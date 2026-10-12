@@ -11,7 +11,7 @@ import {
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinitionV2,
+  type PageDefinition,
   type PermissionDeclaration,
   type SelectedOrganizationScope,
   type ViewerSafeRecordLinkResult,
@@ -105,7 +105,7 @@ const canOpenDetailPage = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   context: InstalledRuntimeContext,
-  page: PageDefinitionV2,
+  page: PageDefinition,
 ): Promise<boolean> => {
   const platform = platformPermissionSource().forKey(page.accessPermissionKey);
   let declaration: OrganizationAccessDeclaration;

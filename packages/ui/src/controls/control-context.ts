@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { builderKeySchema, type BlockPropertyValueV2Contract } from "@vortex/platform/schema";
+import { builderKeySchema, type BlockPropertyValueContract } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
 import type { PlatformBlockRenderProps } from "../registry";
@@ -111,8 +111,8 @@ export function resolveControlContext<Values>(
 type DeclaredSettingsReader = Readonly<{
   read: (
     key: string,
-    kind: BlockPropertyValueV2Contract["kind"],
-  ) => BlockPropertyValueV2Contract | undefined;
+    kind: BlockPropertyValueContract["kind"],
+  ) => BlockPropertyValueContract | undefined;
   text: (key: string) => string | undefined;
   boolean: (key: string) => boolean;
 }>;
@@ -124,8 +124,8 @@ export function createDeclaredSettingsReader(
   const { settings, metadata } = props;
   const read = (
     key: string,
-    kind: BlockPropertyValueV2Contract["kind"],
-  ): BlockPropertyValueV2Contract | undefined => {
+    kind: BlockPropertyValueContract["kind"],
+  ): BlockPropertyValueContract | undefined => {
     const property = metadata.properties.find((candidate) => candidate.key === key);
     if (property === undefined || property.kind !== kind)
       fail(`Block '${metadata.key}' declares no ${kind} property '${key}'`, location);
@@ -167,7 +167,7 @@ type ControlSettings = Readonly<{
    * The grouped property records of a list setting, in declared order. A repeatable component reads
    * its item identities and labels here, so it never reaches into the raw setting map itself.
    */
-  groups: (key: string) => readonly Readonly<Record<string, BlockPropertyValueV2Contract>>[];
+  groups: (key: string) => readonly Readonly<Record<string, BlockPropertyValueContract>>[];
   /** The resolved record-type identifiers declared by a list of record_type_reference settings. */
   recordTypeIds: (key: string) => readonly string[];
   /** The required authored field key, validated as a builder key. */

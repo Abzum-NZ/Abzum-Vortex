@@ -5,7 +5,7 @@ import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { platformIdSchema, type ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
+import { platformIdSchema, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import {
   applyStudioAppearance,
   parseStudioAppearanceRequest,
@@ -18,9 +18,9 @@ import { validateStudioApplicationAppearance } from "../actions";
 type AvailableAppearance = Extract<StudioAppearanceResult, { kind: "available" }>;
 type Props = Readonly<{
   organizationId: string; rootId: string; draftRevision: number;
-  source: ApplicationSourceDocumentV2; disabled: boolean; validationEpoch: number;
+  source: ApplicationSourceDocument; disabled: boolean; validationEpoch: number;
   onPendingChange: (pending: boolean) => void;
-  onApply: (expected: ApplicationSourceDocumentV2, next: ApplicationSourceDocumentV2) => boolean;
+  onApply: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) => boolean;
 }>;
 const inputClass = "w-full";
 const buttonClass = "";

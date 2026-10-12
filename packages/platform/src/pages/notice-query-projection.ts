@@ -5,7 +5,7 @@ import {
   QUERY_NOTICE_BLOCK_RELEASE,
   sameId,
   validateComponentSettings,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -36,7 +36,7 @@ export type QueryNoticeResolution =
   | Readonly<{ status: "refused"; reason: "not_permitted" }>
   | Readonly<{ status: "error" }>;
 
-type Settings = Readonly<Record<string, BlockPropertyValueV2Contract>>;
+type Settings = Readonly<Record<string, BlockPropertyValueContract>>;
 type InstalledModule = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type Mapping = Readonly<{
   message: string;

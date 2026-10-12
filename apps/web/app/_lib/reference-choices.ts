@@ -7,10 +7,10 @@ import {
   builderKeySchema,
   jsonValueSchema,
   referenceChoiceSelectionEvidenceMapSchema,
-  type ApplicationContentV2,
-  type BlockPropertyValueV2Contract,
+  type ApplicationContent,
+  type BlockPropertyValueContract,
   type JsonValue,
-  type ModuleDefinitionConsumerReadResultV3,
+  type ModuleDefinitionConsumerReadResult,
   type ReferenceChoiceSelectionEvidence,
   type ReferenceChoiceSelectionEvidenceMap,
   type IdentitySession,
@@ -59,9 +59,9 @@ const blockOf = (placement: unknown): Record<string, unknown> | undefined => {
 
 const settingsOf = (
   placement: unknown,
-): Readonly<Record<string, BlockPropertyValueV2Contract>> | undefined => {
+): Readonly<Record<string, BlockPropertyValueContract>> | undefined => {
   if (!isRecord(placement) || !isRecord(placement.settings)) return undefined;
-  return placement.settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+  return placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
 };
 
 /** True only for the immutable choice-input release that declares a query source. */
@@ -117,7 +117,7 @@ const placementSettings = (placement: unknown): ChoicePlacementSettings | undefi
 
 const queryCommand = (
   settings: ChoicePlacementSettings,
-  modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  modules: readonly ModuleDefinitionConsumerReadResult[],
 ): RecordReferenceChoiceCommand | undefined => {
   const matches = modules.flatMap((module) =>
     module.content.queries
@@ -144,7 +144,7 @@ const queryCommand = (
 /** Resolves one trusted placement's source against the exact installed Module releases. */
 const referenceChoiceFieldForPlacement = (
   placement: unknown,
-  modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  modules: readonly ModuleDefinitionConsumerReadResult[],
 ): ReferenceChoiceFormField | undefined => {
   const settings = placementSettings(placement);
   if (settings === undefined) return undefined;
@@ -195,7 +195,7 @@ export const bindReferenceChoiceField = (
 const formPlacementsOnPage = (
   page: unknown,
   targetFormId: string,
-  modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  modules: readonly ModuleDefinitionConsumerReadResult[],
 ): Readonly<{ fields: readonly ReferenceChoiceFormField[]; invalid: boolean }> => {
   const found: ReferenceChoiceFormField[] = [];
   let invalid = false;
@@ -229,7 +229,7 @@ const formPlacementsOnPage = (
 
 /** A form ID is usable only when one authored Form placement has that identity in the release. */
 export const applicationHasAuthoredForm = (
-  application: ApplicationContentV2,
+  application: ApplicationContent,
   formId: string,
 ): boolean => {
   let matches = 0;
@@ -263,8 +263,8 @@ export const applicationHasAuthoredForm = (
 
 /** Finds the exact form's choice inputs across the active Application release. */
 const referenceChoiceFieldsForForm = (
-  application: ApplicationContentV2,
-  modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  application: ApplicationContent,
+  modules: readonly ModuleDefinitionConsumerReadResult[],
   formId: string,
 ): ReferenceChoiceFormFieldIndex | undefined => {
   if (!applicationHasAuthoredForm(application, formId)) return undefined;
@@ -290,7 +290,7 @@ const referenceChoiceFieldsForForm = (
 /** Uses only the visible, usable Form subtree of the viewer's projected addressed page. */
 export const projectedReferenceChoiceForm = (
   page: unknown,
-  modules: readonly ModuleDefinitionConsumerReadResultV3[],
+  modules: readonly ModuleDefinitionConsumerReadResult[],
   formId: string,
 ): ProjectedReferenceChoiceForm | undefined => {
   if (!isRecord(page) || !isRecord(page.composition)) return undefined;
@@ -373,8 +373,8 @@ export const resolveReferenceChoiceFormValues = async (args: Readonly<{
   service: ReferenceChoiceService;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
-  application: ApplicationContentV2;
-  modules: readonly ModuleDefinitionConsumerReadResultV3[];
+  application: ApplicationContent;
+  modules: readonly ModuleDefinitionConsumerReadResult[];
   formId: string;
   projectedFields: ReferenceChoiceFormFieldIndex;
   values: unknown;

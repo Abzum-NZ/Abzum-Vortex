@@ -6,8 +6,6 @@ import {
   storedDefinitionCompilationOutputSchema,
   definitionKindSchema,
   definitionResolutionSnapshotSchema,
-  definitionResolutionSnapshotV2Schema,
-  definitionResolutionSnapshotV3Schema,
   storedDefinitionSourceSchema,
   exactDefinitionDependencySchema,
   fingerprintSchema,
@@ -18,21 +16,20 @@ import {
   publishDefinitionResultSchema,
   publishedApplicationDefinitionSchema,
   publishedApplicationReferenceSchema,
-  moduleVersionImpactHistoryEntryV3Schema,
+  moduleVersionImpactHistoryEntrySchema,
   publishedModuleReferenceSchema,
   revisionSchema,
   semanticVersionSchema,
   selectApplicationContractPair,
   stableDefinitionReleaseVersionSchema,
-  sourceIdentityAssignmentV3Schema,
+  sourceIdentityAssignmentSchema,
   storedDefinitionDraftSchema,
   timestampSchema,
   versionImpactReasonSchema,
   type PublishedDefinitionHistory,
-  type ApplicationDraftV2,
-  type ApplicationSourceDocumentV2,
-  type DefinitionResolutionSnapshotV2,
-  type DefinitionResolutionSnapshotV3,
+  type ApplicationDraft,
+  type ApplicationSourceDocument,
+  type DefinitionResolutionSnapshot,
   type PublishDefinitionResult,
   type SessionContext,
   type StoredDefinitionSource,
@@ -139,11 +136,7 @@ const storedReleaseEvidenceSchema = z
     authoredSourceFingerprint: fingerprintSchema,
     sourceContractVersion: semanticVersionSchema,
     compilationOutput: storedDefinitionCompilationOutputSchema,
-    resolutionSnapshot: z.union([
-      definitionResolutionSnapshotSchema,
-      definitionResolutionSnapshotV2Schema,
-      definitionResolutionSnapshotV3Schema,
-    ]),
+    resolutionSnapshot: definitionResolutionSnapshotSchema,
     resolutionFingerprint: fingerprintSchema,
     comparisonFingerprint: fingerprintSchema,
     impactReasons: z.array(versionImpactReasonSchema),
@@ -166,7 +159,7 @@ const publicationStateSchema = z
   .object({
     root: publicationRootSchema,
     draft: databaseStoredDraftSchema,
-    identities: z.array(sourceIdentityAssignmentV3Schema),
+    identities: z.array(sourceIdentityAssignmentSchema),
     historyLatestReleaseRevision: nullableRevisionSchema,
   })
   .strict();
@@ -207,8 +200,8 @@ const rawModuleReleaseSchema = z
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
     compilationOutput: storedDefinitionCompilationOutputSchema,
-    resolutionSnapshot: definitionResolutionSnapshotV3Schema,
-    identities: z.array(sourceIdentityAssignmentV3Schema),
+    resolutionSnapshot: definitionResolutionSnapshotSchema,
+    identities: z.array(sourceIdentityAssignmentSchema),
     published: rawPublishedModuleSchema,
   })
   .strict();
@@ -252,7 +245,7 @@ const appendReleaseRowSchema = z
 
 type RawModuleRelease = z.infer<typeof rawModuleReleaseSchema>;
 type StoredHistoryRelease = z.infer<typeof storedHistoryReleaseSchema>;
-type SourceIdentityAssignmentV3 = z.infer<typeof sourceIdentityAssignmentV3Schema>;
+type SourceIdentityAssignment = z.infer<typeof sourceIdentityAssignmentSchema>;
 type StoredApplicationCompilationOutput = Extract<
   z.infer<typeof storedDefinitionCompilationOutputSchema>,
   { kind: "application" }
@@ -260,7 +253,7 @@ type StoredApplicationCompilationOutput = Extract<
 type ProjectedApplicationCompilationOutput = Omit<
   StoredApplicationCompilationOutput,
   "canonical"
-> & { canonical: ApplicationDraftV2 };
+> & { canonical: ApplicationDraft };
 
 /** Authenticated immutable Application evidence for one ordinary same-root comparison. */
 export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
@@ -268,11 +261,11 @@ export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
   rootId: string;
   key: string;
   publication: z.infer<typeof publishedApplicationReferenceSchema>;
-  authoredSource: ApplicationSourceDocumentV2;
+  authoredSource: ApplicationSourceDocument;
   authoredSourceFingerprint: string;
   compilationOutput: ProjectedApplicationCompilationOutput;
-  resolutionSnapshot: DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
-  identities: readonly SourceIdentityAssignmentV3[];
+  resolutionSnapshot: DefinitionResolutionSnapshot;
+  identities: readonly SourceIdentityAssignment[];
   comparisonFingerprint: string;
   impactReasons: readonly VersionImpactReason[];
 }>;
@@ -295,7 +288,10 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
  * manifest check belongs to consumer reads, which receive the full manifest.
  */
 const dependencyReferencesMatch = (
-  output: Exclude<z.infer<typeof storedDefinitionCompilationOutputSchema>, { kind: "connection_type" }>,
+  output: Exclude<
+    z.infer<typeof storedDefinitionCompilationOutputSchema>,
+    { kind: "connection_type" }
+  >,
   references: readonly { readonly kind: string }[],
 ): boolean => {
   const dependencies =
@@ -322,7 +318,7 @@ const dependencyReferencesMatch = (
 
 const currentIdentityLookupMatches = (
   source: StoredDefinitionSource,
-  identities: readonly z.infer<typeof sourceIdentityAssignmentV3Schema>[],
+  identities: readonly z.infer<typeof sourceIdentityAssignmentSchema>[],
 ): boolean => {
   const expected = extractStoredSourceIdentityRequirements(source).flatMap((requirement) =>
     requirement.aliases.map((alias) =>
@@ -607,14 +603,13 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (
       evidence.authoredSource.kind !== "application" ||
       evidence.compilationOutput.kind !== "application" ||
-      evidence.resolutionSnapshot.contractVersion !== "2.0.0"
+      evidence.resolutionSnapshot.contractVersion !== "3.0.0"
     )
       return invalidStorage();
     const storedOutput = storedDefinitionCompilationOutputSchema.safeParse(
       evidence.compilationOutput,
     );
-    if (!storedOutput.success || storedOutput.data.kind !== "application")
-      return invalidStorage();
+    if (!storedOutput.success || storedOutput.data.kind !== "application") return invalidStorage();
     const canonical = applicationDraftFromStoredRelease(storedOutput.data);
     return Object.freeze({
       organizationId: candidate.draft.organizationId,
@@ -659,7 +654,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch {
           return invalidStorage();
         }
-        if (output.validationContractVersion !== "2.0.0" || resolution.contractVersion !== "2.0.0")
+        if (output.validationContractVersion !== "2.0.0" || resolution.contractVersion !== "3.0.0")
           return invalidStorage();
       }
       if (kind === "module") {
@@ -730,18 +725,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       if (!dependencyReferencesMatch(output, release.dependencyManifest)) return invalidStorage();
       const published =
         kind === "module" && output.kind === "module" && release.publication.kind === "module"
-            ? moduleVersionImpactHistoryEntryV3Schema.safeParse({
+          ? moduleVersionImpactHistoryEntrySchema.safeParse({
               publication: release.publication,
               content: output.canonical.content,
               dependencyManifest: release.dependencyManifest,
               releaseNote: release.releaseNote,
             })
-            : kind === "application" &&
+          : kind === "application" &&
               output.kind === "application" &&
               release.publication.kind === "application"
             ? publishedApplicationDefinitionSchema.safeParse({
-              publication: release.publication,
-              content: applicationDraftFromStoredRelease(output).content,
+                publication: release.publication,
+                content: applicationDraftFromStoredRelease(output).content,
                 dependencyManifest: release.dependencyManifest.filter(
                   (dependency) => dependency.kind === "module",
                 ),
@@ -812,7 +807,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       !dependencyReferencesMatch(output, release.published.dependencyManifest)
     )
       return invalidStorage();
-    const published = moduleVersionImpactHistoryEntryV3Schema.safeParse({
+    const published = moduleVersionImpactHistoryEntrySchema.safeParse({
       publication: release.published.publication,
       content: output.canonical.content,
       dependencyManifest: release.published.dependencyManifest,

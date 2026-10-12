@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import type { BlockPropertyValueV2Contract, PlatformBlockReleaseV2 } from "@vortex/platform/schema";
+import type { BlockPropertyValueContract, PlatformBlockRelease } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../components/alert";
 import { Badge } from "../components/badge";
 import { Card, CardContent } from "../components/card";
@@ -20,12 +20,12 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
  * Returns undefined when the block declares no name or the optional name is absent.
  */
 export function getAccessibleName(
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
-  metadata: PlatformBlockReleaseV2,
+  settings: Readonly<Record<string, BlockPropertyValueContract>>,
+  metadata: PlatformBlockRelease,
 ): string | undefined {
   const capabilities = metadata.capabilities;
   if (capabilities.accessibleName === "not_applicable") return undefined;
-  let current: Readonly<Record<string, BlockPropertyValueV2Contract>> = settings;
+  let current: Readonly<Record<string, BlockPropertyValueContract>> = settings;
   const path = capabilities.accessibleNamePropertyPath;
   for (const [index, key] of path.entries()) {
     const value = Object.hasOwn(current, key) ? current[key] : undefined;

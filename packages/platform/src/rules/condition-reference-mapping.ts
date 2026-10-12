@@ -12,8 +12,8 @@ import {
   ruleGraphConditionSchema,
 } from "./rule-graph-contracts";
 import type { RuleGraphCondition } from "./rule-graph-contracts";
-import { conditionNodeSchema } from "../definition/module-contracts";
-import type { ConditionNode } from "../definition/module-contracts";
+import { conditionNodeSchema } from "../definition/module-foundation-contracts";
+import type { ConditionNode } from "../definition/module-foundation-contracts";
 
 type ModuleComparison = Extract<ConditionNode, { kind: "comparison" }>;
 type ModuleOperand = ModuleComparison["left"];

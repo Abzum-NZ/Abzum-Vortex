@@ -4,12 +4,12 @@ import { platformIdSchema, type DefinitionRuleFailure } from "../schema";
 import { createLocatedFailure } from "./errors";
 import type {
   ThemeResolutionOptions,
-  ThemeTokenValueV2,
+  ThemeTokenValue,
   ThemeValidationFailure,
 } from "./types";
 
 export function validatePublicPlatformAssets(
-  tokens: Readonly<Record<string, ThemeTokenValueV2>>,
+  tokens: Readonly<Record<string, ThemeTokenValue>>,
   options?: ThemeResolutionOptions | undefined,
 ): { failures: ThemeValidationFailure[]; ruleFailures: DefinitionRuleFailure[] } {
   const failures: ThemeValidationFailure[] = [];

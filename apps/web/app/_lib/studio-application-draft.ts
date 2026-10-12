@@ -7,8 +7,8 @@ import {
   sessionContextSchema,
   sameId,
   canonicalJson,
-  placementSlotV2Schema,
-  sourcePlacementSlotV2Schema,
+  placementSlotSchema,
+  sourcePlacementSlotSchema,
   type OrganizationId,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
@@ -45,8 +45,8 @@ type StudioApplicationLoadResult =
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
-type CompiledSlot = ReturnType<typeof placementSlotV2Schema.parse>;
-type AuthoredSlot = ReturnType<typeof sourcePlacementSlotV2Schema.parse>;
+type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
+type AuthoredSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 
 /** Exact compiled page slots keyed by their authored page aliases. */
 export type StudioApplicationCompiledPageSlots = Readonly<Record<string, CompiledSlot>>;
@@ -72,7 +72,7 @@ const compiledPageSlot = (
     composition?: { main?: unknown; shellId?: unknown; content?: Record<string, unknown> };
   };
   if ("main" in sourceComposition && compiled.composition?.main !== undefined)
-    return placementSlotV2Schema.parse(compiled.composition.main);
+    return placementSlotSchema.parse(compiled.composition.main);
   if (!("content" in sourceComposition) || compiled.composition?.content === undefined)
     return undefined;
   const entries = Object.entries(sourceComposition.content);
@@ -94,14 +94,14 @@ const compiledPageSlot = (
   if (sourceSlot === undefined || shells.length !== 1 || contentSlots.length !== 1)
     return undefined;
   const runtimeSlot = compiled.composition.content[String(contentSlots[0]!.slotId)];
-  return runtimeSlot === undefined ? undefined : placementSlotV2Schema.parse(runtimeSlot);
+  return runtimeSlot === undefined ? undefined : placementSlotSchema.parse(runtimeSlot);
 };
 
 const assertCompiledSlotMatches = (
   authored: unknown,
   compiled: CompiledSlot,
 ): void => {
-  const sourceSlot: AuthoredSlot = sourcePlacementSlotV2Schema.parse(authored);
+  const sourceSlot: AuthoredSlot = sourcePlacementSlotSchema.parse(authored);
   const sourceIds = sourceSlot.order.desktop;
   const compiledIds = compiled.order.desktop;
   if (sourceIds.length !== compiledIds.length)

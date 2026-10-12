@@ -1,11 +1,11 @@
 import {
   builderKeySchema,
-  exactDecimalTextV2Schema,
+  exactDecimalTextSchema,
   referenceChoiceSelectionEvidenceMapSchema,
   groupIdSchema,
-  richTextDocumentV2Schema,
+  richTextDocumentSchema,
   timestampSchema,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type ReferenceChoiceSelectionEvidence,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -26,7 +26,7 @@ export type ControlSemanticEventName = (typeof CONTROL_EVENT_NAMES)[number];
 
 /** Closed set of typed values that form field inputs collect and emit. */
 export type TypedRichTextDocument = Extract<
-  BlockPropertyValueV2Contract,
+  BlockPropertyValueContract,
   { kind: "rich_text" }
 >["value"];
 
@@ -309,7 +309,7 @@ const parseRichTextDocument = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): TypedRichTextDocument => {
-  const parsed = richTextDocumentV2Schema.safeParse(value);
+  const parsed = richTextDocumentSchema.safeParse(value);
   return parsed.success
     ? (parsed.data as TypedRichTextDocument)
     : fail("Rich text content is not a valid structured document", location);
@@ -471,7 +471,7 @@ export const parseNumberInputPayload = (
     record.value !== undefined &&
     record.value !== null &&
     !(typeof record.value === "number" && Number.isFinite(record.value)) &&
-    !(typeof record.value === "string" && exactDecimalTextV2Schema.safeParse(record.value).success)
+    !(typeof record.value === "string" && exactDecimalTextSchema.safeParse(record.value).success)
   )
     fail("A number value must be exact decimal text, a finite number or null", location);
   return Object.freeze({

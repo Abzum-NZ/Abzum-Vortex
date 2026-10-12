@@ -1,7 +1,7 @@
 import {
-  platformBlockReleaseIdentityV2,
+  platformBlockReleaseIdentity,
   type BlockPaletteGroup,
-  type PlatformBlockReleaseSummaryV2,
+  type PlatformBlockReleaseSummary,
 } from "@vortex/platform/schema";
 import type { StudioDiscoveryAdapter, StudioPlacementTarget } from "./discovery-adapter";
 
@@ -13,7 +13,7 @@ export type StudioContextualPaletteChoice = Readonly<{
   id: string;
   blockId: string;
   releaseVersion: string;
-  release: PlatformBlockReleaseSummaryV2;
+  release: PlatformBlockReleaseSummary;
 }>;
 
 export type StudioContextualPaletteGroup = Readonly<{
@@ -44,7 +44,7 @@ export function getStudioContextualPaletteGroups(
   if (maxResults === 0) return Object.freeze([]);
 
   const needle = searchText.trim().toLowerCase();
-  const grouped = new Map<BlockPaletteGroup, PlatformBlockReleaseSummaryV2[]>();
+  const grouped = new Map<BlockPaletteGroup, PlatformBlockReleaseSummary[]>();
   let resultCount = 0;
 
   for (const release of discovery.getPlacementChoices(target)) {
@@ -70,7 +70,7 @@ export function getStudioContextualPaletteGroups(
         choices: Object.freeze(
           releases.map((release) =>
             Object.freeze({
-              id: platformBlockReleaseIdentityV2(release),
+              id: platformBlockReleaseIdentity(release),
               blockId: release.blockId,
               releaseVersion: release.releaseVersion,
               release,

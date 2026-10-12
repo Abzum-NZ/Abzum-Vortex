@@ -19,8 +19,8 @@ import {
   type ModuleInstallationBindingEvidence,
   type ModuleInstallationStorageResult,
   type ModuleRootId,
-  type ModuleContentV3,
-  type ModuleContributionV3,
+  type ModuleContent,
+  type ModuleContribution,
   type OrganizationId,
   type PermissionRegistryDefinitionRelease,
   type PermissionRegistryEntryCandidate,
@@ -263,7 +263,7 @@ export type ApplicationInstallationCoordinatorDependencies<InstalledEvents> = Re
       moduleRootId: string;
       definitionKey: string;
       releaseVersion: string;
-      content: ModuleContentV3;
+      content: ModuleContent;
     }>[],
   ) => Readonly<{
     outcome: "resolved" | "conflicted";
@@ -939,7 +939,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       throw fail("APPLICATION_INSTALLATION_INCOMPLETE");
     const declared = new Map<
       string,
-      { moduleRootId: ModuleRootId; contribution: ModuleContributionV3 }
+      { moduleRootId: ModuleRootId; contribution: ModuleContribution }
     >();
     for (const module of releaseSet.modules) {
       for (const contribution of module.content.contributions ?? []) {

@@ -15,17 +15,17 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   jsonValueSchema,
-  richTextDocumentV2Schema,
+  richTextDocumentSchema,
   recordIdSchema,
   ruleIdSchema,
   timestampSchema,
   type IdentitySession,
   type JsonValue,
-  type ModuleFieldV3,
+  type ModuleField,
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinitionV2,
-  type RecordTypeDefinitionV3,
+  type PageDefinition,
+  type RecordTypeDefinition,
   type SelectedOrganizationScope,
 } from "@vortex/platform/schema";
 import {
@@ -45,13 +45,13 @@ import type { RequestDatabaseTransaction } from "@web/platform-server";
 import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
-import { prepareRecordFieldValuesV2 } from "@web/platform-server";
+import { prepareRecordFieldValues } from "@web/platform-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { getQueryContinuationKey } from "./query-continuation-key";
 
 type GuidedFormStepField = Readonly<{
-  field: ModuleFieldV3;
+  field: ModuleField;
   fieldKey: string;
   placementId: string;
   required: boolean;
@@ -198,7 +198,7 @@ const readGuidedFormContext = async (
 const recordTypeForPage = (
   page: Readonly<Record<string, unknown>>,
   modules: readonly Readonly<Record<string, unknown>>[],
-): RecordTypeDefinitionV3 | undefined => {
+): RecordTypeDefinition | undefined => {
   const reference = page.recordType;
   if (!isRecord(reference) || reference.state !== "resolved") return undefined;
   for (const module of modules) {
@@ -215,7 +215,7 @@ const recordTypeForPage = (
         typeof candidate.recordTypeId === "string" &&
         sameId(candidate.recordTypeId, String(reference.recordTypeId)),
     );
-    if (matches.length === 1) return matches[0] as RecordTypeDefinitionV3;
+    if (matches.length === 1) return matches[0] as RecordTypeDefinition;
   }
   return undefined;
 };
@@ -233,7 +233,7 @@ const inputBlock = (placement: Record<string, unknown>): boolean => {
 
 const fieldForPlacement = (
   placement: Record<string, unknown>,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
 ): Omit<GuidedFormStepField, "placementId"> | undefined => {
   const settings = placement.settings;
   if (!isRecord(settings)) return undefined;
@@ -401,7 +401,7 @@ const guidedStepRoots = (
 
 const collectStepFields = (
   page: Readonly<Record<string, unknown>>,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   shellsCandidate?: unknown,
   visiblePlacementIds?: ReadonlySet<string>,
 ): readonly GuidedFormStepFields[] | undefined => {
@@ -469,7 +469,7 @@ const collectStepFields = (
 
 export const getGuidedFormStepFields = (
   pageCandidate: unknown,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   shellsCandidate?: unknown,
   visiblePageCandidate?: unknown,
 ): readonly GuidedFormStepFields[] | undefined => {
@@ -495,7 +495,7 @@ export const getGuidedFormVisiblePlacementIds = (
 export const getGuidedFormRecordType = (
   pageCandidate: unknown,
   modulesCandidate: unknown,
-): RecordTypeDefinitionV3 | undefined => {
+): RecordTypeDefinition | undefined => {
   if (!isRecord(pageCandidate) || !Array.isArray(modulesCandidate)) return undefined;
   return recordTypeForPage(
     pageCandidate,
@@ -731,7 +731,7 @@ const createAuthorityAdapter = (): PrivateFormDraftAuthorityAdapter => ({
       return undefined;
     const access = pageAccess(context, page);
     if (access === undefined) return undefined;
-    const fields = new Map<string, ModuleFieldV3>();
+    const fields = new Map<string, ModuleField>();
     for (const step of steps)
       for (const entry of step.fields) fields.set(entry.fieldKey, entry.field);
     const fieldChoices: Record<string, JsonValue[]> = {};
@@ -867,7 +867,7 @@ const isIncompleteIssue = (code: string): boolean =>
   code === "required_attachment_empty";
 
 export const validateGuidedFormStep = (
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   stepFields: readonly GuidedFormStepField[],
   currentValues: Readonly<Record<string, JsonValue>>,
   currentValidation: Readonly<Record<string, PrivateFormDraftFieldValidation>>,
@@ -890,16 +890,16 @@ export const validateGuidedFormStep = (
       submittedById[String(entry.field.fieldId)] = currentValues[entry.fieldKey];
   }
   const requiredById = new Map(stepFields.map((entry) => [String(entry.field.fieldId), entry.required]));
-  const restrictedRecordType: RecordTypeDefinitionV3 = {
+  const restrictedRecordType: RecordTypeDefinition = {
     ...recordType,
     fields: recordType.fields.map((field) => {
       const required = requiredById.get(String(field.fieldId));
-      if (required !== undefined) return { ...field, required } as ModuleFieldV3;
+      if (required !== undefined) return { ...field, required } as ModuleField;
       const { default: _default, ...withoutDefault } = field;
-      return { ...withoutDefault, required: false } as ModuleFieldV3;
+      return { ...withoutDefault, required: false } as ModuleField;
     }),
   };
-  const prepared = prepareRecordFieldValuesV2({
+  const prepared = prepareRecordFieldValues({
     operation: "create",
     recordType: restrictedRecordType,
     submittedValues: submittedById,
@@ -1004,7 +1004,7 @@ export const visibleGuidedFormValidation = (
 
 export const guidedFormInputData = (
   page: unknown,
-  recordType: RecordTypeDefinitionV3,
+  recordType: RecordTypeDefinition,
   values: Readonly<Record<string, JsonValue>>,
   dateTimeZones: Readonly<{ personTimeZone?: string; organizationTimeZone?: string }> = {},
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> => {
@@ -1138,7 +1138,7 @@ export const guidedFormInputData = (
                   typeof value.recordTypeId === "string" &&
                   typeof value.recordId === "string");
             } else if (control === "rich_text") {
-              usable = value === null || richTextDocumentV2Schema.safeParse(value).success;
+              usable = value === null || richTextDocumentSchema.safeParse(value).success;
             }
             if (usable)
               result[placementId] = {
@@ -1166,8 +1166,8 @@ export const resolveGuidedFormAuthority = async (
   form: PrivateFormDraftScope,
 ): Promise<Readonly<{
   access: OrganizationAccessDeclaration;
-  page: PageDefinitionV2;
-  recordType: RecordTypeDefinitionV3;
+  page: PageDefinition;
+  recordType: RecordTypeDefinition;
   steps: readonly GuidedFormStepFields[];
 }> | undefined> => {
   const context = await readGuidedFormContext(transaction, scope);

@@ -1,4 +1,4 @@
-import type { ApplicationThemeSelectionV2 } from "@vortex/platform/schema";
+import type { ApplicationThemeSelection } from "@vortex/platform/schema";
 import type { CSSProperties } from "react";
 import { createVortexStyleComponentVariables } from "./vortex-style-variables";
 
@@ -86,7 +86,7 @@ export function resolveVortexMenuAccent(requested?: string | null): VortexMenuAc
 
 /** The whole resolved selection, from the theme's catalogue selection or from nothing at all. */
 export function resolveVortexStyleSelection(
-  selection?: ApplicationThemeSelectionV2 | undefined,
+  selection?: ApplicationThemeSelection | undefined,
 ): VortexStyleSelection {
   return {
     style: resolveVortexStyle(selection?.style),

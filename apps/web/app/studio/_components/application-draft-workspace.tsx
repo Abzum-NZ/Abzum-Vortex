@@ -6,9 +6,9 @@ import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { applicationSourceDocumentV2Schema, canonicalJson,
+import { applicationSourceDocumentSchema, canonicalJson,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
-  type ApplicationSourceDocumentV2, type DefinitionPublicationConfirmation,
+  type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
   type PublishDefinitionResult } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
@@ -326,7 +326,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       publicationEpoch.current += 1;
       setPreparedPublication(null);
       previewGeneration.current += 1;
-      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentV2Schema.parse(next.source) });
+      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentSchema.parse(next.source) });
       setState(next);
     });
     const unsubscribeSelection = selection.subscribe((next) => {
@@ -345,7 +345,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     };
   }, [history, selection]);
 
-  const source = useMemo(() => applicationSourceDocumentV2Schema.parse(state.source), [state.source]);
+  const source = useMemo(() => applicationSourceDocumentSchema.parse(state.source), [state.source]);
   const refreshSearchMetadata = async () => {
     const current = history.getState();
     if (!active.current || current.isDirty || current.isSaving || reopening.current || publicationPending.current ||
@@ -541,7 +541,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   const applyLabels = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editable || conditionPending.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current) return;
-    const candidate = applicationSourceDocumentV2Schema.parse(structuredClone(state.source));
+    const candidate = applicationSourceDocumentSchema.parse(structuredClone(state.source));
     if (selected?.kind === "application") {
       candidate.body.name = label.trim();
       candidate.body.description = description.trim();
@@ -550,7 +550,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       if (page === undefined) return;
       page.name = label.trim();
     } else return;
-    const parsed = applicationSourceDocumentV2Schema.safeParse(candidate);
+    const parsed = applicationSourceDocumentSchema.safeParse(candidate);
     if (!parsed.success) { setMessage("Enter a valid non-empty label and description within their limits."); return; }
     if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
     history.edit(parsed.data);
@@ -560,8 +560,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     setMessage("Labels applied to local history. Save to persist this change.");
   };
 
-  const applyPuckPageEdit = (expectedSource: ApplicationSourceDocumentV2,
-    nextSource: ApplicationSourceDocumentV2) => {
+  const applyPuckPageEdit = (expectedSource: ApplicationSourceDocument,
+    nextSource: ApplicationSourceDocument) => {
     const current = history.getState();
     const currentSelection = selection.getSelection();
     if (!active.current || publicationPending.current || reopening.current || current.isSaving ||
@@ -569,7 +569,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       compositionPending.current || conditionPending.current || flowTextPending.current || flowAppendPending.current ||
       currentSelection?.kind !== "page" || currentSelection.pageAlias !== selectedPage?.id ||
       canonicalJson(expectedSource) !== canonicalJson(current.source)) return;
-    const parsed = applicationSourceDocumentV2Schema.safeParse(nextSource);
+    const parsed = applicationSourceDocumentSchema.safeParse(nextSource);
     if (!parsed.success) {
       console.error("Failed to validate Puck page changes", parsed.error);
       setMessage("This page change could not be applied. The saved draft and current edits are preserved.");
@@ -717,7 +717,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         const candidate = structuredClone(expected);
         if (search === undefined) delete candidate.body.search;
         else candidate.body.search = search;
-        const parsed = applicationSourceDocumentV2Schema.safeParse(candidate);
+        const parsed = applicationSourceDocumentSchema.safeParse(candidate);
         if (!parsed.success || !history.edit(parsed.data)) return false;
         setSearchMetadata(null); searchRefresh.current += 1;
         setPreparedPublication(null); previewGeneration.current += 1;
@@ -730,7 +730,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       onPendingChange={(pending) => reportSourceImportPending(pending, sourceImportPanelEpoch)}
       onApply={(expected, candidate) => {
         if (!sameStudioApplicationSourceImportSnapshot(expected, readSourceImportSnapshot())) return "stale";
-        const parsed = applicationSourceDocumentV2Schema.safeParse(candidate);
+        const parsed = applicationSourceDocumentSchema.safeParse(candidate);
         if (!parsed.success || parsed.data.key !== expected.key || parsed.data.root_alias !== expected.rootAlias) return "stale";
         const current = history.getState();
         if (canonicalJson(parsed.data) === canonicalJson(current.source)) return "unchanged";

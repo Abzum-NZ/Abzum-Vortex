@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sharingParameterValueTypeV2Schema } from "../catalogue/catalogues";
+import { sharingParameterValueTypeSchema } from "../catalogue/catalogues";
 import {
   boundedRuleGraphConditionInputSchema,
   ruleGraphBinaryConditionOperatorSchema,
@@ -14,7 +14,7 @@ import {
   jsonValueSchema,
 } from "../catalogue/common";
 import { builderKeySchema, containedComponentIdSchema, fieldIdSchema } from "../catalogue/identifiers";
-import { moduleFieldV3Schema } from "../definition/module-contracts-v3";
+import { moduleFieldSchema } from "../definition/module-contracts";
 
 const conditionReferenceOperandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("module_field"), fieldId: fieldIdSchema }).strict(),
@@ -76,7 +76,7 @@ const conditionReferenceNodeSchema: z.ZodType<ConditionReferenceNode> = z.lazy((
 );
 
 const moduleParameterDeclarationSchema = z
-  .object({ key: builderKeySchema, type: sharingParameterValueTypeV2Schema })
+  .object({ key: builderKeySchema, type: sharingParameterValueTypeSchema })
   .strict();
 
 const reportDuplicate = (
@@ -94,7 +94,7 @@ const reportDuplicate = (
 
 const moduleConditionReferenceDeclarationsSchema = z
   .object({
-    fields: z.array(moduleFieldV3Schema).max(500),
+    fields: z.array(moduleFieldSchema).max(500),
     parameters: z.array(moduleParameterDeclarationSchema),
   })
   .strict()
@@ -121,7 +121,7 @@ const moduleConditionReferenceDeclarationsSchema = z
 
 const ruleGraphConditionReferenceDeclarationsSchema = z
   .object({
-    fields: z.array(moduleFieldV3Schema).max(500),
+    fields: z.array(moduleFieldSchema).max(500),
     inputs: z.array(ruleGraphInputDeclarationSchema).max(100),
     variables: z.array(ruleGraphVariableDeclarationSchema).max(100),
   })

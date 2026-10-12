@@ -1,15 +1,15 @@
 import "server-only";
 
 import {
-  applicationCompilationRequestV2Schema,
-  applicationCompositionCatalogueSnapshotV2Schema,
+  applicationCompilationRequestSchema,
+  applicationCompositionCatalogueSnapshotSchema,
   assertModuleContractPair,
   protectedOperationReferenceSchema,
-  customComponentPlacementAllowedV2,
+  customComponentPlacementAllowed,
   definitionCompilationOutputSchema,
   definitionPublicationConfirmationSchema,
-  definitionResolutionSnapshotV3Schema,
-  moduleCompilationRequestV3Schema,
+  definitionResolutionSnapshotSchema,
+  moduleCompilationRequestSchema,
   moduleRootIdSchema,
   moduleSourceDocumentSchema,
   sourceConditionSchema,
@@ -27,32 +27,29 @@ import {
   savedConditionRevisionAssignmentSchema,
   stableDefinitionReleaseVersionSchema,
   storedDefinitionDraftSchema,
-  storedModuleCompilationOutputV3Schema,
-  sourceIdentityKindV2Schema,
+  storedModuleCompilationOutputSchema,
   recordTypeIdSchema,
   fieldIdSchema,
   type DefinitionCompilationOutput,
-  type ApplicationCompilationOutputV2,
+  type ApplicationCompilationOutput,
   type DefinitionPublicationConfirmation,
   type DefinitionPublicationHistoryEvidence,
   type DefinitionResolutionSnapshot,
-  type DefinitionResolutionSnapshotV2,
-  type DefinitionResolutionSnapshotV3,
-  type ApplicationCompositionCatalogueSnapshotV2,
-  type ApplicationSourceDocumentV2,
+  type ApplicationCompositionCatalogueSnapshot,
+  type ApplicationSourceDocument,
   type BlockId,
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
   type PrepareDefinitionPublicationResult,
   type PublishDefinitionCommand,
-  type ModuleVersionImpactHistoryEntryV3,
-  type ModuleCompilationOutputV3,
+  type ModuleVersionImpactHistoryEntry,
+  type ModuleCompilationOutput,
   type PublishDefinitionResult,
   type SavedConditionRevisionAssignment,
   type SessionContext,
   type ConditionNode,
   type ModuleSourceDocument,
-  type ModuleFieldV3,
+  type ModuleField,
   type DefinitionValidationResult,
   type DefinitionValidationLocation,
   type DefinitionValidationTranslationContext,
@@ -70,9 +67,9 @@ import {
   flowLiteralSchema,
   type ModuleRootId,
   type OrganizationId,
-  type PlatformBlockReleaseV2,
+  type PlatformBlockRelease,
   type PlatformId,
-  type PlatformThemeReleaseV2,
+  type PlatformThemeRelease,
   type PlatformServiceOperationRelease,
   type ProtectedOperationReference,
   type Revision,
@@ -87,7 +84,7 @@ import {
   type BuilderOperation,
 } from "./builder-authority";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
-import { createApplicationResolutionSnapshotV2 } from "./application-v2-resolution";
+import { createApplicationResolutionSnapshot } from "./application-resolution";
 import { compileParsedDefinition } from "./compiler";
 import {
   flowOperationReferencesByNode,
@@ -95,8 +92,12 @@ import {
   type ProtectedOperationReferenceLookups,
 } from "./flow-operation-calls";
 import { DefinitionCompilationError } from "./compilation-error";
-import { extractModuleSourceIdentityRequirementsV3 } from "./source-identities";
-import { definitionSemanticRules, validateDefinitionSet, validateDefinitionSource } from "./validation";
+import { extractModuleSourceIdentityRequirements } from "./source-identities";
+import {
+  definitionSemanticRules,
+  validateDefinitionSet,
+  validateDefinitionSource,
+} from "./validation";
 import {
   compareDefinitionVersionImpactWithEvidence,
   deriveSavedConditionRevisionsFromHistoryEvidence,
@@ -104,13 +105,12 @@ import {
 } from "./version-impact-definition";
 import { DefinitionVersionImpactError } from "./version-impact-error";
 
-type SourceIdentityAssignments = DefinitionResolutionSnapshotV3["identities"];
+type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
 type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
 type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
 type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection_type" }>;
-type PublishableCompilationOutput = ApplicationCompilationOutputV2 | ModuleCompilationOutputV3;
-type DefinitionResolution =
-  DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+type PublishableCompilationOutput = ApplicationCompilationOutput | ModuleCompilationOutput;
+type DefinitionResolution = DefinitionResolutionSnapshot;
 
 export type DefinitionPublicationFailureCode =
   | "INVALID_DEFINITION_PUBLICATION_COMMAND"
@@ -169,9 +169,9 @@ export type ResolvableModuleRelease = Readonly<{
   releaseVersion: SemanticVersion;
   contentFingerprint: Fingerprint;
   resolutionFingerprint: Fingerprint;
-  published: ModuleVersionImpactHistoryEntryV3;
+  published: ModuleVersionImpactHistoryEntry;
   compilationOutput: ModuleOutput;
-  resolutionSnapshot: DefinitionResolutionSnapshotV3;
+  resolutionSnapshot: DefinitionResolutionSnapshot;
 }>;
 
 export type ModuleReleasePageCursor = Readonly<{
@@ -219,15 +219,15 @@ export interface DefinitionPublicationCatalogue {
     rootId: ConnectionTypeId,
     releaseVersion: string,
   ): Promise<ResolvableConnectionTypeRelease | undefined>;
-  readPlatformBlockReleaseV2(
+  readPlatformBlockRelease(
     blockId: BlockId,
     releaseVersion: string,
-  ): Promise<PlatformBlockReleaseV2 | undefined>;
-  readPlatformThemeReleaseV2(
+  ): Promise<PlatformBlockRelease | undefined>;
+  readPlatformThemeRelease(
     catalogueThemeId: PlatformId,
     releaseVersion: string,
-  ): Promise<PlatformThemeReleaseV2 | undefined>;
-  readApplicationCompositionCatalogueSnapshotV2(
+  ): Promise<PlatformThemeRelease | undefined>;
+  readApplicationCompositionCatalogueSnapshot(
     selection: Readonly<{
       platformBlocks: readonly Readonly<{
         blockId: BlockId;
@@ -245,7 +245,7 @@ export interface DefinitionPublicationCatalogue {
         }>[];
       }>;
     }>,
-  ): Promise<ApplicationCompositionCatalogueSnapshotV2 | undefined>;
+  ): Promise<ApplicationCompositionCatalogueSnapshot | undefined>;
   readPlatformServiceOperationRelease?(
     serviceId: string,
     operationId: string,
@@ -293,13 +293,7 @@ type PreparedState = Readonly<{
 export type PreparedDefinitionPublication = PrepareDefinitionPublicationResult;
 
 export type ModuleQueryFilterParameterType =
-  | "text"
-  | "number"
-  | "decimal_number"
-  | "money"
-  | "boolean"
-  | "date"
-  | "date_time";
+  "text" | "number" | "decimal_number" | "money" | "boolean" | "date" | "date_time";
 
 export type ModuleQueryFilterDraftContext = Readonly<{
   organizationId: OrganizationId;
@@ -320,7 +314,7 @@ export type ModuleQueryFilterDraftContext = Readonly<{
   fields: readonly Readonly<{
     sourceAlias: string;
     sourceKey: string;
-    field: ModuleFieldV3;
+    field: ModuleField;
   }>[];
   parameters: readonly Readonly<{ key: string; type: ModuleQueryFilterParameterType }>[];
   filter: ConditionNode | null;
@@ -341,34 +335,36 @@ type ModuleQueryFilterOperandBinding = Pick<
 
 export const fingerprintModuleQueryFilterOperandBinding = (
   binding: ModuleQueryFilterOperandBinding,
-): Fingerprint => fingerprintCanonicalValue({
-  domain: "vortex.module_query_filter_operand_binding.v1",
-  organizationId: binding.organizationId,
-  rootId: binding.rootId,
-  definitionKey: binding.definitionKey,
-  draftRevision: binding.draftRevision,
-  savedSourceFingerprint: binding.savedSourceFingerprint,
-  resolutionFingerprint: binding.resolutionFingerprint,
-  query: {
-    alias: binding.query.alias,
-    key: binding.query.key,
-    queryId: binding.query.queryId,
-  },
-  record: {
-    alias: binding.query.recordAlias,
-    key: binding.query.recordKey,
-    recordTypeId: binding.query.recordTypeId,
-  },
-  fields: binding.fields,
-  parameters: binding.parameters,
-});
+): Fingerprint =>
+  fingerprintCanonicalValue({
+    domain: "vortex.module_query_filter_operand_binding.v1",
+    organizationId: binding.organizationId,
+    rootId: binding.rootId,
+    definitionKey: binding.definitionKey,
+    draftRevision: binding.draftRevision,
+    savedSourceFingerprint: binding.savedSourceFingerprint,
+    resolutionFingerprint: binding.resolutionFingerprint,
+    query: {
+      alias: binding.query.alias,
+      key: binding.query.key,
+      queryId: binding.query.queryId,
+    },
+    record: {
+      alias: binding.query.recordAlias,
+      key: binding.query.recordKey,
+      recordTypeId: binding.query.recordTypeId,
+    },
+    fields: binding.fields,
+    parameters: binding.parameters,
+  });
 
 export type ModuleQueryFilterQueryChoice = Readonly<{
   alias: string;
   key: string;
   label?: string;
   eligible: boolean;
-  reason?: "query_target_unsupported" | "operand_context_unsupported" | "retained_filter_unsupported";
+  reason?:
+    "query_target_unsupported" | "operand_context_unsupported" | "retained_filter_unsupported";
 }>;
 
 export type ModuleQueryFilterDraftResult =
@@ -380,7 +376,8 @@ export type ModuleQueryFilterDraftResult =
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
   | Readonly<{
       kind: "unsupported_context";
-      reason: "query_target_unsupported" | "operand_context_unsupported" | "retained_filter_unsupported";
+      reason:
+        "query_target_unsupported" | "operand_context_unsupported" | "retained_filter_unsupported";
     }>;
 
 export type ModuleQueryFilterValidationResult =
@@ -394,12 +391,13 @@ export type ModuleQueryFilterValidationResult =
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
   | Readonly<{
       kind: "unsupported_context";
-      reason: "query_target_unsupported" | "operand_context_unsupported" | "retained_filter_unsupported";
+      reason:
+        "query_target_unsupported" | "operand_context_unsupported" | "retained_filter_unsupported";
     }>;
 
 /** One current Application draft compiled at its exact revision, for exact-draft preview. */
 export type ApplicationDraftCompilation = Readonly<{
-  compilation: ApplicationCompilationOutputV2;
+  compilation: ApplicationCompilationOutput;
   conditionContexts: readonly ApplicationDraftConditionContext[];
   /** The root's current published release revision; preview only labels it and never reads it. */
   currentReleaseRevision: Revision | null;
@@ -413,16 +411,37 @@ export type ApplicationDraftConditionContext = Readonly<{
   recordReference: string;
   fieldRecordReference: string;
   recordTypeId: string;
-  module: Readonly<Pick<ResolvableModuleRelease, "organizationId" | "key" | "rootId" |
-    "releaseRevision" | "releaseVersion" | "contentFingerprint" | "resolutionFingerprint">>;
-  fields: readonly Readonly<{ field: ModuleFieldV3; aliases: readonly string[];
-    preferredAlias: string; componentOwner: string }>[];
+  module: Readonly<
+    Pick<
+      ResolvableModuleRelease,
+      | "organizationId"
+      | "key"
+      | "rootId"
+      | "releaseRevision"
+      | "releaseVersion"
+      | "contentFingerprint"
+      | "resolutionFingerprint"
+    >
+  >;
+  fields: readonly Readonly<{
+    field: ModuleField;
+    aliases: readonly string[];
+    preferredAlias: string;
+    componentOwner: string;
+  }>[];
 }>;
 
-const conditionFieldTypes = new Set(["text", "long_text", "whole_number", "yes_no", "date", "date_time"]);
+const conditionFieldTypes = new Set([
+  "text",
+  "long_text",
+  "whole_number",
+  "yes_no",
+  "date",
+  "date_time",
+]);
 
 const projectDraftConditionContexts = (
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
   sourceFingerprint: Fingerprint,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
@@ -434,12 +453,23 @@ const projectDraftConditionContexts = (
     const moduleKey = page.record_type.slice(0, split);
     const recordAlias = page.record_type.slice(split + 1);
     const releases = dependencies.modules.filter((release) => release.key === moduleKey);
-    const identities = resolution.identities.filter((identity) => identity.definitionKey === moduleKey);
-    const records = identities.filter((identity) => identity.kind === "record_type" &&
-      identity.scope === "content" && identity.alias === recordAlias);
+    const identities = resolution.identities.filter(
+      (identity) => identity.definitionKey === moduleKey,
+    );
+    const records = identities.filter(
+      (identity) =>
+        identity.kind === "record_type" &&
+        identity.scope === "content" &&
+        identity.alias === recordAlias,
+    );
     const release = releases[0];
     const recordIdentity = records[0];
-    if (releases.length !== 1 || records.length !== 1 || release === undefined || recordIdentity === undefined)
+    if (
+      releases.length !== 1 ||
+      records.length !== 1 ||
+      release === undefined ||
+      recordIdentity === undefined
+    )
       continue;
     const recordIdentifier = recordTypeIdSchema.safeParse(recordIdentity.identifier);
     if (!recordIdentifier.success) continue;
@@ -448,10 +478,17 @@ const projectDraftConditionContexts = (
     );
     const record = canonicalRecords[0];
     if (canonicalRecords.length !== 1 || record === undefined) continue;
-    const recordAliases = identities.filter((identity) => identity.kind === "record_type" &&
-      identity.scope === "content" && identity.identifier === recordIdentity.identifier);
-    if (!recordAliases.some((identity) => identity.alias === record.key) ||
-      recordAliases.some((identity) => identity.componentOwner !== recordIdentity.componentOwner)) continue;
+    const recordAliases = identities.filter(
+      (identity) =>
+        identity.kind === "record_type" &&
+        identity.scope === "content" &&
+        identity.identifier === recordIdentity.identifier,
+    );
+    if (
+      !recordAliases.some((identity) => identity.alias === record.key) ||
+      recordAliases.some((identity) => identity.componentOwner !== recordIdentity.componentOwner)
+    )
+      continue;
     const fields: ApplicationDraftConditionContext["fields"][number][] = [];
     let valid = true;
     for (const field of record.fields) {
@@ -463,25 +500,60 @@ const projectDraftConditionContexts = (
       });
       const owners = new Set(group.map((identity) => identity.componentOwner));
       const aliases = group.map((identity) => identity.alias);
-      if (owners.size !== 1 || aliases.length === 0 || new Set(aliases).size !== aliases.length ||
-        !aliases.includes(field.key) || group.some((entry) => identities.some((other) =>
-          other.kind === "field" && other.scope === entry.scope && other.alias === entry.alias &&
-          (other.identifier !== entry.identifier || other.componentOwner !== entry.componentOwner))) ||
-        group.some((entry) => identities.some((other) => other.kind === "field" && other.scope === entry.scope &&
-          other.componentOwner === entry.componentOwner && other.identifier !== entry.identifier))) {
+      if (
+        owners.size !== 1 ||
+        aliases.length === 0 ||
+        new Set(aliases).size !== aliases.length ||
+        !aliases.includes(field.key) ||
+        group.some((entry) =>
+          identities.some(
+            (other) =>
+              other.kind === "field" &&
+              other.scope === entry.scope &&
+              other.alias === entry.alias &&
+              (other.identifier !== entry.identifier ||
+                other.componentOwner !== entry.componentOwner),
+          ),
+        ) ||
+        group.some((entry) =>
+          identities.some(
+            (other) =>
+              other.kind === "field" &&
+              other.scope === entry.scope &&
+              other.componentOwner === entry.componentOwner &&
+              other.identifier !== entry.identifier,
+          ),
+        )
+      ) {
         valid = false;
         break;
       }
-      fields.push({ field, aliases, preferredAlias: field.key, componentOwner: group[0]!.componentOwner });
+      fields.push({
+        field,
+        aliases,
+        preferredAlias: field.key,
+        componentOwner: group[0]!.componentOwner,
+      });
     }
     if (!valid) continue;
-    contexts.push({ sourceFingerprint, bindingsSignature: JSON.stringify(source.body.module_bindings),
-      pageAlias: page.id, recordReference: page.record_type,
+    contexts.push({
+      sourceFingerprint,
+      bindingsSignature: JSON.stringify(source.body.module_bindings),
+      pageAlias: page.id,
+      recordReference: page.record_type,
       fieldRecordReference: `${moduleKey}:${record.key}`,
-      recordTypeId: record.recordTypeId, module: { organizationId: release.organizationId,
-        key: release.key, rootId: release.rootId, releaseRevision: release.releaseRevision,
-        releaseVersion: release.releaseVersion, contentFingerprint: release.contentFingerprint,
-        resolutionFingerprint: release.resolutionFingerprint }, fields });
+      recordTypeId: record.recordTypeId,
+      module: {
+        organizationId: release.organizationId,
+        key: release.key,
+        rootId: release.rootId,
+        releaseRevision: release.releaseRevision,
+        releaseVersion: release.releaseVersion,
+        contentFingerprint: release.contentFingerprint,
+        resolutionFingerprint: release.resolutionFingerprint,
+      },
+      fields,
+    });
   }
   return contexts;
 };
@@ -491,7 +563,7 @@ type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 type ResolvedDependencies = Readonly<{
   modules: readonly ResolvableModuleRelease[];
   connections: readonly ResolvableConnectionTypeRelease[];
-  compositionV2?: ApplicationCompositionCatalogueSnapshotV2;
+  composition?: ApplicationCompositionCatalogueSnapshot;
   platformOperations: readonly PlatformServiceOperationRelease[];
 }>;
 
@@ -600,19 +672,19 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
     : dependency.kind === "platform_block"
       ? `${dependency.kind}:${dependency.blockId}@${dependency.releaseVersion}`
       : dependency.kind === "application_flow"
-          ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
-          : dependency.kind === "application_flow_node"
-            ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`
-            : dependency.kind === "application_query"
-              ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
-              : dependency.kind === "module_query"
-                ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
-                : dependency.kind === "application_form"
-                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
-                    : dependency.kind === "application_workflow"
-                      ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
-                      : dependency.kind === "application_action"
-                        ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
+        ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
+        : dependency.kind === "application_flow_node"
+          ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`
+          : dependency.kind === "application_query"
+            ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
+            : dependency.kind === "module_query"
+              ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
+              : dependency.kind === "application_form"
+                ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
+                : dependency.kind === "application_workflow"
+                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
+                  : dependency.kind === "application_action"
+                    ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
                     : dependency.kind === "protected_operation"
                       ? `${dependency.kind}:${dependency.operation.owner.kind}:${
                           dependency.operation.owner.kind === "application"
@@ -621,7 +693,7 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
                               ? dependency.operation.owner.moduleRootId
                               : dependency.operation.owner.serviceId
                         }:${dependency.operation.operationId}`
-      : `${dependency.kind}:${dependency.key}`;
+                      : `${dependency.kind}:${dependency.key}`;
 
 const sortedManifest = (
   dependencies: readonly ExactDefinitionDependency[],
@@ -645,9 +717,7 @@ const verifyParsedModuleRelease = (
   } catch {
     return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   }
-  const parsedResolution = definitionResolutionSnapshotV3Schema.safeParse(
-    release.resolutionSnapshot,
-  );
+  const parsedResolution = definitionResolutionSnapshotSchema.safeParse(release.resolutionSnapshot);
   const ownResolution = parsedResolution.success
     ? parsedResolution.data.definitions.filter(
         (definition) =>
@@ -713,7 +783,7 @@ const verifyHistoricalModuleRelease = (
     candidate,
     expectedKey,
     release,
-    storedModuleCompilationOutputV3Schema.safeParse(release.compilationOutput),
+    storedModuleCompilationOutputSchema.safeParse(release.compilationOutput),
   );
 
 const sameModuleReleaseLocator = (
@@ -856,12 +926,12 @@ const findPinned = <Kind extends ExactDefinitionDependency["kind"]>(
   return matches[0] as Extract<ExactDefinitionDependency, { kind: Kind }>;
 };
 
-const resolveApplicationCompositionV2 = async (
-  source: ApplicationSourceDocumentV2,
+const resolveApplicationComposition = async (
+  source: ApplicationSourceDocument,
   catalogue: DefinitionPublicationCatalogue,
   modules: readonly ResolvableModuleRelease[],
   pinned?: readonly ExactDefinitionDependency[],
-): Promise<ApplicationCompositionCatalogueSnapshotV2> => {
+): Promise<ApplicationCompositionCatalogueSnapshot> => {
   const customComponentPlacement = {
     applicationKey: source.key,
     boundModuleReleases: modules.map((module) => ({
@@ -880,9 +950,9 @@ const resolveApplicationCompositionV2 = async (
     },
     customComponentPlacement,
   };
-  const candidate = await catalogue.readApplicationCompositionCatalogueSnapshotV2(selection);
+  const candidate = await catalogue.readApplicationCompositionCatalogueSnapshot(selection);
   if (candidate === undefined) return refuse("DEFINITION_DEPENDENCY_MISSING");
-  const parsed = applicationCompositionCatalogueSnapshotV2Schema.safeParse(candidate);
+  const parsed = applicationCompositionCatalogueSnapshotSchema.safeParse(candidate);
   if (!parsed.success) return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   const snapshot = parsed.data;
   // A custom component is placeable only by its owning application or by an application that binds
@@ -892,7 +962,7 @@ const resolveApplicationCompositionV2 = async (
     const custom = release.customComponent;
     if (
       custom !== undefined &&
-      !customComponentPlacementAllowedV2(custom.owner, customComponentPlacement)
+      !customComponentPlacementAllowed(custom.owner, customComponentPlacement)
     )
       return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   }
@@ -903,10 +973,9 @@ const resolveApplicationCompositionV2 = async (
   });
   if (snapshot.fingerprint !== fingerprint) refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   const blocks = new Map(
-    snapshot.platformBlocks.releases.map((release) => [
-      `${release.blockId}@${release.releaseVersion}`,
-      release,
-    ] as const),
+    snapshot.platformBlocks.releases.map(
+      (release) => [`${release.blockId}@${release.releaseVersion}`, release] as const,
+    ),
   );
   if (blocks.size !== source.body.platform_block_dependencies.length)
     refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
@@ -1011,9 +1080,9 @@ const resolveDependencies = async (
     connections.push(resolvedRelease);
   }
 
-  let compositionV2: ApplicationCompositionCatalogueSnapshotV2 | undefined;
+  let composition: ApplicationCompositionCatalogueSnapshot | undefined;
   if (candidate.draft.source.kind === "application")
-    compositionV2 = await resolveApplicationCompositionV2(
+    composition = await resolveApplicationComposition(
       candidate.draft.source,
       catalogue,
       modules,
@@ -1072,13 +1141,13 @@ const resolveDependencies = async (
   const expectedSubjects = [
     ...modules.map((release) => `module:${release.key}`),
     ...connections.map((release) => `connection_type:${release.key}`),
-    ...(compositionV2 === undefined
+    ...(composition === undefined
       ? []
       : [
-          ...compositionV2.platformBlocks.releases.map(
+          ...composition.platformBlocks.releases.map(
             (release) => `platform_block:${release.blockId}@${release.releaseVersion}`,
           ),
-          `platform_theme:${compositionV2.platformTheme.catalogueThemeId}`,
+          `platform_theme:${composition.platformTheme.catalogueThemeId}`,
         ]),
   ].sort(compareCanonicalStrings);
   if (
@@ -1092,15 +1161,14 @@ const resolveDependencies = async (
         )
         .map(subjectOf)
         .sort(compareCanonicalStrings),
-    ) !==
-      JSON.stringify(expectedSubjects)
+    ) !== JSON.stringify(expectedSubjects)
   )
     refuse("DEFINITION_CONFIRMATION_MISMATCH");
   return {
     modules,
     connections,
     platformOperations,
-    ...(compositionV2 === undefined ? {} : { compositionV2 }),
+    ...(composition === undefined ? {} : { composition }),
   };
 };
 
@@ -1200,18 +1268,23 @@ const protectedOperationReferenceLookups = (
       for (const relationship of recordType.relationships) {
         const targets = relationship.toRecordType
           ? [relationship.toRecordType]
-          : relationship.toRecordTypes ?? [];
+          : (relationship.toRecordTypes ?? []);
         const resolvedTargets = targets.filter((target) => target.state === "resolved");
         const recordTypeIds =
           targets.length > 0 && resolvedTargets.length === targets.length
-            ? [String(relationship.fromRecordTypeId), ...resolvedTargets.map((target) => String(target.recordTypeId))]
+            ? [
+                String(relationship.fromRecordTypeId),
+                ...resolvedTargets.map((target) => String(target.recordTypeId)),
+              ]
             : [];
         const key = String(relationship.relationshipId).toLowerCase();
         const prior = relationshipRecordTypeIdsById.get(key);
         if (
           prior !== undefined &&
           JSON.stringify([...prior].map((id) => id.toLowerCase()).sort(compareCanonicalStrings)) !==
-            JSON.stringify([...recordTypeIds].map((id) => id.toLowerCase()).sort(compareCanonicalStrings))
+            JSON.stringify(
+              [...recordTypeIds].map((id) => id.toLowerCase()).sort(compareCanonicalStrings),
+            )
         )
           return refuse("DEFINITION_COMPILATION_REFUSED");
         relationshipRecordTypeIdsById.set(key, recordTypeIds);
@@ -1251,8 +1324,8 @@ const flowTargetManifestFor = (
     contentFingerprint: output.artifact.contentFingerprint,
     resolutionFingerprint: output.resolutionFingerprint,
   }));
-  const platformOperationEntries: ExactDefinitionDependency[] =
-    dependencies.platformOperations.map((release) => ({
+  const platformOperationEntries: ExactDefinitionDependency[] = dependencies.platformOperations.map(
+    (release) => ({
       kind: "protected_operation" as const,
       operation: {
         owner: { kind: "platform_service" as const, serviceId: release.serviceId },
@@ -1262,7 +1335,8 @@ const flowTargetManifestFor = (
       contentFingerprint: release.contentFingerprint,
       resolutionFingerprint: output.resolutionFingerprint,
       catalogueFingerprint: release.catalogueFingerprint,
-    }));
+    }),
+  );
   return [...flowEntries, ...flowNodeEntries, ...platformOperationEntries];
 };
 
@@ -1289,10 +1363,10 @@ const manifestFor = (
       contentFingerprint: release.contentFingerprint,
       catalogueFingerprint: release.catalogueFingerprint,
     })),
-    ...(dependencies.compositionV2 === undefined
+    ...(dependencies.composition === undefined
       ? []
       : [
-          ...dependencies.compositionV2.platformBlocks.releases.map((release) => ({
+          ...dependencies.composition.platformBlocks.releases.map((release) => ({
             kind: "platform_block" as const,
             blockId: release.blockId,
             releaseVersion: release.releaseVersion,
@@ -1301,10 +1375,10 @@ const manifestFor = (
           })),
           {
             kind: "platform_theme" as const,
-            catalogueThemeId: dependencies.compositionV2.platformTheme.catalogueThemeId,
-            releaseVersion: dependencies.compositionV2.platformTheme.releaseVersion,
-            contentFingerprint: dependencies.compositionV2.platformTheme.contentFingerprint,
-            catalogueFingerprint: dependencies.compositionV2.platformTheme.catalogueFingerprint,
+            catalogueThemeId: dependencies.composition.platformTheme.catalogueThemeId,
+            releaseVersion: dependencies.composition.platformTheme.releaseVersion,
+            contentFingerprint: dependencies.composition.platformTheme.contentFingerprint,
+            catalogueFingerprint: dependencies.composition.platformTheme.catalogueFingerprint,
           },
         ]),
     ...flowTargetManifestFor(dependencies, output, resolution),
@@ -1315,7 +1389,7 @@ const buildResolution = (
   dependencies: ResolvedDependencies,
   ownVersion: string,
 ): DefinitionResolution => {
-  const ownDefinition: DefinitionResolutionSnapshotV2["definitions"][number] =
+  const ownDefinition: DefinitionResolutionSnapshot["definitions"][number] =
     candidate.draft.kind === "module"
       ? {
           kind: "module",
@@ -1329,7 +1403,7 @@ const buildResolution = (
           rootId: candidate.draft.rootId,
           exactVersion: ownVersion,
         };
-  const definitions: DefinitionResolutionSnapshotV2["definitions"] = [
+  const definitions: DefinitionResolutionSnapshot["definitions"] = [
     ownDefinition,
     ...dependencies.modules.map((release) => ({
       kind: "module" as const,
@@ -1378,18 +1452,12 @@ const buildResolution = (
   );
   if (candidate.draft.source.kind === "module") {
     const evidence = { contractVersion: "3.0.0" as const, definitions, identities: allIdentities };
-    return definitionResolutionSnapshotV3Schema.parse({
+    return definitionResolutionSnapshotSchema.parse({
       ...evidence,
       fingerprint: fingerprintCanonicalValue(evidence),
     });
   }
-  return createApplicationResolutionSnapshotV2({
-    definitions,
-    identities: allIdentities.filter(
-      (identity): identity is DefinitionResolutionSnapshotV2["identities"][number] =>
-        sourceIdentityKindV2Schema.safeParse(identity.kind).success,
-    ),
-  });
+  return createApplicationResolutionSnapshot({ definitions, identities: allIdentities });
 };
 
 const draftMetadata = (draft: StoredDefinitionDraft) => ({
@@ -1443,8 +1511,8 @@ const parsedCompilationRequest = <Schema extends z.ZodType>(
 
 const assertFinalPublicationValidation = (
   request:
-    | z.output<typeof applicationCompilationRequestV2Schema>
-    | z.output<typeof moduleCompilationRequestV3Schema>,
+    | z.output<typeof applicationCompilationRequestSchema>
+    | z.output<typeof moduleCompilationRequestSchema>,
   output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   historyEvidence: DefinitionPublicationHistoryEvidence,
@@ -1462,7 +1530,7 @@ const assertFinalPublicationValidation = (
 };
 
 type CompiledModuleCandidate = Readonly<{
-  request: z.output<typeof moduleCompilationRequestV3Schema>;
+  request: z.output<typeof moduleCompilationRequestSchema>;
   output: ModuleOutput;
   dependencyOutputs: readonly DefinitionCompilationOutput[];
 }>;
@@ -1486,7 +1554,7 @@ const compileModuleCandidate = (
     draftMetadata: draftMetadata(candidate.draft),
   };
   const provisional = compileParsedDefinition(
-    parsedCompilationRequest(moduleCompilationRequestV3Schema, {
+    parsedCompilationRequest(moduleCompilationRequestSchema, {
       ...common,
       savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
     }),
@@ -1504,7 +1572,7 @@ const compileModuleCandidate = (
     candidate.draft.rootId,
     provisional.canonical.content.sharingConditions,
   );
-  const request = parsedCompilationRequest(moduleCompilationRequestV3Schema, {
+  const request = parsedCompilationRequest(moduleCompilationRequestSchema, {
     ...common,
     savedConditionRevisions,
   });
@@ -1530,18 +1598,18 @@ const compileCandidate = (
     ...dependencies.connections.map((release) => release.compilationOutput),
   ].map((output) => definitionCompilationOutputSchema.parse(output));
   if (candidate.draft.source.kind === "application") {
-    if (resolution.contractVersion !== "2.0.0" || dependencies.compositionV2 === undefined)
+    if (resolution.contractVersion !== "3.0.0" || dependencies.composition === undefined)
       return refuse("DEFINITION_COMPILATION_REFUSED");
     const request = {
       sourceContractVersion: "2.0.0" as const,
       validationContractVersion: "2.0.0" as const,
       source: candidate.draft.source,
       resolution,
-      catalogueSnapshot: dependencies.compositionV2,
+      catalogueSnapshot: dependencies.composition,
       draftMetadata: draftMetadata(candidate.draft),
     };
     const output = compileParsedDefinition(
-      parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
+      parsedCompilationRequest(applicationCompilationRequestSchema, request),
       dependencyOutputs,
     );
     if (
@@ -1552,7 +1620,7 @@ const compileCandidate = (
       return refuse("DEFINITION_COMPILATION_REFUSED");
     if (final)
       assertFinalPublicationValidation(
-        parsedCompilationRequest(applicationCompilationRequestV2Schema, request),
+        parsedCompilationRequest(applicationCompilationRequestSchema, request),
         output,
         dependencyOutputs,
         candidate.historyEvidence,
@@ -1579,7 +1647,7 @@ const compileCandidate = (
       draftMetadata: draftMetadata(candidate.draft),
     };
     const provisional = compileParsedDefinition(
-      parsedCompilationRequest(moduleCompilationRequestV3Schema, {
+      parsedCompilationRequest(moduleCompilationRequestSchema, {
         ...common,
         savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
       }),
@@ -1602,7 +1670,7 @@ const compileCandidate = (
       savedConditionRevisions,
     };
     return compileParsedDefinition(
-      parsedCompilationRequest(moduleCompilationRequestV3Schema, request),
+      parsedCompilationRequest(moduleCompilationRequestSchema, request),
       dependencyOutputs,
     );
   }
@@ -1695,9 +1763,7 @@ const prepareFromReader = async (
     typeof confirmedImpact,
     { assignedVersion: string }
   >;
-  if (
-    finalImpact.assignedVersion !== confirmableImpact.assignedVersion
-  )
+  if (finalImpact.assignedVersion !== confirmableImpact.assignedVersion)
     refuse("DEFINITION_VERSION_REFUSED");
   const confirmation = definitionPublicationConfirmationSchema.parse({
     outcome: finalImpact.outcome,
@@ -1769,7 +1835,7 @@ const moduleQueryFilterValidationCommandSchema = z
   })
   .strict();
 
-const moduleQueryFieldTypes = new Set<ModuleFieldV3["type"]>([
+const moduleQueryFieldTypes = new Set<ModuleField["type"]>([
   "text",
   "long_text",
   "whole_number",
@@ -1892,7 +1958,7 @@ const conditionUsesOnlyCurrentOperands = (
     if (node.kind === "not") return visit(node.condition);
     if (node.kind === "all" || node.kind === "any") return node.conditions.every(visit);
     if (node.kind !== "comparison") return false;
-    const allowed = (operand: Extract<ConditionNode, { kind: "comparison" }> ["left"]): boolean =>
+    const allowed = (operand: Extract<ConditionNode, { kind: "comparison" }>["left"]): boolean =>
       operand.source === "value" ||
       (operand.source === "field" && fieldIds.has(operand.fieldId.toLowerCase())) ||
       (operand.source === "parameter" && parameterKeys.has(operand.key));
@@ -1909,7 +1975,7 @@ type EligibleModuleQuery = Readonly<{
 
 const moduleQueryChoices = (
   candidate: ValidatedDefinitionPublicationCandidate,
-  resolution: DefinitionResolutionSnapshotV3,
+  resolution: DefinitionResolutionSnapshot,
   output: ModuleOutput,
 ): readonly EligibleModuleQuery[] => {
   if (candidate.draft.kind !== "module" || candidate.draft.source.kind !== "module")
@@ -1932,14 +1998,24 @@ const moduleQueryChoices = (
       query.id,
       [query.id, query.key],
     );
-    const parsedQueryId = queryIdentity === undefined ? undefined : queryIdSchema.safeParse(queryIdentity);
+    const parsedQueryId =
+      queryIdentity === undefined ? undefined : queryIdSchema.safeParse(queryIdentity);
     const compiledQueries = moduleOutput.content.queries.filter(
-      (entry) => entry.key === query.key && parsedQueryId?.success === true && entry.queryId === parsedQueryId.data,
+      (entry) =>
+        entry.key === query.key &&
+        parsedQueryId?.success === true &&
+        entry.queryId === parsedQueryId.data,
     );
     if (parsedQueryId?.success !== true || compiledQueries.length !== 1)
-      return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" } };
+      return {
+        source: query,
+        choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" },
+      };
     if (query.record_type.includes(":"))
-      return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" } };
+      return {
+        source: query,
+        choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" },
+      };
     const records = source.body.record_types.filter((record) => record.key === query.record_type);
     const compiledQuery = compiledQueries[0]!;
     if (
@@ -1947,7 +2023,10 @@ const moduleQueryChoices = (
       compiledQuery.recordType.state !== "resolved" ||
       !sameIdentifier(compiledQuery.recordType.moduleRootId, parsedModuleRootId.data)
     )
-      return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" } };
+      return {
+        source: query,
+        choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" },
+      };
     const record = records[0]!;
     const recordIdentity = currentOwnedIdentity(
       resolution.identities,
@@ -1957,16 +2036,21 @@ const moduleQueryChoices = (
       record.id,
       [record.id, record.key],
     );
-    const parsedRecordTypeId = recordIdentity === undefined ? undefined : recordTypeIdSchema.safeParse(recordIdentity);
+    const parsedRecordTypeId =
+      recordIdentity === undefined ? undefined : recordTypeIdSchema.safeParse(recordIdentity);
     const compiledRecords = moduleOutput.content.recordTypes.filter(
-      (entry) => parsedRecordTypeId?.success === true && entry.recordTypeId === parsedRecordTypeId.data,
+      (entry) =>
+        parsedRecordTypeId?.success === true && entry.recordTypeId === parsedRecordTypeId.data,
     );
     if (
       parsedRecordTypeId?.success !== true ||
       compiledRecords.length !== 1 ||
       compiledQuery.recordType.recordTypeId !== parsedRecordTypeId.data
     )
-      return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" } };
+      return {
+        source: query,
+        choice: { ...queryChoiceBase, eligible: false, reason: "query_target_unsupported" },
+      };
 
     const fields: ModuleQueryFilterDraftContext["fields"][number][] = [];
     const compiledRecord = compiledRecords[0]!;
@@ -1984,14 +2068,13 @@ const moduleQueryChoices = (
         (field) => parsedFieldId?.success === true && field.fieldId === parsedFieldId.data,
       );
       const field = compiledFields[0];
-      if (parsedFieldId?.success !== true || compiledFields.length !== 1 || field === undefined) continue;
+      if (parsedFieldId?.success !== true || compiledFields.length !== 1 || field === undefined)
+        continue;
       if (!moduleQueryFieldTypes.has(field.type) || !field.filterable) continue;
       fields.push({ sourceAlias: sourceField.id, sourceKey: sourceField.key, field });
     }
     const parameters = query.inputs.flatMap((input) =>
-      isModuleQueryFilterParameterType(input.type)
-        ? [{ key: input.key, type: input.type }]
-        : [],
+      isModuleQueryFilterParameterType(input.type) ? [{ key: input.key, type: input.type }] : [],
     );
     const parameterKeys = parameters.map((input) => input.key);
     if (
@@ -1999,17 +2082,26 @@ const moduleQueryChoices = (
       parameters.length !== query.inputs.length ||
       new Set(parameterKeys).size !== parameterKeys.length
     )
-      return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "operand_context_unsupported" } };
+      return {
+        source: query,
+        choice: { ...queryChoiceBase, eligible: false, reason: "operand_context_unsupported" },
+      };
 
     let filter: ConditionNode | null = null;
     if (compiledQuery.filter !== undefined && compiledQuery.filter !== null) {
       const filterParsed = conditionNodeSchema.safeParse(compiledQuery.filter);
       if (!filterParsed.success)
-        return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "retained_filter_unsupported" } };
+        return {
+          source: query,
+          choice: { ...queryChoiceBase, eligible: false, reason: "retained_filter_unsupported" },
+        };
       filter = filterParsed.data;
     }
     if (!conditionUsesOnlyCurrentOperands(filter, fields, parameters))
-      return { source: query, choice: { ...queryChoiceBase, eligible: false, reason: "retained_filter_unsupported" } };
+      return {
+        source: query,
+        choice: { ...queryChoiceBase, eligible: false, reason: "retained_filter_unsupported" },
+      };
     const operandBinding = {
       organizationId: candidate.draft.organizationId,
       rootId: parsedModuleRootId.data,
@@ -2047,7 +2139,7 @@ const moduleQueryChoices = (
 };
 
 const definitionModuleReferenceFailures = (
-  request: z.output<typeof moduleCompilationRequestV3Schema>,
+  request: z.output<typeof moduleCompilationRequestSchema>,
   output: ModuleOutput,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
 ): readonly DefinitionRuleFailure[] => {
@@ -2061,7 +2153,7 @@ const definitionModuleReferenceFailures = (
 type CurrentModuleQueryFilterState = Readonly<{
   candidate: ValidatedDefinitionPublicationCandidate;
   dependencies: ResolvedDependencies;
-  resolution: DefinitionResolutionSnapshotV3;
+  resolution: DefinitionResolutionSnapshot;
   compiled: CompiledModuleCandidate;
   eligibleQueries: readonly EligibleModuleQuery[];
 }>;
@@ -2089,11 +2181,10 @@ const compileCurrentModuleQueryFilterState = async (
   | Readonly<{ kind: "available"; state: CurrentModuleQueryFilterState }>
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
 > => {
-  const candidate = validateCandidate(
-    context,
-    await reader.readCandidate(command.rootId),
-    { rootId: command.rootId, expectedDraftRevision: command.expectedDraftRevision },
-  );
+  const candidate = validateCandidate(context, await reader.readCandidate(command.rootId), {
+    rootId: command.rootId,
+    expectedDraftRevision: command.expectedDraftRevision,
+  });
   if (candidate.draft.kind !== "module" || candidate.draft.source.kind !== "module")
     refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   if (candidate.draft.sourceFingerprint !== command.expectedSavedSourceFingerprint)
@@ -2120,7 +2211,8 @@ const compileCurrentModuleQueryFilterState = async (
   try {
     const dependencies = await resolveDependencies(reader, catalogue, candidate);
     await assertNoCycle(reader, candidate, dependencies.modules);
-    const ownVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
+    const ownVersion =
+      candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
     const resolution = buildResolution(candidate, dependencies, ownVersion);
     if (resolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
     const compiled = compileModuleCandidate(candidate, dependencies, resolution);
@@ -2157,7 +2249,8 @@ const compileCurrentModuleQueryFilterState = async (
   }
 };
 
-type BeforeSaveReason = "flow_target_unsupported" | "operand_context_unsupported" | "retained_condition_unsupported";
+type BeforeSaveReason =
+  "flow_target_unsupported" | "operand_context_unsupported" | "retained_condition_unsupported";
 export type ModuleBeforeSaveConditionDraftContext = Readonly<{
   organizationId: OrganizationId;
   rootId: ModuleRootId;
@@ -2167,60 +2260,110 @@ export type ModuleBeforeSaveConditionDraftContext = Readonly<{
   resolutionFingerprint: Fingerprint;
   operandBindingFingerprint: Fingerprint;
   flow: Readonly<{ alias: string; key: string; flowId: string }>;
-  trigger: Readonly<{ id: string; recordAlias: string; recordKey: string; recordTypeId: RecordTypeId;
-    operations: readonly Readonly<{ kind: "create" | "update" }>[]; priority: number }>;
+  trigger: Readonly<{
+    id: string;
+    recordAlias: string;
+    recordKey: string;
+    recordTypeId: RecordTypeId;
+    operations: readonly Readonly<{ kind: "create" | "update" }>[];
+    priority: number;
+  }>;
   task: Readonly<{ id: string; path: readonly ["tasks", number]; nodeId: string }>;
-  fields: readonly Readonly<{ sourceAlias: string; sourceKey: string; field: ModuleFieldV3 }>[];
+  fields: readonly Readonly<{ sourceAlias: string; sourceKey: string; field: ModuleField }>[];
   condition: ConditionNode;
 }>;
 export type ModuleBeforeSaveConditionFlowChoice = Readonly<{
-  alias: string; key: string; taskId: string; eligible: boolean; reason?: BeforeSaveReason;
+  alias: string;
+  key: string;
+  taskId: string;
+  eligible: boolean;
+  reason?: BeforeSaveReason;
 }>;
 export type ModuleBeforeSaveConditionDraftResult =
-  | Readonly<{ kind: "available"; flowChoices: readonly ModuleBeforeSaveConditionFlowChoice[];
-      selected?: ModuleBeforeSaveConditionDraftContext }>
+  | Readonly<{
+      kind: "available";
+      flowChoices: readonly ModuleBeforeSaveConditionFlowChoice[];
+      selected?: ModuleBeforeSaveConditionDraftContext;
+    }>
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
   | Readonly<{ kind: "unsupported_context"; reason: BeforeSaveReason }>;
 export type ModuleBeforeSaveConditionValidationResult =
-  | Readonly<{ kind: "validated"; source: ModuleSourceDocument; sourceFingerprint: Fingerprint;
-      context: ModuleBeforeSaveConditionDraftContext; noChange: boolean }>
+  | Readonly<{
+      kind: "validated";
+      source: ModuleSourceDocument;
+      sourceFingerprint: Fingerprint;
+      context: ModuleBeforeSaveConditionDraftContext;
+      noChange: boolean;
+    }>
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
   | Readonly<{ kind: "unsupported_context"; reason: BeforeSaveReason }>;
 
 export const fingerprintModuleBeforeSaveConditionOperandBinding = (
   binding: Omit<ModuleBeforeSaveConditionDraftContext, "condition" | "operandBindingFingerprint">,
-): Fingerprint => fingerprintCanonicalValue({
-  domain: "vortex.module_before_save_condition_operand_binding.v1",
-  organizationId: binding.organizationId, rootId: binding.rootId, definitionKey: binding.definitionKey,
-  draftRevision: binding.draftRevision, savedSourceFingerprint: binding.savedSourceFingerprint,
-  resolutionFingerprint: binding.resolutionFingerprint, flow: binding.flow,
-  trigger: binding.trigger, task: binding.task, fields: binding.fields,
-});
+): Fingerprint =>
+  fingerprintCanonicalValue({
+    domain: "vortex.module_before_save_condition_operand_binding.v1",
+    organizationId: binding.organizationId,
+    rootId: binding.rootId,
+    definitionKey: binding.definitionKey,
+    draftRevision: binding.draftRevision,
+    savedSourceFingerprint: binding.savedSourceFingerprint,
+    resolutionFingerprint: binding.resolutionFingerprint,
+    flow: binding.flow,
+    trigger: binding.trigger,
+    task: binding.task,
+    fields: binding.fields,
+  });
 
 const beforeSaveReadShape = {
-  rootId: platformIdSchema, expectedDraftRevision: revisionSchema,
+  rootId: platformIdSchema,
+  expectedDraftRevision: revisionSchema,
   expectedSavedSourceFingerprint: fingerprintSchema,
 };
-const beforeSaveReadSchema = z.object({ ...beforeSaveReadShape,
-  flowAlias: z.string().min(1).max(240).optional(), taskId: z.string().min(1).max(160).optional(),
-}).strict().refine((value) => (value.flowAlias === undefined) === (value.taskId === undefined));
-const beforeSaveValidationSchema = z.object({ ...beforeSaveReadShape,
-  flowAlias: z.string().min(1).max(240), taskId: z.string().min(1).max(160),
-  expectedResolutionFingerprint: fingerprintSchema, expectedOperandBindingFingerprint: fingerprintSchema,
-  condition: conditionNodeSchema,
-}).strict();
-const beforeSaveFieldTypes = new Set<ModuleFieldV3["type"]>([
-  "text", "long_text", "whole_number", "decimal_number", "yes_no", "date", "date_time",
+const beforeSaveReadSchema = z
+  .object({
+    ...beforeSaveReadShape,
+    flowAlias: z.string().min(1).max(240).optional(),
+    taskId: z.string().min(1).max(160).optional(),
+  })
+  .strict()
+  .refine((value) => (value.flowAlias === undefined) === (value.taskId === undefined));
+const beforeSaveValidationSchema = z
+  .object({
+    ...beforeSaveReadShape,
+    flowAlias: z.string().min(1).max(240),
+    taskId: z.string().min(1).max(160),
+    expectedResolutionFingerprint: fingerprintSchema,
+    expectedOperandBindingFingerprint: fingerprintSchema,
+    condition: conditionNodeSchema,
+  })
+  .strict();
+const beforeSaveFieldTypes = new Set<ModuleField["type"]>([
+  "text",
+  "long_text",
+  "whole_number",
+  "decimal_number",
+  "yes_no",
+  "date",
+  "date_time",
 ]);
 const beforeSaveOperators = {
-  equals: "eq", not_equals: "neq", less_than: "lt", less_than_or_equal: "lte",
-  greater_than: "gt", greater_than_or_equal: "gte", contains: "contains",
+  equals: "eq",
+  not_equals: "neq",
+  less_than: "lt",
+  less_than_or_equal: "lte",
+  greater_than: "gt",
+  greater_than_or_equal: "gte",
+  contains: "contains",
 } as const;
 type BeforeSaveOperand = Extract<ConditionNode, { kind: "comparison" }>["left"];
 type BeforeSaveFields = ModuleBeforeSaveConditionDraftContext["fields"];
 
 /** Convert only the current, typed field subset; never accept a client source alias. */
-const encodeBeforeSaveCondition = (node: ConditionNode, fields: BeforeSaveFields): FlowFormula | undefined => {
+const encodeBeforeSaveCondition = (
+  node: ConditionNode,
+  fields: BeforeSaveFields,
+): FlowFormula | undefined => {
   if (node.kind === "not") {
     const child = encodeBeforeSaveCondition(node.condition, fields);
     return child === undefined ? undefined : { op: "not", arg: child };
@@ -2231,19 +2374,31 @@ const encodeBeforeSaveCondition = (node: ConditionNode, fields: BeforeSaveFields
     return { op: node.kind === "all" ? "and" : "or", args: children as FlowFormula[] };
   }
   if (node.kind !== "comparison") return undefined;
-  const fieldFor = (operand: BeforeSaveOperand) => operand.source === "field"
-    ? fields.find((entry) => entry.field.fieldId === operand.fieldId) : undefined;
+  const fieldFor = (operand: BeforeSaveOperand) =>
+    operand.source === "field"
+      ? fields.find((entry) => entry.field.fieldId === operand.fieldId)
+      : undefined;
   const leftField = fieldFor(node.left);
   const rightField = node.right === undefined ? undefined : fieldFor(node.right);
   if (leftField === undefined && rightField === undefined) return undefined;
-  const operand = (value: BeforeSaveOperand, comparedField: BeforeSaveFields[number] | undefined): FlowFormula | undefined => {
+  const operand = (
+    value: BeforeSaveOperand,
+    comparedField: BeforeSaveFields[number] | undefined,
+  ): FlowFormula | undefined => {
     if (value.source === "field") {
       const matches = fields.filter((entry) => entry.field.fieldId === value.fieldId);
-      return matches.length === 1 ? { op: "reference", reference: { source: "trigger_record", field: matches[0]!.sourceKey } } : undefined;
+      return matches.length === 1
+        ? { op: "reference", reference: { source: "trigger_record", field: matches[0]!.sourceKey } }
+        : undefined;
     }
-    if (value.source !== "value" || comparedField === undefined || value.value === null) return undefined;
+    if (value.source !== "value" || comparedField === undefined || value.value === null)
+      return undefined;
     const type = comparedField.field.type === "long_text" ? "text" : comparedField.field.type;
-    if (type === "whole_number" && (typeof value.value !== "number" || !Number.isSafeInteger(value.value))) return undefined;
+    if (
+      type === "whole_number" &&
+      (typeof value.value !== "number" || !Number.isSafeInteger(value.value))
+    )
+      return undefined;
     if (type === "decimal_number" && typeof value.value !== "string") return undefined;
     const literal = flowLiteralSchema.safeParse({ type, value: value.value });
     return literal.success ? { op: "literal", ...literal.data } : undefined;
@@ -2259,24 +2414,32 @@ const encodeBeforeSaveCondition = (node: ConditionNode, fields: BeforeSaveFields
 };
 
 /** A shared-controls view of a compiled predicate, with no evaluator or new stored grammar. */
-const beforeSaveCommonCondition = (node: RuleGraphCondition, fields: BeforeSaveFields): ConditionNode | undefined => {
+const beforeSaveCommonCondition = (
+  node: RuleGraphCondition,
+  fields: BeforeSaveFields,
+): ConditionNode | undefined => {
   if (node.kind === "not") {
     const child = beforeSaveCommonCondition(node.condition, fields);
     return child === undefined ? undefined : { kind: "not", condition: child };
   }
   if (node.kind === "all" || node.kind === "any") {
     const children = node.conditions.map((child) => beforeSaveCommonCondition(child, fields));
-    return children.some((child) => child === undefined) ? undefined
+    return children.some((child) => child === undefined)
+      ? undefined
       : { kind: node.kind, conditions: children as ConditionNode[] };
   }
   if (node.kind !== "comparison") return undefined;
   const operand = (value: typeof node.left): BeforeSaveOperand | undefined => {
     if (value.source === "current_field") {
       const matches = fields.filter((entry) => entry.field.fieldId === value.fieldId);
-      return matches.length === 1 ? { source: "field", fieldId: matches[0]!.field.fieldId } : undefined;
+      return matches.length === 1
+        ? { source: "field", fieldId: matches[0]!.field.fieldId }
+        : undefined;
     }
-    return value.source === "literal" && beforeSaveFieldTypes.has(value.value.type as ModuleFieldV3["type"])
-      ? { source: "value", value: value.value.value } : undefined;
+    return value.source === "literal" &&
+      beforeSaveFieldTypes.has(value.value.type as ModuleField["type"])
+      ? { source: "value", value: value.value.value }
+      : undefined;
   };
   const left = operand(node.left);
   if (left === undefined) return undefined;
@@ -2284,17 +2447,21 @@ const beforeSaveCommonCondition = (node: RuleGraphCondition, fields: BeforeSaveF
     return { kind: "comparison", operator: node.operator, left };
   if (!(node.operator in beforeSaveOperators) || !("right" in node)) return undefined;
   const right = operand(node.right);
-  return right === undefined ? undefined : { kind: "comparison", operator: node.operator, left, right };
+  return right === undefined
+    ? undefined
+    : { kind: "comparison", operator: node.operator, left, right };
 };
 
 type EligibleBeforeSaveCondition = Readonly<{
-  choice: ModuleBeforeSaveConditionFlowChoice; context?: ModuleBeforeSaveConditionDraftContext;
+  choice: ModuleBeforeSaveConditionFlowChoice;
+  context?: ModuleBeforeSaveConditionDraftContext;
 }>;
 const beforeSaveChoices = (
   state: CurrentModuleQueryFilterState,
 ): readonly EligibleBeforeSaveCondition[] => {
   const { candidate, resolution, compiled } = state;
-  if (candidate.draft.kind !== "module" || candidate.draft.source.kind !== "module") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  if (candidate.draft.kind !== "module" || candidate.draft.source.kind !== "module")
+    return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const source = candidate.draft.source;
   const rootId = moduleRootIdSchema.parse(candidate.draft.rootId);
   const result: EligibleBeforeSaveCondition[] = [];
@@ -2304,70 +2471,183 @@ const beforeSaveChoices = (
     for (const [index, task] of flow.tasks.entries()) {
       if (task.type !== "if" || !("condition" in task)) continue;
       const base = { alias: flow.id, key: flow.key, taskId: task.id };
-      const unsupported = (reason: BeforeSaveReason): void => { result.push({ choice: { ...base, eligible: false, reason } }); };
-      const flowId = currentOwnedIdentity(resolution.identities, source.key, "flow", "content", flow.id, [flow.id, flow.key]);
-      const recordMatches = source.body.record_types.filter((entry) => entry.id === trigger.recordTypeId || entry.key === trigger.recordTypeId);
+      const unsupported = (reason: BeforeSaveReason): void => {
+        result.push({ choice: { ...base, eligible: false, reason } });
+      };
+      const flowId = currentOwnedIdentity(
+        resolution.identities,
+        source.key,
+        "flow",
+        "content",
+        flow.id,
+        [flow.id, flow.key],
+      );
+      const recordMatches = source.body.record_types.filter(
+        (entry) => entry.id === trigger.recordTypeId || entry.key === trigger.recordTypeId,
+      );
       const record = recordMatches[0];
-      const compiledFlows = compiled.output.canonical.content.flows.filter((entry) => String(entry.id) === flowId && entry.key === flow.key);
-      const rules = compiled.output.canonical.content.rules.filter((entry) => String(entry.ruleId) === flowId && entry.key === flow.key);
-      if (flow.execution !== "transaction" || flow.triggers.length !== 1 || trigger.operations.some((entry) => entry.kind !== "create" && entry.kind !== "update") ||
-          flowId === undefined || compiledFlows.length !== 1 || rules.length !== 1 || recordMatches.length !== 1 || record === undefined) {
-        unsupported("flow_target_unsupported"); continue;
+      const compiledFlows = compiled.output.canonical.content.flows.filter(
+        (entry) => String(entry.id) === flowId && entry.key === flow.key,
+      );
+      const rules = compiled.output.canonical.content.rules.filter(
+        (entry) => String(entry.ruleId) === flowId && entry.key === flow.key,
+      );
+      if (
+        flow.execution !== "transaction" ||
+        flow.triggers.length !== 1 ||
+        trigger.operations.some((entry) => entry.kind !== "create" && entry.kind !== "update") ||
+        flowId === undefined ||
+        compiledFlows.length !== 1 ||
+        rules.length !== 1 ||
+        recordMatches.length !== 1 ||
+        record === undefined
+      ) {
+        unsupported("flow_target_unsupported");
+        continue;
       }
-      const recordId = currentOwnedIdentity(resolution.identities, source.key, "record_type", "content", record.id, [record.id, record.key]);
+      const recordId = currentOwnedIdentity(
+        resolution.identities,
+        source.key,
+        "record_type",
+        "content",
+        record.id,
+        [record.id, record.key],
+      );
       const recordType = recordTypeIdSchema.safeParse(recordId);
-      const compiledRecords = compiled.output.canonical.content.recordTypes.filter((entry) => entry.recordTypeId === recordId);
+      const compiledRecords = compiled.output.canonical.content.recordTypes.filter(
+        (entry) => entry.recordTypeId === recordId,
+      );
       const rule = rules[0]!;
-      if (!recordType.success || compiledRecords.length !== 1 || rule.subjectRecordTypeId !== recordType.data || rule.priority !== trigger.priority) {
-        unsupported("flow_target_unsupported"); continue;
+      if (
+        !recordType.success ||
+        compiledRecords.length !== 1 ||
+        rule.subjectRecordTypeId !== recordType.data ||
+        rule.priority !== trigger.priority
+      ) {
+        unsupported("flow_target_unsupported");
+        continue;
       }
       const fields: BeforeSaveFields[number][] = [];
       let validFields = true;
       for (const declaration of record.fields) {
-        const id = currentOwnedIdentity(resolution.identities, source.key, "field", `record:${record.key}`, declaration.id, [declaration.id, declaration.key]);
-        const matches = compiledRecords[0]!.fields.filter((entry) => entry.fieldId === id && entry.key === declaration.key);
-        if (id === undefined || matches.length !== 1) { validFields = false; break; }
-        if (beforeSaveFieldTypes.has(matches[0]!.type)) fields.push({ sourceAlias: declaration.id, sourceKey: declaration.key, field: matches[0]! });
+        const id = currentOwnedIdentity(
+          resolution.identities,
+          source.key,
+          "field",
+          `record:${record.key}`,
+          declaration.id,
+          [declaration.id, declaration.key],
+        );
+        const matches = compiledRecords[0]!.fields.filter(
+          (entry) => entry.fieldId === id && entry.key === declaration.key,
+        );
+        if (id === undefined || matches.length !== 1) {
+          validFields = false;
+          break;
+        }
+        if (beforeSaveFieldTypes.has(matches[0]!.type))
+          fields.push({
+            sourceAlias: declaration.id,
+            sourceKey: declaration.key,
+            field: matches[0]!,
+          });
       }
-      const nodeId = currentOwnedIdentity(resolution.identities, source.key, "rule_node", `rule:${flow.key}`, `task_${task.id}`, [`task_${task.id}`]);
+      const nodeId = currentOwnedIdentity(
+        resolution.identities,
+        source.key,
+        "rule_node",
+        `rule:${flow.key}`,
+        `task_${task.id}`,
+        [`task_${task.id}`],
+      );
       const nodes = rule.nodes.filter((entry) => entry.nodeId === nodeId);
       const node = nodes[0];
-      if (!validFields || fields.length === 0 || new Set(fields.map((entry) => entry.field.fieldId)).size !== fields.length ||
-          nodeId === undefined || nodes.length !== 1 || node?.type !== "condition") {
-        unsupported("operand_context_unsupported"); continue;
+      if (
+        !validFields ||
+        fields.length === 0 ||
+        new Set(fields.map((entry) => entry.field.fieldId)).size !== fields.length ||
+        nodeId === undefined ||
+        nodes.length !== 1 ||
+        node?.type !== "condition"
+      ) {
+        unsupported("operand_context_unsupported");
+        continue;
       }
       const condition = beforeSaveCommonCondition(node.condition, fields);
-      const encoded = condition === undefined ? undefined : encodeBeforeSaveCondition(condition, fields);
-      if (condition === undefined || encoded === undefined || fingerprintCanonicalValue(encoded) !== fingerprintCanonicalValue(task.condition)) {
-        unsupported("retained_condition_unsupported"); continue;
+      const encoded =
+        condition === undefined ? undefined : encodeBeforeSaveCondition(condition, fields);
+      if (
+        condition === undefined ||
+        encoded === undefined ||
+        fingerprintCanonicalValue(encoded) !== fingerprintCanonicalValue(task.condition)
+      ) {
+        unsupported("retained_condition_unsupported");
+        continue;
       }
-      const binding: Omit<ModuleBeforeSaveConditionDraftContext, "condition" | "operandBindingFingerprint"> = {
-        organizationId: candidate.draft.organizationId, rootId, definitionKey: source.key,
-        draftRevision: candidate.draft.draftRevision, savedSourceFingerprint: candidate.draft.sourceFingerprint,
+      const binding: Omit<
+        ModuleBeforeSaveConditionDraftContext,
+        "condition" | "operandBindingFingerprint"
+      > = {
+        organizationId: candidate.draft.organizationId,
+        rootId,
+        definitionKey: source.key,
+        draftRevision: candidate.draft.draftRevision,
+        savedSourceFingerprint: candidate.draft.sourceFingerprint,
         resolutionFingerprint: compiled.output.resolutionFingerprint,
         flow: { alias: flow.id, key: flow.key, flowId },
-        trigger: { id: trigger.id, recordAlias: record.id, recordKey: record.key, recordTypeId: recordType.data,
-          operations: trigger.operations.map((entry) => ({ kind: entry.kind as "create" | "update" })), priority: trigger.priority },
-        task: { id: task.id, path: ["tasks", index], nodeId }, fields,
+        trigger: {
+          id: trigger.id,
+          recordAlias: record.id,
+          recordKey: record.key,
+          recordTypeId: recordType.data,
+          operations: trigger.operations.map((entry) => ({
+            kind: entry.kind as "create" | "update",
+          })),
+          priority: trigger.priority,
+        },
+        task: { id: task.id, path: ["tasks", index], nodeId },
+        fields,
       };
-      result.push({ choice: { ...base, eligible: true }, context: { ...binding, condition,
-        operandBindingFingerprint: fingerprintModuleBeforeSaveConditionOperandBinding(binding) } });
+      result.push({
+        choice: { ...base, eligible: true },
+        context: {
+          ...binding,
+          condition,
+          operandBindingFingerprint: fingerprintModuleBeforeSaveConditionOperandBinding(binding),
+        },
+      });
     }
   }
   return result;
 };
-const beforeSaveSemanticFailures = (compiled: CompiledModuleCandidate): readonly DefinitionRuleFailure[] =>
+const beforeSaveSemanticFailures = (
+  compiled: CompiledModuleCandidate,
+): readonly DefinitionRuleFailure[] =>
   ["vortex.definition.module_references", "vortex.definition.module_rule_graphs"].flatMap((id) => {
     const rule = definitionSemanticRules.find((entry) => entry.ruleId === id);
     if (rule === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
-    return rule.run({ requests: [compiled.request], outputs: [compiled.output], dependencyOutputs: compiled.dependencyOutputs });
+    return rule.run({
+      requests: [compiled.request],
+      outputs: [compiled.output],
+      dependencyOutputs: compiled.dependencyOutputs,
+    });
   });
-const compileBeforeSaveState = async (...args: Parameters<typeof compileCurrentModuleQueryFilterState>) => {
+const compileBeforeSaveState = async (
+  ...args: Parameters<typeof compileCurrentModuleQueryFilterState>
+) => {
   const state = await compileCurrentModuleQueryFilterState(...args);
   if (state.kind !== "available") return state;
   const failures = beforeSaveSemanticFailures(state.state.compiled);
-  return failures.length === 0 ? state : { kind: "validation_failed" as const,
-    validation: moduleValidationFromFailures(failures, state.state.candidate.draft.source as ModuleSourceDocument, args[0].correlationId) };
+  return failures.length === 0
+    ? state
+    : {
+        kind: "validation_failed" as const,
+        validation: moduleValidationFromFailures(
+          failures,
+          state.state.candidate.draft.source as ModuleSourceDocument,
+          args[0].correlationId,
+        ),
+      };
 };
 
 /**
@@ -2386,86 +2666,188 @@ export const createDefinitionPublicationService = (
   catalogue: DefinitionPublicationCatalogue,
   authority: BuilderAuthority,
 ) => ({
-  readModuleBeforeSaveConditionDraft: async (context: SessionContext, input: unknown): Promise<ModuleBeforeSaveConditionDraftResult> => {
+  readModuleBeforeSaveConditionDraft: async (
+    context: SessionContext,
+    input: unknown,
+  ): Promise<ModuleBeforeSaveConditionDraftResult> => {
     const parsed = beforeSaveReadSchema.safeParse(input);
     if (!parsed.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     await authorize(authority, context, { kind: "draft_change", rootId: parsed.data.rootId });
-    return safely(async () => repository.read(context, async (reader) => {
-      const state = await compileBeforeSaveState(context, reader, catalogue, parsed.data);
-      if (state.kind !== "available") return state;
-      const choices = beforeSaveChoices(state.state);
-      if (parsed.data.flowAlias === undefined) return { kind: "available", flowChoices: choices.map((entry) => entry.choice) };
-      const matches = choices.filter((entry) => entry.choice.alias === parsed.data.flowAlias && entry.choice.taskId === parsed.data.taskId);
-      if (matches.length !== 1) return { kind: "unsupported_context", reason: "flow_target_unsupported" };
-      return { kind: "available", flowChoices: choices.map((entry) => entry.choice),
-        ...(matches[0]!.context === undefined ? {} : { selected: matches[0]!.context }) };
-    }));
+    return safely(async () =>
+      repository.read(context, async (reader) => {
+        const state = await compileBeforeSaveState(context, reader, catalogue, parsed.data);
+        if (state.kind !== "available") return state;
+        const choices = beforeSaveChoices(state.state);
+        if (parsed.data.flowAlias === undefined)
+          return { kind: "available", flowChoices: choices.map((entry) => entry.choice) };
+        const matches = choices.filter(
+          (entry) =>
+            entry.choice.alias === parsed.data.flowAlias &&
+            entry.choice.taskId === parsed.data.taskId,
+        );
+        if (matches.length !== 1)
+          return { kind: "unsupported_context", reason: "flow_target_unsupported" };
+        return {
+          kind: "available",
+          flowChoices: choices.map((entry) => entry.choice),
+          ...(matches[0]!.context === undefined ? {} : { selected: matches[0]!.context }),
+        };
+      }),
+    );
   },
-  validateModuleBeforeSaveConditionDraft: async (context: SessionContext, input: unknown): Promise<ModuleBeforeSaveConditionValidationResult> => {
+  validateModuleBeforeSaveConditionDraft: async (
+    context: SessionContext,
+    input: unknown,
+  ): Promise<ModuleBeforeSaveConditionValidationResult> => {
     const parsed = beforeSaveValidationSchema.safeParse(input);
     if (!parsed.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const command = parsed.data;
     await authorize(authority, context, { kind: "draft_change", rootId: command.rootId });
-    return safely(async () => repository.read(context, async (reader) => {
-      const loaded = await compileBeforeSaveState(context, reader, catalogue, command);
-      if (loaded.kind !== "available") return loaded;
-      const state = loaded.state;
-      const matches = beforeSaveChoices(state).filter((entry) => entry.choice.alias === command.flowAlias && entry.choice.taskId === command.taskId);
-      const current = matches.length === 1 ? matches[0]!.context : undefined;
-      if (current === undefined) return { kind: "unsupported_context", reason: matches[0]?.choice.reason ?? "flow_target_unsupported" };
-      if (current.resolutionFingerprint !== command.expectedResolutionFingerprint || current.operandBindingFingerprint !== command.expectedOperandBindingFingerprint)
-        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const encoded = encodeBeforeSaveCondition(command.condition, current.fields);
-      const formula = flowFormulaSchema.safeParse(encoded);
-      if (!formula.success) return { kind: "unsupported_context", reason: "operand_context_unsupported" };
-      const draft = state.candidate.draft;
-      if (draft.kind !== "module" || draft.source.kind !== "module") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      if (fingerprintCanonicalValue(command.condition) === fingerprintCanonicalValue(current.condition))
-        return { kind: "validated", source: draft.source, sourceFingerprint: draft.sourceFingerprint, context: current, noChange: true };
-      const source = structuredClone(draft.source);
-      const flows = source.body.flows.filter((entry) => entry.id === current.flow.alias && entry.key === current.flow.key);
-      const task = flows.length === 1 ? flows[0]!.tasks[current.task.path[1]] : undefined;
-      if (task?.type !== "if" || !("condition" in task) || task.id !== current.task.id) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      task.condition = formula.data;
-      if (fingerprintCanonicalValue(extractModuleSourceIdentityRequirementsV3(source)) !== fingerprintCanonicalValue(extractModuleSourceIdentityRequirementsV3(draft.source)))
-        return refuse("DEFINITION_COMPILATION_REFUSED");
-      const parsedSource = moduleSourceDocumentSchema.safeParse(source);
-      if (!parsedSource.success) return { kind: "validation_failed", validation: translateDefinitionSchemaError(
-        parsedSource.error, moduleValidationTranslationContext(draft.source, context.correlationId)) };
-      const shape = validateDefinitionSource(parsedSource.data);
-      if (!shape.valid) return { kind: "validation_failed", validation: moduleValidationFromFailures(shape.failures, source, context.correlationId) };
-      const sourceFingerprint = fingerprintCanonicalValue(source);
-      const candidate: ValidatedDefinitionPublicationCandidate = { ...state.candidate, draft: { ...draft, source, sourceFingerprint } };
-      try {
-        const resolution = buildResolution(candidate, state.dependencies, candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0");
-        if (resolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
-        const compiled = compileModuleCandidate(candidate, state.dependencies, resolution);
-        const failures = beforeSaveSemanticFailures(compiled);
-        if (failures.length > 0) return { kind: "validation_failed", validation: moduleValidationFromFailures(failures, source, context.correlationId) };
-        const choices = beforeSaveChoices({ ...state, candidate, resolution, compiled });
-        const next = choices.filter((entry) => entry.choice.alias === current.flow.alias && entry.choice.taskId === current.task.id);
-        const nextContext = next.length === 1 ? next[0]!.context : undefined;
-        if (nextContext === undefined || nextContext.resolutionFingerprint !== current.resolutionFingerprint ||
-            fingerprintCanonicalValue(nextContext.condition) !== fingerprintCanonicalValue(command.condition)) return refuse("DEFINITION_COMPILATION_REFUSED");
-        // Full compiled source is fixed except this existing node's predicate and authored flow predicate.
-        const expected = structuredClone(state.compiled.output.canonical.content);
-        const nextContent = compiled.output.canonical.content;
-        const expectedFlow = expected.flows.find((entry) => String(entry.id) === current.flow.flowId);
-        const nextFlow = nextContent.flows.find((entry) => String(entry.id) === current.flow.flowId);
-        const expectedTask = expectedFlow?.tasks[current.task.path[1]];
-        const nextTask = nextFlow?.tasks[current.task.path[1]];
-        const expectedNode = expected.rules.find((entry) => String(entry.ruleId) === current.flow.flowId)?.nodes.find((entry) => entry.nodeId === current.task.nodeId);
-        const nextNode = nextContent.rules.find((entry) => String(entry.ruleId) === current.flow.flowId)?.nodes.find((entry) => entry.nodeId === current.task.nodeId);
-        if (expectedTask?.type !== "if" || !("condition" in expectedTask) || nextTask?.type !== "if" || !("condition" in nextTask) || expectedNode?.type !== "condition" || nextNode?.type !== "condition") return refuse("DEFINITION_COMPILATION_REFUSED");
-        expectedTask.condition = nextTask.condition;
-        expectedNode.condition = nextNode.condition;
-        if (fingerprintCanonicalValue(expected) !== fingerprintCanonicalValue(nextContent)) return refuse("DEFINITION_COMPILATION_REFUSED");
-        return { kind: "validated", source, sourceFingerprint, context: nextContext, noChange: false };
-      } catch (error) {
-        if (!(error instanceof DefinitionCompilationError)) throw error;
-        return { kind: "validation_failed", validation: moduleValidationFailure(error, source, context.correlationId) };
-      }
-    }));
+    return safely(async () =>
+      repository.read(context, async (reader) => {
+        const loaded = await compileBeforeSaveState(context, reader, catalogue, command);
+        if (loaded.kind !== "available") return loaded;
+        const state = loaded.state;
+        const matches = beforeSaveChoices(state).filter(
+          (entry) =>
+            entry.choice.alias === command.flowAlias && entry.choice.taskId === command.taskId,
+        );
+        const current = matches.length === 1 ? matches[0]!.context : undefined;
+        if (current === undefined)
+          return {
+            kind: "unsupported_context",
+            reason: matches[0]?.choice.reason ?? "flow_target_unsupported",
+          };
+        if (
+          current.resolutionFingerprint !== command.expectedResolutionFingerprint ||
+          current.operandBindingFingerprint !== command.expectedOperandBindingFingerprint
+        )
+          return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const encoded = encodeBeforeSaveCondition(command.condition, current.fields);
+        const formula = flowFormulaSchema.safeParse(encoded);
+        if (!formula.success)
+          return { kind: "unsupported_context", reason: "operand_context_unsupported" };
+        const draft = state.candidate.draft;
+        if (draft.kind !== "module" || draft.source.kind !== "module")
+          return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        if (
+          fingerprintCanonicalValue(command.condition) ===
+          fingerprintCanonicalValue(current.condition)
+        )
+          return {
+            kind: "validated",
+            source: draft.source,
+            sourceFingerprint: draft.sourceFingerprint,
+            context: current,
+            noChange: true,
+          };
+        const source = structuredClone(draft.source);
+        const flows = source.body.flows.filter(
+          (entry) => entry.id === current.flow.alias && entry.key === current.flow.key,
+        );
+        const task = flows.length === 1 ? flows[0]!.tasks[current.task.path[1]] : undefined;
+        if (task?.type !== "if" || !("condition" in task) || task.id !== current.task.id)
+          return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        task.condition = formula.data;
+        if (
+          fingerprintCanonicalValue(extractModuleSourceIdentityRequirements(source)) !==
+          fingerprintCanonicalValue(extractModuleSourceIdentityRequirements(draft.source))
+        )
+          return refuse("DEFINITION_COMPILATION_REFUSED");
+        const parsedSource = moduleSourceDocumentSchema.safeParse(source);
+        if (!parsedSource.success)
+          return {
+            kind: "validation_failed",
+            validation: translateDefinitionSchemaError(
+              parsedSource.error,
+              moduleValidationTranslationContext(draft.source, context.correlationId),
+            ),
+          };
+        const shape = validateDefinitionSource(parsedSource.data);
+        if (!shape.valid)
+          return {
+            kind: "validation_failed",
+            validation: moduleValidationFromFailures(shape.failures, source, context.correlationId),
+          };
+        const sourceFingerprint = fingerprintCanonicalValue(source);
+        const candidate: ValidatedDefinitionPublicationCandidate = {
+          ...state.candidate,
+          draft: { ...draft, source, sourceFingerprint },
+        };
+        try {
+          const resolution = buildResolution(
+            candidate,
+            state.dependencies,
+            candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0",
+          );
+          if (resolution.contractVersion !== "3.0.0")
+            return refuse("DEFINITION_COMPILATION_REFUSED");
+          const compiled = compileModuleCandidate(candidate, state.dependencies, resolution);
+          const failures = beforeSaveSemanticFailures(compiled);
+          if (failures.length > 0)
+            return {
+              kind: "validation_failed",
+              validation: moduleValidationFromFailures(failures, source, context.correlationId),
+            };
+          const choices = beforeSaveChoices({ ...state, candidate, resolution, compiled });
+          const next = choices.filter(
+            (entry) =>
+              entry.choice.alias === current.flow.alias && entry.choice.taskId === current.task.id,
+          );
+          const nextContext = next.length === 1 ? next[0]!.context : undefined;
+          if (
+            nextContext === undefined ||
+            nextContext.resolutionFingerprint !== current.resolutionFingerprint ||
+            fingerprintCanonicalValue(nextContext.condition) !==
+              fingerprintCanonicalValue(command.condition)
+          )
+            return refuse("DEFINITION_COMPILATION_REFUSED");
+          // Full compiled source is fixed except this existing node's predicate and authored flow predicate.
+          const expected = structuredClone(state.compiled.output.canonical.content);
+          const nextContent = compiled.output.canonical.content;
+          const expectedFlow = expected.flows.find(
+            (entry) => String(entry.id) === current.flow.flowId,
+          );
+          const nextFlow = nextContent.flows.find(
+            (entry) => String(entry.id) === current.flow.flowId,
+          );
+          const expectedTask = expectedFlow?.tasks[current.task.path[1]];
+          const nextTask = nextFlow?.tasks[current.task.path[1]];
+          const expectedNode = expected.rules
+            .find((entry) => String(entry.ruleId) === current.flow.flowId)
+            ?.nodes.find((entry) => entry.nodeId === current.task.nodeId);
+          const nextNode = nextContent.rules
+            .find((entry) => String(entry.ruleId) === current.flow.flowId)
+            ?.nodes.find((entry) => entry.nodeId === current.task.nodeId);
+          if (
+            expectedTask?.type !== "if" ||
+            !("condition" in expectedTask) ||
+            nextTask?.type !== "if" ||
+            !("condition" in nextTask) ||
+            expectedNode?.type !== "condition" ||
+            nextNode?.type !== "condition"
+          )
+            return refuse("DEFINITION_COMPILATION_REFUSED");
+          expectedTask.condition = nextTask.condition;
+          expectedNode.condition = nextNode.condition;
+          if (fingerprintCanonicalValue(expected) !== fingerprintCanonicalValue(nextContent))
+            return refuse("DEFINITION_COMPILATION_REFUSED");
+          return {
+            kind: "validated",
+            source,
+            sourceFingerprint,
+            context: nextContext,
+            noChange: false,
+          };
+        } catch (error) {
+          if (!(error instanceof DefinitionCompilationError)) throw error;
+          return {
+            kind: "validation_failed",
+            validation: moduleValidationFailure(error, source, context.correlationId),
+          };
+        }
+      }),
+    );
   },
   readModuleQueryFilterDraft: async (
     context: SessionContext,
@@ -2477,7 +2859,12 @@ export const createDefinitionPublicationService = (
     await authorize(authority, context, { kind: "draft_change", rootId: parsed.rootId });
     return safely(async () =>
       repository.read(context, async (reader) => {
-        const state = await compileCurrentModuleQueryFilterState(context, reader, catalogue, parsed);
+        const state = await compileCurrentModuleQueryFilterState(
+          context,
+          reader,
+          catalogue,
+          parsed,
+        );
         if (state.kind !== "available") return state;
         const queryChoices = state.state.eligibleQueries.map((entry) => entry.choice);
         if (parsed.queryAlias === undefined) return { kind: "available", queryChoices };
@@ -2506,7 +2893,12 @@ export const createDefinitionPublicationService = (
     await authorize(authority, context, { kind: "draft_change", rootId: parsed.rootId });
     return safely(async () =>
       repository.read(context, async (reader) => {
-        const state = await compileCurrentModuleQueryFilterState(context, reader, catalogue, parsed);
+        const state = await compileCurrentModuleQueryFilterState(
+          context,
+          reader,
+          catalogue,
+          parsed,
+        );
         if (state.kind !== "available") return state;
         const selected = state.state.eligibleQueries.filter(
           (entry) => entry.source.id === parsed.queryAlias,
@@ -2557,12 +2949,14 @@ export const createDefinitionPublicationService = (
           ...state.state.candidate,
           draft: { ...draft, source: source.data, sourceFingerprint },
         };
-        let resolution: DefinitionResolutionSnapshotV3;
+        let resolution: DefinitionResolutionSnapshot;
         let compiled: CompiledModuleCandidate;
         try {
-          const ownVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
+          const ownVersion =
+            candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
           const nextResolution = buildResolution(candidate, state.state.dependencies, ownVersion);
-          if (nextResolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
+          if (nextResolution.contractVersion !== "3.0.0")
+            return refuse("DEFINITION_COMPILATION_REFUSED");
           resolution = nextResolution;
           compiled = compileModuleCandidate(candidate, state.state.dependencies, resolution);
         } catch (error) {
@@ -2597,7 +2991,8 @@ export const createDefinitionPublicationService = (
         if (nextContext.resolutionFingerprint !== current.resolutionFingerprint)
           refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
         const noChange =
-          fingerprintCanonicalValue(nextContext.filter) === fingerprintCanonicalValue(current.filter);
+          fingerprintCanonicalValue(nextContext.filter) ===
+          fingerprintCanonicalValue(current.filter);
         return {
           kind: "validated",
           source: noChange ? draft.source : source.data,
@@ -2662,12 +3057,7 @@ export const createDefinitionPublicationService = (
         const currentVersion =
           candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
         const resolution = buildResolution(candidate, dependencies, currentVersion);
-        const compilation = compileCandidate(
-          candidate,
-          dependencies,
-          resolution,
-          false,
-        );
+        const compilation = compileCandidate(candidate, dependencies, resolution, false);
         if (
           compilation.kind !== "application" ||
           compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
@@ -2675,8 +3065,12 @@ export const createDefinitionPublicationService = (
           return refuse("DEFINITION_COMPILATION_REFUSED");
         return {
           compilation,
-          conditionContexts: projectDraftConditionContexts(candidate.draft.source,
-            candidate.draft.sourceFingerprint, dependencies, resolution),
+          conditionContexts: projectDraftConditionContexts(
+            candidate.draft.source,
+            candidate.draft.sourceFingerprint,
+            dependencies,
+            resolution,
+          ),
           currentReleaseRevision: candidate.draft.publishedRevision ?? null,
         };
       }),

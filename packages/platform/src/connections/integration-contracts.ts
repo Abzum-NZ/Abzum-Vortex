@@ -8,7 +8,7 @@ import {
   secretReferenceSchema,
 } from "../catalogue/common";
 import { accessGrantSchema, grantConsentDecisionSchema } from "../access/identity-access";
-import { conditionNodeSchema } from "../definition/module-contracts";
+import { conditionNodeSchema } from "../definition/module-foundation-contracts";
 import { recordScopeSchema } from "../records/records";
 import {
   activityIdSchema,

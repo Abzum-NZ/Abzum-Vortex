@@ -1,17 +1,17 @@
 import "server-only";
 
 import type {
-  sourceIdentityAssignmentV3Schema} from "@vortex/platform/schema";
+  sourceIdentityAssignmentSchema} from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   canonicalJson,
   pageIdSchema,
   platformIdSchema,
   sameId,
-  type ApplicationContentV2,
-  type ApplicationSourceDocumentV2,
-  type BlockPropertyValueV2Contract,
-  type PageDefinitionV2,
+  type ApplicationContent,
+  type ApplicationSourceDocument,
+  type BlockPropertyValueContract,
+  type PageDefinition,
 } from "@vortex/platform/schema";
 import {
   fingerprintCanonicalValue,
@@ -20,7 +20,7 @@ import {
 } from "@web/platform-server";
 import { z } from "zod";
 
-type SourceIdentityAssignmentV3 = ReturnType<typeof sourceIdentityAssignmentV3Schema.parse>;
+type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
 export const pageAdoptionCommandSchema = z
   .object({
@@ -56,11 +56,11 @@ export type PageAdoptionTargetOption = Readonly<{
 }>;
 
 type PageAdoptionPlan = Readonly<{
-  source: ApplicationSourceDocumentV2;
-  expectedCanonicalContent: ApplicationContentV2;
+  source: ApplicationSourceDocument;
+  expectedCanonicalContent: ApplicationContent;
   comparisonFingerprint: string;
-  original: Readonly<{ pageId: string; key: string; name: string; type: PageDefinitionV2["type"] }>;
-  replacement: Readonly<{ pageId: string; key: string; name: string; type: PageDefinitionV2["type"] }>;
+  original: Readonly<{ pageId: string; key: string; name: string; type: PageDefinition["type"] }>;
+  replacement: Readonly<{ pageId: string; key: string; name: string; type: PageDefinition["type"] }>;
   candidate: Readonly<{ releaseRevision: number; releaseVersion: string; impactReasons: readonly Readonly<{ code: string; impact: string }>[] }>;
   differences: Readonly<{
     entries: readonly PageAdoptionDifference[];
@@ -72,7 +72,7 @@ type PageAdoptionPlan = Readonly<{
 }>;
 
 type DefaultPageComposition = Extract<
-  PageDefinitionV2["composition"],
+  PageDefinition["composition"],
   { shellKind: "default"; main: unknown }
 >;
 type PagePlacementSlot = DefaultPageComposition["main"];
@@ -91,7 +91,7 @@ const safeDifferenceLabel = (value: string): string => {
   return value.length > maxDifferenceLabelLength ? `${bounded}…` : bounded;
 };
 
-const propertyDisplayValue = (value: BlockPropertyValueV2Contract): string => {
+const propertyDisplayValue = (value: BlockPropertyValueContract): string => {
   switch (value.kind) {
     case "text":
       return `Text content (${value.value.length} characters)`;
@@ -138,8 +138,8 @@ const pageLayoutDisplay = (layout: PagePlacement["responsive"]["desktop"]): stri
 };
 
 const pageFacts = (
-  page: PageDefinitionV2,
-  content: ApplicationContentV2,
+  page: PageDefinition,
+  content: ApplicationContent,
 ): Readonly<{ facts: ReadonlyMap<string, PageFact>; truncated: boolean }> => {
   const facts = new Map<string, PageFact>();
   let truncated = false;
@@ -155,7 +155,7 @@ const pageFacts = (
   };
   const addProperty = (
     path: string,
-    property: BlockPropertyValueV2Contract,
+    property: BlockPropertyValueContract,
     depth = 0,
   ): void => {
     add(path, property, propertyDisplayValue(property));
@@ -323,10 +323,10 @@ const pageFacts = (
 };
 
 const comparePages = (
-  suppliedPage: PageDefinitionV2,
-  suppliedContent: ApplicationContentV2,
-  currentPage: PageDefinitionV2,
-  currentContent: ApplicationContentV2,
+  suppliedPage: PageDefinition,
+  suppliedContent: ApplicationContent,
+  currentPage: PageDefinition,
+  currentContent: ApplicationContent,
 ): Readonly<{ entries: readonly PageAdoptionDifference[]; omittedCount: number; summaryTruncated: boolean }> => {
   const suppliedSummary = pageFacts(suppliedPage, suppliedContent);
   const currentSummary = pageFacts(currentPage, currentContent);
@@ -357,10 +357,10 @@ const invalid = (): never => {
 };
 
 const sourcePageIdentifier = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
-  page: ApplicationSourceDocumentV2["body"]["pages"][number],
-): PageDefinitionV2["pageId"] => {
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
+  page: ApplicationSourceDocument["body"]["pages"][number],
+): PageDefinition["pageId"] => {
   const matches = identities.filter(
     (identity) =>
       identity.definitionKey === source.key &&
@@ -375,10 +375,10 @@ const sourcePageIdentifier = (
 };
 
 const sourcePagesByIdentifier = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
-): ReadonlyMap<string, ApplicationSourceDocumentV2["body"]["pages"][number]> => {
-  const pages = new Map<string, ApplicationSourceDocumentV2["body"]["pages"][number]>();
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
+): ReadonlyMap<string, ApplicationSourceDocument["body"]["pages"][number]> => {
+  const pages = new Map<string, ApplicationSourceDocument["body"]["pages"][number]>();
   for (const page of source.body.pages) {
     const identifier = sourcePageIdentifier(source, identities, page).toLowerCase();
     if (pages.has(identifier)) return invalid();
@@ -388,20 +388,20 @@ const sourcePagesByIdentifier = (
 };
 
 const canonicalPage = (
-  content: ApplicationContentV2,
+  content: ApplicationContent,
   pageId: string,
-): PageDefinitionV2 => {
+): PageDefinition => {
   const matches = content.pages.filter((page) => sameId(page.pageId, pageId));
   if (matches.length !== 1 || matches[0] === undefined) return invalid();
   return matches[0];
 };
 
 const identityForComponent = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
   kind: "navigation_item" | "role",
   componentOwner: string,
-): SourceIdentityAssignmentV3["identifier"] => {
+): SourceIdentityAssignment["identifier"] => {
   const matches = identities.filter(
     (identity) =>
       identity.definitionKey === source.key &&
@@ -415,14 +415,14 @@ const identityForComponent = (
   return match.identifier;
 };
 
-type SourceNavigationItem = ApplicationSourceDocumentV2["body"]["navigation"][number];
+type SourceNavigationItem = ApplicationSourceDocument["body"]["navigation"][number];
 const flattenNavigation = (items: readonly SourceNavigationItem[]): SourceNavigationItem[] =>
   items.flatMap((item) => [item, ...(item.type === "heading" ? flattenNavigation(item.children) : [])]);
 
 const targetOptions = (
   draft: StoredApplicationDefinitionDraft,
-  identities: readonly SourceIdentityAssignmentV3[],
-  currentContent: ApplicationContentV2,
+  identities: readonly SourceIdentityAssignment[],
+  currentContent: ApplicationContent,
   release: AuthenticatedApplicationPageAdoptionRelease,
   originalPageId: string,
   replacementPageId: string,
@@ -474,8 +474,8 @@ const setNavigationPage = (
   items: readonly SourceNavigationItem[],
   identity: string,
   pageKey: string,
-  identities: readonly SourceIdentityAssignmentV3[],
-  source: ApplicationSourceDocumentV2,
+  identities: readonly SourceIdentityAssignment[],
+  source: ApplicationSourceDocument,
 ): SourceNavigationItem[] =>
   items.map((item) => {
     if (item.type === "heading")
@@ -486,13 +486,13 @@ const setNavigationPage = (
   });
 
 const replaceSelectedTarget = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
   rootId: string,
   target: PageAdoptionTarget,
   replacementKey: string,
   originalKey: string,
-): ApplicationSourceDocumentV2 => {
+): ApplicationSourceDocument => {
   if (target.kind === "application_home") {
     if (!sameId(target.id, rootId) || source.body.home_page !== replacementKey) return invalid();
     return { ...source, body: { ...source.body, home_page: originalKey } };
@@ -539,7 +539,7 @@ const replaceSelectedTarget = (
 };
 
 const canonicalTargetIsPage = (
-  content: ApplicationContentV2,
+  content: ApplicationContent,
   rootId: string,
   target: PageAdoptionTarget,
   pageId: string,
@@ -551,7 +551,7 @@ const canonicalTargetIsPage = (
     const match = matches[0];
     return matches.length === 1 && match !== undefined && sameId(match.homePageId, pageId);
   }
-  const visit = (items: readonly ApplicationContentV2["navigation"][number][]): string[] =>
+  const visit = (items: readonly ApplicationContent["navigation"][number][]): string[] =>
     items.flatMap((item) =>
       item.type === "heading"
         ? visit(item.children)
@@ -565,8 +565,8 @@ const canonicalTargetIsPage = (
 };
 
 const normalizedSource = (
-  source: ApplicationSourceDocumentV2,
-  identities: readonly SourceIdentityAssignmentV3[],
+  source: ApplicationSourceDocument,
+  identities: readonly SourceIdentityAssignment[],
   omittedPageIds: readonly string[],
   target: PageAdoptionTarget,
 ): unknown => {
@@ -601,14 +601,14 @@ const normalizedSource = (
 };
 
 const normalizedCanonical = (
-  content: ApplicationContentV2,
+  content: ApplicationContent,
   omittedPageIds: readonly string[],
   target: PageAdoptionTarget,
 ): unknown => {
   const omitted = new Set(omittedPageIds.map((id) => id.toLowerCase()));
   const marker = pageIdSchema.parse(omittedPageIds[0]);
   const pages = content.pages.filter((page) => !omitted.has(String(page.pageId).toLowerCase()));
-  let normalized: ApplicationContentV2 = { ...content, pages };
+  let normalized: ApplicationContent = { ...content, pages };
   if (target.kind === "application_home") normalized = { ...normalized, homePageId: marker };
   if (target.kind === "role_home")
     normalized = {
@@ -620,7 +620,7 @@ const normalizedCanonical = (
       ),
     };
   if (target.kind === "navigation") {
-    const normalize = (items: readonly ApplicationContentV2["navigation"][number][]): ApplicationContentV2["navigation"] =>
+    const normalize = (items: readonly ApplicationContent["navigation"][number][]): ApplicationContent["navigation"] =>
       items.map((item) =>
         item.type === "heading"
           ? { ...item, children: normalize(item.children) }
@@ -635,8 +635,8 @@ const normalizedCanonical = (
 
 export const buildPageAdoptionPlan = (input: Readonly<{
   draft: StoredApplicationDefinitionDraft;
-  currentIdentities: readonly SourceIdentityAssignmentV3[];
-  currentContent: ApplicationContentV2;
+  currentIdentities: readonly SourceIdentityAssignment[];
+  currentContent: ApplicationContent;
   release: AuthenticatedApplicationPageAdoptionRelease;
   originalPageId: string;
   replacementPageId: string;
@@ -721,7 +721,7 @@ export const buildPageAdoptionPlan = (input: Readonly<{
 
   const replacementPage = currentPages.get(replacementPageId.toLowerCase());
   if (replacementPage === undefined) return invalid();
-  let source: ApplicationSourceDocumentV2 = {
+  let source: ApplicationSourceDocument = {
     ...draft.source,
     body: {
       ...draft.source.body,
@@ -742,7 +742,7 @@ export const buildPageAdoptionPlan = (input: Readonly<{
       candidateOriginal.key,
     );
 
-  const expectedCanonicalContent: ApplicationContentV2 = {
+  const expectedCanonicalContent: ApplicationContent = {
     ...currentContent,
     pages: currentContent.pages.map((page) =>
       sameId(page.pageId, originalPageId) ? candidateOriginalCanonical : page,
@@ -760,7 +760,7 @@ export const buildPageAdoptionPlan = (input: Readonly<{
             }
           : {
               navigation: (() => {
-                const replace = (items: readonly ApplicationContentV2["navigation"][number][]): ApplicationContentV2["navigation"] =>
+                const replace = (items: readonly ApplicationContent["navigation"][number][]): ApplicationContent["navigation"] =>
                   items.map((item) =>
                     item.type === "heading"
                       ? { ...item, children: replace(item.children) }
@@ -824,8 +824,8 @@ export const buildPageAdoptionPlan = (input: Readonly<{
 
 export const listPageAdoptionTargets = (
   draft: StoredApplicationDefinitionDraft,
-  identities: readonly SourceIdentityAssignmentV3[],
-  currentContent: ApplicationContentV2,
+  identities: readonly SourceIdentityAssignment[],
+  currentContent: ApplicationContent,
   release: AuthenticatedApplicationPageAdoptionRelease,
   originalPageId: string,
   replacementPageId: string,

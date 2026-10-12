@@ -1,11 +1,9 @@
 import type {
-  ApplicationSourceDocumentV2,
+  ApplicationSourceDocument,
   DefinitionSourceDocument,
   ModuleSourceDocument,
   StoredDefinitionSource,
   SourceIdentityKind,
-  SourceIdentityKindV2,
-  SourceIdentityKindV3,
 } from "../schema";
 
 import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
@@ -21,32 +19,19 @@ export type SourceIdentityRequirement = Readonly<{
   aliases: readonly string[];
 }>;
 
-export type SourceIdentityRequirementV2 = Readonly<{
-  definitionKey: string;
-  ownerScope: string;
-  scope: string;
-  kind: SourceIdentityKindV2;
-  componentOwner: string;
-  aliases: readonly string[];
-}>;
-
-export type SourceIdentityRequirementV3 = Readonly<{
-  definitionKey: string;
-  ownerScope: string;
-  scope: string;
-  kind: SourceIdentityKindV3;
-  componentOwner: string;
-  aliases: readonly string[];
-}>;
-
 type SourceObject = Record<string, unknown>;
 
 /** Search borrows existing Module fields and Page identities; it owns no new identities. */
-export const applicationSearchSourceReferences = (source: ApplicationSourceDocumentV2) =>
+export const applicationSearchSourceReferences = (source: ApplicationSourceDocument) =>
   (source.body.search?.record_types ?? []).map((entry) => ({
     recordType: entry.record_type,
-    fields: [...new Set([...entry.fields.map((field) => field.field), entry.title_field,
-      ...(entry.subtitle_field === undefined ? [] : [entry.subtitle_field])])],
+    fields: [
+      ...new Set([
+        ...entry.fields.map((field) => field.field),
+        entry.title_field,
+        ...(entry.subtitle_field === undefined ? [] : [entry.subtitle_field]),
+      ]),
+    ],
     page: entry.target_page,
   }));
 
@@ -73,7 +58,7 @@ const objectValue = (value: unknown): SourceObject | undefined =>
 /**
  * Derives every permanent identity owner and authentic alias shared by the Module vocabulary.
  * Source `id` values are owners; mutable keys and paths are aliases of that owner. A connection
- * type contributes only its root; an Application uses the V2 extractor below.
+ * type contributes only its root; an Application uses the  extractor below.
  */
 export function extractSourceIdentityRequirements(
   source: DefinitionSourceDocument | ModuleSourceDocument,
@@ -152,14 +137,14 @@ export function extractSourceIdentityRequirements(
  * for a `BeforeSave` flow, the nodes of the rule graph it is lowered to. A flow that cannot be
  * lowered lists no nodes; compiling it refuses with the located reason.
  */
-export function extractModuleSourceIdentityRequirementsV3(
+export function extractModuleSourceIdentityRequirements(
   source: ModuleSourceDocument,
-): SourceIdentityRequirementV3[] {
-  const requirements: SourceIdentityRequirementV3[] = extractSourceIdentityRequirements(source).map(
+): SourceIdentityRequirement[] {
+  const requirements: SourceIdentityRequirement[] = extractSourceIdentityRequirements(source).map(
     (requirement) => ({ ...requirement }),
   );
   const add = (
-    kind: Extract<SourceIdentityKindV3, "flow" | "rule_node">,
+    kind: Extract<SourceIdentityKind, "flow" | "rule_node">,
     ownerScope: string,
     scope: string,
     componentOwner: string,
@@ -186,17 +171,17 @@ export function extractModuleSourceIdentityRequirementsV3(
 }
 
 /**
- * Derives V2 Application identities from its exact parsed source contract.
+ * Derives  Application identities from its exact parsed source contract.
  * Platform-block identities belong to the immutable catalogue and are never allocated here.
  */
-export function extractApplicationSourceIdentityRequirementsV2(
-  source: ApplicationSourceDocumentV2,
-): SourceIdentityRequirementV2[] {
+export function extractApplicationSourceIdentityRequirements(
+  source: ApplicationSourceDocument,
+): SourceIdentityRequirement[] {
   const sourceObject = source as unknown as SourceObject;
   const body = sourceObject.body as SourceObject;
-  const requirements: SourceIdentityRequirementV2[] = [];
+  const requirements: SourceIdentityRequirement[] = [];
   const add = (
-    kind: SourceIdentityKindV2,
+    kind: SourceIdentityKind,
     ownerScope: string,
     scope: string,
     componentOwner: unknown,
@@ -214,7 +199,7 @@ export function extractApplicationSourceIdentityRequirementsV2(
     });
   };
   const addIdentified = (
-    kind: SourceIdentityKindV2,
+    kind: SourceIdentityKind,
     ownerScope: string,
     scope: string,
     component: SourceObject,
@@ -222,7 +207,7 @@ export function extractApplicationSourceIdentityRequirementsV2(
   ) => add(kind, ownerScope, scope, component.id, [component.id, component.key, ...extraAliases]);
   const collection = (key: string): SourceObject[] => objects(body[key]);
   const addTopLevel = (
-    kind: SourceIdentityKindV2,
+    kind: SourceIdentityKind,
     collectionKey: string,
     aliases: (component: SourceObject) => readonly unknown[] = () => [],
   ) => {
@@ -310,8 +295,7 @@ export function extractApplicationSourceIdentityRequirementsV2(
 
   for (const binding of collection("flow_bindings")) {
     const bindingId = stringValue(binding.id);
-    if (bindingId !== undefined)
-      add("flow_binding", "content", "content", bindingId, [bindingId]);
+    if (bindingId !== undefined) add("flow_binding", "content", "content", bindingId, [bindingId]);
   }
 
   return requirements;
@@ -320,7 +304,7 @@ export function extractApplicationSourceIdentityRequirementsV2(
 /** Selects the permanent-identity vocabulary from exact stored source metadata. */
 export const extractStoredSourceIdentityRequirements = (source: StoredDefinitionSource) =>
   source.kind === "application"
-    ? extractApplicationSourceIdentityRequirementsV2(source)
+    ? extractApplicationSourceIdentityRequirements(source)
     : source.kind === "module"
-      ? extractModuleSourceIdentityRequirementsV3(source)
+      ? extractModuleSourceIdentityRequirements(source)
       : extractSourceIdentityRequirements(source);

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { builderKeySchema, namespacedKeySchema, themeTokenValueV2Schema } from "../schema";
+import { builderKeySchema, namespacedKeySchema, themeTokenValueSchema } from "../schema";
 import { isReservedTenantSegment } from "./application-address";
 import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "./installed-runtime-context";
 
@@ -28,7 +28,7 @@ export type ApplicationInstallManifest = Readonly<{
 
 /** Reads only a validated compiled color token, preserving both accepted color forms. */
 export const applicationInstallColor = (context: InstalledRuntimeContext, key: string): string => {
-  const token = themeTokenValueV2Schema.parse(
+  const token = themeTokenValueSchema.parse(
     requireInstalledRuntimeContext(context).releaseSet.application.content.theme.tokens[key],
   );
   if (token.kind !== "color_pair") throw new Error("APPLICATION_INSTALL_METADATA_UNAVAILABLE");

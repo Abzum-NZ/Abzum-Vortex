@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ChangeEvent, type ReactElement } from "react";
-import { moduleFieldValueV2Schemas } from "@vortex/platform/schema";
+import { moduleFieldValueSchemas } from "@vortex/platform/schema";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Textarea } from "../components/textarea";
@@ -53,7 +53,7 @@ export function TextInput(props: TextInputProps): ReactElement {
   const invalidEmail =
     inputType === "email" &&
     (value !== "" || required) &&
-    !moduleFieldValueV2Schemas.email_address.safeParse(value).success;
+    !moduleFieldValueSchemas.email_address.safeParse(value).success;
   const error = invalidEmail ? "Enter a valid email address." : context.values?.error;
   useFormField(
     fieldKey,
@@ -72,7 +72,7 @@ export function TextInput(props: TextInputProps): ReactElement {
       if (
         input.disabled ||
         (!required && candidate === "") ||
-        moduleFieldValueV2Schemas.email_address.safeParse(candidate).success
+        moduleFieldValueSchemas.email_address.safeParse(candidate).success
       )
         return;
       event.preventDefault();

@@ -10,25 +10,25 @@ import {
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   conditionNodeSchema,
-  dateValueV2Schema,
-  exactDecimalTextV2Schema,
+  dateValueSchema,
+  exactDecimalTextSchema,
   fieldIdSchema,
   jsonValueSchema,
-  moduleFieldV3Schema,
-  moneyValueV2Schema,
+  moduleFieldSchema,
+  moneyValueSchema,
   organizationAccountIdSchema,
-  personLinkValueV2Schema,
-  recordLinkValueV2Schema,
+  personLinkValueSchema,
+  recordLinkValueSchema,
   type ConditionNode,
   type JsonValue,
-  type ModuleFieldV3,
+  type ModuleField,
 } from "@vortex/platform/schema";
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
 type ConditionOperand = ComparisonCondition["left"];
 type FieldOperand = Extract<ConditionOperand, { source: "field" }>;
 type ParameterOperand = Extract<ConditionOperand, { source: "parameter" }>;
-type FieldOperandPermission = Extract<StudioConditionOperandPermission, { field: ModuleFieldV3 }>;
+type FieldOperandPermission = Extract<StudioConditionOperandPermission, { field: ModuleField }>;
 
 const isComparisonCondition = (condition: ConditionNode): condition is ComparisonCondition =>
   condition.kind === "comparison";
@@ -37,7 +37,7 @@ const isFieldOperandPermission = (
   permission: StudioConditionOperandPermission,
 ): permission is FieldOperandPermission => "field" in permission;
 
-/** The semantic types used by the current Rule V2 field and parameter contracts. */
+/** The semantic types used by the current Rule  field and parameter contracts. */
 export type StudioConditionSemanticType =
   | "text"
   | "number"
@@ -52,7 +52,7 @@ export type StudioConditionSemanticType =
   | "record_reference"
   | "organization_account_reference";
 
-/** Parameter types accepted by Rule V2. Host-only values use the same parameter source. */
+/** Parameter types accepted by Rule . Host-only values use the same parameter source. */
 export type StudioConditionParameterType =
   | "text"
   | "number"
@@ -74,13 +74,13 @@ export type StudioConditionOperandRole =
 
 /**
  * The host grants each available reference explicitly. Previous values, inputs, variables and
- * trusted context use the existing `parameter` operand and must have a matching Rule V2
+ * trusted context use the existing `parameter` operand and must have a matching Rule
  * declaration; current Module fields use the existing `field` operand and their Module metadata.
  */
 export type StudioConditionOperandPermission =
   | Readonly<{
       operand: FieldOperand;
-      field: ModuleFieldV3;
+      field: ModuleField;
       label: string;
       role: "current_field";
     }>
@@ -98,13 +98,13 @@ export type StudioConditionParameterDeclaration = Readonly<{
 export type StudioConditionControlsContext = Readonly<{
   /** Only operands listed here can be selected or retained in the authored tree. */
   allowedOperands: readonly StudioConditionOperandPermission[];
-  /** The source fields the owning host declared for this Rule V2 evaluation context. */
+  /** The source fields the owning host declared for this Rule  evaluation context. */
   declaredFieldIds: readonly string[];
-  /** Exact Rule V2 declarations resolve the types of every permitted parameter operand. */
+  /** Exact Rule  declarations resolve the types of every permitted parameter operand. */
   parameterDeclarations: readonly StudioConditionParameterDeclaration[];
   /** Literal values are opt-in so each host can apply its own authoring policy. */
   allowLiteralValues: boolean;
-  /** An omitted operator list permits the current Rule V2 operator catalogue. */
+  /** An omitted operator list permits the current Rule  operator catalogue. */
   allowedOperators?: readonly StudioConditionOperator[];
 }>;
 
@@ -235,7 +235,7 @@ const referenceKey = (operand: Exclude<ConditionOperand, { source: "value" }>): 
 const permissionKey = (permission: StudioConditionOperandPermission): string =>
   referenceKey(permission.operand);
 
-const semanticTypeForField = (field: ModuleFieldV3): StudioConditionSemanticType => {
+const semanticTypeForField = (field: ModuleField): StudioConditionSemanticType => {
   switch (field.type) {
     case "whole_number":
       return "whole_number";
@@ -368,7 +368,7 @@ const contextIssues = (
     seen.add(key);
 
     if (isFieldOperandPermission(permission)) {
-      const parsedField = moduleFieldV3Schema.safeParse(permission.field);
+      const parsedField = moduleFieldSchema.safeParse(permission.field);
       if (
         !parsedField.success ||
         parsedField.data.fieldId !== permission.operand.fieldId ||
@@ -380,7 +380,7 @@ const contextIssues = (
       const parsedKey = builderKeySchema.safeParse(permission.operand.key);
       const declaredType = parameterDeclarations.get(permission.operand.key);
       if (!parsedKey.success || declaredType === undefined || String(permission.role) === "current_field")
-        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "A parameter must match a Rule V2 declaration"));
+        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "A parameter must match a Rule  declaration"));
       if (
         permission.role === "trusted_account_context" &&
         declaredType !== "organization_account_reference"
@@ -434,7 +434,7 @@ const isValidInstant = (value: unknown): value is string => {
   const minute = Number(match[5]);
   const second = Number(match[6]);
   if (hour > 23 || minute > 59 || second > 59) return false;
-  if (!dateValueV2Schema.safeParse(value.slice(0, 10)).success) return false;
+  if (!dateValueSchema.safeParse(value.slice(0, 10)).success) return false;
   const zone = match[8]!;
   if (zone === "Z") return true;
   const offsetHours = Number(zone.slice(1, 3));
@@ -447,7 +447,7 @@ const semanticTypeForLiteral = (value: JsonValue): StudioConditionSemanticType |
   if (typeof value === "number") return "number";
   if (typeof value === "boolean") return "boolean";
   if (typeof value === "string") {
-    if (dateValueV2Schema.safeParse(value).success) return "date";
+    if (dateValueSchema.safeParse(value).success) return "date";
     if (isValidInstant(value)) return "date_time";
     return "text";
   }
@@ -467,15 +467,15 @@ const literalMatchesType = (value: JsonValue, type: StudioConditionSemanticType)
       return typeof value === "number" && Number.isInteger(value);
     case "decimal_number":
       return (
-        exactDecimalTextV2Schema.safeParse(value).success ||
+        exactDecimalTextSchema.safeParse(value).success ||
         (typeof value === "number" && Number.isInteger(value))
       );
     case "money":
-      return moneyValueV2Schema.safeParse(value).success;
+      return moneyValueSchema.safeParse(value).success;
     case "boolean":
       return typeof value === "boolean";
     case "date":
-      return dateValueV2Schema.safeParse(value).success;
+      return dateValueSchema.safeParse(value).success;
     case "date_time":
       return isValidInstant(value);
     case "text_collection":
@@ -483,11 +483,11 @@ const literalMatchesType = (value: JsonValue, type: StudioConditionSemanticType)
     case "opaque_json":
       return jsonValueSchema.safeParse(value).success;
     case "record_reference":
-      return recordLinkValueV2Schema.safeParse(value).success;
+      return recordLinkValueSchema.safeParse(value).success;
     case "organization_account_reference":
       return (
         organizationAccountIdSchema.safeParse(value).success ||
-        personLinkValueV2Schema.safeParse(value).success
+        personLinkValueSchema.safeParse(value).success
       );
   }
 };
@@ -501,7 +501,7 @@ const sameComparableType = (
 const exactNumericLiteral = (value: JsonValue | undefined): boolean =>
   value === null ||
   (typeof value === "number" && Number.isInteger(value)) ||
-  (typeof value === "string" && exactDecimalTextV2Schema.safeParse(value).success);
+  (typeof value === "string" && exactDecimalTextSchema.safeParse(value).success);
 
 const exactNumericOperand = (operand: OperandInfo): boolean =>
   operand.source === "value"
@@ -593,8 +593,8 @@ const operatorAcceptsOperands = (
   const type = sharedType(left, right);
   if (type === "money" && left.source === "value" && right.source === "value" &&
     left.literal !== null && right.literal !== null) {
-    const leftMoney = moneyValueV2Schema.safeParse(left.literal);
-    const rightMoney = moneyValueV2Schema.safeParse(right.literal);
+    const leftMoney = moneyValueSchema.safeParse(left.literal);
+    const rightMoney = moneyValueSchema.safeParse(right.literal);
     if (leftMoney.success && rightMoney.success &&
       leftMoney.data.currency !== rightMoney.data.currency) return false;
   }
@@ -658,7 +658,7 @@ const candidateRightOperands = (
 };
 
 /**
- * Filters editor options from the shared operator vocabulary and Rule V2 semantic types.
+ * Filters editor options from the shared operator vocabulary and Rule  semantic types.
  * This authoring guard never evaluates a condition; Rule remains the only evaluator.
  */
 export function studioConditionOperatorsFor(

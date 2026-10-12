@@ -1,33 +1,33 @@
 import {
-  applicationCompositionCatalogueSnapshotV2Schema,
-  applicationShellV2Schema,
-  applicationThemeV2Schema,
-  canonicalApplicationThemeSelectionV2,
-  blockPropertyValueV2Schema,
-  guidedFormPageCompositionV2Schema,
-  isRepeatableSlotIdentityV2,
+  applicationCompositionCatalogueSnapshotSchema,
+  applicationShellSchema,
+  applicationThemeSchema,
+  canonicalApplicationThemeSelection,
+  blockPropertyValueSchema,
+  guidedFormPageCompositionSchema,
+  isRepeatableSlotIdentity,
   findFieldInputBinding,
   FIELD_INPUT_CONTROL_RELEASES,
-  pageCompositionV2Schema,
-  repeatableSlotItemIdentitiesV2,
-  repeatableSlotKeyV2,
+  pageCompositionSchema,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
   validateComponentSettingValue,
   validateComponentSettings,
-  type ApplicationCompositionCatalogueSnapshotV2,
-  type ApplicationContentV2,
-  type ApplicationShellV2,
-  type ApplicationSourceDocumentV2,
-  type BlockPropertySchemaV2Contract,
-  type BlockPropertyValueV2Contract,
+  type ApplicationCompositionCatalogueSnapshot,
+  type ApplicationContent,
+  type ApplicationShell,
+  type ApplicationSourceDocument,
+  type BlockPropertySchemaContract,
+  type BlockPropertyValueContract,
   type ComponentSettingFailure,
   type DefinitionValidationLocation,
   type DefinitionRuleFailure,
   type FieldInputControlKey,
-  type PlatformBlockReleaseV2,
-  type PlatformThemeReleaseV2,
+  type PlatformBlockRelease,
+  type PlatformThemeRelease,
   type PlatformId,
   type ProtectedReadModelKey,
-  type SourceBlockPropertyValueV2Contract,
+  type SourceBlockPropertyValueContract,
 } from "../schema";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
@@ -36,15 +36,15 @@ import {
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
 import type {
-  ApplicationCompositionResolutionV2,
+  ApplicationCompositionResolution,
   FieldInputSourceField,
-} from "./application-v2-resolution";
+} from "./application-resolution";
 import {
   createThemeLocation,
   resolveThemeSelection,
   validateApplicationTheme,
   type ThemeResolutionOptions,
-  type ThemeTokenValueV2,
+  type ThemeTokenValue,
   type ThemeValidationFailure,
 } from "../theme/index";
 
@@ -56,20 +56,20 @@ type SourcePlacement = {
   block: { block_id: string; release_version: string };
   view_permission?: string;
   use_permission?: string;
-  visibility_condition?: Parameters<ApplicationCompositionResolutionV2["condition"]>[0];
+  visibility_condition?: Parameters<ApplicationCompositionResolution["condition"]>[0];
   query?: string;
   read_model?: ProtectedReadModelKey;
-  settings: Record<string, SourceBlockPropertyValueV2Contract>;
+  settings: Record<string, SourceBlockPropertyValueContract>;
   theme_overrides: Record<string, unknown>;
   responsive: Record<string, unknown>;
   slots: Record<string, SourceSlot>;
 };
-type CanonicalComposition = ApplicationContentV2["pages"][number]["composition"];
-type CanonicalTheme = ApplicationContentV2["theme"];
+type CanonicalComposition = ApplicationContent["pages"][number]["composition"];
+type CanonicalTheme = ApplicationContent["theme"];
 
-export type MaterialisedApplicationCompositionV2 = Readonly<{
-  platformBlockDependencies: ApplicationContentV2["platformBlockDependencies"];
-  shells: ApplicationShellV2[];
+export type MaterialisedApplicationComposition = Readonly<{
+  platformBlockDependencies: ApplicationContent["platformBlockDependencies"];
+  shells: ApplicationShell[];
   pages: ReadonlyArray<Readonly<{ pageId: string; composition: CanonicalComposition }>>;
   theme: CanonicalTheme;
 }>;
@@ -92,7 +92,7 @@ const asSourceSlot = (value: unknown): SourceSlot => value as SourceSlot;
 const asSourcePlacement = (value: unknown): SourcePlacement => value as SourcePlacement;
 
 const canonicalDependency = (
-  dependency: ApplicationSourceDocumentV2["body"]["platform_block_dependencies"][number],
+  dependency: ApplicationSourceDocument["body"]["platform_block_dependencies"][number],
 ) => ({
   kind: "platform_block" as const,
   blockId: dependency.block_id,
@@ -101,7 +101,7 @@ const canonicalDependency = (
   catalogueFingerprint: dependency.catalogue_fingerprint,
 });
 
-const canonicalThemeDependency = (base: ApplicationSourceDocumentV2["body"]["theme"]["base"]) => ({
+const canonicalThemeDependency = (base: ApplicationSourceDocument["body"]["theme"]["base"]) => ({
   kind: "platform_theme" as const,
   catalogueThemeId: base.catalogue_theme_id,
   releaseVersion: base.release_version,
@@ -188,42 +188,65 @@ const inheritColorRole = (
     ? { ...override, role: inherited.role }
     : override;
 
-export type ApplicationThemeMaterialisationV2 =
+export type ApplicationThemeMaterialisation =
   | Readonly<{ valid: true; theme: CanonicalTheme; options: ThemeResolutionOptions }>
-  | Readonly<{ valid: false; failures: readonly ThemeValidationFailure[]; refusal: DefinitionRuleFailure }>;
+  | Readonly<{
+      valid: false;
+      failures: readonly ThemeValidationFailure[];
+      refusal: DefinitionRuleFailure;
+    }>;
 
 /** The same pure theme producer serves publication and authorized draft feedback. */
-export const materialiseApplicationThemeV2 = (
-  authored: ApplicationSourceDocumentV2["body"]["theme"],
+export const materialiseApplicationTheme = (
+  authored: ApplicationSourceDocument["body"]["theme"],
   documentKey: string,
-  release: PlatformThemeReleaseV2,
-): ApplicationThemeMaterialisationV2 => {
-  if (canonicalJson(canonicalThemeDependency(authored.base)) !== canonicalJson({
-    kind: "platform_theme", catalogueThemeId: release.catalogueThemeId,
-    releaseVersion: release.releaseVersion, contentFingerprint: release.contentFingerprint,
-    catalogueFingerprint: release.catalogueFingerprint,
-  })) reject("vortex.definition.application_dependency_manifest");
-  const overrides: Record<string, ThemeTokenValueV2> = {};
+  release: PlatformThemeRelease,
+): ApplicationThemeMaterialisation => {
+  if (
+    canonicalJson(canonicalThemeDependency(authored.base)) !==
+    canonicalJson({
+      kind: "platform_theme",
+      catalogueThemeId: release.catalogueThemeId,
+      releaseVersion: release.releaseVersion,
+      contentFingerprint: release.contentFingerprint,
+      catalogueFingerprint: release.catalogueFingerprint,
+    })
+  )
+    reject("vortex.definition.application_dependency_manifest");
+  const overrides: Record<string, ThemeTokenValue> = {};
   for (const [key, value] of Object.entries(authored.token_overrides))
-    overrides[key] = canonicalThemeValue(value as unknown as Record<string, unknown>) as ThemeTokenValueV2;
+    overrides[key] = canonicalThemeValue(
+      value as unknown as Record<string, unknown>,
+    ) as ThemeTokenValue;
   const selection = resolveThemeSelection({
-    base: release, baseTokens: release.tokens,
-    ...(authored.selection === undefined ? {}
-      : { selection: canonicalApplicationThemeSelectionV2(authored.selection) }),
-    overrides, options: { documentKey },
+    base: release,
+    baseTokens: release.tokens,
+    ...(authored.selection === undefined
+      ? {}
+      : { selection: canonicalApplicationThemeSelection(authored.selection) }),
+    overrides,
+    options: { documentKey },
   });
   if (!selection.valid) {
     const first = selection.failures[0];
-    return { valid: false, failures: selection.failures, refusal: {
-      ruleCode: first !== undefined && isDefinitionCompilerRefusalCode(first.ruleCode)
-        ? first.ruleCode : "vortex.definition.application_block_settings",
-      family: first?.family ?? "invalid_value",
-      ...(first?.location === undefined ? {} : { location: first.location }),
-    } };
+    return {
+      valid: false,
+      failures: selection.failures,
+      refusal: {
+        ruleCode:
+          first !== undefined && isDefinitionCompilerRefusalCode(first.ruleCode)
+            ? first.ruleCode
+            : "vortex.definition.application_block_settings",
+        family: first?.family ?? "invalid_value",
+        ...(first?.location === undefined ? {} : { location: first.location }),
+      },
+    };
   }
-  const theme = applicationThemeV2Schema.parse({
+  const theme = applicationThemeSchema.parse({
     base: canonicalThemeDependency(authored.base),
-    ...(selection.resolved.selection === undefined ? {} : { selection: selection.resolved.selection }),
+    ...(selection.resolved.selection === undefined
+      ? {}
+      : { selection: selection.resolved.selection }),
     tokens: selection.resolved.tokens,
   });
   const assetIds = new Set<PlatformId>();
@@ -238,37 +261,54 @@ export const materialiseApplicationThemeV2 = (
     if (!(error instanceof DefinitionCompilationError)) throw error;
     const failures: ThemeValidationFailure[] = [];
     for (const [key, token] of Object.entries(theme.tokens))
-      if ((token.kind === "border" || token.kind === "focus") &&
-          theme.tokens[token.colorToken]?.kind !== "color_pair")
-        failures.push({ code: "BROKEN_TOKEN_REFERENCE", ruleCode: error.ruleCode,
-          family: error.family, message: "A colour token reference cannot be resolved.",
-          tokenKey: key, location: createThemeLocation(documentKey, key) });
-    return { valid: false, failures, refusal: {
-      ruleCode: error.ruleCode, family: error.family,
-      ...(error.location === undefined ? {} : { location: error.location }),
-    } };
+      if (
+        (token.kind === "border" || token.kind === "focus") &&
+        theme.tokens[token.colorToken]?.kind !== "color_pair"
+      )
+        failures.push({
+          code: "BROKEN_TOKEN_REFERENCE",
+          ruleCode: error.ruleCode,
+          family: error.family,
+          message: "A colour token reference cannot be resolved.",
+          tokenKey: key,
+          location: createThemeLocation(documentKey, key),
+        });
+    return {
+      valid: false,
+      failures,
+      refusal: {
+        ruleCode: error.ruleCode,
+        family: error.family,
+        ...(error.location === undefined ? {} : { location: error.location }),
+      },
+    };
   }
   const validation = validateApplicationTheme(theme, { ...options, documentKey });
   const first = validation.failures[0];
   if (!validation.valid && first !== undefined)
-    return { valid: false, failures: validation.failures, refusal: {
-      ruleCode: isDefinitionCompilerRefusalCode(first.ruleCode)
-        ? first.ruleCode : "vortex.definition.application_block_settings",
-      family: first.family, location: createThemeLocation(documentKey, first.tokenKey),
-    } };
+    return {
+      valid: false,
+      failures: validation.failures,
+      refusal: {
+        ruleCode: isDefinitionCompilerRefusalCode(first.ruleCode)
+          ? first.ruleCode
+          : "vortex.definition.application_block_settings",
+        family: first.family,
+        location: createThemeLocation(documentKey, first.tokenKey),
+      },
+    };
   return { valid: true, theme, options };
 };
 
 const rejectSettingFailures = (failures: readonly ComponentSettingFailure[]): void => {
   const first = failures[0];
-  if (first !== undefined)
-    reject("vortex.definition.application_block_settings", first.family);
+  if (first !== undefined) reject("vortex.definition.application_block_settings", first.family);
 };
 
 /** Every theme token a canonical value names, including inside groups and lists, must resolve. */
 const validateThemeTokenSettings = (
-  value: BlockPropertyValueV2Contract,
-  schema: BlockPropertySchemaV2Contract,
+  value: BlockPropertyValueContract,
+  schema: BlockPropertySchemaContract,
   theme: CanonicalTheme,
 ): void => {
   if (schema.kind === "theme_token" && value.kind === "theme_token") {
@@ -286,8 +326,8 @@ const validateThemeTokenSettings = (
 };
 
 const validateCanonicalPropertyValue = (
-  value: BlockPropertyValueV2Contract,
-  schema: BlockPropertySchemaV2Contract,
+  value: BlockPropertyValueContract,
+  schema: BlockPropertySchemaContract,
   theme: CanonicalTheme,
 ): void => {
   rejectSettingFailures(validateComponentSettingValue(value, schema));
@@ -295,11 +335,11 @@ const validateCanonicalPropertyValue = (
 };
 
 const compilePropertyValue = (
-  authored: SourceBlockPropertyValueV2Contract,
-  schema: BlockPropertySchemaV2Contract,
-  resolution: ApplicationCompositionResolutionV2,
+  authored: SourceBlockPropertyValueContract,
+  schema: BlockPropertySchemaContract,
+  resolution: ApplicationCompositionResolution,
   theme: CanonicalTheme,
-): BlockPropertyValueV2Contract => {
+): BlockPropertyValueContract => {
   let compiled: unknown;
   switch (authored.kind) {
     case "text":
@@ -380,7 +420,7 @@ const compilePropertyValue = (
     default:
       compiled = authored;
   }
-  const parsed = blockPropertyValueV2Schema.safeParse(compiled);
+  const parsed = blockPropertyValueSchema.safeParse(compiled);
   if (!parsed.success) reject("vortex.definition.application_block_settings", "invalid_value");
   const value = parsed.data!;
   validateCanonicalPropertyValue(value, schema, theme);
@@ -388,12 +428,12 @@ const compilePropertyValue = (
 };
 
 const compileSettings = (
-  authored: Record<string, SourceBlockPropertyValueV2Contract>,
-  declarations: readonly BlockPropertySchemaV2Contract[],
-  resolution: ApplicationCompositionResolutionV2,
+  authored: Record<string, SourceBlockPropertyValueContract>,
+  declarations: readonly BlockPropertySchemaContract[],
+  resolution: ApplicationCompositionResolution,
   theme: CanonicalTheme,
-): Record<string, BlockPropertyValueV2Contract> => {
-  const result: Record<string, BlockPropertyValueV2Contract> = {};
+): Record<string, BlockPropertyValueContract> => {
+  const result: Record<string, BlockPropertyValueContract> = {};
   for (const declaration of declarations) {
     const value = authored[declaration.key];
     if (value !== undefined)
@@ -428,7 +468,8 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
         field.textFormat === undefined ? undefined : TEXT_FORMAT_INPUT_TYPES[field.textFormat];
       return {
         control: "text",
-        settings: inputType === undefined ? {} : { input_type: { kind: "choice", value: inputType } },
+        settings:
+          inputType === undefined ? {} : { input_type: { kind: "choice", value: inputType } },
       };
     }
     case "email_address":
@@ -509,9 +550,9 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
 /** One canonical value, parsed through the closed value contract and checked by its declaration. */
 const derivedPropertyValue = (
   value: unknown,
-  declaration: BlockPropertySchemaV2Contract | undefined,
-): BlockPropertyValueV2Contract => {
-  const parsed = blockPropertyValueV2Schema.safeParse(value);
+  declaration: BlockPropertySchemaContract | undefined,
+): BlockPropertyValueContract => {
+  const parsed = blockPropertyValueSchema.safeParse(value);
   const canonical = parsed.success
     ? parsed.data
     : reject("vortex.definition.unsupported_field_type", "unsupported_choice");
@@ -530,9 +571,9 @@ const derivedPropertyValue = (
  * the delegated control does not declare with `application_block_settings`.
  */
 const applyFieldInputDerivation = (
-  release: PlatformBlockReleaseV2,
-  settings: Record<string, BlockPropertyValueV2Contract>,
-  resolution: ApplicationCompositionResolutionV2,
+  release: PlatformBlockRelease,
+  settings: Record<string, BlockPropertyValueContract>,
+  resolution: ApplicationCompositionResolution,
 ): void => {
   const binding = findFieldInputBinding(release.properties);
   if (binding === undefined) return;
@@ -548,7 +589,7 @@ const applyFieldInputDerivation = (
   );
   const derived = deriveFieldInputContract(field);
   const target = FIELD_INPUT_CONTROL_RELEASES[derived.control];
-  const declaration = (key: string): BlockPropertySchemaV2Contract | undefined =>
+  const declaration = (key: string): BlockPropertySchemaContract | undefined =>
     target.properties.find((property) => property.key === key);
   for (const [key, value] of Object.entries(settings)) {
     if (key === binding.key) continue;
@@ -575,8 +616,8 @@ const applyFieldInputDerivation = (
 };
 
 const validateAccessibleName = (
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
-  release: PlatformBlockReleaseV2,
+  settings: Readonly<Record<string, BlockPropertyValueContract>>,
+  release: PlatformBlockRelease,
 ): void => {
   if (release.capabilities.accessibleName === "not_applicable") return;
   const [first, ...rest] = release.capabilities.accessibleNamePropertyPath;
@@ -598,7 +639,7 @@ const validateAccessibleName = (
 
 const materialiseResponsive = (
   authored: Record<string, unknown>,
-  release: PlatformBlockReleaseV2,
+  release: PlatformBlockRelease,
 ): Record<string, unknown> => {
   const desktop = canonicalPlacementLayout(authored.desktop as Record<string, unknown>);
   const tablet = canonicalPlacementLayout(
@@ -644,13 +685,13 @@ const materialiseOrder = (
   return { desktop, tablet, phone };
 };
 
-/** Pure V2 composition materialisation; it does not activate any compiler or reader dispatch. */
-export const materialiseApplicationCompositionV2 = (
-  source: ApplicationSourceDocumentV2,
-  snapshotInput: ApplicationCompositionCatalogueSnapshotV2,
-  resolution: ApplicationCompositionResolutionV2,
-): MaterialisedApplicationCompositionV2 => {
-  const snapshot = applicationCompositionCatalogueSnapshotV2Schema.parse(snapshotInput);
+/** Pure  composition materialisation; it does not activate any compiler or reader dispatch. */
+export const materialiseApplicationComposition = (
+  source: ApplicationSourceDocument,
+  snapshotInput: ApplicationCompositionCatalogueSnapshot,
+  resolution: ApplicationCompositionResolution,
+): MaterialisedApplicationComposition => {
+  const snapshot = applicationCompositionCatalogueSnapshotSchema.parse(snapshotInput);
   const { fingerprint, ...snapshotEvidence } = snapshot;
   if (fingerprintCanonicalValue(snapshotEvidence) !== fingerprint)
     reject("vortex.definition.application_dependency_manifest");
@@ -677,11 +718,20 @@ export const materialiseApplicationCompositionV2 = (
   )
     reject("vortex.definition.application_dependency_manifest");
 
-  const materialisedTheme = materialiseApplicationThemeV2(source.body.theme, source.key, snapshot.platformTheme);
+  const materialisedTheme = materialiseApplicationTheme(
+    source.body.theme,
+    source.key,
+    snapshot.platformTheme,
+  );
   if (!materialisedTheme.valid) {
     const first = materialisedTheme.refusal;
-    return reject(isDefinitionCompilerRefusalCode(first.ruleCode)
-      ? first.ruleCode : "vortex.definition.application_block_settings", first.family, first.location);
+    return reject(
+      isDefinitionCompilerRefusalCode(first.ruleCode)
+        ? first.ruleCode
+        : "vortex.definition.application_block_settings",
+      first.family,
+      first.location,
+    );
   }
   const { theme, options: themeValidationOptions } = materialisedTheme;
 
@@ -696,7 +746,7 @@ export const materialiseApplicationCompositionV2 = (
   let placementCount = 0;
   const shellPlacementTargets = new Map<
     string,
-    { canonicalId: string; depth: number; release: PlatformBlockReleaseV2 }
+    { canonicalId: string; depth: number; release: PlatformBlockRelease }
   >();
 
   const compileSlot = (
@@ -762,16 +812,13 @@ export const materialiseApplicationCompositionV2 = (
       const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
       for (const declaration of release.slots) {
         if (declaration.repeats === undefined) continue;
-        const identities = repeatableSlotItemIdentitiesV2(
-          declaration,
-          authoredPlacement.settings,
-        );
+        const identities = repeatableSlotItemIdentities(declaration, authoredPlacement.settings);
         if (new Set(identities).size !== identities.length)
           reject("vortex.definition.application_block_settings", "duplicate_key");
         for (const identity of identities) {
-          if (!isRepeatableSlotIdentityV2(declaration.key, identity))
+          if (!isRepeatableSlotIdentity(declaration.key, identity))
             reject("vortex.definition.application_block_settings", "invalid_value");
-          repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
+          repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
         }
       }
       if (
@@ -827,7 +874,7 @@ export const materialiseApplicationCompositionV2 = (
       }
       if (Object.keys(effectiveOverrides).length > 0)
         validateTheme(
-          applicationThemeV2Schema.parse({
+          applicationThemeSchema.parse({
             base: theme.base,
             ...(theme.selection === undefined ? {} : { selection: theme.selection }),
             tokens: { ...theme.tokens, ...effectiveOverrides },
@@ -882,7 +929,7 @@ export const materialiseApplicationCompositionV2 = (
   };
 
   type ShellInfo = {
-    canonical: ApplicationShellV2;
+    canonical: ApplicationShell;
     contentSlots: Map<
       string,
       {
@@ -895,7 +942,7 @@ export const materialiseApplicationCompositionV2 = (
     >;
     publicSafe: boolean;
   };
-  const shells: ApplicationShellV2[] = [];
+  const shells: ApplicationShell[] = [];
   const shellByAlias = new Map<string, ShellInfo>();
   for (const shell of source.body.shells) {
     const reserved = new Set(
@@ -953,7 +1000,7 @@ export const materialiseApplicationCompositionV2 = (
         parentSlotKey: slot.parent_slot,
       };
     });
-    const canonical = applicationShellV2Schema.parse({
+    const canonical = applicationShellSchema.parse({
       shellId: resolution.identity("shell", shell.id, "content"),
       key: shell.key,
       name: shell.name,
@@ -1055,11 +1102,11 @@ export const materialiseApplicationCompositionV2 = (
               shellId: shellByAlias.get(guidedComposition.shell)?.canonical.shellId,
               stepContent,
             };
-      canonical = guidedFormPageCompositionV2Schema.parse(canonical);
+      canonical = guidedFormPageCompositionSchema.parse(canonical);
     } else if ("step_content" in composition)
       reject("vortex.definition.application_layout_complete");
     else if (composition.shell_kind === "default")
-      canonical = pageCompositionV2Schema.parse({
+      canonical = pageCompositionSchema.parse({
         shellKind: "default",
         main: compileSlot(asSourceSlot(composition.main), {
           depth: 1,
@@ -1073,7 +1120,7 @@ export const materialiseApplicationCompositionV2 = (
         composition.content as Record<string, SourceSlot>,
         publicSurface,
       );
-      canonical = pageCompositionV2Schema.parse({
+      canonical = pageCompositionSchema.parse({
         shellKind: "application",
         shellId: result.shell.canonical.shellId,
         content: result.content,

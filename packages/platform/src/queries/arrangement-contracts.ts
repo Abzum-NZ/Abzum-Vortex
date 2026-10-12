@@ -4,12 +4,12 @@ import { z } from "zod";
 import {
   builderKeySchema,
   calendarMappingSchema,
-  exactDecimalTextV2Schema,
+  exactDecimalTextSchema,
   fieldIdSchema,
   fieldTypeKeys,
   jsonValueSchema,
   moduleRootIdSchema,
-  moneyValueV2Schema,
+  moneyValueSchema,
   queryIdSchema,
   recordIdSchema,
   stableDefinitionReleaseVersionSchema,
@@ -111,8 +111,8 @@ const aggregatesSchema = z
  * Declared field and operation validation decides which scalar type is permitted.
  */
 const aggregateValueSchema = z.union([
-  exactDecimalTextV2Schema,
-  moneyValueV2Schema,
+  exactDecimalTextSchema,
+  moneyValueSchema,
   z.number().int(),
   z.iso.date(),
   z.iso.datetime({ offset: true }),

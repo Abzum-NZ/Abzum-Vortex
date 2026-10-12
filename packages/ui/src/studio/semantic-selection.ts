@@ -1,9 +1,9 @@
-import type { ApplicationRootId, ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
+import type { ApplicationRootId, ApplicationSourceDocument } from "@vortex/platform/schema";
 
 /** The editable Application source and its permanent Definition root identity. */
 export type StudioApplicationSelectionDraft = Readonly<{
   rootId: ApplicationRootId;
-  source: ApplicationSourceDocumentV2;
+  source: ApplicationSourceDocument;
 }>;
 
 /**
@@ -74,7 +74,7 @@ export type StudioSemanticSelectionTraversalListener = (
   event: StudioSemanticSelectionTraversalEvent,
 ) => void;
 
-type SourcePlacementSlot = ApplicationSourceDocumentV2["body"]["shells"][number]["layout"];
+type SourcePlacementSlot = ApplicationSourceDocument["body"]["shells"][number]["layout"];
 
 type SelectionIndex = Readonly<{
   applicationRootId: ApplicationRootId;
@@ -184,7 +184,7 @@ export const traverseStudioSemanticSelectionDraft = (
   };
 
   const navigation = (
-    items: readonly ApplicationSourceDocumentV2["body"]["navigation"][number][],
+    items: readonly ApplicationSourceDocument["body"]["navigation"][number][],
   ): void => {
     for (const item of items) {
       const selection = Object.freeze({

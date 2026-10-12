@@ -1,9 +1,9 @@
 import {
   compareExactDecimals,
   compileTextInputPattern,
-  moduleFieldValueV2Schemas,
+  moduleFieldValueSchemas,
   parseExactDecimal,
-  type ActionInputDefinitionV3,
+  type ActionInputDefinition,
   type DefinitionRuleFailure,
   type RecordsTableContract,
 } from "../schema";
@@ -11,7 +11,7 @@ import {
 /** Publication checks the exact Module inputs; the protected Query engine still validates values. */
 export function tableQueryParameterFailures(
   table: RecordsTableContract,
-  inputs: readonly ActionInputDefinitionV3[],
+  inputs: readonly ActionInputDefinition[],
 ): DefinitionRuleFailure["family"][] {
   const failures: DefinitionRuleFailure["family"][] = [];
   const declared = new Map(inputs.map((input) => [input.key, input]));
@@ -79,7 +79,7 @@ export function tableQueryParameterFailures(
       const bound = (candidate: string) =>
         input.type === "date" ? candidate : Date.parse(candidate);
       valid =
-        moduleFieldValueV2Schemas[input.type].safeParse(value).success &&
+        moduleFieldValueSchemas[input.type].safeParse(value).success &&
         (input.validation?.earliest === undefined ||
           comparable >= bound(input.validation.earliest)) &&
         (input.validation?.latest === undefined || comparable <= bound(input.validation.latest));

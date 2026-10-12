@@ -1,7 +1,7 @@
 import {
   builderKeySchema,
   fieldIdSchema,
-  richTextDocumentV2Schema,
+  richTextDocumentSchema,
   recordIdSchema,
   moduleRootIdSchema,
   queryIdSchema,
@@ -9,7 +9,7 @@ import {
   safeHttpsUrlSchema,
   timestampSchema,
   type BoardColumnSelector,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type ComponentSemanticEventKind,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -19,7 +19,7 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
  * Derived from the platform property-value contract so no second representation exists.
  */
 export type DisplayRichTextDocument = Extract<
-  BlockPropertyValueV2Contract,
+  BlockPropertyValueContract,
   { kind: "rich_text" }
 >["value"];
 
@@ -445,7 +445,7 @@ const parseRichTextDocument = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): DisplayRichTextDocument => {
-  const parsed = richTextDocumentV2Schema.safeParse(value);
+  const parsed = richTextDocumentSchema.safeParse(value);
   return parsed.success
     ? (parsed.data as DisplayRichTextDocument)
     : fail("Projected rich text must satisfy the structured rich-text contract", location);

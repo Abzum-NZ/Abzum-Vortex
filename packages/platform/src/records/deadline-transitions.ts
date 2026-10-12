@@ -1,20 +1,20 @@
 import {
   jsonValueSchema,
-  recordTypeDefinitionV3Schema,
-  type ModuleFieldV3,
-  type RecordTypeDefinitionV3,
+  recordTypeDefinitionSchema,
+  type ModuleField,
+  type RecordTypeDefinition,
 } from "../schema";
 import { compareInstants, exactInstant, type ExactInstant } from "./exact-instant";
 import type { RelationshipTotalParentMutation } from "./relationship-total-save";
 
-export type DeriveEarliestPendingDeadlineTransitionV2Input = Readonly<{
-  recordType: RecordTypeDefinitionV3;
+export type DeriveEarliestPendingDeadlineTransitionInput = Readonly<{
+  recordType: RecordTypeDefinition;
   finalAuthoritativeFieldValues: Readonly<Record<string, unknown>>;
   organizationTimeZone: string;
 }>;
 
 /** The calculation field which becomes true at `transitionAt`. */
-export type PendingDeadlineTransitionV2 = Readonly<{
+export type PendingDeadlineTransition = Readonly<{
   calculationFieldId: string;
   transitionAt: string;
 }>;
@@ -22,7 +22,7 @@ export type PendingDeadlineTransitionV2 = Readonly<{
 const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-const fieldResultType = (field: ModuleFieldV3): string =>
+const fieldResultType = (field: ModuleField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
 /**
@@ -32,7 +32,7 @@ const fieldResultType = (field: ModuleFieldV3): string =>
  * Both a calculation and a total must compare against the organisation-local
  * date rather than the UTC date, so they are treated identically here.
  */
-export const isDateDeadlineDueFieldV2 = (field: ModuleFieldV3): boolean =>
+export const isDateDeadlineDueField = (field: ModuleField): boolean =>
   fieldResultType(field) === "date";
 
 const utcDate = (year: number, month: number, day: number): Date => {
@@ -111,10 +111,10 @@ const startOfLocalDate = (dateText: string, timeZone: string): string | undefine
  * Finds the earliest still-pending deadline calculation from final, trusted
  * field values. It deliberately does not evaluate calculations or mutate data.
  */
-export const deriveEarliestPendingDeadlineTransitionV2 = (
-  input: DeriveEarliestPendingDeadlineTransitionV2Input,
-): PendingDeadlineTransitionV2 | undefined => {
-  const recordType = recordTypeDefinitionV3Schema.safeParse(input.recordType);
+export const deriveEarliestPendingDeadlineTransition = (
+  input: DeriveEarliestPendingDeadlineTransitionInput,
+): PendingDeadlineTransition | undefined => {
+  const recordType = recordTypeDefinitionSchema.safeParse(input.recordType);
   if (
     !recordType.success ||
     !isValueMap(input.finalAuthoritativeFieldValues) ||
@@ -124,7 +124,7 @@ export const deriveEarliestPendingDeadlineTransitionV2 = (
 
   const fields = new Map(recordType.data.fields.map((field) => [field.fieldId, field]));
   let earliest:
-    Readonly<{ transition: PendingDeadlineTransitionV2; instant: ExactInstant }> | undefined;
+    Readonly<{ transition: PendingDeadlineTransition; instant: ExactInstant }> | undefined;
   for (const field of recordType.data.fields) {
     if (field.type !== "calculation" || field.settings.expression.kind !== "deadline_passed")
       continue;
@@ -147,7 +147,7 @@ export const deriveEarliestPendingDeadlineTransitionV2 = (
     if (!dueField || typeof dueValue !== "string") continue;
 
     let transitionAt: string | undefined;
-    if (isDateDeadlineDueFieldV2(dueField)) {
+    if (isDateDeadlineDueField(dueField)) {
       const followingDate = dateAfter(dueValue);
       transitionAt =
         followingDate === undefined
@@ -174,7 +174,7 @@ export const deriveEarliestPendingDeadlineTransitionV2 = (
 export type DeadlineDueParentRecordLookup = Readonly<{
   recordKey: string;
   recordId?: string;
-  recordType: RecordTypeDefinitionV3;
+  recordType: RecordTypeDefinition;
   existingValues: Readonly<Record<string, unknown>>;
 }>;
 
@@ -187,7 +187,7 @@ export type ParentDeadlineDueTransition = Readonly<{
   recordTypeId: string;
   recordId: string;
   expectedConcurrencyNumber: number;
-  dueTransition: PendingDeadlineTransitionV2 | null;
+  dueTransition: PendingDeadlineTransition | null;
 }>;
 
 /**
@@ -214,7 +214,7 @@ export const deriveParentDeadlineDueTransitions = (
       recordId: mutation.recordId,
       expectedConcurrencyNumber: mutation.expectedConcurrencyNumber,
       dueTransition:
-        deriveEarliestPendingDeadlineTransitionV2({
+        deriveEarliestPendingDeadlineTransition({
           recordType: record.recordType,
           finalAuthoritativeFieldValues: { ...record.existingValues, ...mutation.finalValues },
           organizationTimeZone,

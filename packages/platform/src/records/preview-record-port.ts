@@ -3,7 +3,7 @@ import "server-only";
 import {
   previewRecordReadCommandV1Schema,
   previewRecordReadResultV1Schema,
-  saveRecordCommandV2Schema,
+  saveRecordCommandSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "../schema";
@@ -64,7 +64,7 @@ export const createPreviewRecordPort = (dependencies: RecordSaveServiceDependenc
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ) {
-      const command = saveRecordCommandV2Schema.safeParse(commandCandidate);
+      const command = saveRecordCommandSchema.safeParse(commandCandidate);
       if (
         !command.success ||
         command.data.previewInstallationId === undefined ||

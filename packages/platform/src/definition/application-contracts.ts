@@ -14,7 +14,7 @@ import {
   actionTaskSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
-} from "./module-contracts";
+} from "./module-foundation-contracts";
 import { interfaceDefinitionSchema } from "../connections/integration-contracts";
 import {
   actionIdSchema,
@@ -37,14 +37,14 @@ import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "../catalogue/c
 import { actionInputValueTypes, applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { permissionDeclarationSchema } from "../access/permissions";
 import {
-  applicationShellV2Schema,
-  applicationThemeV2Schema,
-  canonicalPlacementEntriesV2,
-  guidedFormPageCompositionV2Schema,
-  pageCompositionV2Schema,
-  platformBlockDependenciesV2Schema,
+  applicationShellSchema,
+  applicationThemeSchema,
+  canonicalPlacementEntries,
+  guidedFormPageCompositionSchema,
+  pageCompositionSchema,
+  platformBlockDependenciesSchema,
   type ComponentSettingValue,
-} from "./application-composition-v2";
+} from "./application-composition";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
 import { flowSchema } from "../workflows/flow-contracts";
 import { vortexIconNameSchema } from "../catalogue/icon-names";
@@ -126,7 +126,7 @@ const dateTimeActionInputSchema = z
       .optional(),
   })
   .strict();
-export const actionInputDefinitionSchema = z
+export const applicationActionInputDefinitionSchema = z
   .discriminatedUnion("type", [
     textActionInputSchema,
     formattedTextActionInputSchema,
@@ -172,7 +172,7 @@ export const actionInputDefinitionSchema = z
         message: "Maximum cannot be below minimum",
       });
   });
-export const actionDefinitionSchema = z
+export const applicationActionDefinitionSchema = z
   .object({
     actionId: actionIdSchema,
     key: namespacedKeySchema,
@@ -181,7 +181,7 @@ export const actionDefinitionSchema = z
     permissionKey: namespacedKeySchema.optional(),
     permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
     sharing: z.enum(["refused", "allowed"]),
-    inputs: z.array(actionInputDefinitionSchema).max(50),
+    inputs: z.array(applicationActionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
     tasks: z.array(actionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
   })
@@ -572,7 +572,10 @@ export type BoardColumnSelector = z.infer<typeof boardColumnSelectorSchema>;
 export type BoardColumnContinuationRequest = z.infer<typeof boardColumnContinuationRequestSchema>;
 
 /** Query shapes and title fields that a query-bound Calendar block can display. */
-export const calendarBlockSourceIsSupported = (query: unknown, titleFieldType: unknown): boolean => {
+export const calendarBlockSourceIsSupported = (
+  query: unknown,
+  titleFieldType: unknown,
+): boolean => {
   if (query === null || typeof query !== "object" || Array.isArray(query)) return false;
   const source = query as Record<string, unknown>;
   if (
@@ -599,10 +602,7 @@ export const calendarBlockSourceIsSupported = (query: unknown, titleFieldType: u
     )
   )
     return false;
-  return (
-    typeof titleFieldType === "string" &&
-    calendarTitleFieldTypes.has(titleFieldType)
-  );
+  return typeof titleFieldType === "string" && calendarTitleFieldTypes.has(titleFieldType);
 };
 
 const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
@@ -626,17 +626,17 @@ const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
 // list arrangements and calendar mapping, were compiled but never rendered. The compiler
 // no longer emits them. Releases published before their removal still carry them and
 // their content fingerprints cover them, so they stay decodable as opaque, unused JSON.
-const retiredPageSettingV2Schema = jsonValueSchema.optional();
+const retiredPageSettingSchema = jsonValueSchema.optional();
 
 /**
  * One declared application experience page: a normal page rendered for a fixed state. A
  * refused page and a missing page both resolve to `not_found`, so the two surfaces stay
  * identical and never disclose why an address is unavailable.
  */
-export const applicationExperienceV2Schema = z
+export const applicationExperienceSchema = z
   .object({ state: applicationExperienceStateSchema, pageId: pageIdSchema })
   .strict();
-export type ApplicationExperienceV2 = z.infer<typeof applicationExperienceV2Schema>;
+export type ApplicationExperience = z.infer<typeof applicationExperienceSchema>;
 
 /** Placement bindings that gate, condition or load data; none may appear on an experience page. */
 const experienceGatedPlacementKeys = [
@@ -673,33 +673,33 @@ export function isPresentationOnlyApplicationExperience(
   return shell !== undefined && !declaresGatedPlacement(shell.layout);
 }
 
-const pageV2Common = {
+const pageCommon = {
   pageId: pageIdSchema,
   replacementOfPageId: pageIdSchema.optional(),
   key: builderKeySchema,
   name: labelSchema,
   accessPermissionKey: namespacedKeySchema,
-  states: retiredPageSettingV2Schema,
-  standardPageReplacement: retiredPageSettingV2Schema,
+  states: retiredPageSettingSchema,
+  standardPageReplacement: retiredPageSettingSchema,
 };
 
-const pageV2Base = {
-  ...pageV2Common,
-  composition: pageCompositionV2Schema,
+const pageBase = {
+  ...pageCommon,
+  composition: pageCompositionSchema,
 };
 
-const listPageV2Schema = z
+const listPageSchema = z
   .object({
-    ...pageV2Base,
+    ...pageBase,
     type: z.literal("list"),
     recordType: recordTypeReferenceSchema,
     queryId: queryIdSchema,
-    arrangements: retiredPageSettingV2Schema,
-    calendarMapping: retiredPageSettingV2Schema,
+    arrangements: retiredPageSettingSchema,
+    calendarMapping: retiredPageSettingSchema,
   })
   .strict();
 
-const guidedFormStepV2Schema = z
+const guidedFormStepSchema = z
   .object({
     id: containedComponentIdSchema,
     name: labelSchema,
@@ -707,26 +707,26 @@ const guidedFormStepV2Schema = z
   })
   .strict();
 
-export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
-  listPageV2Schema,
+export const pageDefinitionSchema = z.discriminatedUnion("type", [
+  listPageSchema,
   z
-    .object({ ...pageV2Base, type: z.literal("detail"), recordType: recordTypeReferenceSchema })
+    .object({ ...pageBase, type: z.literal("detail"), recordType: recordTypeReferenceSchema })
     .strict(),
-  z.object({ ...pageV2Base, type: z.literal("dashboard") }).strict(),
+  z.object({ ...pageBase, type: z.literal("dashboard") }).strict(),
   z
     .object({
-      ...pageV2Base,
+      ...pageBase,
       type: z.literal("form"),
       recordType: recordTypeReferenceSchema,
     })
     .strict(),
   z
     .object({
-      ...pageV2Common,
+      ...pageCommon,
       type: z.literal("guided_form"),
       recordType: recordTypeReferenceSchema,
-      steps: z.array(guidedFormStepV2Schema).min(2).max(20),
-      composition: guidedFormPageCompositionV2Schema,
+      steps: z.array(guidedFormStepSchema).min(2).max(20),
+      composition: guidedFormPageCompositionSchema,
     })
     .strict()
     .superRefine((value, context) => {
@@ -756,7 +756,7 @@ export const pageDefinitionV2Schema = z.discriminatedUnion("type", [
     }),
   z
     .object({
-      ...pageV2Base,
+      ...pageBase,
       type: z.literal("public"),
       recordType: recordTypeReferenceSchema.optional(),
       publicFieldIds: z.array(fieldIdSchema),
@@ -894,29 +894,58 @@ export const pipelineSchema = z
   });
 
 /** An installed Application selects existing published index fields and one record Page. */
-export const applicationSearchSchema = z.object({
-  enabled: z.boolean(),
-  recordTypes: z.array(z.object({
-    recordType: recordTypeReferenceSchema,
-    fields: z.array(z.object({ fieldId: fieldIdSchema, priority: z.enum(["first", "normal", "last"]) }).strict()).min(1).max(100),
-    titleFieldId: fieldIdSchema,
-    subtitleFieldId: fieldIdSchema.optional(),
-    targetPageId: pageIdSchema,
-  }).strict()).min(1).max(20),
-}).strict().superRefine((value, context) => {
-  const types = new Set<string>();
-  for (const [index, entry] of value.recordTypes.entries()) {
-    const reference = entry.recordType;
-    if (reference.state !== "resolved") {
-      context.addIssue({ code: "custom", path: ["recordTypes", index], message: "Search requires a resolved record type" });
-      continue;
+export const applicationSearchSchema = z
+  .object({
+    enabled: z.boolean(),
+    recordTypes: z
+      .array(
+        z
+          .object({
+            recordType: recordTypeReferenceSchema,
+            fields: z
+              .array(
+                z
+                  .object({ fieldId: fieldIdSchema, priority: z.enum(["first", "normal", "last"]) })
+                  .strict(),
+              )
+              .min(1)
+              .max(100),
+            titleFieldId: fieldIdSchema,
+            subtitleFieldId: fieldIdSchema.optional(),
+            targetPageId: pageIdSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(20),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const types = new Set<string>();
+    for (const [index, entry] of value.recordTypes.entries()) {
+      const reference = entry.recordType;
+      if (reference.state !== "resolved") {
+        context.addIssue({
+          code: "custom",
+          path: ["recordTypes", index],
+          message: "Search requires a resolved record type",
+        });
+        continue;
+      }
+      const identity = `${reference.moduleRootId}:${reference.recordTypeId}`.toLowerCase();
+      if (
+        types.has(identity) ||
+        new Set(entry.fields.map((field) => String(field.fieldId).toLowerCase())).size !==
+          entry.fields.length
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["recordTypes", index],
+          message: "Search record types and fields must be unique",
+        });
+      types.add(identity);
     }
-    const identity = `${reference.moduleRootId}:${reference.recordTypeId}`.toLowerCase();
-    if (types.has(identity) || new Set(entry.fields.map((field) => String(field.fieldId).toLowerCase())).size !== entry.fields.length)
-      context.addIssue({ code: "custom", path: ["recordTypes", index], message: "Search record types and fields must be unique" });
-    types.add(identity);
-  }
-});
+  });
 export type ApplicationSearch = z.infer<typeof applicationSearchSchema>;
 
 /** The definition-wide fields carried by the current Application contract. */
@@ -931,12 +960,12 @@ const applicationSharedContentSchema = z
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     moduleBindings: z.array(moduleBindingSchema),
     navigation: z.array(navigationItemSchema),
-    experiences: z.array(applicationExperienceV2Schema).max(3).optional(),
+    experiences: z.array(applicationExperienceSchema).max(3).optional(),
     roles: z.array(applicationRoleSchema).min(1),
     queries: z.array(queryDefinitionSchema),
     pipelines: z.array(pipelineSchema),
     permissions: z.array(permissionDeclarationSchema),
-    actions: z.array(actionDefinitionSchema),
+    actions: z.array(applicationActionDefinitionSchema),
     events: z.array(eventDefinitionSchema),
     connectionBindings: z.array(applicationConnectionBindingSchema),
     interfaces: z.array(interfaceDefinitionSchema),
@@ -949,12 +978,12 @@ const applicationSharedContentSchema = z
   })
   .strict();
 
-export const applicationContentV2Schema = applicationSharedContentSchema
+export const applicationContentSchema = applicationSharedContentSchema
   .extend({
-    platformBlockDependencies: platformBlockDependenciesV2Schema,
-    shells: z.array(applicationShellV2Schema),
-    pages: z.array(pageDefinitionV2Schema).min(1),
-    theme: applicationThemeV2Schema,
+    platformBlockDependencies: platformBlockDependenciesSchema,
+    shells: z.array(applicationShellSchema),
+    pages: z.array(pageDefinitionSchema).min(1),
+    theme: applicationThemeSchema,
   })
   .strict()
   .superRefine((value, context) => {
@@ -962,10 +991,19 @@ export const applicationContentV2Schema = applicationSharedContentSchema
       const reference = entry.recordType;
       if (reference.state !== "resolved") continue;
       const page = value.pages.find((candidate) => candidate.pageId === entry.targetPageId);
-      if (page === undefined || !("recordType" in page) || page.recordType?.state !== "resolved" ||
-          page.recordType.moduleRootId !== reference.moduleRootId || page.recordType.recordTypeId !== reference.recordTypeId ||
-          page.type !== "detail")
-        context.addIssue({ code: "custom", path: ["search", "recordTypes", index, "targetPageId"], message: "Search must open a compatible record page" });
+      if (
+        page === undefined ||
+        !("recordType" in page) ||
+        page.recordType?.state !== "resolved" ||
+        page.recordType.moduleRootId !== reference.moduleRootId ||
+        page.recordType.recordTypeId !== reference.recordTypeId ||
+        page.type !== "detail"
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["search", "recordTypes", index, "targetPageId"],
+          message: "Search must open a compatible record page",
+        });
     }
     const experiences = value.experiences ?? [];
     for (const issue of inspectApplicationPageReplacements(
@@ -1030,7 +1068,7 @@ export const applicationContentV2Schema = applicationSharedContentSchema
       });
 
     const placementEntries = value.shells.flatMap((shell) =>
-      canonicalPlacementEntriesV2(shell.layout),
+      canonicalPlacementEntries(shell.layout),
     );
     const shellsById = new Map(value.shells.map((shell) => [String(shell.shellId), shell]));
     const validateShellContent = (
@@ -1066,7 +1104,7 @@ export const applicationContentV2Schema = applicationSharedContentSchema
       if ("stepContent" in composition) {
         if (composition.shellKind === "default") {
           for (const slot of Object.values(composition.stepContent))
-            placementEntries.push(...canonicalPlacementEntriesV2(slot));
+            placementEntries.push(...canonicalPlacementEntries(slot));
           continue;
         }
         const shell = shellsById.get(String(composition.shellId));
@@ -1086,12 +1124,12 @@ export const applicationContentV2Schema = applicationSharedContentSchema
               stepId,
             ]);
           for (const slot of Object.values(content))
-            placementEntries.push(...canonicalPlacementEntriesV2(slot));
+            placementEntries.push(...canonicalPlacementEntries(slot));
         }
         continue;
       }
       if (composition.shellKind === "default")
-        placementEntries.push(...canonicalPlacementEntriesV2(composition.main));
+        placementEntries.push(...canonicalPlacementEntries(composition.main));
       else {
         const shell = shellsById.get(String(composition.shellId));
         if (shell === undefined)
@@ -1108,7 +1146,7 @@ export const applicationContentV2Schema = applicationSharedContentSchema
             "content",
           ]);
         for (const slot of Object.values(composition.content))
-          placementEntries.push(...canonicalPlacementEntriesV2(slot));
+          placementEntries.push(...canonicalPlacementEntries(slot));
       }
     }
 
@@ -1146,7 +1184,11 @@ export const applicationContentV2Schema = applicationSharedContentSchema
     const flowIds = value.flows.map((flow) => String(flow.id));
     const flowKeys = value.flows.map((flow) => flow.key);
     if (new Set(flowIds).size !== flowIds.length)
-      context.addIssue({ code: "custom", path: ["flows"], message: "Flow identities must be unique" });
+      context.addIssue({
+        code: "custom",
+        path: ["flows"],
+        message: "Flow identities must be unique",
+      });
     if (new Set(flowKeys).size !== flowKeys.length)
       context.addIssue({ code: "custom", path: ["flows"], message: "Flow keys must be unique" });
 
@@ -1184,30 +1226,30 @@ export const applicationContentV2Schema = applicationSharedContentSchema
     }
   });
 
-export const applicationDraftV2Schema = z
-  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentV2Schema })
+export const applicationDraftSchema = z
+  .object({ envelope: applicationDefinitionEnvelopeSchema, content: applicationContentSchema })
   .strict();
 
-/** Standalone V2 canonical content is decoded only with its explicit validation version. */
-export const applicationCanonicalDocumentV2Schema = z
+/** Standalone  canonical content is decoded only with its explicit validation version. */
+export const applicationCanonicalDocumentSchema = z
   .object({
     validationContractVersion: z.literal("2.0.0"),
-    canonical: applicationDraftV2Schema,
+    canonical: applicationDraftSchema,
   })
   .strict();
 
-export const publishedApplicationDefinitionV2Schema = z
+export const publishedApplicationDefinitionSchema = z
   .object({
     publication: publishedApplicationReferenceSchema.extend({
       validationContractVersion: z.literal("2.0.0"),
     }),
-    content: applicationContentV2Schema,
+    content: applicationContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
     releaseNote: z.string().min(1).max(2_000),
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(applicationContentV2Schema, value.content, context, [
+    requireResolvedRecordTypeReferences(applicationContentSchema, value.content, context, [
       "content",
     ]),
   )
@@ -1223,7 +1265,6 @@ export const publishedApplicationDefinitionV2Schema = z
   );
 
 /** The sole immutable Application release representation Definition consumers decode. */
-export const publishedApplicationDefinitionSchema = publishedApplicationDefinitionV2Schema;
 
 export type QueryDefinition = z.infer<typeof queryDefinitionSchema>;
 export type Sort = z.infer<typeof sortSchema>;
@@ -1231,13 +1272,10 @@ export type Aggregate = z.infer<typeof aggregateSchema>;
 export type ModuleBinding = z.infer<typeof moduleBindingSchema>;
 export type NavigationItem = z.infer<typeof navigationItemSchema>;
 export type CalendarMapping = z.infer<typeof calendarMappingSchema>;
-export type PageDefinitionV2 = z.infer<typeof pageDefinitionV2Schema>;
-export type ApplicationContentV2 = z.infer<typeof applicationContentV2Schema>;
-export type ApplicationDraftV2 = z.infer<typeof applicationDraftV2Schema>;
-export type ApplicationCanonicalDocumentV2 = z.infer<typeof applicationCanonicalDocumentV2Schema>;
-export type PublishedApplicationDefinitionV2 = z.infer<
-  typeof publishedApplicationDefinitionV2Schema
->;
+export type PageDefinition = z.infer<typeof pageDefinitionSchema>;
+export type ApplicationContent = z.infer<typeof applicationContentSchema>;
+export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
+export type ApplicationCanonicalDocument = z.infer<typeof applicationCanonicalDocumentSchema>;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
 export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
 export type Pipeline = z.infer<typeof pipelineSchema>;

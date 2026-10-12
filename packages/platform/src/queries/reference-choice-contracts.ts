@@ -5,7 +5,7 @@ import {
   builderKeySchema,
   fieldIdSchema,
   organizationAccountIdSchema,
-  publishedModuleQueryDescriptorV3Schema,
+  publishedModuleQueryDescriptorSchema,
   recordIdSchema,
   recordTypeIdSchema,
   recordTypeReferenceSchema,
@@ -28,7 +28,7 @@ export const recordReferenceChoiceCommandSchema = z
     /** The reference input's declared allowed record types. */
     allowedRecordTypes: z.array(recordTypeReferenceSchema).min(1).max(20),
     /** The published Module query whose permitted rows are the choices. */
-    source: publishedModuleQueryDescriptorV3Schema,
+    source: publishedModuleQueryDescriptorSchema,
     /** A field the source query selects, shown as each choice's label. */
     labelFieldId: fieldIdSchema,
     /** Supplied only by the composing server after resolving a current permitted parent choice. */

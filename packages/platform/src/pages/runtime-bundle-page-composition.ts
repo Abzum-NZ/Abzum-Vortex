@@ -1,20 +1,20 @@
-import type { ApplicationShellV2 } from "../definition/application-composition-v2";
-import type { PageDefinitionV2 } from "../definition/application-contracts";
+import type { ApplicationShell } from "../definition/application-composition";
+import type { PageDefinition } from "../definition/application-contracts";
 
-export type PlacementSlotV2 = ApplicationShellV2["layout"];
+export type PlacementSlot = ApplicationShell["layout"];
 export type ResolvedPageComposition = Readonly<{
-  page: PageDefinitionV2;
+  page: PageDefinition;
   roots:
-    | Readonly<{ kind: "page"; main: PlacementSlotV2 }>
-    | Readonly<{ kind: "guided"; stepContent: Readonly<Record<string, PlacementSlotV2>> }>;
+    | Readonly<{ kind: "page"; main: PlacementSlot }>
+    | Readonly<{ kind: "guided"; stepContent: Readonly<Record<string, PlacementSlot>> }>;
 }>;
 
-const emptySlot = (): PlacementSlotV2 => ({
+const emptySlot = (): PlacementSlot => ({
   placements: {},
   order: { desktop: [], tablet: [], phone: [] },
 });
 
-const cloneSlot = (slot: PlacementSlotV2): PlacementSlotV2 => ({
+const cloneSlot = (slot: PlacementSlot): PlacementSlot => ({
   placements: Object.fromEntries(
     Object.entries(slot.placements).map(([placementId, placement]) => [
       placementId,
@@ -37,9 +37,9 @@ const cloneSlot = (slot: PlacementSlotV2): PlacementSlotV2 => ({
 });
 
 const findPlacement = (
-  slot: PlacementSlotV2,
+  slot: PlacementSlot,
   placementId: string,
-): PlacementSlotV2["placements"][string] | undefined => {
+): PlacementSlot["placements"][string] | undefined => {
   const direct = slot.placements[placementId];
   if (direct !== undefined) return direct;
   for (const placement of Object.values(slot.placements))
@@ -50,7 +50,7 @@ const findPlacement = (
   return undefined;
 };
 
-const collectUniquePlacementIds = (slot: PlacementSlotV2, ids: Set<string>): void => {
+const collectUniquePlacementIds = (slot: PlacementSlot, ids: Set<string>): void => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     if (ids.has(placementId)) throw new Error("PAGE_COMPOSITION_BINDING_INVALID");
     ids.add(placementId);
@@ -59,8 +59,8 @@ const collectUniquePlacementIds = (slot: PlacementSlotV2, ids: Set<string>): voi
 };
 
 const requireUniquePlacementOwnership = (
-  shell: ApplicationShellV2 | undefined,
-  pageSlots: readonly PlacementSlotV2[],
+  shell: ApplicationShell | undefined,
+  pageSlots: readonly PlacementSlot[],
 ): void => {
   const ids = new Set<string>();
   if (shell !== undefined) collectUniquePlacementIds(shell.layout, ids);
@@ -68,9 +68,9 @@ const requireUniquePlacementOwnership = (
 };
 
 const resolvedShellRoot = (
-  shell: ApplicationShellV2,
-  content: Readonly<Record<string, PlacementSlotV2>>,
-): PlacementSlotV2 => {
+  shell: ApplicationShell,
+  content: Readonly<Record<string, PlacementSlot>>,
+): PlacementSlot => {
   const allowed = new Set(shell.contentSlots.map((slot) => String(slot.slotId)));
   if (Object.keys(content).some((slotId) => !allowed.has(slotId)))
     throw new Error("PAGE_COMPOSITION_BINDING_INVALID");
@@ -99,8 +99,8 @@ const resolvedShellRoot = (
 };
 
 export const resolvePageComposition = (
-  page: PageDefinitionV2,
-  shells: readonly ApplicationShellV2[] = [],
+  page: PageDefinition,
+  shells: readonly ApplicationShell[] = [],
 ): ResolvedPageComposition => {
   const composition = page.composition;
   if (composition.shellKind === "default") {
@@ -129,7 +129,7 @@ export const resolvePageComposition = (
     page.type === "guided_form" ? page.steps.map((step) => String(step.id)) : [];
   const stepContent = composition.stepContent as unknown as Record<
     string,
-    Record<string, PlacementSlotV2>
+    Record<string, PlacementSlot>
   >;
   if (
     Object.keys(stepContent).length !== expectedSteps.length ||
@@ -150,4 +150,3 @@ export const resolvePageComposition = (
     },
   };
 };
-

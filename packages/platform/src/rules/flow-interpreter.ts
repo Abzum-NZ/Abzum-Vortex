@@ -11,7 +11,7 @@ import {
   flowTaskRegistry,
   parseExactDecimal,
   platformOperationKey,
-  recordLinkValueV2Schema,
+  recordLinkValueSchema,
   type FlowDefinition,
   type FlowExecutionKind,
   type FormContinuationAnswer,
@@ -852,7 +852,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       )
         return failed("value_unresolved", "failed", taskId);
 
-      const link = recordLinkValueV2Schema.safeParse({
+      const link = recordLinkValueSchema.safeParse({
         recordTypeId,
         recordId: evaluatedRecord.value,
       });
