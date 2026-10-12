@@ -1,7 +1,6 @@
 # Canonical database-function sources
 
-This directory holds one readable source file per database function, so a migration is never the
-only place a live definition can be found:
+This directory holds the editable source for functions that have a canonical file:
 
 ```text
 supabase/schemas/<schema>/<function>.sql
@@ -21,6 +20,10 @@ The schema directory names the function's schema and the file name is the functi
 lowercase SQL identifiers, so one name has one file: do not overload a function name. The file
 applies on its own and matches the live database exactly.
 
+The 20261014 baseline includes older live functions that do not yet have a canonical file. Add a
+canonical file whenever one of those functions next changes. All existing canonical function
+bodies in the baseline match their files.
+
 ## Migration rule
 
 - A migration that creates a function or changes its definition carries the complete body,
@@ -31,9 +34,9 @@ applies on its own and matches the live database exactly.
 - An owner-only or privilege-only migration does not repeat the function body. In the same commit,
   change only the canonical owner statement or the function's grant/revoke statements that record
   that migration.
-- Never read a stored definition (`pg_get_functiondef`, `prosrc`, `routine_definition`) and never
-  edit one with `replace()`. A migration states the code it installs in full, as a top-level
-  `create or replace function <schema>.<function>(...)` statement.
+- After the generated baseline, never read a stored definition (`pg_get_functiondef`, `prosrc`,
+  `routine_definition`) or edit one with `replace()`. A migration states the code it installs in
+  full, as a top-level `create or replace function <schema>.<function>(...)` statement.
 - A signature change is an explicit `drop function` of the old signature, then a `create` for the
   new one. `create or replace` with a different argument list would add an overload instead.
 - A canonical file is only changed together with the migration that installs the same definition,
@@ -42,12 +45,10 @@ applies on its own and matches the live database exactly.
 
 ## Enforcement
 
-There is no automated checker. Reviewers rely on these rules: a function's canonical file under
-`supabase/schemas` must stay identical to the definition its latest migration installs, must record
-the same owner, and must hold only its one definition, comment, optional owner statement and
-privileges. Do not read a stored function definition or patch one with `replace()`; change an
-argument list only after an explicit `drop function`. Functions installed by migrations before
-`20260925000000` gain a canonical file when they are next changed.
+`pnpm guard` compares each canonical function definition with its latest migration definition.
+Reviewers also check that the canonical file records the same owner and privileges. Do not read a
+stored function definition or patch one with `replace()` in forward migrations; change an argument
+list only after an explicit `drop function`.
 
 ## Example
 
