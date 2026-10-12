@@ -13,10 +13,21 @@ const remoteRefs = spawnSync("git", ["for-each-ref", "--format=%(refname)", "ref
 });
 if (remoteRefs.status !== 0)
   throw new Error(`Cannot list fetched remote refs: ${remoteRefs.stderr}`);
-const mainRefs = remoteRefs.stdout
+const configuredRemotes = spawnSync("git", ["remote"], { cwd: root, encoding: "utf8" });
+if (configuredRemotes.status !== 0)
+  throw new Error(`Cannot list configured remotes: ${configuredRemotes.stderr}`);
+const availableRemoteRefs = new Set(
+  remoteRefs.stdout
+    .split("\n")
+    .map((ref) => ref.trim())
+    .filter(Boolean),
+);
+const mainRefs = configuredRemotes.stdout
   .split("\n")
-  .map((ref) => ref.trim())
-  .filter((ref) => /^refs\/remotes\/.+\/main$/.test(ref));
+  .map((remote) => remote.trim())
+  .filter(Boolean)
+  .map((remote) => `refs/remotes/${remote}/main`)
+  .filter((ref) => availableRemoteRefs.has(ref));
 const mainRef = mainRefs.includes("refs/remotes/origin/main")
   ? "refs/remotes/origin/main"
   : mainRefs.sort()[0];
