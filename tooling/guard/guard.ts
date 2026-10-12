@@ -21,11 +21,11 @@ const findings: Finding[] = [];
 const silentFindings: Array<{ file: string; line: number; variable: string; branch: string }> = [];
 const occurrences = new Map<string, number>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
-const baselineMigrationFiles = new Set([
-  "supabase/migrations/20261014000100_baseline_roles_and_extensions.sql",
-  "supabase/migrations/20261014000200_baseline_schema_and_functions.sql",
-  "supabase/migrations/20261014000300_baseline_constraints_grants_and_policies.sql",
-  "supabase/migrations/20261014000400_baseline_system_data_and_storage.sql",
+const baselineMigrationFiles = new Map([
+  ["supabase/migrations/20261014000100_baseline_roles_and_extensions.sql", 168],
+  ["supabase/migrations/20261014000200_baseline_schema_and_functions.sql", 105368],
+  ["supabase/migrations/20261014000300_baseline_constraints_grants_and_policies.sql", 5241],
+  ["supabase/migrations/20261014000400_baseline_system_data_and_storage.sql", 705],
 ]);
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const renamedFromMain = new Map<string, string>();
@@ -137,8 +137,9 @@ const businessPattern = new RegExp(
 
 for (const file of codeFiles) {
   const content = read(file);
-  if (content.split("\n").length > 1500 && !baselineMigrationFiles.has(file))
-    add("file-size", file, 1501, `${content.split("\n").length} lines`);
+  const lineCount = content.split("\n").length;
+  if (lineCount > (baselineMigrationFiles.get(file) ?? 1500))
+    add("file-size", file, 1501, `${lineCount} lines`);
   if (/-v[2-9]\d*(?=\.)/i.test(basename(file))) add("versioned-file", file, 1, basename(file));
   const fileArea = area(file);
   if (
