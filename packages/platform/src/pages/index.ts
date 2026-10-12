@@ -1,6 +1,14 @@
 import "server-only";
 
 export {
+  organizationLauncherPage,
+  organizationLauncherPlacementId,
+  organizationLauncherShell,
+  organizationLauncherStudioPage,
+  organizationLauncherStudioPlacementId,
+} from "./organization-launcher-page";
+
+export {
   createAuthenticatedPageCapabilityService,
   type AuthenticatedPageCapabilityDependencies,
   type FixedAuthenticatedPageCapability,
