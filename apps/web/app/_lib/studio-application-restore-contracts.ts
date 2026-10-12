@@ -17,20 +17,20 @@ export const studioApplicationRestoreSelectorSchema = z.object({
   releaseRevision: revisionSchema,
 }).strict();
 
-export const studioApplicationRestoreExpectedSchema = z.object({
+const studioApplicationRestoreExpectedSchema = z.object({
   draftRevision: revisionSchema.refine((revision) => revision < Number.MAX_SAFE_INTEGER),
   sourceFingerprint: fingerprintSchema,
   anchorReleaseRevision: revisionSchema,
 }).strict();
 
-export const studioApplicationRestoreSnapshotSchema = z.object({
+const studioApplicationRestoreSnapshotSchema = z.object({
   organizationId: organizationIdSchema,
   rootId: applicationRootIdSchema,
   definitionKey: namespacedKeySchema,
   ...studioApplicationRestoreExpectedSchema.shape,
 }).strict();
 
-export const studioApplicationRestoreAvailableSchema = z.object({
+const studioApplicationRestoreAvailableSchema = z.object({
   kind: z.literal("available"),
   selector: studioApplicationRestoreSelectorSchema,
   snapshot: studioApplicationRestoreSnapshotSchema,
@@ -92,8 +92,8 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
 ]);
 
 export type StudioApplicationRestoreSelector = z.infer<typeof studioApplicationRestoreSelectorSchema>;
-export type StudioApplicationRestoreExpected = z.infer<typeof studioApplicationRestoreExpectedSchema>;
-export type StudioApplicationRestoreSnapshot = z.infer<typeof studioApplicationRestoreSnapshotSchema>;
+type StudioApplicationRestoreExpected = z.infer<typeof studioApplicationRestoreExpectedSchema>;
+type StudioApplicationRestoreSnapshot = z.infer<typeof studioApplicationRestoreSnapshotSchema>;
 export type StudioApplicationRestoreAvailable = z.infer<typeof studioApplicationRestoreAvailableSchema>;
 export type StudioApplicationRestoreFailure = z.infer<typeof studioApplicationRestoreFailureSchema>;
 export type StudioApplicationRestoreLoadResult = z.infer<typeof studioApplicationRestoreLoadResultSchema>;

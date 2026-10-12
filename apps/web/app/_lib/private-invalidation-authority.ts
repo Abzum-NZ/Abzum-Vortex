@@ -36,7 +36,7 @@ const currentPageAddressSchema = z
 
 type CurrentPageAddress = z.infer<typeof currentPageAddressSchema>;
 
-export type WebPrivateInvalidationChannelInitialResult =
+type WebPrivateInvalidationChannelInitialResult =
   | Readonly<{
       access: PrivateInvalidationChannelAccess;
       accessTokenExpiresAt: string;

@@ -26,8 +26,8 @@ import { createApplicationInstallIcon } from "./application-install-icon";
 
 const expectationSchema = z.object({ applicationReleaseRevision: revisionSchema,
   snapshot: fingerprintSchema }).strict();
-export type ApplicationInstallExpectation = z.infer<typeof expectationSchema>;
-export type ApplicationInstallResult =
+type ApplicationInstallExpectation = z.infer<typeof expectationSchema>;
+type ApplicationInstallResult =
   | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>
   | Readonly<{ kind: "available"; manifest: ApplicationInstallManifest; manifestUrl: string;
       snapshot: string; applicationReleaseRevision: number; validUntil: string }>;

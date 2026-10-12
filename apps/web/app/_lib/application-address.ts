@@ -15,7 +15,7 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
 import type { IdentitySession } from "@vortex/contracts";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 
-export type ApplicationAddressResult =
+type ApplicationAddressResult =
   | Readonly<{
       kind: "unavailable";
       /**

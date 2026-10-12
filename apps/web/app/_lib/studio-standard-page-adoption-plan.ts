@@ -41,7 +41,7 @@ export const pageAdoptionCommandSchema = z
   .strict();
 
 export type PageAdoptionCommand = z.infer<typeof pageAdoptionCommandSchema>;
-export type PageAdoptionTarget = PageAdoptionCommand["target"];
+type PageAdoptionTarget = PageAdoptionCommand["target"];
 
 export type PageAdoptionDifference = Readonly<{
   path: string;
@@ -55,7 +55,7 @@ export type PageAdoptionTargetOption = Readonly<{
   label: string;
 }>;
 
-export type PageAdoptionPlan = Readonly<{
+type PageAdoptionPlan = Readonly<{
   source: ApplicationSourceDocumentV2;
   expectedCanonicalContent: ApplicationContentV2;
   comparisonFingerprint: string;

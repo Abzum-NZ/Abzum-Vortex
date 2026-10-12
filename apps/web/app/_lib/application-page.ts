@@ -217,7 +217,7 @@ export type ApplicationPageModel = Readonly<{
   }>;
 }>;
 
-export type ApplicationPageResult =
+type ApplicationPageResult =
   | Readonly<{ kind: "available"; model: ApplicationPageModel }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -239,7 +239,7 @@ type ApplicationPageInternalResult =
   | ApplicationPageResult
   | Readonly<{ kind: "reload" }>;
 
-export type ApplicationPageLoaderAddress = Readonly<{
+type ApplicationPageLoaderAddress = Readonly<{
   tenantShortName: string;
   organizationShortName: string;
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
@@ -486,7 +486,7 @@ const collectPlacements = (
   return found;
 };
 
-export type ReferenceChoicePageResult =
+type ReferenceChoicePageResult =
   | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "refused" }>

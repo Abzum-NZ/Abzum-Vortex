@@ -82,7 +82,7 @@ type ProtectedRead =
   | Readonly<{ outcome: "storage_unavailable" }>
   | Readonly<{ outcome: "read"; result: FileReadResult }>;
 
-export type FileRouteParameters = Readonly<{ organizationId: string; fileId: string }>;
+type FileRouteParameters = Readonly<{ organizationId: string; fileId: string }>;
 
 /**
  * Serves one private download, range or preview request.

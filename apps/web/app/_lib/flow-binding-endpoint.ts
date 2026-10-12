@@ -110,7 +110,7 @@ export type InstalledFlowBindings = Readonly<{
   >;
 }>;
 
-export type FlowBindingEndpointDependencies = Readonly<{
+type FlowBindingEndpointDependencies = Readonly<{
   /** Reads the active installation for the initiator's selection; `undefined` refuses neutrally. */
   readInstallation: (
     session: IdentitySession,
@@ -151,7 +151,7 @@ export type FlowBindingEndpointDependencies = Readonly<{
 
 type SafeIntents = Extract<FlowOrchestratorResponse, { intents: unknown }>["intents"];
 
-export type FlowBindingEndpointResult =
+type FlowBindingEndpointResult =
   /** The request named a stale installation revision: reload the page, nothing was run. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
   /** The run ended. `descriptor` is the shared safe result; `outputs` only when it says available. */
@@ -818,4 +818,4 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
     },
   });
 
-export type FlowBindingEndpoint = ReturnType<typeof createFlowBindingEndpoint>;
+type FlowBindingEndpoint = ReturnType<typeof createFlowBindingEndpoint>;

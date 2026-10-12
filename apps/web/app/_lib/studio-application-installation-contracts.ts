@@ -53,7 +53,7 @@ export const studioApplicationInstallationSnapshotSchema = z
   })
   .strict();
 
-export const studioApplicationInstallationUnavailableReasonSchema = z.enum([
+const studioApplicationInstallationUnavailableReasonSchema = z.enum([
   "not_installed",
   "not_newer",
   "module_set_changed",
@@ -140,7 +140,7 @@ export type StudioApplicationInstallationSnapshot = z.infer<
 export type StudioApplicationInstallationLoadResult = z.infer<
   typeof studioApplicationInstallationLoadResultSchema
 >;
-export type StudioApplicationInstallationCommand = z.infer<
+type StudioApplicationInstallationCommand = z.infer<
   typeof studioApplicationInstallationCommandSchema
 >;
 export type StudioApplicationInstallationCommandResult = z.infer<
@@ -337,7 +337,7 @@ export const studioApplicationArchiveOptionsQuerySchema = z.object({
   afterConnectionInstanceId: connectionInstanceIdSchema.optional(),
 }).strict();
 
-export const studioApplicationArchiveOptionSchema = z.object({
+const studioApplicationArchiveOptionSchema = z.object({
   connectionInstanceId: connectionInstanceIdSchema,
   connectionTypeId: connectionTypeIdSchema,
   connectionTypeVersion: semanticVersionSchema,
