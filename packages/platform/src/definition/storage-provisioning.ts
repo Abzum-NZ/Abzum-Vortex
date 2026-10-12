@@ -9,16 +9,11 @@ import {
   type ModuleInstallationStorageResult,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-
-export class ModuleInstallationStorageError extends Error {
-  readonly code: ModuleInstallationStorageErrorCode;
-
-  constructor(code: ModuleInstallationStorageErrorCode) {
-    super(code);
-    this.name = "ModuleInstallationStorageError";
-    this.code = code;
-  }
-}
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 type ProvisionRow = DatabaseRow & {
   readonly state: unknown;
@@ -55,32 +50,35 @@ const parseResult = (row: ProvisionRow): ModuleInstallationStorageResult => {
     storageContractIds: row.storage_contract_ids,
   });
   if (!result.success)
-    throw new ModuleInstallationStorageError("RECORD_STORAGE_PROVISIONING_FAILED");
+    throw unexpectedDefinitionFailure(
+      "RECORD_STORAGE_PROVISIONING_FAILED",
+      result.error,
+      "storage-provisioning",
+    );
   return result.data;
 };
 
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
-const mapFailure = (error: unknown): ModuleInstallationStorageError => {
-  if (error instanceof ModuleInstallationStorageError) return error;
-  switch (databaseCode(error)) {
+const mapFailure = (error: unknown): DefinitionError<ModuleInstallationStorageErrorCode> => {
+  if (error instanceof DefinitionError) return error;
+  switch (databaseErrorCode(error)) {
     case "22023":
-      return new ModuleInstallationStorageError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
+      return new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
     case "42501":
-      return new ModuleInstallationStorageError("MODULE_INSTALLATION_AUTHORITY_REFUSED");
+      return new DefinitionError("MODULE_INSTALLATION_AUTHORITY_REFUSED");
     case "P0002":
-      return new ModuleInstallationStorageError("MODULE_INSTALLATION_RELEASE_UNAVAILABLE");
+      return new DefinitionError("MODULE_INSTALLATION_RELEASE_UNAVAILABLE");
     case "23514":
-      return new ModuleInstallationStorageError("MODULE_INSTALLATION_RELEASE_MISMATCH");
+      return new DefinitionError("MODULE_INSTALLATION_RELEASE_MISMATCH");
     case "40001":
-      return new ModuleInstallationStorageError("MODULE_INSTALLATION_BINDING_CONFLICT");
+      return new DefinitionError("MODULE_INSTALLATION_BINDING_CONFLICT");
     case "55000":
-      return new ModuleInstallationStorageError("RECORD_STORAGE_INCOMPATIBLE");
+      return new DefinitionError("RECORD_STORAGE_INCOMPATIBLE");
     default:
-      return new ModuleInstallationStorageError("RECORD_STORAGE_PROVISIONING_FAILED");
+      return unexpectedDefinitionFailure(
+        "RECORD_STORAGE_PROVISIONING_FAILED",
+        error,
+        "storage-provisioning",
+      );
   }
 };
 
@@ -257,7 +255,7 @@ const parseContributionResult = (
     safeRevision(row.module_release_revision) === undefined ||
     contributionIds === undefined
   )
-    throw new ModuleInstallationStorageError("RECORD_STORAGE_PROVISIONING_FAILED");
+    throw new DefinitionError("RECORD_STORAGE_PROVISIONING_FAILED");
   return Object.freeze({
     state: expectedState,
     changed: row.changed,
@@ -293,7 +291,7 @@ export const createModuleInstallationStorageRepository = (
   ): Promise<ModuleContributionStorageResult> => {
     const command = parseContributionCommand(commandCandidate);
     if (command === undefined || command.mode !== mode)
-      throw new ModuleInstallationStorageError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
+      throw new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
     try {
       const rows = await transaction.query<ContributionRow>`
         select *
@@ -308,7 +306,7 @@ export const createModuleInstallationStorageRepository = (
         )
       `;
       if (rows.length !== 1 || rows[0] === undefined)
-        throw new ModuleInstallationStorageError("RECORD_STORAGE_PROVISIONING_FAILED");
+        throw new DefinitionError("RECORD_STORAGE_PROVISIONING_FAILED");
       return parseContributionResult(rows[0], mode);
     } catch (error) {
       throw mapFailure(error);
@@ -319,7 +317,7 @@ export const createModuleInstallationStorageRepository = (
     async provision(commandCandidate: ModuleInstallationStorageCommand) {
       const command = moduleInstallationStorageCommandSchema.safeParse(commandCandidate);
       if (!command.success)
-        throw new ModuleInstallationStorageError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
+        throw new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
       try {
         const rows = await transaction.query<ProvisionRow>`
           select *
@@ -332,7 +330,7 @@ export const createModuleInstallationStorageRepository = (
           )
         `;
         if (rows.length !== 1 || rows[0] === undefined)
-          throw new ModuleInstallationStorageError("RECORD_STORAGE_PROVISIONING_FAILED");
+          throw new DefinitionError("RECORD_STORAGE_PROVISIONING_FAILED");
         return parseResult(rows[0]);
       } catch (error) {
         throw mapFailure(error);

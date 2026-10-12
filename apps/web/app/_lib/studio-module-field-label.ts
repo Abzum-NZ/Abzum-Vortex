@@ -12,7 +12,7 @@ import {
 } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
-  BuilderAuthorityError, createDefinitionStore, DefinitionStoreError, fingerprintCanonicalValue,
+  BuilderAuthorityError, createDefinitionStore, fingerprintCanonicalValue,
   readModuleDefinitionDraft, requireBuilderAuthority, validateDefinitionSource,
   type StoredModuleDefinitionDraft,
 } from "@web/platform-server";
@@ -20,6 +20,7 @@ import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vort
 import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
+import { DefinitionError } from "@web/platform-server";
 
 export type StudioModuleFieldDescriptor = Readonly<{
   recordAlias: string; recordKey: string; recordName: string;
@@ -50,29 +51,30 @@ class LocatedValidationFailure extends Error {
 }
 
 function invalidResult(): never {
-  throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
 }
 
 const safeFailure = (error: unknown): StudioModuleFieldLabelResult => {
   if (error instanceof LocatedValidationFailure) return { kind: "validation_failed", validation: error.validation };
   if (error instanceof BuilderAuthorityError) return { kind: "refused" };
-  if (error instanceof DefinitionStoreError) {
+  if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || error.code === "DEFINITION_ROOT_MISSING" ||
         error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT") return { kind: "conflict" };
     if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE" ||
         error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_STORAGE_VALIDATION_FAILED")
       return { kind: "refused" };
   }
+  console.error("[studio] field label failed unexpectedly", error);
   return { kind: "temporarily_unavailable" };
 };
 
 /** Only a trusted same-organization Module read can establish these non-Application facts. */
 const moduleTargetFacts: BuilderTargetFactsReader = async (transaction, scope, candidateRootId) => {
   const root = moduleRootIdSchema.safeParse(candidateRootId);
-  if (!root.success) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+  if (!root.success) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const draft = await readModuleDefinitionDraft(transaction, scope, { rootId: root.data });
   if (draft.kind !== "module" || !sameId(draft.rootId, root.data) || !sameId(draft.organizationId, scope.organizationId))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   return { isSystemApplication: false };
 };
 
@@ -110,7 +112,7 @@ const readLiveContext = async (
       context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt || context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
       Date.parse(context.issuedAt) > now || Date.parse(context.expiresAt) <= now ||
       Date.parse(context.issuedAt) >= Date.parse(context.expiresAt))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   return context;
 };
 
@@ -121,7 +123,7 @@ const assertLiveCompletion = async (
 ) => {
   await moduleTargetFacts(transaction, scope, draft.rootId);
   const permission = platformPermissionDeclarations.find((item) => item.key === "platform.organization.definition_drafts.manage");
-  if (permission === undefined) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+  if (permission === undefined) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const declaration = organizationAccessDeclarationSchema.parse({
     operationKey: permission.key, action: { actionKind: permission.actionKind }, target: { kind: "organization" },
     requiredPermission: { ownerKind: "platform", ownerId: platformPermissionOwnerId, permissionId: permission.permissionId },
@@ -144,7 +146,7 @@ const assertLiveCompletion = async (
   const current = await readLiveContext(transaction, scope, session, issuedAt);
   if (!decision.success || decision.data.outcome !== "eligible" || !completed.success ||
       canonicalJson(current) !== canonicalJson(originalContext))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const eligible = decision.data;
   const now = Date.parse(completed.data);
   if (eligible.operationKey !== permission.key || eligible.target.kind !== "organization" ||
@@ -153,7 +155,7 @@ const assertLiveCompletion = async (
       eligible.accessVersion !== scope.accessVersion || !sameId(eligible.correlationId, current.correlationId) ||
       Date.parse(eligible.checkedAt) > now || Date.parse(eligible.validUntil) <= now || Date.parse(draft.updatedAt) > now ||
       (await databaseClock(transaction)) >= Math.min(Date.parse(eligible.validUntil), Date.parse(current.expiresAt)))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 };
 
 const verifySaved = (
@@ -205,7 +207,7 @@ export const loadStudioModuleFieldLabel = async (
       });
     return result.kind === "available" ? result.value : failure ?? (result.kind === "unavailable"
       ? { kind: "refused" } : { kind: "temporarily_unavailable" });
-  } catch { return { kind: "temporarily_unavailable" }; }
+  } catch (error) { console.error("[studio] field label failed unexpectedly", error); return { kind: "temporarily_unavailable" }; }
 };
 
 /** Patch exactly one semantic field on server-read source in the initiating HUMAN transaction. */
@@ -228,7 +230,7 @@ export const saveStudioModuleFieldLabel = async (
             rootId: request.data.rootId, expectedDraftRevision: request.data.expectedDraftRevision,
           });
           if (!sameId(previous.organizationId, organization.data) || previous.sourceFingerprint !== request.data.expectedSavedSourceFingerprint)
-            throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+            throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
           const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: previous.rootId });
           const records = previous.source.body.record_types.filter((item) => item.id === request.data.recordAlias);
@@ -236,7 +238,7 @@ export const saveStudioModuleFieldLabel = async (
           const fields = record?.fields.filter((item) => item.id === request.data.fieldAlias);
           const field = fields?.[0];
           if (records.length !== 1 || record === undefined || fields?.length !== 1 || field === undefined)
-            throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+            throw new DefinitionError("INVALID_DEFINITION_COMMAND");
           const location: DefinitionValidationLocation = { documentKind: "module", documentKey: previous.key,
             segments: [{ kind: "module", key: previous.key }, { kind: "record_type", key: record.key }, { kind: "field", key: field.key }] };
           const label = labelSchema.safeParse(request.data.label);
@@ -276,5 +278,5 @@ export const saveStudioModuleFieldLabel = async (
       });
     return result.kind === "available" ? result.value : failure ?? (result.kind === "unavailable"
       ? { kind: "refused" } : { kind: "temporarily_unavailable" });
-  } catch { return { kind: "temporarily_unavailable" }; }
+  } catch (error) { console.error("[studio] field label failed unexpectedly", error); return { kind: "temporarily_unavailable" }; }
 };

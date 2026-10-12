@@ -3,7 +3,6 @@ import "server-only";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
-import { ApplicationInstallationCoordinatorError } from "@web/platform-server";
 import { recordIdSchema } from "@vortex/platform/schema";
 import {
   ALL_UI_STYLES_CSS,
@@ -50,6 +49,7 @@ import {
   advanceGuidedFormStepAction,
   confirmGuidedFormAction,
 } from "./guided-form-actions";
+import { DefinitionError } from "@web/platform-server";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +88,7 @@ const adoptionDiagnosticSqlStates = new Set<string>([
 /** Only a known coordinator exception can select the display-only authentication notice. */
 const adoptionCoordinatorCode = (error: unknown): string => {
   try {
-    if (!(error instanceof ApplicationInstallationCoordinatorError)) return "UNKNOWN";
+    if (!(error instanceof DefinitionError)) return "UNKNOWN";
     const code: unknown = Object.getOwnPropertyDescriptor(error, "code")?.value;
     return typeof code === "string" && adoptionDiagnosticCoordinatorCodes.has(code)
       ? code

@@ -14,64 +14,54 @@ import {
   type ApplicationInstallationLifecycleResult,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 type LifecycleRow = DatabaseRow & { readonly lifecycle_result: unknown };
 type LifecyclePolicyReadinessRow = DatabaseRow & { readonly lifecycle_readiness: unknown };
 type IndexReadinessRow = DatabaseRow & { readonly index_readiness: unknown };
 
-export class ApplicationInstallationLifecycleError extends Error {
-  readonly code: ApplicationInstallationLifecycleErrorCode;
-
-  constructor(code: ApplicationInstallationLifecycleErrorCode) {
-    super(code);
-    this.name = "ApplicationInstallationLifecycleError";
-    this.code = code;
-  }
-}
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
-const mapFailure = (error: unknown): ApplicationInstallationLifecycleError => {
-  if (error instanceof ApplicationInstallationLifecycleError) return error;
-  switch (databaseCode(error)) {
+const mapFailure = (error: unknown): DefinitionError<ApplicationInstallationLifecycleErrorCode> => {
+  if (error instanceof DefinitionError) return error;
+  switch (databaseErrorCode(error)) {
     case "22023":
-      return new ApplicationInstallationLifecycleError(
-        "INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND",
-      );
+      return new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
     case "42501":
-      return new ApplicationInstallationLifecycleError(
-        "APPLICATION_INSTALLATION_AUTHORITY_REFUSED",
-      );
+      return new DefinitionError("APPLICATION_INSTALLATION_AUTHORITY_REFUSED");
     case "P0002":
-      return new ApplicationInstallationLifecycleError(
-        "APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE",
-      );
+      return new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     case "40001":
-      return new ApplicationInstallationLifecycleError("APPLICATION_INSTALLATION_BINDING_CONFLICT");
+      return new DefinitionError("APPLICATION_INSTALLATION_BINDING_CONFLICT");
     case "23514":
     case "55000":
-      return new ApplicationInstallationLifecycleError(
-        "APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE",
-      );
+      return new DefinitionError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
     default:
-      return new ApplicationInstallationLifecycleError("APPLICATION_INSTALLATION_CHANGE_FAILED");
+      return unexpectedDefinitionFailure(
+        "APPLICATION_INSTALLATION_CHANGE_FAILED",
+        error,
+        "installation-lifecycle",
+      );
   }
 };
 
 const parseResult = (rows: readonly LifecycleRow[]): ApplicationInstallationLifecycleResult => {
   if (rows.length !== 1 || rows[0] === undefined)
-    throw new ApplicationInstallationLifecycleError("APPLICATION_INSTALLATION_CHANGE_FAILED");
+    throw new DefinitionError("APPLICATION_INSTALLATION_CHANGE_FAILED");
   const result = applicationInstallationLifecycleResultSchema.safeParse(rows[0].lifecycle_result);
   if (!result.success)
-    throw new ApplicationInstallationLifecycleError("APPLICATION_INSTALLATION_CHANGE_FAILED");
+    throw unexpectedDefinitionFailure(
+      "APPLICATION_INSTALLATION_CHANGE_FAILED",
+      result.error,
+      "installation-lifecycle",
+    );
   return result.data;
 };
 
-const bindingsIncomplete = (): ApplicationInstallationLifecycleError =>
-  new ApplicationInstallationLifecycleError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
+const bindingsIncomplete = (): DefinitionError<ApplicationInstallationLifecycleErrorCode> =>
+  new DefinitionError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
 
 /**
  * The readiness gates run after the activation flipped the binding set, which advances every
@@ -233,9 +223,7 @@ export const createApplicationInstallationLifecycleRepository = (
     async activate(commandCandidate: ApplicationInstallationActivationCommand) {
       const command = applicationInstallationActivationCommandSchema.safeParse(commandCandidate);
       if (!command.success)
-        throw new ApplicationInstallationLifecycleError(
-          "INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND",
-        );
+        throw new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
       try {
         const activated = parseResult(
           await transaction.query<LifecycleRow>`
@@ -257,9 +245,7 @@ export const createApplicationInstallationLifecycleRepository = (
     async detach(commandCandidate: ApplicationInstallationDetachCommand) {
       const command = applicationInstallationDetachCommandSchema.safeParse(commandCandidate);
       if (!command.success)
-        throw new ApplicationInstallationLifecycleError(
-          "INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND",
-        );
+        throw new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
       try {
         return parseResult(
           await transaction.query<LifecycleRow>`

@@ -26,6 +26,11 @@ import {
   retainInstallationRuntimeBundleCachePart,
   type InstallationRuntimeBundleCacheStatus,
 } from "./installation-runtime-bundle-cache";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 export {
   configureInstallationRuntimeBundleCache,
@@ -70,45 +75,36 @@ export const installationRuntimeBundleErrorCodes = [
 export type InstallationRuntimeBundleErrorCode =
   (typeof installationRuntimeBundleErrorCodes)[number];
 
-export class InstallationRuntimeBundleError extends Error {
-  readonly code: InstallationRuntimeBundleErrorCode;
-
-  constructor(code: InstallationRuntimeBundleErrorCode) {
-    super(code);
-    this.name = "InstallationRuntimeBundleError";
-    this.code = code;
-  }
-}
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
-const mapFailure = (error: unknown): InstallationRuntimeBundleError => {
-  if (error instanceof InstallationRuntimeBundleError) return error;
-  switch (databaseCode(error)) {
+const mapFailure = (error: unknown): DefinitionError<InstallationRuntimeBundleErrorCode> => {
+  if (error instanceof DefinitionError) return error;
+  switch (databaseErrorCode(error)) {
     case "22023":
-      return new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+      return new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
     case "42501":
-      return new InstallationRuntimeBundleError(
-        "INSTALLATION_RUNTIME_BUNDLE_AUTHORITY_REFUSED",
-      );
+      return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_AUTHORITY_REFUSED");
     case "P0002":
-      return new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_NOT_FOUND");
+      return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_NOT_FOUND");
     case "23505":
-      return new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_PIN_MISMATCH");
+      return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_PIN_MISMATCH");
     case "40001":
-      return new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_CONFLICT");
+      return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_CONFLICT");
     default:
-      return new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+      return unexpectedDefinitionFailure(
+        "INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED",
+        error,
+        "installation-runtime-bundle-repository",
+      );
   }
 };
 
 const indexFromRow = (row: BundleIndexRow): InstallationRuntimeBundleIndex => {
   const parsed = installationRuntimeBundleIndexSchema.safeParse(row.bundle_index);
   if (!parsed.success)
-    throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+    throw unexpectedDefinitionFailure(
+      "INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED",
+      parsed.error,
+      "installation-runtime-bundle-repository",
+    );
   return parsed.data;
 };
 
@@ -155,7 +151,7 @@ const prepareParts = (
     splitSection(section, canonicalJson(command.sections[section])),
   );
   if (parts.some((part) => !installationRuntimeBundlePartSchema.safeParse(part).success))
-    throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+    throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
   return parts;
 };
 
@@ -168,7 +164,7 @@ const requireMatchingKey = (
     index.applicationReleaseRevision !== key.applicationReleaseRevision ||
     index.bundleFormatVersion !== key.bundleFormatVersion
   )
-    throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+    throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
 };
 
 const sortParts = (
@@ -203,8 +199,7 @@ export const createInstallationRuntimeBundleRepository = (
     keyCandidate: InstallationRuntimeBundleKey,
   ): Promise<InstallationRuntimeBundleIndex> => {
     const key = installationRuntimeBundleKeySchema.safeParse(keyCandidate);
-    if (!key.success)
-      throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+    if (!key.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
     try {
       const rows = await transaction.query<BundleIndexRow>`
         select vortex_module.read_installation_runtime_bundle_index(
@@ -214,7 +209,7 @@ export const createInstallationRuntimeBundleRepository = (
         ) as bundle_index
       `;
       if (rows.length !== 1 || rows[0] === undefined)
-        throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_NOT_FOUND");
+        throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_NOT_FOUND");
       const index = indexFromRow(rows[0]);
       requireMatchingKey(index, key.data);
       return index;
@@ -232,8 +227,7 @@ export const createInstallationRuntimeBundleRepository = (
       ...key,
       sections: [...sections],
     });
-    if (!command.success)
-      throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+    if (!command.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
     const expected = index.parts.filter((part) => command.data.sections.includes(part.section));
     const cachedParts = expected.map((metadata) =>
       readInstallationRuntimeBundleCachePart(index, metadata),
@@ -257,15 +251,19 @@ export const createInstallationRuntimeBundleRepository = (
         ) as bundle_parts
       `;
       if (rows.length !== 1 || rows[0] === undefined || !Array.isArray(rows[0].bundle_parts))
-        throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
-      const parsedParts = installationRuntimeBundlePartSchema.array().safeParse(
-        rows[0].bundle_parts,
-      );
+        throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+      const parsedParts = installationRuntimeBundlePartSchema
+        .array()
+        .safeParse(rows[0].bundle_parts);
       if (!parsedParts.success)
-        throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+        throw unexpectedDefinitionFailure(
+          "INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED",
+          parsedParts.error,
+          "installation-runtime-bundle-repository",
+        );
       const parts = parsedParts.data;
       if (parts.length !== expected.length)
-        throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+        throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
       const expectedByKey = new Map(
         expected.map((part) => [`${part.section}:${part.ordinal}`, part] as const),
       );
@@ -278,11 +276,11 @@ export const createInstallationRuntimeBundleRepository = (
           Buffer.byteLength(part.content, "utf8") !== part.byteSize ||
           sha256(part.content) !== part.sha256
         )
-          throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+          throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
         expectedByKey.delete(`${part.section}:${part.ordinal}`);
       }
       if (expectedByKey.size !== 0)
-        throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+        throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
       const sortedParts = sortParts(parts);
       notifyObservation(observeBundleRead, "PARTS_QUERY_SUCCESS");
       for (const part of sortedParts) retainInstallationRuntimeBundleCachePart(index, part);
@@ -295,14 +293,13 @@ export const createInstallationRuntimeBundleRepository = (
   return Object.freeze({
     async write(commandCandidate: InstallationRuntimeBundleWriteCommand) {
       const parsedCommand = installationRuntimeBundleWriteCommandSchema.safeParse(commandCandidate);
-      if (!parsedCommand.success)
-        throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+      if (!parsedCommand.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       const command = parsedCommand.data;
       let parts: InstallationRuntimeBundlePart[];
       try {
         parts = prepareParts(command);
       } catch {
-        throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+        throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       }
       try {
         const rows = await transaction.query<BundleIndexRow>`
@@ -315,11 +312,11 @@ export const createInstallationRuntimeBundleRepository = (
           ) as bundle_index
         `;
         if (rows.length !== 1 || rows[0] === undefined)
-          throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+          throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
         const index = indexFromRow(rows[0]);
         requireMatchingKey(index, command);
         if (index.pinFingerprint !== command.pinFingerprint)
-          throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_PIN_MISMATCH");
+          throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_PIN_MISMATCH");
         return index;
       } catch (error) {
         throw mapFailure(error);
@@ -331,8 +328,7 @@ export const createInstallationRuntimeBundleRepository = (
       sections: readonly InstallationRuntimeBundleSection[],
     ) {
       const key = installationRuntimeBundleKeySchema.safeParse(keyCandidate);
-      if (!key.success)
-        throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+      if (!key.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       const index = await readIndex(key.data);
       return readPartsWithIndex(key.data, sections, index);
     },
@@ -341,14 +337,12 @@ export const createInstallationRuntimeBundleRepository = (
       sections: readonly InstallationRuntimeBundleSection[] = installationRuntimeBundleSections,
     ) {
       const key = installationRuntimeBundleKeySchema.safeParse(keyCandidate);
-      if (!key.success)
-        throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+      if (!key.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       const command = installationRuntimeBundleReadPartsCommandSchema.safeParse({
         ...key.data,
         sections: [...sections],
       });
-      if (!command.success)
-        throw new InstallationRuntimeBundleError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
+      if (!command.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       const index = await readIndex(key.data);
       const parts = await readPartsWithIndex(key.data, command.data.sections, index);
       const reconstructed: Partial<Record<InstallationRuntimeBundleSection, JsonValue>> = {};
@@ -358,12 +352,16 @@ export const createInstallationRuntimeBundleRepository = (
           sectionParts.length === 0 ||
           sectionParts.some((part, ordinal) => part.ordinal !== ordinal)
         )
-          throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+          throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
         try {
           const value: unknown = JSON.parse(sectionParts.map((part) => part.content).join(""));
           const parsedValue = jsonValueSchema.safeParse(value);
           if (!parsedValue.success)
-            throw new InstallationRuntimeBundleError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
+            throw unexpectedDefinitionFailure(
+              "INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED",
+              parsedValue.error,
+              "installation-runtime-bundle-repository",
+            );
           reconstructed[section] = parsedValue.data;
         } catch (error) {
           throw mapFailure(error);

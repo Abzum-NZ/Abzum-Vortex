@@ -4,7 +4,6 @@ import {
 } from "@web/platform-server";
 import {
   applicationInstallationActivationRequestSchema,
-  ApplicationInstallationCoordinatorError,
   applicationInstallationPreparationRequestSchema,
   createApplicationInstallationCoordinator,
   type ApplicationInstallationCoordinatorDependencies,
@@ -31,6 +30,7 @@ import {
 import type { DevelopmentSetupManifest } from "./manifest";
 import { initializeLifecycleLimits, storeInitialLifecyclePolicies } from "./lifecycle";
 import type { PublishedRelease, SetupState } from "./state";
+import { DefinitionError } from "@web/platform-server";
 
 /**
  * Installs the exact published application releases for the nominated steward through the
@@ -111,10 +111,7 @@ const prepareRelease = async (
       applicationInstallationPreparationRequestSchema.parse(target),
     )
     .catch((error: unknown) => {
-      if (
-        error instanceof ApplicationInstallationCoordinatorError &&
-        error.code === "APPLICATION_INSTALLATION_STALE"
-      )
+      if (error instanceof DefinitionError && error.code === "APPLICATION_INSTALLATION_STALE")
         return undefined;
       throw error;
     });

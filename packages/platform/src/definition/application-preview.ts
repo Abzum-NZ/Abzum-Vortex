@@ -2,11 +2,12 @@ import "server-only";
 
 import { applicationContentSchema, applicationRootIdSchema, canonicalPlacementEntries, flowTaskChildLists, flowTaskRegistry, revisionSchema, type ApplicationContent, type ComponentFlowBinding, type ComponentSemanticEventKind, type FlowDefinition, type FlowEffectKind, type FlowTask, type SessionContext } from "../schema";
 import { z } from "zod";
-import {
-  DefinitionPublicationError,
-  type ApplicationDraftCompilation,
-  type DefinitionPublicationFailureCode,
+import type {
+  ApplicationDraftCompilation,
+  DefinitionPublicationFailureCode,
 } from "./definition-publication";
+import { DefinitionCompilationError } from "./compilation-error";
+import { DefinitionError } from "./definition-error";
 
 /** Compiles an exact Application draft into an inert preview artifact. */
 
@@ -531,9 +532,11 @@ export const compileApplicationPreviewDraft = async (
     });
   } catch (error) {
     const reason =
-      error instanceof DefinitionPublicationError
-        ? refusalByPublicationCode[error.code]
-        : undefined;
+      error instanceof DefinitionCompilationError
+        ? "compilation_refused"
+        : error instanceof DefinitionError
+          ? refusalByPublicationCode[error.code as DefinitionPublicationFailureCode]
+          : undefined;
     if (reason === undefined) throw error;
     return {
       status: "refused",

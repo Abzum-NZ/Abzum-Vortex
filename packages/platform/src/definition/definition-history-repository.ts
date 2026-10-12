@@ -8,6 +8,7 @@ import {
 } from "../schema";
 import { canonicalJson } from "./canonical-json-definition";
 import type { DefinitionHistoryRepository } from "./definition-history";
+import { DefinitionError } from "./definition-error";
 
 type HistoryRow = DatabaseRow & { release_history: unknown };
 type MetadataRow = DatabaseRow & { release_history_entry: unknown };
@@ -35,16 +36,6 @@ type HumanRestoreFenceRow = DatabaseRow & {
   update_not_future: boolean | null;
   restoration_not_future: boolean | null;
 };
-
-class DefinitionHistoryRepositoryError extends Error {
-  readonly code: string;
-
-  constructor(code: "40001" | "42501") {
-    super("Definition history operation could not be completed");
-    this.name = "DefinitionHistoryRepositoryError";
-    this.code = code;
-  }
-}
 
 const asCandidate = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === "object" && !Array.isArray(value)
@@ -94,7 +85,7 @@ const humanContextBindings = (
 
 const parseHumanCurrentDraft = (candidate: unknown): StoredDefinitionDraft => {
   const parsed = storedDefinitionDraftSchema.safeParse(candidate);
-  if (!parsed.success) throw new DefinitionHistoryRepositoryError("40001");
+  if (!parsed.success) throw new DefinitionError("40001");
   return parsed.data;
 };
 
@@ -103,8 +94,7 @@ const assertHumanRestoreCompletion = async (
   context: Extract<SessionContext, { callerKind: "human" }>,
   restored: StoredDefinitionDraft,
 ): Promise<void> => {
-  if (restored.restoredAt === undefined)
-    throw new DefinitionHistoryRepositoryError("42501");
+  if (restored.restoredAt === undefined) throw new DefinitionError("42501");
   const restoredAt = restored.restoredAt;
   const decisions = await transaction.query<PermissionDecisionRow>`
     select decision.*
@@ -125,7 +115,7 @@ const assertHumanRestoreCompletion = async (
     decision.correlation_id.toLowerCase() !== context.correlationId.toLowerCase() ||
     decision.reason_code !== null
   )
-    throw new DefinitionHistoryRepositoryError("42501");
+    throw new DefinitionError("42501");
 
   const expectedBindings = JSON.stringify(humanContextBindings(context));
   const completionRows = await transaction.query<HumanRestoreFenceRow>`
@@ -210,7 +200,7 @@ const assertHumanRestoreCompletion = async (
     completion.update_not_future !== true ||
     completion.restoration_not_future !== true
   )
-    throw new DefinitionHistoryRepositoryError("42501");
+    throw new DefinitionError("42501");
 };
 
 const one = <Row extends DatabaseRow>(rows: readonly Row[], message: string): Row => {
@@ -275,8 +265,7 @@ export const createDatabaseDefinitionHistoryRepository = (
     const restored = one(restoredRows, "DEFINITION_RESTORE_STORAGE_INVALID").restored_draft;
     if (restored === null) return { outcome: "stale" } as const;
     if (verifyRestored === undefined) return { outcome: "restored", draft: restored } as const;
-    if (!isHumanOrganizationOnlyContext(context))
-      throw new DefinitionHistoryRepositoryError("42501");
+    if (!isHumanOrganizationOnlyContext(context)) throw new DefinitionError("42501");
 
     const verifiedDraft = await verifyRestored(restored);
     const currentEvidenceRows = await transaction.query<RestoreEvidenceRow>`
@@ -296,13 +285,13 @@ export const createDatabaseDefinitionHistoryRepository = (
       currentEvidenceRecord.humanDraftSnapshot === undefined ||
       currentEvidenceRecord.humanCurrentDraft === undefined
     )
-      throw new DefinitionHistoryRepositoryError("40001");
+      throw new DefinitionError("40001");
     const currentDraft = parseHumanCurrentDraft(currentEvidenceRecord.humanCurrentDraft);
     if (
       canonicalJson(currentDraft) !== canonicalJson(verifiedDraft) ||
       currentEvidenceRecord.humanDraftSnapshot === null
     )
-      throw new DefinitionHistoryRepositoryError("40001");
+      throw new DefinitionError("40001");
     const snapshot = asCandidate(currentEvidenceRecord.humanDraftSnapshot);
     if (
       snapshot === undefined ||
@@ -310,7 +299,7 @@ export const createDatabaseDefinitionHistoryRepository = (
       snapshot.sourceFingerprint !== verifiedDraft.sourceFingerprint ||
       snapshot.anchorReleaseRevision !== verifiedDraft.publishedRevision
     )
-      throw new DefinitionHistoryRepositoryError("40001");
+      throw new DefinitionError("40001");
 
     await assertHumanRestoreCompletion(transaction, context, verifiedDraft);
     return { outcome: "restored", draft: verifiedDraft } as const;

@@ -13,13 +13,13 @@ import {
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
-  BuilderAuthorityError, DefinitionPublicationError, DefinitionStoreError,
-  createDatabaseDefinitionPublicationService,
+  BuilderAuthorityError, createDatabaseDefinitionPublicationService,
   readApplicationDefinitionDraft, requireBuilderAuthority,
   type ImmutableDefinitionPublicationCatalogueDefinition,
 } from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
+import { DefinitionCompilationError, DefinitionError, isVersionImpactRefusal } from "../definition/definition-index";
 
 type Failure = Readonly<{ kind: "refused" | "conflict" | "dependency_unavailable" | "no_change" | "temporarily_unavailable" }>;
 export type HumanApplicationPublicationPreparationResult = Failure |
@@ -144,23 +144,25 @@ const assertLiveCompletion = async (
 };
 
 const safeFailure = (error: unknown): Failure => {
-  if (error instanceof DefinitionPublicationError && error.code === "DEFINITION_NO_CHANGE")
+  if (error instanceof DefinitionError && error.code === "DEFINITION_NO_CHANGE")
     return { kind: "no_change" };
-  if (error instanceof DefinitionPublicationError && [
+  if (error instanceof DefinitionError && [
     "DEFINITION_DEPENDENCY_MISSING", "DEFINITION_DEPENDENCY_PRERELEASE_ONLY",
     "DEFINITION_DEPENDENCY_INCOMPATIBLE", "DEFINITION_DEPENDENCY_AMBIGUOUS",
     "DEFINITION_DEPENDENCY_SUBSTITUTED", "DEFINITION_DEPENDENCY_CYCLE",
   ].includes(error.code)) return { kind: "dependency_unavailable" };
-  if ((error instanceof DefinitionPublicationError || error instanceof DefinitionStoreError) &&
+  if (error instanceof DefinitionError &&
     (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
       error.code === "DEFINITION_CONFIRMATION_MISMATCH")) return { kind: "conflict" };
-  if (error instanceof PublicationContextRefused || error instanceof BuilderAuthorityError)
+  if (error instanceof PublicationContextRefused || error instanceof BuilderAuthorityError ||
+    error instanceof DefinitionCompilationError || isVersionImpactRefusal(error))
     return { kind: "refused" };
-  if (error instanceof DefinitionPublicationError && error.code !== "DEFINITION_PUBLICATION_FAILED")
+  if (error instanceof DefinitionError && error.code !== "DEFINITION_PUBLICATION_FAILED")
     return { kind: "refused" };
-  if (error instanceof DefinitionStoreError &&
+  if (error instanceof DefinitionError &&
     (error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_ROOT_MISSING" ||
       error.code === "INVALID_DEFINITION_COMMAND")) return { kind: "refused" };
+  console.error("[publication] unexpected failure", error);
   return { kind: "temporarily_unavailable" };
 };
 
@@ -201,7 +203,7 @@ export const createHumanApplicationPublisher = (dependencies: HumanApplicationPu
           if (!sameId(preparation.confirmation.rootId, initial.rootId) ||
             preparation.confirmation.expectedDraftRevision !== initial.draftRevision ||
             preparation.confirmation.sourceFingerprint !== initial.sourceFingerprint)
-            throw new DefinitionPublicationError("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
+            throw new DefinitionError("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
           value = { kind: "prepared", preparation };
         } else {
           if (!publish?.success) throw new PublicationContextRefused();
@@ -216,7 +218,7 @@ export const createHumanApplicationPublisher = (dependencies: HumanApplicationPu
             canonicalJson(publication.dependencyManifest) !== canonicalJson(expected.dependencyManifest) ||
             !sameId(publication.publishedBy, scope.organizationAccountId) ||
             Date.parse(publication.publishedAt) < Date.parse(started.data))
-            throw new DefinitionPublicationError("DEFINITION_PUBLICATION_FAILED");
+            throw new DefinitionError("DEFINITION_PUBLICATION_FAILED");
           value = { kind: "published", publication };
         }
         const final = await readApplicationDefinitionDraft(transaction, scope, command);
@@ -227,7 +229,7 @@ export const createHumanApplicationPublisher = (dependencies: HumanApplicationPu
           final.createdAt !== initial.createdAt || !sameId(final.createdBy, initial.createdBy) ||
           final.updatedAt !== initial.updatedAt || !sameId(final.updatedBy, initial.updatedBy) ||
           final.publishedRevision !== (value.kind === "published" ? value.publication.releaseRevision : initial.publishedRevision))
-          throw new DefinitionPublicationError("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
+          throw new DefinitionError("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
         await targetFacts(transaction, scope, command.rootId);
         const completion = await readHumanContext(transaction, scope, session, issuedAt);
         if (canonicalJson(completion) !== canonicalJson(context)) throw new PublicationContextRefused();

@@ -14,6 +14,11 @@ import {
   type PreviewInstallationExpiryResult,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 export const previewInstallationRepositoryErrorCodes = [
   "INVALID_PREVIEW_INSTALLATION_COMMAND",
@@ -25,16 +30,6 @@ export const previewInstallationRepositoryErrorCodes = [
 
 export type PreviewInstallationRepositoryErrorCode =
   (typeof previewInstallationRepositoryErrorCodes)[number];
-
-export class PreviewInstallationRepositoryError extends Error {
-  readonly code: PreviewInstallationRepositoryErrorCode;
-
-  constructor(code: PreviewInstallationRepositoryErrorCode, options?: ErrorOptions) {
-    super(code, options);
-    this.name = "PreviewInstallationRepositoryError";
-    this.code = code;
-  }
-}
 
 type PreviewRow = DatabaseRow & { readonly preview_installation: unknown };
 type ExpiryRow = DatabaseRow & { readonly expired_count: unknown };
@@ -49,35 +44,32 @@ export type PreviewInstallationRepository = Readonly<{
   expire(request: PreviewInstallationExpiryRequest): Promise<PreviewInstallationExpiryResult>;
 }>;
 
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
-const mapFailure = (error: unknown): PreviewInstallationRepositoryError => {
-  if (error instanceof PreviewInstallationRepositoryError) return error;
-  switch (databaseCode(error)) {
+const mapFailure = (error: unknown): DefinitionError<PreviewInstallationRepositoryErrorCode> => {
+  if (error instanceof DefinitionError) return error;
+  switch (databaseErrorCode(error)) {
     case "22023":
-      return new PreviewInstallationRepositoryError("INVALID_PREVIEW_INSTALLATION_COMMAND", {
+      return new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND", {
         cause: error,
       });
     case "42501":
-      return new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_AUTHORITY_REFUSED", {
+      return new DefinitionError("PREVIEW_INSTALLATION_AUTHORITY_REFUSED", {
         cause: error,
       });
     case "P0002":
-      return new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_NOT_FOUND", {
+      return new DefinitionError("PREVIEW_INSTALLATION_NOT_FOUND", {
         cause: error,
       });
     case "40001":
     case "23514":
-      return new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_STALE", {
+      return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
         cause: error,
       });
     default:
-      return new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED", {
-        cause: error,
-      });
+      return unexpectedDefinitionFailure(
+        "PREVIEW_INSTALLATION_FAILED",
+        error,
+        "preview-installation-repository",
+      );
   }
 };
 
@@ -85,7 +77,11 @@ const parsePreviewRow = (row: PreviewRow | undefined): PreviewInstallation | und
   if (row === undefined || row.preview_installation === null) return undefined;
   const parsed = previewInstallationSchema.safeParse(row.preview_installation);
   if (!parsed.success)
-    throw new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED");
+    throw unexpectedDefinitionFailure(
+      "PREVIEW_INSTALLATION_FAILED",
+      parsed.error,
+      "preview-installation-repository",
+    );
   return parsed.data;
 };
 
@@ -108,8 +104,7 @@ export const createPreviewInstallationRepository = (
   Object.freeze({
     async create(requestCandidate, candidateValue) {
       const candidate = previewInstallationCandidateSchema.safeParse(candidateValue);
-      if (!candidate.success)
-        throw new PreviewInstallationRepositoryError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      if (!candidate.success) throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       try {
         const rows = await transaction.query<PreviewRow>`
           select vortex_module.create_preview_installation(
@@ -118,9 +113,9 @@ export const createPreviewInstallationRepository = (
             ${JSON.stringify(candidate.data)}::text::jsonb
           ) as preview_installation
         `;
-        if (rows.length !== 1) throw new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED");
+        if (rows.length !== 1) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
         const result = parsePreviewRow(rows[0]);
-        if (result === undefined) throw new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED");
+        if (result === undefined) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
         return result;
       } catch (error) {
         throw mapFailure(error);
@@ -134,7 +129,7 @@ export const createPreviewInstallationRepository = (
             ${address.previewInstallationId}::uuid
           ) as preview_installation
         `;
-        if (rows.length !== 1) throw new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED");
+        if (rows.length !== 1) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
         return parsePreviewRow(rows[0]);
       } catch (error) {
         throw mapFailure(error);
@@ -148,11 +143,16 @@ export const createPreviewInstallationRepository = (
             ${address.previewInstallationId}::uuid
           ) as preview_installation
         `;
-        if (rows.length !== 1) throw new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED");
+        if (rows.length !== 1) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
         const parsed = previewInstallationDiscardResultSchema.safeParse(
           rows[0]?.preview_installation,
         );
-        if (!parsed.success) throw new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED");
+        if (!parsed.success)
+          throw unexpectedDefinitionFailure(
+            "PREVIEW_INSTALLATION_FAILED",
+            parsed.error,
+            "preview-installation-repository",
+          );
         return parsed.data;
       } catch (error) {
         throw mapFailure(error);
@@ -169,7 +169,12 @@ export const createPreviewInstallationRepository = (
       });
       const count = rows.length === 1 ? parseSafeCount(rows[0]?.expired_count) : undefined;
       const parsed = previewInstallationExpiryResultSchema.safeParse({ expiredCount: count });
-      if (!parsed.success) throw new PreviewInstallationRepositoryError("PREVIEW_INSTALLATION_FAILED");
+      if (!parsed.success)
+        throw unexpectedDefinitionFailure(
+          "PREVIEW_INSTALLATION_FAILED",
+          parsed.error,
+          "preview-installation-repository",
+        );
       return parsed.data;
     },
   });

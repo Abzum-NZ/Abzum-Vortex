@@ -11,11 +11,12 @@ import {
   type SessionContext, type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
-import { BuilderAuthorityError, DefinitionStoreError, readApplicationDefinitionDraft,
+import { BuilderAuthorityError, readApplicationDefinitionDraft,
   requireBuilderAuthority } from "@web/platform-server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
+import { DefinitionError } from "@web/platform-server";
 
 const pageSize = 20;
 const snapshotFields = {
@@ -173,11 +174,11 @@ const assertLiveCompletion = async (
 const safeFailure = (error: unknown): StudioApplicationHistoryFailure => {
   if (error instanceof HistoryConflict ||
     (typeof error === "object" && error !== null && "code" in error && error.code === "40001") ||
-    (error instanceof DefinitionStoreError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING"))
+    (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING"))
     return { kind: "conflict" };
   if (error instanceof HistoryRefused || error instanceof BuilderAuthorityError ||
     (typeof error === "object" && error !== null && "code" in error && error.code === "42501") ||
-    (error instanceof DefinitionStoreError && ["DEFINITION_CONTEXT_REFUSED", "DEFINITION_ROOT_MISSING",
+    (error instanceof DefinitionError && ["DEFINITION_CONTEXT_REFUSED", "DEFINITION_ROOT_MISSING",
       "INVALID_DEFINITION_COMMAND"].includes(error.code))) return { kind: "refused" };
   return { kind: "temporarily_unavailable" };
 };

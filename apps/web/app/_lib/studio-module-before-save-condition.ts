@@ -27,8 +27,6 @@ import {
   BuilderAuthorityError,
   createDatabaseDefinitionPublicationService,
   createDefinitionStore,
-  DefinitionPublicationError,
-  DefinitionStoreError,
   fingerprintModuleBeforeSaveConditionOperandBinding,
   fingerprintCanonicalValue,
   readModuleDefinitionDraft,
@@ -42,6 +40,7 @@ import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
+import { DefinitionError } from "@web/platform-server";
 
 export type StudioModuleBeforeSaveConditionSnapshot = Readonly<{
   organizationId: string;
@@ -117,36 +116,36 @@ const conditionRequestSchema = z.object({
 const sameUuid = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const invalidResult = (): never => {
-  throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+  throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
 };
 
 const safeFailure = (error: unknown):
   | Extract<StudioModuleBeforeSaveConditionResult, { kind: "conflict" | "refused" | "temporarily_unavailable" }>
   | Extract<StudioModuleBeforeSaveConditionSaveResult, { kind: "conflict" | "refused" | "temporarily_unavailable" }> => {
   if (error instanceof BuilderAuthorityError) return { kind: "refused" };
-  if (error instanceof DefinitionStoreError) {
+  if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || error.code === "DEFINITION_ROOT_MISSING" ||
         error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT") return { kind: "conflict" };
     if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE" ||
         error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_STORAGE_VALIDATION_FAILED")
       return { kind: "refused" };
-    return { kind: "temporarily_unavailable" };
   }
-  if (error instanceof DefinitionPublicationError) {
+  if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || error.code === "DEFINITION_ORGANIZATION_MISMATCH" ||
         error.code === "DEFINITION_SOURCE_EVIDENCE_MISMATCH" || error.code === "DEFINITION_HISTORY_INVALID")
       return { kind: "conflict" };
     if (error.code === "INVALID_DEFINITION_PUBLICATION_COMMAND") return { kind: "refused" };
   }
+  console.error("[studio] before-save condition failed unexpectedly", error);
   return { kind: "temporarily_unavailable" };
 };
 
 const moduleTargetFacts: BuilderTargetFactsReader = async (transaction, scope, candidateRootId) => {
   const root = moduleRootIdSchema.safeParse(candidateRootId);
-  if (!root.success) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+  if (!root.success) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const draft = await readModuleDefinitionDraft(transaction, scope, { rootId: root.data });
   if (draft.kind !== "module" || !sameId(draft.rootId, root.data) || !sameId(draft.organizationId, scope.organizationId))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   return { isSystemApplication: false };
 };
 
@@ -171,13 +170,13 @@ const readLiveContext = async (
   const transport = rows[0]?.context;
   if (rows.length !== 1 || transport === null || typeof transport !== "object" || Array.isArray(transport) ||
       !("channel" in transport) || transport.channel !== "web")
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const parsed = sessionContextSchema.safeParse(
     Object.fromEntries(Object.entries(transport).filter(([key]) => key !== "channel")),
   );
   const now = await databaseClock(transaction);
   if (!parsed.success || parsed.data.callerKind !== "human")
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const context = parsed.data;
   if (Object.hasOwn(scope, "applicationRootId") || Object.hasOwn(context, "applicationRootId") ||
       context.delegatedContext !== undefined || context.supportContext !== undefined ||
@@ -193,7 +192,7 @@ const readLiveContext = async (
       context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
       Date.parse(context.issuedAt) > now || Date.parse(context.expiresAt) <= now ||
       Date.parse(context.issuedAt) >= Date.parse(context.expiresAt))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   return context;
 };
 
@@ -210,7 +209,7 @@ const evaluateDraftPermission = async (
   const permission = platformPermissionDeclarations.find(
     (entry) => entry.key === "platform.organization.definition_drafts.manage",
   );
-  if (permission === undefined) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+  if (permission === undefined) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const declaration = organizationAccessDeclarationSchema.parse({
     operationKey: permission.key,
     action: { actionKind: permission.actionKind },
@@ -248,7 +247,7 @@ const evaluateDraftPermission = async (
   const current = await readLiveContext(transaction, scope, session, issuedAt);
   if (!decision.success || decision.data.outcome !== "eligible" || !completed.success ||
       canonicalJson(current) !== canonicalJson(originalContext))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const eligible = decision.data;
   const now = Date.parse(completed.data);
   const previousDeadline = originalValidUntil === undefined ? Number.POSITIVE_INFINITY : Date.parse(originalValidUntil);
@@ -261,7 +260,7 @@ const evaluateDraftPermission = async (
       previousDeadline <= now ||
       Date.parse(draft.updatedAt) > now ||
       (await databaseClock(transaction)) >= Math.min(previousDeadline, Date.parse(eligible.validUntil), Date.parse(current.expiresAt)))
-    throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const deadline = Math.min(previousDeadline, Date.parse(eligible.validUntil), Date.parse(current.expiresAt));
   return new Date(deadline).toISOString();
 };
@@ -492,7 +491,7 @@ const currentCondition = async (
   liveContext: HumanContext;
   originalDeadline: string;
 }>> => {
-  if (!sameUuid(scope.organizationId, organizationId)) throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+  if (!sameUuid(scope.organizationId, organizationId)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   const liveContext = await readLiveContext(transaction, scope, session, issuedAt);
   const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
   await requireBuilderAuthority(authority, {
@@ -504,7 +503,7 @@ const currentCondition = async (
     expectedDraftRevision: request.expectedDraftRevision,
   });
   if (!sameId(draft.organizationId, organizationId) || draft.sourceFingerprint !== request.expectedSavedSourceFingerprint)
-    throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   const originalDeadline = await evaluateDraftPermission(transaction, scope, session, issuedAt, liveContext, draft);
   const service = beforeSaveConditionService(transaction, scope);
   const current = await service.readModuleBeforeSaveConditionDraft(liveContext, {
@@ -522,7 +521,7 @@ const currentCondition = async (
   }
   if (current.selected.resolutionFingerprint !== request.expectedResolutionFingerprint ||
       current.selected.operandBindingFingerprint !== request.expectedOperandBindingFingerprint)
-    throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   const validated = await service.validateModuleBeforeSaveConditionDraft(liveContext, {
     rootId: platformIdSchema.parse(draft.rootId),
     expectedDraftRevision: draft.draftRevision,
@@ -536,7 +535,7 @@ const currentCondition = async (
   if (validated.kind === "validation_failed") throw new ValidationFailure(validated.validation);
   if (validated.kind === "unsupported_context") throw new ReadonlyContext(validated.reason);
   if (!validated.noChange && !changesOnlySelectedIfCondition(draft.source, validated.source, request.flowAlias, request.taskId))
-    throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   await evaluateDraftPermission(transaction, scope, session, issuedAt, liveContext, draft, originalDeadline);
   return {
     draft,
@@ -641,7 +640,7 @@ export const saveStudioModuleBeforeSaveCondition = async (
             if (receipt.kind === "validation_failed") throw new ValidationFailure(receipt.validation);
             if (receipt.kind !== "available" || receipt.selected === undefined ||
                 canonicalJson(receipt.selected) !== canonicalJson(validated.context))
-              throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+              throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
             await evaluateDraftPermission(
               transaction, scope, resolved.session, issuedAt, validated.liveContext, current,
               originalDeadline,
@@ -688,7 +687,7 @@ export const saveStudioModuleBeforeSaveCondition = async (
           );
           if (receipt.kind === "validation_failed") throw new ValidationFailure(receipt.validation);
           if (receipt.kind !== "available" || receipt.selected === undefined)
-            throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+            throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
           const selectedReceipt = receipt.selected;
           const expectedReceiptBindingFingerprint = fingerprintModuleBeforeSaveConditionOperandBinding({
             organizationId: selectedReceipt.organizationId,
@@ -710,7 +709,7 @@ export const saveStudioModuleBeforeSaveCondition = async (
               !sameOperandBindingIdentity(selectedReceipt, validated.context) ||
               selectedReceipt.operandBindingFingerprint !== expectedReceiptBindingFingerprint ||
               canonicalJson(selectedReceipt.condition) !== canonicalJson(validated.context.condition))
-            throw new DefinitionStoreError("INVALID_DEFINITION_STORAGE_RESULT");
+            throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
           await evaluateDraftPermission(
             transaction,
             scope,

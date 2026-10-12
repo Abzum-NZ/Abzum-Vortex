@@ -17,6 +17,11 @@ import {
   prepareApplicationPermissionRegistrationFromReleaseSet,
   type PermissionRegistryDefinitionSetReader,
 } from "../access/index";
+import {
+  DefinitionError,
+  databaseErrorCode,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 export const installedRuntimeContextErrorCodes = [
   "INSTALLED_RUNTIME_CONTEXT_REFUSED",
@@ -26,16 +31,6 @@ export const installedRuntimeContextErrorCodes = [
 ] as const;
 
 export type InstalledRuntimeContextErrorCode = (typeof installedRuntimeContextErrorCodes)[number];
-
-export class InstalledRuntimeContextError extends Error {
-  readonly code: InstalledRuntimeContextErrorCode;
-
-  constructor(code: InstalledRuntimeContextErrorCode, options?: ErrorOptions) {
-    super(code, options);
-    this.name = "InstalledRuntimeContextError";
-    this.code = code;
-  }
-}
 
 /**
  * One trusted application-service context: the exact organisation, installation and bound
@@ -86,7 +81,7 @@ const assembledContexts = new WeakSet<object>();
 /** Returns the context only when this loader assembled it, so a consumer cannot be handed a forgery. */
 export const requireInstalledRuntimeContext = (candidate: unknown): InstalledRuntimeContext => {
   if (typeof candidate !== "object" || candidate === null || !assembledContexts.has(candidate))
-    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
+    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
   return candidate as InstalledRuntimeContext;
 };
 
@@ -104,16 +99,11 @@ const isLiveSystemContext = (context: SessionContext): boolean => {
   );
 };
 
-const errorCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
 const failure = (code: InstalledRuntimeContextErrorCode, cause: unknown) =>
-  new InstalledRuntimeContextError(code, { cause });
+  new DefinitionError(code, { cause });
 
-const installationFailure = (error: unknown): InstalledRuntimeContextError => {
-  switch (errorCode(error)) {
+const installationFailure = (error: unknown): DefinitionError<InstalledRuntimeContextErrorCode> => {
+  switch (databaseErrorCode(error)) {
     case "ACTIVE_APPLICATION_CONTEXT_REFUSED":
       return failure("INSTALLED_RUNTIME_CONTEXT_REFUSED", error);
     case "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE":
@@ -121,12 +111,16 @@ const installationFailure = (error: unknown): InstalledRuntimeContextError => {
     case "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE":
       return failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
     default:
-      return failure("INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE", error);
+      return unexpectedDefinitionFailure(
+        "INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE",
+        error,
+        "installed runtime context",
+      );
   }
 };
 
-const definitionFailure = (error: unknown): InstalledRuntimeContextError => {
-  switch (errorCode(error)) {
+const definitionFailure = (error: unknown): DefinitionError<InstalledRuntimeContextErrorCode> => {
+  switch (databaseErrorCode(error)) {
     case "DEFINITION_RELEASE_NOT_FOUND":
       return failure("INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE", error);
     case "DEFINITION_CONTEXT_REFUSED":
@@ -134,7 +128,11 @@ const definitionFailure = (error: unknown): InstalledRuntimeContextError => {
     case "DEFINITION_RELEASE_INTEGRITY_FAILED":
       return failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
     default:
-      return failure("INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE", error);
+      return unexpectedDefinitionFailure(
+        "INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE",
+        error,
+        "installed runtime context",
+      );
   }
 };
 
@@ -162,18 +160,18 @@ export const createInstalledRuntimeContextLoader = (
       const installation =
         activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
       if (!installation.success)
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
 
       const contextCandidate = sessionContextSchema.safeParse(dependencies.systemContext());
       if (!contextCandidate.success || !isLiveSystemContext(contextCandidate.data))
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
+        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
       const systemContext = contextCandidate.data;
       if (
         !sameId(systemContext.organizationId, installation.data.organizationId) ||
         (systemContext.applicationRootId !== undefined &&
           !sameId(systemContext.applicationRootId, installation.data.applicationRootId))
       )
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
+        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
 
       let releaseSetCandidate: unknown;
       try {
@@ -234,12 +232,12 @@ export const createHumanInstalledRuntimeContextLoader = (
       const installation =
         activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
       if (!installation.success)
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
       if (
         !sameId(installation.data.organizationId, dependencies.scope.organizationId) ||
         !sameId(installation.data.applicationRootId, dependencies.scope.applicationRootId)
       )
-        throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
+        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
 
       let releaseSetCandidate: unknown;
       try {
@@ -285,7 +283,7 @@ const assembleContext = (
   const parsedReleaseSet =
     systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
   if (!parsedReleaseSet.success)
-    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
   const releaseSet = parsedReleaseSet.data;
 
   const application = releaseSet.application;
@@ -298,7 +296,7 @@ const assembleContext = (
       !sameId(application.correlationId, expectedCorrelationId)) ||
     releaseSet.modules.length === 0
   )
-    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
 
   // The bound release set must carry exactly one release per active installation binding.
   const releasesByRoot = new Map<string, number>();
@@ -309,15 +307,15 @@ const assembleContext = (
       !sameId(module.organizationId, application.organizationId) ||
       !sameId(module.correlationId, application.correlationId)
     )
-      throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+      throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
     releasesByRoot.set(root, module.releaseRevision);
   }
   if (releasesByRoot.size !== installation.moduleBindings.length)
-    throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
   for (const binding of installation.moduleBindings) {
     const releaseRevision = releasesByRoot.get(binding.moduleRootId.toLowerCase());
     if (releaseRevision === undefined || releaseRevision !== binding.moduleReleaseRevision)
-      throw new InstalledRuntimeContextError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
+      throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
   }
 
   let permissionRegistration: PreparedApplicationPermissionRegistration;

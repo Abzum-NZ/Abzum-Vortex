@@ -10,6 +10,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/index";
+import { DefinitionError } from "./definition-error";
 
 export const runtimeBundleCleanupLimits = Object.freeze({
   batchSize: 100,
@@ -40,13 +41,6 @@ export type InstallationRuntimeBundleRemovalReport = Readonly<{
   accessPlansRemoved: number;
 }>;
 
-export class RuntimeBundleCleanupError extends Error {
-  constructor() {
-    super("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
-    this.name = "RuntimeBundleCleanupError";
-  }
-}
-
 type CleanupRow = DatabaseRow & { readonly cleanup_result: unknown };
 
 const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
@@ -71,7 +65,7 @@ const parseBatchResult = (candidate: unknown): RuntimeBundleCleanupBatchResult =
     !isCount(value.accessPlansRemoved) ||
     !isCount(value.orphanedAccessPlansRemoved)
   )
-    throw new RuntimeBundleCleanupError();
+    throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
   return Object.freeze({
     bundlesRemoved: value.bundlesRemoved,
     bundlePartsRemoved: value.bundlePartsRemoved,
@@ -94,7 +88,7 @@ const parseInstallationRemovalReport = (
     !isCount(value.bundlePartsRemoved) ||
     !isCount(value.accessPlansRemoved)
   )
-    throw new RuntimeBundleCleanupError();
+    throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
 
   const bundles = (value.bundles as readonly unknown[]).map((candidateBundle) => {
     const bundle = record(candidateBundle);
@@ -108,7 +102,7 @@ const parseInstallationRemovalReport = (
       !Number.isSafeInteger(bundle.bundleFormatVersion) ||
       (bundle.bundleFormatVersion as number) < 1
     )
-      throw new RuntimeBundleCleanupError();
+      throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
     return Object.freeze({
       applicationReleaseRevision: bundle.applicationReleaseRevision as number,
       bundleFormatVersion: bundle.bundleFormatVersion as number,
@@ -166,14 +160,14 @@ export const runScheduledRuntimeBundleCleanup = async (): Promise<RuntimeBundleC
           ${runtimeBundleCleanupLimits.batchSize}::integer
         ) as cleanup_result
       `,
-    );
-    if (rows.length !== 1 || rows[0] === undefined)
-      throw new RuntimeBundleCleanupError();
-    return parseBatchResult(rows[0].cleanup_result);
-  } catch {
-    throw new RuntimeBundleCleanupError();
-  }
-};
+      );
+      if (rows.length !== 1 || rows[0] === undefined)
+        throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
+      return parseBatchResult(rows[0].cleanup_result);
+    } catch {
+      throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
+    }
+  };
 
 /** Removes the exact authenticated organisation's bundle registrations for one uninstalled app. */
 export const createInstallationRuntimeBundleCleanupRepository = (
@@ -184,7 +178,7 @@ export const createInstallationRuntimeBundleCleanupRepository = (
       applicationRootIdCandidate: ApplicationRootId,
     ): Promise<InstallationRuntimeBundleRemovalReport> {
       const parsedRootId = applicationRootIdSchema.safeParse(applicationRootIdCandidate);
-      if (!parsedRootId.success) throw new RuntimeBundleCleanupError();
+      if (!parsedRootId.success) throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
       try {
         const rows = await transaction.query<CleanupRow>`
           select vortex_module.remove_installation_runtime_bundles_internal(
@@ -192,10 +186,10 @@ export const createInstallationRuntimeBundleCleanupRepository = (
           ) as cleanup_result
         `;
         if (rows.length !== 1 || rows[0] === undefined)
-          throw new RuntimeBundleCleanupError();
+          throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
         return parseInstallationRemovalReport(rows[0].cleanup_result);
       } catch {
-        throw new RuntimeBundleCleanupError();
+        throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
       }
     },
   });

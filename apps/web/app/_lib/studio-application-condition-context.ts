@@ -1,17 +1,19 @@
 import "server-only";
 
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
-import { applicationRootIdSchema, organizationIdSchema, revisionSchema,
+import {
+  applicationRootIdSchema, organizationIdSchema, revisionSchema,
   sessionContextSchema, type IdentitySession, type SelectedOrganizationScope,
-  type SessionContext } from "@vortex/platform/schema";
+  type SessionContext,
+} from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
-import { BuilderAuthorityError, DefinitionStoreError, DefinitionPublicationError,
-  createDatabaseDefinitionPublicationService, fingerprintCanonicalValue,
+import { BuilderAuthorityError, createDatabaseDefinitionPublicationService, fingerprintCanonicalValue,
   readApplicationDefinitionDraft, requireBuilderAuthority } from "@web/platform-server";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
+import { DefinitionError } from "@web/platform-server";
 
 const requestSchema = z.object({ rootId: applicationRootIdSchema,
   draftRevision: revisionSchema, pageAlias: z.string().min(1).max(160).regex(/^[a-z][a-z0-9_]*$/) }).strict();
@@ -82,12 +84,13 @@ const readHumanContext = async (
 };
 
 const safeFailure = (error: unknown): StudioApplicationConditionContextResult => {
-  if ((error instanceof DefinitionStoreError || error instanceof DefinitionPublicationError) &&
+  if (error instanceof DefinitionError &&
     error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
   if (error instanceof ContextRefused || error instanceof BuilderAuthorityError ||
-    (error instanceof DefinitionStoreError &&
+    (error instanceof DefinitionError &&
       (error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_ROOT_MISSING")))
     return { kind: "refused" };
+  console.error("[studio] application condition context failed unexpectedly", error);
   return { kind: "temporarily_unavailable" };
 };
 
@@ -157,5 +160,5 @@ export const readSavedStudioApplicationConditionContext = async (
       });
     return result.kind === "available" ? result.value : result.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-  } catch { return { kind: "temporarily_unavailable" }; }
+  } catch (error) { console.error("[studio] application condition context failed unexpectedly", error); return { kind: "temporarily_unavailable" }; }
 };

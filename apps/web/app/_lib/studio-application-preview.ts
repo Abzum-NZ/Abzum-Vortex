@@ -23,7 +23,6 @@ import {
   BuilderAuthorityError,
   compileApplicationPreviewDraft,
   createDatabaseDefinitionPublicationService,
-  DefinitionStoreError,
   fingerprintCanonicalValue,
   materialiseApplicationPreview,
   readApplicationDefinitionDraft,
@@ -34,6 +33,7 @@ import {
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
+import { DefinitionError } from "@web/platform-server";
 
 const savedHomepageRequestSchema = z.object({
   rootId: applicationRootIdSchema,
@@ -181,12 +181,13 @@ const readHumanContext = async (
 };
 
 const safeFailure = (error: unknown): StudioApplicationPreviewResult => {
-  if (error instanceof DefinitionStoreError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+  if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
     return { kind: "conflict" };
   if (error instanceof ContextRefused || error instanceof BuilderAuthorityError ||
-    (error instanceof DefinitionStoreError &&
+    (error instanceof DefinitionError &&
       (error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_ROOT_MISSING")))
     return { kind: "refused", reason: "context_refused" };
+  console.error("[studio] application preview failed unexpectedly", error);
   return { kind: "temporarily_unavailable" };
 };
 

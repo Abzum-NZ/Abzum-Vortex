@@ -3,11 +3,7 @@ import "server-only";
 import type { NextResponse} from "next/server";
 import type { NextRequest } from "next/server";
 import { createBuilderAuthority } from "@web/platform-server";
-import {
-  createFlowTestRunner,
-  createPreviewInstallationCoordinator,
-  PreviewInstallationCoordinatorError,
-} from "@web/platform-server";
+import { createFlowTestRunner, createPreviewInstallationCoordinator } from "@web/platform-server";
 import {
   builderPreviewCreateRequestSchema,
   builderPreviewCreateResultSchema,
@@ -50,6 +46,7 @@ import { readBoundedRequestText } from "../api/_lib/bounded-request-body";
 import { privateJsonResponse } from "./private-response";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { appTelemetry, humanOrganizationRequests } from "./server-composition";
+import { DefinitionCompilationError, DefinitionError } from "@web/platform-server";
 
 const maximumRequestBodyLength = 131_072;
 type RootClassificationRow = DatabaseRow & {
@@ -150,6 +147,7 @@ const errorCodes = (error: unknown): readonly string[] => {
       const code = (current as { readonly code?: unknown }).code;
       if (typeof code === "string") codes.push(code);
     }
+    if (current instanceof DefinitionCompilationError) codes.push("DEFINITION_COMPILATION_REFUSED");
     current = current instanceof Error ? current.cause : undefined;
   }
   return codes;
@@ -203,7 +201,7 @@ const coordinatorRefusal = (
     )
   )
     return operationRefusal("validation", location);
-  if (error instanceof PreviewInstallationCoordinatorError) {
+  if (error instanceof DefinitionError) {
     if (error.code === "PREVIEW_INSTALLATION_REFUSED")
       return operationRefusal("permission_refused", location);
   }

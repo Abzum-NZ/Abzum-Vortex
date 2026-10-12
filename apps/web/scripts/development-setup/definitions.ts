@@ -11,7 +11,6 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-serv
 import {
   createDatabaseDefinitionPublicationService,
   createDefinitionStore,
-  DefinitionStoreError,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
 } from "@web/platform-server";
@@ -44,6 +43,7 @@ import {
   type SystemContextFacts,
 } from "./development-authority";
 import type { PublishedRelease, SetupState } from "./state";
+import { DefinitionError } from "@web/platform-server";
 
 /**
  * Publishes the shipped module and application definitions into the target organisation through
@@ -257,10 +257,7 @@ const publishOne = async (
           ? store.createRoot({ source })
           : store.createTrustedApplicationRoot({ source }, descriptor.applicationOriginKind);
       const created = await creation.catch((error: unknown) => {
-        if (
-          error instanceof DefinitionStoreError &&
-          error.code === "DEFINITION_ROOT_ALREADY_EXISTS"
-        )
+        if (error instanceof DefinitionError && error.code === "DEFINITION_ROOT_ALREADY_EXISTS")
           throw new Error(
             `${source.key} already exists in this organisation but the setup state does not record it. Reset the local database (pnpm db:reset) and run the setup again.`,
           );

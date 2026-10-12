@@ -26,11 +26,9 @@ import {
   type SelectedOrganizationScope,
   type SessionContext,
 } from "../schema";
-import {
-  PreviewInstallationRepositoryError,
-  createPreviewInstallationRepository,
-} from "./module-index";
+import { createPreviewInstallationRepository } from "./module-index";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
 type InstallerRequests = Pick<
   ReturnType<typeof createHumanOrganizationRequestService>,
@@ -59,16 +57,6 @@ export const previewInstallationCoordinatorErrorCodes = [
 export type PreviewInstallationCoordinatorErrorCode =
   (typeof previewInstallationCoordinatorErrorCodes)[number];
 
-export class PreviewInstallationCoordinatorError extends Error {
-  readonly code: PreviewInstallationCoordinatorErrorCode;
-
-  constructor(code: PreviewInstallationCoordinatorErrorCode, options?: ErrorOptions) {
-    super(code, options);
-    this.name = "PreviewInstallationCoordinatorError";
-    this.code = code;
-  }
-}
-
 export type PreviewInstallationCoordinatorDependencies = Readonly<{
   installerRequests: InstallerRequests;
   builderAuthority(
@@ -93,32 +81,38 @@ const errorCode = (error: unknown): string | undefined =>
     ? String((error as { readonly code?: unknown }).code)
     : undefined;
 
-const toCoordinatorError = (error: unknown): PreviewInstallationCoordinatorError => {
-  if (error instanceof PreviewInstallationCoordinatorError) return error;
+const toCoordinatorError = (
+  error: unknown,
+): DefinitionError<PreviewInstallationCoordinatorErrorCode> => {
+  if (
+    error instanceof DefinitionError &&
+    (previewInstallationCoordinatorErrorCodes as readonly string[]).includes(error.code)
+  )
+    return error;
   if (error instanceof BuilderAuthorityError)
-    return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
+    return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
       cause: error,
     });
-  if (error instanceof PreviewInstallationRepositoryError) {
+  if (error instanceof DefinitionError) {
     switch (error.code) {
       case "INVALID_PREVIEW_INSTALLATION_COMMAND":
-        return new PreviewInstallationCoordinatorError("INVALID_PREVIEW_INSTALLATION_COMMAND", {
+        return new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND", {
           cause: error,
         });
       case "PREVIEW_INSTALLATION_NOT_FOUND":
-        return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_NOT_FOUND", {
+        return new DefinitionError("PREVIEW_INSTALLATION_NOT_FOUND", {
           cause: error,
         });
       case "PREVIEW_INSTALLATION_STALE":
-        return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_STALE", {
+        return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
           cause: error,
         });
       case "PREVIEW_INSTALLATION_AUTHORITY_REFUSED":
-        return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
+        return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
           cause: error,
         });
       case "PREVIEW_INSTALLATION_FAILED":
-        return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_FAILED", {
+        return new DefinitionError("PREVIEW_INSTALLATION_FAILED", {
           cause: error,
         });
     }
@@ -128,18 +122,20 @@ const toCoordinatorError = (error: unknown): PreviewInstallationCoordinatorError
     case "DEFINITION_SOURCE_EVIDENCE_MISMATCH":
     case "40001":
     case "23514":
-      return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_STALE", {
+      return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
         cause: error,
       });
     case "BUILDER_PERMISSION_REFUSED":
     case "42501":
-      return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
+      return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
         cause: error,
       });
     default:
-      return new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_FAILED", {
-        cause: error,
-      });
+      return unexpectedDefinitionFailure(
+        "PREVIEW_INSTALLATION_FAILED",
+        error,
+        "preview-installation-coordinator",
+      );
   }
 };
 
@@ -163,7 +159,7 @@ const readHumanContext = async (
     (scope.applicationRootId !== undefined &&
       !sameId(parsed.data.applicationRootId, scope.applicationRootId))
   )
-    throw new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_REFUSED");
+    throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
   return parsed.data;
 };
 
@@ -187,9 +183,8 @@ export const createPreviewInstallationCoordinator = (
     ) => Promise<Result>,
   ): Promise<Result> => {
     const session = identitySessionSchema.safeParse(sessionCandidate);
-    if (!session.success)
-      throw new PreviewInstallationCoordinatorError("INVALID_PREVIEW_INSTALLATION_COMMAND");
-    const captured: { failure?: PreviewInstallationCoordinatorError } = {};
+    if (!session.success) throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+    const captured: { failure?: DefinitionError<PreviewInstallationCoordinatorErrorCode> } = {};
     const runner: InstallerRequests["run"] =
       mode === "change"
         ? dependencies.installerRequests.runChange
@@ -204,10 +199,10 @@ export const createPreviewInstallationCoordinator = (
             (applicationRootId !== undefined &&
               !sameId(scope.applicationRootId, applicationRootId))
           )
-            throw new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_REFUSED");
+            throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
           const authority = dependencies.builderAuthority(transaction, scope);
           if (!sameId(authority.organizationId, scope.organizationId))
-            throw new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_REFUSED");
+            throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
           await requireBuilderAuthority(authority, {
             kind: "draft_change",
             ...(builderRootId === undefined ? {} : { rootId: builderRootId }),
@@ -223,7 +218,7 @@ export const createPreviewInstallationCoordinator = (
     });
     if (result.kind === "available") return result.value;
     if (captured.failure !== undefined) throw captured.failure;
-    throw new PreviewInstallationCoordinatorError(
+    throw new DefinitionError(
       result.kind === "temporarily_unavailable"
         ? "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE"
         : "PREVIEW_INSTALLATION_REFUSED",
@@ -236,8 +231,7 @@ export const createPreviewInstallationCoordinator = (
       requestCandidate: PreviewInstallationCreateRequest,
     ): Promise<PreviewInstallation> {
       const parsed = previewInstallationCreateRequestSchema.safeParse(requestCandidate);
-      if (!parsed.success)
-        throw new PreviewInstallationCoordinatorError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      if (!parsed.success) throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       return runRequest(
         "change",
         session,
@@ -253,9 +247,11 @@ export const createPreviewInstallationCoordinator = (
               expectedDraftRevision: parsed.data.expectedDraftRevision,
             });
           const candidate = previewInstallationCandidateSchema.safeParse(candidateValue);
-          if (!candidate.success)
-            throw new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_FAILED");
-          return createPreviewInstallationRepository(transaction).create(parsed.data, candidate.data);
+          if (!candidate.success) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
+          return createPreviewInstallationRepository(transaction).create(
+            parsed.data,
+            candidate.data,
+          );
         },
       );
     },
@@ -265,8 +261,7 @@ export const createPreviewInstallationCoordinator = (
       addressCandidate: PreviewInstallationAddress,
     ): Promise<PreviewInstallation> {
       const address = previewInstallationAddressSchema.safeParse(addressCandidate);
-      if (!address.success)
-        throw new PreviewInstallationCoordinatorError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      if (!address.success) throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       return runRequest(
         "read",
         session,
@@ -275,8 +270,7 @@ export const createPreviewInstallationCoordinator = (
         address.data.applicationRootId,
         async (transaction) => {
           const found = await createPreviewInstallationRepository(transaction).read(address.data);
-          if (found === undefined)
-            throw new PreviewInstallationCoordinatorError("PREVIEW_INSTALLATION_NOT_FOUND");
+          if (found === undefined) throw new DefinitionError("PREVIEW_INSTALLATION_NOT_FOUND");
           return found;
         },
       );
@@ -287,8 +281,7 @@ export const createPreviewInstallationCoordinator = (
       addressCandidate: PreviewInstallationAddress,
     ): Promise<PreviewInstallationDiscardResult> {
       const address = previewInstallationAddressSchema.safeParse(addressCandidate);
-      if (!address.success)
-        throw new PreviewInstallationCoordinatorError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      if (!address.success) throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       return runRequest(
         "change",
         session,
@@ -304,8 +297,7 @@ export const createPreviewInstallationCoordinator = (
       requestCandidate: PreviewInstallationExpiryRequest,
     ): Promise<PreviewInstallationExpiryResult> {
       const request = previewInstallationExpiryRequestSchema.safeParse(requestCandidate);
-      if (!request.success)
-        throw new PreviewInstallationCoordinatorError("INVALID_PREVIEW_INSTALLATION_COMMAND");
+      if (!request.success) throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       return runRequest(
         "change",
         session,

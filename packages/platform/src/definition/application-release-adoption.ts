@@ -10,6 +10,7 @@ import {
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
+import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
 /**
  * Reads the published-current release an organisation may deliberately adopt for an application it
@@ -27,16 +28,6 @@ export const applicationReleaseAdoptionTargetErrorCodes = [
 
 export type ApplicationReleaseAdoptionTargetErrorCode =
   (typeof applicationReleaseAdoptionTargetErrorCodes)[number];
-
-export class ApplicationReleaseAdoptionTargetError extends Error {
-  readonly code: ApplicationReleaseAdoptionTargetErrorCode;
-
-  constructor(code: ApplicationReleaseAdoptionTargetErrorCode) {
-    super(code);
-    this.name = "ApplicationReleaseAdoptionTargetError";
-    this.code = code;
-  }
-}
 
 const storedTargetSchema = z
   .object({
@@ -73,8 +64,7 @@ export const createDatabaseApplicationReleaseAdoptionTargetRepository = (
         ${applicationRootId}::uuid
       ) as adoption_target
     `;
-    if (rows.length !== 1)
-      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
+    if (rows.length !== 1) throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
     return rows[0]!.adoption_target === null ? undefined : rows[0]!.adoption_target;
   },
 });
@@ -88,37 +78,34 @@ export const createApplicationReleaseAdoptionTargetService = (
    */
   async read(commandCandidate: unknown): Promise<ApplicationReleaseAdoptionTarget | undefined> {
     const command = applicationReleaseAdoptionTargetCommandSchema.safeParse(commandCandidate);
-    if (!command.success)
-      throw new ApplicationReleaseAdoptionTargetError(
-        "INVALID_APPLICATION_RELEASE_ADOPTION_COMMAND",
-      );
+    if (!command.success) throw new DefinitionError("INVALID_APPLICATION_RELEASE_ADOPTION_COMMAND");
 
     let candidate: unknown | undefined;
     try {
       candidate = await repository.read(command.data.applicationRootId);
     } catch (error) {
-      if (error instanceof ApplicationReleaseAdoptionTargetError) throw error;
-      throw new ApplicationReleaseAdoptionTargetError(
-        "APPLICATION_RELEASE_ADOPTION_TARGET_UNAVAILABLE",
-      );
+      if (error instanceof DefinitionError) throw error;
+      throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_UNAVAILABLE");
     }
     if (candidate === undefined)
-      throw new ApplicationReleaseAdoptionTargetError(
-        "APPLICATION_RELEASE_ADOPTION_TARGET_UNAVAILABLE",
-      );
+      throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_UNAVAILABLE");
 
     const parsed = storedTargetSchema.safeParse(candidate);
     if (!parsed.success)
-      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
+      throw unexpectedDefinitionFailure(
+        "APPLICATION_RELEASE_ADOPTION_TARGET_FAILED",
+        parsed.error,
+        "application-release-adoption",
+      );
     const target = parsed.data;
     if (target.applicationRootId.toLowerCase() !== command.data.applicationRootId.toLowerCase())
-      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
+      throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
     // A published root always carries both the pointer and its version; a partial pair is refused
     // rather than offered as a half-known adoption target.
     if (target.currentReleaseRevision === null || target.currentReleaseVersion === null) {
       if (target.currentReleaseRevision === null && target.currentReleaseVersion === null)
         return undefined;
-      throw new ApplicationReleaseAdoptionTargetError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
+      throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
     }
     return Object.freeze({
       organizationId: target.organizationId,

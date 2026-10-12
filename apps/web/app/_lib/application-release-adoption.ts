@@ -5,7 +5,6 @@ import {
   prepareApplicationRoleTemplatesForHumanRequest,
 } from "@web/platform-server";
 import {
-  ApplicationInstallationCoordinatorError,
   applicationInstallationActivationRequestSchema,
   createApplicationInstallationCoordinator,
   type HumanInstallationDefinitionAccess,
@@ -27,6 +26,7 @@ import {
   releaseSetContainsCustomComponents,
 } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
+import { DefinitionError } from "@web/platform-server";
 
 /**
  * The deliberate release adoption of one installed application (#610). The offered target is the
@@ -61,9 +61,7 @@ const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
         }),
     );
     if (result.kind !== "available")
-      throw new ApplicationInstallationCoordinatorError(
-        "APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE",
-      );
+      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     return result.value;
   },
   async prepareRegistrationCandidate(target, releaseSet) {
@@ -151,6 +149,6 @@ export const adoptApplicationRelease = async (
     activation.expectedActiveReleaseRevision === null ||
     activation.applicationReleaseRevision <= activation.expectedActiveReleaseRevision
   )
-    throw new ApplicationInstallationCoordinatorError("APPLICATION_INSTALLATION_STALE");
+    throw new DefinitionError("APPLICATION_INSTALLATION_STALE");
   await coordinator().activate(session, activation);
 };

@@ -1,3 +1,4 @@
+import { DefinitionError } from "./definition-error";
 export const applicationSourceContractVersion = "2.0.0" as const;
 export const applicationValidationContractVersion = "2.0.0" as const;
 
@@ -9,16 +10,6 @@ export const applicationContractVersionErrorCodes = [
 
 export type ApplicationContractVersionErrorCode =
   (typeof applicationContractVersionErrorCodes)[number];
-
-export class ApplicationContractVersionError extends Error {
-  readonly code: ApplicationContractVersionErrorCode;
-
-  constructor(code: ApplicationContractVersionErrorCode) {
-    super(code);
-    this.name = "ApplicationContractVersionError";
-    this.code = code;
-  }
-}
 
 export const applicationContractPair = {
   sourceContractVersion: applicationSourceContractVersion,
@@ -32,9 +23,9 @@ export const selectApplicationContractPair = (
   validationContractVersion: string,
 ): ApplicationContractPair => {
   if (sourceContractVersion !== applicationSourceContractVersion)
-    throw new ApplicationContractVersionError("UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION");
+    throw new DefinitionError("UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION");
   if (validationContractVersion !== applicationValidationContractVersion)
-    throw new ApplicationContractVersionError("UNKNOWN_APPLICATION_VALIDATION_CONTRACT_VERSION");
+    throw new DefinitionError("UNKNOWN_APPLICATION_VALIDATION_CONTRACT_VERSION");
   return applicationContractPair;
 };
 
@@ -43,7 +34,7 @@ export const selectStoredApplicationSourceContract = (
   intrinsicSourceContractVersion: string,
 ): void => {
   if (sourceContractVersion !== intrinsicSourceContractVersion)
-    throw new ApplicationContractVersionError("APPLICATION_SOURCE_METADATA_MISMATCH");
+    throw new DefinitionError("APPLICATION_SOURCE_METADATA_MISMATCH");
   if (sourceContractVersion !== applicationSourceContractVersion)
-    throw new ApplicationContractVersionError("UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION");
+    throw new DefinitionError("UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION");
 };
