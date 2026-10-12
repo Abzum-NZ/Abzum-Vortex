@@ -547,7 +547,7 @@ export const arrangeSummary = async (
 
 type ProtectedBoardService = Pick<
   ReturnType<typeof createProtectedQueryService>,
-  "boardMembers" | "boardSummary"
+  "boardMembers" | "boardInitialPages" | "boardSummary"
 >;
 type ProtectedBoardSummaryArguments = Parameters<ProtectedBoardService["boardSummary"]>;
 type ProtectedBoardMembersArguments = Parameters<ProtectedBoardService["boardMembers"]>;
@@ -609,18 +609,27 @@ const readProtectedBoardPage = async (
   });
   if (producer.kind !== "available") return producer;
 
-  const parsed = protectedQueryResultSchema.safeParse(producer.value);
-  if (!parsed.success) return { kind: "available", value: refusal("dataset_invalid") };
-  if (parsed.data.outcome === "refused")
-    return { kind: "available", value: refusal(parsed.data.reasonCode) };
+  return {
+    kind: "available",
+    value: validateProtectedBoardPage(producer.value, command, expectedReleaseVersion),
+  };
+};
+
+const validateProtectedBoardPage = (
+  value: unknown,
+  command: ReturnType<typeof protectedBoardArrangementCommandSchema.parse>,
+  expectedReleaseVersion: string,
+): ProtectedBoardArrangementPage | ArrangementRefusal => {
+  const parsed = protectedQueryResultSchema.safeParse(value);
+  if (!parsed.success) return refusal("dataset_invalid");
+  if (parsed.data.outcome === "refused") return refusal(parsed.data.reasonCode);
 
   if (
     lower(parsed.data.moduleRootId) !== lower(command.moduleRootId) ||
     lower(parsed.data.queryId) !== lower(command.queryId)
   )
-    return { kind: "available", value: refusal("dataset_invalid") };
-  if (parsed.data.moduleReleaseVersion !== expectedReleaseVersion)
-    return { kind: "available", value: refusal("cursor_stale") };
+    return refusal("dataset_invalid");
+  if (parsed.data.moduleReleaseVersion !== expectedReleaseVersion) return refusal("cursor_stale");
 
   const page = protectedBoardArrangementPageSchema.safeParse({
     rows: parsed.data.rows,
@@ -635,15 +644,14 @@ const readProtectedBoardPage = async (
       command.requestedSystemFieldKeys,
     )
   )
-    return { kind: "available", value: refusal("dataset_invalid") };
-  return { kind: "available", value: page.data };
+    return refusal("dataset_invalid");
+  return page.data;
 };
 
 /**
  * Composes one current protected board summary with only its requested member pages. Initial
- * requests read at most twelve installed columns plus unassigned; continuations read one column.
- * Every producer call rechecks current authority, and separate calls do not share an atomic
- * snapshot, so refreshed totals can differ from previously returned or newly read member pages.
+ * requests read at most twelve installed columns plus unassigned in one protected operation;
+ * continuations read one column. The summary and member operation have separate snapshots.
  */
 export const arrangeProtectedBoard = async (
   queries: ProtectedBoardService,
@@ -705,18 +713,40 @@ export const arrangeProtectedBoard = async (
   };
 
   if (command.pageRequest.kind === "initial") {
-    for (const column of summary.columns) {
-      const failure = await readColumn({
-        choiceFieldId: summary.choiceFieldId,
-        column: { kind: "option", value: column.value },
-      });
-      if (failure !== undefined) return failure;
-    }
-    const failure = await readColumn({
+    const selectors: ProtectedQueryBoardSelector[] = summary.columns.map((column) => ({
+      choiceFieldId: summary.choiceFieldId,
+      column: { kind: "option", value: column.value },
+    }));
+    selectors.push({
       choiceFieldId: summary.choiceFieldId,
       column: { kind: "unassigned" },
     });
-    if (failure !== undefined) return failure;
+    const producedPages = await queries.boardInitialPages(caller, selection, {
+      moduleRootId: command.moduleRootId,
+      queryId: command.queryId,
+      inputValues: command.inputValues,
+      requestedFieldIds: command.requestedFieldIds,
+      requestedSystemFieldKeys: command.requestedSystemFieldKeys,
+      filter: command.filter,
+      filterableFieldIds: command.filterableFieldIds,
+      pageSize: command.pageSize,
+      selectors,
+    });
+    if (producedPages.kind !== "available") return producedPages;
+    if (producedPages.value.outcome === "refused")
+      return { kind: "available", value: refusal(producedPages.value.reasonCode) };
+    if (producedPages.value.pages.length !== selectors.length)
+      return { kind: "available", value: refusal("dataset_invalid") };
+    for (const [index, selector] of selectors.entries()) {
+      const page = validateProtectedBoardPage(
+        producedPages.value.pages[index],
+        command,
+        summary.moduleReleaseVersion,
+      );
+      if ("outcome" in page) return { kind: "available", value: page };
+      if (selector.column.kind === "unassigned") unassignedPage = page;
+      else pages.set(selector.column.value, page);
+    }
   } else {
     const selector = command.pageRequest.selector;
     if (lower(selector.choiceFieldId) !== lower(summary.choiceFieldId))

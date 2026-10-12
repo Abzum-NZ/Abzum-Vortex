@@ -3,14 +3,17 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import {
   PRIVATE_FILE_BUCKET,
+  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   STRUCTURED_RECORD_IMPORT_FORMAT,
   STRUCTURED_RECORD_IMPORT_MAXIMUM_SOURCE_BYTES,
   correlationIdSchema,
+  downloadGrantSchema,
   fileIdSchema,
   fileRecordSchema,
   fingerprintSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
+  platformIdSchema,
   type CorrelationId,
   type FileRecord,
   type IdentitySession,
@@ -28,7 +31,6 @@ import {
 } from "./storage-credentials";
 import {
   composeStorageAuthorityResolvers,
-  createFileReadCoordinator,
   createReadStorageAuthorityResolver,
   type UpstreamStorageReader,
 } from "./read";
@@ -441,10 +443,10 @@ export const createFileRecordImportSourceService = (
       }
     };
 
-    const protectedRead = await protectedRequests.run(
+    const initialRead = await protectedRequests.run(
       session.data,
       { organizationId: organization.data.organizationId, applicationRootId },
-      async (transaction, scope, issuedAt): Promise<RecordImportSourceResult> => {
+      async (transaction, scope, issuedAt) => {
         const issuedAtMilliseconds = Date.parse(issuedAt);
         const deadlineMilliseconds =
           issuedAtMilliseconds + FILE_IMPORT_DECISION_WINDOW_SECONDS * 1_000;
@@ -486,11 +488,6 @@ export const createFileRecordImportSourceService = (
           }
 
           const validUntil = new Date(deadlineMilliseconds).toISOString();
-          const deadlineReader = boundedUpstreamReader(
-            dependencies.upstreamStorageReader,
-            clock,
-            deadlineMilliseconds,
-          );
           const bridge = createStorageCredentialBridge({
             destinationProject: dependencies.destinationProject,
             issuer: dependencies.issuer,
@@ -501,105 +498,50 @@ export const createFileRecordImportSourceService = (
             }),
             clock,
           });
-          const coordinator = createFileReadCoordinator({
-            repository,
-            bridge,
-            upstreamStorageReader: deadlineReader,
-            correlationId: () => correlationId,
-            clock,
-          });
-          const opened = await coordinator.readFile(
-            {
-              viewer: {
-                organizationId: scope.organizationId,
-                actor: {
-                  kind: "human",
-                  organizationAccountId: scope.organizationAccountId,
-                  identityId: session.data.identityId,
-                },
-                applicationRootId,
-              },
-              recordTypeId: decision.recordTypeId,
-              recordId: decision.recordId,
-              fieldId: decision.fieldId,
-              readableFieldIds: [decision.fieldId],
-              validUntil,
-            },
-            { fileId: fileId.data, purpose: "download" },
-          );
-          if (opened.outcome !== "success") {
-            return sourceRefusal(
-              expiredAt(clock, deadlineMilliseconds) ? "source_expired" : "storage_unavailable",
-            );
-          }
-          openedReader = undefined;
-          const bytes = await consumeAuthorizedStream(
-            opened.stream,
-            initialFile.sizeBytes,
-            deadlineMilliseconds,
-            clock,
-            (reader) => {
-              openedReader = reader;
-            },
-          );
-          openedReader = undefined;
-          if (bytes === null) {
-            return sourceRefusal(
-              expiredAt(clock, deadlineMilliseconds) ? "source_expired" : "storage_unavailable",
-            );
-          }
-          const checksum = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-          if (bytes.byteLength !== initialFile.sizeBytes || checksum !== initialFile.checksum) {
-            return sourceRefusal("source_changed");
-          }
-
-          if (expiredAt(clock, deadlineMilliseconds)) return sourceRefusal("source_expired");
-          const decoded = decodeStructuredRecordImport(bytes);
-          const decodeRefusal = decodeResultToRefusal(decoded);
-          if (decodeRefusal !== null) return decodeRefusal;
-          if (decoded.outcome !== "decoded") return sourceRefusal("invalid_document");
-
-          if (expiredAt(clock, deadlineMilliseconds)) return sourceRefusal("source_expired");
-          const finalDecision = await decideFileRead(transaction, fileId.data);
-          const finalCandidate = await repository.readFile(fileId.data);
-          const finalFile = finalCandidate === null ? null : validCanonicalFile(finalCandidate);
-          if (
-            finalFile === null ||
-            !isExpectedOwner(finalFile, finalDecision, scope.organizationId, applicationRootId) ||
-            !sameCanonicalAttachment(initialFile, finalFile) ||
-            expiredAt(clock, deadlineMilliseconds)
-          ) {
-            return sourceRefusal(
-              expiredAt(clock, deadlineMilliseconds) ? "source_expired" : "file_not_found",
-            );
-          }
-          if (!sameCanonicalContent(initialFile, finalFile)) return sourceRefusal("source_changed");
-          if (expiredAt(clock, deadlineMilliseconds)) return sourceRefusal("source_expired");
-
-          const source = Object.freeze({
-            format: STRUCTURED_RECORD_IMPORT_FORMAT,
+          const oneTimeId = platformIdSchema.parse(randomUUID());
+          const grant = downloadGrantSchema.parse({
+            kind: "download",
             organizationId: scope.organizationId,
-            applicationRootId,
-            fileId: initialFile.fileId,
-            checksum: initialFile.checksum,
-            sizeBytes: initialFile.sizeBytes,
-            ownerRecordTypeId: decision.recordTypeId,
-            ownerRecordId: decision.recordId,
-            ownerFieldId: decision.fieldId,
-            viewerIdentityId: session.data.identityId,
-            viewerOrganizationAccountId: scope.organizationAccountId,
-            correlationId,
-            issuedAt: new Date(issuedAtMilliseconds).toISOString(),
+            actor: {
+              kind: "human",
+              organizationAccountId: scope.organizationAccountId,
+              identityId: session.data.identityId,
+            },
+            recordTypeId: decision.recordTypeId,
+            recordId: decision.recordId,
+            fieldId: decision.fieldId,
+            fileId: fileId.data,
+            oneTimeId,
+            expiresAt: new Date(
+              Math.min(
+                clock().getTime() + MAXIMUM_FILE_STORAGE_OPERATION_SECONDS * 1_000,
+                deadlineMilliseconds,
+              ),
+            ).toISOString(),
+          });
+          await repository.recordDownloadGrant({ grant, correlationId, purpose: "download" });
+          const credential = await bridge.mintStorageOperationCredential({
+            request: { operation: "read", grant },
+            ttlSeconds: MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
+          });
+          if (
+            credential.operation !== "read" ||
+            credential.organizationId !== initialFile.organizationId ||
+            credential.objectPath !== initialFile.storageKey
+          )
+            return sourceRefusal("storage_unavailable");
+          return {
+            kind: "ready" as const,
+            initialFile,
+            decision,
+            credential,
+            organizationAccountId: scope.organizationAccountId,
+            issuedAtMilliseconds,
+            deadlineMilliseconds,
             validUntil,
-          });
-          return Object.freeze({
-            kind: "available",
-            source,
-            columns: decoded.columns,
-            rows: decoded.rows,
-          });
-        } catch {
-          closeOpenedReader();
+          };
+        } catch (error) {
+          console.error("FILE_IMPORT_INITIAL_READ_FAILED", { cause: error });
           return sourceRefusal(
             expiredAt(clock, deadlineMilliseconds) ? "source_expired" : "storage_unavailable",
           );
@@ -607,19 +549,124 @@ export const createFileRecordImportSourceService = (
       },
     );
 
-    if (protectedRead.kind !== "available") {
-      closeOpenedReader();
+    if (initialRead.kind !== "available") {
       return sourceRefusal(
-        protectedRead.kind === "temporarily_unavailable" ? "storage_unavailable" : "file_not_found",
+        initialRead.kind === "temporarily_unavailable" ? "storage_unavailable" : "file_not_found",
       );
     }
-    if (
-      protectedRead.value.kind === "available" &&
-      expiredAt(clock, Date.parse(protectedRead.value.source.validUntil))
-    ) {
-      return sourceRefusal("source_expired");
+    if (initialRead.value.kind !== "ready") return initialRead.value;
+    const {
+      initialFile,
+      decision,
+      credential,
+      organizationAccountId,
+      issuedAtMilliseconds,
+      deadlineMilliseconds,
+      validUntil,
+    } = initialRead.value;
+
+    let decoded: Extract<StructuredRecordImportDecodeResult, { outcome: "decoded" }>;
+    try {
+      const deadlineReader = boundedUpstreamReader(
+        dependencies.upstreamStorageReader,
+        clock,
+        deadlineMilliseconds,
+      );
+      const opened = await deadlineReader({ credential });
+      if (
+        opened.statusCode !== 200 ||
+        (opened.contentLength !== undefined && opened.contentLength !== initialFile.sizeBytes)
+      ) {
+        cancelStream(opened.stream);
+        return sourceRefusal("storage_unavailable");
+      }
+      const bytes = await consumeAuthorizedStream(
+        opened.stream,
+        initialFile.sizeBytes,
+        deadlineMilliseconds,
+        clock,
+        (reader) => {
+          openedReader = reader;
+        },
+      );
+      openedReader = undefined;
+      if (bytes === null)
+        return sourceRefusal(
+          expiredAt(clock, deadlineMilliseconds) ? "source_expired" : "storage_unavailable",
+        );
+      const checksum = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+      if (checksum !== initialFile.checksum) return sourceRefusal("source_changed");
+      if (expiredAt(clock, deadlineMilliseconds)) return sourceRefusal("source_expired");
+      const result = decodeStructuredRecordImport(bytes);
+      const decodeRefusal = decodeResultToRefusal(result);
+      if (decodeRefusal !== null) return decodeRefusal;
+      if (result.outcome !== "decoded") return sourceRefusal("invalid_document");
+      decoded = result;
+    } catch (error) {
+      closeOpenedReader();
+      console.error("FILE_IMPORT_STREAM_FAILED", { cause: error });
+      return sourceRefusal(
+        expiredAt(clock, deadlineMilliseconds) ? "source_expired" : "storage_unavailable",
+      );
     }
-    return protectedRead.value;
+
+    if (expiredAt(clock, deadlineMilliseconds)) return sourceRefusal("source_expired");
+    const finalRead = await protectedRequests.run(
+      session.data,
+      { organizationId: organization.data.organizationId, applicationRootId },
+      async (transaction, scope) => {
+        const finalDecision = await decideFileRead(transaction, fileId.data);
+        const repository = createSqlFileReadRepository(transaction);
+        const finalCandidate = await repository.readFile(fileId.data);
+        const finalFile = finalCandidate === null ? null : validCanonicalFile(finalCandidate);
+        if (
+          finalFile === null ||
+          !isExpectedOwner(finalFile, finalDecision, scope.organizationId, applicationRootId) ||
+          !sameCanonicalAttachment(initialFile, finalFile) ||
+          expiredAt(clock, deadlineMilliseconds)
+        )
+          return sourceRefusal(
+            expiredAt(clock, deadlineMilliseconds) ? "source_expired" : "file_not_found",
+          );
+        if (!sameCanonicalContent(initialFile, finalFile)) return sourceRefusal("source_changed");
+        if (
+          scope.organizationAccountId !== organizationAccountId ||
+          finalDecision.recordTypeId !== decision.recordTypeId ||
+          finalDecision.recordId !== decision.recordId ||
+          finalDecision.fieldId !== decision.fieldId
+        )
+          return sourceRefusal("file_not_found");
+        return { kind: "confirmed" as const };
+      },
+    );
+    if (finalRead.kind !== "available")
+      return sourceRefusal(
+        finalRead.kind === "temporarily_unavailable" ? "storage_unavailable" : "file_not_found",
+      );
+    if (finalRead.value.kind !== "confirmed") return finalRead.value;
+    if (expiredAt(clock, deadlineMilliseconds)) return sourceRefusal("source_expired");
+    const source = Object.freeze({
+      format: STRUCTURED_RECORD_IMPORT_FORMAT,
+      organizationId: organization.data.organizationId,
+      applicationRootId,
+      fileId: initialFile.fileId,
+      checksum: initialFile.checksum,
+      sizeBytes: initialFile.sizeBytes,
+      ownerRecordTypeId: decision.recordTypeId,
+      ownerRecordId: decision.recordId,
+      ownerFieldId: decision.fieldId,
+      viewerIdentityId: session.data.identityId,
+      viewerOrganizationAccountId: organizationAccountId,
+      correlationId,
+      issuedAt: new Date(issuedAtMilliseconds).toISOString(),
+      validUntil,
+    });
+    return Object.freeze({
+      kind: "available",
+      source,
+      columns: decoded.columns,
+      rows: decoded.rows,
+    });
   };
 
   return Object.freeze({ read });

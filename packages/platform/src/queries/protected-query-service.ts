@@ -42,6 +42,7 @@ import {
 import {
   protectedQueryCommandSchema,
   protectedQueryBoardMembersCommandSchema,
+  protectedQueryBoardSelectorSchema,
   protectedQueryGroupedMembersCommandSchema,
   protectedQueryGroupedMembersResultSchema,
   protectedQueryPageRowSchema,
@@ -384,6 +385,26 @@ const boardMembersFilterInputRefusal = (
   conditionFieldIds(command.filter, referenced);
   return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
 };
+
+const boardInitialPagesCommandSchema = protectedQueryBoardMembersCommandSchema
+  .omit({ selector: true, continuationToken: true })
+  .extend({
+    selectors: z
+      .array(protectedQueryBoardSelectorSchema)
+      .min(1)
+      .max(13)
+      .refine(
+        (selectors) =>
+          selectors.every((selector) =>
+            sameId(selector.choiceFieldId, selectors[0]!.choiceFieldId),
+          ) &&
+          new Set(selectors.map((selector) => JSON.stringify(selector.column))).size ===
+            selectors.length &&
+          selectors.filter((selector) => selector.column.kind === "unassigned").length === 1,
+        { message: "Board columns must be unique and include unassigned" },
+      ),
+  })
+  .strict();
 
 const groupedMembersFilterInputRefusal = (
   command: ProtectedQueryGroupedMembersCommand,
@@ -1257,6 +1278,41 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       return requests.run(caller, selection, (transaction, scope) =>
         boardMembersCommand(transaction, scope, command.data, continuationKey),
       );
+    },
+    async boardInitialPages(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<
+      HumanOrganizationRequestResult<
+        | Readonly<{ outcome: "completed"; pages: readonly ProtectedQueryResult[] }>
+        | Extract<ProtectedQueryResult, { outcome: "refused" }>
+      >
+    > {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const command = boardInitialPagesCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(caller, selection, async (transaction, scope) => {
+        const pages: ProtectedQueryResult[] = [];
+        for (const selector of command.data.selectors) {
+          const memberCommand: ProtectedQueryBoardMembersCommand = {
+            ...command.data,
+            selector,
+          };
+          const page = await boardMembersCommand(
+            transaction,
+            scope,
+            memberCommand,
+            continuationKey,
+          );
+          if (page.outcome === "refused") return page;
+          pages.push(page);
+        }
+        return { outcome: "completed" as const, pages };
+      });
     },
     async groupedMembers(
       caller: IdentitySession | ExecutionAuthorityContext,
