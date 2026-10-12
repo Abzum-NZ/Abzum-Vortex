@@ -1,3 +1,5 @@
+set local role vortex_page_owner;
+
 create or replace function vortex_page.create_private_form_draft(
   p_form_id uuid,
   p_flow_id uuid,
@@ -200,6 +202,8 @@ comment on function vortex_page.update_private_form_draft(uuid, bigint, uuid, uu
 
 alter function vortex_page.update_private_form_draft(uuid, bigint, uuid, uuid, uuid, uuid, jsonb, jsonb)
   owner to vortex_page_owner;
+
+reset role;
 
 create or replace function vortex_access.list_installed_applications_projection(
   p_record_id uuid,
@@ -647,6 +651,8 @@ grant execute on function vortex_access.read_application_address_candidates(uuid
 
 comment on function vortex_access.read_application_address_candidates(uuid, text, text) is
   'Private App candidate read for one exact live human organisation address; only App may project metadata after current page Access decisions.';
+
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.read_record(
   p_record_type_id uuid,
@@ -1757,8 +1763,6 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, classifies those columns from current readable values, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values or affects scan order or budget; orders board and generic group pages by record identity, returns generic group identity even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; refuses preview member, grouped, aggregate and system projection modes.';
 
-set local role vortex_record_adapter;
-
 create or replace function vortex_record.read_record_projection_internal(
   p_record_type_id uuid,
   p_record_id uuid
@@ -2047,3 +2051,5 @@ revoke all on function vortex_record.read_record_capabilities_internal(uuid, uui
 
 comment on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb) is
   'Private record capabilities: returns the permitted update, delete and restore actions and changeable fields of one readable record, reusing the read facts and field bounds of its read decision.';
+
+reset role;
