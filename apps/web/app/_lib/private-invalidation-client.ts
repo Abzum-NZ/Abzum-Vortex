@@ -208,8 +208,9 @@ export const openWebPrivateInvalidationSource = (
     }
     function onInvalidation(event: Event): void {
       if (closed || !ready || scope === undefined || event.currentTarget !== socket) return;
-      const parsed = liveInvalidationSchema.safeParse(parseData(event));
-      if (!parsed.success || !sameScope(scope, parsed.data)) return;
+      const currentScope = scope;
+      const parsed = liveInvalidationSchema.array().safeParse(parseData(event));
+      if (!parsed.success || parsed.data.some((notice) => !sameScope(currentScope, notice))) return;
       if (receiver === undefined) { reportGap(); return; }
       try { receiver(parsed.data); } catch { reportGap(); }
     }

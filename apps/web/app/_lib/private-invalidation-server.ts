@@ -215,7 +215,8 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
   };
   const onAbort = (): void => { void finish(); };
 
-  const emit = (event: "control" | "invalidation", value: WebPrivateInvalidationControl | LiveInvalidation): boolean => {
+  const emit = (event: "control" | "invalidation",
+    value: WebPrivateInvalidationControl | readonly LiveInvalidation[]): boolean => {
     if (!live()) { finish("unavailable"); return false; }
     const output = controller;
     const bytes = frame(event, value);
@@ -282,10 +283,16 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
         joinTimer = undefined;
       }
       while (!stopping && pending.length > 0) {
-        const notice = pending.shift();
-        if (notice === undefined) break;
+        const batch: LiveInvalidation[] = [];
+        for (const notice of pending) {
+          if (frame("invalidation", [...batch, notice]).byteLength > limits.maximumFrameBytes)
+            break;
+          batch.push(notice);
+        }
+        if (batch.length === 0) { finish("gap"); return; }
+        pending.splice(0, batch.length);
         if (!await authorizeFresh()) { finish("unavailable"); return; }
-        if (!emit("invalidation", notice)) return;
+        if (!emit("invalidation", batch)) return;
       }
     } catch { finish("unavailable"); }
     finally { pumping = false; }
@@ -348,9 +355,13 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
                 notice.organizationId.toLowerCase() !== scope.organizationId.toLowerCase() ||
                 notice.applicationRootId.toLowerCase() !== scope.applicationRootId.toLowerCase())
               return;
-            if (frame("invalidation", notice).byteLength > limits.maximumFrameBytes) {
+            if (frame("invalidation", [notice]).byteLength > limits.maximumFrameBytes) {
               finish("gap"); return;
             }
+            const duplicate = pending.findIndex((existing) =>
+              existing.recordTypeId === notice.recordTypeId &&
+              existing.recordId === notice.recordId);
+            if (duplicate >= 0) { pending[duplicate] = notice; return; }
             if (pending.length >= limits.maximumPendingNotices) { finish("gap"); return; }
             pending.push(notice);
             track(pump());
