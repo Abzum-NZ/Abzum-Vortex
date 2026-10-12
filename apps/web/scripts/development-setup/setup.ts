@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { developmentSetupManifest } from "./manifest";
+import { developmentSetupManifestFor } from "./manifest";
 import {
   createHumanOrganizationRequestService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
@@ -33,6 +33,8 @@ import {
   nominatedOwnerSession,
 } from "./development-authority";
 import { loadSetupState } from "./state";
+import { seedDemoRecords } from "../demo-setup/seed-demo-records";
+import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
 
 /**
  * The development-only setup provisions the disposable organisation, publishes and installs the
@@ -176,10 +178,13 @@ const initializeLandingZoneDefault = async (
   }
 };
 
-const main = async (): Promise<void> => {
-  const args = parseSetupArguments(process.argv.slice(2));
+export const runDevelopmentSetup = async (
+  argv: readonly string[],
+): Promise<Readonly<{ organizationId: string; stewardIdentityId: string }>> => {
+  loadLocalWebEnvironment();
+  const args = parseSetupArguments(argv);
   const identityAuthorityId = requireLocalDevelopmentEnvironment(process.env);
-  const manifest = developmentSetupManifest;
+  const manifest = developmentSetupManifestFor(args.tenantShortName, args.organizationShortName);
   const stewardIdentityId = await resolveFirstOwnerIdentity(args.firstOwner);
   log(`first owner identity ${stewardIdentityId}`);
 
@@ -230,7 +235,15 @@ const main = async (): Promise<void> => {
     systemActorId: manifest.definitionActorId,
     accessVersion: provisioned.accessVersion,
   };
-  const state = loadSetupState(provisioned.rootOrganizationId);
+  const state = loadSetupState(provisioned.rootOrganizationId, {
+    tenantId: provisioned.tenantId,
+    tenantShortName: manifest.provisioning.tenant.shortName,
+    organizationShortName: manifest.provisioning.rootOrganization.shortName,
+    accessVersion: provisioned.accessVersion,
+    systemActorId: manifest.definitionActorId,
+    stewardIdentityId,
+    stewardOrganizationAccountId: provisioned.organizationAccountId,
+  });
   const installFacts = (
     releases: InstallFacts["releases"],
     applicationKeys: readonly (typeof manifest.applicationKeys)[number][] = manifest.applicationKeys,
@@ -302,8 +315,21 @@ const main = async (): Promise<void> => {
   if (landingZoneRelease === undefined)
     throw new Error(`No published release recorded for ${landingZoneApplicationKey}`);
   await initializeLandingZoneDefault(installFacts(releases), landingZoneRelease.rootId);
+  if (args.seedDemo)
+    await seedDemoRecords({
+      identityAuthorityId,
+      system,
+      stewardIdentityId,
+      releases,
+      tenantShortName: manifest.provisioning.tenant.shortName,
+      organizationShortName: manifest.provisioning.rootOrganization.shortName,
+    });
   log("done. Sign in with the nominated account and open the organisation.");
+  return { organizationId: provisioned.rootOrganizationId, stewardIdentityId };
 };
+
+const main = async (): Promise<void> =>
+  runDevelopmentSetup(process.argv.slice(2)).then(() => undefined);
 
 main().catch((error: unknown) => {
   if (error instanceof DevelopmentSetupRefusal) process.stderr.write(`[setup] ${error.message}\n`);

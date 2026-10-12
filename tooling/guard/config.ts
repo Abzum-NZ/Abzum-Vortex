@@ -5,7 +5,11 @@ export const paths = {
   ui: ["ui/src/", "studio/src/", "packages/ui/src/"],
   definitions: ["modules/src/", "packages/definitions/src/"],
   web: ["apps/web/"],
-  developmentSetup: ["apps/web/scripts/development-setup/", "apps/web/app/_lib/development-setup/"],
+  developmentSetup: [
+    "apps/web/scripts/development-setup/",
+    "apps/web/scripts/demo-setup/",
+    "apps/web/app/_lib/development-setup/",
+  ],
   canonical: "supabase/schemas/",
   migrations: "supabase/migrations/",
   applicationSources: "modules/src/",

@@ -64,62 +64,76 @@ The development server binds to `127.0.0.1`. Authentication and protected data o
 
 ### Local development setup
 
-A fresh local database has no organisation, so a signed-in developer sees "No organisations available". The development-only setup command provisions one organisation with a nominated steward, then publishes and installs every shipped application. The steward grants application roles later through IAM. The command runs only on your machine against the Supabase CLI database on loopback: it refuses `NODE_ENV=production`, any other database host or port, and a run without the explicit `--local-development` flag.
+A fresh local database has no organisation, so a signed-in developer sees "No organisations available". `pnpm demo:setup` is the one-command path: it resets the local database, creates a confirmed local owner account, runs the protected development setup, and seeds realistic CRM and Service Desk records through the record save service. It requires the local Supabase stack to be running. The reset deletes all data in that local stack, including local sign-ups; never point it at a hosted database.
 
-1. Start the local stack and build a fresh database (this deletes local data, including local sign-ups):
+1. Install dependencies, start the local stack, and copy the environment example:
 
    ```sh
    pnpm install --frozen-lockfile
    pnpm db:start
-   pnpm db:reset
+   cp apps/web/.env.example apps/web/.env.local
    ```
 
-2. Start the web application with your usual local environment (the same variables `pnpm dev` uses) and sign up at `http://127.0.0.1:3000` as the person who should own the organisation. Confirm the sign-up email in Mailpit at `http://127.0.0.1:54324`.
+   Fill in the local Supabase publishable key, identity authority UUID and Query continuation key. Set a local-only password for `VORTEX_DEMO_OWNER_PASSWORD`; do not commit `.env.local`.
 
-3. Nominate that account and run the setup in a shell with the same `VORTEX_IDENTITY_AUTHORITY_ID` as the web application (the runtime database variables default to the local Supabase values):
+2. Create the local demo:
 
    ```sh
-   pnpm setup:local -- --local-development --first-owner-email you@example.com
+   pnpm demo:setup
    ```
 
-   `--first-owner-identity-id <uuid>` nominates by Supabase user id instead of email. Exactly one account is accepted, and it comes only from this command line; nothing is read from a browser. The account must already exist locally (step 2).
+   The owner email and password come from `VORTEX_DEMO_OWNER_EMAIL` and `VORTEX_DEMO_OWNER_PASSWORD`. The account is confirmed locally, so no email step is required. The setup publishes and installs the shipped applications, grants the owner their defined application roles, and creates eight companies, eight contacts, eight opportunities, fifteen Service Desk cases, a service calendar and SLA. Record writes use the protected `apply_record_changes` path. Re-running `pnpm demo:setup` starts over by resetting the local database.
 
-4. Sign in at `http://127.0.0.1:3000` with the nominated account and select the organisation "Abzum Development". It has six installed applications: IAM, Organisation Administration, Tenant Administration, CRM, Service Desk and Operations.
+3. Start the web application and sign in using the configured demo account:
+
+   ```sh
+   pnpm dev
+   ```
+
+   Open `http://127.0.0.1:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with `VORTEX_DEMO_OWNER_EMAIL` and `VORTEX_DEMO_OWNER_PASSWORD`. The seeded CRM companies are at `/abzum/abzum/vortex.app.crm/crm_companies`; Service Desk cases are at `/abzum/abzum/vortex.app.service_desk/service_desk_cases`.
+
+For a manually nominated account or a separate validation organisation, use `pnpm setup:local` after the account exists in local Supabase Auth. Pass `--first-owner-email <email>` or `--first-owner-identity-id <uuid>` plus `--local-development`. The optional `--tenant-short-name` and `--organization-short-name` flags accept lowercase underscore keys such as `val_demo`; add `--seed-demo` to create the same idempotent demo data. The seeder can also be run later with `pnpm demo:seed -- --tenant-short-name val_demo --organization-short-name val_demo` against the most recently configured organisation.
 
 What the setup does, in order, through the protected entry points only (no table is written directly):
 
 | Step | Result |
 | --- | --- |
 | Provision | The tenant and organisation "Abzum Development" with the nominated account as its steward (`provision_tenant` with a fixed development duplicate key, recorded as the provisioning receipt). |
-| Publish | The IAM, Organisation Administration, Tenant Administration, CRM, Service Desk and Operations modules and applications from `modules/` are published as 1.0.0 through the Definition store and publication service. |
+| Publish | IAM, Organisation Administration, Tenant Administration, CRM, Service Desk, Operations and Landing Zone, plus their modules from `modules/`, are published as 1.0.0 through the Definition store and publication service. |
 | Installer access | The steward, through the ordinary Access administration operations, creates the custom role "Application installer" (`platform.organization.applications.manage` only) and assigns it to themselves. A provisioned steward holds no installation permission. |
-| Install | Organisation Administration, Tenant Administration, CRM, Service Desk and Operations, then IAM, are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
-| Administration access | The nominated steward opens IAM, Organisation Administration and Tenant Administration through the platform permissions established at provisioning; setup grants no application operating role. |
-| Later application roles | Through IAM's protected Access operations, the steward accepts application role templates and assigns roles to accounts or Groups within their delegated scope, including CRM access. |
+| Install | The configured shipped applications are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
+| Owner access | Through protected Access operations, setup accepts the shipped application role templates and assigns their roles to the nominated owner, so the owner can open the installed applications and operate the demo. |
+| Later access | The owner can use IAM's protected Access operations to assign roles to other accounts or Groups within their delegated scope. |
 
-The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only what these roles and later IAM assignments give it. The command is not a general grant tool: further access is granted in the IAM application.
+The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Management status or a first sign-in never implies application permission: the account can use only the roles explicitly assigned through the protected Access operations.
 
 CRM and Service Desk bind the platform-owned email, calendar and webhook connection-type releases at 1.0.0. The releases declare operations, secret keys and health checks, but support no provider adapter. A fresh organisation has no configured connection instances, so these connections are unavailable for sending, receiving and network health checks.
 
-An interrupted run resumes: provisioning replays by its fixed key and the steps recorded in `supabase/.temp/development-setup-state.json` are skipped. Once every step has completed, the command is disabled: running it again only calls the initial operating-role grant with the original receipt and the same manifest, which replays the stored result. A different nominated account is refused. `pnpm db:reset` starts over.
+An interrupted `pnpm setup:local` run resumes from the identifiers recorded in `supabase/.temp/development-setup-state.json`; provisioning and record saves replay by their stable idempotency keys. Re-running setup for the same organisation reuses its published releases, installations and role assignments. A different nominated account is refused. `pnpm demo:setup` deliberately resets the local database before starting a fresh demo.
 
 `pnpm verify` runs format check, lint, typecheck and build. There are no tests in this project.
 
 ### Local environment variables
 
-`pnpm dev` reads server-only values from `apps/web/.env.local`: copy [apps/web/.env.example](apps/web/.env.example) and fill in local values only; never commit a real value. `pnpm db:start` prints the local API URL and publishable key. `pnpm setup:local` does not read that file: run it in a shell that exports the same `VORTEX_IDENTITY_AUTHORITY_ID`, and it refuses any environment or database that is not the local one.
+`pnpm dev`, `pnpm demo:setup`, and `pnpm setup:local` read server-only values from `apps/web/.env.local` and the other local Next.js environment files. Copy [apps/web/.env.example](apps/web/.env.example) and fill in local values only; never commit a real value. `pnpm db:start` prints the local API URL and publishable key. Setup commands refuse any environment or database that is not the local one.
 
 | Variable | Local value | Purpose |
 | --- | --- | --- |
 | `VORTEX_ENVIRONMENT` | `local` | Selects local behaviour. The local site URL must then be `http` on loopback; the development setup refuses any other value. |
-| `VORTEX_SITE_URL` | `http://localhost:3000` | The configured site URL. Identity-session cookies and auth redirects are built from it. Open the application at exactly this address: Next.js builds its redirects from the request URL as `localhost`, so browsing `127.0.0.1` makes the proxy's site check fail. |
+| `VORTEX_SITE_URL` | `http://127.0.0.1:3000` | The configured site URL. Use this exact host for browser requests and redirects. The local server binds to `127.0.0.1`. |
 | `VORTEX_SUPABASE_URL` | `http://127.0.0.1:54321` | The local Supabase API and Auth endpoint. |
 | `VORTEX_SUPABASE_PUBLISHABLE_KEY` | `<local publishable key from supabase status>` | The public key the browser sign-in journey uses. |
-| `VORTEX_IDENTITY_AUTHORITY_ID` | `<uuid>` | Pins the local identity authority. Use the same value for `pnpm dev` and `pnpm setup:local`. |
+| `VORTEX_IDENTITY_AUTHORITY_ID` | `<uuid>` | Pins the local identity authority. Generate a UUID, keep it stable for this local stack, and use it for both `pnpm dev` and setup. |
 | `VORTEX_QUERY_CONTINUATION_KEY` | `<base64 of exactly 32 random bytes>` | Makes Query continuation tokens opaque; the generation command is in the env example. |
 | `VORTEX_RUNTIME_DATABASE_URL` | `postgresql://vortex_runtime:vortex-runtime-local-only@127.0.0.1:54322/postgres` | The restricted runtime connection to the local database. Required by `pnpm dev`; `pnpm setup:local` defaults to this address when unset. |
 | `VORTEX_RUNTIME_DATABASE_POOL_SIZE` | `<1-20>` | Optional runtime connection-pool cap; 5 applies when unset. |
 | `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` | not set locally | Trusted root certificate for a hosted runtime connection; not needed for the local loopback database. |
+| `VORTEX_DEMO_OWNER_EMAIL` | `owner@vortex.test` | Local email address created as the first owner by `pnpm demo:setup`. |
+| `VORTEX_DEMO_OWNER_PASSWORD` | set locally | Local-only password for the demo owner. Use at least 12 characters with a letter and a number. |
+| `VORTEX_LOCAL_DEVELOPMENT_SIGN_IN_ENABLED` | not set | Optional local sign-in shortcut switch. Set to `true` to show the development account button in a development server. |
+| `VORTEX_LOCAL_DEVELOPMENT_IDENTITY_ID` | `<demo owner identity UUID>` | Required only when the optional local sign-in shortcut is enabled. Use the identity UUID printed by the setup command. |
+| `VORTEX_LOCAL_SUPABASE_AUTH_ADMIN_KEY` | `<local Supabase secret key>` | Required only for the optional local sign-in shortcut. Read it from local Supabase status; never commit it. |
+| `VORTEX_SETUP_DEBUG` | not set | Optional setup diagnostics. Set to `1` in the shell running `pnpm setup:local` to print the underlying setup error. |
 
 In a local environment the installed-application pages read releases against the platform catalogue plus the development placeholder connection types CRM and Service Desk bind (`apps/web/app/_lib/definition-catalogue.ts`). During `pnpm setup:local` the database driver no longer prints server notices such as `relation ... already exists, skipping` (an idempotent index the setup creates twice); a real database error still stops the setup with a non-zero exit. A failing installed-application page logs a safe `[access] human organisation request failed` line with error class names and codes to the `pnpm dev` console.
 

@@ -5,6 +5,7 @@ import {
   roleAssignmentIdSchema,
   roleIdSchema,
 } from "@vortex/contracts";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 /**
@@ -69,8 +70,24 @@ export const developmentSetupManifestSchema = z
 
 export type DevelopmentSetupManifest = z.infer<typeof developmentSetupManifestSchema>;
 
-export const developmentSetupManifest: DevelopmentSetupManifest =
-  developmentSetupManifestSchema.parse({
+const setupUuidNamespace = Buffer.from("6d1f0c523b7a4c4e8a510e1a7b0c9d00", "hex");
+
+const setupUuid = (name: string): string => {
+  const digest = createHash("sha1").update(setupUuidNamespace).update(name).digest();
+  const bytes = Buffer.from(digest.subarray(0, 16));
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+export const developmentSetupManifestFor = (
+  tenantShortName = "abzum",
+  organizationShortName = tenantShortName,
+): DevelopmentSetupManifest => {
+  const targetKey = `${tenantShortName}/${organizationShortName}`;
+  const defaultOrganization = tenantShortName === "abzum" && organizationShortName === "abzum";
+  return developmentSetupManifestSchema.parse({
     manifestVersion: "1.0.0",
     operator: {
       clusterId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d01",
@@ -78,9 +95,18 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
     },
     definitionActorId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d03",
     provisioning: {
-      duplicateKey: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d04",
-      tenant: { shortName: "abzum", displayName: "Abzum Development" },
-      rootOrganization: { shortName: "abzum", displayName: "Abzum Development" },
+      duplicateKey: defaultOrganization
+        ? "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d04"
+        : setupUuid(`${targetKey}/provision`),
+      tenant: {
+        shortName: tenantShortName,
+        displayName: tenantShortName === "abzum" ? "Abzum Development" : `${tenantShortName} Demo`,
+      },
+      rootOrganization: {
+        shortName: organizationShortName,
+        displayName:
+          organizationShortName === "abzum" ? "Abzum Development" : `${organizationShortName} Demo`,
+      },
       accountDisplayName: "First owner",
       language: "en-NZ",
       timeZone: "Pacific/Auckland",
@@ -99,7 +125,12 @@ export const developmentSetupManifest: DevelopmentSetupManifest =
     ],
     installerRole: {
       roleKey: "application_installer",
-      roleId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d08",
-      roleAssignmentId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d09",
+      roleId: defaultOrganization
+        ? "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d08"
+        : setupUuid(`${targetKey}/installer-role`),
+      roleAssignmentId: defaultOrganization
+        ? "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d09"
+        : setupUuid(`${targetKey}/installer-assignment`),
     },
   });
+};
