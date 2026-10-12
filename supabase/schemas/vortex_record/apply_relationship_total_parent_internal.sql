@@ -24,6 +24,7 @@ declare
   new_revision bigint;
   preview_installation jsonb;
   notice_sequence bigint;
+  pending_exact_notice boolean := false;
   event_result jsonb;
 begin
   if pg_catalog.jsonb_typeof(p_final_values) <> 'object'
@@ -97,21 +98,7 @@ begin
   preview_installation := vortex_record.read_current_preview_installation_internal();
   if preview_installation is null
     and snapshot #>> '{recordType,storageScope}' = 'application_contained' then
-    notice_sequence := pg_catalog.nextval(
-      'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-    );
-    begin
-      perform vortex_invalidation.publish_change_notice(
-        (context_value ->> 'organizationId')::uuid,
-        (context_value ->> 'applicationRootId')::uuid,
-        p_record_type_id, saved_record_id, new_revision, 'changed',
-        notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
-      );
-    exception
-      when others then
-        -- Invalidation is advisory; a lost notice must not refuse the parent write.
-        null;
-    end;
+    pending_exact_notice := true;
   else
     perform vortex_record.bump_record_data_version_internal(
       (context_value ->> 'organizationId')::uuid,
@@ -137,6 +124,23 @@ begin
   );
   if pg_catalog.jsonb_array_length(event_result) <> 1 then
     raise exception using errcode = '55000', message = 'Relationship total parent Event append failed';
+  end if;
+  if pending_exact_notice then
+    begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
+      perform vortex_invalidation.publish_change_notice(
+        (context_value ->> 'organizationId')::uuid,
+        (context_value ->> 'applicationRootId')::uuid,
+        p_record_type_id, saved_record_id, new_revision, 'changed',
+        notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+      );
+    exception
+      when others then
+        -- Invalidation is advisory; a lost notice must not refuse the parent write.
+        null;
+    end;
   end if;
 end
 $function$;
