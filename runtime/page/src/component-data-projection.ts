@@ -72,7 +72,7 @@ export type ProjectedComponentData<Values> =
 export type ComponentDataProjectionInput = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
   fieldLabels?: Readonly<Record<string, string>>;
-  /** Authorized options in definition order for fields whose stored value is a several-choice list. */
+  /** Options in definition order for choice fields; several-choice options are limited to those the viewer may use. */
   fieldChoiceLabels?: Readonly<
     Record<string, readonly Readonly<{ value: string; label: string }>[]>
   >;
@@ -120,6 +120,19 @@ const projectCell = (
         .join(", "),
     };
   }
+  // One selected choice shows its label; a value the field no longer offers shows no value.
+  if (typeof value === "string" && choiceLabels !== undefined) {
+    const option = choiceLabels.find((candidate) => candidate.value === value);
+    return option === undefined ? empty : { kind: "text", text: option.label };
+  }
+  // A money value is its exact amount with its currency code.
+  if (
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof value.amount === "string" &&
+    typeof value.currency === "string"
+  )
+    return { kind: "text", text: `${value.currency} ${value.amount}` };
   switch (format) {
     case "number":
     case "currency":
@@ -223,7 +236,11 @@ export const projectRecordsTableData = (
         cells: Object.fromEntries(
           columns.map((column) => [
             column.key,
-            projectCell(valueOf(row, column.key)?.value ?? null, column.format),
+            projectCell(
+              valueOf(row, column.key)?.value ?? null,
+              column.format,
+              input.fieldChoiceLabels?.[column.key.toLowerCase()],
+            ),
           ]),
         ),
       })),

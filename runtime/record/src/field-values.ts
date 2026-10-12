@@ -233,6 +233,11 @@ const collectChoicePermission = (
     });
 };
 
+/** Only safe integer numbers can cross a numeric caller boundary without losing decimal digits. */
+const submittedDecimalText = (value: unknown): unknown => {
+  return typeof value === "number" && Number.isSafeInteger(value) ? String(value) : value;
+};
+
 const normalizeMoney = (
   field: Extract<ModuleFieldV3, { type: "money" }>,
   value: unknown,
@@ -254,6 +259,20 @@ const normalizeMoney = (
     return { amount: amount.data, currency };
   }
 
+  if (
+    origin === "submitted" &&
+    (typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value)))
+  ) {
+    // An amount submitted without a currency is in the field's fixed currency or the
+    // organisation's currency, as a default amount is.
+    const currency =
+      field.settings.currencyMode === "fixed"
+        ? field.settings.currency
+        : context.organizationCurrency;
+    if (currency === undefined)
+      return issue(context, "organization_currency_required", path, field.fieldId);
+    value = { amount: submittedDecimalText(value), currency };
+  }
   const parsed =
     origin === "submitted"
       ? sourceMoneyValueV2Schema.safeParse(value)
@@ -468,7 +487,7 @@ const normalizeValue = (
   if (field.type === "decimal_number") {
     const parsed =
       origin === "submitted"
-        ? sourceExactDecimalTextV2Schema.safeParse(value)
+        ? sourceExactDecimalTextV2Schema.safeParse(submittedDecimalText(value))
         : exactDecimalTextV2Schema.safeParse(value);
     if (!parsed.success)
       return issue(
@@ -493,6 +512,16 @@ const normalizeValue = (
       field.fieldId,
     );
   const normalized = leaf.data as JsonValue;
+  // A required text-valued field is satisfied by a value, not by an empty answer. A stored blank
+  // that is not being changed stays as it is.
+  if (
+    policy === "final" &&
+    field.required &&
+    origin !== "existing" &&
+    typeof normalized === "string" &&
+    normalized.trim() === ""
+  )
+    return issue(context, "required_field_missing", path, field.fieldId);
   if (
     policy === "final" &&
     field.type === "several_choices" &&

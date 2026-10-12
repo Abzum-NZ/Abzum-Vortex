@@ -2,7 +2,7 @@ import "server-only";
 
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ApplicationInstallationCoordinatorError } from "@vortex/app";
 import { recordIdSchema } from "@vortex/contracts";
 import {
@@ -495,7 +495,7 @@ export default async function ApplicationAddressPage({
         <Link href={launcherPath(tenantShortName, organizationShortName)}>Try again</Link>
       </AuthShell>
     );
-  if (page.kind === "unavailable") return unavailableFallback;
+  if (page.kind === "unavailable") notFound();
   const search = await loadApplicationSearch(identity.session, {
     tenantShortName, organizationShortName, applicationKey: resolved.application.key,
   }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "");
