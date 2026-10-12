@@ -34,10 +34,6 @@ import {
   type ResolvedPageComposition,
 } from "./page-composition-resolution";
 
-type ObservedViewReason = "ABSENT" | "ALLOWED" | "access_refused" | "authentication_required"
-  | "target_policy_unavailable" | "caller_unsupported" | "UNKNOWN";
-type ObservedTargetKind = "ABSENT" | "ORGANIZATION" | "APPLICATION" | "UNPROVABLE";
-
 type PermissionBinding = Readonly<{
   permissionKey: string;
   declaration: OrganizationAccessDeclaration;
@@ -107,27 +103,6 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
         scope: SelectedOrganizationScope,
         validUntil: string,
       ) => Promise<boolean>;
-      /** Diagnostic metadata only, latched by the original serial condition invocation. */
-      visibilityConditionReason?: () =>
-        | "SUPPORTED_TRUE" | "SUPPORTED_FALSE" | "UNSUPPORTED_OPERAND"
-        | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE" | "UNKNOWN";
-      /** Optional server-only sink; immutable decisions cannot influence projection authority. */
-      observeProjectionDecision?: (observation: Readonly<{
-        /** Only supplied after the original target/request and single-correlation checks. */
-        requestBound: true;
-        placements: readonly Readonly<{
-          placementId: string;
-          ancestorPlacementIds: readonly string[];
-          viewGate: "ABSENT" | "ALLOWED" | "REFUSED";
-          viewReason: ObservedViewReason;
-          targetKind: ObservedTargetKind;
-          condition: "ABSENT" | "TRUE" | "NOT_TRUE" | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR";
-          conditionReason: "ABSENT" | "SUPPORTED_TRUE" | "SUPPORTED_FALSE" | "UNSUPPORTED_OPERAND"
-            | "SUBJECT_UNAVAILABLE" | "FIELD_UNAVAILABLE" | "DECLARATION_UNPROVABLE"
-            | "SKIPPED_VIEW" | "SKIPPED_ANCESTOR" | "UNKNOWN";
-          useState: "PLAIN_CONTENT" | "AVAILABLE" | "DISABLED";
-        }>[];
-      }>) => void;
     }>;
 
 type RequiredPlacement = Readonly<{
@@ -185,8 +160,6 @@ const evaluate = async (
   allowed: boolean;
   correlationId: string;
   validUntil?: string;
-  viewReason: ObservedViewReason;
-  targetKind: ObservedTargetKind;
 }>> => {
   // Record placement availability carries no row decision and invokes no operation callback.
   // Page-level and non-record gates still use their original generic permission operation.
@@ -207,22 +180,7 @@ const evaluate = async (
   const validUntil = result.outcome === "eligible"
     ? result.validUntil
     : result.outcome === "completed" ? result.value.validUntil : undefined;
-  // These diagnostic labels retain only the existing safe result, never private decision evidence.
-  let viewReason: ObservedViewReason = "UNKNOWN";
-  let targetKind: ObservedTargetKind = "UNPROVABLE";
-  try {
-    if (result.outcome === "completed" || result.outcome === "eligible") viewReason = "ALLOWED";
-    else if (result.reasonCode === "access_refused" ||
-      result.reasonCode === "authentication_required" ||
-      result.reasonCode === "target_policy_unavailable" ||
-      result.reasonCode === "caller_unsupported") viewReason = result.reasonCode;
-    const kind = binding.declaration.target.kind;
-    targetKind = kind === "organization" ? "ORGANIZATION"
-      : kind === "application" ? "APPLICATION" : "UNPROVABLE";
-  } catch {
-    // Optional metadata cannot replace the original evaluated outcome or its genuine errors.
-  }
-  return { ...evaluated, ...(validUntil === undefined ? {} : { validUntil }), viewReason, targetKind };
+  return { ...evaluated, ...(validUntil === undefined ? {} : { validUntil }) };
 };
 
 const sameKey = (left: string, right: string): boolean => left === right;
@@ -272,27 +230,13 @@ export const createAuthenticatedPageCapabilityService = <Command>(
         retainEarliestAccessEligibility(pageAccess.validUntil);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
         const hiddenPlacements = new Set<string>();
-        // Observation has its own finite custody and never changes the authoritative states.
-        const observed: Array<Parameters<NonNullable<
-          AuthenticatedPageCapabilityDependencies<Command>["observeProjectionDecision"]
-        >>[0]["placements"][number]> = [];
-        let observer: AuthenticatedPageCapabilityDependencies<Command>["observeProjectionDecision"];
-        let observationValid = false;
-        try {
-          observer = dependencies.observeProjectionDecision;
-          observationValid = typeof observer === "function";
-        } catch {
-          // An unavailable sink must not turn a normal projection into a failure.
-        }
         for (const required of requiredPlacements(resolved)) {
           if (states[required.placementId] !== undefined) continue;
           const binding = loaded.placements[required.placementId];
           if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
           const view =
             required.viewPermissionKey === undefined
-              ? { allowed: true, correlationId: pageAccess.correlationId,
-                  validUntil: undefined,
-                  viewReason: "ABSENT" as const, targetKind: "ABSENT" as const }
+              ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
               : binding.viewPermission !== undefined &&
                   sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
                 ? await evaluate(transaction, scope, binding.viewPermission)
@@ -343,34 +287,6 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               ? {}
               : { conditionAllowed }),
           };
-          if (observationValid) {
-            try {
-              if (observed.length >= 4096 || required.ancestorPlacementIds.length > 64)
-                observationValid = false;
-              else {
-                const condition = required.visibilityCondition === undefined ? "ABSENT"
-                  : !view.allowed ? "SKIPPED_VIEW" : ancestorHidden ? "SKIPPED_ANCESTOR"
-                  : conditionAllowed === true ? "TRUE" : "NOT_TRUE";
-                observed.push(Object.freeze({
-                  placementId: required.placementId,
-                  ancestorPlacementIds: Object.freeze([...required.ancestorPlacementIds]),
-                  viewGate: required.viewPermissionKey === undefined ? "ABSENT"
-                    : view.allowed ? "ALLOWED" : "REFUSED",
-                  viewReason: view.viewReason,
-                  targetKind: view.targetKind,
-                  condition,
-                  conditionReason: condition === "ABSENT" || condition === "SKIPPED_VIEW" ||
-                    condition === "SKIPPED_ANCESTOR" ? condition
-                    : dependencies.visibilityConditionReason?.() ?? "UNKNOWN",
-                  useState: required.usePermissionKey === undefined &&
-                    binding.operationRequired !== true && !binding.operationBound ? "PLAIN_CONTENT"
-                    : use.allowed && binding.operationBound ? "AVAILABLE" : "DISABLED",
-                }));
-              }
-            } catch {
-              observationValid = false;
-            }
-          }
         }
         if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
         const projected = projectPageCapability(resolved, {
@@ -390,16 +306,6 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               earliestAccessEligibilityUntil,
             ))
           ) return undefined;
-        }
-        if (projected !== undefined && observationValid) {
-          try {
-            observer?.call(dependencies, Object.freeze({
-              requestBound: true,
-              placements: Object.freeze(observed),
-            }));
-          } catch {
-            // A diagnostic sink never changes the original return or genuine error.
-          }
         }
         return projected;
       }),

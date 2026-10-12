@@ -9,7 +9,6 @@ import {
 } from "@web/platform-server";
 import {
   activeApplicationInstallationEvidenceSchema,
-  describeFailure,
   fieldIdSchema,
   jsonValueSchema,
   recordIdSchema,
@@ -35,6 +34,7 @@ import {
   humanOrganizationRequestDependencies,
   humanOrganizationRequestsFor,
 } from "./server-composition";
+import { mapWebError } from "./web-error-mapper";
 
 type ApplicationSearchView =
   | Readonly<{ kind: "disabled" }>
@@ -313,7 +313,11 @@ export const loadApplicationSearch = async (
       more: results.length > 50,
     };
   } catch (error) {
-    console.error(`Application search failed: ${describeFailure(error)}`);
-    return unavailable;
+    return mapWebError(error, {
+      route: "application-search",
+      operation: "search",
+      code: "APPLICATION_SEARCH_FAILED",
+      fallback: unavailable,
+    });
   }
 };

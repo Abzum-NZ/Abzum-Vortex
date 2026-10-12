@@ -33,7 +33,6 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import {
   createInstallationRuntimeBundleRepository,
-  type InstallationRuntimeBundleObservationObserver,
 } from "./installation-runtime-bundle-repository";
 import {
   DefinitionError,
@@ -193,10 +192,9 @@ export interface ActiveInstallationBundleRepository {
 /** Reads and repairs only the active format-2 bundle under the verified HUMAN request transaction. */
 export const createActiveInstallationBundleRepository = (
   transaction: RequestDatabaseTransaction,
-  observeBundleRead?: InstallationRuntimeBundleObservationObserver,
 ): ActiveInstallationBundleRepository => {
   let statePromise: Promise<ActiveInstallationBundleState> | undefined;
-  const bundles = createInstallationRuntimeBundleRepository(transaction, observeBundleRead);
+  const bundles = createInstallationRuntimeBundleRepository(transaction);
 
   const readCurrentState = async (): Promise<ActiveInstallationBundleState> => {
     if (statePromise !== undefined) return statePromise;
