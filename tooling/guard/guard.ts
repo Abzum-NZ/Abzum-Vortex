@@ -138,7 +138,10 @@ const businessPattern = new RegExp(
 for (const file of codeFiles) {
   const content = read(file);
   const lineCount = content.split("\n").length;
-  if (lineCount > (baselineMigrationFiles.get(file) ?? 1500))
+  const baselineLineCount = baselineMigrationFiles.get(file);
+  if (baselineLineCount !== undefined && lineCount > baselineLineCount)
+    throw new Error(`Generated baseline migration grew: ${file}`);
+  if (lineCount > 1500 && baselineLineCount === undefined)
     add("file-size", file, 1501, `${lineCount} lines`);
   if (/-v[2-9]\d*(?=\.)/i.test(basename(file))) add("versioned-file", file, 1, basename(file));
   const fileArea = area(file);
