@@ -5233,4 +5233,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE vortex_record_owner IN SCHEMA record_data GRAN
 --
 -- PostgreSQL database dump complete
 --
-
