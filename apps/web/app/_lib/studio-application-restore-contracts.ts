@@ -92,8 +92,6 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
 ]);
 
 export type StudioApplicationRestoreSelector = z.infer<typeof studioApplicationRestoreSelectorSchema>;
-type StudioApplicationRestoreExpected = z.infer<typeof studioApplicationRestoreExpectedSchema>;
-type StudioApplicationRestoreSnapshot = z.infer<typeof studioApplicationRestoreSnapshotSchema>;
 export type StudioApplicationRestoreAvailable = z.infer<typeof studioApplicationRestoreAvailableSchema>;
 export type StudioApplicationRestoreFailure = z.infer<typeof studioApplicationRestoreFailureSchema>;
 export type StudioApplicationRestoreLoadResult = z.infer<typeof studioApplicationRestoreLoadResultSchema>;

@@ -51,8 +51,6 @@ const pageSchema = z.object({
 }).strict();
 
 export type StudioApplicationHistorySnapshot = z.infer<typeof snapshotSchema>;
-type StudioApplicationHistoryListRequest = z.infer<typeof listRequestSchema>;
-type StudioApplicationHistoryInspectRequest = z.infer<typeof inspectRequestSchema>;
 export type StudioApplicationHistoryFailure = Readonly<{
   kind: "refused" | "conflict" | "temporarily_unavailable";
 }>;

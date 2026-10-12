@@ -817,5 +817,3 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
       }
     },
   });
-
-type FlowBindingEndpoint = ReturnType<typeof createFlowBindingEndpoint>;

@@ -140,9 +140,6 @@ export type StudioApplicationInstallationSnapshot = z.infer<
 export type StudioApplicationInstallationLoadResult = z.infer<
   typeof studioApplicationInstallationLoadResultSchema
 >;
-type StudioApplicationInstallationCommand = z.infer<
-  typeof studioApplicationInstallationCommandSchema
->;
 export type StudioApplicationInstallationCommandResult = z.infer<
   typeof studioApplicationInstallationCommandResultSchema
 >;
