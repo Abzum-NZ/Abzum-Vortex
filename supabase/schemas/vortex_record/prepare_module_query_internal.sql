@@ -69,6 +69,8 @@ declare
   preview_field_bounds jsonb;
   preview_field_mappings jsonb := '{}'::jsonb;
   preview_mode boolean := false;
+  failure_sqlstate text;
+  failure_message text;
 begin
   if p_stage not in ('resolution', 'storage', 'complete') then
     raise exception using errcode = '22023', message = 'Invalid query preparation stage';
@@ -80,8 +82,17 @@ begin
   if preview_mode then
     begin
       preview_context := vortex_record.read_current_preview_installation_internal();
-    exception when others then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    exception
+      -- A refused access context or a stale preview is the expected refusal; any
+      -- other failure is logged with its cause before the same safe refusal.
+      when sqlstate '42501' or sqlstate '40001' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      when others then
+        get stacked diagnostics failure_sqlstate = returned_sqlstate,
+          failure_message = message_text;
+        raise warning 'Query preview preparation failed (preview installation): SQLSTATE %, %',
+          failure_sqlstate, failure_message;
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
     end;
     preview_candidate_revision_text := preview_context ->> 'applicationReleaseRevision';
     if preview_context is null
@@ -108,8 +119,17 @@ begin
       begin
         context_value := vortex_access.validated_human_request_context();
         resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
-      exception when others then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      exception
+        -- A refused access context or a stale preview is the expected refusal; any
+        -- other failure is logged with its cause before the same safe refusal.
+        when sqlstate '42501' or sqlstate '40001' then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+        when others then
+          get stacked diagnostics failure_sqlstate = returned_sqlstate,
+            failure_message = message_text;
+          raise warning 'Query preview preparation failed (preview context): SQLSTATE %, %',
+            failure_sqlstate, failure_message;
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
       end;
       if context_value is null or not (context_value ? 'applicationRootId') or resolved is null then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
@@ -200,8 +220,17 @@ begin
   if preview_mode then
     begin
       context_value := vortex_access.validated_human_request_context();
-    exception when others then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    exception
+      -- A refused access context or a stale preview is the expected refusal; any
+      -- other failure is logged with its cause before the same safe refusal.
+      when sqlstate '42501' or sqlstate '40001' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      when others then
+        get stacked diagnostics failure_sqlstate = returned_sqlstate,
+          failure_message = message_text;
+        raise warning 'Query preview preparation failed (preview context): SQLSTATE %, %',
+          failure_sqlstate, failure_message;
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
     end;
     if context_value is null or not (context_value ? 'applicationRootId') then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
@@ -224,8 +253,17 @@ begin
   if preview_mode then
     begin
       resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
-    exception when others then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+    exception
+      -- A refused access context or a stale preview is the expected refusal; any
+      -- other failure is logged with its cause before the same safe refusal.
+      when sqlstate '42501' or sqlstate '40001' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      when others then
+        get stacked diagnostics failure_sqlstate = returned_sqlstate,
+          failure_message = message_text;
+        raise warning 'Query preview preparation failed (preview query): SQLSTATE %, %',
+          failure_sqlstate, failure_message;
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
     end;
   else
     resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
@@ -417,7 +455,7 @@ begin
       -- can examine a row the reader cannot read. Only those fields may drive the
       -- scan order, the pushed filter or the keyset cursor, because any other
       -- field could be withheld and its value must not influence which rows are
-      -- examined. A failure yields no readable fields, so nothing is pushed.
+      -- examined. A planning failure propagates; it never widens the scan.
       select plan.* into access_plan
       from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
       readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
@@ -433,7 +471,7 @@ begin
         ),
         'readableFieldIds', pg_catalog.to_jsonb(readable_field_ids),
         'access', pg_catalog.jsonb_build_object(
-          'predicate', coalesce(access_plan.access_predicate, 'true'),
+          'predicate', access_plan.access_predicate,
           'parameters', coalesce(access_plan.access_parameters, '[]'::jsonb),
           'ownerAccountId', access_plan.owner_account_id,
           'ownerGroupIds', pg_catalog.to_jsonb(coalesce(access_plan.owner_group_ids, array[]::uuid[])),

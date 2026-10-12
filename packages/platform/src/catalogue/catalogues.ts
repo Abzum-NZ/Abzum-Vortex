@@ -28,7 +28,7 @@ export const fieldTypeKeys = [
 /**
  * Flow-only value types: the references, bounded lists, file, run and JSON values that a field
  * does not itself have. Together with `fieldTypeKeys` these form the one Vortex value-type
- * catalogue (#982).
+ * catalogue.
  */
 export const flowOnlyValueTypeKeys = [
   "record_reference",
@@ -134,7 +134,7 @@ export type BlockPaletteGroup = z.infer<typeof blockPaletteGroupSchema>;
 export type PersonalDataClass = z.infer<typeof personalDataClassSchema>;
 export type SearchPriority = z.infer<typeof searchPrioritySchema>;
 
-/** The semantic spelling of a flow value type, shared by every flow compatibility check (#982). */
+/** The semantic spelling of a flow value type, shared by every flow compatibility check. */
 export function canonicalWorkflowValueType(type: string): string {
   return ["whole_number", "decimal_number", "money"].includes(type)
     ? "number"
@@ -164,7 +164,7 @@ const crossFormatValueTypes: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The one value-type compatibility function (#982). The context selects the exact rule set the
+ * The one value-type compatibility function. The context selects the exact rule set the
  * caller needs; every rule is a view of the one value-type catalogue above.
  */
 export function valueTypesCompatible(

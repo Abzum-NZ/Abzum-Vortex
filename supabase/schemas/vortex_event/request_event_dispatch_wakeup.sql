@@ -12,6 +12,8 @@ declare
   bearer_credential text := nullif(
     pg_catalog.current_setting('vortex.event_dispatch_wakeup_bearer', true), ''
   );
+  failure_sqlstate text;
+  failure_message text;
 begin
   -- Fail closed: an unconfigured endpoint or credential sends nothing.
   if endpoint_url is null or bearer_credential is null then
@@ -36,11 +38,12 @@ begin
   if pg_catalog.current_setting('vortex.event_dispatch_wakeup_sent', true) = 'true' then
     return null;
   end if;
-  perform pg_catalog.set_config('vortex.event_dispatch_wakeup_sent', 'true', true);
 
   -- pg_net queues the request transactionally and sends it only after this
-  -- transaction commits; a rolled-back append sends nothing. Best effort only:
-  -- the hint must never make the durable append fail.
+  -- transaction commits; a rolled-back append sends nothing. The hint must
+  -- never make the durable append fail, so an enqueue failure is logged with
+  -- its cause and leaves the sent flag unset: a later row in this transaction
+  -- tries again, and the scheduled recovery tick covers a hint that never left.
   begin
     perform net.http_post(
       url := endpoint_url,
@@ -51,8 +54,12 @@ begin
       body := pg_catalog.jsonb_build_object('source', 'database_webhook'),
       timeout_milliseconds := 5000
     );
+    perform pg_catalog.set_config('vortex.event_dispatch_wakeup_sent', 'true', true);
   exception when others then
-    return null;
+    get stacked diagnostics failure_sqlstate = returned_sqlstate,
+      failure_message = message_text;
+    raise warning 'Event dispatch wake-up was not queued: SQLSTATE %, %',
+      failure_sqlstate, failure_message;
   end;
   return null;
 end

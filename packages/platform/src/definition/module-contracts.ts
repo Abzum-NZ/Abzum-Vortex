@@ -1302,11 +1302,9 @@ export const actionDefinitionSchema = z
  * A Module's canonical content. `flows` is the one home of its behaviour (architecture decision 1):
  * every save rule is a flow with a `BeforeSave` trigger and `transaction` execution.
  *
- * `rules` is not authored. It is the executable form of exactly those `BeforeSave` flows, derived
- * from them by the compiler, because the database read that hands a save its rules and the
- * before-save evaluator still read a rule graph. Until the flow interpreter replaces them (#1007),
- * every `BeforeSave` flow has exactly one rule of the same identity, record type and priority, and
- * no rule exists without its flow, so a save can never run without a rule its Module declares.
+ * `rules` is derived from the authored `BeforeSave` flows because the save path still evaluates
+ * rule graphs. Each flow has one matching rule with the same identity, record type and priority;
+ * no rule exists without its flow.
  */
 export const moduleContentSchema = z
     .object({

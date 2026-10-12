@@ -19,8 +19,8 @@ import {
 import type { FlowOrchestrator, FlowOrchestratorResponse } from "./flow-orchestrator";
 
 /**
- * The App implementation of the web-independent form request and continuation contract (#544)
- * over the flow orchestrator (#579). It adds no continuation mechanism of its own: the
+ * The App implementation of the web-independent form request and continuation contract
+ * over the flow orchestrator. It adds no continuation mechanism of its own: the
  * orchestrator's server-stored single-use continuation and effect ledger remain the only ones, so a
  * replayed continuation, a repeated submit or a retried resume never repeats a protected effect.
  *

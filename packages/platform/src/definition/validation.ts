@@ -257,7 +257,7 @@ const actionPermissionsMatch = (
  * names, so a deleting action has exactly one delete and may otherwise only copy
  * relationships (which write the target, never the subject) and announce Events.
  * A subject write or a creation can move that revision. The Record runtime
- * refuses the same combination when it composes the action (#571).
+ * refuses the same combination when it composes the action.
  */
 const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
   const types = array(action.tasks).map((task) => String(task.type));

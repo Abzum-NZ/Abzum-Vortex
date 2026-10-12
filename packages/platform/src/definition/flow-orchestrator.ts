@@ -86,44 +86,7 @@ import type { ProtectedOperationExecutor } from "./protected-operation-executor"
 
 export type { FlowSubject };
 
-/**
- * The server orchestrator of the in-house flow engine (architecture decision 1, "Who drives a
- * flow"). Any flow that contains a protected task is driven from its first task here, for the
- * person who started it. The pure interpreter (`@vortex/rule`) decides what each task does; this
- * module supplies everything the interpreter must not have: the trusted session, the run id, the
- * clock, the continuation store and the protected-operation executor.
- *
- * What it guarantees:
- * - Person starts and resumes use only the verified session and selected organisation. A
- *   committed Event start accepts only its stored intent ID, reloads the exact retained release,
- *   and resolves the Access-owned non-person principal without creating or borrowing a session.
- * - Person protected tasks run through the one executor (`protected-operation-executor.ts`), in
- *   their own short transaction, and only after the effect ledger claims the run, task path,
- *   iteration, principal and origin. Event protected tasks fail closed until exact per-task grant
- *   resolution is available; neither path can repeat an uncertain effect.
- * - A person continuation is a random token whose hash keys one server-stored row bound to the run,
- *   the initiator, the organisation and the exact flow release. It expires, is handed back once,
- *   and a token that is unknown, expired, used, foreign or for another release is one neutral result.
- * - The page subject and revision are kept in that server-stored run state as evidence. Protected
- *   tasks recheck current read access and pass the same expected revision to the owning operation.
- * - The run limits are enforced here and in the interpreter: 100 For each items, 25 protected
- *   operations, 10 seconds of server time (across every resume) and a Run flow depth of 3.
- * - A task the platform cannot run yet fails with a located `not_yet_available` notice and the
- *   `task_not_available` failure code, never as a refusal, so a person is not told they lack a
- *   permission for something that does not exist yet. It is never run inline and never guessed.
- * - A Save record task runs through the record save port (`records`): the ordinary-human protected
- *   save, in its own transaction under the initiator's verified request. Its values are named by the
- *   exact release's field keys or field identities, and a change to an existing record is bound to
- *   the revision the surface was rendered at, never to one read at save time.
- * - A named action is a `transaction` flow started through its binding (`executeAction`), or by a
- *   Call protected operation task that names the action's key for the surface's subject record.
- *   The same interpreter runs it for that record inside the transaction the record port owns, and
- *   the record changes it asks for are applied by that port in one apply record changes call, so a
- *   web button and an agent tool reach one entry point. Its actor is the verified session's
- *   organisation account, never anything the command carries.
- *
- * Every failure is a safe outcome; the orchestrator never throws to its caller.
- */
+/** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
 
 /** The seconds a suspended run may wait for the person's answer. */
 export const flowContinuationLifetimeSeconds = 900;
@@ -271,7 +234,7 @@ export type FlowNamedAction = Readonly<{
 }>;
 
 /**
- * The protected save a Save record task runs through (#1369): the ordinary-human base save of the
+ * The protected save a Save record task runs through: the ordinary-human base save of the
  * record service (`createRecordSaveService`), in its own transaction under the initiator's verified
  * request. It owns every access, field, rule, calculation and revision decision.
  */
@@ -311,7 +274,7 @@ type FlowSelectedRecordReadPort = Readonly<{
 }>;
 
 /**
- * What the record service runs for a named action (#1063): it prepares the action's subject under
+ * What the record service runs for a named action: it prepares the action's subject under
  * the actor's authority, calls the supplied flow run inside its own transaction, and applies every
  * record change the flow collected in one apply record changes call. The result is the closed
  * named-action result; any before-save rule warnings travel beside it.

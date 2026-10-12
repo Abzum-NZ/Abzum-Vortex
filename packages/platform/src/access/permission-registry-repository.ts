@@ -9,7 +9,7 @@ import {
   type ApplicationPermissionCatalogueSnapshot,
   type ApplicationPermissionCatalogueSnapshotCommand,
   type PermissionCatalogueLookupCommand,
-  type PermissionCatalogueLookupResult,
+  type PermissionCatalogueEntry,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 
@@ -36,7 +36,10 @@ export class PermissionRegistryRepositoryError extends Error {
 }
 
 export interface PermissionRegistryPrivateRepository {
-  lookup(command: PermissionCatalogueLookupCommand): Promise<PermissionCatalogueLookupResult>;
+  /** Reads the available entries for exact permissions in one query; absent permissions yield no row. */
+  lookupMany(
+    commands: readonly PermissionCatalogueLookupCommand[],
+  ): Promise<readonly PermissionCatalogueEntry[]>;
   readApplicationSnapshot(
     command: ApplicationPermissionCatalogueSnapshotCommand,
   ): Promise<ApplicationPermissionCatalogueSnapshot | undefined>;
@@ -93,11 +96,13 @@ const requireOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
-const invalidStorage = (): never => {
-  throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_STORAGE_RESULT");
+const invalidStorage = (cause: unknown): never => {
+  throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_STORAGE_RESULT", {
+    cause,
+  });
 };
 
-const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult => {
+const parseEntry = (row: PermissionEntryRow): PermissionCatalogueEntry => {
   const platformSource = row.source_kind === "platform_catalogue";
   const recordScope = optional(row.record_scope);
   const fieldPolicy = optional(row.field_policy);
@@ -138,7 +143,7 @@ const parseEntry = (row: PermissionEntryRow): PermissionCatalogueLookupResult =>
         },
     meaningFingerprint: row.meaning_fingerprint,
   });
-  return parsed.success ? { outcome: "available", entry: parsed.data } : invalidStorage();
+  return parsed.success ? parsed.data : invalidStorage(parsed.error);
 };
 
 const parseSnapshot = (row: ApplicationSnapshotRow): ApplicationPermissionCatalogueSnapshot => {
@@ -159,7 +164,7 @@ const parseSnapshot = (row: ApplicationSnapshotRow): ApplicationPermissionCatalo
     catalogueFingerprint: row.catalogue_fingerprint,
     permissionIds: row.permission_ids,
   });
-  return parsed.success ? parsed.data : invalidStorage();
+  return parsed.success ? parsed.data : invalidStorage(parsed.error);
 };
 
 const mapStorageFailure = (error: unknown): PermissionRegistryRepositoryError => {
@@ -168,14 +173,24 @@ const mapStorageFailure = (error: unknown): PermissionRegistryRepositoryError =>
       ? String((error as { readonly code?: unknown }).code)
       : undefined;
   if (databaseCode === "22023")
-    return new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
+    return new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND", {
+      cause: error,
+    });
   if (databaseCode === "42501")
-    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_SCOPE_UNAVAILABLE");
+    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_SCOPE_UNAVAILABLE", {
+      cause: error,
+    });
   if (databaseCode === "22003")
-    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_ACCESS_VERSION_EXHAUSTED");
+    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_ACCESS_VERSION_EXHAUSTED", {
+      cause: error,
+    });
   if (["23503", "23505", "40001", "55000"].includes(databaseCode ?? ""))
-    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_STALE_OR_UNAVAILABLE");
-  return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_OPERATION_FAILED");
+    return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_STALE_OR_UNAVAILABLE", {
+      cause: error,
+    });
+  return new PermissionRegistryRepositoryError("PERMISSION_REGISTRY_OPERATION_FAILED", {
+    cause: error,
+  });
 };
 
 const execute = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
@@ -196,23 +211,42 @@ export const createPermissionRegistryPrivateRepository = (
   transaction: RequestDatabaseTransaction,
 ): PermissionRegistryPrivateRepository => {
   const repository: PermissionRegistryPrivateRepository = {
-    async lookup(commandCandidate: PermissionCatalogueLookupCommand) {
-      const command = permissionCatalogueLookupCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
+    async lookupMany(commandCandidates: readonly PermissionCatalogueLookupCommand[]) {
+      const commands = commandCandidates.map((candidate) => {
+        const command = permissionCatalogueLookupCommandSchema.safeParse(candidate);
+        if (!command.success)
+          throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
+        return command.data;
+      });
+      const [first] = commands;
+      if (first === undefined) return [];
+      if (commands.some((command) => command.organizationId !== first.organizationId))
         throw new PermissionRegistryRepositoryError("INVALID_PERMISSION_REGISTRY_COMMAND");
       return execute(async () => {
         const rows = await transaction.query<PermissionEntryRow>`
-          select *
-          from vortex_access.read_available_permission(
-            ${command.data.organizationId}::uuid,
-            ${command.data.applicationRootId ?? null}::uuid,
-            ${command.data.ownerKind}::text,
-            ${command.data.ownerId}::uuid,
-            ${command.data.permissionId}::uuid
+          select entry.*
+          from pg_catalog.jsonb_to_recordset(${JSON.stringify(
+            commands.map((command) => ({
+              applicationRootId: command.applicationRootId ?? null,
+              ownerKind: command.ownerKind,
+              ownerId: command.ownerId,
+              permissionId: command.permissionId,
+            })),
+          )}::jsonb) as requested(
+            "applicationRootId" uuid,
+            "ownerKind" text,
+            "ownerId" uuid,
+            "permissionId" uuid
           )
+          cross join lateral vortex_access.read_available_permission(
+            ${first.organizationId}::uuid,
+            requested."applicationRootId",
+            requested."ownerKind",
+            requested."ownerId",
+            requested."permissionId"
+          ) as entry
         `;
-        if (rows.length === 0) return { outcome: "unavailable" as const };
-        return parseEntry(requireOne(rows));
+        return rows.map((row) => parseEntry(row));
       });
     },
 

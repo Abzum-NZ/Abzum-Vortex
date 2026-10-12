@@ -52,11 +52,6 @@ export {
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision-access";
 export {
-  runOrganizationRecordAccessOperation,
-  type FixedOrganizationRecordAccessAdapter,
-  type OrganizationRecordAccessOperationResult,
-} from "./organization-record-access-operation";
-export {
   createOrganizationDirectRecordShareService,
   type FixedOrganizationDirectRecordShareAdapter,
   type OrganizationDirectRecordShareDependencies,

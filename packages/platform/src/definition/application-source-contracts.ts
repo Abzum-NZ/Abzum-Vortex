@@ -193,8 +193,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
   ]),
 );
-// Retired page settings (#1011): accepted as opaque, unused JSON so stored authored
-// sources keep their fingerprints and older sources still parse; never compiled.
+// Preserve legacy page settings when parsing authored source; they are never compiled.
 const retiredSourcePageSettingSchema = jsonValueSchema.optional();
 
 const sourcePageCommon = {

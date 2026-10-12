@@ -14,6 +14,7 @@
     "@js-temporal/polyfill": "catalog:",
     "@supabase/supabase-js": "catalog:",
     "postgres": "catalog:",
+    "re2js": "catalog:",
     "semver": "catalog:",
     "server-only": "0.0.1",
     "shadcn": "4.21.0",
