@@ -130,9 +130,12 @@ REVOKE CREATE ON SCHEMA public FROM vortex_runtime, vortex_request;
 
 -- These extensions were installed by the historical migrations.
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+SET ROLE postgres;
 CREATE EXTENSION IF NOT EXISTS pgmq;
-CREATE EXTENSION IF NOT EXISTS pg_net;
 SELECT pgmq.create('vortex_event_occurrences');
+RESET ROLE;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+ALTER SCHEMA pgmq OWNER TO postgres;
 REVOKE ALL ON SCHEMA pgmq FROM public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 REVOKE ALL ON TABLE pgmq.q_vortex_event_occurrences, pgmq.a_vortex_event_occurrences FROM public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 REVOKE ALL ON SEQUENCE pgmq.q_vortex_event_occurrences_msg_id_seq FROM public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
