@@ -41,8 +41,26 @@ type InstalledPageBundle = Readonly<{
   compositions: ReadonlyMap<string, ResolvedPageComposition>;
 }>;
 
-const installedPageBundleCacheLimit = 64;
-const installedPageBundles = new Map<string, InstalledPageBundle>();
+/** Retained size of the cache, counted as the stored section text each parsed bundle came from. */
+const installedPageBundleCacheBudget = 256 * 1024 * 1024;
+const installedPageBundles = new Map<string, Readonly<{ bundle: InstalledPageBundle; size: number }>>();
+let installedPageBundlesSize = 0;
+
+const retainInstalledPageBundle = (key: string, bundle: InstalledPageBundle, size: number): void => {
+  const previous = installedPageBundles.get(key);
+  if (previous !== undefined) {
+    installedPageBundles.delete(key);
+    installedPageBundlesSize -= previous.size;
+  }
+  if (size > installedPageBundleCacheBudget) return;
+  for (const [oldest, entry] of installedPageBundles) {
+    if (installedPageBundlesSize + size <= installedPageBundleCacheBudget) break;
+    installedPageBundles.delete(oldest);
+    installedPageBundlesSize -= entry.size;
+  }
+  installedPageBundles.set(key, { bundle, size });
+  installedPageBundlesSize += size;
+};
 
 const installedPageBundleKey = (identity: ActiveInstallationBundleState["identity"]): string =>
   JSON.stringify([
@@ -188,16 +206,17 @@ export const createHumanInstalledPageBundleContextLoader = (
       const bundleIndex = state.bundleIndex;
       if (bundleIndex === null) throw new Error("INSTALLED_PAGE_BUNDLE_INDEX_UNAVAILABLE");
       const key = installedPageBundleKey(state.identity);
-      let bundle = installedPageBundles.get(key);
-      if (bundle === undefined) {
-        bundle = bundleFromSections(await repository.readSections(state), state.identity.correlationId);
+      const cached = installedPageBundles.get(key);
+      let bundle: InstalledPageBundle;
+      if (cached === undefined) {
+        const { sections, textLength } = await repository.readSections(state);
+        bundle = bundleFromSections(sections, state.identity.correlationId);
         identityMatchesReleaseSet(state, bundle.releaseSet);
-        if (installedPageBundles.size >= installedPageBundleCacheLimit) {
-          const oldest = installedPageBundles.keys().next().value;
-          if (oldest !== undefined) installedPageBundles.delete(oldest);
-        }
-      } else installedPageBundles.delete(key);
-      installedPageBundles.set(key, bundle);
+        retainInstalledPageBundle(key, bundle, textLength);
+      } else {
+        bundle = cached.bundle;
+        retainInstalledPageBundle(key, bundle, cached.size);
+      }
       const context = assembleHumanInstalledRuntimeContext(
         installation,
         withCorrelation(bundle.releaseSet, state.identity.correlationId),

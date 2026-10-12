@@ -142,8 +142,14 @@ export interface InstallationRuntimeBundleRepository {
   readSections(
     key: InstallationRuntimeBundleKey,
     sections?: readonly InstallationRuntimeBundleSection[],
-  ): Promise<Partial<Record<InstallationRuntimeBundleSection, JsonValue>>>;
+  ): Promise<InstallationRuntimeBundleSections>;
 }
+
+/** The reconstructed sections and the character length of the stored text they were parsed from. */
+export type InstallationRuntimeBundleSections = Readonly<{
+  sections: Partial<Record<InstallationRuntimeBundleSection, JsonValue>>;
+  textLength: number;
+}>;
 
 /** Stores exact-release bundle sections through the verified request transaction. */
 export const createInstallationRuntimeBundleRepository = (
@@ -284,6 +290,7 @@ export const createInstallationRuntimeBundleRepository = (
       const index = await readIndex(key.data);
       const parts = await readPartsWithIndex(key.data, command.data.sections, index);
       const reconstructed: Partial<Record<InstallationRuntimeBundleSection, JsonValue>> = {};
+      let textLength = 0;
       for (const section of command.data.sections) {
         const sectionParts = parts.filter((part) => part.section === section);
         if (
@@ -292,7 +299,9 @@ export const createInstallationRuntimeBundleRepository = (
         )
           throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
         try {
-          const value: unknown = JSON.parse(sectionParts.map((part) => part.content).join(""));
+          const text = sectionParts.map((part) => part.content).join("");
+          textLength += text.length;
+          const value: unknown = JSON.parse(text);
           const parsedValue = jsonValueSchema.safeParse(value);
           if (!parsedValue.success)
             throw unexpectedDefinitionFailure(
@@ -305,7 +314,7 @@ export const createInstallationRuntimeBundleRepository = (
           throw mapFailure(error);
         }
       }
-      return reconstructed;
+      return { sections: reconstructed, textLength };
     },
   });
 };

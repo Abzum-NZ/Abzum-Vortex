@@ -16,13 +16,12 @@ import {
   semanticVersionSchema,
   namespacedKeySchema,
   type ActiveApplicationInstallationEvidence,
-  type InstallationRuntimeBundleSection,
-  type JsonValue,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import {
   createInstallationRuntimeBundleRepository,
+  type InstallationRuntimeBundleSections,
 } from "./installation-runtime-bundle-repository";
 import {
   DefinitionError,
@@ -133,7 +132,7 @@ export interface ActiveInstallationBundleRepository {
   readCurrent(): Promise<ActiveApplicationInstallationEvidence>;
   readSections(
     state: ActiveInstallationBundleState,
-  ): Promise<Readonly<Partial<Record<InstallationRuntimeBundleSection, JsonValue>>>>;
+  ): Promise<InstallationRuntimeBundleSections>;
 }
 
 /** Reads only the active format-2 bundle under the verified HUMAN request transaction. */
