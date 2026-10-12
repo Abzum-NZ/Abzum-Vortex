@@ -24,6 +24,7 @@ declare
   permission_snapshot record;
   pin record;
   locked_binding vortex_module.installation_bindings%rowtype;
+  module_release vortex_definition.releases%rowtype;
   storage_provision record;
   expected_module_root_id uuid;
   expected_binding_revision bigint;
@@ -271,13 +272,17 @@ begin
       and binding.application_root_id = p_application_root_id
       and binding.module_root_id = pin.target_root_id;
 
+    select release.* into strict module_release
+    from vortex_definition.releases as release
+    where release.root_id = locked_binding.module_root_id
+      and release.release_revision = locked_binding.module_release_revision;
+
     if locked_binding.binding_revision is distinct from expected_binding_revision
       or locked_binding.application_release_revision is distinct from p_application_release_revision
       or locked_binding.module_release_revision is distinct from pin.target_release_revision
       or locked_binding.state is distinct from 'provisioned'
-      or locked_binding.content_fingerprint is distinct from pin.dependency_content_fingerprint
-      or locked_binding.resolution_fingerprint is distinct from pin.evidence_fingerprint
-      or locked_binding.generator_contract_version is distinct from '1.0.0' then
+      or module_release.content_fingerprint is distinct from pin.dependency_content_fingerprint
+      or module_release.resolution_fingerprint is distinct from pin.evidence_fingerprint then
       raise exception using errcode = '40001',
         message = 'Application installation bindings changed or are incomplete';
     end if;
