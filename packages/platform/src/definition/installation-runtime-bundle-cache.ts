@@ -23,13 +23,6 @@ interface CacheState {
   readonly entries: Map<string, CacheEntry>;
 }
 
-export interface InstallationRuntimeBundleCacheStatus {
-  readonly maximumBytes: number;
-  readonly chargedBytes: number;
-  readonly entryCount: number;
-  readonly sharedTierDisabled: true;
-}
-
 const isCacheState = (value: unknown): value is CacheState => {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Partial<CacheState>;
@@ -233,15 +226,3 @@ export const configureInstallationRuntimeBundleCache = (maximumBytes: unknown): 
     if (!removeLeastRecentlyUsed(state)) break;
   }
 };
-
-/** Reports content-free accounting for the single process-wide cache. */
-export const readInstallationRuntimeBundleCacheStatus =
-  (): InstallationRuntimeBundleCacheStatus => {
-    const state = cacheState();
-    return Object.freeze({
-      maximumBytes: state.maximumBytes,
-      chargedBytes: state.chargedBytes,
-      entryCount: state.entries.size,
-      sharedTierDisabled: true,
-    });
-  };

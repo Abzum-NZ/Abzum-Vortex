@@ -12,6 +12,7 @@ import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { applicationPageAddressPath } from "./address-paths";
 import { humanOrganizationRequestDependencies, humanOrganizationRequestsFor } from "./server-composition";
+import { mapWebError } from "./web-error-mapper";
 
 type ApplicationSearchView =
   | Readonly<{ kind: "disabled" }>
@@ -163,7 +164,11 @@ export const loadApplicationSearch = async (
     }
     return { kind: "available", expression: expression!, results: results.slice(0, 50), more: results.length > 50 };
   } catch (error) {
-    console.error("Application search failed", error);
-    return unavailable;
+    return mapWebError(error, {
+      route: "application-search",
+      operation: "search",
+      code: "APPLICATION_SEARCH_FAILED",
+      fallback: unavailable,
+    });
   }
 };
