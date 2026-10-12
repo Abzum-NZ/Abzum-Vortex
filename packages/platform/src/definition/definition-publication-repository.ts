@@ -547,6 +547,36 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     return release;
   }
 
+  /** One query for several exact releases; the result lines up with the requested locators. */
+  async readModuleReleases(
+    organizationId: typeof this.context.organizationId,
+    locators: Parameters<DefinitionPublicationReader["readModuleReleases"]>[1],
+  ): Promise<(ResolvableModuleRelease | undefined)[]> {
+    if (locators.length === 0) return [];
+    const rows = await this.transaction.query`
+      select vortex_definition.read_module_release(
+        (requested.value ->> 'rootId')::uuid,
+        (requested.value ->> 'releaseRevision')::bigint
+      ) as module_release
+      from pg_catalog.jsonb_array_elements(${JSON.stringify(locators)}::text::jsonb)
+        with ordinality as requested(value, ordinality)
+      order by requested.ordinality
+    `;
+    if (rows.length !== locators.length)
+      return invalidStorage("readModuleReleases found inconsistent stored evidence");
+    return rows.map((raw) => {
+      const row = moduleReleaseRowSchema.safeParse(raw);
+      if (!row.success) return invalidStorage(row.error);
+      if (row.data.module_release === null) return undefined;
+      const parsed = rawModuleReleaseSchema.safeParse(row.data.module_release);
+      if (!parsed.success) return invalidStorage(parsed.error);
+      const release = this.materializeModuleRelease(parsed.data);
+      if (release !== undefined && release.organizationId !== organizationId)
+        return invalidStorage("readModuleReleases found inconsistent stored evidence");
+      return release;
+    });
+  }
+
   /**
    * Returns the current Application release: the ordinary candidate reader has read and
    * checked it, and it is the only release page adoption compares against.
