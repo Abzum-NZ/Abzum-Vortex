@@ -101,27 +101,27 @@ BEGIN
 END
 $roles$;
 
--- A role creator receives ADMIN separately on PostgreSQL 17.
 -- Explicit SET grants preserve the live runtime and migration owner graph.
-GRANT vortex_access_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_activity_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_connection_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_context_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_definition_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_event_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_file_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_identity_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_invalidation_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_module_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_operations_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_page_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_record_adapter TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_record_inventory TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_record_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_request TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_runtime TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_search_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
-GRANT vortex_workflow_owner TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET TRUE;
+-- PostgreSQL 17 rejects granting ADMIN back to the role that granted membership.
+GRANT vortex_access_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_activity_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_connection_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_context_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_definition_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_event_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_file_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_identity_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_invalidation_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_module_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_operations_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_page_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_record_adapter TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_record_inventory TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_record_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_request TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_runtime TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_search_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+GRANT vortex_workflow_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
 GRANT vortex_request TO vortex_runtime WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
 
 REVOKE vortex_request FROM anon, authenticated, service_role;
@@ -163,4 +163,5 @@ SET ROLE vortex_record_owner; ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIO
 SET ROLE vortex_search_owner; ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC; RESET ROLE;
 SET ROLE vortex_workflow_owner; ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC; RESET ROLE;
 
+GRANT USAGE ON SCHEMA extensions TO vortex_record_owner, vortex_module_owner;
 GRANT EXECUTE ON FUNCTION extensions.digest(bytea, text) TO vortex_module_owner;

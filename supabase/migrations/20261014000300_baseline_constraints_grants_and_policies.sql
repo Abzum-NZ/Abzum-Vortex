@@ -18,6 +18,9 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+-- Primary keys create indexes, so the migration role needs CREATE until replay ends.
+GRANT CREATE ON SCHEMA vortex_definition TO postgres;
+
 SET default_tablespace = '';
 
 --
@@ -5227,7 +5230,9 @@ ALTER TABLE vortex_workflow.protected_workflow_runs ENABLE ROW LEVEL SECURITY;
 -- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: record_data; Owner: vortex_record_owner
 --
 
+SET ROLE vortex_record_owner;
 ALTER DEFAULT PRIVILEGES FOR ROLE vortex_record_owner IN SCHEMA record_data GRANT SELECT,UPDATE ON TABLES TO postgres;
+RESET ROLE;
 
 
 --

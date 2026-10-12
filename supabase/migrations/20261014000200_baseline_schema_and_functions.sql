@@ -25,7 +25,6 @@ SET row_security = off;
 CREATE SCHEMA record_data;
 
 
-ALTER SCHEMA record_data OWNER TO vortex_record_owner;
 
 --
 -- Name: vortex_access; Type: SCHEMA; Schema: -; Owner: postgres
@@ -157,7 +156,6 @@ COMMENT ON SCHEMA vortex_invalidation IS 'Private content-free invalidation chan
 CREATE SCHEMA vortex_module;
 
 
-ALTER SCHEMA vortex_module OWNER TO vortex_module_owner;
 
 --
 -- Name: vortex_operations; Type: SCHEMA; Schema: -; Owner: postgres
@@ -184,7 +182,6 @@ ALTER SCHEMA vortex_page OWNER TO postgres;
 CREATE SCHEMA vortex_record;
 
 
-ALTER SCHEMA vortex_record OWNER TO vortex_record_owner;
 
 --
 -- Name: vortex_search; Type: SCHEMA; Schema: -; Owner: postgres
@@ -203,6 +200,22 @@ CREATE SCHEMA vortex_workflow;
 
 
 ALTER SCHEMA vortex_workflow OWNER TO postgres;
+
+-- Schema privileges must precede object ownership transfers.
+GRANT ALL ON SCHEMA vortex_access TO vortex_access_owner;
+GRANT ALL ON SCHEMA vortex_activity TO vortex_activity_owner;
+GRANT ALL ON SCHEMA vortex_connection TO vortex_connection_owner;
+GRANT ALL ON SCHEMA vortex_context TO vortex_context_owner;
+GRANT ALL ON SCHEMA vortex_definition TO vortex_definition_owner;
+GRANT ALL ON SCHEMA vortex_event TO vortex_event_owner;
+GRANT ALL ON SCHEMA vortex_file TO vortex_file_owner;
+GRANT ALL ON SCHEMA vortex_identity TO vortex_identity_owner;
+GRANT ALL ON SCHEMA vortex_invalidation TO vortex_invalidation_owner;
+GRANT ALL ON SCHEMA vortex_operations TO vortex_operations_owner;
+GRANT ALL ON SCHEMA vortex_page TO vortex_page_owner;
+GRANT ALL ON SCHEMA vortex_record TO vortex_record_adapter;
+GRANT ALL ON SCHEMA vortex_search TO vortex_search_owner;
+GRANT ALL ON SCHEMA vortex_workflow TO vortex_workflow_owner;
 
 --
 -- Name: accept_organization_invitation(text, uuid, text, text, uuid); Type: FUNCTION; Schema: vortex_access; Owner: postgres
@@ -11877,7 +11890,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.evaluate_organization_permission_eligibility(p_declaration jsonb) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION evaluate_organization_permission_eligibility(p_declaration jsonb); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -12359,7 +12371,6 @@ end;
 $function$;
 
 
-ALTER FUNCTION vortex_access.evaluate_organization_record_permission_availability(p_declaration jsonb) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION evaluate_organization_record_permission_availability(p_declaration jsonb); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -17688,7 +17699,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.list_organization_permissions_for_administration(p_after_application_root_id uuid, p_after_owner_kind text, p_after_owner_id uuid, p_after_permission_id uuid, p_page_size integer) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION list_organization_permissions_for_administration(p_after_application_root_id uuid, p_after_owner_kind text, p_after_owner_id uuid, p_after_permission_id uuid, p_page_size integer); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -17802,7 +17812,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.list_organization_permissions_projection(p_record_id uuid, p_page_size integer) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION list_organization_permissions_projection(p_record_id uuid, p_page_size integer); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -19379,7 +19388,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.organization_account_has_current_application_access_internal(p_organization_id uuid, p_organization_account_id uuid, p_application_root_id uuid) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION organization_account_has_current_application_access_internal(p_organization_id uuid, p_organization_account_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -19744,7 +19752,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.organization_groups_administration_scope() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION organization_groups_administration_scope(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -20036,7 +20043,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.organization_permissions_administration_scope() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION organization_permissions_administration_scope(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -22671,7 +22677,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.protect_platform_permission_declarations() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION protect_platform_permission_declarations(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -23223,7 +23228,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_access.read_application_permission_snapshot(p_organization_id uuid, p_application_root_id uuid) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION read_application_permission_snapshot(p_organization_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -23385,7 +23389,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_access.read_available_permission(p_organization_id uuid, p_application_root_id uuid, p_owner_kind text, p_owner_id uuid, p_permission_id uuid) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION read_available_permission(p_organization_id uuid, p_application_root_id uuid, p_owner_kind text, p_owner_id uuid, p_permission_id uuid); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -23443,7 +23446,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.read_capability_reservation_balance(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION read_capability_reservation_balance(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -23609,7 +23611,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.read_current_application_role_ids_for_launcher() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION read_current_application_role_ids_for_launcher(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -24146,7 +24147,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_access.read_guarded_platform_permission_minimum_internal() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION read_guarded_platform_permission_minimum_internal(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -24654,7 +24654,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.read_organization_permission_for_administration(p_application_root_id uuid, p_owner_kind text, p_owner_id uuid, p_permission_id uuid) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION read_organization_permission_for_administration(p_application_root_id uuid, p_owner_kind text, p_owner_id uuid, p_permission_id uuid); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -26068,7 +26067,6 @@ where valid.expected_set_valid
 $function$;
 
 
-ALTER FUNCTION vortex_access.read_platform_permission_declaration_catalogue_internal(p_registration_revision bigint) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION read_platform_permission_declaration_catalogue_internal(p_registration_revision bigint); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -30214,7 +30212,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.resolve_record_field_bounds_internal(p_decision jsonb) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION resolve_record_field_bounds_internal(p_decision jsonb); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -30500,7 +30497,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.resolve_record_read_field_bounds_internal(p_declaration jsonb) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION resolve_record_read_field_bounds_internal(p_declaration jsonb); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -30697,7 +30693,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.resolve_record_read_scan_routes_internal(p_declaration jsonb, p_ownership_mode text) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION resolve_record_read_scan_routes_internal(p_declaration jsonb, p_ownership_mode text); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -34483,7 +34478,6 @@ end;
 $function$;
 
 
-ALTER FUNCTION vortex_access.validate_application_role_template_continuity_evidence() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION validate_application_role_template_continuity_evidence(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -35384,7 +35378,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.validate_organization_role_revision_evidence() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION validate_organization_role_revision_evidence(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -35432,7 +35425,6 @@ end;
 $function$;
 
 
-ALTER FUNCTION vortex_access.validate_permission_continuity_evidence() OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION validate_permission_continuity_evidence(); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -35602,7 +35594,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_access.validation_reference_list(p_list text) OWNER TO vortex_access_owner;
 
 --
 -- Name: FUNCTION validation_reference_list(p_list text); Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -36104,7 +36095,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_activity.read_organization_activity_aggregates(p_occurred_from timestamp with time zone, p_occurred_to timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_correlation_id uuid, p_outcome text, p_source text, p_group_by text) OWNER TO vortex_activity_owner;
 
 --
 -- Name: FUNCTION read_organization_activity_aggregates(p_occurred_from timestamp with time zone, p_occurred_to timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_correlation_id uuid, p_outcome text, p_source text, p_group_by text); Type: COMMENT; Schema: vortex_activity; Owner: vortex_activity_owner
@@ -36307,7 +36297,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_activity.read_organization_activity_page(p_occurred_from timestamp with time zone, p_occurred_to timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_correlation_id uuid, p_outcome text, p_source text, p_page_size integer, p_after_occurred_at timestamp with time zone, p_after_activity_id uuid) OWNER TO vortex_activity_owner;
 
 --
 -- Name: FUNCTION read_organization_activity_page(p_occurred_from timestamp with time zone, p_occurred_to timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_correlation_id uuid, p_outcome text, p_source text, p_page_size integer, p_after_occurred_at timestamp with time zone, p_after_activity_id uuid); Type: COMMENT; Schema: vortex_activity; Owner: vortex_activity_owner
@@ -36583,7 +36572,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.assert_connection_administration_authority(p_context jsonb) OWNER TO vortex_connection_owner;
 
 --
 -- Name: assert_human_administration_request(); Type: FUNCTION; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -36606,7 +36594,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.assert_human_administration_request() OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION assert_human_administration_request(); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -36684,7 +36671,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.grant_connection_application_for_administration(p_connection_instance_id uuid, p_application_root_id uuid, p_administrator_activity_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION grant_connection_application_for_administration(p_connection_instance_id uuid, p_application_root_id uuid, p_administrator_activity_id uuid); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37128,7 +37114,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.reauthorize_connection_instance_for_administration(p_connection_instance_id uuid, p_expected_revision bigint, p_administrator_activity_id uuid, p_destination_fingerprint text, p_token_expires_at timestamp with time zone) OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION reauthorize_connection_instance_for_administration(p_connection_instance_id uuid, p_expected_revision bigint, p_administrator_activity_id uuid, p_destination_fingerprint text, p_token_expires_at timestamp with time zone); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37227,7 +37212,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.reauthorize_connection_instance_internal(p_connection_instance_id uuid, p_expected_revision bigint, p_administrator_activity_id uuid, p_destination_fingerprint text, p_token_expires_at timestamp with time zone) OWNER TO vortex_connection_owner;
 
 --
 -- Name: record_connection_health_check_for_administration(uuid, bigint, text, uuid); Type: FUNCTION; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37258,7 +37242,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.record_connection_health_check_for_administration(p_connection_instance_id uuid, p_expected_revision bigint, p_new_health_outcome text, p_administrator_activity_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION record_connection_health_check_for_administration(p_connection_instance_id uuid, p_expected_revision bigint, p_new_health_outcome text, p_administrator_activity_id uuid); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37364,7 +37347,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.record_connection_health_check_internal(p_connection_instance_id uuid, p_expected_revision bigint, p_new_health_outcome text, p_administrator_activity_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: register_connection_instance_for_administration(uuid, uuid, text, text, text, uuid, timestamp with time zone); Type: FUNCTION; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37404,7 +37386,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.register_connection_instance_for_administration(p_connection_instance_id uuid, p_connection_type_id uuid, p_connection_type_version text, p_destination_key text, p_destination_fingerprint text, p_administrator_activity_id uuid, p_token_expires_at timestamp with time zone) OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION register_connection_instance_for_administration(p_connection_instance_id uuid, p_connection_type_id uuid, p_connection_type_version text, p_destination_key text, p_destination_fingerprint text, p_administrator_activity_id uuid, p_token_expires_at timestamp with time zone); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37488,7 +37469,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.register_connection_instance_internal(p_connection_instance_id uuid, p_organization_id uuid, p_connection_type_id uuid, p_connection_type_version text, p_destination_key text, p_destination_fingerprint text, p_administrator_activity_id uuid, p_token_expires_at timestamp with time zone) OWNER TO vortex_connection_owner;
 
 --
 -- Name: resolve_connection_instance_readiness(uuid, uuid, uuid, text, bigint, text); Type: FUNCTION; Schema: vortex_connection; Owner: postgres
@@ -37706,7 +37686,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.revoke_connection_application_for_administration(p_connection_instance_id uuid, p_application_root_id uuid, p_administrator_activity_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION revoke_connection_application_for_administration(p_connection_instance_id uuid, p_application_root_id uuid, p_administrator_activity_id uuid); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37788,7 +37767,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.revoke_connection_application_internal(p_connection_instance_id uuid, p_application_root_id uuid, p_administrator_activity_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: revoke_connection_instance_for_administration(uuid, bigint, uuid); Type: FUNCTION; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37817,7 +37795,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.revoke_connection_instance_for_administration(p_connection_instance_id uuid, p_expected_revision bigint, p_administrator_activity_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION revoke_connection_instance_for_administration(p_connection_instance_id uuid, p_expected_revision bigint, p_administrator_activity_id uuid); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37905,7 +37882,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_connection.revoke_connection_instance_internal(p_connection_instance_id uuid, p_expected_revision bigint, p_administrator_activity_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: validated_administration_context(uuid); Type: FUNCTION; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -37939,7 +37915,6 @@ end;
 $function$;
 
 
-ALTER FUNCTION vortex_connection.validated_administration_context(p_organization_id uuid) OWNER TO vortex_connection_owner;
 
 --
 -- Name: FUNCTION validated_administration_context(p_organization_id uuid); Type: COMMENT; Schema: vortex_connection; Owner: vortex_connection_owner
@@ -39716,7 +39691,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_definition.application_role_identity_is_exact_for_human_request_internal(p_application_root_id uuid, p_source_role_id uuid) OWNER TO vortex_definition_owner;
 
 --
 -- Name: FUNCTION application_role_identity_is_exact_for_human_request_internal(p_application_root_id uuid, p_source_role_id uuid); Type: COMMENT; Schema: vortex_definition; Owner: vortex_definition_owner
@@ -39749,7 +39723,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_definition.application_root_exists_for_organization_internal(p_organization_id uuid, p_application_root_id uuid) OWNER TO vortex_definition_owner;
 
 --
 -- Name: FUNCTION application_root_exists_for_organization_internal(p_organization_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_definition; Owner: vortex_definition_owner
@@ -40462,7 +40435,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_definition.read_application_release_adoption_release_set(p_application_root_id uuid, p_application_release_revision bigint) OWNER TO vortex_definition_owner;
 
 --
 -- Name: FUNCTION read_application_release_adoption_release_set(p_application_root_id uuid, p_application_release_revision bigint); Type: COMMENT; Schema: vortex_definition; Owner: vortex_definition_owner
@@ -40566,7 +40538,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_definition.read_application_release_adoption_target(p_application_root_id uuid) OWNER TO vortex_definition_owner;
 
 --
 -- Name: FUNCTION read_application_release_adoption_target(p_application_root_id uuid); Type: COMMENT; Schema: vortex_definition; Owner: vortex_definition_owner
@@ -42968,7 +42939,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_definition.validated_builder_draft_write_context_internal(p_root_id uuid) OWNER TO vortex_definition_owner;
 
 --
 -- Name: FUNCTION validated_builder_draft_write_context_internal(p_root_id uuid); Type: COMMENT; Schema: vortex_definition; Owner: vortex_definition_owner
@@ -43140,7 +43110,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.acknowledge_consumer_occurrence(p_consumer_key text, p_ack_cursor uuid, p_occurrence_id uuid) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION acknowledge_consumer_occurrence(p_consumer_key text, p_ack_cursor uuid, p_occurrence_id uuid); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -43195,7 +43164,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.append_detached_offboarding_reassignment_internal(p_storage_contract_id uuid, p_record_id uuid, p_record_type_id uuid, p_occurrence_id uuid) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION append_detached_offboarding_reassignment_internal(p_storage_contract_id uuid, p_record_id uuid, p_record_type_id uuid, p_occurrence_id uuid); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -43227,7 +43195,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.append_record_occurrences(p_storage_contract_id uuid, p_record_id uuid, p_occurrences jsonb) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION append_record_occurrences(p_storage_contract_id uuid, p_record_id uuid, p_occurrences jsonb); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -43948,7 +43915,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.claim_consumer_occurrences(p_consumer_key text, p_batch_size integer, p_lease_seconds integer) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION claim_consumer_occurrences(p_consumer_key text, p_batch_size integer, p_lease_seconds integer); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -44008,7 +43974,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_event.event_dispatch_backlog_status() OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION event_dispatch_backlog_status(); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -44076,7 +44041,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.list_terminally_failed_consumer_occurrences(p_consumer_key text, p_limit integer) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION list_terminally_failed_consumer_occurrences(p_consumer_key text, p_limit integer); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -44191,7 +44155,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.record_consumer_occurrence_delivery_failure(p_consumer_key text, p_occurrence_id uuid, p_claim_cursor uuid, p_failure_code text, p_max_attempts integer, p_retry_backoff_seconds integer) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION record_consumer_occurrence_delivery_failure(p_consumer_key text, p_occurrence_id uuid, p_claim_cursor uuid, p_failure_code text, p_max_attempts integer, p_retry_backoff_seconds integer); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -44295,7 +44258,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.recover_consumer_occurrence_claim(p_consumer_key text, p_occurrence_id uuid, p_expected_failure_count integer, p_system_actor_id uuid) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION recover_consumer_occurrence_claim(p_consumer_key text, p_occurrence_id uuid, p_expected_failure_count integer, p_system_actor_id uuid); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -44375,7 +44337,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_event.renew_consumer_occurrence_lease(p_consumer_key text, p_ack_cursor uuid, p_occurrence_id uuid, p_lease_seconds integer) OWNER TO vortex_event_owner;
 
 --
 -- Name: FUNCTION renew_consumer_occurrence_lease(p_consumer_key text, p_ack_cursor uuid, p_occurrence_id uuid, p_lease_seconds integer); Type: COMMENT; Schema: vortex_event; Owner: vortex_event_owner
@@ -44595,7 +44556,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.activate_uploaded_file(p_file_id uuid, p_expected_revision bigint, p_owner_record_type_id uuid, p_owner_record_id uuid, p_owner_field_id uuid, p_attachment_reference_id uuid, p_replacing_file_id uuid) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION activate_uploaded_file(p_file_id uuid, p_expected_revision bigint, p_owner_record_type_id uuid, p_owner_record_id uuid, p_owner_field_id uuid, p_attachment_reference_id uuid, p_replacing_file_id uuid); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -44822,7 +44782,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.claim_file_download_grant(p_one_time_id uuid) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION claim_file_download_grant(p_one_time_id uuid); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -44908,7 +44867,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.claim_file_upload_grant(p_one_time_id uuid) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION claim_file_upload_grant(p_one_time_id uuid); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -45169,7 +45127,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.read_file_for_download(p_file_id uuid) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION read_file_for_download(p_file_id uuid); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -45226,7 +45183,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.read_file_upload(p_file_id uuid) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION read_file_upload(p_file_id uuid); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -45265,7 +45221,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.read_versioned_file_metadata(p_file_id uuid) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION read_versioned_file_metadata(p_file_id uuid); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -45358,7 +45313,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.record_file_download_grant(p_one_time_id uuid, p_file_id uuid, p_owner_record_type_id uuid, p_owner_record_id uuid, p_owner_field_id uuid, p_actor jsonb, p_purpose text, p_correlation_id uuid, p_expires_at timestamp with time zone) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION record_file_download_grant(p_one_time_id uuid, p_file_id uuid, p_owner_record_type_id uuid, p_owner_record_id uuid, p_owner_field_id uuid, p_actor jsonb, p_purpose text, p_correlation_id uuid, p_expires_at timestamp with time zone); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -45459,7 +45413,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.record_file_upload_outcome(p_file_id uuid, p_expected_revision bigint, p_detected_media_type text, p_size_bytes bigint, p_checksum text, p_scanner_name text, p_scanner_version text, p_scanner_result text) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION record_file_upload_outcome(p_file_id uuid, p_expected_revision bigint, p_detected_media_type text, p_size_bytes bigint, p_checksum text, p_scanner_name text, p_scanner_version text, p_scanner_result text); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -45556,7 +45509,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.renew_file_upload(p_file_id uuid, p_expected_revision bigint, p_previous_one_time_id uuid, p_new_one_time_id uuid, p_policy_fingerprint text, p_grant_expires_at timestamp with time zone) OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION renew_file_upload(p_file_id uuid, p_expected_revision bigint, p_previous_one_time_id uuid, p_new_one_time_id uuid, p_policy_fingerprint text, p_grant_expires_at timestamp with time zone); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -45968,7 +45920,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_file.upload_validated_context() OWNER TO vortex_file_owner;
 
 --
 -- Name: FUNCTION upload_validated_context(); Type: COMMENT; Schema: vortex_file; Owner: vortex_file_owner
@@ -46213,7 +46164,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -46308,7 +46258,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.accept_organization_invitation_with_transition(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION accept_organization_invitation_with_transition(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -47538,7 +47487,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.begin_organization_account_closing(p_organization_account_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION begin_organization_account_closing(p_organization_account_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -47733,7 +47681,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) OWNER TO vortex_identity_owner;
 
 --
 -- Name: change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: vortex_identity; Owner: postgres
@@ -47921,7 +47868,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.close_cluster_identity(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION close_cluster_identity(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -48086,7 +48032,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.create_organization_invitation(p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) OWNER TO vortex_identity_owner;
 
 --
 -- Name: create_tenant_organization(uuid, text, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text); Type: FUNCTION; Schema: vortex_identity; Owner: postgres
@@ -48451,7 +48396,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.ensure_identity_projection(p_identity_id uuid, p_correlation_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: finalize_organization_account_deletion(uuid, bigint); Type: FUNCTION; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -48507,7 +48451,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.finalize_organization_account_deletion(p_organization_account_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION finalize_organization_account_deletion(p_organization_account_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -48843,7 +48786,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.has_active_identity_organization_account_internal(p_identity_id uuid, p_organization_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION has_active_identity_organization_account_internal(p_identity_id uuid, p_organization_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -48872,7 +48814,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.identity_is_disabled(p_identity_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION identity_is_disabled(p_identity_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -48968,7 +48909,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.initialize_organization_runtime_settings(p_organization_id uuid, p_language text, p_time_zone text, p_currency text, p_date_format text, p_number_format text) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION initialize_organization_runtime_settings(p_organization_id uuid, p_language text, p_time_zone text, p_currency text, p_date_format text, p_number_format text); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -49012,7 +48952,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.is_active_organization_account_reference_internal(p_tenant_id uuid, p_organization_id uuid, p_organization_account_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid); Type: FUNCTION; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -49111,7 +49050,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.list_organization_account_choices_internal(p_tenant_id uuid, p_organization_id uuid, p_search text, p_page_size integer, p_after_sort_key text, p_after_organization_account_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION list_organization_account_choices_internal(p_tenant_id uuid, p_organization_id uuid, p_search text, p_page_size integer, p_after_sort_key text, p_after_organization_account_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -49169,7 +49107,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.list_organization_accounts(p_identity_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: list_organization_accounts_for_administration_internal(uuid, uuid, integer); Type: FUNCTION; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -49245,7 +49182,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.list_organization_accounts_for_administration_internal(p_organization_id uuid, p_after_organization_account_id uuid, p_page_size integer) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION list_organization_accounts_for_administration_internal(p_organization_id uuid, p_after_organization_account_id uuid, p_page_size integer); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -49308,7 +49244,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.list_organization_accounts_projection_internal(p_organization_id uuid, p_active_members_only boolean) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION list_organization_accounts_projection_internal(p_organization_id uuid, p_active_members_only boolean); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -49399,7 +49334,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.list_organization_invitations_for_administration_internal(p_organization_id uuid, p_after_invitation_id uuid, p_page_size integer) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION list_organization_invitations_for_administration_internal(p_organization_id uuid, p_after_invitation_id uuid, p_page_size integer); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -49444,7 +49378,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.list_organization_invitations_projection_internal(p_organization_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION list_organization_invitations_projection_internal(p_organization_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -50088,7 +50021,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.lock_organization_account_for_deletion_internal(p_organization_account_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION lock_organization_account_for_deletion_internal(p_organization_account_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -50146,7 +50078,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.organization_and_tenant_are_active_internal(p_organization_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION organization_and_tenant_are_active_internal(p_organization_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -50759,7 +50690,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.publish_identity_disablement(p_subject_identity_id uuid, p_actor_identity_id uuid, p_correlation_id uuid, p_published_at timestamp with time zone) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION publish_identity_disablement(p_subject_identity_id uuid, p_actor_identity_id uuid, p_correlation_id uuid, p_published_at timestamp with time zone); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -50787,7 +50717,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.reactivate_cluster_identity(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION reactivate_cluster_identity(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -50815,7 +50744,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.reactivate_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION reactivate_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -51053,7 +50981,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.read_current_organization_runtime_settings_internal(p_organization_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: read_identity_projection(uuid); Type: FUNCTION; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -51090,7 +51017,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.read_identity_projection(p_identity_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION read_identity_projection(p_identity_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -51147,7 +51073,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.read_organization_account_for_administration_internal(p_organization_id uuid, p_organization_account_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION read_organization_account_for_administration_internal(p_organization_id uuid, p_organization_account_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -51211,7 +51136,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.read_organization_invitation_for_administration_internal(p_organization_id uuid, p_invitation_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION read_organization_invitation_for_administration_internal(p_organization_id uuid, p_invitation_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -51530,7 +51454,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.read_organization_time_zone_internal(p_organization_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION read_organization_time_zone_internal(p_organization_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -52399,7 +52322,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.revoke_organization_invitation(p_invitation_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: revoke_tenant_administrator(uuid, text, uuid, uuid, bigint); Type: FUNCTION; Schema: vortex_identity; Owner: postgres
@@ -52851,7 +52773,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.save_organization_runtime_settings_record_internal(p_organization_id uuid, p_expected_revision bigint, p_core_values jsonb, p_extension_values jsonb) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION save_organization_runtime_settings_record_internal(p_organization_id uuid, p_expected_revision bigint, p_core_values jsonb, p_extension_values jsonb); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -52941,7 +52862,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.suspend_cluster_identity(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION suspend_cluster_identity(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -52969,7 +52889,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.suspend_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION suspend_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -53181,7 +53100,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.tenant_administrator_grant_expiry_cap(p_actor_identity_id uuid, p_tenant_id uuid, p_capabilities text[], p_evaluated_at timestamp with time zone) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION tenant_administrator_grant_expiry_cap(p_actor_identity_id uuid, p_tenant_id uuid, p_capabilities text[], p_evaluated_at timestamp with time zone); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -53242,7 +53160,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_identity.tenant_has_permanent_manager(p_tenant_id uuid, p_checked_at timestamp with time zone, p_excluded_assignment_id uuid) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION tenant_has_permanent_manager(p_tenant_id uuid, p_checked_at timestamp with time zone, p_excluded_assignment_id uuid); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -53429,7 +53346,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.update_organization_account_profile_internal(p_organization_id uuid, p_organization_account_id uuid, p_expected_revision bigint, p_display_name text, p_language text, p_time_zone text) OWNER TO vortex_identity_owner;
 
 --
 -- Name: FUNCTION update_organization_account_profile_internal(p_organization_id uuid, p_organization_account_id uuid, p_expected_revision bigint, p_display_name text, p_language text, p_time_zone text); Type: COMMENT; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -53508,7 +53424,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.validate_organization_lifecycle() OWNER TO vortex_identity_owner;
 
 --
 -- Name: validate_tenant_lifecycle(); Type: FUNCTION; Schema: vortex_identity; Owner: vortex_identity_owner
@@ -53549,7 +53464,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_identity.validate_tenant_lifecycle() OWNER TO vortex_identity_owner;
 
 --
 -- Name: validated_human_account_context(); Type: FUNCTION; Schema: vortex_identity; Owner: postgres
@@ -53627,7 +53541,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_invalidation.application_is_installed(p_organization_id uuid, p_application_root_id uuid) OWNER TO vortex_invalidation_owner;
 
 --
 -- Name: FUNCTION application_is_installed(p_organization_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_invalidation; Owner: vortex_invalidation_owner
@@ -54171,7 +54084,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.activate_application_installation(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION activate_application_installation(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -54504,7 +54416,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.assert_prepared_installation_runtime_bundle(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb, p_pin_fingerprint text) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION assert_prepared_installation_runtime_bundle(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb, p_pin_fingerprint text); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -54561,7 +54472,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.assert_preview_installation_authority_internal() OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION assert_preview_installation_authority_internal(); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -54867,7 +54777,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.count_storage_adoption_dependents_internal(p_module_root_id uuid, p_storage_contract_id uuid, p_dependent_release_revisions bigint[]) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION count_storage_adoption_dependents_internal(p_module_root_id uuid, p_storage_contract_id uuid, p_dependent_release_revisions bigint[]); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -55096,7 +55005,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.create_preview_installation(p_application_root_id uuid, p_expected_draft_revision bigint, p_candidate jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION create_preview_installation(p_application_root_id uuid, p_expected_draft_revision bigint, p_candidate jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -55351,7 +55259,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.detach_application_installation(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION detach_application_installation(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -55406,7 +55313,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.discard_preview_installation(p_preview_installation_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION discard_preview_installation(p_preview_installation_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -55670,7 +55576,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.drain_installation(p_activity_id uuid, p_root_id uuid, p_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION drain_installation(p_activity_id uuid, p_root_id uuid, p_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -55722,7 +55627,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.expire_preview_installations(p_limit integer) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION expire_preview_installations(p_limit integer); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -55757,7 +55661,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_module.has_active_application_release_binding_internal(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION has_active_application_release_binding_internal(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -56100,7 +56003,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.lock_active_installation_runtime_mapping_internal(p_expected_identity jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION lock_active_installation_runtime_mapping_internal(p_expected_identity jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -56353,7 +56255,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.lock_prepared_installation_runtime_mapping_internal(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION lock_prepared_installation_runtime_mapping_internal(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -56418,7 +56319,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.lock_storage_adoption_binding_internal(p_organization_id uuid, p_application_root_id uuid, p_module_root_id uuid, p_storage_contract_id uuid, p_source_release_revision bigint) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION lock_storage_adoption_binding_internal(p_organization_id uuid, p_application_root_id uuid, p_module_root_id uuid, p_storage_contract_id uuid, p_source_release_revision bigint); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -56674,7 +56574,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.provision_module_contribution_storage(p_application_root_id uuid, p_application_release_revision bigint, p_module_root_id uuid, p_module_release_revision bigint, p_expected_binding_revision bigint, p_contribution_mode text, p_contributions jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION provision_module_contribution_storage(p_application_root_id uuid, p_application_release_revision bigint, p_module_root_id uuid, p_module_release_revision bigint, p_expected_binding_revision bigint, p_contribution_mode text, p_contributions jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -56912,7 +56811,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.provision_module_installation_storage(p_application_root_id uuid, p_application_release_revision bigint, p_module_root_id uuid, p_module_release_revision bigint, p_expected_binding_revision bigint) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION provision_module_installation_storage(p_application_root_id uuid, p_application_release_revision bigint, p_module_root_id uuid, p_module_release_revision bigint, p_expected_binding_revision bigint); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -57166,7 +57064,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_active_installation_bundle_identity() OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_active_installation_bundle_identity(); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -57296,7 +57193,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_active_installation_for_scope_internal(p_organization_id uuid, p_application_root_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_active_installation_for_scope_internal(p_organization_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -57684,7 +57580,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_active_shared_record_consumers_internal(p_module_root_id uuid, p_record_type_id uuid, p_storage_contract_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_active_shared_record_consumers_internal(p_module_root_id uuid, p_record_type_id uuid, p_storage_contract_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -57765,7 +57660,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.read_application_installation_bindings(p_application_root_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_application_installation_bindings(p_application_root_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -57797,7 +57691,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.read_current_active_installation() OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_current_active_installation(); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58020,7 +57913,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_current_detached_installation_for_transfer_internal() OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_current_detached_installation_for_transfer_internal(); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58083,7 +57975,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.read_current_offboarding_inventory_installation_internal() OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_current_offboarding_inventory_installation_internal(); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58158,7 +58049,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_installation_runtime_bundle_index(p_application_root_id uuid, p_application_release_revision bigint, p_bundle_format_version integer) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_installation_runtime_bundle_index(p_application_root_id uuid, p_application_release_revision bigint, p_bundle_format_version integer); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58268,7 +58158,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_installation_runtime_bundle_parts(p_application_root_id uuid, p_application_release_revision bigint, p_bundle_format_version integer, p_sections jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_installation_runtime_bundle_parts(p_application_root_id uuid, p_application_release_revision bigint, p_bundle_format_version integer, p_sections jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58331,7 +58220,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.read_lifecycle_activation_targets_internal(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_lifecycle_activation_targets_internal(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58380,7 +58268,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.read_offboarding_inventory_contract_applications_internal(p_storage_contract_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_offboarding_inventory_contract_applications_internal(p_storage_contract_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58470,7 +58357,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_prepared_installation_runtime_source(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_prepared_installation_runtime_source(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58529,7 +58415,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_preview_installation(p_preview_installation_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_preview_installation(p_preview_installation_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -58604,7 +58489,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_preview_record_installation_internal(p_preview_installation_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_preview_record_installation_internal(p_preview_installation_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -59082,7 +58966,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.read_provisioned_lifecycle_setup_targets_internal(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION read_provisioned_lifecycle_setup_targets_internal(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -59158,7 +59041,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.record_application_installation_outcome(p_activity_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_state text) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION record_application_installation_outcome(p_activity_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_state text); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -59254,7 +59136,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.record_lifecycle_provisioned_setup_target_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_binding_revision bigint, p_storage_contract_id uuid, p_workflow_id uuid, p_expected_workflow_revision bigint) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION record_lifecycle_provisioned_setup_target_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_binding_revision bigint, p_storage_contract_id uuid, p_workflow_id uuid, p_expected_workflow_revision bigint); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -59298,7 +59179,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.record_lifecycle_target_is_installed_internal(p_organization_id uuid, p_application_root_id uuid, p_storage_contract_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION record_lifecycle_target_is_installed_internal(p_organization_id uuid, p_application_root_id uuid, p_storage_contract_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -59379,7 +59259,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.record_lifecycle_workflow_is_installed_internal(p_organization_id uuid, p_application_root_id uuid, p_storage_contract_id uuid, p_workflow_id uuid, p_expected_workflow_revision bigint) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION record_lifecycle_workflow_is_installed_internal(p_organization_id uuid, p_application_root_id uuid, p_storage_contract_id uuid, p_workflow_id uuid, p_expected_workflow_revision bigint); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -59600,7 +59479,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.remove_abandoned_runtime_bundles_internal(p_limit integer) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION remove_abandoned_runtime_bundles_internal(p_limit integer); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -59705,7 +59583,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.remove_installation_runtime_bundles_internal(p_application_root_id uuid) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION remove_installation_runtime_bundles_internal(p_application_root_id uuid); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -60116,7 +59993,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.repair_active_installation_runtime_bundle_internal(p_expected_identity jsonb, p_parts jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION repair_active_installation_runtime_bundle_internal(p_expected_identity jsonb, p_parts jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -60184,7 +60060,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.resolve_addressed_active_application_identity(p_application_key text) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION resolve_addressed_active_application_identity(p_application_key text); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -60235,7 +60110,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_module.storage_conversion_is_installed_internal(p_organization_id uuid, p_application_root_id uuid, p_storage_contract_id uuid, p_module_root_id uuid, p_module_release_revision bigint) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION storage_conversion_is_installed_internal(p_organization_id uuid, p_application_root_id uuid, p_storage_contract_id uuid, p_module_root_id uuid, p_module_release_revision bigint); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -60737,7 +60611,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_module.write_installation_runtime_bundle_internal(p_application_root_id uuid, p_application_release_revision bigint, p_bundle_format_version integer, p_pin_fingerprint text, p_parts jsonb) OWNER TO vortex_module_owner;
 
 --
 -- Name: FUNCTION write_installation_runtime_bundle_internal(p_application_root_id uuid, p_application_release_revision bigint, p_bundle_format_version integer, p_pin_fingerprint text, p_parts jsonb); Type: COMMENT; Schema: vortex_module; Owner: vortex_module_owner
@@ -60846,7 +60719,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_operations.read_open_alert_signals(p_limit integer) OWNER TO vortex_operations_owner;
 
 --
 -- Name: FUNCTION read_open_alert_signals(p_limit integer); Type: COMMENT; Schema: vortex_operations; Owner: vortex_operations_owner
@@ -60935,7 +60807,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_operations.record_alert_signal(p_code text, p_severity text, p_affected_service text, p_deduplication_key text, p_owning_role text, p_runbook_reference text) OWNER TO vortex_operations_owner;
 
 --
 -- Name: FUNCTION record_alert_signal(p_code text, p_severity text, p_affected_service text, p_deduplication_key text, p_owning_role text, p_runbook_reference text); Type: COMMENT; Schema: vortex_operations; Owner: vortex_operations_owner
@@ -61004,7 +60875,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_page.abandon_private_form_draft(p_draft_id uuid, p_expected_revision bigint) OWNER TO vortex_page_owner;
 
 --
 -- Name: FUNCTION abandon_private_form_draft(p_draft_id uuid, p_expected_revision bigint); Type: COMMENT; Schema: vortex_page; Owner: vortex_page_owner
@@ -61110,7 +60980,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_page.create_private_form_draft(p_form_id uuid, p_flow_id uuid, p_node_id uuid, p_subject_record_id uuid, p_field_values jsonb, p_validation_state jsonb) OWNER TO vortex_page_owner;
 
 --
 -- Name: FUNCTION create_private_form_draft(p_form_id uuid, p_flow_id uuid, p_node_id uuid, p_subject_record_id uuid, p_field_values jsonb, p_validation_state jsonb); Type: COMMENT; Schema: vortex_page; Owner: vortex_page_owner
@@ -61152,7 +61021,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_page.expire_private_form_drafts(p_limit integer) OWNER TO vortex_page_owner;
 
 --
 -- Name: FUNCTION expire_private_form_drafts(p_limit integer); Type: COMMENT; Schema: vortex_page; Owner: vortex_page_owner
@@ -61218,7 +61086,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_page.private_form_draft_context_internal() OWNER TO vortex_page_owner;
 
 --
 -- Name: FUNCTION private_form_draft_context_internal(); Type: COMMENT; Schema: vortex_page; Owner: vortex_page_owner
@@ -61574,7 +61441,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_page.read_private_form_draft(p_form_id uuid, p_flow_id uuid, p_node_id uuid, p_subject_record_id uuid) OWNER TO vortex_page_owner;
 
 --
 -- Name: FUNCTION read_private_form_draft(p_form_id uuid, p_flow_id uuid, p_node_id uuid, p_subject_record_id uuid); Type: COMMENT; Schema: vortex_page; Owner: vortex_page_owner
@@ -61673,7 +61539,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_page.update_private_form_draft(p_draft_id uuid, p_expected_revision bigint, p_form_id uuid, p_flow_id uuid, p_node_id uuid, p_subject_record_id uuid, p_field_values jsonb, p_validation_state jsonb) OWNER TO vortex_page_owner;
 
 --
 -- Name: FUNCTION update_private_form_draft(p_draft_id uuid, p_expected_revision bigint, p_form_id uuid, p_flow_id uuid, p_node_id uuid, p_subject_record_id uuid, p_field_values jsonb, p_validation_state jsonb); Type: COMMENT; Schema: vortex_page; Owner: vortex_page_owner
@@ -61745,7 +61610,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.account_retains_owned_records_internal(p_organization_account_id uuid) OWNER TO vortex_record_inventory;
 
 --
 -- Name: FUNCTION account_retains_owned_records_internal(p_organization_account_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_inventory
@@ -61807,7 +61671,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.acquire_relationship_edge_locks_internal(p_identities text[]) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION acquire_relationship_edge_locks_internal(p_identities text[]); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -61994,7 +61857,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.adopt_storage_conversion(p_conversion_contract_id uuid, p_expected_plan_revision bigint, p_application_root_id uuid, p_module_root_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION adopt_storage_conversion(p_conversion_contract_id uuid, p_expected_plan_revision bigint, p_application_root_id uuid, p_module_root_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -62090,7 +61952,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.allocate_preview_reference_number_internal(p_preview_installation_id uuid, p_storage_contract_id uuid, p_field_id uuid, p_settings jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION allocate_preview_reference_number_internal(p_preview_installation_id uuid, p_storage_contract_id uuid, p_field_id uuid, p_settings jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -62153,7 +62014,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.allocate_reference_number_internal(p_organization_id uuid, p_storage_contract_id uuid, p_field_id uuid, p_application_root_id uuid, p_settings jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: allocate_storage_conversion_plan(uuid, bigint); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -62337,7 +62197,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.allocate_storage_conversion_plan(p_conversion_contract_id uuid, p_expected_plan_revision bigint) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION allocate_storage_conversion_plan(p_conversion_contract_id uuid, p_expected_plan_revision bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -62477,7 +62336,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: append_lifecycle_policy_activity_internal(uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: postgres
@@ -62777,7 +62635,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.append_record_lifecycle_effect_internal(p_effect_kind text, p_storage_contract_id uuid, p_record_type_id uuid, p_record_id uuid, p_pre_concurrency_number bigint, p_relationship_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION append_record_lifecycle_effect_internal(p_effect_kind text, p_storage_contract_id uuid, p_record_type_id uuid, p_record_id uuid, p_pre_concurrency_number bigint, p_relationship_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -62829,7 +62686,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.apply_action_record_changes(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid, p_action jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION apply_action_record_changes(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid, p_action jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -62881,7 +62737,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.apply_lifecycle_record_changes(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION apply_lifecycle_record_changes(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -63535,7 +63390,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.apply_lifecycle_record_changes_internal(p_operation text, p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION apply_lifecycle_record_changes_internal(p_operation text, p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -63705,7 +63559,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.apply_named_action_relationship_copies_internal(p_plan jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION apply_named_action_relationship_copies_internal(p_plan jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -65560,7 +65413,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.apply_record_changes(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid, p_action jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION apply_record_changes(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid, p_mutations jsonb, p_activity_id uuid, p_occurrence_id uuid, p_action jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -65677,7 +65529,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.apply_record_lifecycle_generated_values_internal(p_preparation jsonb, p_include_root boolean, p_mutations jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION apply_record_lifecycle_generated_values_internal(p_preparation jsonb, p_include_root boolean, p_mutations jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -65838,7 +65689,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.apply_relationship_total_parent_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_final_values jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION apply_relationship_total_parent_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_final_values jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -65876,7 +65726,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.assert_record_lifecycle_receipt_completed_internal() OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION assert_record_lifecycle_receipt_completed_internal(); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -66426,7 +66275,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.authorize_created_records_for_command_internal(p_creations jsonb, p_created_records jsonb, p_original_context jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION authorize_created_records_for_command_internal(p_creations jsonb, p_created_records jsonb, p_original_context jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -66522,7 +66370,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.authorize_index_status_internal(p_organization_id uuid, p_application_root_id uuid) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION authorize_index_status_internal(p_organization_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -66639,7 +66486,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.authorize_storage_conversion_internal(p_storage_contract_id uuid, p_installed_release_revision bigint) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION authorize_storage_conversion_internal(p_storage_contract_id uuid, p_installed_release_revision bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -66678,7 +66524,6 @@ CREATE FUNCTION vortex_record.base_save_command_fingerprint_internal(p_command_i
 $$;
 
 
-ALTER FUNCTION vortex_record.base_save_command_fingerprint_internal(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: before_save_rules_for_record_type_internal(uuid, bigint, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -66716,7 +66561,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.before_save_rules_for_record_type_internal(p_module_root_id uuid, p_module_release_revision bigint, p_record_type_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION before_save_rules_for_record_type_internal(p_module_root_id uuid, p_module_release_revision bigint, p_record_type_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -66798,7 +66642,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.bump_record_data_version_internal(p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION bump_record_data_version_internal(p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -66937,7 +66780,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.canonical_record_value_matches(p_value jsonb, p_field_type text, p_database_value_type text) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION canonical_record_value_matches(p_value jsonb, p_field_type text, p_database_value_type text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -67183,7 +67025,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.change_record(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_final_values jsonb, p_submitted_field_ids uuid[]) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION change_record(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_final_values jsonb, p_submitted_field_ids uuid[]); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -67454,7 +67295,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.change_record_by_named_action_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_final_values jsonb, p_submitted_field_ids uuid[], p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: change_record_relationship_internal(uuid, uuid, bigint, uuid, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -67593,7 +67433,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.change_record_relationship_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_relationship_id uuid, p_target_value jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION change_record_relationship_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_relationship_id uuid, p_target_value jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -67773,7 +67612,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.claim_command_receipt_internal(p_command_kind text, p_command_id uuid, p_operation text, p_fingerprint text, p_record_type_id uuid, p_record_id uuid, p_identity jsonb, p_details jsonb, p_replay_only boolean) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION claim_command_receipt_internal(p_command_kind text, p_command_id uuid, p_operation text, p_fingerprint text, p_record_type_id uuid, p_record_id uuid, p_identity jsonb, p_details jsonb, p_replay_only boolean); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -67863,7 +67701,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.claim_record_index_build(p_lease_seconds integer) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION claim_record_index_build(p_lease_seconds integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -67922,7 +67759,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.command_receipt_exists_internal(p_command_kind text, p_command_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION command_receipt_exists_internal(p_command_kind text, p_command_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -68580,7 +68416,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.compile_query_filter_internal(p_condition jsonb, p_field_types jsonb, p_field_columns jsonb, p_field_database_types jsonb, p_field_definitions jsonb, p_read_time_expressions jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_parameter_sql_parameter integer, p_parameter_offset integer) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION compile_query_filter_internal(p_condition jsonb, p_field_types jsonb, p_field_columns jsonb, p_field_database_types jsonb, p_field_definitions jsonb, p_read_time_expressions jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_parameter_sql_parameter integer, p_parameter_offset integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -68655,7 +68490,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.complete_command_receipt_internal(p_command_kind text, p_command_id uuid, p_record_id uuid, p_concurrency_number bigint, p_stale_message text) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION complete_command_receipt_internal(p_command_kind text, p_command_id uuid, p_record_id uuid, p_concurrency_number bigint, p_stale_message text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -68684,7 +68518,6 @@ CREATE FUNCTION vortex_record.conversion_semantic_for_fields(p_source_field json
 $$;
 
 
-ALTER FUNCTION vortex_record.conversion_semantic_for_fields(p_source_field jsonb, p_target_field jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION conversion_semantic_for_fields(p_source_field jsonb, p_target_field jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -68722,7 +68555,6 @@ CREATE FUNCTION vortex_record.conversion_semantic_for_types(p_source_database_va
 $$;
 
 
-ALTER FUNCTION vortex_record.conversion_semantic_for_types(p_source_database_value_type text, p_target_database_value_type text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION conversion_semantic_for_types(p_source_database_value_type text, p_target_database_value_type text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -68762,7 +68594,6 @@ CREATE FUNCTION vortex_record.conversion_value_assignment(p_conversion_semantic 
 $$;
 
 
-ALTER FUNCTION vortex_record.conversion_value_assignment(p_conversion_semantic text, p_source_column_token text, p_target_column_token text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION conversion_value_assignment(p_conversion_semantic text, p_source_column_token text, p_target_column_token text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -68999,7 +68830,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.convert_record_storage_batch(p_conversion_contract_id uuid, p_batch_size integer, p_expected_plan_revision bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION convert_record_storage_batch(p_conversion_contract_id uuid, p_batch_size integer, p_expected_plan_revision bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -69335,7 +69165,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.create_record_internal(p_record_type_id uuid, p_final_values jsonb, p_submitted_field_ids uuid[], p_selected_group_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION create_record_internal(p_record_type_id uuid, p_final_values jsonb, p_submitted_field_ids uuid[], p_selected_group_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -69468,7 +69297,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.create_record_storage_table_internal(p_storage_contract_id uuid, p_module_root_id uuid, p_record_type_id uuid, p_storage_scope text, p_ownership_mode text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION create_record_storage_table_internal(p_storage_contract_id uuid, p_module_root_id uuid, p_record_type_id uuid, p_storage_scope text, p_ownership_mode text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -69954,7 +69782,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.create_system_projection_companion_storage_internal(p_storage_contract_id uuid, p_target_module_root_id uuid, p_record_type_id uuid, p_contributor_module_root_id uuid, p_field_definition jsonb, p_validate_only boolean) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION create_system_projection_companion_storage_internal(p_storage_contract_id uuid, p_target_module_root_id uuid, p_record_type_id uuid, p_contributor_module_root_id uuid, p_field_definition jsonb, p_validate_only boolean); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -70010,7 +69837,6 @@ CREATE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
 $$;
 
 
-ALTER FUNCTION vortex_record.database_value_type(p_field jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: detach_exact_module_contributions(uuid, bigint, jsonb, boolean); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -70207,7 +70033,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.detach_exact_module_contributions(p_module_root_id uuid, p_module_release_revision bigint, p_contributions jsonb, p_retire boolean) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION detach_exact_module_contributions(p_module_root_id uuid, p_module_release_revision bigint, p_contributions jsonb, p_retire boolean); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -70362,7 +70187,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.discover_relationship_total_closure_internal(p_catalogue jsonb, p_operation text, p_record_type_id uuid, p_record_id uuid, p_submitted_values jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: drop_preview_installation_storage(uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -70433,7 +70257,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.drop_preview_installation_storage(p_preview_installation_id uuid) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION drop_preview_installation_storage(p_preview_installation_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -70482,7 +70305,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.enforce_relationship_edge_scope() OWNER TO vortex_record_owner;
 
 --
 -- Name: ensure_account_deletion_fence_internal(text); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -70541,7 +70363,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.ensure_account_deletion_fence_internal(p_physical_table_token text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION ensure_account_deletion_fence_internal(p_physical_table_token text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -70629,7 +70450,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.ensure_field_index_internal(p_storage_contract_id uuid, p_field_id uuid, p_purpose text, p_storage_scope text, p_table_token text, p_scope_index_columns text, p_column_token text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION ensure_field_index_internal(p_storage_contract_id uuid, p_field_id uuid, p_purpose text, p_storage_scope text, p_table_token text, p_scope_index_columns text, p_column_token text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -70667,7 +70487,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.ensure_offboarding_owner_index_internal(p_physical_table_token text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION ensure_offboarding_owner_index_internal(p_physical_table_token text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -70735,7 +70554,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.ensure_storage_conversion_column_internal(p_table_token text, p_column_token text, p_database_value_type text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION ensure_storage_conversion_column_internal(p_table_token text, p_column_token text, p_database_value_type text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -70764,7 +70582,6 @@ CREATE FUNCTION vortex_record.field_storage_meaning(p_field jsonb) RETURNS jsonb
 $$;
 
 
-ALTER FUNCTION vortex_record.field_storage_meaning(p_field jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: filter_calculated_readable_field_ids(jsonb, uuid, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -70859,7 +70676,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.filter_calculated_readable_field_ids(p_record_types jsonb, p_record_type_id uuid, p_readable_field_ids jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: finalize_account_deletion_fence(uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -70946,7 +70762,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.finalize_account_deletion_fence(p_organization_account_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION finalize_account_deletion_fence(p_organization_account_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -71136,7 +70951,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -71175,7 +70989,6 @@ CREATE FUNCTION vortex_record.index_contract_identity(p_storage_contract_id uuid
 $$;
 
 
-ALTER FUNCTION vortex_record.index_contract_identity(p_storage_contract_id uuid, p_field_id uuid) OWNER TO vortex_record_owner;
 
 --
 -- Name: index_definition(text, text, text, text); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71196,7 +71009,6 @@ CREATE FUNCTION vortex_record.index_definition(p_purpose text, p_table_token tex
 $$;
 
 
-ALTER FUNCTION vortex_record.index_definition(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) OWNER TO vortex_record_owner;
 
 --
 -- Name: index_definition_fingerprint(text, text, text, text); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71221,7 +71033,6 @@ CREATE FUNCTION vortex_record.index_definition_fingerprint(p_purpose text, p_tab
 $$;
 
 
-ALTER FUNCTION vortex_record.index_definition_fingerprint(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION index_definition_fingerprint(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -71246,7 +71057,6 @@ CREATE FUNCTION vortex_record.index_scope_columns(p_storage_scope text) RETURNS 
 $$;
 
 
-ALTER FUNCTION vortex_record.index_scope_columns(p_storage_scope text) OWNER TO vortex_record_owner;
 
 --
 -- Name: initialize_organization_lifecycle_limits(uuid, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71415,7 +71225,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.initialize_organization_lifecycle_limits(p_organization_id uuid, p_limits jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION initialize_organization_lifecycle_limits(p_organization_id uuid, p_limits jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -71690,7 +71499,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.insert_named_action_record_internal(p_record_type_id uuid, p_final_values jsonb, p_submitted_field_ids uuid[]) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION insert_named_action_record_internal(p_record_type_id uuid, p_final_values jsonb, p_submitted_field_ids uuid[]); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -71726,7 +71534,6 @@ CREATE FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) RETURNS 
 $$;
 
 
-ALTER FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) OWNER TO vortex_record_owner;
 
 --
 -- Name: is_lifecycle_destination(text); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71744,7 +71551,6 @@ CREATE FUNCTION vortex_record.is_lifecycle_destination(p_value text) RETURNS boo
 $_$;
 
 
-ALTER FUNCTION vortex_record.is_lifecycle_destination(p_value text) OWNER TO vortex_record_owner;
 
 --
 -- Name: is_lifecycle_destination_list(text[]); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71771,7 +71577,6 @@ CREATE FUNCTION vortex_record.is_lifecycle_destination_list(p_values text[]) RET
 $$;
 
 
-ALTER FUNCTION vortex_record.is_lifecycle_destination_list(p_values text[]) OWNER TO vortex_record_owner;
 
 --
 -- Name: is_lifecycle_limit_value(jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71791,7 +71596,6 @@ CREATE FUNCTION vortex_record.is_lifecycle_limit_value(p_value jsonb) RETURNS bo
 $$;
 
 
-ALTER FUNCTION vortex_record.is_lifecycle_limit_value(p_value jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: is_lifecycle_revision_value(jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71809,7 +71613,6 @@ CREATE FUNCTION vortex_record.is_lifecycle_revision_value(p_value jsonb) RETURNS
 $$;
 
 
-ALTER FUNCTION vortex_record.is_lifecycle_revision_value(p_value jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: is_record_type_lifecycle_policy(jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -71893,7 +71696,6 @@ as $function$
 $function$;
 
 
-ALTER FUNCTION vortex_record.is_record_type_lifecycle_policy(p_policy jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION is_record_type_lifecycle_policy(p_policy jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -71949,7 +71751,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.list_offboarding_owned_records(p_source_organization_account_id uuid, p_target_kind text, p_target_id uuid, p_section_kind text, p_after_storage_contract_id uuid, p_after_record_id uuid, p_limit integer) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION list_offboarding_owned_records(p_source_organization_account_id uuid, p_target_kind text, p_target_id uuid, p_section_kind text, p_after_storage_contract_id uuid, p_after_record_id uuid, p_limit integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -72174,7 +71975,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.list_offboarding_owned_records_internal(p_source_organization_account_id uuid, p_target_kind text, p_target_id uuid, p_after_storage_contract_id uuid, p_after_record_id uuid, p_limit integer) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION list_offboarding_owned_records_internal(p_source_organization_account_id uuid, p_target_kind text, p_target_id uuid, p_after_storage_contract_id uuid, p_after_record_id uuid, p_limit integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -72418,7 +72218,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.list_offboarding_owned_shared_records_internal(p_source_organization_account_id uuid, p_target_kind text, p_target_id uuid, p_after_storage_contract_id uuid, p_after_record_id uuid, p_limit integer) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION list_offboarding_owned_shared_records_internal(p_source_organization_account_id uuid, p_target_kind text, p_target_id uuid, p_after_storage_contract_id uuid, p_after_record_id uuid, p_limit integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73078,7 +72877,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.load_named_action_facts_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION load_named_action_facts_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73117,7 +72915,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.load_offboarding_ownership_transfer_facts_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: load_record_access_facts_for_transfer_installation_internal(uuid, uuid, bigint, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73153,7 +72950,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.load_record_access_facts_for_transfer_installation_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_installation jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION load_record_access_facts_for_transfer_installation_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_installation jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73643,7 +73439,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.load_record_access_facts_from_installation_internal(p_record_type_id uuid, p_action_kind text, p_record_id uuid, p_expected_concurrency_number bigint, p_installation jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION load_record_access_facts_from_installation_internal(p_record_type_id uuid, p_action_kind text, p_record_id uuid, p_expected_concurrency_number bigint, p_installation jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73724,7 +73519,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.load_record_access_facts_internal(p_record_type_id uuid, p_action_kind text, p_record_id uuid, p_expected_concurrency_number bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION load_record_access_facts_internal(p_record_type_id uuid, p_action_kind text, p_record_id uuid, p_expected_concurrency_number bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73768,7 +73562,6 @@ CREATE TABLE vortex_record.command_receipts (
 ALTER TABLE ONLY vortex_record.command_receipts FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.command_receipts OWNER TO vortex_record_adapter;
 
 --
 -- Name: TABLE command_receipts; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73810,7 +73603,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.lock_command_receipt_internal(p_command_kind text, p_command_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION lock_command_receipt_internal(p_command_kind text, p_command_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73888,7 +73680,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.lock_record_change_targets_internal(p_record_type jsonb, p_organization_id uuid, p_final_values jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION lock_record_change_targets_internal(p_record_type jsonb, p_organization_id uuid, p_final_values jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -73936,7 +73727,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.lock_record_recovery_policy_internal(p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid) OWNER TO vortex_record_owner;
 
 --
 -- Name: lock_relationship_target_row_internal(uuid, uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -74007,7 +73797,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.lock_relationship_target_row_internal(p_target_record_type_id uuid, p_target_record_id uuid, p_organization_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION lock_relationship_target_row_internal(p_target_record_type_id uuid, p_target_record_id uuid, p_organization_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -74081,7 +73870,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.lock_storage_adoption_internal(p_conversion_contract_id uuid, p_organization_id uuid, p_application_root_id uuid) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION lock_storage_adoption_internal(p_conversion_contract_id uuid, p_organization_id uuid, p_application_root_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -74176,7 +73964,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.named_action_command_closure_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_submitted_values jsonb, p_creations jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: named_action_command_fingerprint_internal(uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -74200,7 +73987,6 @@ CREATE FUNCTION vortex_record.named_action_command_fingerprint_internal(p_comman
 $$;
 
 
-ALTER FUNCTION vortex_record.named_action_command_fingerprint_internal(p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_inputs jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: named_action_command_link_targets_internal(jsonb, uuid, jsonb, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -74285,7 +74071,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.named_action_command_link_targets_internal(p_catalogue jsonb, p_record_type_id uuid, p_submitted_values jsonb, p_creations jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: named_action_creation_plan_internal(text, uuid, bigint, uuid, uuid, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -74534,7 +74319,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.named_action_creation_plan_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_creations jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION named_action_creation_plan_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_creations jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -74603,7 +74387,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.named_action_deleted_subject_replay_internal(p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION named_action_deleted_subject_replay_internal(p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -74691,7 +74474,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.observe_field_index_internal(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION observe_field_index_internal(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -74725,7 +74507,6 @@ CREATE FUNCTION vortex_record.ownership_transfer_command_fingerprint_internal(p_
 $$;
 
 
-ALTER FUNCTION vortex_record.ownership_transfer_command_fingerprint_internal(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_operation_identity text, p_source_organization_account_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: plan_record_read_scan_internal(uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -75185,7 +74966,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.plan_record_read_scan_internal(p_record_type_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION plan_record_read_scan_internal(p_record_type_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -75534,7 +75314,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_base_record_save(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid, p_activity_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_base_record_save(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid, p_activity_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -76242,7 +76021,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_module_query_internal(p_module_root_id uuid, p_query_id uuid, p_expected_release_revision bigint, p_input_values jsonb, p_user_filter jsonb, p_declared_filterable_field_ids jsonb, p_stage text, p_prior_plan jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_module_query_internal(p_module_root_id uuid, p_query_id uuid, p_expected_release_revision bigint, p_input_values jsonb, p_user_filter jsonb, p_declared_filterable_field_ids jsonb, p_stage text, p_prior_plan jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -76696,7 +76474,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_named_action_command_totals(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_creations jsonb, p_activity_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_named_action_command_totals(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_creations jsonb, p_activity_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -76974,7 +76751,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_named_action_relationship_copies_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_subject_record_type_id uuid, p_subject_record_id uuid, p_inputs jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_named_action_relationship_copies_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_subject_record_type_id uuid, p_subject_record_id uuid, p_inputs jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -76999,7 +76775,6 @@ CREATE FUNCTION vortex_record.prepare_named_action_set_announce(p_command_id uui
 $$;
 
 
-ALTER FUNCTION vortex_record.prepare_named_action_set_announce(p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_inputs jsonb, p_activity_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: prepare_named_action_set_announce_internal(boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -77214,7 +76989,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_named_action_set_announce_internal(p_preview boolean, p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_inputs jsonb, p_activity_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_named_action_set_announce_internal(p_preview boolean, p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_inputs jsonb, p_activity_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -77352,7 +77126,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_protected_record_delete(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid, p_occurrence_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_protected_record_delete(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid, p_occurrence_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -77543,7 +77316,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_protected_record_restore(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_protected_record_restore(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -77772,7 +77544,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_record_lifecycle_totals_internal(p_operation text, p_record_type_id uuid, p_record_id uuid, p_command_id uuid, p_root_snapshot jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: prepare_relationship_total_save(uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -78091,7 +77862,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.prepare_relationship_total_save(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid, p_activity_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION prepare_relationship_total_save(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid, p_activity_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -78116,7 +77886,6 @@ CREATE FUNCTION vortex_record.preview_named_action_set_announce(p_command_id uui
 $$;
 
 
-ALTER FUNCTION vortex_record.preview_named_action_set_announce(p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_inputs jsonb, p_activity_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: preview_record_field_bounds_internal(uuid, uuid, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -78181,7 +77950,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.preview_record_field_bounds_internal(p_record_type_id uuid, p_storage_contract_id uuid, p_record_type jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION preview_record_field_bounds_internal(p_record_type_id uuid, p_storage_contract_id uuid, p_record_type jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -78283,7 +78051,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.preview_record_lifecycle_candidates(p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION preview_record_lifecycle_candidates(p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -78326,7 +78093,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.preview_scoped_command_id_internal(p_command_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION preview_scoped_command_id_internal(p_command_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -78423,7 +78189,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.project_derived_readable_field_ids_internal(p_loaded jsonb, p_record_type_id uuid, p_record_id uuid, p_readable_field_ids jsonb, p_required_field_ids jsonb, p_seen_derived_field_keys jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: project_named_action_record_internal(text, uuid, bigint, uuid, uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -78485,7 +78250,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.project_named_action_record_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: provision_account_deletion_fence_internal(); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -78504,7 +78268,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.provision_account_deletion_fence_internal() OWNER TO vortex_record_owner;
 
 --
 -- Name: provision_exact_module_contributions(uuid, bigint, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -79229,7 +78992,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.provision_exact_module_contributions(p_module_root_id uuid, p_module_release_revision bigint, p_contributions jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION provision_exact_module_contributions(p_module_root_id uuid, p_module_release_revision bigint, p_contributions jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -79901,7 +79663,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.provision_exact_module_storage(p_module_root_id uuid, p_module_release_revision bigint) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION provision_exact_module_storage(p_module_root_id uuid, p_module_release_revision bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -79929,7 +79690,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.provision_offboarding_owner_index_internal() OWNER TO vortex_record_owner;
 
 --
 -- Name: provision_preview_module_storage(uuid, uuid, bigint); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -80137,7 +79897,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.provision_preview_module_storage(p_preview_installation_id uuid, p_module_root_id uuid, p_module_release_revision bigint) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION provision_preview_module_storage(p_preview_installation_id uuid, p_module_root_id uuid, p_module_release_revision bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -80364,7 +80123,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.read_application_index_status(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION read_application_index_status(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -80554,7 +80312,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -80906,7 +80663,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_current_legal_holds(p_candidate jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION read_current_legal_holds(p_candidate jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -80951,7 +80707,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_current_preview_installation_internal() OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_current_preview_installation_internal(); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -80997,7 +80752,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.read_derived_field_ids_for_exact_record_internal(p_record_type_id uuid, p_record_id uuid, p_required_field_ids jsonb, p_seen_derived_field_keys jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: read_exact_module_storage_provision(uuid, bigint); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -81039,7 +80793,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_exact_module_storage_provision(p_module_root_id uuid, p_module_release_revision bigint) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION read_exact_module_storage_provision(p_module_root_id uuid, p_module_release_revision bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -81593,7 +81346,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_import_update_targets(p_record_type_id uuid, p_mapped_field_ids jsonb, p_targets jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_import_update_targets(p_record_type_id uuid, p_mapped_field_ids jsonb, p_targets jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -81710,7 +81462,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -81870,7 +81621,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.read_index_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION read_index_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -81929,7 +81679,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_module_query_inputs(p_module_root_id uuid, p_query_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_module_query_inputs(p_module_root_id uuid, p_query_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -82451,7 +82200,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_provisioned_lifecycle_policy_setup(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION read_provisioned_lifecycle_policy_setup(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -82595,7 +82343,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_record(p_record_type_id uuid, p_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_record(p_record_type_id uuid, p_record_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -82778,7 +82525,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_record_capabilities(p_record_type_id uuid, p_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_record_capabilities(p_record_type_id uuid, p_record_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -82876,7 +82622,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -82995,7 +82740,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.read_storage_conversion_corrections(p_conversion_contract_id uuid, p_limit integer) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_storage_conversion_corrections(p_conversion_contract_id uuid, p_limit integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83038,7 +82782,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_time_clock_internal() OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_time_clock_internal(); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83128,7 +82871,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.read_time_deadline_expression_internal(p_storage_contract_id uuid, p_expression jsonb, p_clock jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION read_time_deadline_expression_internal(p_storage_contract_id uuid, p_expression jsonb, p_clock jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83271,7 +83013,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.record_index_build_result(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_expected_definition_fingerprint text) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION record_index_build_result(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_expected_definition_fingerprint text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -83303,7 +83044,6 @@ CREATE FUNCTION vortex_record.record_lifecycle_command_fingerprint_internal(p_co
 $$;
 
 
-ALTER FUNCTION vortex_record.record_lifecycle_command_fingerprint_internal(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: record_lifecycle_current_revision_internal(uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83340,7 +83080,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.record_lifecycle_current_revision_internal(p_record_type_id uuid, p_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: record_lifecycle_total_closure_internal(jsonb, text, uuid, uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83491,7 +83230,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.record_lifecycle_total_closure_internal(p_catalogue jsonb, p_operation text, p_record_type_id uuid, p_record_id uuid, p_command_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: record_named_action_precondition_refusal(text, uuid, bigint, uuid, uuid, uuid, bigint, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83530,7 +83268,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.record_named_action_precondition_refusal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: register_storage_conversion_plan(uuid, uuid, uuid, bigint, bigint); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -83766,7 +83503,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.register_storage_conversion_plan(p_source_storage_contract_id uuid, p_source_field_id uuid, p_target_field_id uuid, p_source_release_revision bigint, p_target_release_revision bigint) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION register_storage_conversion_plan(p_source_storage_contract_id uuid, p_source_field_id uuid, p_target_field_id uuid, p_source_release_revision bigint, p_target_release_revision bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -83800,7 +83536,6 @@ CREATE FUNCTION vortex_record.relationship_declares_target_internal(p_relationsh
 $$;
 
 
-ALTER FUNCTION vortex_record.relationship_declares_target_internal(p_relationship jsonb, p_record_type_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION relationship_declares_target_internal(p_relationship jsonb, p_record_type_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83844,7 +83579,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.relationship_edge_lock_identities_internal(p_relationship_id uuid, p_from_storage_contract_id uuid, p_from_record_id uuid, p_to_storage_contract_id uuid, p_to_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION relationship_edge_lock_identities_internal(p_relationship_id uuid, p_from_storage_contract_id uuid, p_from_record_id uuid, p_to_storage_contract_id uuid, p_to_record_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83880,7 +83614,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.relationship_edge_record_identity_internal(p_relationship_id uuid, p_storage_contract_id uuid, p_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION relationship_edge_record_identity_internal(p_relationship_id uuid, p_storage_contract_id uuid, p_record_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -83966,7 +83699,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.relationship_total_catalogue_internal() OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION relationship_total_catalogue_internal(); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -84103,7 +83835,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.relationship_total_record_snapshot_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_lock boolean) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION relationship_total_record_snapshot_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_lock boolean); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -84157,7 +83888,6 @@ end
 $_$;
 
 
-ALTER FUNCTION vortex_record.relationship_total_source_is_retained_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_organization_id uuid, p_application_root_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: release_command_receipt_internal(text, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -84208,7 +83938,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.release_command_receipt_internal(p_command_kind text, p_command_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION release_command_receipt_internal(p_command_kind text, p_command_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -84252,7 +83981,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.renew_record_index_build_lease(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_lease_seconds integer) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION renew_record_index_build_lease(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_lease_seconds integer); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -84368,7 +84096,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.reserve_named_action_creation_locks_internal(p_record_type_id uuid, p_creations jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION reserve_named_action_creation_locks_internal(p_record_type_id uuid, p_creations jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -84755,7 +84482,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.resolve_active_bundle_record_access_plan_internal(p_expected_identity jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION resolve_active_bundle_record_access_plan_internal(p_expected_identity jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -85225,7 +84951,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.resolve_installation_access_plan_internal(p_installation jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION resolve_installation_access_plan_internal(p_installation jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -85341,7 +85066,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -85625,7 +85349,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.resolve_named_action_context_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION resolve_named_action_context_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -85770,7 +85493,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.resolve_prepared_record_access_plan_internal(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION resolve_prepared_record_access_plan_internal(p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -86100,7 +85822,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.resolve_preview_module_query_internal(p_module_root_id uuid, p_query_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION resolve_preview_module_query_internal(p_module_root_id uuid, p_query_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -86385,7 +86106,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.resolve_record_action_context_internal(p_record_type_id uuid, p_action_kind text) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION resolve_record_action_context_internal(p_record_type_id uuid, p_action_kind text); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -86673,7 +86393,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.restore_record_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION restore_record_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -87712,7 +87431,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.run_module_query(p_module_root_id uuid, p_query_id uuid, p_expected_release_revision bigint, p_input_values jsonb, p_requested_field_ids jsonb, p_page_size integer, p_after jsonb, p_requested_system_field_keys jsonb, p_user_inputs jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION run_module_query(p_module_root_id uuid, p_query_id uuid, p_expected_release_revision bigint, p_input_values jsonb, p_requested_field_ids jsonb, p_page_size integer, p_after jsonb, p_requested_system_field_keys jsonb, p_user_inputs jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -88662,7 +88380,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.run_module_query_summary(p_module_root_id uuid, p_query_id uuid, p_expected_release_revision bigint, p_input_values jsonb, p_user_inputs jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION run_module_query_summary(p_module_root_id uuid, p_query_id uuid, p_expected_release_revision bigint, p_input_values jsonb, p_user_inputs jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -88740,7 +88457,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.save_base_record(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_final_values jsonb, p_selected_group_id uuid, p_activity_id uuid, p_occurrence_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION save_base_record(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_final_values jsonb, p_selected_group_id uuid, p_activity_id uuid, p_occurrence_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -89010,7 +88726,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.save_base_record_with_relationship_totals(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_final_values jsonb, p_selected_group_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_parent_mutations jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION save_base_record_with_relationship_totals(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_final_values jsonb, p_selected_group_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_parent_mutations jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -89234,7 +88949,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.save_initial_record_type_lifecycle_policy_for_provisioned_setup(p_binding_application_root_id uuid, p_expected_binding_revision bigint, p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_activity_id uuid, p_policy jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION save_initial_record_type_lifecycle_policy_for_provisioned_setup(p_binding_application_root_id uuid, p_expected_binding_revision bigint, p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_activity_id uuid, p_policy jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -89641,7 +89355,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.save_organization_settings_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_final_values jsonb, p_activity_id uuid, p_occurrence_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION save_organization_settings_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_final_values jsonb, p_activity_id uuid, p_occurrence_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -89903,7 +89616,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -89965,7 +89677,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.share_lock_named_action_target_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION share_lock_named_action_target_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -90007,7 +89718,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.soft_delete_record_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION soft_delete_record_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -90273,7 +89983,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.soft_delete_record_recursive_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_visited text[]) OWNER TO vortex_record_adapter;
 
 --
 -- Name: sql_value_type(text); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -90296,7 +90005,6 @@ CREATE FUNCTION vortex_record.sql_value_type(p_database_value_type text) RETURNS
 $$;
 
 
-ALTER FUNCTION vortex_record.sql_value_type(p_database_value_type text) OWNER TO vortex_record_owner;
 
 --
 -- Name: storage_conversion_contract_identity(uuid, uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -90329,7 +90037,6 @@ CREATE FUNCTION vortex_record.storage_conversion_contract_identity(p_source_stor
 $$;
 
 
-ALTER FUNCTION vortex_record.storage_conversion_contract_identity(p_source_storage_contract_id uuid, p_source_field_id uuid, p_target_field_id uuid) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION storage_conversion_contract_identity(p_source_storage_contract_id uuid, p_source_field_id uuid, p_target_field_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -90371,7 +90078,6 @@ CREATE FUNCTION vortex_record.storage_meaning(p_record_type jsonb) RETURNS jsonb
 $$;
 
 
-ALTER FUNCTION vortex_record.storage_meaning(p_record_type jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: storage_meaning_fingerprint(jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -90388,7 +90094,6 @@ CREATE FUNCTION vortex_record.storage_meaning_fingerprint(p_record_type jsonb) R
 $$;
 
 
-ALTER FUNCTION vortex_record.storage_meaning_fingerprint(p_record_type jsonb) OWNER TO vortex_record_owner;
 
 --
 -- Name: switch_storage_conversion_mappings_internal(uuid, boolean); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_owner
@@ -90582,7 +90287,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.switch_storage_conversion_mappings_internal(p_conversion_contract_id uuid, p_owns_module boolean) OWNER TO vortex_record_owner;
 
 --
 -- Name: FUNCTION switch_storage_conversion_mappings_internal(p_conversion_contract_id uuid, p_owns_module boolean); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -90703,7 +90407,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.total_dependency_contract_internal(p_record_types jsonb, p_relationships jsonb, p_target_record_type_id uuid, p_total_field jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -90787,7 +90490,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.total_inputs_readable_internal(p_loaded jsonb, p_target_record_type_id uuid, p_target_record_id uuid, p_total_field jsonb, p_seen_derived_field_keys jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: transfer_offboarding_active_owned_record(uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, bigint); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -90846,7 +90548,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.transfer_offboarding_active_owned_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_expected_access_version bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION transfer_offboarding_active_owned_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_expected_access_version bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -90898,7 +90599,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.transfer_offboarding_owned_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_source_organization_account_id uuid, p_expected_access_version bigint) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION transfer_offboarding_owned_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_source_organization_account_id uuid, p_expected_access_version bigint); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -91138,7 +90838,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.transfer_record_ownership_for_offboarding_internal(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_source_organization_account_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION transfer_record_ownership_for_offboarding_internal(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_source_organization_account_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -91247,7 +90946,6 @@ end
 $$;
 
 
-ALTER FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) OWNER TO vortex_record_adapter;
 
 --
 -- Name: write_named_action_relationship_value_internal(uuid, uuid, uuid, jsonb, text, uuid, bigint, uuid, uuid, uuid); Type: FUNCTION; Schema: vortex_record; Owner: vortex_record_adapter
@@ -91504,7 +91202,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.write_named_action_relationship_value_internal(p_source_record_type_id uuid, p_source_record_id uuid, p_relationship_id uuid, p_target_value jsonb, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_subject_record_type_id uuid, p_subject_record_id uuid) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION write_named_action_relationship_value_internal(p_source_record_type_id uuid, p_source_record_id uuid, p_relationship_id uuid, p_target_value jsonb, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_subject_record_type_id uuid, p_subject_record_id uuid); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -91782,7 +91479,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_record.write_relationship_value_internal(p_source_record_type_id uuid, p_source_record_id uuid, p_relationship_id uuid, p_target_value jsonb, p_increment_source_revision boolean) OWNER TO vortex_record_adapter;
 
 --
 -- Name: FUNCTION write_relationship_value_internal(p_source_record_type_id uuid, p_source_record_id uuid, p_relationship_id uuid, p_target_value jsonb, p_increment_source_revision boolean); Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -91978,7 +91674,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_search.put_document(p_organization_id uuid, p_record_type_id uuid, p_record_id uuid, p_application_root_id uuid, p_source_record_version bigint, p_deleted boolean, p_entries jsonb, p_content_fingerprint text) OWNER TO vortex_search_owner;
 
 --
 -- Name: FUNCTION put_document(p_organization_id uuid, p_record_type_id uuid, p_record_id uuid, p_application_root_id uuid, p_source_record_version bigint, p_deleted boolean, p_entries jsonb, p_content_fingerprint text); Type: COMMENT; Schema: vortex_search; Owner: vortex_search_owner
@@ -92395,7 +92090,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_workflow.begin_flow_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text) OWNER TO vortex_workflow_owner;
 
 --
 -- Name: FUNCTION begin_flow_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text); Type: COMMENT; Schema: vortex_workflow; Owner: vortex_workflow_owner
@@ -92511,7 +92205,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_workflow.begin_flow_effect_with_origin(p_run_id uuid, p_organization_id uuid, p_principal_kind text, p_principal_id uuid, p_origin_kind text, p_origin_id uuid, p_task_path text, p_iteration text) OWNER TO vortex_workflow_owner;
 
 --
 -- Name: FUNCTION begin_flow_effect_with_origin(p_run_id uuid, p_organization_id uuid, p_principal_kind text, p_principal_id uuid, p_origin_kind text, p_origin_id uuid, p_task_path text, p_iteration text); Type: COMMENT; Schema: vortex_workflow; Owner: vortex_workflow_owner
@@ -92568,7 +92261,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_workflow.complete_flow_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text, p_outcome text, p_outputs jsonb) OWNER TO vortex_workflow_owner;
 
 --
 -- Name: FUNCTION complete_flow_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text, p_outcome text, p_outputs jsonb); Type: COMMENT; Schema: vortex_workflow; Owner: vortex_workflow_owner
@@ -92652,7 +92344,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_workflow.complete_flow_effect_with_origin(p_run_id uuid, p_organization_id uuid, p_principal_kind text, p_principal_id uuid, p_origin_kind text, p_origin_id uuid, p_task_path text, p_iteration text, p_outcome text, p_outputs jsonb) OWNER TO vortex_workflow_owner;
 
 --
 -- Name: FUNCTION complete_flow_effect_with_origin(p_run_id uuid, p_organization_id uuid, p_principal_kind text, p_principal_id uuid, p_origin_kind text, p_origin_id uuid, p_task_path text, p_iteration text, p_outcome text, p_outputs jsonb); Type: COMMENT; Schema: vortex_workflow; Owner: vortex_workflow_owner
@@ -92718,7 +92409,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_workflow.consume_flow_continuation(p_token_hash text, p_organization_id uuid, p_identity_id uuid, p_flow_id uuid, p_release_key text) OWNER TO vortex_workflow_owner;
 
 --
 -- Name: FUNCTION consume_flow_continuation(p_token_hash text, p_organization_id uuid, p_identity_id uuid, p_flow_id uuid, p_release_key text); Type: COMMENT; Schema: vortex_workflow; Owner: vortex_workflow_owner
@@ -92866,7 +92556,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_workflow.issue_flow_continuation(p_token_hash text, p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_flow_id uuid, p_release_key text, p_state jsonb, p_elapsed_milliseconds integer, p_lifetime_seconds integer) OWNER TO vortex_workflow_owner;
 
 --
 -- Name: FUNCTION issue_flow_continuation(p_token_hash text, p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_flow_id uuid, p_release_key text, p_state jsonb, p_elapsed_milliseconds integer, p_lifetime_seconds integer); Type: COMMENT; Schema: vortex_workflow; Owner: vortex_workflow_owner
@@ -92965,7 +92654,6 @@ end
 $function$;
 
 
-ALTER FUNCTION vortex_workflow.read_committed_flow_start_intent(p_intent_id uuid) OWNER TO vortex_workflow_owner;
 
 --
 -- Name: FUNCTION read_committed_flow_start_intent(p_intent_id uuid); Type: COMMENT; Schema: vortex_workflow; Owner: vortex_workflow_owner
@@ -94787,7 +94475,6 @@ CREATE TABLE vortex_access.platform_permission_declarations (
 );
 
 
-ALTER TABLE vortex_access.platform_permission_declarations OWNER TO vortex_access_owner;
 
 --
 -- Name: TABLE platform_permission_declarations; Type: COMMENT; Schema: vortex_access; Owner: vortex_access_owner
@@ -96190,7 +95877,6 @@ CREATE TABLE vortex_module.installation_bindings (
 ALTER TABLE ONLY vortex_module.installation_bindings FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_module.installation_bindings OWNER TO vortex_module_owner;
 
 --
 -- Name: installation_runtime_bundle_parts; Type: TABLE; Schema: vortex_module; Owner: vortex_module_owner
@@ -96212,7 +95898,6 @@ CREATE TABLE vortex_module.installation_runtime_bundle_parts (
 ALTER TABLE ONLY vortex_module.installation_runtime_bundle_parts FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_module.installation_runtime_bundle_parts OWNER TO vortex_module_owner;
 
 --
 -- Name: installation_runtime_bundles; Type: TABLE; Schema: vortex_module; Owner: vortex_module_owner
@@ -96239,7 +95924,6 @@ CREATE TABLE vortex_module.installation_runtime_bundles (
 ALTER TABLE ONLY vortex_module.installation_runtime_bundles FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_module.installation_runtime_bundles OWNER TO vortex_module_owner;
 
 --
 -- Name: organization_setup_source_manifests; Type: TABLE; Schema: vortex_module; Owner: postgres
@@ -96299,7 +95983,6 @@ CREATE TABLE vortex_module.preview_installations (
 ALTER TABLE ONLY vortex_module.preview_installations FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_module.preview_installations OWNER TO vortex_module_owner;
 
 --
 -- Name: alert_signals; Type: TABLE; Schema: vortex_operations; Owner: postgres
@@ -96403,7 +96086,6 @@ CREATE TABLE vortex_record.field_storage_mappings (
 ALTER TABLE ONLY vortex_record.field_storage_mappings FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.field_storage_mappings OWNER TO vortex_record_owner;
 
 --
 -- Name: index_catalogue; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96439,7 +96121,6 @@ END || replace(lower((field_id)::text), '-'::text, ''::text)))),
 ALTER TABLE ONLY vortex_record.index_catalogue FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.index_catalogue OWNER TO vortex_record_owner;
 
 --
 -- Name: TABLE index_catalogue; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -96487,7 +96168,6 @@ CREATE TABLE vortex_record.installation_access_plans (
 ALTER TABLE ONLY vortex_record.installation_access_plans FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.installation_access_plans OWNER TO vortex_record_adapter;
 
 --
 -- Name: legal_hold_versions; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96532,7 +96212,6 @@ CREATE TABLE vortex_record.legal_hold_versions (
 ALTER TABLE ONLY vortex_record.legal_hold_versions FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.legal_hold_versions OWNER TO vortex_record_owner;
 
 --
 -- Name: organization_lifecycle_limits; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96562,7 +96241,6 @@ CREATE TABLE vortex_record.organization_lifecycle_limits (
 ALTER TABLE ONLY vortex_record.organization_lifecycle_limits FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.organization_lifecycle_limits OWNER TO vortex_record_owner;
 
 --
 -- Name: TABLE organization_lifecycle_limits; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -96601,7 +96279,6 @@ CREATE TABLE vortex_record.preview_command_receipts (
 ALTER TABLE ONLY vortex_record.preview_command_receipts FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.preview_command_receipts OWNER TO vortex_record_adapter;
 
 --
 -- Name: TABLE preview_command_receipts; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -96625,7 +96302,6 @@ CREATE TABLE vortex_record.preview_reference_counters (
 ALTER TABLE ONLY vortex_record.preview_reference_counters FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.preview_reference_counters OWNER TO vortex_record_adapter;
 
 --
 -- Name: TABLE preview_reference_counters; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -96651,7 +96327,6 @@ CREATE TABLE vortex_record.preview_storage_bindings (
 ALTER TABLE ONLY vortex_record.preview_storage_bindings FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.preview_storage_bindings OWNER TO vortex_record_owner;
 
 --
 -- Name: protected_read_model_views; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96670,7 +96345,6 @@ CREATE TABLE vortex_record.protected_read_model_views (
 ALTER TABLE ONLY vortex_record.protected_read_model_views FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.protected_read_model_views OWNER TO vortex_record_owner;
 
 --
 -- Name: TABLE protected_read_model_views; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -96691,7 +96365,6 @@ CREATE SEQUENCE vortex_record.record_invalidation_sequence
     CACHE 1;
 
 
-ALTER SEQUENCE vortex_record.record_invalidation_sequence OWNER TO vortex_record_owner;
 
 --
 -- Name: record_lifecycle_command_effects; Type: TABLE; Schema: vortex_record; Owner: vortex_record_adapter
@@ -96721,7 +96394,6 @@ CREATE TABLE vortex_record.record_lifecycle_command_effects (
 ALTER TABLE ONLY vortex_record.record_lifecycle_command_effects FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.record_lifecycle_command_effects OWNER TO vortex_record_adapter;
 
 --
 -- Name: TABLE record_lifecycle_command_effects; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_adapter
@@ -96748,7 +96420,6 @@ CREATE TABLE vortex_record.record_reference_counters (
 ALTER TABLE ONLY vortex_record.record_reference_counters FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.record_reference_counters OWNER TO vortex_record_owner;
 
 --
 -- Name: record_type_lifecycle_policies; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96776,7 +96447,6 @@ CREATE TABLE vortex_record.record_type_lifecycle_policies (
 ALTER TABLE ONLY vortex_record.record_type_lifecycle_policies FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.record_type_lifecycle_policies OWNER TO vortex_record_owner;
 
 --
 -- Name: TABLE record_type_lifecycle_policies; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -96805,7 +96475,6 @@ CREATE TABLE vortex_record.relationship_edges (
 ALTER TABLE ONLY vortex_record.relationship_edges FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.relationship_edges OWNER TO vortex_record_owner;
 
 --
 -- Name: relationship_storage_mappings; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96831,7 +96500,6 @@ CREATE TABLE vortex_record.relationship_storage_mappings (
 ALTER TABLE ONLY vortex_record.relationship_storage_mappings FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.relationship_storage_mappings OWNER TO vortex_record_owner;
 
 --
 -- Name: release_provisions; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96848,7 +96516,6 @@ CREATE TABLE vortex_record.release_provisions (
 ALTER TABLE ONLY vortex_record.release_provisions FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.release_provisions OWNER TO vortex_record_owner;
 
 --
 -- Name: storage_catalogue; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96882,7 +96549,6 @@ CREATE TABLE vortex_record.storage_catalogue (
 ALTER TABLE ONLY vortex_record.storage_catalogue FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.storage_catalogue OWNER TO vortex_record_owner;
 
 --
 -- Name: storage_conversion_catalogue; Type: TABLE; Schema: vortex_record; Owner: vortex_record_owner
@@ -96923,7 +96589,6 @@ CREATE TABLE vortex_record.storage_conversion_catalogue (
 ALTER TABLE ONLY vortex_record.storage_conversion_catalogue FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.storage_conversion_catalogue OWNER TO vortex_record_owner;
 
 --
 -- Name: TABLE storage_conversion_catalogue; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -96954,7 +96619,6 @@ CREATE TABLE vortex_record.storage_conversion_plans (
 ALTER TABLE ONLY vortex_record.storage_conversion_plans FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.storage_conversion_plans OWNER TO vortex_record_owner;
 
 --
 -- Name: TABLE storage_conversion_plans; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -96980,7 +96644,6 @@ CREATE TABLE vortex_record.storage_conversion_progress (
 ALTER TABLE ONLY vortex_record.storage_conversion_progress FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE vortex_record.storage_conversion_progress OWNER TO vortex_record_owner;
 
 --
 -- Name: TABLE storage_conversion_progress; Type: COMMENT; Schema: vortex_record; Owner: vortex_record_owner
@@ -97181,7 +96844,6 @@ GRANT USAGE ON SCHEMA vortex_access TO vortex_request;
 GRANT USAGE ON SCHEMA vortex_access TO vortex_record_owner;
 GRANT USAGE ON SCHEMA vortex_access TO vortex_module_owner;
 GRANT USAGE ON SCHEMA vortex_access TO vortex_record_adapter;
-GRANT ALL ON SCHEMA vortex_access TO vortex_access_owner;
 GRANT USAGE ON SCHEMA vortex_access TO vortex_connection_owner;
 GRANT USAGE ON SCHEMA vortex_access TO vortex_definition_owner;
 GRANT USAGE ON SCHEMA vortex_access TO vortex_event_owner;
@@ -97196,7 +96858,6 @@ GRANT USAGE ON SCHEMA vortex_access TO vortex_invalidation_owner;
 --
 
 GRANT USAGE ON SCHEMA vortex_activity TO vortex_request;
-GRANT ALL ON SCHEMA vortex_activity TO vortex_activity_owner;
 
 
 --
@@ -97206,7 +96867,6 @@ GRANT ALL ON SCHEMA vortex_activity TO vortex_activity_owner;
 GRANT USAGE ON SCHEMA vortex_connection TO vortex_request;
 GRANT USAGE ON SCHEMA vortex_connection TO vortex_runtime;
 GRANT USAGE ON SCHEMA vortex_connection TO vortex_record_owner;
-GRANT ALL ON SCHEMA vortex_connection TO vortex_connection_owner;
 
 
 --
@@ -97219,7 +96879,6 @@ GRANT USAGE ON SCHEMA vortex_context TO vortex_record_owner;
 GRANT USAGE ON SCHEMA vortex_context TO vortex_record_adapter;
 GRANT USAGE ON SCHEMA vortex_context TO vortex_module_owner;
 GRANT USAGE ON SCHEMA vortex_context TO vortex_record_inventory;
-GRANT ALL ON SCHEMA vortex_context TO vortex_context_owner;
 GRANT USAGE ON SCHEMA vortex_context TO vortex_access_owner;
 GRANT USAGE ON SCHEMA vortex_context TO vortex_workflow_owner;
 GRANT USAGE ON SCHEMA vortex_context TO vortex_connection_owner;
@@ -97241,7 +96900,6 @@ GRANT USAGE ON SCHEMA vortex_definition TO vortex_request;
 GRANT USAGE ON SCHEMA vortex_definition TO vortex_record_owner;
 GRANT USAGE ON SCHEMA vortex_definition TO vortex_module_owner;
 GRANT USAGE ON SCHEMA vortex_definition TO vortex_record_adapter;
-GRANT ALL ON SCHEMA vortex_definition TO vortex_definition_owner;
 GRANT USAGE ON SCHEMA vortex_definition TO vortex_invalidation_owner;
 
 
@@ -97251,7 +96909,6 @@ GRANT USAGE ON SCHEMA vortex_definition TO vortex_invalidation_owner;
 
 GRANT USAGE ON SCHEMA vortex_event TO vortex_record_adapter;
 GRANT USAGE ON SCHEMA vortex_event TO vortex_runtime;
-GRANT ALL ON SCHEMA vortex_event TO vortex_event_owner;
 
 
 --
@@ -97260,7 +96917,6 @@ GRANT ALL ON SCHEMA vortex_event TO vortex_event_owner;
 
 GRANT USAGE ON SCHEMA vortex_file TO vortex_runtime;
 GRANT USAGE ON SCHEMA vortex_file TO vortex_request;
-GRANT ALL ON SCHEMA vortex_file TO vortex_file_owner;
 
 
 --
@@ -97271,7 +96927,6 @@ GRANT USAGE ON SCHEMA vortex_identity TO vortex_runtime;
 GRANT USAGE ON SCHEMA vortex_identity TO vortex_record_owner;
 GRANT USAGE ON SCHEMA vortex_identity TO vortex_record_adapter;
 GRANT USAGE ON SCHEMA vortex_identity TO vortex_module_owner;
-GRANT ALL ON SCHEMA vortex_identity TO vortex_identity_owner;
 GRANT USAGE ON SCHEMA vortex_identity TO vortex_access_owner;
 GRANT USAGE ON SCHEMA vortex_identity TO vortex_invalidation_owner;
 
@@ -97284,7 +96939,6 @@ GRANT USAGE ON SCHEMA vortex_invalidation TO authenticated;
 GRANT USAGE ON SCHEMA vortex_invalidation TO vortex_runtime;
 GRANT USAGE ON SCHEMA vortex_invalidation TO vortex_request;
 GRANT USAGE ON SCHEMA vortex_invalidation TO vortex_record_adapter;
-GRANT ALL ON SCHEMA vortex_invalidation TO vortex_invalidation_owner;
 
 
 --
@@ -97307,7 +96961,6 @@ GRANT USAGE ON SCHEMA vortex_module TO postgres;
 --
 
 GRANT USAGE ON SCHEMA vortex_operations TO vortex_runtime;
-GRANT ALL ON SCHEMA vortex_operations TO vortex_operations_owner;
 
 
 --
@@ -97315,14 +96968,12 @@ GRANT ALL ON SCHEMA vortex_operations TO vortex_operations_owner;
 --
 
 GRANT USAGE ON SCHEMA vortex_page TO vortex_request;
-GRANT ALL ON SCHEMA vortex_page TO vortex_page_owner;
 
 
 --
 -- Name: SCHEMA vortex_record; Type: ACL; Schema: -; Owner: vortex_record_owner
 --
 
-GRANT ALL ON SCHEMA vortex_record TO vortex_record_adapter;
 GRANT USAGE ON SCHEMA vortex_record TO vortex_module_owner;
 GRANT USAGE ON SCHEMA vortex_record TO vortex_request;
 GRANT USAGE ON SCHEMA vortex_record TO vortex_runtime;
@@ -97335,7 +96986,6 @@ GRANT USAGE ON SCHEMA vortex_record TO postgres;
 
 GRANT USAGE ON SCHEMA vortex_search TO vortex_runtime;
 GRANT USAGE ON SCHEMA vortex_search TO vortex_request;
-GRANT ALL ON SCHEMA vortex_search TO vortex_search_owner;
 
 
 --
@@ -97344,7 +96994,6 @@ GRANT ALL ON SCHEMA vortex_search TO vortex_search_owner;
 
 GRANT USAGE ON SCHEMA vortex_workflow TO vortex_runtime;
 GRANT USAGE ON SCHEMA vortex_workflow TO vortex_request;
-GRANT ALL ON SCHEMA vortex_workflow TO vortex_workflow_owner;
 
 
 --
