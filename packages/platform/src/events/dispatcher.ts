@@ -355,7 +355,8 @@ export const createEventDispatcherGrantReader = (
         if (rows.length !== 1 || first === undefined)
           return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
         return parseGrantAuthority(first.result);
-      } catch {
+      } catch (error) {
+        console.error("Event dispatcher grant could not be read", error);
         return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
       }
     },
