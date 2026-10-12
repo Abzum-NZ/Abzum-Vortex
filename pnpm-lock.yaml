@@ -577,9 +577,6 @@ importers:
       '@vortex/rule':
         specifier: workspace:*
         version: link:../rule
-      '@vortex/theme':
-        specifier: workspace:*
-        version: link:../theme
       server-only:
         specifier: 0.0.1
         version: 0.0.1
