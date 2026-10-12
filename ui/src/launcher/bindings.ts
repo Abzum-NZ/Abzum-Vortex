@@ -334,10 +334,18 @@ export function applicationLauncherQueryRowsToListValues(
     const icon = projectedIcon?.kind === "text"
       ? projectedIcon
       : fail("A launcher query row requires its projected icon cell", rowLocation);
+    const cells: Record<string, DisplayCellValue> = {
+      [headingKey]: name,
+      [secondaryKey]: icon,
+    };
+    const descriptionCell = row.cells.description;
+    if (descriptionCell?.kind === "text") {
+      cells.description = descriptionCell;
+    }
     displayRows.push(
       Object.freeze({
         recordId: applicationKey,
-        cells: Object.freeze({ [headingKey]: name, [secondaryKey]: icon }),
+        cells: Object.freeze(cells),
       }),
     );
   }

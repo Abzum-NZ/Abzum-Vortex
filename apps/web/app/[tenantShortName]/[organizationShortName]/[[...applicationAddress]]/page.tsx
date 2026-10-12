@@ -12,6 +12,7 @@ import {
   createThemeRootProps,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
+  VortexFontStylesheets,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
@@ -20,7 +21,16 @@ import { AccountDetails } from "./_components/account-details";
 import { ApplicationSearch } from "./_components/application-search";
 import { loadApplicationSearch } from "../../../_lib/application-search";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@vortex/ui/components/empty";
+import { Icon } from "@vortex/ui/icons";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { applicationHomeContinuationFromAddress } from "../../../auth/_lib/application-home-continuation";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
@@ -269,7 +279,13 @@ export default async function ApplicationAddressPage({
         title="This address is temporarily unavailable"
         description="Your sign-in is still active. Try loading this address again."
       >
-        <Link href={launcherPath(tenantShortName, organizationShortName)}>Try again</Link>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href={launcherPath(tenantShortName, organizationShortName)} />}
+        >
+          Try again
+        </Button>
       </AuthShell>
     );
 
@@ -289,7 +305,13 @@ export default async function ApplicationAddressPage({
         title="This address is temporarily unavailable"
         description="Your sign-in is still active. Try loading this address again."
       >
-        <Link href={launcherPath(tenantShortName, organizationShortName)}>Try again</Link>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href={launcherPath(tenantShortName, organizationShortName)} />}
+        >
+          Try again
+        </Button>
       </AuthShell>
     );
 
@@ -300,7 +322,9 @@ export default async function ApplicationAddressPage({
         title="Your organisation account is suspended"
         description="This account needs explicit reactivation before it can be used. Signing in will not reactivate it."
       >
-        <Link href="/signed-in">Choose another organisation</Link>
+        <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
+          Choose another organisation
+        </Button>
       </AuthShell>
     );
 
@@ -349,48 +373,93 @@ export default async function ApplicationAddressPage({
       projection.kind === "available" ? permittedApplicationsToListValues(projection) : undefined;
 
     return (
-      <AuthShell
-        eyebrow={resolved.read.tenantShortName}
-        title={resolved.read.organizationShortName}
-        description="Choose an application you can open."
+      <main
+        className="flex min-h-svh w-full flex-col bg-background text-foreground"
+        {...createThemeRootProps(undefined)}
       >
-        {launcherValues === undefined ? (
-          <p className="text-sm text-muted-foreground">No applications are available for this organisation.</p>
-        ) : (
-          <div {...createThemeRootProps(undefined)}>
-            <style href="vortex-ui-styles" precedence="default">
-              {ALL_UI_STYLES_CSS}
-            </style>
-            <ApplicationLauncher
-              placementId="organization-application-launcher"
-              settings={{ title: { kind: "text", value: "Available applications" } }}
-              slots={{}}
-              breakpoint="desktop"
-              metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
-              availability="available"
-              data={{ status: "ready", values: launcherValues }}
-              events={{ row_action: openApplication }}
+        <VortexFontStylesheets />
+        <style href="vortex-ui-styles" precedence="default">
+          {ALL_UI_STYLES_CSS}
+        </style>
+        <header className="sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur-sm">
+          <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/"
+                className="text-base font-bold tracking-tight text-foreground hover:text-primary transition-colors"
+              >
+                Vortex
+              </Link>
+              <Badge variant="outline" className="text-xs">
+                {resolved.read.organizationShortName}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              {studioCreateHref === undefined ? null : (
+                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={studioCreateHref} />}>
+                  Studio
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/signed-in" />}>
+                Switch organisation
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="w-fit text-xs uppercase">
+                {resolved.read.tenantShortName}
+              </Badge>
+            </div>
+            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              {resolved.read.organizationShortName}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Choose an application you can open.
+            </p>
+          </div>
+
+          {launcherValues === undefined || launcherValues.rows.length === 0 ? (
+            <Empty className="my-auto border border-dashed border-border py-12">
+              <EmptyMedia variant="icon">
+                <Icon name="grid" className="size-8 text-muted-foreground" />
+              </EmptyMedia>
+              <EmptyHeader>
+                <EmptyTitle>No applications available</EmptyTitle>
+                <EmptyDescription>
+                  No applications are available for this organisation.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <div className="w-full">
+              <ApplicationLauncher
+                placementId="organization-application-launcher"
+                settings={{ title: { kind: "text", value: "Available applications" } }}
+                slots={{}}
+                breakpoint="desktop"
+                metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
+                availability="available"
+                data={{ status: "ready", values: launcherValues }}
+                events={{ row_action: openApplication }}
+              />
+            </div>
+          )}
+
+          <div className="mt-auto border-t border-border pt-6">
+            <AccountDetails
+              account={
+                currentOrganizationAccount.kind === "available"
+                  ? currentOrganizationAccount.value
+                  : undefined
+              }
             />
           </div>
-        )}
-        <AccountDetails
-          account={
-            currentOrganizationAccount.kind === "available"
-              ? currentOrganizationAccount.value
-              : undefined
-          }
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          {studioCreateHref === undefined ? null : (
-            <Button variant="outline" nativeButton={false} render={<Link href={studioCreateHref} />}>
-              Create application in Studio
-            </Button>
-          )}
-          <Button variant="ghost" nativeButton={false} render={<Link href="/signed-in" />}>
-            Choose another organisation
-          </Button>
         </div>
-      </AuthShell>
+      </main>
     );
   }
 
