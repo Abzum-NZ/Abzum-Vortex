@@ -51,10 +51,6 @@ export const applicationReleaseAdoptionTargetCommandSchema = z
   .object({ applicationRootId: applicationRootIdSchema })
   .strict();
 
-export type ApplicationReleaseAdoptionTargetCommand = z.infer<
-  typeof applicationReleaseAdoptionTargetCommandSchema
->;
-
 export type ApplicationReleaseAdoptionTarget = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
@@ -140,6 +136,3 @@ export const createDatabaseApplicationReleaseAdoptionTargetService = (
     createDatabaseApplicationReleaseAdoptionTargetRepository(transaction),
   );
 
-export type ApplicationReleaseAdoptionTargetService = ReturnType<
-  typeof createApplicationReleaseAdoptionTargetService
->;

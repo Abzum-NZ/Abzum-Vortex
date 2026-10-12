@@ -801,4 +801,3 @@ export const createFlowTestRunner = (dependencies: FlowTestRunDependencies) => {
   });
 };
 
-export type FlowTestRunner = ReturnType<typeof createFlowTestRunner>;

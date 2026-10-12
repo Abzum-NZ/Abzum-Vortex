@@ -26,7 +26,6 @@ import {
   workflowNodeIdSchema,
 } from "../catalogue/identifiers";
 import { versionRequirementSchema } from "./definitions";
-import { protectedOperationChannelSchema } from "./operation-contracts";
 import { flowNodeRunAsSchema } from "../access/run-as-vocabulary";
 import { tenantStructuralCapabilitySchema } from "../access/identity-access";
 
@@ -54,13 +53,6 @@ export const flowValueDeclarationSchema = z
         message: "Record-reference values require their allowed record types",
       });
   });
-
-export const typedFlowResultMappingSchema = z
-  .object({
-    output: builderKeySchema,
-    type: workflowValueTypeSchema,
-  })
-  .strict();
 
 export const componentSemanticEventKindSchema = z.enum([
   "action",
@@ -112,7 +104,6 @@ export const componentFlowBindingSchema = z
     flow: flowBindingSchema,
   })
   .strict();
-
 
 export const protectedOperationOwnerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema }).strict(),
@@ -195,22 +186,6 @@ export const protectedOperationReferenceSetSchema = z
       });
   });
 
-export const sameProtectedOperationReferenceSet = (
-  left: readonly ProtectedOperationReference[],
-  right: readonly ProtectedOperationReference[],
-): boolean => {
-  const canonicalLeft = canonicalizeProtectedOperationReferences(left);
-  const canonicalRight = canonicalizeProtectedOperationReferences(right);
-  return (
-    canonicalLeft.length === canonicalRight.length &&
-    canonicalLeft.every(
-      (reference, index) =>
-        protectedOperationReferenceKey(reference) ===
-        protectedOperationReferenceKey(canonicalRight[index]!),
-    )
-  );
-};
-
 const flowNodeOperationReferencesShape = {
   nodeId: builderKeySchema,
   operations: protectedOperationReferenceSetSchema,
@@ -233,11 +208,6 @@ const refineFlowNodeGrantability = (
       message: "Record and Query nodes are owned by an Application or Module",
     });
 };
-
-export const flowNodeOperationReferencesSchema = z
-  .object(flowNodeOperationReferencesShape)
-  .strict()
-  .superRefine(refineFlowNodeGrantability);
 
 /**
  * Exact manifest entries for targets contained by an Application release. These are deliberately
@@ -547,6 +517,34 @@ export const protectedOperationDescriptorSchema = z
 export { flowNodeRunAsSchema };
 
 /**
+ * The one channel vocabulary. It is the channel through which a protected operation, and the flow
+ * surface that invoked it, was reached. The trusted server entry point sets the channel in the
+ * request context; a caller never supplies it, and a context without one means `web`. Activity
+ * source and flow execution binding surface are the same list, so a recorded source and a permitted
+ * surface always agree.
+ *
+ * - `web`: a signed-in person using the Vortex web application.
+ * - `mcp`: an MCP client acting through the Vortex MCP surface.
+ * - `programmatic_interface`: a caller of a published programmatic interface (formerly the
+ *   Activity source `interface`).
+ * - `connection`: an external system reaching the organisation through an installed connection.
+ *   Activity recorded before the wrappers read the context channel (#1094, #1095) also uses it for
+ *   connection grant and administration changes.
+ * - `federation`: another organisation reaching this one through federation.
+ * - `durable_workflow`: a step of a durable workflow run (formerly the Activity source `workflow`).
+ * - `system`: platform work with no outside caller, such as scheduled or maintenance work.
+ */
+export const protectedOperationChannelSchema = z.enum([
+  "web",
+  "mcp",
+  "programmatic_interface",
+  "connection",
+  "federation",
+  "durable_workflow",
+  "system",
+]);
+
+/**
  * An execution binding is an Access-owned grant, separate from the editable run-as reference a
  * definition carries. It names one exact organisation, application release, flow node, protected
  * operation and effective actor, plus who may invoke it, on which surfaces, with which declared
@@ -694,11 +692,11 @@ export const sourceComponentFlowBindingSchema = z
   })
   .strict();
 
-
 export type ComponentSemanticEventKind = z.infer<typeof componentSemanticEventKindSchema>;
 export type FlowEffectKind = z.infer<typeof flowEffectKindSchema>;
 export type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffectKindSchema>;
 export type ComponentFlowBinding = z.infer<typeof componentFlowBindingSchema>;
+export type ProtectedOperationChannel = z.infer<typeof protectedOperationChannelSchema>;
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;
 export type PlatformServiceOperationRelease = z.infer<
   typeof platformServiceOperationReleaseSchema

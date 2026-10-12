@@ -44,7 +44,6 @@ import {
 import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
 
 export {
-  richTextBlockSchema,
   richTextDocumentSchema,
   richTextElementKindSchema,
 } from "../records/rich-text";
@@ -1658,28 +1657,6 @@ export const immutablePlatformBlockCatalogueSchema = z
     }
   });
 
-export const platformBlockDependenciesSchemaForCatalogue = (catalogueInput: unknown) => {
-  const catalogue = immutablePlatformBlockCatalogueSchema.parse(catalogueInput);
-  const releases = new Map(
-    catalogue.releases.map((release) => [
-      `${release.blockId}:${release.releaseVersion}`,
-      `${release.contentFingerprint}:${release.catalogueFingerprint}`,
-    ]),
-  );
-  return platformBlockDependenciesSchema.superRefine((dependencies, context) => {
-    for (const [index, dependency] of dependencies.entries()) {
-      const expected = releases.get(`${dependency.blockId}:${dependency.releaseVersion}`);
-      const actual = `${dependency.contentFingerprint}:${dependency.catalogueFingerprint}`;
-      if (expected !== actual)
-        context.addIssue({
-          code: "custom",
-          path: [index],
-          message: "A platform-block dependency must match one exact immutable catalogue release",
-        });
-    }
-  });
-};
-
 export const platformBlockDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_block")),
@@ -2878,7 +2855,6 @@ export const sourceGuidedFormPageCompositionSchema = z.discriminatedUnion("shell
 
 export type PlatformBlockRelease = z.infer<typeof platformBlockReleaseSchema>;
 export type ComponentStateOperationKind = z.infer<typeof componentStateOperationKindSchema>;
-export type PlatformBlockDependency = z.infer<typeof platformBlockDependencySchema>;
 export type PlatformThemeRelease = z.infer<typeof platformThemeReleaseSchema>;
 export type ApplicationCompositionPolicy = z.infer<typeof applicationCompositionPolicySchema>;
 export type ImmutablePlatformBlockCatalogue = z.infer<typeof immutablePlatformBlockCatalogueSchema>;

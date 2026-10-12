@@ -91,12 +91,6 @@ export const actionInputValueTypes = {
   record_reference: "record_reference",
   organization_account_reference: "organization_account_reference",
 } as const satisfies Record<string, ValueType>;
-export type ActionInputValueType =
-  (typeof actionInputValueTypes)[keyof typeof actionInputValueTypes];
-export const actionInputValueTypeKeys = Object.values(
-  actionInputValueTypes,
-) as unknown as readonly [ActionInputValueType, ...ActionInputValueType[]];
-export const actionInputValueTypeSchema = z.enum(actionInputValueTypeKeys);
 
 /** Sharing-parameter value types accepted by the current condition contract. */
 export const sharingParameterValueTypeKeys = [
@@ -111,14 +105,6 @@ export const sharingParameterValueTypeKeys = [
 ] as const satisfies readonly ValueType[];
 export const sharingParameterValueTypeSchema = z.enum(sharingParameterValueTypeKeys);
 
-export const pageTypeKeys = [
-  "list",
-  "detail",
-  "dashboard",
-  "form",
-  "guided_form",
-  "public",
-] as const;
 export const blockPaletteGroupKeys = [
   "data",
   "figures",
@@ -128,51 +114,24 @@ export const blockPaletteGroupKeys = [
   "layout",
   "content",
 ] as const;
-export const blockSettingControlKeys = [
-  "text",
-  "long_text",
-  "formatted_text",
-  "number",
-  "switch",
-  "choice",
-  "theme_colour",
-  "platform_icon",
-  "stored_image",
-  "data_reading",
-  "record_type_picker",
-  "record_picker",
-  "field_picker",
-  "relationship_picker",
-  "action_picker",
-  "page_picker",
-  "process_pipeline_picker",
-] as const;
 
 export const fieldTypeSchema = z.enum(fieldTypeKeys);
-export const pageTypeSchema = z.enum(pageTypeKeys);
 /**
  * The fixed application experience states. A page refused and a page missing share `not_found`,
  * so their surfaces stay indistinguishable and never reveal why an address is unavailable.
  */
 export const applicationExperienceStateKeys = ["not_found", "unavailable", "error"] as const;
 export const applicationExperienceStateSchema = z.enum(applicationExperienceStateKeys);
-export type ApplicationExperienceState = z.infer<typeof applicationExperienceStateSchema>;
 export const blockPaletteGroupSchema = z.enum(blockPaletteGroupKeys);
-export const blockSettingControlSchema = z.enum(blockSettingControlKeys);
 
 export const workflowValueTypeSchema = z.enum(workflowValueTypeKeys);
-export const lifecycleStateSchema = z.enum(["active", "soft_deleted", "removal_pending"]);
 export const personalDataClassSchema = z.enum(["none", "personal", "sensitive"]);
 export const publicDisplaySchema = z.enum(["refused", "allowed"]);
 export const searchPrioritySchema = z.enum(["first", "normal", "last"]);
 
 export type FieldType = z.infer<typeof fieldTypeSchema>;
-export type PageType = z.infer<typeof pageTypeSchema>;
 export type BlockPaletteGroup = z.infer<typeof blockPaletteGroupSchema>;
-export type BlockSettingControl = z.infer<typeof blockSettingControlSchema>;
-export type LifecycleState = z.infer<typeof lifecycleStateSchema>;
 export type PersonalDataClass = z.infer<typeof personalDataClassSchema>;
-export type PublicDisplay = z.infer<typeof publicDisplaySchema>;
 export type SearchPriority = z.infer<typeof searchPrioritySchema>;
 
 /** The semantic spelling of a flow value type, shared by every flow compatibility check. */

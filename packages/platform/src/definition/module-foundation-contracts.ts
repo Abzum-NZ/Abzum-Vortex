@@ -269,16 +269,6 @@ export const installedEventDescriptorSchema = z.discriminatedUnion("kind", [
   declaredInstalledEventDescriptorSchema,
 ]);
 
-
-export type ModuleDependency = z.infer<typeof moduleDependencySchema>;
-export type RelationshipDefinition = z.infer<typeof relationshipDefinitionSchema>;
 export type Condition = z.infer<typeof conditionNodeSchema>;
-export type EventDefinition = z.infer<typeof eventDefinitionSchema>;
 export type StandardInstalledEventKind = z.infer<typeof standardInstalledEventKindSchema>;
-export type StandardInstalledEventDescriptor = z.infer<
-  typeof standardInstalledEventDescriptorSchema
->;
-export type DeclaredInstalledEventDescriptor = z.infer<
-  typeof declaredInstalledEventDescriptorSchema
->;
 export type InstalledEventDescriptor = z.infer<typeof installedEventDescriptorSchema>;
