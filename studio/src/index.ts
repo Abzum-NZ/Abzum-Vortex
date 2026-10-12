@@ -1,4 +1,5 @@
 export * from "./contextual-palette";
+export * from "./application-page-puck-editor";
 export * from "./vortex-puck-adapter";
 export * from "./discovery-adapter";
 export * from "./navigation-adapter";

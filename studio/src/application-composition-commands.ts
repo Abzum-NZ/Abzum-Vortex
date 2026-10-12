@@ -338,7 +338,7 @@ const privateContentAt = (root: unknown, steps: readonly SlotStep[]): unknown[] 
     if (!Array.isArray(content)) return refuse();
     const matches = content.filter((value: unknown) => object(object(value).props).id === step.parentAlias);
     if (matches.length !== 1) return refuse();
-    content = object(object(matches[0]).props)[`slot_${step.slotKey}`];
+    content = object(object(matches[0]).props)[step.slotKey];
   }
   if (!Array.isArray(content)) return refuse();
   return content;
@@ -1032,7 +1032,7 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     for (const step of target.steps) {
       if (!Array.isArray(content)) return refuse();
       const parent: unknown = content.find((value: unknown) => object(object(value).props).id === step.parentAlias);
-      content = object(object(parent).props)[`slot_${step.slotKey}`];
+      content = object(object(parent).props)[step.slotKey];
     }
     if (!Array.isArray(content)) return refuse();
     if (command.kind === "order") {
@@ -1077,7 +1077,12 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
       }
       const node: unknown = content.find((value: unknown) => object(object(value).props).id === alias);
       const props = object(object(node).props);
-      props.vortex = { ...object(props.vortex), responsive };
+      const metadata = object(props.vortex);
+      const authored = object(metadata.authored);
+      props.vortex = {
+        ...metadata,
+        authored: { ...authored, responsive: structuredClone(responsive) },
+      };
     } else return { kind: "invalid" };
     if (target.region.shell) {
       const shell = bridge.fromPuckShell(target.region.shell, data);

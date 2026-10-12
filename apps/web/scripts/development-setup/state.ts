@@ -33,6 +33,7 @@ export type SetupState = {
   drafts: Record<string, CreatedDraft>;
   releases: Record<string, PublishedRelease>;
   installerRoleGranted: boolean;
+  definitionRoleGranted: boolean;
   lifecyclePolicies: Record<string, boolean>;
   /**
    * Organisation-shared record types whose one lifecycle policy is stored, by storage contract id.
@@ -81,6 +82,7 @@ export const loadSetupState = (
   let releases: Record<string, PublishedRelease> = {};
   let drafts: Record<string, CreatedDraft> = {};
   let installerRoleGranted = false;
+  let definitionRoleGranted = false;
   let lifecyclePolicies: Record<string, boolean> = {};
   let sharedLifecyclePolicies: Record<string, boolean> = {};
   let setupCompleted = false;
@@ -93,6 +95,7 @@ export const loadSetupState = (
       releases?: Record<string, PublishedRelease>;
       drafts?: Record<string, CreatedDraft>;
       installerRoleGranted?: boolean;
+      definitionRoleGranted?: boolean;
       lifecyclePolicies?: Record<string, boolean>;
       sharedLifecyclePolicies?: Record<string, boolean>;
       setupCompleted?: boolean;
@@ -107,6 +110,7 @@ export const loadSetupState = (
       releases = stored.releases ?? {};
       drafts = stored.drafts ?? {};
       installerRoleGranted = stored.installerRoleGranted === true;
+      definitionRoleGranted = stored.definitionRoleGranted === true;
       lifecyclePolicies = stored.lifecyclePolicies ?? {};
       sharedLifecyclePolicies = stored.sharedLifecyclePolicies ?? {};
       setupCompleted = stored.setupCompleted === true;
@@ -135,6 +139,7 @@ export const loadSetupState = (
     drafts,
     releases,
     installerRoleGranted,
+    definitionRoleGranted,
     lifecyclePolicies,
     sharedLifecyclePolicies,
     setupCompleted,
@@ -151,6 +156,7 @@ export const loadSetupState = (
             drafts: state.drafts,
             releases: state.releases,
             installerRoleGranted: state.installerRoleGranted,
+            definitionRoleGranted: state.definitionRoleGranted,
             lifecyclePolicies: state.lifecyclePolicies,
             sharedLifecyclePolicies: state.sharedLifecyclePolicies,
             setupCompleted: state.setupCompleted,

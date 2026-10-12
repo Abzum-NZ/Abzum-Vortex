@@ -8,7 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { useRouter } from "next/navigation";
 import { applicationSourceDocumentV2Schema, canonicalJson,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
-  type DefinitionPublicationConfirmation, type PublishDefinitionResult } from "@vortex/contracts";
+  type ApplicationSourceDocumentV2, type DefinitionPublicationConfirmation,
+  type PublishDefinitionResult } from "@vortex/contracts";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -19,6 +20,7 @@ import {
   applyStudioFlowCalculateCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
+  ApplicationPagePuckEditor,
   projectStudioSemanticOutline,
   projectStudioFlowPresentationMoves,
   projectStudioFlowPresentationRemoval,
@@ -40,6 +42,7 @@ import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./app
 import { ApplicationSourceImport } from "./application-source-import";
 import { ApplicationSearchEditor } from "./application-search-editor";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
+import type { StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
 import {
   sameStudioApplicationSourceImportSnapshot,
   type StudioApplicationSourceImportSnapshot,
@@ -48,7 +51,8 @@ import {
 type WorkspaceProps =
   | Readonly<{ mode: "new"; organizationId: string }>
   | Readonly<{ mode: "existing"; organizationId: string; draft: StudioStoredApplicationDraft;
-      searchMetadata?: StudioApplicationSearchMetadata | null }>;
+      searchMetadata?: StudioApplicationSearchMetadata | null;
+      pageCompiledSlots?: StudioApplicationCompiledPageSlots | null }>;
 
 type PublicationSnapshot = Readonly<{
   organizationId: string; rootId: string; key: string; draftRevision: number;
@@ -75,7 +79,8 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new"
     ? <NewApplicationWorkspace organizationId={props.organizationId} />
     : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft}
-        initialSearchMetadata={props.searchMetadata ?? null} />;
+        initialSearchMetadata={props.searchMetadata ?? null}
+        pageCompiledSlots={props.pageCompiledSlots ?? null} />;
 }
 
 function NewApplicationWorkspace({ organizationId }: { organizationId: string }) {
@@ -184,8 +189,9 @@ function Outline({ node, selectedKey, choose, disabled = false }: {
   </li>;
 }
 
-function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMetadata }: {
+function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMetadata, pageCompiledSlots }: {
   organizationId: string; draft: StudioStoredApplicationDraft; initialSearchMetadata: StudioApplicationSearchMetadata | null;
+  pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
 }) {
   const active = useRef(false);
   const lifetime = useRef(0);
@@ -554,6 +560,26 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     setMessage("Labels applied to local history. Save to persist this change.");
   };
 
+  const applyPuckPageEdit = (expectedSource: ApplicationSourceDocumentV2,
+    nextSource: ApplicationSourceDocumentV2) => {
+    const current = history.getState();
+    const currentSelection = selection.getSelection();
+    if (!active.current || publicationPending.current || reopening.current || current.isSaving ||
+      pendingSearch || sourceImportPending.current || labelsPending.current || appearancePending.current ||
+      compositionPending.current || conditionPending.current || flowTextPending.current || flowAppendPending.current ||
+      currentSelection?.kind !== "page" || currentSelection.pageAlias !== selectedPage?.id ||
+      canonicalJson(expectedSource) !== canonicalJson(current.source)) return;
+    const parsed = applicationSourceDocumentV2Schema.safeParse(nextSource);
+    if (!parsed.success) {
+      console.error("Failed to validate Puck page changes", parsed.error);
+      setMessage("This page change could not be applied. The saved draft and current edits are preserved.");
+      return;
+    }
+    if (parsed.data.key !== draft.key || parsed.data.root_alias !== current.source.root_alias ||
+      !history.edit(parsed.data)) return;
+    setMessage("Page composition applied to local history. Save to persist it.");
+  };
+
   const save = async () => {
     if (publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || history.getState().isSaving || conditionPending.current || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current) return;
     publicationEpoch.current += 1;
@@ -760,7 +786,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(publishedPublication, null, 2)}</pre>
       </details>}
     </form>
-    <div className="grid gap-6 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_minmax(16rem,1fr)]">
+    <div className={selected?.kind === "page"
+      ? "grid gap-6"
+      : "grid gap-6 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_minmax(16rem,1fr)]"}>
       <nav aria-label="Application outline" className="space-y-3"><h2 className="font-semibold">Outline</h2>
         <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={(node) => {
           if (publicationPending.current || reopening.current || history.getState().isSaving || (((sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
@@ -779,11 +807,21 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
           setLabel(currentLabel);
           setDescription(source.body.description);
         }} /></ul></nav>
-      <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Selected item">
+      <section className={selected?.kind === "page"
+        ? "space-y-3 bg-card text-card-foreground"
+        : "space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"} aria-label="Selected item">
         <h2 className="font-semibold">{inspector.status === "resolved" ? inspector.descriptor.label : "Select an item"}</h2>
-        {selectedPage?.type === "dashboard" && <p>This dashboard's authored composition is preserved. This minimum host edits labels; it does not render or execute application data, events or actions.</p>}
+        {selectedPage?.type === "dashboard" && <p>This page composition is rendered from its definition and can be edited visually below.</p>}
         {selected?.kind === "application" && <p>{source.body.description}</p>}
-        {(selected?.kind === "placement" || selected?.kind === "page") && inspector.status === "resolved" &&
+        {selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
+          <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}`} source={source}
+            compiledSource={draft.source}
+            pageAlias={selectedPage.id} compiledSlot={pageCompiledSlots?.[selectedPage.id]}
+            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening ||
+              state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition ||
+              pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
+            onChange={applyPuckPageEdit} />}
+        {selected?.kind === "placement" && inspector.status === "resolved" &&
           <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
             selection={selected} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingFlowText || pendingFlowAppend || pendingCondition || workspaceLifetime === 0}
             onPendingChange={reportCompositionPending} onCommand={(expected, expectedSelection, command) => {
