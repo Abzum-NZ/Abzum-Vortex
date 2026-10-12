@@ -10,11 +10,11 @@ import {
   createApplicationInstallationCoordinator,
   type HumanInstallationDefinitionAccess,
 } from "@vortex/app";
-import {
-  type ApplicationRootId,
-  type IdentitySession,
-  type OrganizationId,
-  type SystemApplicationBoundReleaseSetResult,
+import type {
+  ApplicationRootId,
+  IdentitySession,
+  OrganizationId,
+  SystemApplicationBoundReleaseSetResult,
 } from "@vortex/contracts";
 import {
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
@@ -26,7 +26,7 @@ import {
   installedReleaseCatalogue,
   releaseSetContainsCustomComponents,
 } from "./definition-catalogue";
-import { appTelemetry as telemetry, humanOrganizationRequests } from "./server-composition";
+import { humanOrganizationRequests } from "./server-composition";
 
 /**
  * The deliberate release adoption of one installed application (#610). The offered target is the

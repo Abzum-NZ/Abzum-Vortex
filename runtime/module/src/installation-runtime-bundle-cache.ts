@@ -78,7 +78,9 @@ const removeLeastRecentlyUsed = (state: CacheState): boolean => {
 };
 
 const clearEntries = (state: CacheState): void => {
-  while (removeLeastRecentlyUsed(state)) {}
+  while (removeLeastRecentlyUsed(state)) {
+    /* Continue until the cache is empty. */
+  }
 };
 
 const cacheKey = (

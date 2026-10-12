@@ -19,7 +19,7 @@ import {
 } from "@vortex/definition";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
-import { createHumanOrganizationRequestService } from "./human-organization-request";
+import type { createHumanOrganizationRequestService } from "./human-organization-request";
 
 type Failure = Readonly<{ kind: "refused" | "conflict" | "dependency_unavailable" | "no_change" | "temporarily_unavailable" }>;
 export type HumanApplicationPublicationPreparationResult = Failure |

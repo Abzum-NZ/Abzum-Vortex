@@ -39,11 +39,8 @@ import {
   type StoredApplicationDefinitionDraft,
 } from "@vortex/definition";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
-import {
-  createBuilderAuthority,
-  type BuilderTargetFactsReader,
-} from "./builder-authority";
-import { createHumanOrganizationRequestService } from "./human-organization-request";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+import type { createHumanOrganizationRequestService } from "./human-organization-request";
 
 export type HumanApplicationDraftWriteResult =
   | Readonly<{ kind: "available"; draft: StoredApplicationDefinitionDraft }>
@@ -339,7 +336,10 @@ export const createHumanApplicationDraftWriter = (
       { organizationId: organization.data },
       async (transaction, scope): Promise<StoredApplicationDefinitionDraft> => {
         try {
-          if (!sameId(scope.organizationId, organization.data) || scope.applicationRootId !== undefined)
+          if (
+            !sameId(scope.organizationId, organization.data) ||
+            scope.applicationRootId !== undefined
+          )
             throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
           const authority = createBuilderAuthority({ transaction, scope, targetFacts });
           const store = createDefinitionStore(transaction, authority);
@@ -396,22 +396,26 @@ export const createHumanApplicationDraftWriter = (
     session: IdentitySession,
     organizationId: string,
     candidate: unknown,
-    derive: (input: Readonly<{
-      transaction: RequestDatabaseTransaction;
-      scope: SelectedOrganizationScope;
-      session: IdentitySession;
-      draft: StoredApplicationDefinitionDraft;
-      command: DerivedDraftCommand;
-    }>) => Promise<DerivedDraftMaterialization>,
-  ): Promise<HumanApplicationDraftWriteResult | Readonly<{
-    kind: "no_change";
-    draftRevision: number;
-    sourceFingerprint: string;
-  }>> => {
+    derive: (
+      input: Readonly<{
+        transaction: RequestDatabaseTransaction;
+        scope: SelectedOrganizationScope;
+        session: IdentitySession;
+        draft: StoredApplicationDefinitionDraft;
+        command: DerivedDraftCommand;
+      }>,
+    ) => Promise<DerivedDraftMaterialization>,
+  ): Promise<
+    | HumanApplicationDraftWriteResult
+    | Readonly<{
+        kind: "no_change";
+        draftRevision: number;
+        sourceFingerprint: string;
+      }>
+  > => {
     const organization = organizationIdSchema.safeParse(organizationId);
     const command = derivedDraftCommandSchema.safeParse(candidate);
-    if (!organization.success || !command.success)
-      return { kind: "refused" };
+    if (!organization.success || !command.success) return { kind: "refused" };
     if (command.data.candidateReleaseRevision !== command.data.expectedPublicationAnchor)
       return { kind: "conflict" };
 
@@ -421,7 +425,10 @@ export const createHumanApplicationDraftWriter = (
       { organizationId: organization.data },
       async (transaction, scope): Promise<DerivedDraftWriteResult> => {
         try {
-          if (!sameId(scope.organizationId, organization.data) || scope.applicationRootId !== undefined)
+          if (
+            !sameId(scope.organizationId, organization.data) ||
+            scope.applicationRootId !== undefined
+          )
             throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
           const authority = createBuilderAuthority({ transaction, scope, targetFacts });
           await requireBuilderAuthority(authority, {
@@ -444,10 +451,8 @@ export const createHumanApplicationDraftWriter = (
             const code = databaseErrorCode(error);
             if (code === "40001")
               throw new DefinitionStoreError("DEFINITION_DRAFT_STALE_OR_MISSING");
-            if (code === "42501")
-              throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
-            if (code === "22023")
-              throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
+            if (code === "42501") throw new DefinitionStoreError("DEFINITION_CONTEXT_REFUSED");
+            if (code === "22023") throw new DefinitionStoreError("INVALID_DEFINITION_COMMAND");
             throw error;
           }
           if (
@@ -539,13 +544,15 @@ export const createHumanApplicationDraftWriter = (
       session: IdentitySession,
       organizationId: string,
       candidate: unknown,
-      derive: (input: Readonly<{
-        transaction: RequestDatabaseTransaction;
-        scope: SelectedOrganizationScope;
-        session: IdentitySession;
-        draft: StoredApplicationDefinitionDraft;
-        command: DerivedDraftCommand;
-      }>) => Promise<DerivedDraftMaterialization>,
+      derive: (
+        input: Readonly<{
+          transaction: RequestDatabaseTransaction;
+          scope: SelectedOrganizationScope;
+          session: IdentitySession;
+          draft: StoredApplicationDefinitionDraft;
+          command: DerivedDraftCommand;
+        }>,
+      ) => Promise<DerivedDraftMaterialization>,
     ) => writeDerived(session, organizationId, candidate, derive),
   });
 };

@@ -14,7 +14,7 @@ import type {
   ThemeValidationFailure,
 } from "./types";
 
-export const REGISTERED_THEME_TOKEN_KINDS: ReadonlySet<ThemeTokenKindV2> = new Set(
+const REGISTERED_THEME_TOKEN_KINDS: ReadonlySet<ThemeTokenKindV2> = new Set(
   themeTokenKindV2Schema.options,
 );
 
@@ -34,14 +34,10 @@ export function validateComponentThemeOverrides(
   const effectiveOverrides: Record<string, ThemeTokenValueV2> = {};
 
   const permittedSet: ReadonlySet<ThemeTokenKindV2> | undefined =
-    context.permittedTokenKinds !== undefined
-      ? new Set(context.permittedTokenKinds)
-      : undefined;
+    context.permittedTokenKinds !== undefined ? new Set(context.permittedTokenKinds) : undefined;
 
   const extraSegments = [
-    ...(context.pageKey !== undefined
-      ? [{ kind: "page" as const, key: context.pageKey }]
-      : []),
+    ...(context.pageKey !== undefined ? [{ kind: "page" as const, key: context.pageKey }] : []),
     ...(context.componentKey !== undefined
       ? [{ kind: "block" as const, key: context.componentKey }]
       : []),

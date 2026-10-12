@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextResponse} from "next/server";
+import type { NextRequest } from "next/server";
 import {
   createDurableActorRequestService,
   createOrganizationAccessAdministrationService,
@@ -7,7 +8,7 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "@vortex/access";
 import { createProtectedOperationExecutor } from "@vortex/app";
-import { type RequestDatabaseTransaction } from "@vortex/db";
+import type { RequestDatabaseTransaction } from "@vortex/db";
 import {
   createRequestBoundTenantGovernanceService,
   type RequestBoundTenantGovernanceService,

@@ -1,10 +1,11 @@
 import "server-only";
 
+import type {
+  sourceIdentityAssignmentV3Schema} from "@vortex/contracts";
 import {
   applicationRootIdSchema,
   canonicalJson,
   organizationIdSchema,
-  sourceIdentityAssignmentV3Schema,
   storedDefinitionDraftSchema,
   sessionContextSchema,
   sameId,

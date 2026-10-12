@@ -2,12 +2,13 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import type {
+  flowControlTaskTypeKeys} from "@vortex/contracts";
 import {
   isRecord,
   applicationRootIdSchema,
   canonicalJson,
   flowTaskChildLists,
-  flowControlTaskTypeKeys,
   flowSchema,
   flowTaskRegistry,
   protectedOperationReferenceSetSchema,

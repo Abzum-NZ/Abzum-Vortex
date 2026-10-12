@@ -16,8 +16,9 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "@vortex/contracts";
+import type {
+  createReferenceChoiceService} from "@vortex/query";
 import {
-  createReferenceChoiceService,
   recordReferenceChoiceCommandSchema,
   resolveReferenceChoiceSelection,
   type RecordReferenceChoiceCommand,

@@ -7,8 +7,11 @@ import { packageAreas, paths } from "./config.ts";
 type Finding = { rule: string; file: string; line: number; detail: string; id: string };
 const root = resolve(import.meta.dirname, "../..");
 const baselinePath = resolve(import.meta.dirname, "baseline.json");
+const hasBaseline = existsSync(baselinePath);
+const baseline = hasBaseline ? (JSON.parse(readFileSync(baselinePath, "utf8")) as string[]) : [];
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".sql"]);
 const findings: Finding[] = [];
+const silentFindings: Array<{ file: string; line: number; variable: string; branch: string }> = [];
 const occurrences = new Map<string, number>();
 const normalize = (value: string) => value.replaceAll("\\", "/");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
@@ -159,6 +162,7 @@ for (const file of codeFiles) {
     ) {
       add("process-artifact", file, lineAt(content, node.getStart(source)), node.text);
     }
+    if (fileArea === "platform" || fileArea === "schema") checkSilentParse(node);
     ts.forEachChild(node, visit);
   }
   function checkImport(specifier: string, offset: number): void {
@@ -166,6 +170,7 @@ for (const file of codeFiles) {
     const invalid =
       (target === "web" && fileArea !== "web") ||
       (fileArea === "platform" && (target === "ui" || target === "definitions")) ||
+      (fileArea === "schema" && target !== "schema" && target !== "other") ||
       ((fileArea === "ui" || fileArea === "definitions") &&
         (target === "platform" ||
           target === "web" ||
@@ -173,34 +178,172 @@ for (const file of codeFiles) {
           (target === "ui" && fileArea === "definitions")));
     if (invalid) add("layering", file, lineAt(content, offset), specifier);
   }
-  visit(source);
-  if (fileArea === "platform" || fileArea === "schema") {
-    // Match a parsed value and a later failure branch in the same source region.
-    for (const match of content.matchAll(
-      /\b(?:const|let)\s+(\w+)\s*=\s*[^;]{0,300}?\.safeParse\s*\(/g,
-    )) {
-      const variable = match[1];
-      const tail = content.slice(match.index + match[0].length, match.index + 4000);
-      const failure = new RegExp(
-        `if\\s*\\(\\s*!\\s*${variable}\\.success\\s*\\)|if\\s*\\(\\s*${variable}\\.success\\s*===?\\s*false\\s*\\)`,
-        "g",
-      ).exec(tail);
-      if (!failure) continue;
-      const branch = tail.slice(failure.index, failure.index + 600);
-      const nextClose = branch.indexOf("}");
-      const body = nextClose < 0 ? branch : branch.slice(0, nextClose);
+  function parseVariable(node: ts.Node): string | undefined {
+    if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || !node.initializer)
+      return undefined;
+    let found = false;
+    function scan(value: ts.Node): void {
       if (
-        /return\s+(?:null|undefined|false)\s*;/.test(body) &&
-        !/(?:console\.|logger\.|log\(|captureException\()/i.test(body)
-      ) {
-        add(
-          "silent-parse",
-          file,
-          lineAt(content, match.index + match[0].length + failure.index),
-          variable,
-        );
-      }
+        ts.isCallExpression(value) &&
+        ts.isPropertyAccessExpression(value.expression) &&
+        value.expression.name.text === "safeParse"
+      )
+        found = true;
+      ts.forEachChild(value, scan);
     }
+    scan(node.initializer);
+    return found ? node.name.text : undefined;
+  }
+  function parseSuccess(node: ts.Expression, variable: string): boolean {
+    if (ts.isParenthesizedExpression(node)) return parseSuccess(node.expression, variable);
+    return (
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === variable &&
+      node.name.text === "success"
+    );
+  }
+  function failureCondition(node: ts.Expression, variable: string): "true" | "false" | undefined {
+    if (ts.isParenthesizedExpression(node)) return failureCondition(node.expression, variable);
+    if (
+      ts.isPrefixUnaryExpression(node) &&
+      node.operator === ts.SyntaxKind.ExclamationToken &&
+      parseSuccess(node.operand, variable)
+    )
+      return "true";
+    if (parseSuccess(node, variable)) return "false";
+    if (ts.isBinaryExpression(node)) {
+      const comparison = node.operatorToken.kind;
+      if (
+        parseSuccess(node.left, variable) &&
+        (node.right.kind === ts.SyntaxKind.FalseKeyword ||
+          node.right.kind === ts.SyntaxKind.TrueKeyword)
+      ) {
+        const equals =
+          comparison === ts.SyntaxKind.EqualsEqualsToken ||
+          comparison === ts.SyntaxKind.EqualsEqualsEqualsToken;
+        const differs =
+          comparison === ts.SyntaxKind.ExclamationEqualsToken ||
+          comparison === ts.SyntaxKind.ExclamationEqualsEqualsToken;
+        if (equals || differs)
+          return (node.right.kind === ts.SyntaxKind.FalseKeyword) === equals ? "true" : "false";
+      }
+      if (
+        comparison === ts.SyntaxKind.BarBarToken ||
+        comparison === ts.SyntaxKind.AmpersandAmpersandToken
+      )
+        return failureCondition(node.left, variable) ?? failureCondition(node.right, variable);
+    }
+    return undefined;
+  }
+  function silentReturn(node: ts.Node): boolean {
+    let hasReturn = false;
+    let hasLog = false;
+    function scan(value: ts.Node): void {
+      if (ts.isReturnStatement(value) && (!value.expression || silentValue(value.expression)))
+        hasReturn = true;
+      if (
+        ts.isCallExpression(value) &&
+        /^(?:(?:console|logger)\.|log$|captureException$)/i.test(value.expression.getText(source))
+      )
+        hasLog = true;
+      ts.forEachChild(value, scan);
+    }
+    scan(node);
+    return hasReturn && !hasLog;
+  }
+  function silentValue(value: ts.Expression): boolean {
+    return (
+      value.kind === ts.SyntaxKind.NullKeyword ||
+      value.kind === ts.SyntaxKind.FalseKeyword ||
+      (ts.isIdentifier(value) && value.text === "undefined")
+    );
+  }
+  function checkSilentParse(node: ts.Node): void {
+    const variable = parseVariable(node);
+    if (!variable) return;
+    const scope = node.parent?.parent?.parent;
+    if (!scope) return;
+    const later =
+      ts.isBlock(scope) || ts.isSourceFile(scope)
+        ? scope.statements.filter((statement) => statement.getStart(source) > node.getStart(source))
+        : [];
+    for (const statement of later) {
+      function scan(value: ts.Node): void {
+        if (ts.isIfStatement(value)) {
+          const condition = failureCondition(value.expression, variable);
+          const failureBranch =
+            condition === "true"
+              ? value.thenStatement
+              : condition === "false"
+                ? value.elseStatement
+                : undefined;
+          if (failureBranch && silentReturn(failureBranch))
+            silentFindings.push({
+              file,
+              line: lineAt(content, value.getStart(source)),
+              variable,
+              branch: value.getText(source).replace(/\s+/g, " "),
+            });
+        }
+        if (ts.isConditionalExpression(value)) {
+          const condition = failureCondition(value.condition, variable);
+          const failureBranch =
+            condition === "true"
+              ? value.whenTrue
+              : condition === "false"
+                ? value.whenFalse
+                : undefined;
+          if (failureBranch && silentValue(failureBranch))
+            silentFindings.push({
+              file,
+              line: lineAt(content, value.getStart(source)),
+              variable,
+              branch: value.getText(source).replace(/\s+/g, " "),
+            });
+        }
+        ts.forEachChild(value, scan);
+      }
+      scan(statement);
+    }
+  }
+  visit(source);
+}
+
+// The first baseline predates the AST check. Preserve its entries and compare the
+// newly visible cases with main, so older branches do not enlarge the baseline.
+const oldSilentCounts = new Map<string, number>();
+for (const id of baseline) {
+  if (!id.startsWith("silent-parse|")) continue;
+  const key = id.slice(0, id.lastIndexOf("|"));
+  oldSilentCounts.set(key, (oldSilentCounts.get(key) ?? 0) + 1);
+}
+const baseSource = new Map<string, string>();
+const seenBranch = new Map<string, number>();
+const keptOld = new Map<string, number>();
+for (const finding of silentFindings) {
+  const key = `silent-parse|${finding.file}|${finding.variable}`;
+  if (!baseSource.has(finding.file)) {
+    const previous = spawnSync("git", ["show", `origin/main:${finding.file}`], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    baseSource.set(finding.file, previous.status === 0 ? previous.stdout.replace(/\s+/g, " ") : "");
+  }
+  const signature = `${finding.file}|${finding.variable}|${finding.branch}`;
+  const occurrence = (seenBranch.get(signature) ?? 0) + 1;
+  seenBranch.set(signature, occurrence);
+  const baseCount = baseSource.get(finding.file)!.split(finding.branch).length - 1;
+  if (occurrence <= baseCount) {
+    const kept = keptOld.get(key) ?? 0;
+    if (kept < (oldSilentCounts.get(key) ?? 0)) {
+      add("silent-parse", finding.file, finding.line, finding.variable);
+      keptOld.set(key, kept + 1);
+    }
+  } else {
+    // Reserve the historical identifiers even when a new branch sorts first.
+    occurrences.set(key, Math.max(occurrences.get(key) ?? 0, oldSilentCounts.get(key) ?? 0));
+    add("silent-parse", finding.file, finding.line, finding.variable);
   }
 }
 
@@ -316,8 +459,6 @@ for (const issue of report.issues ?? []) {
 const unique = [...new Map(findings.map((finding) => [finding.id, finding])).values()].sort(
   (a, b) => a.id.localeCompare(b.id),
 );
-const hasBaseline = existsSync(baselinePath);
-const baseline = hasBaseline ? (JSON.parse(readFileSync(baselinePath, "utf8")) as string[]) : [];
 const mainBaseline = spawnSync("git", ["show", "origin/main:tooling/guard/baseline.json"], {
   cwd: root,
   encoding: "utf8",

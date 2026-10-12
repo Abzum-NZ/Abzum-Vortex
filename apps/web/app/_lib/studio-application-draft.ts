@@ -200,7 +200,7 @@ export const loadStudioApplicationDraft = async (
               let release: ResolvableModuleRelease | undefined;
               let previous: number | null = null;
               let count = 0;
-              do {
+              for (;;) {
                 const page = await reader.readModuleReleasePage(scope.organizationId, selection.key, cursor);
                 if (page.rootId === null || page.anchorReleaseRevision === null || !sameId(page.rootId, binding.moduleRootId) || page.entries.length === 0 ||
                     (cursor !== undefined && (page.anchorReleaseRevision !== cursor.anchorReleaseRevision || !sameId(page.rootId, cursor.rootId))))
@@ -220,7 +220,7 @@ export const loadStudioApplicationDraft = async (
                 }
                 if (page.nextAfterReleaseRevision !== previous) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
                 cursor = { rootId: page.rootId, anchorReleaseRevision: page.anchorReleaseRevision, afterReleaseRevision: page.nextAfterReleaseRevision };
-              } while (true);
+              }
               if (release === undefined || !sameId(release.organizationId, scope.organizationId) ||
                   !sameId(release.rootId, binding.moduleRootId) || release.key !== selection.key ||
                   release.releaseVersion !== binding.resolvedVersion)

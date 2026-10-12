@@ -106,7 +106,6 @@ import { DefinitionVersionImpactError } from "./version-impact-error";
 
 type SourceIdentityAssignments = DefinitionResolutionSnapshotV3["identities"];
 type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
-type SourceCondition = NonNullable<ModuleSourceQuery["filter"]>;
 type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
 type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection_type" }>;
 type PublishableCompilationOutput = ApplicationCompilationOutputV2 | ModuleCompilationOutputV3;

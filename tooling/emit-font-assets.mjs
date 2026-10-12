@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 /**
  * Emits every shadcn/create font as a self-hosted asset (#1277), and the font catalogue the theme
  * selection, the theme bridge and the runtime font loader read.

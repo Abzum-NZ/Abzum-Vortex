@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import {
   authenticateEventDispatcher,
   createEventDispatcherWakeup,
@@ -16,8 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type ReadBodyResult =
-  | Readonly<{ ok: true; body?: unknown }>
-  | Readonly<{ ok: false; status: number }>;
+  Readonly<{ ok: true; body?: unknown }> | Readonly<{ ok: false; status: number }>;
 
 // A rejected caller credential is 401. A missing server configuration or a
 // missing, ambiguous or unavailable system actor grant is 503: no credential
