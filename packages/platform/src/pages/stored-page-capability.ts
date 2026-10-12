@@ -658,8 +658,7 @@ export const createStoredPageCapabilityService = (
               ? page.recordType
               : undefined;
           const subjectRecordId = dependencies.selection.subjectRecordId;
-          if (recordType === undefined || subjectRecordId === undefined)
-            return false;
+          if (recordType === undefined || subjectRecordId === undefined) return false;
           const modules = context.releaseSet.modules.filter((module) =>
             sameId(module.rootId, recordType.moduleRootId),
           );

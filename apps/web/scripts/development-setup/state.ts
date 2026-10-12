@@ -77,6 +77,8 @@ const developmentSetupMetadataSchema = z
   .strict();
 
 const setupRevisionSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const setupStateRepairInstruction =
+  "Run `pnpm demo:setup` to reset the local database, or delete `supabase/.temp/development-setup-state.json`.";
 const createdDraftSchema = z
   .object({
     rootId: z.uuid(),
@@ -95,26 +97,24 @@ const setupStateDocumentSchema = z
   .object({
     organizationId: z.uuid(),
     metadata: developmentSetupMetadataSchema,
-    drafts: z.record(z.string(), createdDraftSchema).optional(),
-    releases: z.record(z.string(), publishedReleaseSchema).optional(),
-    installerRoleGranted: z.boolean().optional(),
-    definitionRoleGranted: z.boolean().optional(),
-    lifecyclePolicies: z.record(z.string(), z.boolean()).optional(),
-    sharedLifecyclePolicies: z.record(z.string(), z.boolean()).optional(),
-    setupCompleted: z.boolean().optional(),
-    defaultApplicationInitializationAttempted: z.boolean().optional(),
-    defaultApplicationInitializationAttemptRevision: setupRevisionSchema.nullable().optional(),
-    defaultApplicationInitializationCompleted: z.boolean().optional(),
+    drafts: z.record(z.string(), createdDraftSchema),
+    releases: z.record(z.string(), publishedReleaseSchema),
+    installerRoleGranted: z.boolean(),
+    definitionRoleGranted: z.boolean(),
+    lifecyclePolicies: z.record(z.string(), z.boolean()),
+    sharedLifecyclePolicies: z.record(z.string(), z.boolean()),
+    setupCompleted: z.boolean(),
+    defaultApplicationInitializationAttempted: z.boolean(),
+    defaultApplicationInitializationAttemptRevision: setupRevisionSchema.nullable(),
+    defaultApplicationInitializationCompleted: z.boolean(),
   })
   .strict()
   .superRefine((state, context) => {
-    const attemptRevision = state.defaultApplicationInitializationAttemptRevision;
-    if (attemptRevision === undefined) return;
     if (
-      state.defaultApplicationInitializationAttempted === undefined ||
-      state.defaultApplicationInitializationCompleted === undefined ||
-      (state.defaultApplicationInitializationAttempted && attemptRevision === null) ||
-      (!state.defaultApplicationInitializationAttempted && attemptRevision !== null)
+      (state.defaultApplicationInitializationAttempted &&
+        state.defaultApplicationInitializationAttemptRevision === null) ||
+      (!state.defaultApplicationInitializationAttempted &&
+        state.defaultApplicationInitializationAttemptRevision !== null)
     )
       context.addIssue({
         code: "custom",
@@ -136,7 +136,7 @@ const stateFailure = (message: string, cause: unknown): Error => {
       : cause instanceof Error
         ? `${cause.name}${typeof storedStateCode(cause) === "string" ? ` (${String(storedStateCode(cause))})` : ""}: ${cause.message}`
         : typeof cause;
-  return new Error(`${message} Cause: ${summary}`, { cause });
+  return new Error(`${message} Cause: ${summary} ${setupStateRepairInstruction}`, { cause });
 };
 
 const readSetupStateDocument = (): unknown | undefined => {
@@ -194,39 +194,23 @@ export const loadSetupState = (
     if (envelope.organizationId.toLowerCase() === organizationId.toLowerCase()) {
       const parsed = setupStateDocumentSchema.safeParse(document);
       if (!parsed.success)
-        throw stateFailure("Development setup state is malformed.", parsed.error);
+        throw stateFailure(
+          "Development setup state does not match the current schema.",
+          parsed.error,
+        );
       const stored = parsed.data;
       if (initialMetadata === undefined) metadata = stored.metadata;
-      releases = stored.releases ?? {};
-      drafts = stored.drafts ?? {};
-      installerRoleGranted = stored.installerRoleGranted === true;
-      definitionRoleGranted = stored.definitionRoleGranted === true;
-      lifecyclePolicies = stored.lifecyclePolicies ?? {};
-      sharedLifecyclePolicies = stored.sharedLifecyclePolicies ?? {};
-      setupCompleted = stored.setupCompleted === true;
-      if (
-        typeof stored.defaultApplicationInitializationAttempted === "boolean" &&
-        typeof stored.defaultApplicationInitializationCompleted === "boolean"
-      ) {
-        if (stored.defaultApplicationInitializationAttemptRevision === undefined) {
-          // A legacy attempted write has no revision evidence. Preserve its prior decision as
-          // completed and clear its pending marker so later saves remain internally consistent.
-          defaultApplicationInitializationAttempted = false;
-          defaultApplicationInitializationCompleted =
-            stored.defaultApplicationInitializationAttempted ||
-            stored.defaultApplicationInitializationCompleted;
-        } else {
-          defaultApplicationInitializationAttempted =
-            stored.defaultApplicationInitializationAttempted;
-          defaultApplicationInitializationCompleted =
-            stored.defaultApplicationInitializationCompleted;
-          defaultApplicationInitializationAttemptRevision =
-            stored.defaultApplicationInitializationAttemptRevision;
-        }
-      } else {
-        // Older setup state may have an explicit null default; do not infer a first initialization.
-        defaultApplicationInitializationCompleted = true;
-      }
+      releases = stored.releases;
+      drafts = stored.drafts;
+      installerRoleGranted = stored.installerRoleGranted;
+      definitionRoleGranted = stored.definitionRoleGranted;
+      lifecyclePolicies = stored.lifecyclePolicies;
+      sharedLifecyclePolicies = stored.sharedLifecyclePolicies;
+      setupCompleted = stored.setupCompleted;
+      defaultApplicationInitializationAttempted = stored.defaultApplicationInitializationAttempted;
+      defaultApplicationInitializationAttemptRevision =
+        stored.defaultApplicationInitializationAttemptRevision;
+      defaultApplicationInitializationCompleted = stored.defaultApplicationInitializationCompleted;
     }
   }
   if (metadata === undefined)

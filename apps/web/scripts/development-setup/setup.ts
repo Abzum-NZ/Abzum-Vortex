@@ -95,14 +95,10 @@ const initializeLandingZoneDefault = async (
 
   if (state.defaultApplicationInitializationAttempted) {
     const attemptRevision = state.defaultApplicationInitializationAttemptRevision;
-    if (attemptRevision === null) {
-      state.defaultApplicationInitializationCompleted = true;
-      state.save();
-      log(
-        "a prior default initialization had no revision evidence; the current default was preserved",
+    if (attemptRevision === null)
+      throw new Error(
+        "Development setup state has inconsistent default initialization metadata. Run `pnpm demo:setup` to reset the local database, or delete `supabase/.temp/development-setup-state.json`.",
       );
-      return;
-    }
     const writeWasObserved =
       observed.value.revision === attemptRevision + 1 &&
       observed.value.defaultApplicationRootId?.toLowerCase() ===
