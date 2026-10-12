@@ -149,3 +149,54 @@ export const runOrganizationAccessOperation = async <Result>(
     throw unavailableError(unavailableCode);
   return { outcome: "completed", value: await operation(decision.data) };
 };
+
+/** Resolve a page's independent permission declarations in one protected database request. */
+export const decideOrganizationAccessBatch = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  declarationCandidates: readonly OrganizationAccessDeclaration[],
+): Promise<readonly boolean[]> => {
+  const resolvedScope = selectedOrganizationScopeSchema.safeParse(scope);
+  const declarations = declarationCandidates.map((candidate) =>
+    organizationAccessDeclarationSchema.safeParse(candidate),
+  );
+  if (!resolvedScope.success || declarations.some((declaration) => !declaration.success))
+    throw unavailableError(unavailableCode);
+  if (declarations.length === 0) return [];
+  const values = declarations.map((declaration) => {
+    if (!declaration.success) throw unavailableError(unavailableCode);
+    if (
+      declaration.data.target.kind === "application" &&
+      (resolvedScope.data.applicationRootId === undefined ||
+        !sameId(resolvedScope.data.applicationRootId, declaration.data.target.applicationRootId))
+    )
+      throw unavailableError(unavailableCode);
+    return declaration.data;
+  });
+  let rows: readonly (EligibilityRow & { decision_index: unknown })[];
+  try {
+    rows = await transaction.query<EligibilityRow & { decision_index: unknown }>`
+      select input.decision_index, decision.*
+      from pg_catalog.jsonb_array_elements(${JSON.stringify(values)}::text::jsonb)
+        with ordinality as input(declaration, decision_index)
+      cross join lateral vortex_access.evaluate_organization_permission_eligibility(
+        input.declaration
+      ) as decision
+      order by input.decision_index
+    `;
+  } catch (error) {
+    throw unavailableError(unavailableCode, undefined, error);
+  }
+  if (rows.length !== values.length) throw unavailableError(unavailableCode);
+  return rows.map((row, index) => {
+    if (Number(row.decision_index) !== index + 1) throw unavailableError(unavailableCode);
+    const eligibility = parseEligibility([row]);
+    const declaration = values[index];
+    if (
+      declaration === undefined ||
+      !isBoundToRequest(eligibility, resolvedScope.data, declaration)
+    )
+      throw unavailableError(unavailableCode);
+    return eligibility.outcome === "eligible";
+  });
+};

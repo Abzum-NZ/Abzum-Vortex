@@ -48,6 +48,7 @@ export {
   type OrganizationLocalAdministrationDependencies,
 } from "./organization-local-administration-access";
 export {
+  decideOrganizationAccessBatch,
   runOrganizationAccessOperation,
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision-access";

@@ -3,7 +3,7 @@ import "server-only";
 import {
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   readCurrentRecordOwnerGroupsAfterAuthorization,
-  runOrganizationAccessOperation,
+  decideOrganizationAccessBatch,
   type HumanOrganizationRequestDependencies,
 } from "@web/platform-server";
 import {
@@ -1738,7 +1738,8 @@ const loadApplicationPageInternal = async (
           if (organizationSettings !== undefined)
             zones.organizationTimeZone = organizationSettings.timeZone;
         }
-        const allowed: string[] = [];
+        const keys: string[] = [];
+        const declarations: OrganizationAccessDeclaration[] = [];
         for (const [key, entry] of gatedPermissions) {
           const declaration: OrganizationAccessDeclaration = {
             operationKey: "application.page.field_choice.view",
@@ -1758,14 +1759,11 @@ const loadApplicationPageInternal = async (
             recentAuthentication: { kind: "none" },
             authority: { kind: "permission" },
           };
-          const decision = await runOrganizationAccessOperation(
-            transaction,
-            scope,
-            declaration,
-            async () => true,
-          );
-          if (decision.outcome === "completed") allowed.push(key);
+          keys.push(key);
+          declarations.push(declaration);
         }
+        const decisions = await decideOrganizationAccessBatch(transaction, scope, declarations);
+        const allowed = keys.filter((_, index) => decisions[index]);
         return { zones, allowed, accessVersion: scope.accessVersion };
       },
     );
