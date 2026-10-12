@@ -450,9 +450,6 @@ importers:
       '@vortex/db':
         specifier: workspace:*
         version: link:../../db
-      '@vortex/workflow':
-        specifier: workspace:*
-        version: link:../workflow
       server-only:
         specifier: 0.0.1
         version: 0.0.1
