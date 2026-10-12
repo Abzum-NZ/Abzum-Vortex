@@ -1,22 +1,20 @@
 import { z } from "zod";
+import { applicationDraftSchema } from "./application-contracts";
+import { applicationCompositionCatalogueSnapshotSchema } from "./application-composition";
+import { applicationSourceDocumentSchema } from "./application-source-contracts";
 import {
-  applicationDraftV2Schema,
-} from "./application-contracts";
-import { applicationCompositionCatalogueSnapshotV2Schema } from "./application-composition-v2";
-import { applicationSourceDocumentV2Schema } from "./application-source-contracts";
-import {
-  actionInputDefinitionSchema,
+  applicationActionInputDefinitionSchema,
   publishedApplicationDefinitionSchema,
 } from "./application-contracts";
 import { flowValueDeclarationSchema } from "./application-flow-bindings";
 import { connectionTypeSourceDocumentSchema } from "../connections/connection-source-contracts";
 import { connectionTypeSchema } from "../connections/integration-contracts";
 import {
-  actionInputDefinitionV3Schema,
-  moduleContractVersionPairV3Schema,
-  moduleDraftV3Schema,
-  storedModuleDraftV3Schema,
-} from "./module-contracts-v3";
+  actionInputDefinitionSchema,
+  moduleContractVersionPairSchema,
+  moduleDraftSchema,
+  storedModuleDraftSchema,
+} from "./module-contracts";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "./definition-provenance";
@@ -41,7 +39,7 @@ import {
   timestampSchema,
 } from "../catalogue/identifiers";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
-import { moduleVersionImpactHistoryEntryV3Schema } from "./version-impact";
+import { moduleVersionImpactHistoryEntrySchema } from "./version-impact";
 
 export {
   definitionProvenanceEntrySchema,
@@ -72,29 +70,17 @@ export const sourceIdentityKindSchema = z.enum([
   "interface",
   "interface_operation",
   "public_address",
-]);
-export type SourceIdentityKind = z.infer<typeof sourceIdentityKindSchema>;
-
-/** V2-only identity vocabulary. The legacy identity decoder remains intentionally closed. */
-export const sourceIdentityKindV2Schema = z.enum([
-  ...sourceIdentityKindSchema.options,
   "shell",
   "shell_content_slot",
   "flow",
   "flow_node",
   "flow_edge",
   "flow_binding",
-]);
-export type SourceIdentityKindV2 = z.infer<typeof sourceIdentityKindV2Schema>;
-
-/** Module V3 adds stable identities owned by each shared Rule graph. */
-export const sourceIdentityKindV3Schema = z.enum([
-  ...sourceIdentityKindV2Schema.options,
   "rule_input",
   "rule_variable",
   "rule_node",
 ]);
-export type SourceIdentityKindV3 = z.infer<typeof sourceIdentityKindV3Schema>;
+export type SourceIdentityKind = z.infer<typeof sourceIdentityKindSchema>;
 
 export const sourceIdentityAssignmentSchema = z
   .object({
@@ -106,29 +92,6 @@ export const sourceIdentityAssignmentSchema = z
     identifier: platformIdSchema,
   })
   .strict();
-
-export const sourceIdentityAssignmentV2Schema = z
-  .object({
-    definitionKey: namespacedKeySchema,
-    scope: z.string().min(1).max(500),
-    kind: sourceIdentityKindV2Schema,
-    componentOwner: z.string().min(1).max(240),
-    alias: z.string().min(1).max(500),
-    identifier: platformIdSchema,
-  })
-  .strict();
-
-export const sourceIdentityAssignmentV3Schema = z
-  .object({
-    definitionKey: namespacedKeySchema,
-    scope: z.string().min(1).max(500),
-    kind: sourceIdentityKindV3Schema,
-    componentOwner: z.string().min(1).max(240),
-    alias: z.string().min(1).max(500),
-    identifier: platformIdSchema,
-  })
-  .strict();
-
 export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -159,31 +122,12 @@ export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
 
 export const definitionResolutionSnapshotSchema = z
   .object({
-    contractVersion: z.literal("1.0.0"),
+    contractVersion: z.literal("3.0.0"),
     fingerprint: fingerprintSchema,
     definitions: z.array(resolvedDefinitionSchema).min(1),
     identities: z.array(sourceIdentityAssignmentSchema),
   })
   .strict();
-
-export const definitionResolutionSnapshotV2Schema = z
-  .object({
-    contractVersion: z.literal("2.0.0"),
-    fingerprint: fingerprintSchema,
-    definitions: z.array(resolvedDefinitionSchema).min(1),
-    identities: z.array(sourceIdentityAssignmentV2Schema),
-  })
-  .strict();
-
-export const definitionResolutionSnapshotV3Schema = z
-  .object({
-    contractVersion: z.literal("3.0.0"),
-    fingerprint: fingerprintSchema,
-    definitions: z.array(resolvedDefinitionSchema).min(1),
-    identities: z.array(sourceIdentityAssignmentV3Schema),
-  })
-  .strict();
-
 export const definitionDraftMetadataSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -217,24 +161,24 @@ export const definitionCompilationRequestSchema = z
   .strict();
 
 /** The one current Module compilation request; runtime dispatch requires this exact pair. */
-export const moduleCompilationRequestV3Schema = z
+export const moduleCompilationRequestSchema = z
   .object({
-    ...moduleContractVersionPairV3Schema.shape,
+    ...moduleContractVersionPairSchema.shape,
     source: moduleSourceDocumentSchema,
-    resolution: definitionResolutionSnapshotV3Schema,
+    resolution: definitionResolutionSnapshotSchema,
     draftMetadata: definitionDraftMetadataSchema,
     savedConditionRevisions: z.array(savedConditionRevisionAssignmentSchema).optional(),
   })
   .strict();
 
 /** The one current Application compilation request; runtime dispatch requires this exact pair. */
-export const applicationCompilationRequestV2Schema = z
+export const applicationCompilationRequestSchema = z
   .object({
     sourceContractVersion: z.literal("2.0.0"),
     validationContractVersion: z.literal("2.0.0"),
-    source: applicationSourceDocumentV2Schema,
-    resolution: definitionResolutionSnapshotV2Schema,
-    catalogueSnapshot: applicationCompositionCatalogueSnapshotV2Schema,
+    source: applicationSourceDocumentSchema,
+    resolution: definitionResolutionSnapshotSchema,
+    catalogueSnapshot: applicationCompositionCatalogueSnapshotSchema,
     draftMetadata: definitionDraftMetadataSchema,
   })
   .strict();
@@ -340,13 +284,13 @@ export const applicationToolInputSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("action_inputs"),
-      inputs: z.array(actionInputDefinitionSchema).max(50),
+      inputs: z.array(applicationActionInputDefinitionSchema).max(50),
     })
     .strict(),
   z
     .object({
       kind: z.literal("module_inputs"),
-      inputs: z.array(actionInputDefinitionV3Schema).max(50),
+      inputs: z.array(actionInputDefinitionSchema).max(50),
     })
     .strict(),
   z
@@ -417,12 +361,12 @@ export const applicationToolBundleSchema = z
       });
   });
 
-export const applicationCompilationOutputV2Schema = z
+export const applicationCompilationOutputSchema = z
   .object({
     kind: z.literal("application"),
     validationContractVersion: z.literal("2.0.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
-    canonical: applicationDraftV2Schema,
+    canonical: applicationDraftSchema,
     artifact: compiledApplicationArtifactSchema,
     provenance: z.array(definitionProvenanceEntrySchema),
     dependencyOrder: z.array(namespacedKeySchema),
@@ -449,7 +393,7 @@ export const storedApplicationCompilationOutputSchema = z
     kind: z.literal("application"),
     validationContractVersion: z.literal("2.0.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema.optional(),
-    canonical: applicationDraftV2Schema,
+    canonical: applicationDraftSchema,
     artifact: compiledApplicationArtifactSchema,
     provenance: z.array(definitionProvenanceEntrySchema),
     dependencyOrder: z.array(namespacedKeySchema),
@@ -467,27 +411,26 @@ export const storedApplicationCompilationOutputSchema = z
       });
   });
 
-const createModuleCompilationOutputV3Schema = (canonicalSchema: typeof moduleDraftV3Schema) =>
+const createModuleCompilationOutputSchema = (canonicalSchema: typeof moduleDraftSchema) =>
   z
-  .object({
-    kind: z.literal("module"),
-    validationContractVersion: z.literal("3.0.0"),
-    canonical: canonicalSchema,
-    artifact: compiledModuleArtifactSchema,
-    provenance: z.array(definitionProvenanceEntrySchema),
-    dependencyOrder: z.array(namespacedKeySchema),
-    resolvedDependencies: z.array(resolvedDefinitionSchema),
-    resolutionFingerprint: fingerprintSchema,
-  })
-  .strict();
+    .object({
+      kind: z.literal("module"),
+      validationContractVersion: z.literal("3.0.0"),
+      canonical: canonicalSchema,
+      artifact: compiledModuleArtifactSchema,
+      provenance: z.array(definitionProvenanceEntrySchema),
+      dependencyOrder: z.array(namespacedKeySchema),
+      resolvedDependencies: z.array(resolvedDefinitionSchema),
+      resolutionFingerprint: fingerprintSchema,
+    })
+    .strict();
 
-export const moduleCompilationOutputV3Schema = createModuleCompilationOutputV3Schema(moduleDraftV3Schema);
-export const storedModuleCompilationOutputV3Schema = createModuleCompilationOutputV3Schema(
-  storedModuleDraftV3Schema,
-);
+export const moduleCompilationOutputSchema = createModuleCompilationOutputSchema(moduleDraftSchema);
+export const storedModuleCompilationOutputSchema =
+  createModuleCompilationOutputSchema(storedModuleDraftSchema);
 
 const createDefinitionCompilationOutputSchema = <ApplicationSchema extends z.ZodTypeAny>(
-  moduleSchema: typeof moduleCompilationOutputV3Schema,
+  moduleSchema: typeof moduleCompilationOutputSchema,
   applicationSchema: ApplicationSchema,
 ) =>
   z.union([
@@ -507,19 +450,19 @@ const createDefinitionCompilationOutputSchema = <ApplicationSchema extends z.Zod
   ]);
 
 export const definitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
-  moduleCompilationOutputV3Schema,
-  applicationCompilationOutputV2Schema,
+  moduleCompilationOutputSchema,
+  applicationCompilationOutputSchema,
 );
 /** Stored contract dispatch only; new compilation and dependency selection stay current-only. */
 export const storedDefinitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
-  storedModuleCompilationOutputV3Schema,
+  storedModuleCompilationOutputSchema,
   storedApplicationCompilationOutputSchema,
 );
 export type StoredDefinitionCompilationOutput = z.infer<
   typeof storedDefinitionCompilationOutputSchema
 >;
 
-const publishedModuleHistoryEntrySchema = moduleVersionImpactHistoryEntryV3Schema;
+const publishedModuleHistoryEntrySchema = moduleVersionImpactHistoryEntrySchema;
 
 export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
   z
@@ -654,18 +597,16 @@ export const definitionRuntimeCheckResultSchema = z
   .strict();
 
 export type DefinitionResolutionSnapshot = z.infer<typeof definitionResolutionSnapshotSchema>;
-export type DefinitionResolutionSnapshotV2 = z.infer<typeof definitionResolutionSnapshotV2Schema>;
-export type DefinitionResolutionSnapshotV3 = z.infer<typeof definitionResolutionSnapshotV3Schema>;
 export type DefinitionDraftMetadata = z.infer<typeof definitionDraftMetadataSchema>;
 export type SavedConditionRevisionAssignment = z.infer<
   typeof savedConditionRevisionAssignmentSchema
 >;
 export type DefinitionCompilationRequest = z.input<typeof definitionCompilationRequestSchema>;
-export type ModuleCompilationRequestV3 = z.input<typeof moduleCompilationRequestV3Schema>;
-export type ApplicationCompilationRequestV2 = z.input<typeof applicationCompilationRequestV2Schema>;
+export type ModuleCompilationRequest = z.input<typeof moduleCompilationRequestSchema>;
+export type ApplicationCompilationRequest = z.input<typeof applicationCompilationRequestSchema>;
 export type DefinitionCompilationOutput = z.infer<typeof definitionCompilationOutputSchema>;
-export type ModuleCompilationOutputV3 = z.infer<typeof moduleCompilationOutputV3Schema>;
-export type ApplicationCompilationOutputV2 = z.infer<typeof applicationCompilationOutputV2Schema>;
+export type ModuleCompilationOutput = z.infer<typeof moduleCompilationOutputSchema>;
+export type ApplicationCompilationOutput = z.infer<typeof applicationCompilationOutputSchema>;
 export type ApplicationTool = z.infer<typeof applicationToolSchema>;
 export type ApplicationToolBundle = z.infer<typeof applicationToolBundleSchema>;
 /** The unbranded shape the compiler builds before the bundle contract validates it. */

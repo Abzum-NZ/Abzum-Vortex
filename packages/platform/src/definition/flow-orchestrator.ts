@@ -5,7 +5,7 @@ import {
   isRecord,
   builderKeySchema,
   PLATFORM_SERVICE_OPERATIONS,
-  executeNamedActionCommandV2Schema,
+  executeNamedActionCommandSchema,
   applicationRootIdSchema,
   correlationIdSchema,
   fieldIdSchema,
@@ -30,26 +30,26 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   ruleIdSchema,
-  saveRecordCommandV2Schema,
+  saveRecordCommandSchema,
   sameId,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
   viewerSafeRecordPinSelectorSchema,
   viewerSafeRecordPinAcquisitionResultSchema,
   type ExecutionAuthorityContext,
-  type ExecuteNamedActionCommandV2,
+  type ExecuteNamedActionCommand,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
-  type ExecuteNamedActionResultV2,
+  type ExecuteNamedActionResult,
   type FlowRefusalFeedback,
   type FlowTask,
   type FlowValue,
   type IdentitySession,
-  type InstalledNamedActionReferenceV2,
+  type InstalledNamedActionReference,
   type JsonValue,
   type OrganizationSelectionCandidate,
-  type SaveRecordCommandV2,
-  type SaveRecordResultV2,
+  type SaveRecordCommand,
+  type SaveRecordResult,
   type FlowTriggerOrigin,
   type ViewerSafeRecordPinSelector,
   type ViewerSafeRecordPinAcquisitionResult,
@@ -265,7 +265,7 @@ export type FlowRecordType = Readonly<{
 
 /** A named action of a release: the one installed action a task names by its key. */
 export type FlowNamedAction = Readonly<{
-  action: InstalledNamedActionReferenceV2;
+  action: InstalledNamedActionReference;
   /** The record type the action runs on. */
   subjectRecordTypeId: string;
 }>;
@@ -279,8 +279,8 @@ export type RecordSaveTaskPort = Readonly<{
   save(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
-    command: SaveRecordCommandV2,
-  ): Promise<HumanOrganizationRequestResult<SaveRecordResultV2>>;
+    command: SaveRecordCommand,
+  ): Promise<HumanOrganizationRequestResult<SaveRecordResult>>;
 }>;
 
 /** Confirms that the initiator can currently read a claimed page subject of the exact record type. */
@@ -323,7 +323,7 @@ export type NamedActionRecordPort = Readonly<{
     command: unknown,
     run: ActionFlowRunner,
   ): Promise<
-    HumanOrganizationRequestResult<ExecuteNamedActionResultV2> &
+    HumanOrganizationRequestResult<ExecuteNamedActionResult> &
       Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>
   >;
 }>;
@@ -919,8 +919,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   /** What one protected task will run, decided before its effect is claimed. */
   type TaskPlan =
     | Readonly<{ kind: "operation"; entry: PlatformOperation; inputs: Record<string, unknown> }>
-    | Readonly<{ kind: "save"; command: SaveRecordCommandV2 }>
-    | Readonly<{ kind: "action"; command: ExecuteNamedActionCommandV2 }>;
+    | Readonly<{ kind: "save"; command: SaveRecordCommand }>
+    | Readonly<{ kind: "action"; command: ExecuteNamedActionCommand }>;
 
   type TaskResult = {
     outcome: FlowTaskOutcome;
@@ -1016,7 +1016,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           : groupIdSchema.safeParse(selectedOwnerGroupId);
         if (selectedGroup !== undefined && !selectedGroup.success)
           return { outcome: "validation" };
-        const command = saveRecordCommandV2Schema.safeParse({
+        const command = saveRecordCommandSchema.safeParse({
           contractVersion: "2.0.0",
           commandId,
           operation: "create",
@@ -1039,7 +1039,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         return notAvailable(run, call, "the revision of the record the page shows");
       if (dependencies.subjects === undefined)
         return notAvailable(run, call, "a protected read of the page's record");
-      const command = saveRecordCommandV2Schema.safeParse({
+      const command = saveRecordCommandSchema.safeParse({
         contractVersion: "2.0.0",
         commandId,
         operation: "update",
@@ -1076,7 +1076,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       return notAvailable(run, call, "the record the action runs on");
     if (dependencies.subjects === undefined)
       return notAvailable(run, call, "a protected read of the page's record");
-    const command = executeNamedActionCommandV2Schema.safeParse({
+    const command = executeNamedActionCommandSchema.safeParse({
       contractVersion: "2.0.0",
       commandId,
       action: named.action,
@@ -1539,7 +1539,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   const runNamedAction = async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
-    command: ExecuteNamedActionCommandV2,
+    command: ExecuteNamedActionCommand,
   ): Promise<NamedActionExecutionResult> => {
     if (dependencies.actionRecords === undefined) return { kind: "unavailable" };
     const flowId = command.action.actionId;
@@ -1567,7 +1567,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         const parsed = z
           .object({ session: identitySessionSchema, selection: organizationSelectionCandidateSchema })
           .safeParse({ session, selection });
-        const command = executeNamedActionCommandV2Schema.safeParse(commandCandidate);
+        const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
         if (!parsed.success || !command.success) return { kind: "unavailable" };
         return await runNamedAction(parsed.data.session, parsed.data.selection, command.data);
       } catch {

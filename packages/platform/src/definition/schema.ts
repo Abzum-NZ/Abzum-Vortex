@@ -1,6 +1,6 @@
 export * from "./application-contracts";
 export * from "./application-contract-versions";
-export * from "./application-composition-v2";
+export * from "./application-composition";
 export * from "./application-composition-catalogue";
 export * from "./preview-installation-contracts";
 export * from "./builder-preview-operations";
@@ -14,8 +14,8 @@ export * from "./definition-history-contracts";
 export * from "./definition-store-contracts";
 export * from "./installation-runtime-bundle";
 export * from "./lineage";
+export * from "./module-foundation-contracts";
 export * from "./module-contracts";
-export * from "./module-contracts-v3";
 export {
   modulePlatformPermissionDeclarationSchema,
   type ModulePlatformPermissionDeclaration,

@@ -15,8 +15,8 @@ import {
 } from "./definition-error";
 import {
   resolveRootPlacementSlot,
-  type MaterialisedApplicationCompositionV2,
-  type PlacementSlotV2,
+  type MaterialisedApplicationComposition,
+  type PlacementSlot,
 } from "./page-composition";
 import { PagePuckRenderer } from "./page-puck-renderer";
 import { cn } from "./lib/utils";
@@ -85,7 +85,7 @@ export type ApplicationPreviewArtifact = Readonly<{
   activeStepId?: string;
   breakpoint: ApplicationPreviewBreakpoint;
   interactionMode: "simulation";
-  composition: MaterialisedApplicationCompositionV2;
+  composition: MaterialisedApplicationComposition;
   interactions: readonly ApplicationPreviewInteraction[];
   displaySampleDataByPlacement: Readonly<Record<string, unknown>>;
   controlSampleDataByPlacement: Readonly<Record<string, unknown>>;
@@ -235,7 +235,7 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
       : { activeStepId: requireString(activeStepId, "A preview active step identity is invalid") }),
     breakpoint,
     interactionMode: "simulation",
-    composition: composition as unknown as MaterialisedApplicationCompositionV2,
+    composition: composition as unknown as MaterialisedApplicationComposition,
     interactions: Object.freeze(
       requireArray(record.interactions, "A preview artifact requires its interactions").map(parseInteraction),
     ),
@@ -258,7 +258,7 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
   });
 };
 
-const collectPlacementIds = (slot: PlacementSlotV2, into: Set<string>): void => {
+const collectPlacementIds = (slot: PlacementSlot, into: Set<string>): void => {
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     into.add(placementId);
     for (const child of Object.values(placement.slots)) collectPlacementIds(child, into);
@@ -271,8 +271,8 @@ const collectPlacementIds = (slot: PlacementSlotV2, into: Set<string>): void => 
  * no permission-projected availability. A refusal is then shown as a preview outcome.
  */
 const validatePreviewPlacements = (
-  slot: PlacementSlotV2,
-  dependencies: MaterialisedApplicationCompositionV2["platformBlockDependencies"],
+  slot: PlacementSlot,
+  dependencies: MaterialisedApplicationComposition["platformBlockDependencies"],
   location: DefinitionRenderErrorLocation,
 ): void => {
   const releases = new Set(
@@ -308,7 +308,7 @@ const validatePreviewPlacements = (
  * rather than failing the render.
  */
 const validatePreviewRuntimeInputs = (
-  slot: PlacementSlotV2,
+  slot: PlacementSlot,
   registry: PlatformComponentRegistry,
   runtimeInputs: RuntimeInputsByPlacement,
   location: DefinitionRenderErrorLocation,
@@ -393,7 +393,7 @@ export function ApplicationPreview({
   };
   const composition = artifact.composition;
 
-  let resolvedSlot: PlacementSlotV2 | undefined;
+  let resolvedSlot: PlacementSlot | undefined;
   let renderFailure: DefinitionRenderError | undefined;
   try {
     resolvedSlot = resolveRootPlacementSlot({

@@ -3,10 +3,8 @@ import {
   selectApplicationContractPair,
   storedApplicationCompilationOutputSchema,
   type StoredDefinitionCompilationOutput,
-  type ApplicationDraftV2,
+  type ApplicationDraft,
   type DefinitionResolutionSnapshot,
-  type DefinitionResolutionSnapshotV2,
-  type DefinitionResolutionSnapshotV3,
   type ExactDefinitionDependency,
   type FlowDefinition,
   type Fingerprint,
@@ -14,18 +12,17 @@ import {
   type SemanticVersion,
 } from "../schema";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
-import {
-  flowOperationNodeDescriptors,
-  platformOperationsCalledBy,
-} from "./flow-operation-calls";
+import { flowOperationNodeDescriptors, platformOperationsCalledBy } from "./flow-operation-calls";
 
-type CustomerDefinitionOutput = Exclude<StoredDefinitionCompilationOutput, { kind: "connection_type" }>;
-type CustomerDefinitionResolution =
-  DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+type CustomerDefinitionOutput = Exclude<
+  StoredDefinitionCompilationOutput,
+  { kind: "connection_type" }
+>;
+type CustomerDefinitionResolution = DefinitionResolutionSnapshot;
 
 export const applicationDraftFromStoredRelease = (
   output: Extract<StoredDefinitionCompilationOutput, { kind: "application" }>,
-): ApplicationDraftV2 => {
+): ApplicationDraft => {
   // No compatibility decoding: there is no released product, so stored releases always use the
   // current contract (target architecture rule 6). Reset local databases after contract changes.
   return storedApplicationCompilationOutputSchema.parse(output).canonical;
@@ -64,19 +61,19 @@ const manifestSubject = (dependency: ExactDefinitionDependency): string =>
     : dependency.kind === "platform_block"
       ? `${dependency.kind}:${dependency.blockId}@${dependency.releaseVersion}`
       : dependency.kind === "application_flow"
-          ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
-          : dependency.kind === "application_flow_node"
-            ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`
-            : dependency.kind === "application_query"
-              ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
-              : dependency.kind === "module_query"
-                ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
-                : dependency.kind === "application_form"
-                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
-                    : dependency.kind === "application_workflow"
-                      ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
-                      : dependency.kind === "application_action"
-                        ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
+        ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}`
+        : dependency.kind === "application_flow_node"
+          ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.flowId}:${dependency.nodeId}`
+          : dependency.kind === "application_query"
+            ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
+            : dependency.kind === "module_query"
+              ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
+              : dependency.kind === "application_form"
+                ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
+                : dependency.kind === "application_workflow"
+                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
+                  : dependency.kind === "application_action"
+                    ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
                     : dependency.kind === "protected_operation"
                       ? `${dependency.kind}:${dependency.operation.owner.kind}:${
                           dependency.operation.owner.kind === "application"
@@ -85,7 +82,7 @@ const manifestSubject = (dependency: ExactDefinitionDependency): string =>
                               ? dependency.operation.owner.moduleRootId
                               : dependency.operation.owner.serviceId
                         }:${dependency.operation.operationId}`
-      : `${dependency.kind}:${dependency.key}`;
+                      : `${dependency.kind}:${dependency.key}`;
 
 const sameStringSet = (left: readonly string[], right: readonly string[]): boolean => {
   const leftSet = new Set(left);
@@ -162,19 +159,18 @@ const exactApplicationFlowTargetsMatch = (
         resolutionFingerprint: output.resolutionFingerprint,
       }),
     ),
-    ...platformOperationsCalledBy(flows).map(
-      (operation) =>
-        flowManifestSubject({
-          kind: "protected_operation",
-          operation: {
-            owner: { kind: "platform_service", serviceId: operation.release.serviceId },
-            operationId: operation.release.operationId,
-          },
-          releaseVersion: operation.release.releaseVersion,
-          contentFingerprint: operation.release.contentFingerprint,
-          resolutionFingerprint: output.resolutionFingerprint,
-          catalogueFingerprint: operation.release.catalogueFingerprint,
-        }),
+    ...platformOperationsCalledBy(flows).map((operation) =>
+      flowManifestSubject({
+        kind: "protected_operation",
+        operation: {
+          owner: { kind: "platform_service", serviceId: operation.release.serviceId },
+          operationId: operation.release.operationId,
+        },
+        releaseVersion: operation.release.releaseVersion,
+        contentFingerprint: operation.release.contentFingerprint,
+        resolutionFingerprint: output.resolutionFingerprint,
+        catalogueFingerprint: operation.release.catalogueFingerprint,
+      }),
     ),
   ]);
   const actual = manifest.filter((entry) => flowManifestSubject(entry) !== "");
@@ -182,7 +178,9 @@ const exactApplicationFlowTargetsMatch = (
   if (actualSubjects.size !== actual.length || actualSubjects.size !== expectedSubjects.size)
     return false;
   const moduleRootIds = new Set(
-    output.canonical.content.moduleBindings.map((binding) => String(binding.moduleRootId).toLowerCase()),
+    output.canonical.content.moduleBindings.map((binding) =>
+      String(binding.moduleRootId).toLowerCase(),
+    ),
   );
   const nodeDescriptorByIdentity = new Map(
     nodeDescriptors.map((node) => [
@@ -199,11 +197,7 @@ const exactApplicationFlowTargetsMatch = (
         entry.catalogueFingerprint !== undefined &&
         expectedSubjects.has(flowManifestSubject(entry))
       );
-    if (
-      entry.kind !== "application_flow" &&
-      entry.kind !== "application_flow_node"
-    )
-      return false;
+    if (entry.kind !== "application_flow" && entry.kind !== "application_flow_node") return false;
     if (entry.resolutionFingerprint !== output.resolutionFingerprint) return false;
     if (
       String(entry.applicationRootId).toLowerCase() !==
@@ -223,21 +217,24 @@ const exactApplicationFlowTargetsMatch = (
       descriptor.taskType === "record.query" &&
       (entry.operations.length !== 1 ||
         descriptor.operationId === undefined ||
-        String(entry.operations[0]!.operationId).toLowerCase() !== descriptor.operationId.toLowerCase())
+        String(entry.operations[0]!.operationId).toLowerCase() !==
+          descriptor.operationId.toLowerCase())
     )
       return false;
-    if (descriptor.taskType !== "record.link" && descriptor.taskType !== "record.query" && (
-      entry.operations.length !== descriptor.recordTypeIds.length ||
-      descriptor.recordTypeIds.some(
-        (recordTypeId) =>
-          !entry.operations.some(
-            (operation) => String(operation.operationId).toLowerCase() === recordTypeId,
-          ),
-      )
-    )) {
+    if (
+      descriptor.taskType !== "record.link" &&
+      descriptor.taskType !== "record.query" &&
+      (entry.operations.length !== descriptor.recordTypeIds.length ||
+        descriptor.recordTypeIds.some(
+          (recordTypeId) =>
+            !entry.operations.some(
+              (operation) => String(operation.operationId).toLowerCase() === recordTypeId,
+            ),
+        ))
+    ) {
       return false;
     }
-    if (entry.grantable !== (entry.operations.length > 0)) return false;
+    if (entry.grantable !== entry.operations.length > 0) return false;
     return entry.operations.every((operation) => {
       if (operation.owner.kind === "application")
         return (
@@ -317,21 +314,19 @@ const exactApplicationDependenciesMatch = (
   return (
     exactApplicationFlowTargetsMatch(output, manifest) &&
     sameStringSet(
-    [
-      ...moduleSubjects.map((entry) => `module:${entry!.key}`),
-      ...connectionSubjects.map((entry) => `connection_type:${entry!.key}`),
-      ...blockDependencies.map(
-        (entry) => `platform_block:${entry.blockId}@${entry.releaseVersion}`,
-      ),
-      `platform_theme:${base.catalogueThemeId}`,
-    ],
-    manifest
-      .filter((entry) =>
-        ["module", "connection_type", "platform_block", "platform_theme"].includes(
-          entry.kind,
+      [
+        ...moduleSubjects.map((entry) => `module:${entry!.key}`),
+        ...connectionSubjects.map((entry) => `connection_type:${entry!.key}`),
+        ...blockDependencies.map(
+          (entry) => `platform_block:${entry.blockId}@${entry.releaseVersion}`,
         ),
-      )
-      .map(manifestSubject),
+        `platform_theme:${base.catalogueThemeId}`,
+      ],
+      manifest
+        .filter((entry) =>
+          ["module", "connection_type", "platform_block", "platform_theme"].includes(entry.kind),
+        )
+        .map(manifestSubject),
     )
   );
 };
@@ -393,7 +388,7 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
   }
   if (
     output.validationContractVersion !== expectedVersion ||
-    snapshot.contractVersion !== expectedVersion ||
+    snapshot.contractVersion !== "3.0.0" ||
     output.validationContractVersion !== release.validationContractVersion
   )
     return false;

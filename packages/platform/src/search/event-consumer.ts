@@ -1,13 +1,13 @@
 import "server-only";
 
 import {
-  eventOccurrenceEnvelopeV2Schema,
+  eventOccurrenceEnvelopeSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
   timestampSchema,
-  type EventOccurrenceEnvelopeV2,
-  type RecordTypeDefinitionV3,
+  type EventOccurrenceEnvelope,
+  type RecordTypeDefinition,
 } from "../schema";
 import {
   buildSearchDocument,
@@ -79,7 +79,7 @@ export class SearchEventConsumerError extends Error {
  * derivation. A record type that has not published a search-relevant field is
  * still a valid configuration: every field is then simply left out.
  */
-export type SearchIndexRecordType = Pick<RecordTypeDefinitionV3, "recordTypeId" | "fields">;
+export type SearchIndexRecordType = Pick<RecordTypeDefinition, "recordTypeId" | "fields">;
 
 /**
  * Server-side reads and the idempotent write the consumer needs. A loader never
@@ -94,11 +94,11 @@ export type SearchIndexRecordType = Pick<RecordTypeDefinitionV3, "recordTypeId" 
  */
 export type SearchIndexOccurrenceDependencies = Readonly<{
   loadRecordType: (
-    occurrence: EventOccurrenceEnvelopeV2,
+    occurrence: EventOccurrenceEnvelope,
   ) => Promise<SearchIndexRecordType | undefined>;
-  loadPolicy: (occurrence: EventOccurrenceEnvelopeV2) => Promise<SearchableFieldPolicy>;
+  loadPolicy: (occurrence: EventOccurrenceEnvelope) => Promise<SearchableFieldPolicy>;
   loadRecordSnapshot: (
-    occurrence: EventOccurrenceEnvelopeV2,
+    occurrence: EventOccurrenceEnvelope,
   ) => Promise<SearchRecordSnapshot | undefined>;
   storeDocument: (command: SearchDocumentStoreCommand) => Promise<SearchDocumentStoreOutcome>;
 }>;
@@ -127,7 +127,7 @@ export type SearchIndexOccurrenceResult = Readonly<{
 }>;
 
 export type ConsumeSearchEventsInput = Readonly<{
-  occurrences: readonly EventOccurrenceEnvelopeV2[];
+  occurrences: readonly EventOccurrenceEnvelope[];
   /** Indexing observation instant; defaults to the current time. */
   observedAt?: string;
 }>;
@@ -244,7 +244,7 @@ export type SearchDeliveryFailureCode =
  * depend on a same-tier service package.
  */
 export type SearchEventDelivery = Readonly<{
-  occurrence: EventOccurrenceEnvelopeV2;
+  occurrence: EventOccurrenceEnvelope;
   renewLease: () => Promise<boolean>;
 }>;
 
@@ -274,7 +274,7 @@ const indexableEventKinds: ReadonlySet<string> = new Set([
   "reassigned",
 ]);
 
-const occurrenceIsIndexable = (occurrence: EventOccurrenceEnvelopeV2): boolean =>
+const occurrenceIsIndexable = (occurrence: EventOccurrenceEnvelope): boolean =>
   indexableEventKinds.has(occurrence.payload.kind);
 
 /**
@@ -316,12 +316,12 @@ const batchInvalid = (): never => {
  * for one record may arrive in non-increasing sequence. A violation refuses the
  * whole batch rather than indexing out of order.
  */
-const validateOccurrenceBatch = (candidate: unknown): readonly EventOccurrenceEnvelopeV2[] => {
+const validateOccurrenceBatch = (candidate: unknown): readonly EventOccurrenceEnvelope[] => {
   if (!Array.isArray(candidate) || candidate.length > searchEventConsumerLimits.maximumOccurrences)
     return batchInvalid();
-  const parsed: EventOccurrenceEnvelopeV2[] = [];
+  const parsed: EventOccurrenceEnvelope[] = [];
   for (const item of candidate) {
-    const occurrence = eventOccurrenceEnvelopeV2Schema.safeParse(item);
+    const occurrence = eventOccurrenceEnvelopeSchema.safeParse(item);
     if (!occurrence.success) return batchInvalid();
     const previous = parsed[parsed.length - 1];
     if (previous !== undefined) {
@@ -349,7 +349,7 @@ const validateOccurrenceBatch = (candidate: unknown): readonly EventOccurrenceEn
 };
 
 const occurrenceResult = (
-  occurrence: EventOccurrenceEnvelopeV2,
+  occurrence: EventOccurrenceEnvelope,
   outcome: SearchIndexOccurrenceOutcome,
 ): SearchIndexOccurrenceResult =>
   Object.freeze({
@@ -372,7 +372,7 @@ const occurrenceResult = (
  * ordering check.
  */
 const indexOccurrence = async (
-  occurrence: EventOccurrenceEnvelopeV2,
+  occurrence: EventOccurrenceEnvelope,
   dependencies: SearchIndexOccurrenceDependencies,
 ): Promise<SearchIndexOccurrenceResult> => {
   if (!occurrenceIsIndexable(occurrence))
@@ -602,7 +602,7 @@ export const createSearchEventConsumer = (
   Object.freeze({
     consumerKey: searchEventConsumerKey,
     async deliver(delivery: SearchEventDelivery): Promise<SearchEventConsumerOutcome> {
-      const occurrence = eventOccurrenceEnvelopeV2Schema.safeParse(delivery.occurrence);
+      const occurrence = eventOccurrenceEnvelopeSchema.safeParse(delivery.occurrence);
       if (!occurrence.success)
         return { outcome: "terminal_failure", failureCode: "validation_rejected" };
 

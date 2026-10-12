@@ -1,25 +1,25 @@
 import type { ComponentData, Content, Data } from "@puckeditor/core";
 import {
   applicationPuckRootShellSchema,
-  applicationShellV2Schema,
-  blockPropertyValueV2Schema,
-  immutablePlatformBlockCatalogueV2Schema,
-  isRepeatableSlotIdentityV2,
-  placementSlotV2Schema,
-  repeatableSlotItemIdentitiesV2,
-  repeatableSlotKeyV2,
+  applicationShellSchema,
+  blockPropertyValueSchema,
+  immutablePlatformBlockCatalogueSchema,
+  isRepeatableSlotIdentity,
+  placementSlotSchema,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
   validateComponentSettings,
-  type ApplicationShellV2,
+  type ApplicationShell,
   type ApplicationPuckRootShell,
-  type BlockPropertySchemaV2Contract,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertySchemaContract,
+  type BlockPropertyValueContract,
   type ComponentSettingFailure,
-  type PlatformBlockReleaseV2,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 
 /** Actual Puck Data. Page, shell, and guided-step selection remain Vortex orchestration. */
-export type VortexPuckDataV2 = Data;
-export type VortexPuckContentV2 = Content;
+export type VortexPuckData = Data;
+export type VortexPuckContent = Content;
 
 export class VortexPuckAdapterError extends Error {
   override readonly name = "VortexPuckAdapterError";
@@ -101,7 +101,7 @@ const bestOrderHint = (
   return best;
 };
 
-type VortexSlot = ReturnType<typeof placementSlotV2Schema.parse>;
+type VortexSlot = ReturnType<typeof placementSlotSchema.parse>;
 
 /** The exact setting a shared failure names, for an operator-readable adapter error. */
 const describeSettingFailure = (failure: ComponentSettingFailure, at: string): string => {
@@ -126,7 +126,7 @@ const describeSettingFailure = (failure: ComponentSettingFailure, at: string): s
 
 const validateSettings = (
   rawSettings: unknown,
-  declarations: readonly BlockPropertySchemaV2Contract[],
+  declarations: readonly BlockPropertySchemaContract[],
   at: string,
 ): Record<string, unknown> => {
   const settings = asObject(rawSettings, at);
@@ -135,7 +135,7 @@ const validateSettings = (
     const value = settings[declaration.key];
     if (value === undefined) continue;
     try {
-      blockPropertyValueV2Schema.parse(value);
+      blockPropertyValueSchema.parse(value);
     } catch (error) {
       throw new VortexPuckAdapterError(`Invalid property value at ${at}.${declaration.key}`, {
         cause: error,
@@ -144,7 +144,7 @@ const validateSettings = (
   }
 
   for (const failure of validateComponentSettings(
-    settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+    settings as Readonly<Record<string, BlockPropertyValueContract>>,
     declarations,
   ))
     throw new VortexPuckAdapterError(describeSettingFailure(failure, at));
@@ -152,13 +152,13 @@ const validateSettings = (
   return settings;
 };
 
-export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
-  const catalogue = immutablePlatformBlockCatalogueV2Schema.parse(catalogueInput);
+export const createVortexPuckAdapter = (catalogueInput: unknown) => {
+  const catalogue = immutablePlatformBlockCatalogueSchema.parse(catalogueInput);
   const releases = new Map(catalogue.releases.map((release) => [releaseKey(release), release]));
   const releaseFor = (block: {
     blockId: string;
     releaseVersion: string;
-  }): PlatformBlockReleaseV2 => {
+  }): PlatformBlockRelease => {
     const release = releases.get(releaseKey(block));
     if (!release)
       throw new VortexPuckAdapterError(
@@ -204,7 +204,7 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
     // are runtime metadata, while the authored placement schema remains strict.
     const source = asObject(slotInput, "slot");
     const rawPlacements = asObject(source.placements, "slot.placements");
-    const slot = placementSlotV2Schema.parse(authoredSlot(source));
+    const slot = placementSlotSchema.parse(authoredSlot(source));
     return slot.order[breakpoint].map((id) => {
       const placement = slot.placements[id]!;
       const release = releaseFor(placement.block);
@@ -237,8 +237,8 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         release.slots.flatMap((slot) =>
           slot.repeats === undefined
             ? []
-            : repeatableSlotItemIdentitiesV2(slot, placement.settings).map((identity) =>
-                repeatableSlotKeyV2(slot.key, identity),
+            : repeatableSlotItemIdentities(slot, placement.settings).map((identity) =>
+                repeatableSlotKey(slot.key, identity),
               ),
         ),
       );
@@ -265,7 +265,7 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
     depth: number,
     seenPlacementIds: Set<string>,
     state: { totalPlacements: number },
-    parentSlotDecl?: PlatformBlockReleaseV2["slots"][number],
+    parentSlotDecl?: PlatformBlockRelease["slots"][number],
     at = "content",
   ): VortexSlot => {
     if (!Array.isArray(input))
@@ -338,18 +338,18 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       // identities must be admissible and distinct so no two items share a slot.
       const slotKeysByDeclaration = release.slots.map((declaration) => {
         if (declaration.repeats === undefined) return [declaration.key];
-        const identities = repeatableSlotItemIdentitiesV2(
+        const identities = repeatableSlotItemIdentities(
           declaration,
-          settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
+          settings as Readonly<Record<string, BlockPropertyValueContract>>,
         );
         if (
           new Set(identities).size !== identities.length ||
-          identities.some((identity) => !isRepeatableSlotIdentityV2(declaration.key, identity))
+          identities.some((identity) => !isRepeatableSlotIdentity(declaration.key, identity))
         )
           throw new VortexPuckAdapterError(
             `Repeatable item keys must be distinct builder keys at ${at}[${index}].props.settings`,
           );
-        return identities.map((identity) => repeatableSlotKeyV2(declaration.key, identity));
+        return identities.map((identity) => repeatableSlotKey(declaration.key, identity));
       });
       const allowed = new Set(["id", "settings", "vortex", ...slotKeysByDeclaration.flat()]);
       if (Object.keys(props).some((key) => !allowed.has(key)))
@@ -417,7 +417,7 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
         tablet: rebuildBreakpointOrder(savedOrder?.tablet, desktop),
         phone: rebuildBreakpointOrder(savedOrder?.phone, desktop),
       };
-      return placementSlotV2Schema.parse({ placements, order });
+      return placementSlotSchema.parse({ placements, order });
     } catch (error) {
       throw new VortexPuckAdapterError("Invalid placement slot schema", { cause: error });
     }
@@ -467,10 +467,10 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
     }
   };
 
-  const fromPuckShell = (shell: ApplicationShellV2, data: unknown): ApplicationShellV2 => {
-    let parsedShell: ApplicationShellV2;
+  const fromPuckShell = (shell: ApplicationShell, data: unknown): ApplicationShell => {
+    let parsedShell: ApplicationShell;
     try {
-      parsedShell = applicationShellV2Schema.parse(shell);
+      parsedShell = applicationShellSchema.parse(shell);
     } catch (error) {
       throw new VortexPuckAdapterError("Invalid application shell input", { cause: error });
     }
@@ -482,13 +482,13 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
     );
     if (rootShell.kind !== "application" || rootShell.shellId !== parsedShell.shellId)
       throw new VortexPuckAdapterError("Inbound Puck root does not match the application shell");
-    const assembled: ApplicationShellV2 = {
+    const assembled: ApplicationShell = {
       ...parsedShell,
       presentation: rootShell.presentation,
       layout,
     };
     try {
-      return applicationShellV2Schema.parse(assembled);
+      return applicationShellSchema.parse(assembled);
     } catch (error) {
       throw new VortexPuckAdapterError("Invalid assembled application shell", { cause: error });
     }
@@ -497,8 +497,8 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
   return Object.freeze({
     toPuckData,
     fromPuckData,
-    toPuckShell: (shell: ApplicationShellV2): Data => {
-      const parsed = applicationShellV2Schema.parse(shell);
+    toPuckShell: (shell: ApplicationShell): Data => {
+      const parsed = applicationShellSchema.parse(shell);
       return toPuckData(parsed.layout, undefined, {
         kind: "application",
         shellId: parsed.shellId,

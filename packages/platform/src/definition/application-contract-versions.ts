@@ -21,7 +21,6 @@ export class ApplicationContractVersionError extends Error {
 }
 
 export const applicationContractPair = {
-  schema: "v2",
   sourceContractVersion: applicationSourceContractVersion,
   validationContractVersion: applicationValidationContractVersion,
 } as const;
@@ -42,10 +41,9 @@ export const selectApplicationContractPair = (
 export const selectStoredApplicationSourceContract = (
   sourceContractVersion: string,
   intrinsicSourceContractVersion: string,
-): "v2" => {
+): void => {
   if (sourceContractVersion !== intrinsicSourceContractVersion)
     throw new ApplicationContractVersionError("APPLICATION_SOURCE_METADATA_MISMATCH");
   if (sourceContractVersion !== applicationSourceContractVersion)
     throw new ApplicationContractVersionError("UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION");
-  return "v2";
 };

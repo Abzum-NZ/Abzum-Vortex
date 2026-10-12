@@ -1,13 +1,13 @@
 import { z } from "zod";
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   fingerprintSchema,
   definitionValidationResultSchema,
   organizationIdSchema,
   revisionSchema,
   canonicalJson,
-  type ApplicationSourceDocumentV2,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
 export const maximumApplicationSourceImportBytes = 2 * 1024 * 1024;
@@ -16,14 +16,14 @@ export const studioApplicationSourceReviewRequestSchema = z.object({
   rootId: applicationRootIdSchema,
   expectedDraftRevision: revisionSchema,
   expectedSavedSourceFingerprint: fingerprintSchema,
-  source: applicationSourceDocumentV2Schema,
+  source: applicationSourceDocumentSchema,
 }).strict();
 
 const sourceReviewBinding = {
   organizationId: organizationIdSchema,
   rootId: applicationRootIdSchema,
-  key: applicationSourceDocumentV2Schema.shape.key,
-  rootAlias: applicationSourceDocumentV2Schema.shape.root_alias,
+  key: applicationSourceDocumentSchema.shape.key,
+  rootAlias: applicationSourceDocumentSchema.shape.root_alias,
   draftRevision: revisionSchema,
   savedSourceFingerprint: fingerprintSchema,
   candidateSourceFingerprint: fingerprintSchema,
@@ -33,7 +33,7 @@ export const studioApplicationSourceReviewResultSchema = z.discriminatedUnion("k
   z.object({
     kind: z.literal("available"),
     ...sourceReviewBinding,
-    source: applicationSourceDocumentV2Schema,
+    source: applicationSourceDocumentSchema,
   }).strict(),
   z.object({
     kind: z.literal("validation_failed"),
@@ -52,7 +52,7 @@ export type StudioApplicationSourceReviewResult = z.infer<typeof studioApplicati
 export type StudioApplicationSourceImportSnapshot = Readonly<{
   organizationId: string; rootId: string; key: string; rootAlias: string;
   draftRevision: number; savedSourceFingerprint: string;
-  source: ApplicationSourceDocumentV2; selectionKey: string;
+  source: ApplicationSourceDocument; selectionKey: string;
   localLifetime: number; generation: number;
 }>;
 
@@ -100,7 +100,7 @@ function hasUnambiguousMembers(text: string): boolean {
 
 export function readStudioApplicationSourceImport(
   text: string, key: string, rootAlias: string,
-): Readonly<{ kind: "valid"; source: ApplicationSourceDocumentV2 }> |
+): Readonly<{ kind: "valid"; source: ApplicationSourceDocument }> |
   Readonly<{ kind: "invalid"; message: string }> {
   if (text.length > maximumApplicationSourceImportBytes ||
     new TextEncoder().encode(text).byteLength > maximumApplicationSourceImportBytes)
@@ -109,7 +109,7 @@ export function readStudioApplicationSourceImport(
     if (!hasUnambiguousMembers(text))
       return { kind: "invalid", message: "The JSON source has duplicate members or exceeds its nesting limit." };
     const input: unknown = JSON.parse(text);
-    const parsed = applicationSourceDocumentV2Schema.safeParse(input);
+    const parsed = applicationSourceDocumentSchema.safeParse(input);
     if (!parsed.success)
       return { kind: "invalid", message: "Use one valid authored Application source document in format 2.0.0." };
     if (parsed.data.key !== key || parsed.data.root_alias !== rootAlias)

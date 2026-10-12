@@ -1,22 +1,22 @@
 import { isDeepStrictEqual } from "node:util";
 import {
-  currencyCodeV2Schema,
-  exactDecimalTextV2Schema,
-  exactDecimalWithinBoundsV2,
-  moduleFieldV3Schema,
-  moduleFieldValueV2Schemas,
-  moneyValueV2Schema,
+  currencyCodeSchema,
+  exactDecimalTextSchema,
+  exactDecimalWithinBounds,
+  moduleFieldSchema,
+  moduleFieldValueSchemas,
+  moneyValueSchema,
   normalizeExactDecimal,
   parseExactDecimal,
-  recordTypeDefinitionV3Schema,
-  sourceExactDecimalTextV2Schema,
-  sourceModuleFieldValueV2Schemas,
-  sourceMoneyValueV2Schema,
+  recordTypeDefinitionSchema,
+  sourceExactDecimalTextSchema,
+  sourceModuleFieldValueSchemas,
+  sourceMoneyValueSchema,
   type FileId,
   type JsonValue,
-  type ModuleFieldV3,
+  type ModuleField,
   type PermissionId,
-  type RecordTypeDefinitionV3,
+  type RecordTypeDefinition,
 } from "../schema";
 
 type ValueMap = Readonly<Record<string, unknown>>;
@@ -73,15 +73,15 @@ export type RecordFieldValuePendingCheck =
       fileId: FileId;
     }>;
 
-export type PrepareRecordFieldValuesV2Input = Readonly<{
+export type PrepareRecordFieldValuesInput = Readonly<{
   operation: "create" | "update";
-  recordType: RecordTypeDefinitionV3;
+  recordType: RecordTypeDefinition;
   submittedValues: ValueMap;
   existingValues?: ValueMap;
   organizationCurrency?: string;
 }>;
 
-export type PrepareRecordFieldValuesV2Result =
+export type PrepareRecordFieldValuesResult =
   | Readonly<{
       success: true;
       setValues: Readonly<Record<string, JsonValue>>;
@@ -93,33 +93,33 @@ export type PrepareRecordFieldValuesV2Result =
       issues: readonly RecordFieldValuePreparationIssue[];
     }>;
 
-export type RecordFieldValueRequirementV2 = Readonly<{
+export type RecordFieldValueRequirement = Readonly<{
   fieldId: string;
   code: string;
   message: string;
 }>;
 
-type RecordFieldValueOriginV2 = "submitted" | "existing" | "default";
+type RecordFieldValueOrigin = "submitted" | "existing" | "default";
 
-export type InitialRecordFieldCandidateV2 = Readonly<{
+export type InitialRecordFieldCandidate = Readonly<{
   operation: "create" | "update";
   recordTypeId: string;
   originalValues: ValueMap;
   candidateValues: Readonly<Record<string, JsonValue>>;
-  valueOrigins: Readonly<Record<string, RecordFieldValueOriginV2>>;
+  valueOrigins: Readonly<Record<string, RecordFieldValueOrigin>>;
   submittedFieldIds: readonly string[];
   submittedClearFieldIds: readonly string[];
 }>;
 
-export type PrepareInitialRecordFieldCandidateV2Result =
-  | Readonly<{ success: true; candidate: InitialRecordFieldCandidateV2 }>
+export type PrepareInitialRecordFieldCandidateResult =
+  | Readonly<{ success: true; candidate: InitialRecordFieldCandidate }>
   | Readonly<{ success: false; issues: readonly RecordFieldValuePreparationIssue[] }>;
 
-export type FinalizeRecordFieldCandidateV2Input = Readonly<{
-  recordType: RecordTypeDefinitionV3;
-  initialCandidate: InitialRecordFieldCandidateV2;
+export type FinalizeRecordFieldCandidateInput = Readonly<{
+  recordType: RecordTypeDefinition;
+  initialCandidate: InitialRecordFieldCandidate;
   candidateValues: ValueMap;
-  requirements?: readonly RecordFieldValueRequirementV2[];
+  requirements?: readonly RecordFieldValueRequirement[];
   /**
    * The generated fields that the invoking Record operation has produced.
    * Omitting this option preserves the public finalizer's full generated-field
@@ -135,15 +135,15 @@ type PreparationContext = {
   readonly organizationCurrency?: string;
 };
 
-type ValueOrigin = RecordFieldValueOriginV2 | "candidate";
+type ValueOrigin = RecordFieldValueOrigin | "candidate";
 type FieldPolicyMode = "structural" | "final";
 
 export type PersistedRecordFieldValueInput = Readonly<{
-  field: ModuleFieldV3;
+  field: ModuleField;
   value: unknown;
 }>;
 
-const generatedFieldTypes = new Set<ModuleFieldV3["type"]>([
+const generatedFieldTypes = new Set<ModuleField["type"]>([
   "reference_number",
   "calculation",
   "total",
@@ -189,15 +189,15 @@ const validateExactBounds = (
 ): boolean => {
   const parsed = parseExactDecimal(value);
   if (parsed === undefined) return false;
-  return exactDecimalWithinBoundsV2(
+  return exactDecimalWithinBounds(
     parsed,
     settings.minimum === undefined ? undefined : parseExactDecimal(settings.minimum),
     settings.maximum === undefined ? undefined : parseExactDecimal(settings.maximum),
   );
 };
 
-const syntheticFieldAcceptsDefault = (field: ModuleFieldV3, value: unknown): boolean =>
-  moduleFieldV3Schema.safeParse({ ...field, default: value }).success;
+const syntheticFieldAcceptsDefault = (field: ModuleField, value: unknown): boolean =>
+  moduleFieldSchema.safeParse({ ...field, default: value }).success;
 
 const collectRichTextFileChecks = (
   value: Extract<JsonValue, { blocks?: unknown }>,
@@ -239,7 +239,7 @@ const submittedDecimalText = (value: unknown): unknown => {
 };
 
 const normalizeMoney = (
-  field: Extract<ModuleFieldV3, { type: "money" }>,
+  field: Extract<ModuleField, { type: "money" }>,
   value: unknown,
   origin: ValueOrigin,
   path: ValuePath,
@@ -248,7 +248,7 @@ const normalizeMoney = (
 ): JsonValue | undefined => {
   const invalidCode = origin === "existing" ? "invalid_existing_value" : "invalid_value";
   if (origin === "default" && policy === "structural") {
-    const amount = exactDecimalTextV2Schema.safeParse(value);
+    const amount = exactDecimalTextSchema.safeParse(value);
     if (!amount.success) return issue(context, invalidCode, path, field.fieldId);
     const currency =
       field.settings.currencyMode === "fixed"
@@ -275,8 +275,8 @@ const normalizeMoney = (
   }
   const parsed =
     origin === "submitted"
-      ? sourceMoneyValueV2Schema.safeParse(value)
-      : moneyValueV2Schema.safeParse(value);
+      ? sourceMoneyValueSchema.safeParse(value)
+      : moneyValueSchema.safeParse(value);
   if (!parsed.success) return issue(context, invalidCode, path, field.fieldId);
   const amount = normalizeExactDecimal(parsed.data.amount);
   if (amount === undefined || (policy === "final" && !validateExactBounds(amount, field.settings)))
@@ -290,7 +290,7 @@ const normalizeMoney = (
   return { amount, currency: parsed.data.currency };
 };
 
-type TableField = Extract<ModuleFieldV3, { type: "table" }>;
+type TableField = Extract<ModuleField, { type: "table" }>;
 type TableColumn = TableField["settings"]["columns"][number];
 
 const tableCellAccepts = (parent: TableField, column: TableColumn, value: unknown): boolean => {
@@ -300,7 +300,7 @@ const tableCellAccepts = (parent: TableField, column: TableColumn, value: unknow
     settings: column.settings,
     default: value,
   };
-  return moduleFieldV3Schema.safeParse(candidate).success;
+  return moduleFieldSchema.safeParse(candidate).success;
 };
 
 const normalizeTableMoney = (
@@ -316,7 +316,7 @@ const normalizeTableMoney = (
   let amount: string;
   let currency: string | undefined;
   if (origin === "default" && policy === "structural") {
-    const parsed = exactDecimalTextV2Schema.safeParse(value);
+    const parsed = exactDecimalTextSchema.safeParse(value);
     if (!parsed.success) return issue(context, invalidCode, path, parent.fieldId);
     amount = parsed.data;
     currency =
@@ -328,8 +328,8 @@ const normalizeTableMoney = (
   } else {
     const parsed =
       origin === "submitted"
-        ? sourceMoneyValueV2Schema.safeParse(value)
-        : moneyValueV2Schema.safeParse(value);
+        ? sourceMoneyValueSchema.safeParse(value)
+        : moneyValueSchema.safeParse(value);
     if (!parsed.success) return issue(context, invalidCode, path, parent.fieldId);
     const normalized = normalizeExactDecimal(parsed.data.amount);
     if (normalized === undefined) return issue(context, invalidCode, path, parent.fieldId);
@@ -361,8 +361,8 @@ const normalizeTable = (
   if (policy === "structural" && origin !== "default") {
     const parsed =
       origin === "submitted"
-        ? sourceModuleFieldValueV2Schemas.table.safeParse(value)
-        : moduleFieldValueV2Schemas.table.safeParse(value);
+        ? sourceModuleFieldValueSchemas.table.safeParse(value)
+        : moduleFieldValueSchemas.table.safeParse(value);
     if (!parsed.success) return issue(context, invalidCode, path, field.fieldId);
     tableValue = parsed.data;
   }
@@ -406,8 +406,8 @@ const normalizeTable = (
       if (column.type === "decimal_number") {
         const parsed =
           origin === "submitted"
-            ? sourceExactDecimalTextV2Schema.safeParse(raw)
-            : exactDecimalTextV2Schema.safeParse(raw);
+            ? sourceExactDecimalTextSchema.safeParse(raw)
+            : exactDecimalTextSchema.safeParse(raw);
         const decimal = parsed.success ? normalizeExactDecimal(parsed.data) : undefined;
         if (
           decimal === undefined ||
@@ -420,7 +420,7 @@ const normalizeTable = (
       } else if (
         policy === "final"
           ? tableCellAccepts(field, column, raw)
-          : moduleFieldValueV2Schemas[column.type].safeParse(raw).success
+          : moduleFieldValueSchemas[column.type].safeParse(raw).success
       ) {
         normalized = raw as JsonValue;
       } else normalized = issue(context, invalidCode, cellPath, field.fieldId);
@@ -445,12 +445,12 @@ const normalizeTable = (
 };
 
 const normalizeGeneratedExisting = (
-  field: Extract<ModuleFieldV3, { type: "reference_number" | "calculation" | "total" }>,
+  field: Extract<ModuleField, { type: "reference_number" | "calculation" | "total" }>,
   value: unknown,
 ): JsonValue | undefined => {
   const resultType =
     field.type === "reference_number" ? "reference_number" : field.settings.resultType;
-  const parsed = moduleFieldValueV2Schemas[resultType].safeParse(value);
+  const parsed = moduleFieldValueSchemas[resultType].safeParse(value);
   if (!parsed.success) return undefined;
   if (
     field.type === "total" &&
@@ -463,7 +463,7 @@ const normalizeGeneratedExisting = (
 };
 
 const normalizeValue = (
-  field: ModuleFieldV3,
+  field: ModuleField,
   value: unknown,
   origin: ValueOrigin,
   context: PreparationContext,
@@ -474,7 +474,7 @@ const normalizeValue = (
   if (generatedFieldTypes.has(field.type)) {
     if (origin !== "existing") return issue(context, "generated_field_input", path, field.fieldId);
     const parsed = normalizeGeneratedExisting(
-      field as Extract<ModuleFieldV3, { type: "reference_number" | "calculation" | "total" }>,
+      field as Extract<ModuleField, { type: "reference_number" | "calculation" | "total" }>,
       value,
     );
     return parsed ?? issue(context, "invalid_existing_value", path, field.fieldId);
@@ -487,8 +487,8 @@ const normalizeValue = (
   if (field.type === "decimal_number") {
     const parsed =
       origin === "submitted"
-        ? sourceExactDecimalTextV2Schema.safeParse(submittedDecimalText(value))
-        : exactDecimalTextV2Schema.safeParse(value);
+        ? sourceExactDecimalTextSchema.safeParse(submittedDecimalText(value))
+        : exactDecimalTextSchema.safeParse(value);
     if (!parsed.success)
       return issue(
         context,
@@ -499,7 +499,7 @@ const normalizeValue = (
     candidate = normalizeExactDecimal(parsed.data);
   }
 
-  const leaf = moduleFieldValueV2Schemas[field.type].safeParse(candidate);
+  const leaf = moduleFieldValueSchemas[field.type].safeParse(candidate);
   const settingsValid =
     policy === "structural" ||
     field.type === "attachment" ||
@@ -639,7 +639,7 @@ const normalizeValue = (
 export const persistedRecordFieldValueMatches = (
   input: PersistedRecordFieldValueInput,
 ): boolean => {
-  const field = moduleFieldV3Schema.safeParse(input.field);
+  const field = moduleFieldSchema.safeParse(input.field);
   if (!field.success) return false;
   const context: PreparationContext = { issues: [], pendingChecks: [] };
   return normalizeValue(field.data, input.value, "existing", context, "final", true) !== undefined;
@@ -654,31 +654,31 @@ const preparationContext = (organizationCurrency: string | undefined): Preparati
 /**
  * Builds the typed in-memory candidate used by trusted Record-owned engines.
  * This is not a request or authority boundary: field policies and requiredness
- * are deliberately applied by `finalizeRecordFieldCandidateV2` after rules and
+ * are deliberately applied by `finalizeRecordFieldCandidate` after rules and
  * owning generators have produced the final candidate.
  */
-export const prepareInitialRecordFieldCandidateV2 = (
-  input: PrepareRecordFieldValuesV2Input,
-): PrepareInitialRecordFieldCandidateV2Result => {
-  const trustedRecordType = recordTypeDefinitionV3Schema.parse(input.recordType);
+export const prepareInitialRecordFieldCandidate = (
+  input: PrepareRecordFieldValuesInput,
+): PrepareInitialRecordFieldCandidateResult => {
+  const trustedRecordType = recordTypeDefinitionSchema.parse(input.recordType);
   const context = preparationContext(input.organizationCurrency);
   if (!isValueMap(input.submittedValues)) issue(context, "invalid_input", ["submittedValues"]);
   if (input.operation === "update" && !isValueMap(input.existingValues))
     issue(context, "invalid_input", ["existingValues"]);
   if (
     input.organizationCurrency !== undefined &&
-    !currencyCodeV2Schema.safeParse(input.organizationCurrency).success
+    !currencyCodeSchema.safeParse(input.organizationCurrency).success
   )
     issue(context, "invalid_input", ["organizationCurrency"]);
   if (context.issues.length > 0) return { success: false, issues: context.issues };
 
   const submittedValues = input.submittedValues;
   const existingValues = input.existingValues ?? {};
-  const fieldsById = new Map<string, ModuleFieldV3>(
+  const fieldsById = new Map<string, ModuleField>(
     trustedRecordType.fields.map((field) => [field.fieldId, field]),
   );
   const candidateValues: Record<string, JsonValue> = {};
-  const valueOrigins: Record<string, RecordFieldValueOriginV2> = {};
+  const valueOrigins: Record<string, RecordFieldValueOrigin> = {};
   const submittedFieldIds: string[] = [];
   const submittedClearFieldIds: string[] = [];
 
@@ -762,23 +762,23 @@ export const prepareInitialRecordFieldCandidateV2 = (
  * derives its write patch. The candidate may contain trusted rule/calculation/
  * total output; this function is not evidence of Access or database checks.
  */
-const finalizeRecordFieldCandidateV2Internal = (
-  input: FinalizeRecordFieldCandidateV2Input,
+const finalizeRecordFieldCandidateInternal = (
+  input: FinalizeRecordFieldCandidateInput,
   requiredGeneratedFieldIds: ReadonlySet<string>,
-): PrepareRecordFieldValuesV2Result => {
-  const trustedRecordType = recordTypeDefinitionV3Schema.parse(input.recordType);
+): PrepareRecordFieldValuesResult => {
+  const trustedRecordType = recordTypeDefinitionSchema.parse(input.recordType);
   const context = preparationContext(input.organizationCurrency);
   if (!isValueMap(input.candidateValues)) issue(context, "invalid_input", ["candidateValues"]);
   if (input.initialCandidate.recordTypeId !== trustedRecordType.recordTypeId)
     issue(context, "invalid_input", ["initialCandidate", "recordTypeId"]);
   if (
     input.organizationCurrency !== undefined &&
-    !currencyCodeV2Schema.safeParse(input.organizationCurrency).success
+    !currencyCodeSchema.safeParse(input.organizationCurrency).success
   )
     issue(context, "invalid_input", ["organizationCurrency"]);
   if (context.issues.length > 0) return { success: false, issues: context.issues };
 
-  const fieldsById = new Map<string, ModuleFieldV3>(
+  const fieldsById = new Map<string, ModuleField>(
     trustedRecordType.fields.map((field) => [field.fieldId, field]),
   );
   for (const fieldId of requiredGeneratedFieldIds) {
@@ -809,7 +809,7 @@ const finalizeRecordFieldCandidateV2Internal = (
 
     if (generatedFieldTypes.has(field.type)) {
       const normalized = normalizeGeneratedExisting(
-        field as Extract<ModuleFieldV3, { type: "reference_number" | "calculation" | "total" }>,
+        field as Extract<ModuleField, { type: "reference_number" | "calculation" | "total" }>,
         value,
       );
       if (normalized === undefined)
@@ -889,23 +889,23 @@ const finalizeRecordFieldCandidateV2Internal = (
   return { success: true, setValues, clearFieldIds, pendingChecks: context.pendingChecks };
 };
 
-export const finalizeRecordFieldCandidateV2 = (
-  input: FinalizeRecordFieldCandidateV2Input,
-): PrepareRecordFieldValuesV2Result => {
+export const finalizeRecordFieldCandidate = (
+  input: FinalizeRecordFieldCandidateInput,
+): PrepareRecordFieldValuesResult => {
   const requiredGeneratedFieldIds =
     input.requiredGeneratedFieldIds ??
     input.recordType.fields
       .filter((field) => generatedFieldTypes.has(field.type))
       .map((field) => field.fieldId);
-  return finalizeRecordFieldCandidateV2Internal(input, new Set(requiredGeneratedFieldIds));
+  return finalizeRecordFieldCandidateInternal(input, new Set(requiredGeneratedFieldIds));
 };
 
-export const prepareRecordFieldValuesV2 = (
-  input: PrepareRecordFieldValuesV2Input,
-): PrepareRecordFieldValuesV2Result => {
-  const initial = prepareInitialRecordFieldCandidateV2(input);
+export const prepareRecordFieldValues = (
+  input: PrepareRecordFieldValuesInput,
+): PrepareRecordFieldValuesResult => {
+  const initial = prepareInitialRecordFieldCandidate(input);
   if (!initial.success) return initial;
-  return finalizeRecordFieldCandidateV2Internal(
+  return finalizeRecordFieldCandidateInternal(
     {
       recordType: input.recordType,
       initialCandidate: initial.candidate,

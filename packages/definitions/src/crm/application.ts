@@ -1,6 +1,6 @@
 import {
-  sourceApplicationThemeSelectionV2Schema,
-  type ApplicationSourceDocumentV2,
+  sourceApplicationThemeSelectionSchema,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 import { loadApplicationSource } from "../application-source-loader";
@@ -12,7 +12,7 @@ import { loadApplicationSource } from "../application-source-loader";
  * non-refused catalogue option, and the combination passes the platform contrast and focus checks
  * publication runs.
  */
-const selection = sourceApplicationThemeSelectionV2Schema.parse({
+const selection = sourceApplicationThemeSelectionSchema.parse({
   style: "maia",
   base_color: "mauve",
   theme: "mauve",
@@ -64,4 +64,4 @@ source.body.flows = source.body.flows.filter((flow) => !unusedFlows.has(flow.id)
 source.body.events = source.body.events.filter((event) => !unusedEvents.has(event.id));
 
 /** CRM's current Application source; all placements use the shared registered block catalogue. */
-export const application: ApplicationSourceDocumentV2 = loadApplicationSource(source, selection);
+export const application: ApplicationSourceDocument = loadApplicationSource(source, selection);

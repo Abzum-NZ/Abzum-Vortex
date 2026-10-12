@@ -1,18 +1,18 @@
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   builderKeySchema,
   readRecordDetailContract,
   readRecordsTableContract,
-  isRepeatableSlotIdentityV2,
-  repeatableSlotItemIdentitiesV2,
-  repeatableSlotKeyV2,
+  isRepeatableSlotIdentity,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
   validateComponentSettings,
-  type ApplicationSourceDocumentV2,
-  type BlockPropertySchemaV2Contract,
+  type ApplicationSourceDocument,
+  type BlockPropertySchemaContract,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
-  type PlatformBlockReleaseV2,
-  type SourceBlockPropertyValueV2Contract,
+  type PlatformBlockRelease,
+  type SourceBlockPropertyValueContract,
 } from "../schema";
 
 /**
@@ -25,11 +25,11 @@ import {
  */
 
 type Segment = DefinitionValidationLocation["segments"][number];
-type Body = ApplicationSourceDocumentV2["body"];
+type Body = ApplicationSourceDocument["body"];
 type SourceSlot = Body["shells"][number]["layout"];
 type SourcePlacement = SourceSlot["placements"][string];
 type SourceLayout = SourcePlacement["responsive"]["desktop"];
-type SourceValue = SourceBlockPropertyValueV2Contract;
+type SourceValue = SourceBlockPropertyValueContract;
 
 export const applicationCatalogueRuleCodes = [
   "vortex.definition.application_dependency_manifest",
@@ -53,10 +53,10 @@ const effectiveLayouts = (responsive: SourcePlacement["responsive"]): SourceLayo
 
 /** Exact registered releases keyed by permanent block identity and release version. */
 const registeredReleasesOf = (
-  additionalReleases: readonly PlatformBlockReleaseV2[],
-): ReadonlyMap<string, PlatformBlockReleaseV2> =>
+  additionalReleases: readonly PlatformBlockRelease[],
+): ReadonlyMap<string, PlatformBlockRelease> =>
   new Map(
-    [...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2.releases, ...additionalReleases].map((release) => [
+    [...IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.releases, ...additionalReleases].map((release) => [
       `${release.blockId}:${release.releaseVersion}`,
       release,
     ]),
@@ -71,7 +71,7 @@ type SlotOptions = Readonly<{
   responsiveOrderAllowed: boolean;
   publicSurface: boolean;
   reserved?: ReadonlySet<string>;
-  shellPlacements?: Map<string, Readonly<{ depth: number; release: PlatformBlockReleaseV2 }>>;
+  shellPlacements?: Map<string, Readonly<{ depth: number; release: PlatformBlockRelease }>>;
 }>;
 
 type ShellContentSlot = Readonly<{
@@ -86,16 +86,16 @@ type ShellContentSlot = Readonly<{
  * Every refusal names the placement, and where relevant the setting, that caused it.
  */
 export function validateApplicationSourceCatalogue(
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
   /**
    * Custom component releases the publishing path resolved for this application: its own and the
    * exact releases of the modules it binds. Draft save passes none, so only the platform catalogue
    * is available then; publication passes the resolved custom component releases so a release that
    * carries a custom component validates against its own catalogue.
    */
-  customComponentReleases: readonly PlatformBlockReleaseV2[] = [],
+  customComponentReleases: readonly PlatformBlockRelease[] = [],
 ): DefinitionRuleFailure[] {
-  const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE_V2;
+  const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
   const registeredReleases = registeredReleasesOf(customComponentReleases);
   const failures: DefinitionRuleFailure[] = [];
   const report = (
@@ -280,7 +280,7 @@ export function validateApplicationSourceCatalogue(
 
   const validateSettings = (
     authored: Readonly<Record<string, SourceValue>>,
-    declarations: readonly BlockPropertySchemaV2Contract[],
+    declarations: readonly BlockPropertySchemaContract[],
     location: readonly Segment[],
   ): void => {
     for (const failure of validateComponentSettings(authored, declarations))
@@ -294,15 +294,15 @@ export function validateApplicationSourceCatalogue(
   /** A required accessible name must exist after defaults; a supplied name must be real text. */
   const validateAccessibleName = (
     settings: Readonly<Record<string, SourceValue>>,
-    release: PlatformBlockReleaseV2,
+    release: PlatformBlockRelease,
     location: readonly Segment[],
   ): void => {
     if (release.capabilities.accessibleName === "not_applicable") return;
     const path = release.capabilities.accessibleNamePropertyPath;
-    let declarations: readonly BlockPropertySchemaV2Contract[] = release.properties;
+    let declarations: readonly BlockPropertySchemaContract[] = release.properties;
     let values: Readonly<Record<string, SourceValue>> = settings;
     let nameLocation = location;
-    let name: SourceValue | BlockPropertySchemaV2Contract["defaultValue"] = undefined;
+    let name: SourceValue | BlockPropertySchemaContract["defaultValue"] = undefined;
     for (const [index, key] of path.entries()) {
       const declaration = declarations.find((candidate) => candidate.key === key);
       nameLocation = [...nameLocation, ...keySegment("setting", key)];
@@ -326,7 +326,7 @@ export function validateApplicationSourceCatalogue(
 
   const validateResponsive = (
     placement: SourcePlacement,
-    release: PlatformBlockReleaseV2,
+    release: PlatformBlockRelease,
     location: readonly Segment[],
   ): void => {
     const layouts = effectiveLayouts(placement.responsive);
@@ -434,7 +434,7 @@ export function validateApplicationSourceCatalogue(
       const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
       for (const declaration of release.slots) {
         if (declaration.repeats === undefined) continue;
-        const identities = repeatableSlotItemIdentitiesV2(declaration, placement.settings);
+        const identities = repeatableSlotItemIdentities(declaration, placement.settings);
         if (new Set(identities).size !== identities.length)
           report(
             "vortex.definition.application_block_settings",
@@ -442,13 +442,13 @@ export function validateApplicationSourceCatalogue(
             [...location, ...keySegment("setting", declaration.repeats.items)],
           );
         for (const identity of identities) {
-          if (!isRepeatableSlotIdentityV2(declaration.key, identity))
+          if (!isRepeatableSlotIdentity(declaration.key, identity))
             report(
               "vortex.definition.application_block_settings",
               "invalid_value",
               [...location, ...keySegment("setting", declaration.repeats.items)],
             );
-          else repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
+          else repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
         }
       }
       if (
@@ -502,7 +502,7 @@ export function validateApplicationSourceCatalogue(
   for (const shell of source.body.shells) {
     const shellPlacements = new Map<
       string,
-      Readonly<{ depth: number; release: PlatformBlockReleaseV2 }>
+      Readonly<{ depth: number; release: PlatformBlockRelease }>
     >();
     validateSlot(
       shell.layout,

@@ -1,6 +1,6 @@
 import {
-  eventOccurrenceEnvelopeV2Schema,
-  type EventOccurrenceEnvelopeV2,
+  eventOccurrenceEnvelopeSchema,
+  type EventOccurrenceEnvelope,
   type InstalledEventDescriptor,
 } from "../schema";
 import {
@@ -99,9 +99,9 @@ const expectedDefinitionRelease = (
 export const validateInstalledEventOccurrence = (
   input: InstalledEventCatalogueInput,
   occurrenceCandidate: unknown,
-): EventOccurrenceEnvelopeV2 => {
+): EventOccurrenceEnvelope => {
   const context = resolveInstalledEventDefinitionContext(input);
-  const occurrence = eventOccurrenceEnvelopeV2Schema.safeParse(occurrenceCandidate);
+  const occurrence = eventOccurrenceEnvelopeSchema.safeParse(occurrenceCandidate);
   if (!occurrence.success)
     throw new InstalledEventOccurrenceError("INSTALLED_EVENT_OCCURRENCE_INVALID");
   const value = occurrence.data;

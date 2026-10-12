@@ -1,8 +1,8 @@
 import {
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   storedDefinitionDraftSchema,
   type ApplicationRootId,
-  type ApplicationSourceDocumentV2,
+  type ApplicationSourceDocument,
   type SaveDefinitionDraftCommand,
   type StoredDefinitionDraft,
   platformIdSchema,
@@ -10,12 +10,12 @@ import {
 
 export type StudioStoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 
-type StudioApplicationSourceSnapshot = Readonly<ApplicationSourceDocumentV2>;
+type StudioApplicationSourceSnapshot = Readonly<ApplicationSourceDocument>;
 
 export type StudioApplicationDraftSaveCommand = Readonly<{
   rootId: SaveDefinitionDraftCommand["rootId"];
   expectedDraftRevision: SaveDefinitionDraftCommand["expectedDraftRevision"];
-  source: ApplicationSourceDocumentV2;
+  source: ApplicationSourceDocument;
 }>;
 
 /** The only write boundary used by Studio application draft history. */
@@ -47,7 +47,7 @@ export type StudioApplicationDraftHistoryListener = (
 
 export interface StudioApplicationDraftHistoryController {
   getState(): StudioApplicationDraftHistoryState;
-  edit(source: ApplicationSourceDocumentV2): boolean;
+  edit(source: ApplicationSourceDocument): boolean;
   undo(): boolean;
   redo(): boolean;
   save(): Promise<StudioApplicationDraftSaveOutcome>;
@@ -57,11 +57,11 @@ export interface StudioApplicationDraftHistoryController {
 }
 
 const snapshotSource = (
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
 ): StudioApplicationSourceSnapshot => {
   // Definition persists authored source as JSON, which omits optional undefined properties.
   const serialized: unknown = JSON.parse(JSON.stringify(source));
-  return deepFreeze(applicationSourceDocumentV2Schema.parse(serialized));
+  return deepFreeze(applicationSourceDocumentSchema.parse(serialized));
 };
 
 const deepFreeze = <Value>(value: Value): Readonly<Value> => {
@@ -74,9 +74,9 @@ const deepFreeze = <Value>(value: Value): Readonly<Value> => {
 
 const mutableSourceCopy = (
   source: StudioApplicationSourceSnapshot,
-): ApplicationSourceDocumentV2 => {
+): ApplicationSourceDocument => {
   const cloned: unknown = structuredClone(source);
-  return applicationSourceDocumentV2Schema.parse(cloned);
+  return applicationSourceDocumentSchema.parse(cloned);
 };
 
 const sameValue = (left: unknown, right: unknown): boolean => {
@@ -175,8 +175,8 @@ export const createStudioApplicationDraftHistoryController = (
 
   return Object.freeze({
     getState,
-    edit: (source: ApplicationSourceDocumentV2): boolean => {
-      const parsed = applicationSourceDocumentV2Schema.safeParse(source);
+    edit: (source: ApplicationSourceDocument): boolean => {
+      const parsed = applicationSourceDocumentSchema.safeParse(source);
       if (!parsed.success || parsed.data.key !== key) return false;
 
       const next = snapshotSource(parsed.data);

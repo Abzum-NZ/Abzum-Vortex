@@ -1,10 +1,10 @@
 import {
-  repeatableSlotItemIdentitiesV2,
-  repeatableSlotKeyV2,
-  type ApplicationShellV2,
-  type BlockPlacementV2Contract,
-  type BlockPropertyValueV2Contract,
-  type PlatformBlockReleaseV2,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
+  type ApplicationShell,
+  type BlockPlacementContract,
+  type BlockPropertyValueContract,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "./registry";
 
@@ -72,8 +72,8 @@ export class DefinitionRenderError extends Error {
  * or that an optional accessible name is not blank if provided.
  */
 export function validateAccessibleName(
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>,
-  capabilities: PlatformBlockReleaseV2["capabilities"],
+  settings: Readonly<Record<string, BlockPropertyValueContract>>,
+  capabilities: PlatformBlockRelease["capabilities"],
   location: DefinitionRenderErrorLocation = {},
 ): void {
   if (capabilities.accessibleName === "not_applicable") {
@@ -92,8 +92,8 @@ export function validateAccessibleName(
     return;
   }
 
-  let currentSettings: Readonly<Record<string, BlockPropertyValueV2Contract>> = settings;
-  let targetValue: BlockPropertyValueV2Contract | undefined;
+  let currentSettings: Readonly<Record<string, BlockPropertyValueContract>> = settings;
+  let targetValue: BlockPropertyValueContract | undefined;
 
   for (const [index, key] of propertyPath.entries()) {
     const val = currentSettings[key];
@@ -216,8 +216,8 @@ export function validateSlotOrder(
  * 2. Child placements within each slot must have a paletteGroup permitted by allowedChildCategories.
  */
 export function validatePlacementSlots(
-  placement: BlockPlacementV2Contract,
-  metadata: PlatformBlockReleaseV2,
+  placement: BlockPlacementContract,
+  metadata: PlatformBlockRelease,
   registry: PlatformComponentRegistry,
   location: DefinitionRenderErrorLocation = {},
   options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
@@ -229,11 +229,11 @@ export function validatePlacementSlots(
 
   // A repeatable slot owns one key per declared item identity, so resolve every item's own key to
   // its declaration before judging the placement's slots.
-  const repeatableSlots = new Map<string, PlatformBlockReleaseV2["slots"][number]>();
+  const repeatableSlots = new Map<string, PlatformBlockRelease["slots"][number]>();
   for (const declaration of metadata.slots) {
     if (declaration.repeats === undefined) continue;
-    for (const identity of repeatableSlotItemIdentitiesV2(declaration, placement.settings))
-      repeatableSlots.set(repeatableSlotKeyV2(declaration.key, identity), declaration);
+    for (const identity of repeatableSlotItemIdentities(declaration, placement.settings))
+      repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
   }
 
   for (const declaration of metadata.slots) {
@@ -323,7 +323,7 @@ export function validatePlacementSlots(
  * Permission projection may legitimately empty a required slot after publication validation.
  */
 export function validatePlacementTree(
-  slot: ApplicationShellV2["layout"],
+  slot: ApplicationShell["layout"],
   registry: PlatformComponentRegistry,
   location: DefinitionRenderErrorLocation = {},
   options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
@@ -331,7 +331,7 @@ export function validatePlacementTree(
   const seenPlacementIds = new Set<string>();
 
   const visit = (
-    currentSlot: ApplicationShellV2["layout"],
+    currentSlot: ApplicationShell["layout"],
     currentLocation: DefinitionRenderErrorLocation,
   ): void => {
     for (const breakpoint of ["desktop", "tablet", "phone"] as const)

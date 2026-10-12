@@ -2,14 +2,14 @@ import "server-only";
 
 import {
   canonicalJson,
-  pageDefinitionV2Schema,
-  type ApplicationShellV2,
+  pageDefinitionSchema,
+  type ApplicationShell,
   type ConditionNode,
   type IdentitySession,
   type OrganizationAccessDeclaration,
   type OrganizationRecordAccessDeclaration,
   type OrganizationSelectionCandidate,
-  type PageDefinitionV2,
+  type PageDefinition,
   type SelectedOrganizationScope,
 } from "../schema";
 import {
@@ -52,8 +52,8 @@ type PlacementPermissionBinding =
     }>;
 
 export type FixedAuthenticatedPageCapability = Readonly<{
-  page: PageDefinitionV2;
-  applicationShells?: readonly ApplicationShellV2[];
+  page: PageDefinition;
+  applicationShells?: readonly ApplicationShell[];
   /** Exact request-context-bound resolved roots from the validated immutable format-2 bundle. */
   resolvedComposition?: ResolvedPageComposition;
   resolvedCompositionContext?: InstalledRuntimeContext;
@@ -98,7 +98,7 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
       evaluateVisibilityCondition?: (
         transaction: RequestDatabaseTransaction,
         scope: SelectedOrganizationScope,
-        page: PageDefinitionV2,
+        page: PageDefinition,
         condition: ConditionNode,
       ) => Promise<boolean>;
       /** Final current-context and database-clock check for the earliest private Access deadline. */
@@ -138,8 +138,8 @@ type RequiredPlacement = Readonly<{
   ancestorPlacementIds: readonly string[];
 }>;
 
-const collectV2Slot = (
-  slot: ApplicationShellV2["layout"],
+const collectSlot = (
+  slot: ApplicationShell["layout"],
   result: RequiredPlacement[],
   ancestorPlacementIds: readonly string[] = [],
 ): void => {
@@ -158,17 +158,17 @@ const collectV2Slot = (
         : { visibilityCondition: candidate.visibilityCondition }),
     });
     for (const child of Object.values(candidate.slots))
-      collectV2Slot(child, result, [...ancestorPlacementIds, placementId]);
+      collectSlot(child, result, [...ancestorPlacementIds, placementId]);
   }
 };
 
 const requiredPlacements = (resolved: ResolvedPageComposition): RequiredPlacement[] => {
   const result: RequiredPlacement[] = [];
   if (resolved.roots.kind === "page")
-    collectV2Slot(resolved.roots.main, result);
+    collectSlot(resolved.roots.main, result);
   else
     for (const root of Object.values(resolved.roots.stepContent))
-      collectV2Slot(root, result);
+      collectSlot(root, result);
   return result;
 };
 
@@ -239,7 +239,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
     ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> =>
       requests.run(session, candidate, async (transaction, scope) => {
         const loaded = await dependencies.adapter.load(transaction, scope, command);
-        const page = pageDefinitionV2Schema.parse(loaded.page);
+        const page = pageDefinitionSchema.parse(loaded.page);
         if (loaded.resolvedComposition !== undefined && (
           loaded.resolvedCompositionContext === undefined ||
           !isTrustedInstalledPageComposition(

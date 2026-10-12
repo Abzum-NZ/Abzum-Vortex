@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { applicationContentV2Schema } from "./application-contracts";
-import { placementSlotV2Schema } from "./application-composition-v2";
+import { applicationContentSchema } from "./application-contracts";
+import { placementSlotSchema } from "./application-composition";
 import { jsonValueSchema } from "../catalogue/common";
 import {
-  applicationDefinitionConsumerReadResultV2Schema,
-  moduleDefinitionConsumerReadResultV3Schema,
+  applicationDefinitionConsumerReadResultSchema,
+  moduleDefinitionConsumerReadResultSchema,
   type SystemApplicationBoundReleaseSetResult,
 } from "./definition-consumer-read";
 import {
@@ -35,11 +35,11 @@ import {
   recordStorageColumnTokenSchema,
   recordStorageTableTokenSchema,
 } from "../files/storage";
-import { savedSharingConditionV3Schema } from "./module-contracts-v3";
+import { savedSharingConditionSchema } from "./module-contracts";
 
 export {
   resolvePageComposition,
-  type PlacementSlotV2,
+  type PlacementSlot,
   type ResolvedPageComposition,
 } from "../pages/runtime-bundle-page-composition";
 export const installationRuntimeBundleFormatVersion = 2 as const;
@@ -89,9 +89,9 @@ const immutableRuntimeModuleIdentitySchema = immutableRuntimeReleaseIdentitySche
   rootId: moduleRootIdSchema,
 }).strict();
 
-const applicationConsumerResultFields = applicationDefinitionConsumerReadResultV2Schema.shape;
-const moduleConsumerResultFields = moduleDefinitionConsumerReadResultV3Schema.shape;
-const applicationContentFields = z.object(applicationContentV2Schema.shape).strict();
+const applicationConsumerResultFields = applicationDefinitionConsumerReadResultSchema.shape;
+const moduleConsumerResultFields = moduleDefinitionConsumerReadResultSchema.shape;
+const applicationContentFields = z.object(applicationContentSchema.shape).strict();
 
 // Release metadata is immutable; consumer correlation IDs are request-specific and are injected
 // again when a HUMAN release set is reconstructed from the stored sections.
@@ -118,11 +118,11 @@ const installationRuntimeBundleApplicationPageContentSchema = applicationContent
   .strict();
 
 const installationRuntimeBundleResolvedRootsSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("page"), main: placementSlotV2Schema }).strict(),
+  z.object({ kind: z.literal("page"), main: placementSlotSchema }).strict(),
   z
     .object({
       kind: z.literal("guided"),
-      stepContent: z.record(z.string(), placementSlotV2Schema),
+      stepContent: z.record(z.string(), placementSlotSchema),
     })
     .strict(),
 ]);
@@ -329,7 +329,7 @@ const runtimeRecordAccessPlanSchema = z.object({
   applicationReleaseRevision: revisionSchema,
   recordTypes: runtimePlanRecordTypesSchema,
   relationships: runtimePlanRelationshipsSchema,
-  sharingConditions: z.array(savedSharingConditionV3Schema),
+  sharingConditions: z.array(savedSharingConditionSchema),
   permissions: runtimePlanPermissionsSchema,
 }).strict();
 
@@ -507,9 +507,3 @@ export type InstallationRuntimeBundleKey = z.infer<
 export type InstallationRuntimeBundleWriteCommand = z.infer<
   typeof installationRuntimeBundleWriteCommandSchema
 >;
-
-
-
-
-
-

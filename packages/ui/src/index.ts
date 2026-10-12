@@ -61,19 +61,19 @@ export {
 export {
   resolveRootPlacementSlot,
   resolveShellLayout,
-  type GuidedFormCompositionV2,
-  type MaterialisedApplicationCompositionV2,
-  type PlacementSlotV2,
+  type GuidedFormComposition,
+  type MaterialisedApplicationComposition,
+  type PlacementSlot,
   type ProjectedPlacementAvailability,
   type ProjectedPlacementSlot,
   type ProjectedPageCapability,
 } from "./page-composition";
 export { PagePuckRenderer, type PagePuckRendererProps } from "./page-puck-renderer";
 export {
-  createVortexPuckAdapterV2,
+  createVortexPuckAdapter,
   VortexPuckAdapterError,
-  type VortexPuckContentV2,
-  type VortexPuckDataV2,
+  type VortexPuckContent,
+  type VortexPuckData,
 } from "./vortex-puck-adapter";
 
 // Per-Block Display Payload & Event Contracts

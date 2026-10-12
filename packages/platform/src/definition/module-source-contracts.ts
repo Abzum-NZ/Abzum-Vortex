@@ -31,20 +31,20 @@ import {
 import { parseExactDecimal } from "../records/exact-decimal";
 import { compileTextInputPattern } from "../pages/text-input-pattern";
 import {
-  currencyCodeV2Schema,
-  exactDecimalFitsDigitsV2,
-  exactDecimalWithinBoundsV2,
-  inspectRecordRichTextV2,
-  recordRichTextDocumentV2Schema,
-  sourceExactDecimalTextV2Schema,
-  sourceMoneyValueV2Schema,
-  sourcePersonLinkValueV2Schema,
-  sourceRecordLinkValueV2Schema,
-  type FormattedTextAllowedBlockV2,
-} from "../records/module-field-values-v2";
+  currencyCodeSchema,
+  exactDecimalFitsDigits,
+  exactDecimalWithinBounds,
+  inspectRecordRichText,
+  recordRichTextDocumentSchema,
+  sourceExactDecimalTextSchema,
+  sourceMoneyValueSchema,
+  sourcePersonLinkValueSchema,
+  sourceRecordLinkValueSchema,
+  type FormattedTextAllowedBlock,
+} from "../records/module-field-values";
 import { moduleSourceRecordOwnershipModeSchema } from "../records/record-ownership-compatibility";
 import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
-import { protectedReadModelKeySchema } from "./application-composition-v2";
+import { protectedReadModelKeySchema } from "./application-composition";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import {
   permissionActionKindSchema,
@@ -550,7 +550,7 @@ const exactRangeValid = (minimum?: string, maximum?: string): boolean => {
   return (
     parsedMinimum !== undefined &&
     parsedMaximum !== undefined &&
-    exactDecimalWithinBoundsV2(parsedMinimum, undefined, parsedMaximum)
+    exactDecimalWithinBounds(parsedMinimum, undefined, parsedMaximum)
   );
 };
 
@@ -558,8 +558,8 @@ const sourceDecimalSettingsSchema = z
   .object({
     digits_before_decimal: sourceProvenanceUnchanged(z.number().int().min(1).max(30)),
     decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12), ["decimalPlaces"]),
-    minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
-    maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
+    minimum: sourceProvenanceTarget(sourceExactDecimalTextSchema.optional(), ["minimum"]),
+    maximum: sourceProvenanceTarget(sourceExactDecimalTextSchema.optional(), ["maximum"]),
   })
   .strict()
   .refine(
@@ -574,9 +574,9 @@ const sourceMoneySettingsSchema = z
     currency_mode: sourceProvenanceTarget(z.enum(["fixed", "organisation_default"]), [
       "currencyMode",
     ]),
-    currency: sourceProvenanceUnchanged(currencyCodeV2Schema.optional()),
-    minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
-    maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
+    currency: sourceProvenanceUnchanged(currencyCodeSchema.optional()),
+    minimum: sourceProvenanceTarget(sourceExactDecimalTextSchema.optional(), ["minimum"]),
+    maximum: sourceProvenanceTarget(sourceExactDecimalTextSchema.optional(), ["maximum"]),
   })
   .strict()
   .superRefine((value, context) => {
@@ -780,7 +780,7 @@ const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
   z
     .object({
       source: sourceProvenanceUnchanged(z.literal("literal")),
-      value: sourceProvenanceTarget(sourceExactDecimalTextV2Schema, ["value"]),
+      value: sourceProvenanceTarget(sourceExactDecimalTextSchema, ["value"]),
     })
     .strict(),
 ]);
@@ -954,7 +954,7 @@ const sourceTotalSettingsSchema = z
     ),
     field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
     filter: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
-    currency: sourceProvenanceUnchanged(currencyCodeV2Schema.optional()),
+    currency: sourceProvenanceUnchanged(currencyCodeSchema.optional()),
     decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), [
       "decimalPlaces",
     ]),
@@ -1067,10 +1067,10 @@ const sourceTableDefaultSchema = z.array(z.record(builderKeySchema, jsonValueSch
 const sourceFieldMembers = [
   sourceField("text", sourceTextSettingsSchema, z.string()),
   sourceField("long_text", sourceLongTextSettingsSchema, z.string()),
-  sourceField("formatted_text", sourceFormattedTextSettingsSchema, recordRichTextDocumentV2Schema),
+  sourceField("formatted_text", sourceFormattedTextSettingsSchema, recordRichTextDocumentSchema),
   sourceField("whole_number", sourceWholeNumberSettingsSchema, z.number().int()),
-  sourceField("decimal_number", sourceDecimalSettingsSchema, sourceExactDecimalTextV2Schema),
-  sourceField("money", sourceMoneySettingsSchema, sourceExactDecimalTextV2Schema),
+  sourceField("decimal_number", sourceDecimalSettingsSchema, sourceExactDecimalTextSchema),
+  sourceField("money", sourceMoneySettingsSchema, sourceExactDecimalTextSchema),
   sourceField("yes_no", emptySettingsSchema, z.boolean()),
   sourceField("date", sourceDateSettingsSchema, z.iso.date()),
   sourceField("date_time", sourceDateTimeSettingsSchema, z.iso.datetime({ offset: true })),
@@ -1081,13 +1081,13 @@ const sourceFieldMembers = [
   sourceField("phone_number", sourcePhoneSettingsSchema, z.string()),
   sourceField("web_address", sourceWebAddressSettingsSchema, safeHttpsUrlSchema),
   sourceField("table", sourceTableSettingsSchema, sourceTableDefaultSchema),
-  sourceField("link", sourceLinkSettingsSchema, sourceRecordLinkValueV2Schema),
+  sourceField("link", sourceLinkSettingsSchema, sourceRecordLinkValueSchema),
   sourceField(
     "link_to_one_of_several",
     sourceMultiLinkSettingsSchema,
-    sourceRecordLinkValueV2Schema,
+    sourceRecordLinkValueSchema,
   ),
-  sourceField("link_to_person", sourcePersonLinkSettingsSchema, sourcePersonLinkValueV2Schema),
+  sourceField("link_to_person", sourcePersonLinkSettingsSchema, sourcePersonLinkValueSchema),
   sourceField("calculation", sourceCalculationSettingsSchema, noDefaultSchema),
   sourceField("total", sourceTotalSettingsSchema, noDefaultSchema),
   sourceField("attachment", sourceAttachmentSettingsSchema, noDefaultSchema),
@@ -1114,8 +1114,8 @@ const decimalValid = (value: string, settings: z.infer<typeof sourceDecimalSetti
   const parsed = parseExactDecimal(value);
   if (parsed === undefined) return false;
   return (
-    exactDecimalFitsDigitsV2(parsed, settings.digits_before_decimal, settings.decimal_places) &&
-    exactDecimalWithinBoundsV2(
+    exactDecimalFitsDigits(parsed, settings.digits_before_decimal, settings.decimal_places) &&
+    exactDecimalWithinBounds(
       parsed,
       settings.minimum === undefined ? undefined : parseExactDecimal(settings.minimum),
       settings.maximum === undefined ? undefined : parseExactDecimal(settings.maximum),
@@ -1125,18 +1125,18 @@ const decimalValid = (value: string, settings: z.infer<typeof sourceDecimalSetti
 const moneyAmountValid = (value: string, settings: z.infer<typeof sourceMoneySettingsSchema>) => {
   const parsed = parseExactDecimal(value);
   if (parsed === undefined) return false;
-  return exactDecimalWithinBoundsV2(
+  return exactDecimalWithinBounds(
     parsed,
     settings.minimum === undefined ? undefined : parseExactDecimal(settings.minimum),
     settings.maximum === undefined ? undefined : parseExactDecimal(settings.maximum),
   );
 };
 const formattedTextValid = (
-  value: z.infer<typeof recordRichTextDocumentV2Schema>,
+  value: z.infer<typeof recordRichTextDocumentSchema>,
   settings: z.infer<typeof sourceFormattedTextSettingsSchema>,
 ) => {
-  const inspected = inspectRecordRichTextV2(value);
-  const allowed = new Set<FormattedTextAllowedBlockV2>(settings.allowed_blocks);
+  const inspected = inspectRecordRichText(value);
+  const allowed = new Set<FormattedTextAllowedBlock>(settings.allowed_blocks);
   return (
     [...inspected.usedBlocks].every((kind) => allowed.has(kind)) &&
     (settings.max_length === undefined || inspected.visibleTextLength <= settings.max_length)
@@ -1157,12 +1157,12 @@ const tableCellDefaultValid = (
       return Number.isInteger(value) && wholeNumberValid(value as number, column.settings);
     case "decimal_number":
       return (
-        sourceExactDecimalTextV2Schema.safeParse(value).success &&
+        sourceExactDecimalTextSchema.safeParse(value).success &&
         decimalValid(value as string, column.settings)
       );
     case "money":
       return (
-        sourceExactDecimalTextV2Schema.safeParse(value).success &&
+        sourceExactDecimalTextSchema.safeParse(value).success &&
         moneyAmountValid(value as string, column.settings)
       );
     case "yes_no":
@@ -1292,8 +1292,8 @@ const moduleSourceActionInputBase = {
 };
 const moduleSourceExactActionInputValidationSchema = z
   .object({
-    minimum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["minimum"]),
-    maximum: sourceProvenanceTarget(sourceExactDecimalTextV2Schema.optional(), ["maximum"]),
+    minimum: sourceProvenanceTarget(sourceExactDecimalTextSchema.optional(), ["minimum"]),
+    maximum: sourceProvenanceTarget(sourceExactDecimalTextSchema.optional(), ["maximum"]),
   })
   .strict()
   .refine(
@@ -1784,8 +1784,8 @@ const sourceSharingParameterValueSchemas: Record<
 > = {
   text: z.string(),
   number: z.number().finite(),
-  decimal_number: sourceExactDecimalTextV2Schema,
-  money: sourceMoneyValueV2Schema,
+  decimal_number: sourceExactDecimalTextSchema,
+  money: sourceMoneyValueSchema,
   boolean: z.boolean(),
   date: z.iso.date(),
   date_time: z.iso.datetime({ offset: true }),

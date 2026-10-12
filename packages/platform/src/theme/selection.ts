@@ -3,7 +3,7 @@ import "server-only";
 import {
   DEFAULT_APPLICATION_THEME_SELECTION,
   SHADCN_HEADING_FONT_INHERIT,
-  applicationThemeSelectionV2Schema,
+  applicationThemeSelectionSchema,
   findShadcnFont,
   findShadcnThemeCatalogueOption,
   isShadcnIconLibrary,
@@ -11,8 +11,8 @@ import {
   resolveShadcnFontSelection,
   shadcnFontFamilyKey,
   shadcnThemeCatalogueDimensionKeys,
-  themeTokenValueV2Schema,
-  type ApplicationThemeSelectionV2,
+  themeTokenValueSchema,
+  type ApplicationThemeSelection,
   type DefinitionRuleFailure,
 } from "../schema";
 import { findShadcnThemeRelease } from "./shadcn-theme-releases";
@@ -20,9 +20,9 @@ import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure, createThemeLocation } from "./errors";
 import { validateFocusVisibility } from "./focus";
 import type {
-  ExactPlatformThemeDependencyV2,
+  ExactPlatformThemeDependency,
   ThemeResolutionOptions,
-  ThemeTokenValueV2,
+  ThemeTokenValue,
   ThemeValidationFailure,
 } from "./types";
 
@@ -42,22 +42,22 @@ export type ResolvedThemeSelection = Readonly<{
    * The effective selection: the authored one, or the platform default when none was authored.
    * Absent only for a theme pinned to an earlier release than the catalogue's base release.
    */
-  selection?: ApplicationThemeSelectionV2 | undefined;
+  selection?: ApplicationThemeSelection | undefined;
   /** The selected, catalogue-backed shadcn style id, for the style CSS loader. */
   style: string;
   /** The complete resolved application token set: base release plus every selected option. */
-  tokens: Readonly<Record<string, ThemeTokenValueV2>>;
+  tokens: Readonly<Record<string, ThemeTokenValue>>;
 }>;
 
 export type ThemeSelectionResolutionInput = Readonly<{
   /** The pinned platform theme release the selection is applied to. */
-  base: Pick<ExactPlatformThemeDependencyV2, "catalogueThemeId" | "releaseVersion">;
+  base: Pick<ExactPlatformThemeDependency, "catalogueThemeId" | "releaseVersion">;
   /** The pinned base release's tokens. */
-  baseTokens: Readonly<Record<string, ThemeTokenValueV2>>;
+  baseTokens: Readonly<Record<string, ThemeTokenValue>>;
   /** The authored catalogue selection; absent means the platform default selection. */
-  selection?: ApplicationThemeSelectionV2 | undefined;
+  selection?: ApplicationThemeSelection | undefined;
   /** Already-canonical token overrides applied after the selection. */
-  overrides?: Readonly<Record<string, ThemeTokenValueV2>> | undefined;
+  overrides?: Readonly<Record<string, ThemeTokenValue>> | undefined;
   options?: ThemeResolutionOptions | undefined;
 }>;
 
@@ -100,7 +100,7 @@ const selectionFailureSink = (
 };
 
 const checkSelectionOptions = (
-  selection: ApplicationThemeSelectionV2,
+  selection: ApplicationThemeSelection,
   base: ThemeSelectionResolutionInput["base"] | undefined,
   addFailure: FailureSink,
 ): void => {
@@ -165,7 +165,7 @@ const checkSelectionOptions = (
  * token values, so a stored theme's selection can be checked without resolving it again.
  */
 export function validateThemeSelectionOptions(
-  selection: ApplicationThemeSelectionV2,
+  selection: ApplicationThemeSelection,
   options?: ThemeResolutionOptions | undefined,
   base?: ThemeSelectionResolutionInput["base"] | undefined,
 ): { failures: ThemeValidationFailure[]; ruleFailures: DefinitionRuleFailure[] } {
@@ -211,11 +211,11 @@ export function resolveThemeSelection(
     ruleFailures.push(located.ruleFailure);
   };
 
-  const tokens: Record<string, ThemeTokenValueV2> = { ...input.baseTokens };
-  let selection: ApplicationThemeSelectionV2 | undefined;
+  const tokens: Record<string, ThemeTokenValue> = { ...input.baseTokens };
+  let selection: ApplicationThemeSelection | undefined;
 
   if (input.selection !== undefined || isShadcnThemeCatalogueBaseRelease(input.base)) {
-    const parsedSelection = applicationThemeSelectionV2Schema.safeParse(
+    const parsedSelection = applicationThemeSelectionSchema.safeParse(
       input.selection ?? DEFAULT_APPLICATION_THEME_SELECTION,
     );
     if (!parsedSelection.success) {
@@ -246,7 +246,7 @@ export function resolveThemeSelection(
       }
       for (const tokenKey of option.tokenKeys ?? []) {
         const raw = release.tokens[tokenKey];
-        const parsed = raw === undefined ? undefined : themeTokenValueV2Schema.safeParse(raw);
+        const parsed = raw === undefined ? undefined : themeTokenValueSchema.safeParse(raw);
         if (parsed === undefined || !parsed.success) {
           addSelectionFailure({
             code: "INVALID_THEME_OPTION_TOKEN",

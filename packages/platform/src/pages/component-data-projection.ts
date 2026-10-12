@@ -4,7 +4,7 @@ import {
   readRecordDetailContract,
   readRecordsTableContract,
   timestampSchema,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type JsonValue,
   type RecordsDisplayFormat,
 } from "../schema";
@@ -73,7 +73,7 @@ export type ProjectedComponentData<Values> =
  * fields the Query engine returned.
  */
 export type ComponentDataProjectionInput = Readonly<{
-  settings: Readonly<Record<string, BlockPropertyValueV2Contract>>;
+  settings: Readonly<Record<string, BlockPropertyValueContract>>;
   fieldLabels?: Readonly<Record<string, string>>;
   /** Options in definition order for choice fields; several-choice options are limited to those the viewer may use. */
   fieldChoiceLabels?: Readonly<

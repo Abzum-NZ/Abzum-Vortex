@@ -1,8 +1,8 @@
 import "server-only";
 
-import { platformThemeTokenRolesV2, type DefinitionRuleFailure } from "../schema";
+import { platformThemeTokenRoles, type DefinitionRuleFailure } from "../schema";
 import { createLocatedFailure } from "./errors";
-import type { ThemeResolutionOptions, ThemeTokenValueV2, ThemeValidationFailure } from "./types";
+import type { ThemeResolutionOptions, ThemeTokenValue, ThemeValidationFailure } from "./types";
 
 const WCAG_AA_NORMAL_TEXT_MIN_CONTRAST = 4.5;
 const WCAG_AA_LARGE_TEXT_MIN_CONTRAST = 3.0;
@@ -211,7 +211,7 @@ export function contrastRatio(
  * background role wins; token names never decide whether a colour is a surface.
  */
 export function findThemeSurface(
-  tokens: Readonly<Record<string, ThemeTokenValueV2>>,
+  tokens: Readonly<Record<string, ThemeTokenValue>>,
 ): Readonly<{ key?: string; light: string; dark: string; name: string }> {
   const backgrounds = Object.keys(tokens)
     .sort()
@@ -248,7 +248,7 @@ export function findThemeSurface(
 }
 
 export function validateThemeContrast(
-  tokens: Readonly<Record<string, ThemeTokenValueV2>>,
+  tokens: Readonly<Record<string, ThemeTokenValue>>,
   options?: ThemeResolutionOptions | undefined,
 ): { failures: ThemeValidationFailure[]; ruleFailures: DefinitionRuleFailure[] } {
   const failures: ThemeValidationFailure[] = [];
@@ -272,7 +272,7 @@ export function validateThemeContrast(
   // The renderer paints each vocabulary colour by its key, so a vocabulary colour must carry
   // exactly the role the vocabulary declares for it; otherwise the checks below would judge it
   // as something other than what is painted.
-  for (const role of platformThemeTokenRolesV2) {
+  for (const role of platformThemeTokenRoles) {
     const token = tokens[role.key];
     if (token?.kind !== "color_pair") continue;
     const declared: string | undefined = "colorRole" in role ? role.colorRole : undefined;

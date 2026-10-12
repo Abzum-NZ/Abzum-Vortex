@@ -1,7 +1,7 @@
 import {
   jsonValueSchema,
-  type CustomComponentReleaseV2,
-  type PlatformBlockReleaseV2,
+  type CustomComponentRelease,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import {
@@ -28,7 +28,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const parseValues = (
-  custom: CustomComponentReleaseV2,
+  custom: CustomComponentRelease,
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): Readonly<Record<string, unknown>> => {
@@ -57,7 +57,7 @@ const parseValues = (
 };
 
 const parseBindings = (
-  custom: CustomComponentReleaseV2,
+  custom: CustomComponentRelease,
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): Readonly<Record<string, CustomComponentEventBinding>> => {
@@ -88,7 +88,7 @@ const parseBindings = (
 
 /** Builds the fail-closed parser for one custom component release's own contract. */
 export const createCustomComponentPayloadParser = (
-  custom: CustomComponentReleaseV2,
+  custom: CustomComponentRelease,
 ): PlatformComponentPayloadParser =>
   createPayloadParser({
     values: (value, location) => parseValues(custom, value, location),
@@ -101,7 +101,7 @@ export const createCustomComponentPayloadParser = (
  * derived from it rather than registered statically.
  */
 export const createCustomComponentRegistration = (
-  release: PlatformBlockReleaseV2,
+  release: PlatformBlockRelease,
 ): PlatformComponentRegistration => {
   const custom = release.customComponent;
   if (custom === undefined)
@@ -118,11 +118,11 @@ export const createCustomComponentRegistration = (
 
 /** Builds the exact registrations for the resolved custom component releases of one installation. */
 export const createCustomComponentRegistrations = (
-  releases: readonly PlatformBlockReleaseV2[],
+  releases: readonly PlatformBlockRelease[],
 ): readonly PlatformComponentRegistration[] =>
   Object.freeze(releases.map((release) => createCustomComponentRegistration(release)));
 
 /** Creates an immutable registry over exactly the supplied custom component releases. */
 export const createCustomComponentRegistry = (
-  releases: readonly PlatformBlockReleaseV2[],
+  releases: readonly PlatformBlockRelease[],
 ): PlatformComponentRegistry => createPlatformComponentRegistry(createCustomComponentRegistrations(releases));

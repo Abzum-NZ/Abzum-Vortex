@@ -3,7 +3,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Textarea } from "@vortex/ui/components/textarea";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { canonicalJson, sameId, type ApplicationSourceDocumentV2,
+import { canonicalJson, sameId, type ApplicationSourceDocument,
   type DefinitionValidationResult } from "@vortex/platform/schema";
 import { reviewStudioApplicationSource } from "../actions";
 import {
@@ -17,7 +17,7 @@ import {
 type ReviewedSource = Readonly<{
   snapshot: StudioApplicationSourceImportSnapshot;
   text: string; epoch: number;
-  source: ApplicationSourceDocumentV2; fingerprint: string;
+  source: ApplicationSourceDocument; fingerprint: string;
 }>;
 
 type SourceDiagnostics = Readonly<{
@@ -30,14 +30,14 @@ type Props = Readonly<{
   disabled: boolean;
   readSnapshot: () => StudioApplicationSourceImportSnapshot | null;
   onPendingChange: (pending: boolean) => void;
-  onApply: (expected: StudioApplicationSourceImportSnapshot, source: ApplicationSourceDocumentV2) =>
+  onApply: (expected: StudioApplicationSourceImportSnapshot, source: ApplicationSourceDocument) =>
     "applied" | "unchanged" | "stale";
 }>;
 
 const inputClass = "w-full";
 const buttonClass = "";
 
-const candidateFingerprint = async (source: ApplicationSourceDocumentV2): Promise<string> => {
+const candidateFingerprint = async (source: ApplicationSourceDocument): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalJson(source)));
   return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 };

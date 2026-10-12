@@ -2,11 +2,11 @@ import { platformPermissionSource } from "../access/platform-permissions";
 import { createHash } from "node:crypto";
 import { satisfies } from "semver";
 import {
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   inspectApplicationPageReplacements,
-  applicationCompilationOutputV2Schema,
-  applicationCompilationRequestV2Schema,
-  applicationDraftV2Schema,
+  applicationCompilationOutputSchema,
+  applicationCompilationRequestSchema,
+  applicationDraftSchema,
   applicationToolBundleSchema,
   calculationMaximumNestingDepth,
   descriptionSchema,
@@ -18,9 +18,9 @@ import {
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
   definitionSourceDocumentSchema,
-  moduleDraftV3Schema,
-  moduleCompilationOutputV3Schema,
-  moduleCompilationRequestV3Schema,
+  moduleDraftSchema,
+  moduleCompilationOutputSchema,
+  moduleCompilationRequestSchema,
   moduleSourceDocumentSchema,
   sourceFlowCollectionSchema,
   sourceProvenanceRegistry,
@@ -33,16 +33,16 @@ import {
   flowContractVersion,
   normalizeExactDecimal,
   readModuleSourceRecordOwnershipMode,
-  type ApplicationCompilationOutputV2,
-  type ApplicationCompilationRequestV2,
-  type ApplicationDraftV2,
+  type ApplicationCompilationOutput,
+  type ApplicationCompilationRequest,
+  type ApplicationDraft,
   type ApplicationToolBundleInput,
   type ApplicationToolOperationReference,
   type ApplicationToolBundle,
   type NavigationItem,
   type PlatformServiceOperationKey,
-  type ModuleCompilationOutputV3,
-  type ModuleCompilationRequestV3,
+  type ModuleCompilationOutput,
+  type ModuleCompilationRequest,
   type ModuleSourceDocument,
   type CompiledFlowSet,
   type FlowDefinition,
@@ -54,16 +54,14 @@ import {
   type JsonValue,
   type RuleGraph,
   type DefinitionCompilationRequest,
-  type ApplicationSourceDocumentV2,
+  type ApplicationSourceDocument,
   type DefinitionCompilationOutput,
   type DefinitionProvenanceEntry,
   type DefinitionResolutionSnapshot,
-  type DefinitionResolutionSnapshotV2,
-  type DefinitionResolutionSnapshotV3,
   type DefinitionSourceDocument,
   type DefinitionValidationLocation,
   type SourceProvenanceAnnotation,
-  type ModuleFieldV3,
+  type ModuleField,
 } from "../schema";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import {
@@ -76,22 +74,22 @@ import {
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
 import {
-  extractApplicationSourceIdentityRequirementsV2,
+  extractApplicationSourceIdentityRequirements,
   extractSourceIdentityRequirements,
-  extractModuleSourceIdentityRequirementsV3,
+  extractModuleSourceIdentityRequirements,
   applicationSearchSourceReferences,
 } from "./source-identities";
 import { deriveFormCommitActionKeys } from "./form-commit";
 import { compileRuleGraph } from "./rule-graph-compilation";
 import {
-  materialiseApplicationCompositionV2,
-  type MaterialisedApplicationCompositionV2,
-} from "./application-v2-composition";
+  materialiseApplicationComposition,
+  type MaterialisedApplicationComposition,
+} from "./application-materialisation";
 import type {
-  ApplicationCompositionResolutionV2,
+  ApplicationCompositionResolution,
   FieldInputSourceField,
-} from "./application-v2-resolution";
-import { applicationSearchFieldIsSelectable } from "./application-v2-resolution";
+} from "./application-resolution";
+import { applicationSearchFieldIsSelectable } from "./application-resolution";
 import { validateApplicationSourceCatalogue } from "./application-catalogue-validation";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import {
@@ -315,7 +313,7 @@ function sourceContractPositions(source: JsonObject): SourceContractPositions {
     source.kind === "module"
       ? moduleSourceDocumentSchema
       : source.kind === "application"
-        ? applicationSourceDocumentV2Schema
+        ? applicationSourceDocumentSchema
         : definitionSourceDocumentSchema;
   walkDefinitionContract(contract, source, (schema, _value, path) => {
     if (schema === jsonValueSchema) opaqueDataRoots.push(path as Path);
@@ -410,13 +408,13 @@ function sourceToCanonicalPath(
     const sourceIndex = bodyIndex + offset;
     // A flow value's `trigger_record.field` names a readable field key, not a permanent identity,
     // so it never takes the field-to-identity suffix map.
-    const flowReferenceField =
-      segment === "field" && sourcePath[sourceIndex - 1] === "reference";
-    const mappedKey = isDataProperty(positions, sourcePath, sourceIndex) || flowReferenceField
-      ? segment
-      : segment === "id" && collection
-        ? (sourceCollectionIdKeys[collection] ?? "id")
-        : (directSourceKeyMap[segment] ?? camelCase(segment));
+    const flowReferenceField = segment === "field" && sourcePath[sourceIndex - 1] === "reference";
+    const mappedKey =
+      isDataProperty(positions, sourcePath, sourceIndex) || flowReferenceField
+        ? segment
+        : segment === "id" && collection
+          ? (sourceCollectionIdKeys[collection] ?? "id")
+          : (directSourceKeyMap[segment] ?? camelCase(segment));
     mapped.push(mappedKey);
     collection = segment;
   }
@@ -442,13 +440,25 @@ function applicationSearchTargets(
   canonical: unknown,
   sourcePath: Path,
 ): Path[] | undefined {
-  if (source.kind === "application" && sourcePath[0] === "body" && sourcePath[1] === "search" &&
-      sourcePath[2] === "record_types" && typeof sourcePath[3] === "number") {
+  if (
+    source.kind === "application" &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "search" &&
+    sourcePath[2] === "record_types" &&
+    typeof sourcePath[3] === "number"
+  ) {
     const base: Path = ["content", "search", "recordTypes", sourcePath[3]];
-    if (sourcePath[4] === "record_type") return leafPaths(valueAtPath(canonical, [...base, "recordType"]), [...base, "recordType"]);
+    if (sourcePath[4] === "record_type")
+      return leafPaths(valueAtPath(canonical, [...base, "recordType"]), [...base, "recordType"]);
     if (sourcePath[4] === "fields" && typeof sourcePath[5] === "number")
-      return [[...base, "fields", sourcePath[5], sourcePath[6] === "field" ? "fieldId" : "priority"]];
-    const properties: Readonly<Record<string, string>> = { title_field: "titleFieldId", subtitle_field: "subtitleFieldId", target_page: "targetPageId" };
+      return [
+        [...base, "fields", sourcePath[5], sourcePath[6] === "field" ? "fieldId" : "priority"],
+      ];
+    const properties: Readonly<Record<string, string>> = {
+      title_field: "titleFieldId",
+      subtitle_field: "subtitleFieldId",
+      target_page: "targetPageId",
+    };
     const property = properties[String(sourcePath[4])];
     if (property !== undefined) return [[...base, property]];
   }
@@ -1266,8 +1276,7 @@ function explicitSourceTargets(
     };
     const canonicalCollection = collectionMap[collection];
     if (canonicalCollection) {
-      const targetKey =
-        collection === "actions" ? "subjectRecordTypeId" : "recordTypeId";
+      const targetKey = collection === "actions" ? "subjectRecordTypeId" : "recordTypeId";
       return [["content", canonicalCollection, sourcePath[2], targetKey]];
     }
   }
@@ -1337,11 +1346,7 @@ function canonicalTargetMatches(targetPath: Path, target: string): boolean {
     }
     if (pathOffset >= targetPath.length) return false;
     const value = targetPath[pathOffset];
-    if (
-      patternSegment !== "*" &&
-      patternSegment !== "#" &&
-      patternSegment !== String(value)
-    )
+    if (patternSegment !== "*" && patternSegment !== "#" && patternSegment !== String(value))
       return false;
     if (patternSegment === "#" && typeof value !== "number") return false;
     return matchesFrom(pathOffset + 1, patternOffset + 1);
@@ -1392,7 +1397,7 @@ function applicationTypedValueTarget(
         : "organizationAccountId";
   const candidate = [...targetPath.slice(0, -1), canonicalLeaf];
   return canonicalLeafSet.has(pathKey(candidate)) &&
-      sourceTransformationApproved(sourcePath, candidate, positions)
+    sourceTransformationApproved(sourcePath, candidate, positions)
     ? candidate
     : targetPath;
 }
@@ -1499,8 +1504,7 @@ function provenanceFor(
   const sourceObject = asObject(source);
   const positions = sourceContractPositions(sourceObject);
   const sourceLeafPaths = leafPaths(source).filter(
-    (path) =>
-      !(path.length === 1 && (path[0] === "source_contract_version" || path[0] === "kind")),
+    (path) => !(path.length === 1 && (path[0] === "source_contract_version" || path[0] === "kind")),
   );
   const canonicalLeafPaths = leafPaths(canonical);
   const canonicalLeafSet = new Set(canonicalLeafPaths.map(pathKey));
@@ -1612,8 +1616,7 @@ function provenanceFor(
   return entries;
 }
 
-type ResolutionSnapshot =
-  DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+type ResolutionSnapshot = DefinitionResolutionSnapshot;
 
 /**
  * Narrowing key only. Every lookup still applies its own predicate to the entries it finds, so
@@ -1623,8 +1626,7 @@ const identityLookupKey = (definitionKey: string, kind: string, alias: string): 
   `${definitionKey}\0${kind}\0${alias}`;
 
 class Resolution {
-  readonly snapshot:
-    DefinitionResolutionSnapshot | DefinitionResolutionSnapshotV2 | DefinitionResolutionSnapshotV3;
+  readonly snapshot: DefinitionResolutionSnapshot;
   readonly sourceLocation: DefinitionValidationLocation;
   /** Filled by the constructor passes that already visit every definition and identity. */
   private readonly definitionsByKey = new Map<
@@ -1636,21 +1638,15 @@ class Resolution {
     ResolutionSnapshot["identities"][number][]
   >();
 
-  constructor(
-    snapshot:
-      | DefinitionResolutionSnapshot
-      | DefinitionResolutionSnapshotV2
-      | DefinitionResolutionSnapshotV3,
-    source: JsonObject,
-  ) {
+  constructor(snapshot: DefinitionResolutionSnapshot, source: JsonObject) {
     this.snapshot = snapshot;
     this.sourceLocation = compilerRootLocation(source);
     const requirements =
       source.kind === "module"
-        ? extractModuleSourceIdentityRequirementsV3(source as unknown as ModuleSourceDocument)
+        ? extractModuleSourceIdentityRequirements(source as unknown as ModuleSourceDocument)
         : source.kind === "application"
-          ? extractApplicationSourceIdentityRequirementsV2(
-              source as unknown as ApplicationSourceDocumentV2,
+          ? extractApplicationSourceIdentityRequirements(
+              source as unknown as ApplicationSourceDocument,
             )
           : extractSourceIdentityRequirements(source as unknown as DefinitionSourceDocument);
     const authenticSourceIdentities = new Set(
@@ -1955,16 +1951,16 @@ type ModuleValueContext = Readonly<{
   resolution: Resolution;
 }>;
 
-const normaliseExactV2 = (value: unknown): unknown =>
+const normaliseExact = (value: unknown): unknown =>
   typeof value === "string" ? (normalizeExactDecimal(value) ?? value) : value;
 
-function normaliseMoneyV2(value: unknown): unknown {
+function normaliseMoney(value: unknown): unknown {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
   const money = value as JsonObject;
-  return { ...money, amount: normaliseExactV2(money.amount) };
+  return { ...money, amount: normaliseExact(money.amount) };
 }
 
-function normaliseModuleFieldValueV2(
+function normaliseModuleFieldValue(
   field: JsonObject | undefined,
   value: unknown,
   context: ModuleValueContext,
@@ -1973,13 +1969,13 @@ function normaliseModuleFieldValueV2(
   if (!field) return value;
   switch (field.type) {
     case "decimal_number":
-      return normaliseExactV2(value);
+      return normaliseExact(value);
     case "money":
-      return fieldDefault ? normaliseExactV2(value) : normaliseMoneyV2(value);
+      return fieldDefault ? normaliseExact(value) : normaliseMoney(value);
     case "calculation":
     case "total": {
       const settings = asObject(field.settings);
-      return normaliseModuleTypedValueV2(
+      return normaliseModuleTypedValue(
         String(settings.result_type ?? settings.resultType),
         value,
         context,
@@ -2011,9 +2007,9 @@ function normaliseModuleFieldValueV2(
         objectFromUniqueEntries(
           Object.entries(asObject(row)).map(([key, cell]) => {
             const column = byKey.get(key);
-            if (column?.type === "decimal_number") return [key, normaliseExactV2(cell)];
+            if (column?.type === "decimal_number") return [key, normaliseExact(cell)];
             if (column?.type === "money")
-              return [key, fieldDefault ? normaliseExactV2(cell) : normaliseMoneyV2(cell)];
+              return [key, fieldDefault ? normaliseExact(cell) : normaliseMoney(cell)];
             return [key, cell];
           }),
         ),
@@ -2024,15 +2020,15 @@ function normaliseModuleFieldValueV2(
   }
 }
 
-function normaliseModuleTypedValueV2(
+function normaliseModuleTypedValue(
   declaration: JsonObject | string | undefined,
   value: unknown,
   context: ModuleValueContext,
 ): unknown {
   if (typeof declaration === "object" && declaration !== null)
-    return normaliseModuleFieldValueV2(declaration, value, context);
-  if (declaration === "decimal_number") return normaliseExactV2(value);
-  if (declaration === "money") return normaliseMoneyV2(value);
+    return normaliseModuleFieldValue(declaration, value, context);
+  if (declaration === "decimal_number") return normaliseExact(value);
+  if (declaration === "money") return normaliseMoney(value);
   if (declaration === "record_reference") {
     const link = asObject(value);
     if (typeof link.record_type === "string")
@@ -2044,7 +2040,7 @@ function normaliseModuleTypedValueV2(
   return value;
 }
 
-function conditionDeclarationV2(
+function conditionDeclaration(
   operandValue: unknown,
   context: ModuleValueContext,
 ): JsonObject | string | undefined {
@@ -2085,10 +2081,10 @@ function condition(
         ? { source: "parameter", parameter: value.parameter }
         : { source: "value", value: value.value };
   const leftDeclaration = valueContext
-    ? conditionDeclarationV2(authoredLeft, valueContext)
+    ? conditionDeclaration(authoredLeft, valueContext)
     : undefined;
   const rightDeclaration = valueContext
-    ? conditionDeclarationV2(authoredRight, valueContext)
+    ? conditionDeclaration(authoredRight, valueContext)
     : undefined;
   const operand = (
     inputOperand: unknown,
@@ -2106,11 +2102,9 @@ function condition(
       Array.isArray(authoredValue) &&
       ((side === "right" && ["in", "not_in"].includes(operator)) ||
         (side === "left" && ["contains", "not_contains"].includes(operator)))
-        ? authoredValue.map((entry) =>
-            normaliseModuleTypedValueV2(declaration, entry, valueContext),
-          )
+        ? authoredValue.map((entry) => normaliseModuleTypedValue(declaration, entry, valueContext))
         : valueContext
-          ? normaliseModuleTypedValueV2(declaration, authoredValue, valueContext)
+          ? normaliseModuleTypedValue(declaration, authoredValue, valueContext)
           : authoredValue;
     return {
       source: "value",
@@ -2157,7 +2151,7 @@ function actionTaskValue(
     ...entry,
     literal: {
       ...literal,
-      value: normaliseModuleFieldValueV2(targetField, literal.value, valueContext),
+      value: normaliseModuleFieldValue(targetField, literal.value, valueContext),
     },
   };
 }
@@ -2186,10 +2180,10 @@ function actionInput(input: JsonObject, resolution: Resolution, moduleOwned = fa
         : moduleOwned && (input.type === "decimal_number" || input.type === "money")
           ? {
               ...(validation.minimum !== undefined
-                ? { minimum: normaliseExactV2(validation.minimum) }
+                ? { minimum: normaliseExact(validation.minimum) }
                 : {}),
               ...(validation.maximum !== undefined
-                ? { maximum: normaliseExactV2(validation.maximum) }
+                ? { maximum: normaliseExact(validation.maximum) }
                 : {}),
             }
           : validation
@@ -2423,15 +2417,15 @@ function compilePermissionRecordScope(
       ...(binding.source === "literal"
         ? {
             value: valueContext
-              ? normaliseModuleTypedValueV2(
+              ? normaliseModuleTypedValue(
                   parameterTypes.get(String(binding.key)),
                   binding.value,
                   valueContext,
                 )
               : parameterTypes.get(String(binding.key)) === "decimal_number"
-                ? normaliseExactV2(binding.value)
+                ? normaliseExact(binding.value)
                 : parameterTypes.get(String(binding.key)) === "money"
-                  ? normaliseMoneyV2(binding.value)
+                  ? normaliseMoney(binding.value)
                   : binding.value,
           }
         : {}),
@@ -2532,9 +2526,7 @@ function applicationPermissionSharingConditions(
  * not author its evaluation inherits read-time from its same-record dependencies. An authored
  * `stored` evaluation is kept, and publication refuses it when it depends on a read-time field.
  */
-function inheritReadTimeEvaluation<
-  T extends { fieldId: string; type: unknown; settings: unknown },
->(
+function inheritReadTimeEvaluation<T extends { fieldId: string; type: unknown; settings: unknown }>(
   sourceFields: readonly JsonObject[],
   fields: readonly T[],
 ): T[] {
@@ -2605,7 +2597,7 @@ function validatePersonLinkApplicationAccess(
             (dependency) => dependency.module === moduleKey,
           );
           const candidates = dependencyOutputs.filter(
-            (output): output is ModuleCompilationOutputV3 =>
+            (output): output is ModuleCompilationOutput =>
               output.kind === "module" && output.artifact.definitionKey === moduleKey,
           );
           if (declarations.length !== 1 || candidates.length !== 1)
@@ -2629,7 +2621,9 @@ function validatePersonLinkApplicationAccess(
             fail("vortex.definition.application_dependency_manifest", "broken_reference", location);
           records = content.recordTypes as JsonObject[];
         }
-        const matches = records.filter((candidate) => candidate.recordTypeId === target.recordTypeId);
+        const matches = records.filter(
+          (candidate) => candidate.recordTypeId === target.recordTypeId,
+        );
         if (
           target.moduleRootId !== expected.rootId ||
           matches.length !== 1 ||
@@ -2677,12 +2671,8 @@ function fieldSettings(
       return {
         digitsBeforeDecimal: settings.digits_before_decimal,
         decimalPlaces: settings.decimal_places,
-        ...(settings.minimum !== undefined
-          ? { minimum: normaliseExactV2(settings.minimum) }
-          : {}),
-        ...(settings.maximum !== undefined
-          ? { maximum: normaliseExactV2(settings.maximum) }
-          : {}),
+        ...(settings.minimum !== undefined ? { minimum: normaliseExact(settings.minimum) } : {}),
+        ...(settings.maximum !== undefined ? { maximum: normaliseExact(settings.maximum) } : {}),
       };
     case "money":
       return {
@@ -2691,12 +2681,8 @@ function fieldSettings(
             ? "organization_default"
             : settings.currency_mode,
         ...(settings.currency ? { currency: settings.currency } : {}),
-        ...(settings.minimum !== undefined
-          ? { minimum: normaliseExactV2(settings.minimum) }
-          : {}),
-        ...(settings.maximum !== undefined
-          ? { maximum: normaliseExactV2(settings.maximum) }
-          : {}),
+        ...(settings.minimum !== undefined ? { minimum: normaliseExact(settings.minimum) } : {}),
+        ...(settings.maximum !== undefined ? { maximum: normaliseExact(settings.maximum) } : {}),
       };
     case "yes_no":
     case "email_address":
@@ -2839,7 +2825,7 @@ function fieldSettings(
             dependenciesInOrder.push(fieldId);
             return { source: "field", fieldId };
           }
-          return { source: "literal", value: normaliseExactV2(operand.value) };
+          return { source: "literal", value: normaliseExact(operand.value) };
         };
         const operands = (expression.operands as JsonObject[]).map((operand) =>
           numberValue(asObject(operand), 1),
@@ -2870,7 +2856,7 @@ function fieldSettings(
             ? { source: "field", fieldId: localField(String(amount.field)) }
             : {
                 source: "literal",
-                value: normaliseExactV2(amount.value),
+                value: normaliseExact(amount.value),
               };
         dependencies = [
           dateFieldId,
@@ -2977,7 +2963,10 @@ const flowTextValue = (value: string): FlowValue => ({
   literal: { type: "text", value },
 });
 
-const flowReferenceValue = (reference: FlowReference): FlowValue => ({ kind: "reference", reference });
+const flowReferenceValue = (reference: FlowReference): FlowValue => ({
+  kind: "reference",
+  reference,
+});
 
 /**
  * What an action value can read inside its compiled flow: the subject is the record the action
@@ -3060,9 +3049,11 @@ function actionPreconditionFormula(node: unknown, scope: ActionFlowScope): FlowF
       const authored = asObject(value.right);
       const raw = authored.source === "value" ? authored.value : undefined;
       const options = Array.isArray(raw)
-        ? raw.map(
-            (entry): FlowFormula => ({ op: "literal", type: "json", value: entry as JsonValue }),
-          )
+        ? raw.map((entry): FlowFormula => ({
+            op: "literal",
+            type: "json",
+            value: entry as JsonValue,
+          }))
         : [rightOperand()];
       const membership: FlowFormula = { op: "in", value: left, options };
       return String(value.operator) === "not_in" ? { op: "not", arg: membership } : membership;
@@ -3314,7 +3305,7 @@ function compileModule(
       ...(field.help_text ? { helpText: field.help_text } : {}),
       required: field.required,
       ...(field.default !== undefined
-        ? { default: normaliseModuleFieldValueV2(field, field.default, valueContext, true) }
+        ? { default: normaliseModuleFieldValue(field, field.default, valueContext, true) }
         : {}),
       unique: field.unique,
       filterable: field.filterable,
@@ -3444,10 +3435,7 @@ function compileModule(
                 values: objectFromUniqueEntries(
                   Object.entries(asObject(properties.values)).map(([key, value]) => {
                     const fieldId = localField(key);
-                    return [
-                      fieldId,
-                      actionTaskValue(value, fieldsById.get(fieldId), valueContext),
-                    ];
+                    return [fieldId, actionTaskValue(value, fieldsById.get(fieldId), valueContext)];
                   }),
                 ),
               },
@@ -3462,10 +3450,7 @@ function compileModule(
                 values: objectFromUniqueEntries(
                   Object.entries(asObject(properties.values)).map(([key, value]) => {
                     const fieldId = resolution.field(target, key);
-                    return [
-                      fieldId,
-                      actionTaskValue(value, fieldsById.get(fieldId), valueContext),
-                    ];
+                    return [fieldId, actionTaskValue(value, fieldsById.get(fieldId), valueContext)];
                   }),
                 ),
               },
@@ -3588,13 +3573,13 @@ function compileModule(
         parameters: objectFromUniqueEntries(
           Object.entries(asObject(test.parameters)).map(([key, value]) => [
             key,
-            normaliseModuleTypedValueV2(parameterTypes.get(key), value, valueContext),
+            normaliseModuleTypedValue(parameterTypes.get(key), value, valueContext),
           ]),
         ),
         fieldValues: objectFromUniqueEntries(
           Object.entries(asObject(test.field_values)).map(([key, value]) => [
             localField(key),
-            normaliseModuleFieldValueV2(fieldFor(record, key), value, valueContext),
+            normaliseModuleFieldValue(fieldFor(record, key), value, valueContext),
           ]),
         ),
         expected: test.expected,
@@ -3766,7 +3751,7 @@ function compileModule(
       actionId,
     };
   });
-  const canonical = moduleDraftV3Schema.parse({
+  const canonical = moduleDraftSchema.parse({
     envelope: {
       kind: "module",
       rootId: root.rootId,
@@ -3818,10 +3803,10 @@ const standardRecordActions = new Set([
   "export",
 ]);
 
-function compileApplicationPagesV2(
+function compileApplicationPages(
   source: JsonObject,
   resolution: Resolution,
-  composition: MaterialisedApplicationCompositionV2,
+  composition: MaterialisedApplicationComposition,
   moduleQueryId: (reference: string) => string,
 ) {
   const body = asObject(source.body);
@@ -3940,7 +3925,7 @@ function compileApplication(
   resolution: Resolution,
   metadata: JsonObject,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-  compositionV2: MaterialisedApplicationCompositionV2,
+  composition: MaterialisedApplicationComposition,
   valueIndex: ApplicationModuleValueIndex,
   flows: readonly FlowDefinition[],
 ) {
@@ -3980,28 +3965,46 @@ function compileApplication(
     };
   });
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
-  const pages = compileApplicationPagesV2(source, resolution, compositionV2, valueIndex.query);
-  const searchSource = (source as unknown as ApplicationSourceDocumentV2).body.search;
-  const searchReferences = applicationSearchSourceReferences(source as unknown as ApplicationSourceDocumentV2);
-  const search = searchSource === undefined ? undefined : {
-    enabled: searchSource.enabled,
-    recordTypes: searchSource.record_types.map((entry, index) => {
-      const references = searchReferences[index]!;
-      const recordType = resolution.recordType(references.recordType);
-      const record = valueIndex.record(references.recordType)?.record;
-      const fields = record?.fields as ModuleFieldV3[] | undefined;
-      if (fields === undefined || references.fields.some((reference) =>
-        !applicationSearchFieldIsSelectable(fields, qualifiedField(resolution, reference))))
-        fail("vortex.definition.application_page_query", "broken_reference");
-      return {
-        recordType,
-        fields: entry.fields.map((field) => ({ fieldId: qualifiedField(resolution, field.field), priority: field.priority })),
-        titleFieldId: qualifiedField(resolution, entry.title_field),
-        ...(entry.subtitle_field === undefined ? {} : { subtitleFieldId: qualifiedField(resolution, entry.subtitle_field) }),
-        targetPageId: pageId(references.page),
-      };
-    }),
-  };
+  const pages = compileApplicationPages(source, resolution, composition, valueIndex.query);
+  const searchSource = (source as unknown as ApplicationSourceDocument).body.search;
+  const searchReferences = applicationSearchSourceReferences(
+    source as unknown as ApplicationSourceDocument,
+  );
+  const search =
+    searchSource === undefined
+      ? undefined
+      : {
+          enabled: searchSource.enabled,
+          recordTypes: searchSource.record_types.map((entry, index) => {
+            const references = searchReferences[index]!;
+            const recordType = resolution.recordType(references.recordType);
+            const record = valueIndex.record(references.recordType)?.record;
+            const fields = record?.fields as ModuleField[] | undefined;
+            if (
+              fields === undefined ||
+              references.fields.some(
+                (reference) =>
+                  !applicationSearchFieldIsSelectable(
+                    fields,
+                    qualifiedField(resolution, reference),
+                  ),
+              )
+            )
+              fail("vortex.definition.application_page_query", "broken_reference");
+            return {
+              recordType,
+              fields: entry.fields.map((field) => ({
+                fieldId: qualifiedField(resolution, field.field),
+                priority: field.priority,
+              })),
+              titleFieldId: qualifiedField(resolution, entry.title_field),
+              ...(entry.subtitle_field === undefined
+                ? {}
+                : { subtitleFieldId: qualifiedField(resolution, entry.subtitle_field) }),
+              targetPageId: pageId(references.page),
+            };
+          }),
+        };
   // An application never owns a query: the Query engine runs only the queries a Module exposes, so
   // every page and placement binds a dependency-qualified Module query instead.
   const ownedQuery = (body.queries as JsonObject[])[0];
@@ -4017,7 +4020,7 @@ function compileApplication(
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
   const wildcardPermissionKeys = wildcardPermissions.map((permission) => permission.key);
   const wildcardCatalogueFingerprint = fingerprintCanonicalValue(wildcardPermissions);
-  const canonical = applicationDraftV2Schema.parse({
+  const canonical = applicationDraftSchema.parse({
     envelope: {
       kind: "application",
       rootId: root.rootId,
@@ -4099,8 +4102,8 @@ function compileApplication(
         };
       }),
       queries,
-      platformBlockDependencies: compositionV2.platformBlockDependencies,
-      shells: compositionV2.shells,
+      platformBlockDependencies: composition.platformBlockDependencies,
+      shells: composition.shells,
       pipelines: (body.pipelines as JsonObject[]).map((pipeline) => {
         const record = String(pipeline.record_type);
         const valueContext = valueIndex.record(record) ? valueIndex.context(record) : undefined;
@@ -4171,11 +4174,7 @@ function compileApplication(
                         const pair = valueIndex.fieldById(fieldId);
                         return [
                           fieldId,
-                          actionTaskValue(
-                            value,
-                            pair?.field,
-                            pair ? subjectContext : undefined,
-                          ),
+                          actionTaskValue(value, pair?.field, pair ? subjectContext : undefined),
                         ];
                       }),
                     ),
@@ -4362,7 +4361,7 @@ function compileApplication(
         state: address.state,
         rateLimitPerMinute: address.rate_limit_per_minute,
       })),
-      theme: compositionV2.theme,
+      theme: composition.theme,
       homePageId: pageId(String(body.home_page)),
       ...(search === undefined ? {} : { search }),
       flows,
@@ -4591,11 +4590,11 @@ function compileParsedConnectionRequest(
   }
 }
 
-const applicationCompositionResolutionV2 = (
-  source: ApplicationSourceDocumentV2,
+const applicationCompositionResolution = (
+  source: ApplicationSourceDocument,
   resolution: Resolution,
   valueIndex: ApplicationModuleValueIndex,
-): ApplicationCompositionResolutionV2 => {
+): ApplicationCompositionResolution => {
   const definitionKey = source.key;
   const allowedOwners = permissionScopeSourceOwners(source as unknown as JsonObject);
   const splitMember = (
@@ -4617,9 +4616,7 @@ const applicationCompositionResolutionV2 = (
       const field = pair.field;
       const type = String(field.type);
       const settings = field.settings === undefined ? {} : asObject(field.settings);
-      const resolvedRecordType = (
-        value: unknown,
-      ): FieldInputSourceField["recordTypes"][number] => {
+      const resolvedRecordType = (value: unknown): FieldInputSourceField["recordTypes"][number] => {
         const recordType = asObject(value);
         // A canonical module field resolves every link target; anything else is refused rather
         // than derived, so an automatic field input never invents a record type identity.
@@ -4687,14 +4684,14 @@ const applicationCompositionResolutionV2 = (
   };
 };
 
-const v2SpecialRoot = (path: Path): boolean =>
+const applicationSpecialRoot = (path: Path): boolean =>
   path[0] === "body" &&
   (path[1] === "platform_block_dependencies" ||
     path[1] === "shells" ||
     path[1] === "theme" ||
     (path[1] === "pages" && path.includes("composition")));
 
-const v2ThemeValueTargets = (
+const applicationThemeValueTargets = (
   sourcePath: Path,
   sourceValueRoot: Path,
   canonicalRoot: Path,
@@ -4716,8 +4713,8 @@ const v2ThemeValueTargets = (
   return [[...canonicalRoot, ...mapped]];
 };
 
-const v2PropertyValueTargets = (
-  source: ApplicationSourceDocumentV2,
+const applicationPropertyValueTargets = (
+  source: ApplicationSourceDocument,
   sourcePath: Path,
   sourceValueRoot: Path,
   canonicalRoot: Path,
@@ -4754,8 +4751,8 @@ const v2PropertyValueTargets = (
   ];
 };
 
-function v2SlotSourceTargets(
-  source: ApplicationSourceDocumentV2,
+function applicationSlotSourceTargets(
+  source: ApplicationSourceDocument,
   sourcePath: Path,
   sourceSlotRoot: Path,
   canonicalSlotRoot: Path,
@@ -4841,13 +4838,13 @@ function v2SlotSourceTargets(
       ]);
     }
     if (property === "theme_overrides" && typeof placementSuffix[1] === "string")
-      return v2ThemeValueTargets(
+      return applicationThemeValueTargets(
         sourcePath,
         [...sourceRoot, "theme_overrides", placementSuffix[1]],
         [...canonicalRoot, "themeOverrides", placementSuffix[1]],
       );
     if (property === "settings" && typeof placementSuffix[1] === "string")
-      return v2PropertyValueTargets(
+      return applicationPropertyValueTargets(
         source,
         sourcePath,
         [...sourceRoot, "settings", placementSuffix[1]],
@@ -4857,8 +4854,8 @@ function v2SlotSourceTargets(
   }
 }
 
-function v2SpecialSourceTargets(
-  source: ApplicationSourceDocumentV2,
+function applicationSpecialSourceTargets(
+  source: ApplicationSourceDocument,
   sourcePath: Path,
   resolution: Resolution,
 ): Path[] | undefined {
@@ -4891,7 +4888,7 @@ function v2SpecialSourceTargets(
         ],
       ];
     if (sourcePath[2] === "token_overrides" && typeof sourcePath[3] === "string")
-      return v2ThemeValueTargets(
+      return applicationThemeValueTargets(
         sourcePath,
         ["body", "theme", "token_overrides", sourcePath[3]],
         ["content", "theme", "tokens", sourcePath[3]],
@@ -4910,7 +4907,7 @@ function v2SpecialSourceTargets(
         ],
       ];
     if (sourcePath[3] === "layout")
-      return v2SlotSourceTargets(
+      return applicationSlotSourceTargets(
         source,
         sourcePath,
         ["body", "shells", sourcePath[2], "layout"],
@@ -4953,7 +4950,7 @@ function v2SpecialSourceTargets(
     if (sourcePath[4] === "shell_kind") return [[...root, "shellKind"]];
     if (sourcePath[4] === "shell") return [[...root, "shellId"]];
     if (sourcePath[4] === "main")
-      return v2SlotSourceTargets(
+      return applicationSlotSourceTargets(
         source,
         sourcePath,
         ["body", "pages", sourcePath[2], "composition", "main"],
@@ -4962,7 +4959,7 @@ function v2SpecialSourceTargets(
       );
     if (sourcePath[4] === "content" && typeof sourcePath[5] === "string") {
       const slotAlias = sourcePath[5];
-      return v2SlotSourceTargets(
+      return applicationSlotSourceTargets(
         source,
         sourcePath,
         ["body", "pages", sourcePath[2], "composition", "content", slotAlias],
@@ -4974,7 +4971,7 @@ function v2SpecialSourceTargets(
       const stepAlias = sourcePath[5];
       const stepId = resolution.id(source.key, "guided_step", stepAlias, "page:" + page.key);
       if (composition.shell_kind === "default")
-        return v2SlotSourceTargets(
+        return applicationSlotSourceTargets(
           source,
           sourcePath,
           ["body", "pages", sourcePath[2], "composition", "step_content", stepAlias],
@@ -4983,7 +4980,7 @@ function v2SpecialSourceTargets(
         );
       if (typeof sourcePath[6] !== "string") return undefined;
       const slotAlias = sourcePath[6];
-      return v2SlotSourceTargets(
+      return applicationSlotSourceTargets(
         source,
         sourcePath,
         ["body", "pages", sourcePath[2], "composition", "step_content", stepAlias, slotAlias],
@@ -5006,8 +5003,8 @@ function v2SpecialSourceTargets(
  * are resolved from its aliases while its typed input map is the same value in source and output.
  */
 function applicationFlowProvenance(
-  source: ApplicationSourceDocumentV2,
-  canonical: ApplicationDraftV2,
+  source: ApplicationSourceDocument,
+  canonical: ApplicationDraft,
   flowSet: CompiledFlowSet,
 ): DefinitionProvenanceEntry[] {
   const entries: DefinitionProvenanceEntry[] = flowSet.provenance.map((entry) => ({
@@ -5051,14 +5048,14 @@ function applicationFlowProvenance(
   return entries;
 }
 
-function applicationProvenanceV2(
-  fullSource: ApplicationSourceDocumentV2,
-  fullCanonical: ApplicationDraftV2,
+function applicationProvenance(
+  fullSource: ApplicationSourceDocument,
+  fullCanonical: ApplicationDraft,
   resolution: Resolution,
   flowSet: CompiledFlowSet,
 ): DefinitionProvenanceEntry[] {
   // The generic pass below sees the content without its flows and bindings, which are traced above.
-  const source: ApplicationSourceDocumentV2 = {
+  const source: ApplicationSourceDocument = {
     ...fullSource,
     body: { ...fullSource.body, flows: [], flow_bindings: [] },
   };
@@ -5075,8 +5072,8 @@ function applicationProvenanceV2(
   const canonicalLeafSet = new Set(canonicalLeaves.map(pathKey));
   const entries: DefinitionProvenanceEntry[] = [];
   for (const sourcePath of sourceLeaves) {
-    const targets = v2SpecialRoot(sourcePath)
-      ? v2SpecialSourceTargets(source, sourcePath, resolution)
+    const targets = applicationSpecialRoot(sourcePath)
+      ? applicationSpecialSourceTargets(source, sourcePath, resolution)
       : (explicitSourceTargets(sourceObject, canonical, sourcePath, positions, resolution) ?? [
           sourceToCanonicalPath(sourceObject, canonical, sourcePath, positions),
         ]);
@@ -5139,7 +5136,7 @@ function applicationProvenanceV2(
         sourceParent !== undefined &&
         propertyReferenceLeaf[String(sourceParent.kind)] === String(sourcePath.at(-1));
       const compositionReference =
-        v2SpecialRoot(sourcePath) &&
+        applicationSpecialRoot(sourcePath) &&
         (["shell", "parent_placement", "view_permission", "use_permission"].includes(
           String(sourcePath.at(-1)),
         ) ||
@@ -5152,7 +5149,7 @@ function applicationProvenanceV2(
         pageReference ||
         compositionReference ||
         eventSettingReference ||
-        (v2SpecialRoot(sourcePath) &&
+        (applicationSpecialRoot(sourcePath) &&
           sourcePath.includes("order") &&
           typeof sourcePath.at(-1) === "number");
       entries.push({
@@ -5246,7 +5243,7 @@ const applicationToolDescription = (
  * than described with an invented contract.
  */
 function compileApplicationToolBundle(
-  canonical: ApplicationDraftV2,
+  canonical: ApplicationDraft,
   source: JsonObject,
   resolution: Resolution,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
@@ -5264,7 +5261,7 @@ function compileApplicationToolBundle(
     ]),
   );
   const boundModuleOutputs = dependencyOutputs.filter(
-    (output): output is ModuleCompilationOutputV3 =>
+    (output): output is ModuleCompilationOutput =>
       output.kind === "module" &&
       boundVersions.get(String(output.artifact.rootId)) === String(output.artifact.exactVersion),
   );
@@ -5449,7 +5446,8 @@ function compileApplicationToolBundle(
   const moduleQueriesById = new Map(
     boundModuleOutputs.flatMap((output) =>
       output.canonical.content.queries.map(
-        (query) => [String(query.queryId), { moduleRootId: String(output.artifact.rootId), query }] as const,
+        (query) =>
+          [String(query.queryId), { moduleRootId: String(output.artifact.rootId), query }] as const,
       ),
     ),
   );
@@ -5523,13 +5521,13 @@ function compileApplicationToolBundle(
   });
 }
 
-function compileApplicationV2Internal(
+function compileApplicationInternal(
   input: unknown,
   context?: DefinitionCompilationContext,
-): ApplicationCompilationOutputV2 {
-  const parsed = applicationCompilationRequestV2Schema.safeParse(input);
+): ApplicationCompilationOutput {
+  const parsed = applicationCompilationRequestSchema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  return compileParsedApplicationV2Request(parsed.data, parseDefinitionCompilationContext(context));
+  return compileParsedApplicationRequest(parsed.data, parseDefinitionCompilationContext(context));
 }
 
 /**
@@ -5552,11 +5550,15 @@ function compileOwnedFlowSources(
   const body = asObject(source.body);
   const moduleDependencyEntries =
     source.kind === "module"
-      ? (Array.isArray(body.dependencies) ? (body.dependencies as JsonObject[]) : [])
+      ? Array.isArray(body.dependencies)
+        ? (body.dependencies as JsonObject[])
+        : []
       : source.kind === "application"
-        ? (Array.isArray(body.module_bindings) ? (body.module_bindings as JsonObject[]) : [])
+        ? Array.isArray(body.module_bindings)
+          ? (body.module_bindings as JsonObject[])
+          : []
         : [];
-  const dependencyModuleOutput = (moduleKey: string): ModuleCompilationOutputV3 => {
+  const dependencyModuleOutput = (moduleKey: string): ModuleCompilationOutput => {
     const bindings = moduleDependencyEntries.filter(
       (binding) => String(binding.module) === moduleKey,
     );
@@ -5573,7 +5575,7 @@ function compileOwnedFlowSources(
       fail("vortex.definition.application_dependency_manifest", "broken_reference");
 
     const candidates = dependencyOutputs.filter(
-      (output): output is ModuleCompilationOutputV3 =>
+      (output): output is ModuleCompilationOutput =>
         output.kind === "module" && output.artifact.definitionKey === moduleKey,
     );
     if (candidates.length !== 1)
@@ -5615,10 +5617,7 @@ function compileOwnedFlowSources(
       });
   }
   for (const output of dependencyOutputs) {
-    if (
-      output.kind !== "module" ||
-      !declaredDefinitionKeySet.has(output.artifact.definitionKey)
-    )
+    if (output.kind !== "module" || !declaredDefinitionKeySet.has(output.artifact.definitionKey))
       continue;
     for (const recordType of output.canonical.content.recordTypes as unknown as JsonObject[])
       for (const field of recordType.fields as JsonObject[])
@@ -5728,20 +5727,17 @@ function compileCheckedFlowSources(
   return flowSet;
 }
 
-function compileParsedApplicationV2Request(
-  request: ParsedApplicationV2Request,
+function compileParsedApplicationRequest(
+  request: ParsedApplicationRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-): ApplicationCompilationOutputV2 {
+): ApplicationCompilationOutput {
   const source = request.source;
   const sourceObject = source as unknown as JsonObject;
   try {
     // Publication refuses with the first of the located catalogue results draft save reports,
     // before materialisation can refuse the same document without its location.
     const catalogueFailure = settleDefinitionRuleFailures(
-      validateApplicationSourceCatalogue(
-        source,
-        request.catalogueSnapshot.platformBlocks.releases,
-      ),
+      validateApplicationSourceCatalogue(source, request.catalogueSnapshot.platformBlocks.releases),
     )[0];
     if (catalogueFailure !== undefined)
       throw new DefinitionCompilationError(
@@ -5752,12 +5748,12 @@ function compileParsedApplicationV2Request(
     const resolution = new Resolution(request.resolution, sourceObject);
     const flowSet = compileCheckedFlowSources(sourceObject, resolution, dependencyOutputs);
     const valueIndex = applicationModuleValueIndex(sourceObject, resolution, dependencyOutputs);
-    const composition = materialiseApplicationCompositionV2(
+    const composition = materialiseApplicationComposition(
       source,
       request.catalogueSnapshot,
-      applicationCompositionResolutionV2(source, resolution, valueIndex),
+      applicationCompositionResolution(source, resolution, valueIndex),
     );
-    const canonical = applicationDraftV2Schema.parse(
+    const canonical = applicationDraftSchema.parse(
       compileApplication(
         sourceObject,
         resolution,
@@ -5777,13 +5773,13 @@ function compileParsedApplicationV2Request(
       contentFingerprint: fingerprintCanonicalValue(canonical.content),
       resolutionFingerprint: request.resolution.fingerprint,
     };
-    const output = applicationCompilationOutputV2Schema.safeParse({
+    const output = applicationCompilationOutputSchema.safeParse({
       kind: "application",
       validationContractVersion: "2.0.0",
       platformCompatibilityVersion: APPLICATION_PLATFORM_COMPATIBILITY_VERSION,
       canonical,
       artifact,
-      provenance: applicationProvenanceV2(source, canonical, resolution, flowSet),
+      provenance: applicationProvenance(source, canonical, resolution, flowSet),
       dependencyOrder: dependencyOrder(sourceObject),
       resolvedDependencies: resolvedDependencies(sourceObject, resolution),
       resolutionFingerprint: request.resolution.fingerprint,
@@ -5809,19 +5805,19 @@ function compileParsedApplicationV2Request(
   }
 }
 
-function compileModuleV3Internal(
+function compileModuleInternal(
   input: unknown,
   context?: DefinitionCompilationContext,
-): ModuleCompilationOutputV3 {
-  const parsed = moduleCompilationRequestV3Schema.safeParse(input);
+): ModuleCompilationOutput {
+  const parsed = moduleCompilationRequestSchema.safeParse(input);
   if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  return compileParsedModuleV3Request(parsed.data, parseDefinitionCompilationContext(context));
+  return compileParsedModuleRequest(parsed.data, parseDefinitionCompilationContext(context));
 }
 
-function compileParsedModuleV3Request(
-  request: ParsedModuleV3Request,
+function compileParsedModuleRequest(
+  request: ParsedModuleRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-): ModuleCompilationOutputV3 {
+): ModuleCompilationOutput {
   const source = request.source as unknown as JsonObject;
   try {
     const resolution = new Resolution(request.resolution, source);
@@ -5884,7 +5880,7 @@ function compileParsedModuleV3Request(
           a.graph.priority - b.graph.priority ||
           compareCanonicalStrings(a.graph.ruleId, b.graph.ruleId),
       );
-    const canonical = moduleDraftV3Schema.parse(
+    const canonical = moduleDraftSchema.parse(
       compileModule(
         source,
         resolution,
@@ -5938,7 +5934,7 @@ function compileParsedModuleV3Request(
         });
     });
     const ownDefinition = resolution.definition(definitionKey, "module");
-    const output = moduleCompilationOutputV3Schema.safeParse({
+    const output = moduleCompilationOutputSchema.safeParse({
       kind: "module",
       validationContractVersion: "3.0.0",
       canonical,
@@ -5987,14 +5983,12 @@ const explicitCompilationKind = (input: unknown): "module" | "application" | und
 
 /** Requests as this package's own schemas return them, carrying the ids compiling needs. */
 type ParsedConnectionRequest = ReturnType<typeof definitionCompilationRequestSchema.parse>;
-type ParsedApplicationV2Request = ReturnType<typeof applicationCompilationRequestV2Schema.parse>;
-type ParsedModuleV3Request = ReturnType<typeof moduleCompilationRequestV3Schema.parse>;
+type ParsedApplicationRequest = ReturnType<typeof applicationCompilationRequestSchema.parse>;
+type ParsedModuleRequest = ReturnType<typeof moduleCompilationRequestSchema.parse>;
 
 /** The request shapes the compile entry points dispatch on, as they declare them. */
 type DispatchableCompilationRequest =
-  | DefinitionCompilationRequest
-  | ApplicationCompilationRequestV2
-  | ModuleCompilationRequestV3;
+  DefinitionCompilationRequest | ApplicationCompilationRequest | ModuleCompilationRequest;
 
 /**
  * Package-internal compile entry for a request this package parsed and dependency outputs it
@@ -6003,13 +5997,13 @@ type DispatchableCompilationRequest =
  * compileDefinitionWithContext, which parse what they are given.
  */
 export function compileParsedDefinition(
-  request: ApplicationCompilationRequestV2,
+  request: ApplicationCompilationRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-): ApplicationCompilationOutputV2;
+): ApplicationCompilationOutput;
 export function compileParsedDefinition(
-  request: ModuleCompilationRequestV3,
+  request: ModuleCompilationRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-): ModuleCompilationOutputV3;
+): ModuleCompilationOutput;
 export function compileParsedDefinition(
   request: DefinitionCompilationRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
@@ -6021,37 +6015,34 @@ export function compileParsedDefinition(
   assertDependencyOutputLimits(dependencyOutputs);
   const explicitKind = explicitCompilationKind(request);
   if (explicitKind === "module")
-    return compileParsedModuleV3Request(request as ParsedModuleV3Request, dependencyOutputs);
+    return compileParsedModuleRequest(request as ParsedModuleRequest, dependencyOutputs);
   if (explicitKind === "application")
-    return compileParsedApplicationV2Request(
-      request as ParsedApplicationV2Request,
-      dependencyOutputs,
-    );
+    return compileParsedApplicationRequest(request as ParsedApplicationRequest, dependencyOutputs);
   return compileParsedConnectionRequest(request as ParsedConnectionRequest);
 }
 
 export function compileDefinition(
-  input: ApplicationCompilationRequestV2,
-): ApplicationCompilationOutputV2;
-export function compileDefinition(input: ModuleCompilationRequestV3): ModuleCompilationOutputV3;
+  input: ApplicationCompilationRequest,
+): ApplicationCompilationOutput;
+export function compileDefinition(input: ModuleCompilationRequest): ModuleCompilationOutput;
 export function compileDefinition(input: DefinitionCompilationRequest): DefinitionCompilationOutput;
 export function compileDefinition(
   input: unknown,
-): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
+): DefinitionCompilationOutput | ApplicationCompilationOutput {
   const explicitKind = explicitCompilationKind(input);
-  if (explicitKind === "module") return compileModuleV3Internal(input);
-  if (explicitKind === "application") return compileApplicationV2Internal(input);
+  if (explicitKind === "module") return compileModuleInternal(input);
+  if (explicitKind === "application") return compileApplicationInternal(input);
   return compileDefinitionInternal(input);
 }
 
 export function compileDefinitionWithContext(
-  input: ApplicationCompilationRequestV2,
+  input: ApplicationCompilationRequest,
   context: DefinitionCompilationContext,
-): ApplicationCompilationOutputV2;
+): ApplicationCompilationOutput;
 export function compileDefinitionWithContext(
-  input: ModuleCompilationRequestV3,
+  input: ModuleCompilationRequest,
   context: DefinitionCompilationContext,
-): ModuleCompilationOutputV3;
+): ModuleCompilationOutput;
 export function compileDefinitionWithContext(
   input: DefinitionCompilationRequest,
   context: DefinitionCompilationContext,
@@ -6059,9 +6050,9 @@ export function compileDefinitionWithContext(
 export function compileDefinitionWithContext(
   input: unknown,
   context: DefinitionCompilationContext,
-): DefinitionCompilationOutput | ApplicationCompilationOutputV2 {
+): DefinitionCompilationOutput | ApplicationCompilationOutput {
   const explicitKind = explicitCompilationKind(input);
-  if (explicitKind === "module") return compileModuleV3Internal(input, context);
-  if (explicitKind === "application") return compileApplicationV2Internal(input, context);
+  if (explicitKind === "module") return compileModuleInternal(input, context);
+  if (explicitKind === "application") return compileApplicationInternal(input, context);
   return compileDefinitionInternal(input, context);
 }

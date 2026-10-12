@@ -1,8 +1,8 @@
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentV2Schema,
+  applicationSourceDocumentSchema,
   type ApplicationRootId,
-  type ApplicationSourceDocumentV2,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
@@ -142,12 +142,12 @@ const onlyMatch = (
 };
 
 const placementCandidates = (
-  source: ApplicationSourceDocumentV2,
+  source: ApplicationSourceDocument,
   alias: string,
 ): InspectorCandidate[] => {
   const matches: InspectorCandidate[] = [];
   const visitSlot = (
-    slot: ApplicationSourceDocumentV2["body"]["shells"][number]["layout"],
+    slot: ApplicationSourceDocument["body"]["shells"][number]["layout"],
     path: SourcePath,
   ): void => {
     for (const [placementAlias, placement] of Object.entries(slot.placements)) {
@@ -211,7 +211,7 @@ export const resolveStudioSelectionInspectorContext = (
     const parsedRoot = applicationRootIdSchema.safeParse(draft.rootId);
     if (!parsedRoot.success) return refused("invalid_context");
 
-    const parsedSource = applicationSourceDocumentV2Schema.safeParse(draft.source);
+    const parsedSource = applicationSourceDocumentSchema.safeParse(draft.source);
     if (!parsedSource.success) return refused("invalid_context");
     const source = parsedSource.data;
     const parsedSelection = parseSelection(selection);
@@ -254,7 +254,7 @@ export const resolveStudioSelectionInspectorContext = (
       case "navigation": {
         candidates = [];
         const visitNavigation = (
-          items: ApplicationSourceDocumentV2["body"]["navigation"],
+          items: ApplicationSourceDocument["body"]["navigation"],
           path: SourcePath,
         ): void => {
           items.forEach((item, index) => {

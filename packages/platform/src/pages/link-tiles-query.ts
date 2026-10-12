@@ -19,7 +19,7 @@ import {
   safeHttpsUrlSchema,
   sameId,
   validateComponentSettings,
-  type BlockPropertyValueV2Contract,
+  type BlockPropertyValueContract,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -35,7 +35,7 @@ import {
 } from "../queries/index";
 import type { RecordsTableQueryRunner } from "./records-table-query";
 
-type Settings = Readonly<Record<string, BlockPropertyValueV2Contract>>;
+type Settings = Readonly<Record<string, BlockPropertyValueContract>>;
 type TextCell = Readonly<{ kind: "text"; text: string }>;
 type LinkCell = Readonly<{ kind: "link"; address: string; label: string }>;
 type LinkRow = Readonly<{

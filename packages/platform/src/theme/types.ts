@@ -1,34 +1,34 @@
 import "server-only";
 
 import type {
-  ApplicationContentV2,
+  ApplicationContent,
   BuilderKey,
   DefinitionValidationLocation,
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
   NamespacedKey,
   PlatformId,
-  PlatformThemeReleaseV2 as ContractPlatformThemeReleaseV2,
+  PlatformThemeRelease as ContractPlatformThemeRelease,
   ThemeColorRole,
 } from "../schema";
 
 export type { ThemeColorRole };
 
-export type ApplicationThemeV2 = ApplicationContentV2["theme"];
-export type ExactPlatformThemeDependencyV2 = ApplicationThemeV2["base"];
-export type ThemeTokenValueV2 = ApplicationThemeV2["tokens"][string];
-export type ThemeTokenKindV2 = ThemeTokenValueV2["kind"];
-export type PlatformThemeReleaseV2 = ContractPlatformThemeReleaseV2;
+export type ApplicationTheme = ApplicationContent["theme"];
+export type ExactPlatformThemeDependency = ApplicationTheme["base"];
+export type ThemeTokenValue = ApplicationTheme["tokens"][string];
+export type ThemeTokenKind = ThemeTokenValue["kind"];
+export type PlatformThemeRelease = ContractPlatformThemeRelease;
 
-export type ColorPairToken = Extract<ThemeTokenValueV2, { kind: "color_pair" }>;
-export type TypographyToken = Extract<ThemeTokenValueV2, { kind: "typography" }>;
-export type SpacingToken = Extract<ThemeTokenValueV2, { kind: "spacing" }>;
-export type CornersToken = Extract<ThemeTokenValueV2, { kind: "corners" }>;
-export type BorderToken = Extract<ThemeTokenValueV2, { kind: "border" }>;
-export type ElevationToken = Extract<ThemeTokenValueV2, { kind: "elevation" }>;
-export type FocusToken = Extract<ThemeTokenValueV2, { kind: "focus" }>;
-export type AssetToken = Extract<ThemeTokenValueV2, { kind: "asset" }>;
-export type DensityToken = Extract<ThemeTokenValueV2, { kind: "density" }>;
+export type ColorPairToken = Extract<ThemeTokenValue, { kind: "color_pair" }>;
+export type TypographyToken = Extract<ThemeTokenValue, { kind: "typography" }>;
+export type SpacingToken = Extract<ThemeTokenValue, { kind: "spacing" }>;
+export type CornersToken = Extract<ThemeTokenValue, { kind: "corners" }>;
+export type BorderToken = Extract<ThemeTokenValue, { kind: "border" }>;
+export type ElevationToken = Extract<ThemeTokenValue, { kind: "elevation" }>;
+export type FocusToken = Extract<ThemeTokenValue, { kind: "focus" }>;
+export type AssetToken = Extract<ThemeTokenValue, { kind: "asset" }>;
+export type DensityToken = Extract<ThemeTokenValue, { kind: "density" }>;
 
 export type ContrastPairUsage = "normal_text" | "large_text" | "non_text";
 
@@ -43,16 +43,16 @@ export type ContrastPairDeclaration = Readonly<{
 
 export type ComponentThemeOverrideContext = Readonly<{
   /**
-   * Component-level theme overrides (token key -> ThemeTokenValueV2).
+   * Component-level theme overrides (token key -> ThemeTokenValue).
    */
-  overrides?: Readonly<Record<string, ThemeTokenValueV2>> | undefined;
+  overrides?: Readonly<Record<string, ThemeTokenValue>> | undefined;
   /**
    * Permitted token kinds for this component.
-   * If omitted, all registered token kinds from themeTokenKindV2Schema are permitted.
+   * If omitted, all registered token kinds from themeTokenKindSchema are permitted.
    */
   permittedTokenKinds?:
-    | ReadonlySet<ThemeTokenKindV2>
-    | readonly ThemeTokenKindV2[]
+    | ReadonlySet<ThemeTokenKind>
+    | readonly ThemeTokenKind[]
     | undefined;
   /** Display-safe definition keys/aliases used only to locate a refusal. */
   pageKey?: BuilderKey | undefined;
@@ -70,19 +70,19 @@ export type ThemeResolutionOptions = Readonly<{
 }>;
 
 export type ThemeResolutionInput = Readonly<{
-  theme: ApplicationThemeV2;
+  theme: ApplicationTheme;
   componentOverrideContext?: ComponentThemeOverrideContext | undefined;
   options?: ThemeResolutionOptions | undefined;
 }>;
 
 export type ResolvedTheme = Readonly<{
-  base: ExactPlatformThemeDependencyV2;
+  base: ExactPlatformThemeDependency;
   /**
    * The catalogue-backed shadcn style id the theme selects; the platform default style when the
    * theme records no selection (a theme pinned to an earlier release than the catalogue's base).
    */
   style: string;
-  tokens: Readonly<Record<string, ThemeTokenValueV2>>;
+  tokens: Readonly<Record<string, ThemeTokenValue>>;
 }>;
 
 export type ThemeValidationFailure = Readonly<{
