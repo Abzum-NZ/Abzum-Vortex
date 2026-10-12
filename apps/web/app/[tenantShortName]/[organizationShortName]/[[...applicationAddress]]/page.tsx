@@ -2,7 +2,7 @@ import "server-only";
 
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ApplicationInstallationCoordinatorError } from "@vortex/app";
 import { recordIdSchema } from "@vortex/contracts";
 import {
@@ -495,18 +495,7 @@ export default async function ApplicationAddressPage({
         <Link href={launcherPath(tenantShortName, organizationShortName)}>Try again</Link>
       </AuthShell>
     );
-  if (page.kind === "unavailable") {
-    // A page whose addressed record cannot be shown shows the application's own not-found page.
-    if (resolved.experience === undefined) return unavailableFallback;
-    return (
-      <ApplicationExperiencePage
-        page={resolved.experience.page}
-        shells={resolved.experience.shells}
-        theme={resolved.experience.theme}
-        organizationName={organizationShortName}
-      />
-    );
-  }
+  if (page.kind === "unavailable") notFound();
   const search = await loadApplicationSearch(identity.session, {
     tenantShortName, organizationShortName, applicationKey: resolved.application.key,
   }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "");

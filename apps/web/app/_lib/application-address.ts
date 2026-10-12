@@ -36,8 +36,6 @@ export type ApplicationAddressResult =
       read: Extract<PermittedApplicationsRead, { kind: "available" }>;
       application: PermittedApplication;
       pageKey: string;
-      /** The application's own not-found page, for a page whose addressed record cannot be shown. */
-      experience?: ApplicationExperience;
     }>;
 
 const loadAddressedApplicationAtAddress = async (
@@ -100,12 +98,10 @@ export const resolveApplicationAddress = async (
       : { kind: "unavailable", experience };
   }
   if (resolved.application === null) return { kind: "organization_launcher", read };
-  const notFoundExperience = addressed.experiences.find((entry) => entry.state === "not_found");
   return {
     kind: "application_page",
     read,
     application: resolved.application,
     pageKey: resolved.pageKey,
-    ...(notFoundExperience === undefined ? {} : { experience: notFoundExperience }),
   };
 };

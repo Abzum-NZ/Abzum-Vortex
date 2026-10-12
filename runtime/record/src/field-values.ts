@@ -233,23 +233,9 @@ const collectChoicePermission = (
     });
 };
 
-/**
- * A number control submits a JavaScript number; exact decimal and money fields hold exact text. A
- * finite number becomes its plain decimal text so no precision is invented, and anything else is
- * left for the field's own schema to refuse.
- */
+/** Only safe integer numbers can cross a numeric caller boundary without losing decimal digits. */
 const submittedDecimalText = (value: unknown): unknown => {
-  if (typeof value !== "number" || !Number.isFinite(value)) return value;
-  const text = String(value);
-  if (!/e/i.test(text)) return text;
-  const match = /^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/i.exec(text);
-  if (match === null) return text;
-  const [, sign = "", whole = "", fraction = "", exponentText = "0"] = match;
-  const digits = `${whole}${fraction}`;
-  const point = whole.length + Number(exponentText);
-  if (point <= 0) return `${sign}0.${"0".repeat(-point)}${digits}`;
-  if (point >= digits.length) return `${sign}${digits}${"0".repeat(point - digits.length)}`;
-  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+  return typeof value === "number" && Number.isSafeInteger(value) ? String(value) : value;
 };
 
 const normalizeMoney = (
@@ -273,7 +259,10 @@ const normalizeMoney = (
     return { amount: amount.data, currency };
   }
 
-  if (origin === "submitted" && (typeof value === "number" || typeof value === "string")) {
+  if (
+    origin === "submitted" &&
+    (typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value)))
+  ) {
     // An amount submitted without a currency is in the field's fixed currency or the
     // organisation's currency, as a default amount is.
     const currency =

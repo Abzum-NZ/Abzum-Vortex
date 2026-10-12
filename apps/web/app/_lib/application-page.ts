@@ -615,14 +615,22 @@ const projectEditField = (
       displayed = stored ?? "";
       break;
     case "number":
-      if (stored !== null && (typeof stored !== "number" || !Number.isFinite(stored)))
+      displayed =
+        field.type === "money" && isRecord(stored) && typeof stored.amount === "string"
+          ? stored.amount
+          : stored;
+      if (
+        displayed !== null &&
+        !(typeof displayed === "number" && Number.isFinite(displayed)) &&
+        !(typeof displayed === "string" && exactDecimalTextV2Schema.safeParse(displayed).success)
+      )
         return undefined;
       if (
-        stored !== null &&
+        displayed !== null &&
         isRecord(settings.integer) &&
         settings.integer.kind === "boolean" &&
         settings.integer.value === true &&
-        !Number.isInteger(stored)
+        (typeof displayed !== "number" || !Number.isSafeInteger(displayed))
       )
         return undefined;
       kind = "number_input";
@@ -1204,8 +1212,7 @@ const fieldChoiceLabelsOf = (
             permissionId === undefined
               ? undefined
               : `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
-          // A permission gates picking an option, not reading one already stored in a single choice.
-          return field.type === "choice" || permissionKey === undefined || allowedPermissions.has(permissionKey)
+          return permissionKey === undefined || allowedPermissions.has(permissionKey)
             ? [{ value: option.value, label: option.label }]
             : [];
         });
@@ -2241,10 +2248,13 @@ const loadApplicationPageInternal = async (
     allPlacements.flatMap(({ placement }) => {
       const settings = placement.settings;
       if (!isRecord(settings)) return [];
-      const detail = readRecordDetailContract(
-        settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
-      );
-      return detail?.fields.map((field) => field.field.toLowerCase()) ?? [];
+      const contractSettings = settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+      const detail = readRecordDetailContract(contractSettings);
+      const table = readRecordsTableContract(contractSettings);
+      return [
+        ...(detail?.fields.map((field) => field.field.toLowerCase()) ?? []),
+        ...(table?.columns.map((column) => column.field.toLowerCase()) ?? []),
+      ];
     }),
   );
   for (const module of context.releaseSet.modules)
@@ -2252,7 +2262,7 @@ const loadApplicationPageInternal = async (
       for (const field of recordType.fields) {
         if (
           !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
-          field.type !== "several_choices"
+          field.type !== "several_choices" && field.type !== "choice"
         )
           continue;
         for (const option of field.settings.options) {
@@ -2401,6 +2411,15 @@ const loadApplicationPageInternal = async (
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
+  // A detail address always names one readable record, even if its authored placements do not
+  // include a record-detail block. Other-org and unreadable IDs have the same outcome as absence.
+  if (pageDefinition.type === "detail") {
+    if (!subjectId.success || subjectType === undefined) return { kind: "unavailable" };
+    const addressedSubject = await readSubject(String(subjectType.recordTypeId), subjectId.data);
+    if (addressedSubject.kind === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable" };
+    if (addressedSubject.kind !== "read") return { kind: "unavailable" };
+  }
 
   if (
     selectedPlacementIds !== undefined &&

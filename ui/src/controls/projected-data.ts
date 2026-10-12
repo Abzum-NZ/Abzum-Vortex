@@ -1,5 +1,6 @@
 import {
   builderKeySchema,
+  exactDecimalTextV2Schema,
   referenceChoiceSelectionEvidenceMapSchema,
   groupIdSchema,
   richTextDocumentV2Schema,
@@ -109,7 +110,7 @@ export type RichTextInputPayload = Readonly<{
 /** The ready values a number input accepts. */
 export type NumberInputPayload = Readonly<{
   kind: "number_input";
-  value?: number | null;
+  value?: string | number | null;
   error?: string;
 }>;
 
@@ -471,12 +472,13 @@ export const parseNumberInputPayload = (
   if (
     record.value !== undefined &&
     record.value !== null &&
-    !(typeof record.value === "number" && Number.isFinite(record.value))
+    !(typeof record.value === "number" && Number.isFinite(record.value)) &&
+    !(typeof record.value === "string" && exactDecimalTextV2Schema.safeParse(record.value).success)
   )
-    fail("A number value must be a finite number or null", location);
+    fail("A number value must be exact decimal text, a finite number or null", location);
   return Object.freeze({
     kind: "number_input",
-    ...(record.value === undefined ? {} : { value: record.value as number | null }),
+    ...(record.value === undefined ? {} : { value: record.value as string | number | null }),
     ...optionalError(record, location),
   });
 };
