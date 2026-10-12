@@ -538,9 +538,6 @@ importers:
 
   runtime/module:
     dependencies:
-      '@vortex/access':
-        specifier: workspace:*
-        version: link:../access
       '@vortex/contracts':
         specifier: workspace:*
         version: link:../../contracts
