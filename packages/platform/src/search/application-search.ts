@@ -3,7 +3,7 @@ import "server-only";
 import { applicationSearchSchema, moduleFieldValueSchemas, sameId, type ApplicationSearch, type JsonValue, type RecordRichTextDocument, type SelectedOrganizationScope } from "../schema";
 import { matchLiteralSearch } from "./literal-search";
 import { searchPriorityWeights, type SearchDocument } from "./document-store";
-import type { PermittedSearchCurrentReadRequest } from "./permitted-search";
+import type { PermittedSearchCurrentRead, PermittedSearchCurrentReadRequest } from "./permitted-search";
 
 export type ApplicationSearchRecord = Readonly<{
   concurrencyNumber: number;
@@ -81,7 +81,8 @@ export const searchConfiguredApplication = async (input: Readonly<{
   configuration: ApplicationSearch | undefined;
   expression: string;
   candidates: readonly SearchDocument[];
-  readCurrentRecord(request: PermittedSearchCurrentReadRequest): Promise<ApplicationSearchRecord | undefined>;
+  /** Keyed by lower-case record identity; a record that cannot be read now is absent. */
+  readCurrentRecords(request: PermittedSearchCurrentReadRequest): Promise<ReadonlyMap<string, ApplicationSearchRecord>>;
 }>): Promise<ApplicationSearchResult> => {
   if (input.configuration === undefined || !input.configuration.enabled) return { kind: "disabled" };
   const parsed = applicationSearchSchema.safeParse(input.configuration);
@@ -92,6 +93,8 @@ export const searchConfiguredApplication = async (input: Readonly<{
     if (entry.recordType.state !== "resolved") return { kind: "refused" };
     const recordTypeId = String(entry.recordType.recordTypeId);
     const current = new Map<string, ApplicationSearchRecord>();
+    const indexed = new Map(input.candidates.filter((candidate) => sameId(candidate.recordTypeId, recordTypeId))
+      .map((candidate) => [candidate.recordId.toLowerCase(), candidate]));
     const result = await matchLiteralSearch({
       expression: input.expression,
       search: {
@@ -101,12 +104,15 @@ export const searchConfiguredApplication = async (input: Readonly<{
         candidates: input.candidates.filter((candidate) => sameId(candidate.recordTypeId, recordTypeId)),
       },
     }, {
-      readCurrentRecord: async (request) => {
-        const record = await input.readCurrentRecord(request);
-        const indexed = input.candidates.find((candidate) => sameId(candidate.recordTypeId, request.recordTypeId) && sameId(candidate.recordId, request.recordId));
-        if (record === undefined || indexed === undefined || record.concurrencyNumber !== indexed.sourceRecordVersion) return { outcome: "refused" };
-        current.set(request.recordId.toLowerCase(), record);
-        return { outcome: "allowed", concurrencyNumber: record.concurrencyNumber, readableFieldIds: Object.keys(record.values) };
+      readCurrentRecords: async (request) => {
+        const records = await input.readCurrentRecords(request);
+        const reads = new Map<string, PermittedSearchCurrentRead>();
+        for (const [recordId, record] of records) {
+          if (record.concurrencyNumber !== indexed.get(recordId)?.sourceRecordVersion) continue;
+          current.set(recordId, record);
+          reads.set(recordId, { outcome: "allowed", concurrencyNumber: record.concurrencyNumber, readableFieldIds: Object.keys(record.values) });
+        }
+        return reads;
       },
     });
     if (result.outcome === "refused") return { kind: "refused" };
