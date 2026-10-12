@@ -23,12 +23,7 @@
       "project": ["**/*.{js,jsx,mjs,ts,tsx}"]
     },
     "packages/platform": {
-      "entry": [
-        "src/*/schema.ts",
-        "src/*/index.ts",
-        "src/definition/*-index.ts",
-        "src/definition/compiler-api.ts"
-      ]
+      "entry": ["src/schema.ts", "src/server.ts"]
     },
     "packages/definitions": {
       "includeEntryExports": false,

@@ -308,16 +308,3 @@ export const createDefinitionStore = (
   };
 };
 
-export const createDefinitionRoot = (
-  transaction: RequestDatabaseTransaction,
-  authority: BuilderAuthority,
-  candidate: CreateDefinitionRootCommand,
-): Promise<StoredDefinitionDraft> =>
-  createDefinitionStore(transaction, authority).createRoot(candidate);
-
-export const saveDefinitionDraft = (
-  transaction: RequestDatabaseTransaction,
-  authority: BuilderAuthority,
-  candidate: SaveDefinitionDraftCommand,
-): Promise<StoredDefinitionDraft> =>
-  createDefinitionStore(transaction, authority).saveDraft(candidate);

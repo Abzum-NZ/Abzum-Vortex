@@ -9,7 +9,7 @@ import {
   recordTypeIdSchema,
   revisionSchema,
 } from "../catalogue/identifiers";
-import { safeErrorResponseSchema } from "../definition/operation-contracts";
+import { safeErrorResponseSchema } from "./safe-error-contracts";
 
 export const installedNamedActionReferenceSchema = z.discriminatedUnion("ownerKind", [
   z

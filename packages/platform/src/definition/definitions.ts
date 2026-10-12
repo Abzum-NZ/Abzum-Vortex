@@ -286,16 +286,8 @@ export const requireResolvedRecordTypeReferences = (
     });
 };
 
-export type DefinitionKind = z.infer<typeof definitionKindSchema>;
-export type ModuleDefinitionEnvelope = z.infer<typeof moduleDefinitionEnvelopeSchema>;
-export type ApplicationDefinitionEnvelope = z.infer<typeof applicationDefinitionEnvelopeSchema>;
-export type PublishedModuleReference = z.infer<typeof publishedModuleReferenceSchema>;
-export type PublishedApplicationReference = z.infer<typeof publishedApplicationReferenceSchema>;
-export type PublishedDefinitionReference = z.infer<typeof publishedDefinitionReferenceSchema>;
 export type VersionRequirement = z.infer<typeof versionRequirementSchema>;
-export type QualifiedRecordTypeKey = z.infer<typeof qualifiedRecordTypeKeySchema>;
 export type UnresolvedRecordTypeReference = z.infer<typeof unresolvedRecordTypeReferenceSchema>;
-export type ResolvedRecordTypeReference = z.infer<typeof resolvedRecordTypeReferenceSchema>;
 export type RecordTypeReference = z.infer<typeof recordTypeReferenceSchema>;
 export type ResolveRecordTypeReferences<T> = T extends UnresolvedRecordTypeReference
   ? never

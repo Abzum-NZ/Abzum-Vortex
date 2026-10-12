@@ -13,7 +13,6 @@ import {
   actionInputDefinitionSchema,
   moduleContractVersionPairSchema,
   moduleDraftSchema,
-  storedModuleDraftSchema,
 } from "./module-contracts";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { descriptionSchema } from "../catalogue/common";
@@ -210,11 +209,6 @@ const compiledConnectionArtifactSchema = z
     rootId: connectionTypeIdSchema,
   })
   .strict();
-export const compiledDefinitionArtifactSchema = z.discriminatedUnion("kind", [
-  compiledModuleArtifactSchema,
-  compiledApplicationArtifactSchema,
-  compiledConnectionArtifactSchema,
-]);
 
 /**
  * A compiled tool name: `<applicationKey>.<operationKind>.<operationKey>`. The operation kind keeps
@@ -411,12 +405,11 @@ export const storedApplicationCompilationOutputSchema = z
       });
   });
 
-const createModuleCompilationOutputSchema = (canonicalSchema: typeof moduleDraftSchema) =>
-  z
+export const moduleCompilationOutputSchema = z
     .object({
       kind: z.literal("module"),
       validationContractVersion: z.literal("3.0.0"),
-      canonical: canonicalSchema,
+      canonical: moduleDraftSchema,
       artifact: compiledModuleArtifactSchema,
       provenance: z.array(definitionProvenanceEntrySchema),
       dependencyOrder: z.array(namespacedKeySchema),
@@ -424,10 +417,6 @@ const createModuleCompilationOutputSchema = (canonicalSchema: typeof moduleDraft
       resolutionFingerprint: fingerprintSchema,
     })
     .strict();
-
-export const moduleCompilationOutputSchema = createModuleCompilationOutputSchema(moduleDraftSchema);
-export const storedModuleCompilationOutputSchema =
-  createModuleCompilationOutputSchema(storedModuleDraftSchema);
 
 const createDefinitionCompilationOutputSchema = <ApplicationSchema extends z.ZodTypeAny>(
   moduleSchema: typeof moduleCompilationOutputSchema,
@@ -455,7 +444,7 @@ export const definitionCompilationOutputSchema = createDefinitionCompilationOutp
 );
 /** Stored contract dispatch only; new compilation and dependency selection stay current-only. */
 export const storedDefinitionCompilationOutputSchema = createDefinitionCompilationOutputSchema(
-  storedModuleCompilationOutputSchema,
+  moduleCompilationOutputSchema,
   storedApplicationCompilationOutputSchema,
 );
 export type StoredDefinitionCompilationOutput = z.infer<
@@ -561,43 +550,7 @@ export const definitionPublicationContextSchema = z
     );
   });
 
-const definitionCheckCommon = {
-  definitionKey: namespacedKeySchema,
-  releaseVersion: semanticVersionSchema,
-  contentFingerprint: fingerprintSchema,
-  resolutionFingerprint: fingerprintSchema,
-};
-const definitionCheckRequestSchema = z.discriminatedUnion("kind", [
-  z
-    .object({ kind: z.literal("module"), ...definitionCheckCommon, rootId: moduleRootIdSchema })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("application"),
-      ...definitionCheckCommon,
-      rootId: applicationRootIdSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("connection_type"),
-      ...definitionCheckCommon,
-      rootId: connectionTypeIdSchema,
-    })
-    .strict(),
-]);
-export const definitionInstallCheckRequestSchema = definitionCheckRequestSchema;
-export const definitionInstallCheckResultSchema = z
-  .object({ accepted: z.boolean(), refusalCodes: z.array(namespacedKeySchema) })
-  .strict();
-
-export const definitionRuntimeCheckRequestSchema = definitionCheckRequestSchema;
-export const definitionRuntimeCheckResultSchema = z
-  .object({ available: z.boolean(), refusalCodes: z.array(namespacedKeySchema) })
-  .strict();
-
 export type DefinitionResolutionSnapshot = z.infer<typeof definitionResolutionSnapshotSchema>;
-export type DefinitionDraftMetadata = z.infer<typeof definitionDraftMetadataSchema>;
 export type SavedConditionRevisionAssignment = z.infer<
   typeof savedConditionRevisionAssignmentSchema
 >;
@@ -607,24 +560,14 @@ export type ApplicationCompilationRequest = z.input<typeof applicationCompilatio
 export type DefinitionCompilationOutput = z.infer<typeof definitionCompilationOutputSchema>;
 export type ModuleCompilationOutput = z.infer<typeof moduleCompilationOutputSchema>;
 export type ApplicationCompilationOutput = z.infer<typeof applicationCompilationOutputSchema>;
-export type ApplicationTool = z.infer<typeof applicationToolSchema>;
 export type ApplicationToolBundle = z.infer<typeof applicationToolBundleSchema>;
 /** The unbranded shape the compiler builds before the bundle contract validates it. */
 export type ApplicationToolBundleInput = z.input<typeof applicationToolBundleSchema>;
 export type ApplicationToolOperationReference = z.infer<
   typeof applicationToolOperationReferenceSchema
 >;
-export type ApplicationToolInputSchema = z.infer<typeof applicationToolInputSchema>;
-export type ApplicationToolPermissionMeaning = z.infer<
-  typeof applicationToolPermissionMeaningSchema
->;
-export type CompiledDefinitionArtifact = z.infer<typeof compiledDefinitionArtifactSchema>;
 export type PublishedDefinitionHistory = z.infer<typeof publishedDefinitionHistorySchema>;
 export type DefinitionPublicationHistoryEvidence = z.infer<
   typeof definitionPublicationHistoryEvidenceSchema
 >;
 export type DefinitionPublicationContext = z.infer<typeof definitionPublicationContextSchema>;
-export type DefinitionInstallCheckRequest = z.infer<typeof definitionInstallCheckRequestSchema>;
-export type DefinitionInstallCheckResult = z.infer<typeof definitionInstallCheckResultSchema>;
-export type DefinitionRuntimeCheckRequest = z.infer<typeof definitionRuntimeCheckRequestSchema>;
-export type DefinitionRuntimeCheckResult = z.infer<typeof definitionRuntimeCheckResultSchema>;
