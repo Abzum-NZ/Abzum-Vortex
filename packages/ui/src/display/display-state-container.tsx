@@ -31,9 +31,7 @@ export function getAccessibleName(
     const value = Object.hasOwn(current, key) ? current[key] : undefined;
     if (value === undefined) return undefined;
     if (index === path.length - 1)
-      return value.kind === "text" && value.value.trim().length > 0
-        ? value.value.trim()
-        : undefined;
+      return value.kind === "text" && value.value.trim().length > 0 ? value.value.trim() : undefined;
     if (value.kind !== "group") return undefined;
     current = value.properties;
   }

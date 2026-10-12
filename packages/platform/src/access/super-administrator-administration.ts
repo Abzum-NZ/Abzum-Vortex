@@ -31,7 +31,9 @@ type MutationRow = DatabaseRow & {
   correlation_id: unknown;
   accepted_at: unknown;
 };
-type MutationOperation = "grant_vortex_super_administrator" | "revoke_vortex_super_administrator";
+type MutationOperation =
+  | "grant_vortex_super_administrator"
+  | "revoke_vortex_super_administrator";
 
 const timestamp = (value: unknown): unknown =>
   value instanceof Date && Number.isFinite(value.valueOf()) ? value.toISOString() : value;
@@ -131,7 +133,9 @@ export const createVortexSuperAdministratorAdministrationService = (
         }));
         return vortexSuperAdministratorAssignmentPageSchema.parse({
           entries,
-          ...(rows.length > query.data.limit ? { next: entries.at(-1)?.assignmentId } : {}),
+          ...(rows.length > query.data.limit
+            ? { next: entries.at(-1)?.assignmentId }
+            : {}),
         });
       });
     },
@@ -165,10 +169,7 @@ export const createVortexSuperAdministratorAdministrationService = (
               ${value.duplicateKey}::uuid, ${value.identityId}::uuid
             )
           `;
-          return mutation(
-            "grant_vortex_super_administrator",
-            rows.length === 1 ? rows[0] : undefined,
-          );
+          return mutation("grant_vortex_super_administrator", rows.length === 1 ? rows[0] : undefined);
         },
         (code) => mutationRefusal("grant_vortex_super_administrator", code),
       );
@@ -204,10 +205,7 @@ export const createVortexSuperAdministratorAdministrationService = (
               ${value.expectedRevision}::bigint
             )
           `;
-          return mutation(
-            "revoke_vortex_super_administrator",
-            rows.length === 1 ? rows[0] : undefined,
-          );
+          return mutation("revoke_vortex_super_administrator", rows.length === 1 ? rows[0] : undefined);
         },
         (code) => mutationRefusal("revoke_vortex_super_administrator", code),
       );

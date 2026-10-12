@@ -269,8 +269,7 @@ export function resolveThemeSelection(
       ["heading", fonts.heading],
     ] as const) {
       const token = tokens[key];
-      if (token?.kind === "typography")
-        tokens[key] = { ...token, family: shadcnFontFamilyKey(font) };
+      if (token?.kind === "typography") tokens[key] = { ...token, family: shadcnFontFamilyKey(font) };
     }
   }
 
@@ -306,7 +305,8 @@ export function resolveThemeSelection(
         });
         continue;
       }
-      tokens[key] = inherited.role === undefined ? override : { ...override, role: inherited.role };
+      tokens[key] =
+        inherited.role === undefined ? override : { ...override, role: inherited.role };
       continue;
     }
     tokens[key] = override;

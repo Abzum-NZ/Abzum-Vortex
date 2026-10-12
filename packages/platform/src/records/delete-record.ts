@@ -1,6 +1,10 @@
 import "server-only";
 
-import { correlationIdSchema, recordIdSchema, type SaveRecordCommand } from "../schema";
+import {
+  correlationIdSchema,
+  recordIdSchema,
+  type SaveRecordCommand,
+} from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   calculateLockedRelationshipTotalSave,
@@ -142,13 +146,13 @@ const parseDatabaseOutcome = (candidate: unknown): DatabaseOutcome => {
 };
 
 const one = <Value>(rows: readonly Value[]): Value => {
-  if (rows.length !== 1 || rows[0] === undefined)
-    throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
   return rows[0];
 };
 
 export type Settled<Result> =
-  Readonly<{ kind: "restart" }> | Readonly<{ kind: "result"; value: Result }>;
+  | Readonly<{ kind: "restart" }>
+  | Readonly<{ kind: "result"; value: Result }>;
 
 /**
  * Carries the command's settled outcome out of a transaction that must roll

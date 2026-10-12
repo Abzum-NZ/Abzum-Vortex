@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { NextResponse } from "next/server";
+import type { NextResponse} from "next/server";
 import type { NextRequest } from "next/server";
 import { createBuilderAuthority } from "@web/platform-server";
 import {
@@ -44,10 +44,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import { createPreviewRecordPort } from "@web/platform-server";
 import type { z } from "zod";
-import {
-  getIdentityAuthorityConfiguration,
-  getIdentityJourneyConfiguration,
-} from "../auth/_lib/authority-configuration";
+import { getIdentityAuthorityConfiguration, getIdentityJourneyConfiguration } from "../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readBoundedRequestText } from "../api/_lib/bounded-request-body";
 import { privateJsonResponse } from "./private-response";
@@ -118,10 +115,7 @@ const builderAuthority = (
     transaction,
     scope,
     targetFacts: async (requestTransaction, _requestScope, rootId) => {
-      const isSystemApplication = await readApplicationRootClassification(
-        requestTransaction,
-        rootId,
-      );
+      const isSystemApplication = await readApplicationRootClassification(requestTransaction, rootId);
       return { isSystemApplication };
     },
   });
@@ -229,13 +223,11 @@ const previewLocation = (
   previewInstallationId: address.previewInstallationId,
 });
 
-const draftLocation = (
-  request: Readonly<{
-    organizationId: OrganizationId;
-    applicationRootId: ApplicationRootId;
-    expectedDraftRevision: number;
-  }>,
-): BuilderPreviewOperationLocation => ({
+const draftLocation = (request: Readonly<{
+  organizationId: OrganizationId;
+  applicationRootId: ApplicationRootId;
+  expectedDraftRevision: number;
+}>): BuilderPreviewOperationLocation => ({
   kind: "draft",
   organizationId: request.organizationId,
   applicationRootId: request.applicationRootId,
@@ -249,7 +241,11 @@ const matchesExpectedDraft = (
 
 const isExpectedOrigin = (request: NextRequest): boolean => {
   const origin = request.headers.get("origin");
-  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  const contentType = request.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
   return (
     origin !== null &&
     origin === new URL(getIdentityJourneyConfiguration().siteUrl).origin &&
@@ -301,19 +297,31 @@ export const handleBuilderPreviewOperationRequest = async <Schema extends z.ZodT
   const requestLocation: BuilderPreviewOperationLocation = { kind: "request" };
   try {
     if (!isExpectedOrigin(request))
-      return privateJsonResponse(operationRefusal("invalid_request", requestLocation), 403);
+      return privateJsonResponse(
+        operationRefusal("invalid_request", requestLocation),
+        403,
+      );
   } catch {
-    return privateJsonResponse(operationRefusal("temporarily_unavailable", requestLocation), 503);
+    return privateJsonResponse(
+      operationRefusal("temporarily_unavailable", requestLocation),
+      503,
+    );
   }
 
   let identity: Awaited<ReturnType<typeof resolveIdentitySession>>;
   try {
     identity = await resolveIdentitySession();
   } catch {
-    return privateJsonResponse(operationRefusal("temporarily_unavailable", requestLocation), 503);
+    return privateJsonResponse(
+      operationRefusal("temporarily_unavailable", requestLocation),
+      503,
+    );
   }
   if (identity.kind === "temporarily_unavailable")
-    return privateJsonResponse(operationRefusal("temporarily_unavailable", requestLocation), 503);
+    return privateJsonResponse(
+      operationRefusal("temporarily_unavailable", requestLocation),
+      503,
+    );
   if (identity.kind !== "active")
     return privateJsonResponse(operationRefusal("unauthenticated", requestLocation), 401);
   const parsedSession = identitySessionSchema.safeParse(identity.session);
@@ -340,7 +348,10 @@ export const handleBuilderPreviewOperationRequest = async <Schema extends z.ZodT
     const result = await operation(parsedSession.data, parsed.data);
     return privateJsonResponse(result, responseStatus(result));
   } catch {
-    return privateJsonResponse(operationRefusal("operation_failed", requestLocation), 500);
+    return privateJsonResponse(
+      operationRefusal("operation_failed", requestLocation),
+      500,
+    );
   }
 };
 
@@ -356,12 +367,7 @@ const flowTestRunner = () => {
   return createFlowTestRunner({
     previews: coordinator,
     records: previewRecordPort(),
-    async readPinnedModuleRelease(
-      session,
-      selection,
-      moduleRootCandidate,
-      releaseRevisionCandidate,
-    ) {
+    async readPinnedModuleRelease(session, selection, moduleRootCandidate, releaseRevisionCandidate) {
       const moduleRoot = moduleRootIdSchema.safeParse(moduleRootCandidate);
       const releaseRevision = revisionSchema.safeParse(releaseRevisionCandidate);
       if (!moduleRoot.success || !releaseRevision.success) return undefined;
@@ -370,7 +376,11 @@ const flowTestRunner = () => {
         const release = await createDatabaseDefinitionPublicationRepository(transaction).read(
           context,
           (reader) =>
-            reader.readModuleRelease(context.organizationId, moduleRoot.data, releaseRevision.data),
+            reader.readModuleRelease(
+              context.organizationId,
+              moduleRoot.data,
+              releaseRevision.data,
+            ),
         );
         if (release === undefined || release.compilationOutput.kind !== "module") return undefined;
         const output = release.compilationOutput;
@@ -393,10 +403,8 @@ const flowTestRunner = () => {
       return result.kind === "available" ? result.value : undefined;
     },
     async resolvePreviewerOrganizationAccountId(session, selection) {
-      const result = await requests.run(
-        session,
-        selection,
-        async (_transaction, scope) => scope.organizationAccountId,
+      const result = await requests.run(session, selection, async (_transaction, scope) =>
+        scope.organizationAccountId,
       );
       return result.kind === "available" ? result.value : undefined;
     },
@@ -538,7 +546,9 @@ export const builderPreviewOperations = Object.freeze({
                     : parsedResponse.data.reason === "server_time_limit"
                       ? "operation_failed"
                       : "preview_unavailable";
-        return builderPreviewRunFlowResultSchema.parse(operationRefusal(reason, refusalLocation));
+        return builderPreviewRunFlowResultSchema.parse(
+          operationRefusal(reason, refusalLocation),
+        );
       }
       return builderPreviewRunFlowResultSchema.parse({
         kind: "completed",

@@ -54,7 +54,10 @@ import {
   type ViewerSafeRecordPinSelector,
   type ViewerSafeRecordPinAcquisitionResult,
 } from "../schema";
-import { readFlowRunAsPrincipalForRun, type HumanOrganizationRequestResult } from "../access/index";
+import {
+  readFlowRunAsPrincipalForRun,
+  type HumanOrganizationRequestResult,
+} from "../access/index";
 import { withRuntimeTransaction } from "../db/index";
 import {
   collectActionFlowTasks,
@@ -351,7 +354,10 @@ export type FlowOrchestratorDependencies = Readonly<{
    * Resolves the flows of the release the organisation runs for a flow id, from trusted
    * installation state. `undefined` refuses the start without saying why.
    */
-  resolveRelease: (organizationId: string, flowId: string) => Promise<FlowRelease | undefined>;
+  resolveRelease: (
+    organizationId: string,
+    flowId: string,
+  ) => Promise<FlowRelease | undefined>;
   /** Reads a committed Event intent by ID; the caller cannot supply its tenant, release or actor. */
   readCommittedStartIntent?: (intentId: string) => Promise<unknown>;
   /** Resolves the exact immutable release named by the committed intent, never the current pointer. */
@@ -864,8 +870,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       const failedTaskId = step.result.failure.taskId;
       // A task the platform could not run ends the run as not available, never as a refusal.
       const notAvailable =
-        failedTaskId !== undefined &&
-        run.unavailable.some((notice) => notice.taskId === failedTaskId);
+        failedTaskId !== undefined && run.unavailable.some((notice) => notice.taskId === failedTaskId);
       return {
         kind: "finished",
         runId: step.state.runId,
@@ -935,7 +940,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   ]);
 
   /** A saved record effect stores only the record identity, never readable or submitted values. */
-  const isSavedRecordEffectOutput = (value: unknown): value is Readonly<{ record: string }> =>
+  const isSavedRecordEffectOutput = (
+    value: unknown,
+  ): value is Readonly<{ record: string }> =>
     isRecord(value) &&
     Object.keys(value).length === 1 &&
     Object.hasOwn(value, "record") &&
@@ -1004,11 +1011,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         for (const [fieldId, value] of Object.entries(submittedValues))
           if (value === null) delete submittedValues[fieldId];
         const selectedOwnerGroupId = call.properties.selected_owner_group_id?.value;
-        const selectedGroup =
-          selectedOwnerGroupId === undefined
-            ? undefined
-            : groupIdSchema.safeParse(selectedOwnerGroupId);
-        if (selectedGroup !== undefined && !selectedGroup.success) return { outcome: "validation" };
+        const selectedGroup = selectedOwnerGroupId === undefined
+          ? undefined
+          : groupIdSchema.safeParse(selectedOwnerGroupId);
+        if (selectedGroup !== undefined && !selectedGroup.success)
+          return { outcome: "validation" };
         const command = saveRecordCommandSchema.safeParse({
           contractVersion: "2.0.0",
           commandId,
@@ -1099,8 +1106,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       return notAvailable(run, call, "the exact release's selected-record projection");
 
     const record = call.properties.record;
-    const recordId =
-      record?.type === "record_reference" ? recordIdSchema.safeParse(record.value) : undefined;
+    const recordId = record?.type === "record_reference"
+      ? recordIdSchema.safeParse(record.value)
+      : undefined;
     if (recordId === undefined || !recordId.success) return { outcome: "refused" };
 
     try {
@@ -1142,7 +1150,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     plan: TaskPlan,
   ): Promise<{ result: TaskResult; stored: Record<string, JsonValue> }> => {
     // Non-person execution contexts stay fail-closed until exact per-task grants are implemented.
-    if (run.authority.kind !== "person") return { result: { outcome: "failed" }, stored: {} };
+    if (run.authority.kind !== "person")
+      return { result: { outcome: "failed" }, stored: {} };
     const { session, selection } = run.authority;
     // The page subject is retained as run evidence. A fresh read under this initiator's request
     // scope verifies the exact record type and identity before either protected change is attempted.
@@ -1168,7 +1177,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       const value = saved.value;
       if (value.outcome === "saved") {
         const recordId = recordIdSchema.safeParse(value.recordId);
-        if (!recordId.success) return { result: { outcome: "refused" }, stored: {} };
+        if (!recordId.success)
+          return { result: { outcome: "refused" }, stored: {} };
         const outputs = { record: recordId.data };
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
@@ -1205,15 +1215,18 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     });
     const outcome: FlowTaskOutcome = executed.outcome;
     // Read results keep their outputs for later tasks but do not count as committed changes.
-    const operationSucceeded = executed.outcome === "completed" || executed.outcome === "committed";
+    const operationSucceeded =
+      executed.outcome === "completed" || executed.outcome === "committed";
     const outputs: Record<string, JsonValue> = operationSucceeded
       ? { result: { ...executed.outputs } }
       : {};
     const sensitive = plan.entry.descriptor.sensitiveOutputs ?? [];
-    if (operationSucceeded) run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
-    const stored: Record<string, JsonValue> = operationSucceeded
-      ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
-      : {};
+    if (operationSucceeded)
+      run.sensitive.push(...sensitiveValues(executed.outputs, sensitive));
+    const stored: Record<string, JsonValue> =
+      operationSucceeded
+        ? { result: redactSensitiveOutputs(executed.outputs, sensitive) }
+        : {};
     const diagnostic = "diagnostic" in executed ? executed.diagnostic : undefined;
     return {
       result: {
@@ -1239,7 +1252,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     // replayable effect-ledger entry for this task.
     if (run.selectedRecordReadSeen && call.taskType !== "record.save")
       return { outcome: "refused" };
-    if (call.taskType === "record.read_fields") return runSelectedRecordRead(run, state, call);
+    if (call.taskType === "record.read_fields")
+      return runSelectedRecordRead(run, state, call);
 
     // Identity acquisition is a fresh protected read, never an effect-ledger replay. The tuple
     // selects a later read; it contains no title/address and does not confer target authority.
@@ -1247,13 +1261,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       if (run.authority.kind !== "person" || dependencies.recordPins === undefined)
         return notAvailable(run, call, "a trusted human record-pin acquisition port");
       if (
-        call.taskVersion !== "1.0.0" ||
-        Object.keys(call.properties).length !== 3 ||
+        call.taskVersion !== "1.0.0" || Object.keys(call.properties).length !== 3 ||
         call.properties.application_key?.type !== "text" ||
         call.properties.record_type_key?.type !== "text" ||
         call.properties.record_id?.type !== "text"
-      )
-        return { outcome: "validation" };
+      ) return { outcome: "validation" };
       const selector = viewerSafeRecordPinSelectorSchema.safeParse({
         applicationKey: call.properties.application_key.value,
         recordTypeKey: call.properties.record_type_key.value,
@@ -1264,9 +1276,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       try {
         const result = viewerSafeRecordPinAcquisitionResultSchema.safeParse(
           await dependencies.recordPins.acquireIdentity(
-            run.authority.session,
-            run.authority.selection,
-            selector.data,
+            run.authority.session, run.authority.selection, selector.data,
           ),
         );
         if (!result.success || result.data.outcome !== "available") return { outcome: "refused" };
@@ -1274,8 +1284,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         if (
           !sameId(identity.organizationId, run.authority.selection.organizationId) ||
           !sameId(identity.recordId, selector.data.recordId)
-        )
-          return { outcome: "refused" };
+        ) return { outcome: "refused" };
         run.recordPinReadSeen = true;
         return {
           outcome: "completed",
@@ -1333,11 +1342,15 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         // Never trust or expose an effect-ledger replay for a read-derived save. Validate its
         // minimal stored shape, then ask the Record service to resolve the command receipt under
         // the current initiator and permissions. The receipt also rejects changed command fields.
-        if (planned.plan.kind !== "save" || !flowTaskOutcomes.has(claim.outcome as FlowTaskOutcome))
+        if (
+          planned.plan.kind !== "save" ||
+          !flowTaskOutcomes.has(claim.outcome as FlowTaskOutcome)
+        )
           return { outcome: "refused" };
         if (claim.outcome === "committed") {
           const ledgerOutputs = claim.outputs;
-          if (!isSavedRecordEffectOutput(ledgerOutputs)) return { outcome: "refused" };
+          if (!isSavedRecordEffectOutput(ledgerOutputs))
+            return { outcome: "refused" };
           try {
             const replayed = await runPlan(run, state, call, planned.plan);
             if (replayed.result.outcome === "committed") {
@@ -1552,10 +1565,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     ): Promise<NamedActionExecutionResult> {
       try {
         const parsed = z
-          .object({
-            session: identitySessionSchema,
-            selection: organizationSelectionCandidateSchema,
-          })
+          .object({ session: identitySessionSchema, selection: organizationSelectionCandidateSchema })
           .safeParse({ session, selection });
         const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
         if (!parsed.success || !command.success) return { kind: "unavailable" };
@@ -1680,8 +1690,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         if (
           principal.state !== "active" ||
           principal.actor.kind !== flow.runAs.kind ||
-          principal.executionBindingId.toLowerCase() !==
-            flow.runAs.executionBindingId.toLowerCase() ||
+          principal.executionBindingId.toLowerCase() !== flow.runAs.executionBindingId.toLowerCase() ||
           principal.organizationId.toLowerCase() !== intent.organizationId.toLowerCase() ||
           principal.applicationRootId.toLowerCase() !== intent.applicationRootId.toLowerCase() ||
           principal.releaseVersion !== intent.applicationReleaseVersion ||

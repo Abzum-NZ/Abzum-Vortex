@@ -39,9 +39,7 @@ const release = (definition: { blockId: string; releaseVersion: string }): Platf
 export const TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TEXT_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the structured rich text display block. */
-export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RICH_TEXT_BLOCK_RELEASE,
-);
+export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.RICH_TEXT_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the list display block. */
 export const LIST_BLOCK_RELEASE: PlatformBlockRelease = release(sources.LIST_BLOCK_RELEASE);
@@ -50,19 +48,13 @@ export const LIST_BLOCK_RELEASE: PlatformBlockRelease = release(sources.LIST_BLO
 export const TABLE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TABLE_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the record detail display block. */
-export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RECORD_DETAIL_BLOCK_RELEASE,
-);
+export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockRelease = release(sources.RECORD_DETAIL_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the grouped data display block. */
-export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.GROUPED_DATA_BLOCK_RELEASE,
-);
+export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockRelease = release(sources.GROUPED_DATA_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the summary values display block. */
-export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.SUMMARY_VALUES_BLOCK_RELEASE,
-);
+export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockRelease = release(sources.SUMMARY_VALUES_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the authored Notice display block. */
 export const NOTICE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.NOTICE_BLOCK_RELEASE);
@@ -73,9 +65,7 @@ export const ATTACHMENT_LIST_BLOCK_RELEASE: PlatformBlockRelease = release(
 );
 
 /** Exact immutable release for ordinary installed-query notices. */
-export const QUERY_NOTICE_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.QUERY_NOTICE_BLOCK_RELEASE,
-);
+export const QUERY_NOTICE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.QUERY_NOTICE_BLOCK_RELEASE);
 
 /**
  * Release 1.1.0 of each display block adds an optional authored `empty_message` shown in place of
@@ -147,35 +137,27 @@ export const TABLE_BLOCK_RELEASE_1_4_0: PlatformBlockRelease = release(
 );
 
 /** Exact immutable metadata release for the query-bound calendar display block. */
-export const CALENDAR_BLOCK_RELEASE: PlatformBlockRelease = release(sources.CALENDAR_BLOCK_RELEASE);
+export const CALENDAR_BLOCK_RELEASE: PlatformBlockRelease = release(
+  sources.CALENDAR_BLOCK_RELEASE,
+);
 
 /** Exact immutable metadata release for the installed query-bound board display block. */
 export const BOARD_BLOCK_RELEASE: PlatformBlockRelease = release(sources.BOARD_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the text input block. */
-export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.TEXT_INPUT_BLOCK_RELEASE,
-);
+export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.TEXT_INPUT_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the number input block. */
-export const NUMBER_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.NUMBER_INPUT_BLOCK_RELEASE,
-);
+export const NUMBER_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.NUMBER_INPUT_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the boolean input block. */
-export const BOOLEAN_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.BOOLEAN_INPUT_BLOCK_RELEASE,
-);
+export const BOOLEAN_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.BOOLEAN_INPUT_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the date input block. */
-export const DATE_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.DATE_INPUT_BLOCK_RELEASE,
-);
+export const DATE_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.DATE_INPUT_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the choice input block. */
-export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.CHOICE_INPUT_BLOCK_RELEASE,
-);
+export const CHOICE_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.CHOICE_INPUT_BLOCK_RELEASE);
 
 /** Release 1.1.0 adds a published-query source while preserving the authored-option release. */
 export const CHOICE_INPUT_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
@@ -188,9 +170,7 @@ export const CHOICE_INPUT_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
 );
 
 /** Exact immutable metadata release for the validation message block. */
-export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.VALIDATION_MESSAGE_BLOCK_RELEASE,
-);
+export const VALIDATION_MESSAGE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.VALIDATION_MESSAGE_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the button block. */
 export const BUTTON_BLOCK_RELEASE: PlatformBlockRelease = release(sources.BUTTON_BLOCK_RELEASE);
@@ -215,9 +195,7 @@ export const DIALOG_BLOCK_RELEASE: PlatformBlockRelease = release(sources.DIALOG
 export const DRAWER_BLOCK_RELEASE: PlatformBlockRelease = release(sources.DRAWER_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the general container block. */
-export const CONTAINER_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.CONTAINER_BLOCK_RELEASE,
-);
+export const CONTAINER_BLOCK_RELEASE: PlatformBlockRelease = release(sources.CONTAINER_BLOCK_RELEASE);
 
 /** Menu sizing, placement and breakpoint overrides for a definition-owned shell. */
 export const CONTAINER_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
@@ -257,28 +235,20 @@ export const APPLICATION_SEARCH_BLOCK_RELEASE: PlatformBlockRelease = release(
 );
 
 /** Exact immutable metadata release for the form container block. */
-export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.FORM_CONTAINER_BLOCK_RELEASE,
-);
+export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockRelease = release(sources.FORM_CONTAINER_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the link input block. */
-export const LINK_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.LINK_INPUT_BLOCK_RELEASE,
-);
+export const LINK_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.LINK_INPUT_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the structured rich text input block. */
-export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RICH_TEXT_INPUT_BLOCK_RELEASE,
-);
+export const RICH_TEXT_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.RICH_TEXT_INPUT_BLOCK_RELEASE);
 
 /**
  * Exact immutable metadata release for the automatic field input. It binds one record field; the
  * compiler derives its name, label, requirement, choices and control from that module field, so an
  * input can never publish against a missing field and a label follows a field rename.
  */
-export const FIELD_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.FIELD_INPUT_BLOCK_RELEASE,
-);
+export const FIELD_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(sources.FIELD_INPUT_BLOCK_RELEASE);
 
 /**
  * The derived settings needed only when a field input delegates to a typed field control. These
@@ -364,43 +334,32 @@ const dateTimeDisplayTimeZoneProperty: BlockPropertySchemaContract = {
  * draws the placement with this release's metadata, so both read one mapping. Date-time and
  * several-choice aliases add closed settings that are derived from their module field contracts.
  */
-export const FIELD_INPUT_CONTROL_RELEASES: Readonly<
-  Record<FieldInputControlKey, PlatformBlockRelease>
-> = Object.freeze({
-  text: TEXT_INPUT_BLOCK_RELEASE,
-  rich_text: RICH_TEXT_INPUT_BLOCK_RELEASE,
-  number: NUMBER_INPUT_BLOCK_RELEASE,
-  boolean: BOOLEAN_INPUT_BLOCK_RELEASE,
-  date: DATE_INPUT_BLOCK_RELEASE,
-  date_time: derivedFieldInputRelease(DATE_INPUT_BLOCK_RELEASE, [dateTimeDisplayTimeZoneProperty]),
-  choice: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [derivedChoiceOptionsProperty]),
-  several_choices: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [
-    derivedChoiceOptionsProperty,
-    severalChoicesMaximumSelectionsProperty,
-  ]),
-  link: LINK_INPUT_BLOCK_RELEASE,
-});
+export const FIELD_INPUT_CONTROL_RELEASES: Readonly<Record<FieldInputControlKey, PlatformBlockRelease>> =
+  Object.freeze({
+    text: TEXT_INPUT_BLOCK_RELEASE,
+    rich_text: RICH_TEXT_INPUT_BLOCK_RELEASE,
+    number: NUMBER_INPUT_BLOCK_RELEASE,
+    boolean: BOOLEAN_INPUT_BLOCK_RELEASE,
+    date: DATE_INPUT_BLOCK_RELEASE,
+    date_time: derivedFieldInputRelease(DATE_INPUT_BLOCK_RELEASE, [dateTimeDisplayTimeZoneProperty]),
+    choice: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [derivedChoiceOptionsProperty]),
+    several_choices: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [
+      derivedChoiceOptionsProperty,
+      severalChoicesMaximumSelectionsProperty,
+    ]),
+    link: LINK_INPUT_BLOCK_RELEASE,
+  });
 
 /** Exact immutable metadata release for the application launcher block. */
-export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.APPLICATION_LAUNCHER_BLOCK_RELEASE,
-);
+export const APPLICATION_LAUNCHER_BLOCK_RELEASE: PlatformBlockRelease = release(sources.APPLICATION_LAUNCHER_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the link tiles block. */
-export const LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.LINK_TILES_BLOCK_RELEASE,
-);
-export const RECORD_PIN_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-);
-export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
-);
+export const LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(sources.LINK_TILES_BLOCK_RELEASE);
+export const RECORD_PIN_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(sources.RECORD_PIN_LINK_TILES_BLOCK_RELEASE);
+export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(sources.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE);
 
 /** Exact immutable metadata release for the view filter block. */
-export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.VIEW_FILTER_BLOCK_RELEASE,
-);
+export const VIEW_FILTER_BLOCK_RELEASE: PlatformBlockRelease = release(sources.VIEW_FILTER_BLOCK_RELEASE);
 
 /** All immutable display block releases, including calendar and query-bound board releases. */
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
@@ -488,12 +447,13 @@ export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.f
  * Closed immutable platform block catalogue for pure  composition validation and materialisation.
  * Server-owned; client-side renderer changes cannot alter or expand this allowlist.
  */
-export const IMMUTABLE_PLATFORM_BLOCK_CATALOGUE: ImmutablePlatformBlockCatalogue = deepFreeze(
-  immutablePlatformBlockCatalogueSchema.parse({
-    compositionPolicy: {
-      maximumDepth: 32,
-      maximumPlacements: 512,
-    },
-    releases: PLATFORM_BLOCK_RELEASES,
-  }),
-);
+export const IMMUTABLE_PLATFORM_BLOCK_CATALOGUE: ImmutablePlatformBlockCatalogue =
+  deepFreeze(
+    immutablePlatformBlockCatalogueSchema.parse({
+      compositionPolicy: {
+        maximumDepth: 32,
+        maximumPlacements: 512,
+      },
+      releases: PLATFORM_BLOCK_RELEASES,
+    }),
+  );

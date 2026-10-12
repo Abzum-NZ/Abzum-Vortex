@@ -37,49 +37,40 @@ export const minimumApplicationSource = (
       description: inputs.description.trim(),
       icon: "layout-dashboard",
       home_page: "home",
-      module_bindings: [
-        {
-          module: inputs.moduleKey.trim(),
-          version:
-            inputs.moduleVersionSelection === "exact"
-              ? { selection: "exact", version: inputs.moduleVersion.trim() }
-              : { selection: "allowed_range", expression: inputs.moduleVersion.trim() },
-          purpose: "primary",
+      module_bindings: [{
+        module: inputs.moduleKey.trim(),
+        version: inputs.moduleVersionSelection === "exact"
+          ? { selection: "exact", version: inputs.moduleVersion.trim() }
+          : { selection: "allowed_range", expression: inputs.moduleVersion.trim() },
+        purpose: "primary",
+      }],
+      permissions: [{
+        id: "permission_home",
+        key: permissionKey,
+        label: "View home",
+        description: "View the application's home page.",
+        action_kind: "named",
+        named_action: "view_home",
+        administrative: false,
+      }],
+      roles: [{
+        id: "role_member",
+        key: inputs.roleKey.trim(),
+        name: inputs.roleName.trim(),
+        home_page: "home",
+        permissions: [permissionKey],
+      }],
+      pages: [{
+        id: "page_home",
+        key: "home",
+        name: inputs.homeName.trim(),
+        type: "dashboard",
+        permission: permissionKey,
+        composition: {
+          shell_kind: "default",
+          main: { placements: {}, order: { desktop: [] } },
         },
-      ],
-      permissions: [
-        {
-          id: "permission_home",
-          key: permissionKey,
-          label: "View home",
-          description: "View the application's home page.",
-          action_kind: "named",
-          named_action: "view_home",
-          administrative: false,
-        },
-      ],
-      roles: [
-        {
-          id: "role_member",
-          key: inputs.roleKey.trim(),
-          name: inputs.roleName.trim(),
-          home_page: "home",
-          permissions: [permissionKey],
-        },
-      ],
-      pages: [
-        {
-          id: "page_home",
-          key: "home",
-          name: inputs.homeName.trim(),
-          type: "dashboard",
-          permission: permissionKey,
-          composition: {
-            shell_kind: "default",
-            main: { placements: {}, order: { desktop: [] } },
-          },
-        },
-      ],
+      }],
       navigation: [],
       queries: [],
       pipelines: [],
@@ -105,9 +96,6 @@ export const minimumApplicationSource = (
     },
   });
   if (!parsed.success)
-    return {
-      kind: "invalid",
-      message: "Check the application key, labels and Module version requirement.",
-    };
+    return { kind: "invalid", message: "Check the application key, labels and Module version requirement." };
   return { kind: "valid", source: parsed.data };
 };

@@ -118,7 +118,9 @@ export function validateApplicationSourceCatalogue(
   const manifest = new Map<string, Body["platform_block_dependencies"][number]>();
   for (const dependency of source.body.platform_block_dependencies) {
     manifest.set(`${dependency.block_id}@${dependency.release_version}`, dependency);
-    const release = registeredReleases.get(`${dependency.block_id}:${dependency.release_version}`);
+    const release = registeredReleases.get(
+      `${dependency.block_id}:${dependency.release_version}`,
+    );
     if (release === undefined)
       report("vortex.definition.application_dependency_manifest", "broken_reference");
     else if (
@@ -180,8 +182,7 @@ export function validateApplicationSourceCatalogue(
     ): void => {
       const seen = new Set<string>();
       for (const field of fields) {
-        if (seen.has(field))
-          report("vortex.definition.application_block_settings", "duplicate_key", at(key));
+        if (seen.has(field)) report("vortex.definition.application_block_settings", "duplicate_key", at(key));
         seen.add(field);
         if (!mapped(field))
           report("vortex.definition.application_block_settings", "broken_reference", at(key));
@@ -192,12 +193,7 @@ export function validateApplicationSourceCatalogue(
     const orders = (): boolean => true;
 
     if (table !== undefined) {
-      checkFields(
-        "columns",
-        table.columns.map((column) => column.field),
-        () => true,
-        "invalid_value",
-      );
+      checkFields("columns", table.columns.map((column) => column.field), () => true, "invalid_value");
       if (table.defaultSort !== undefined) {
         checkFields("default_sort", [table.defaultSort.field], orders, "unsupported_choice");
       }
@@ -208,21 +204,13 @@ export function validateApplicationSourceCatalogue(
         // The exact bound Module query owns the input names and types. Publication checks them;
         // draft save can check only the authored parameter structure here.
         if (inputs.has(parameter.input))
-          report(
-            "vortex.definition.application_block_settings",
-            "duplicate_key",
-            at("query_parameters"),
-          );
+          report("vortex.definition.application_block_settings", "duplicate_key", at("query_parameters"));
         inputs.add(parameter.input);
         if (
           (parameter.source === "fixed" && parameter.fixedValue === undefined) ||
           (parameter.source === "page" && parameter.pageParameter === undefined)
         )
-          report(
-            "vortex.definition.application_block_settings",
-            "required_value",
-            at("query_parameters"),
-          );
+          report("vortex.definition.application_block_settings", "required_value", at("query_parameters"));
       }
 
       /**
@@ -262,28 +250,17 @@ export function validateApplicationSourceCatalogue(
         const accepts = Object.values(flow.inputs).some(
           (input) => input.type === requiredInputType,
         );
-        if (!accepts)
-          report("vortex.definition.application_block_settings", "invalid_value", at(key));
+        if (!accepts) report("vortex.definition.application_block_settings", "invalid_value", at(key));
       };
       const behaviours = table.rowBehaviours;
       if (behaviours.rowClick !== undefined)
-        checkRowBehaviour(
-          "row_click",
-          behaviours.rowClick.eventId,
-          "row_clicked",
-          "record_reference",
-        );
+        checkRowBehaviour("row_click", behaviours.rowClick.eventId, "row_clicked", "record_reference");
       for (const action of behaviours.rowActions)
         checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
       for (const action of behaviours.bulkActions)
         checkRowBehaviour("bulk_actions", action.eventId, "bulk_action", "record_reference_list");
       if (behaviours.inlineEdit !== undefined) {
-        checkRowBehaviour(
-          "inline_edit",
-          behaviours.inlineEdit.eventId,
-          "inline_edit",
-          "record_reference",
-        );
+        checkRowBehaviour("inline_edit", behaviours.inlineEdit.eventId, "inline_edit", "record_reference");
         // An editable field must be one the bound query selects and one of the declared columns;
         // a field that is never shown could never be edited in place.
         const columnFields = new Set(table.columns.map((column) => column.field));
@@ -295,12 +272,7 @@ export function validateApplicationSourceCatalogue(
         );
       }
     } else if (detail !== undefined)
-      checkFields(
-        "detail_fields",
-        detail.fields.map((entry) => entry.field),
-        () => true,
-        "invalid_value",
-      );
+      checkFields("detail_fields", detail.fields.map((entry) => entry.field), () => true, "invalid_value");
   };
 
   const settingPathSegments = (path: readonly (string | number)[]): Segment[] =>
@@ -312,10 +284,11 @@ export function validateApplicationSourceCatalogue(
     location: readonly Segment[],
   ): void => {
     for (const failure of validateComponentSettings(authored, declarations))
-      report("vortex.definition.application_block_settings", failure.family, [
-        ...location,
-        ...settingPathSegments(failure.path),
-      ]);
+      report(
+        "vortex.definition.application_block_settings",
+        failure.family,
+        [...location, ...settingPathSegments(failure.path)],
+      );
   };
 
   /** A required accessible name must exist after defaults; a supplied name must be real text. */
@@ -463,16 +436,18 @@ export function validateApplicationSourceCatalogue(
         if (declaration.repeats === undefined) continue;
         const identities = repeatableSlotItemIdentities(declaration, placement.settings);
         if (new Set(identities).size !== identities.length)
-          report("vortex.definition.application_block_settings", "duplicate_key", [
-            ...location,
-            ...keySegment("setting", declaration.repeats.items),
-          ]);
+          report(
+            "vortex.definition.application_block_settings",
+            "duplicate_key",
+            [...location, ...keySegment("setting", declaration.repeats.items)],
+          );
         for (const identity of identities) {
           if (!isRepeatableSlotIdentity(declaration.key, identity))
-            report("vortex.definition.application_block_settings", "invalid_value", [
-              ...location,
-              ...keySegment("setting", declaration.repeats.items),
-            ]);
+            report(
+              "vortex.definition.application_block_settings",
+              "invalid_value",
+              [...location, ...keySegment("setting", declaration.repeats.items)],
+            );
           else repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
         }
       }
@@ -630,7 +605,12 @@ export function validateApplicationSourceCatalogue(
       }
     } else if (page.composition.shell_kind === "default") pageSlot(page.composition.main);
     else
-      validateShellContent(page.composition.shell, page.composition.content, publicSurface, scope);
+      validateShellContent(
+        page.composition.shell,
+        page.composition.content,
+        publicSurface,
+        scope,
+      );
   }
 
   return failures;

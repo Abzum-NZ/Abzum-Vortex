@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  sourceAliasSchema,
-  sourceQualifiedRecordTypeSchema,
-} from "../definition/definition-source-common";
+import { sourceAliasSchema, sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
 import { builderKeySchema } from "../catalogue/identifiers";
 import { sourceModuleFieldValueSchemas } from "../records/module-field-values";
 import {

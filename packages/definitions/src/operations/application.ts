@@ -20,7 +20,11 @@ import {
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
-import { operationsRunbooks, runbookPageKey, runbookPageText } from "./runbooks";
+import {
+  operationsRunbooks,
+  runbookPageKey,
+  runbookPageText,
+} from "./runbooks";
 
 type JsonObject = Record<string, unknown>;
 
@@ -193,13 +197,9 @@ const actionButton = (
 
 /** A form container holding its inputs followed by its one submit button. */
 const form = (title: string, inputs: Record<string, unknown>) =>
-  placement(
-    FORM_CONTAINER_BLOCK_RELEASE,
-    { title: { kind: "text", value: title } },
-    {
-      content: slot(inputs),
-    },
-  );
+  placement(FORM_CONTAINER_BLOCK_RELEASE, { title: { kind: "text", value: title } }, {
+    content: slot(inputs),
+  });
 
 const createForm = "form_operations_new_incident";
 const attachForm = "form_operations_incident_attach";
@@ -474,19 +474,17 @@ const releasesByKey = new Map<string, PlatformBlockRelease>(
 /** Exactly the registered block releases the shell and pages place, in permanent-identity order. */
 const platformBlockDependencies = [
   ...collectBlockReleases({ shell: applicationShell, pages: applicationPages }),
-]
-  .sort()
-  .map((releaseKey) => {
-    const release = releasesByKey.get(releaseKey);
-    if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
-    return {
-      kind: "platform_block" as const,
-      block_id: String(release.blockId),
-      release_version: release.releaseVersion,
-      content_fingerprint: release.contentFingerprint,
-      catalogue_fingerprint: release.catalogueFingerprint,
-    };
-  });
+].sort().map((releaseKey) => {
+  const release = releasesByKey.get(releaseKey);
+  if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
+  return {
+    kind: "platform_block" as const,
+    block_id: String(release.blockId),
+    release_version: release.releaseVersion,
+    content_fingerprint: release.contentFingerprint,
+    catalogue_fingerprint: release.catalogueFingerprint,
+  };
+});
 
 const theme = {
   base: {

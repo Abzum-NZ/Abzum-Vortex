@@ -1298,15 +1298,7 @@ const compareApplicationSharedContent = (
   const reasons: VersionImpactReason[] = [];
   const previous = asRecord(previousContent);
   const candidate = asRecord(candidateContent);
-  pushChange(
-    reasons,
-    previous.search,
-    candidate.search,
-    "major",
-    "presentation_changed",
-    "application",
-    "configuration",
-  );
+  pushChange(reasons, previous.search, candidate.search, "major", "presentation_changed", "application", "configuration");
   for (const key of ["name", "description", "icon"])
     pushChange(
       reasons,
@@ -1956,7 +1948,9 @@ const normaliseRecordType = (recordType: RecordValue): RecordValue => ({
   customActionIds: sorted(recordType.customActionIds as unknown[]),
 });
 
-export const normaliseModuleContent = <T extends ModuleContent>(content: T): T => {
+export const normaliseModuleContent = <T extends ModuleContent>(
+  content: T,
+): T => {
   const value = asRecord(content);
   return {
     ...value,
@@ -2064,7 +2058,10 @@ const normaliseApplicationSharedContent = (content: ApplicationContent): RecordV
     ),
     publicAddresses: sorted(value.publicAddresses as unknown[], "addressId"),
     flows: sorted(value.flows as unknown[], "id"),
-    flowBindings: sorted(value.flowBindings as RecordValue[], "bindingId"),
+    flowBindings: sorted(
+      value.flowBindings as RecordValue[],
+      "bindingId",
+    ),
   };
 };
 
@@ -2188,7 +2185,9 @@ const assertUnambiguousApplicationSharedContent = (content: unknown): void => {
   for (const pipeline of value.pipelines as RecordValue[])
     assertUnique(pipeline.stages as RecordValue[], "key");
   const flowBindings = value.flowBindings as RecordValue[];
-  const flowBindingKeys = flowBindings.map((binding) => `${binding.controlId}:${binding.eventId}`);
+  const flowBindingKeys = flowBindings.map(
+    (binding) => `${binding.controlId}:${binding.eventId}`,
+  );
   if (new Set(flowBindingKeys).size !== flowBindingKeys.length)
     refuseVersionImpact("ambiguous_component_identity");
   const flowBindingIds = flowBindings.map((binding) => binding.bindingId);
@@ -2285,7 +2284,9 @@ const collectPlacementSlot = (
   }
 };
 
-const collectPlacements = (contentValue: ApplicationContent): Map<string, PlacementContext> => {
+const collectPlacements = (
+  contentValue: ApplicationContent,
+): Map<string, PlacementContext> => {
   const content = asRecord(contentValue);
   const result = new Map<string, PlacementContext>();
   const shells = content.shells as RecordValue[];
@@ -2361,7 +2362,9 @@ const comparePlacements = (
   );
   const compatibleAddedPageIds = new Set(
     (asRecord(candidateContent).pages as RecordValue[])
-      .filter((page) => !previousPageIds.has(String(page.pageId)) && pageIsCompatibleAddition(page))
+      .filter(
+        (page) => !previousPageIds.has(String(page.pageId)) && pageIsCompatibleAddition(page),
+      )
       .map((page) => String(page.pageId)),
   );
   for (const [id, current] of candidate)
@@ -2762,7 +2765,9 @@ export const compareApplicationContents = (
   return finaliseReasons(reasons);
 };
 
-export const normaliseApplicationContent = (content: ApplicationContent): ApplicationContent => {
+export const normaliseApplicationContent = (
+  content: ApplicationContent,
+): ApplicationContent => {
   const comparisonContent = structuredClone(content);
   // Empty internal containers have no display effect. Children and exposed
   // shell-slot declarations independently carry their meaningful changes.
@@ -2829,7 +2834,8 @@ export const assertUnambiguousApplicationContent = (content: unknown): void => {
     return slots;
   });
   assertUnique(contentSlots, "slotId");
-  if (Array.isArray(value.experiences)) assertUnique(value.experiences as RecordValue[], "state");
+  if (Array.isArray(value.experiences))
+    assertUnique(value.experiences as RecordValue[], "state");
   for (const page of value.pages as RecordValue[]) {
     if (Array.isArray(page.steps)) assertUnique(page.steps as RecordValue[], "id");
     if (Array.isArray(page.publicFieldIds)) assertUniqueValues(page.publicFieldIds as unknown[]);

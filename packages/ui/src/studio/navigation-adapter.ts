@@ -114,9 +114,7 @@ const validated = <T>(check: () => T, at: string): T => {
 
 const requiredChild = <T>(items: readonly T[], at: string): void => {
   if (items.length === 0)
-    throw new VortexNavigationAdapterError(
-      `A navigation heading needs at least one child at ${at}`,
-    );
+    throw new VortexNavigationAdapterError(`A navigation heading needs at least one child at ${at}`);
   bounded(items, at);
 };
 
@@ -139,7 +137,11 @@ export const createVortexNavigationAdapter = (pagesInput: readonly StudioNavigat
     identityByKey.set(key, pageId);
   }
 
-  const toEditorItem = (raw: unknown, at: string, seen: Set<string>): StudioNavigationItem => {
+  const toEditorItem = (
+    raw: unknown,
+    at: string,
+    seen: Set<string>,
+  ): StudioNavigationItem => {
     const item = validated(() => navigationItemSchema.parse(raw), at);
     if (seen.has(item.id))
       throw new VortexNavigationAdapterError(`Duplicate navigation item identity ${item.id}`);
@@ -241,14 +243,7 @@ export const createVortexNavigationAdapter = (pagesInput: readonly StudioNavigat
         () => namespacedKeySchema.parse(node.permission),
         `${at}.permission`,
       );
-      const assembled: NavigationItem = {
-        id,
-        type: "external",
-        label,
-        icon,
-        address,
-        permissionKey,
-      };
+      const assembled: NavigationItem = { id, type: "external", label, icon, address, permissionKey };
       return validated(() => navigationItemSchema.parse(assembled), at);
     }
     throw new VortexNavigationAdapterError(`Invalid navigation item type at ${at}`);

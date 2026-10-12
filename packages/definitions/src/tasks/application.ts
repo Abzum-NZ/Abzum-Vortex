@@ -183,14 +183,7 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
         },
       ],
       navigation: [
-        {
-          id: "nav_tasks_list",
-          type: "page",
-          label: "Tasks",
-          icon: "check",
-          page: "tasks",
-          permission: readPage,
-        },
+        { id: "nav_tasks_list", type: "page", label: "Tasks", icon: "check", page: "tasks", permission: readPage },
         {
           id: "nav_tasks_create",
           type: "page",

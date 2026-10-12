@@ -45,7 +45,9 @@ import {
 } from "./saved-condition-revisions";
 
 type SupportedVersionImpactRequest =
-  DefinitionVersionImpactRequest | ApplicationVersionImpactRequest | ModuleVersionImpactRequest;
+  | DefinitionVersionImpactRequest
+  | ApplicationVersionImpactRequest
+  | ModuleVersionImpactRequest;
 
 type HistoryRelease = SupportedVersionImpactRequest["history"][number];
 
@@ -276,7 +278,8 @@ const comparisonFingerprint = (
   exactCandidateContentFingerprint: `sha256:${string}`,
   resultWithoutFingerprint: unknown,
   policyVersion:
-    typeof applicationVersionImpactPolicyVersion | typeof moduleVersionImpactPolicyVersion,
+    | typeof applicationVersionImpactPolicyVersion
+    | typeof moduleVersionImpactPolicyVersion,
 ): `sha256:${string}` =>
   fingerprintCanonicalValue({
     policyVersion,

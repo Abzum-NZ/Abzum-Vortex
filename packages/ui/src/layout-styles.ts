@@ -42,7 +42,9 @@ export const LAYOUT_CLASS_NAMES = Object.freeze({
 /**
  * Computes inline CSSProperties for a placement's layout declaration at a given breakpoint.
  */
-export function computePlacementStyle(layout: PlacementLayoutContract | undefined): CSSProperties {
+export function computePlacementStyle(
+  layout: PlacementLayoutContract | undefined,
+): CSSProperties {
   if (!layout) {
     return { boxSizing: "border-box" };
   }
@@ -132,7 +134,10 @@ export const slotGapLength = (gap: SlotGapName): string =>
  * CSS declarations for one breakpoint's layout. Visibility and geometry are explicit so a narrower
  * rule can always override a wider one, including resetting bounded height and grid placement.
  */
-function responsiveLayoutDeclarations(layout: PlacementLayoutContract, gridItem: boolean): string {
+function responsiveLayoutDeclarations(
+  layout: PlacementLayoutContract,
+  gridItem: boolean,
+): string {
   if (!layout.visible) return "display: none";
 
   const declarations: string[] = ["display: block"];

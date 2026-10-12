@@ -16,7 +16,8 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "@vortex/platform/schema";
-import type { createReferenceChoiceService } from "@web/platform-server";
+import type {
+  createReferenceChoiceService} from "@web/platform-server";
 import {
   recordReferenceChoiceCommandSchema,
   resolveReferenceChoiceSelection,
@@ -95,12 +96,8 @@ const placementSettings = (placement: unknown): ChoicePlacementSettings | undefi
   let dependency: ChoicePlacementSettings["dependency"];
   if (releaseVersion === "1.2.0" && source.properties.input !== undefined) {
     const input = source.properties.input;
-    if (
-      input.kind !== "group" ||
-      Object.keys(input.properties).length !== 2 ||
-      input.properties.key?.kind !== "text" ||
-      input.properties.from_field?.kind !== "text"
-    )
+    if (input.kind !== "group" || Object.keys(input.properties).length !== 2 ||
+        input.properties.key?.kind !== "text" || input.properties.from_field?.kind !== "text")
       return undefined;
     const key = builderKeySchema.safeParse(input.properties.key.value);
     const from = builderKeySchema.safeParse(input.properties.from_field.value);
@@ -155,13 +152,8 @@ const referenceChoiceFieldForPlacement = (
   if (command === undefined) return undefined;
   if (settings.dependency !== undefined) {
     const input = command.source.query.inputs[0];
-    if (
-      command.source.query.inputs.length !== 1 ||
-      input?.required !== true ||
-      input.type !== "text" ||
-      input.key !== settings.dependency.key
-    )
-      return undefined;
+    if (command.source.query.inputs.length !== 1 || input?.required !== true ||
+        input.type !== "text" || input.key !== settings.dependency.key) return undefined;
   }
   return {
     fieldKey: settings.fieldKey,
@@ -176,13 +168,8 @@ const validDependencies = (fields: ReferenceChoiceFormFieldIndex): boolean => {
   for (const field of fields.values()) {
     if (field.dependency === undefined) continue;
     const parent = fields.get(field.dependency.fromField);
-    if (
-      parent === undefined ||
-      parent === field ||
-      parent.dependency !== undefined ||
-      parent.command.source.query.inputs.length !== 0
-    )
-      return false;
+    if (parent === undefined || parent === field || parent.dependency !== undefined ||
+        parent.command.source.query.inputs.length !== 0) return false;
   }
   return true;
 };
@@ -194,13 +181,8 @@ export const bindReferenceChoiceField = (
   parentChoice: ReferenceChoiceOption,
 ): ReferenceChoiceFormField | undefined => {
   const dependency = field.dependency;
-  if (
-    dependency === undefined ||
-    !validDependencies(fields) ||
-    !fields.has(dependency.fromField) ||
-    !("recordId" in parentChoice.value)
-  )
-    return undefined;
+  if (dependency === undefined || !validDependencies(fields) ||
+      !fields.has(dependency.fromField) || !("recordId" in parentChoice.value)) return undefined;
   return {
     ...field,
     command: {
@@ -225,11 +207,7 @@ const formPlacementsOnPage = (
         typeof block?.blockId === "string" &&
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
       const owner = isForm ? placementId : formId;
-      if (
-        owner !== undefined &&
-        sameId(owner, targetFormId) &&
-        hasReferenceChoiceSource(placement)
-      ) {
+      if (owner !== undefined && sameId(owner, targetFormId) && hasReferenceChoiceSource(placement)) {
         const field = referenceChoiceFieldForPlacement(placement, modules);
         if (field === undefined) invalid = true;
         else found.push(field);
@@ -323,8 +301,7 @@ export const projectedReferenceChoiceForm = (
     for (const [placementId, placement] of Object.entries(slot.placements)) {
       if (!isRecord(placement)) continue;
       const block = blockOf(placement);
-      const isForm =
-        typeof block?.blockId === "string" &&
+      const isForm = typeof block?.blockId === "string" &&
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
       const currentlyUsable = usable && placement.availability === undefined;
       if (isForm && sameId(placementId, formId)) {
@@ -349,11 +326,8 @@ export const projectedReferenceChoiceForm = (
     for (const [placementId, placement] of Object.entries(slot.placements)) {
       if (!isRecord(placement)) continue;
       const block = blockOf(placement);
-      if (
-        typeof block?.blockId === "string" &&
-        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-      )
-        continue;
+      if (typeof block?.blockId === "string" &&
+          sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) continue;
       const currentlyUsable = usable && placement.availability === undefined;
       if (!currentlyUsable) continue;
       if (hasReferenceChoiceSource(placement)) {
@@ -368,7 +342,8 @@ export const projectedReferenceChoiceForm = (
         for (const child of Object.values(placement.slots)) collect(child, currentlyUsable);
     }
   };
-  if (isRecord(target.slots)) for (const child of Object.values(target.slots)) collect(child, true);
+  if (isRecord(target.slots))
+    for (const child of Object.values(target.slots)) collect(child, true);
   return invalid || !validDependencies(fields) ? undefined : { fields, placements };
 };
 
@@ -394,19 +369,17 @@ const choicesForEvidence = async (
 };
 
 /** Resolves submitted keys only when the same source page currently offers them to this viewer. */
-export const resolveReferenceChoiceFormValues = async (
-  args: Readonly<{
-    service: ReferenceChoiceService;
-    session: IdentitySession;
-    selection: OrganizationSelectionCandidate;
-    application: ApplicationContent;
-    modules: readonly ModuleDefinitionConsumerReadResult[];
-    formId: string;
-    projectedFields: ReferenceChoiceFormFieldIndex;
-    values: unknown;
-    evidence?: unknown;
-  }>,
-): Promise<Readonly<Record<string, JsonValue>> | undefined> => {
+export const resolveReferenceChoiceFormValues = async (args: Readonly<{
+  service: ReferenceChoiceService;
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+  application: ApplicationContent;
+  modules: readonly ModuleDefinitionConsumerReadResult[];
+  formId: string;
+  projectedFields: ReferenceChoiceFormFieldIndex;
+  values: unknown;
+  evidence?: unknown;
+}>): Promise<Readonly<Record<string, JsonValue>> | undefined> => {
   if (!isRecord(args.values)) return undefined;
   const authoredFields = referenceChoiceFieldsForForm(args.application, args.modules, args.formId);
   if (authoredFields === undefined) return undefined;
@@ -423,9 +396,8 @@ export const resolveReferenceChoiceFormValues = async (
 
   const resolved: Record<string, unknown> = { ...args.values };
   const parents = new Map<string, ReferenceChoiceOption>();
-  const ordered = [...fields].sort(
-    ([, left], [, right]) =>
-      Number(left.dependency !== undefined) - Number(right.dependency !== undefined),
+  const ordered = [...fields].sort(([, left], [, right]) =>
+    Number(left.dependency !== undefined) - Number(right.dependency !== undefined),
   );
   for (const [fieldKey, field] of ordered) {
     if (!Object.hasOwn(args.values, fieldKey)) continue;
@@ -466,16 +438,14 @@ export const resolveReferenceChoiceFormValues = async (
 };
 
 /** Rechecks a selected choice while returning another search or continuation page to the client. */
-export const resolveReferenceChoiceOption = async (
-  args: Readonly<{
-    service: ReferenceChoiceService;
-    session: IdentitySession;
-    selection: OrganizationSelectionCandidate;
-    field: ReferenceChoiceFormField;
-    key: string;
-    evidence: ReferenceChoiceSelectionEvidence;
-  }>,
-): Promise<ReferenceChoiceOption | undefined> => {
+export const resolveReferenceChoiceOption = async (args: Readonly<{
+  service: ReferenceChoiceService;
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+  field: ReferenceChoiceFormField;
+  key: string;
+  evidence: ReferenceChoiceSelectionEvidence;
+}>): Promise<ReferenceChoiceOption | undefined> => {
   const choices = await choicesForEvidence(
     args.service,
     args.session,

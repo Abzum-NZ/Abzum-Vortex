@@ -197,9 +197,7 @@ export const moduleVersionImpactHistoryEntrySchema = z
   })
   .strict()
   .superRefine((value, context) =>
-    requireResolvedRecordTypeReferences(storedModuleContentSchema, value.content, context, [
-      "content",
-    ]),
+    requireResolvedRecordTypeReferences(storedModuleContentSchema, value.content, context, ["content"]),
   );
 
 export const moduleVersionImpactRequestSchema = z
@@ -306,8 +304,12 @@ export type DefinitionVersionImpactFailureCode = z.infer<
   typeof definitionVersionImpactFailureCodeSchema
 >;
 export type DefinitionVersionImpactRequest = z.infer<typeof definitionVersionImpactRequestSchema>;
-export type ApplicationVersionImpactRequest = z.infer<typeof applicationVersionImpactRequestSchema>;
+export type ApplicationVersionImpactRequest = z.infer<
+  typeof applicationVersionImpactRequestSchema
+>;
 export type ModuleVersionImpactRequest = z.infer<typeof moduleVersionImpactRequestSchema>;
-export type ModuleVersionImpactHistoryEntry = z.infer<typeof moduleVersionImpactHistoryEntrySchema>;
+export type ModuleVersionImpactHistoryEntry = z.infer<
+  typeof moduleVersionImpactHistoryEntrySchema
+>;
 export type DefinitionVersionImpactResult = z.infer<typeof definitionVersionImpactResultSchema>;
 export type DefinitionVersionConfirmation = z.infer<typeof definitionVersionConfirmationSchema>;

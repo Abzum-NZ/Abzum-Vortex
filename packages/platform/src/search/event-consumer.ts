@@ -104,7 +104,9 @@ export type SearchIndexOccurrenceDependencies = Readonly<{
 }>;
 
 export type SearchOccurrenceSkipReason =
-  "not_indexable_event" | "record_type_unavailable" | "record_unavailable";
+  | "not_indexable_event"
+  | "record_type_unavailable"
+  | "record_unavailable";
 
 export type SearchIndexOccurrenceOutcome =
   | Readonly<{ kind: "skipped"; reason: SearchOccurrenceSkipReason }>

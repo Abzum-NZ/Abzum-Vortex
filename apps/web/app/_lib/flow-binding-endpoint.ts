@@ -228,8 +228,7 @@ const hasVisibleOwningFormField = (
   ): void => {
     if (!isRecord(candidate)) return;
     if (!isRecord(candidate.placements)) {
-      for (const child of Object.values(candidate))
-        visitSlotTree(child, currentFormId, ancestorsVisible);
+      for (const child of Object.values(candidate)) visitSlotTree(child, currentFormId, ancestorsVisible);
       return;
     }
     for (const [placementId, value] of Object.entries(candidate.placements)) {
@@ -289,7 +288,9 @@ const hasVisibleOwningFormField = (
   )
     return false;
   const ownerFormId = controls[0]!.formId;
-  const matchingFields = fields.filter((field) => field.formId === ownerFormId && field.visible);
+  const matchingFields = fields.filter(
+    (field) => field.formId === ownerFormId && field.visible,
+  );
   return matchingFields.length === 1;
 };
 
@@ -561,7 +562,9 @@ const finishedResult = (
       : {
           failure: {
             code: response.failure.code,
-            ...(response.failure.taskId === undefined ? {} : { taskId: response.failure.taskId }),
+            ...(response.failure.taskId === undefined
+              ? {}
+              : { taskId: response.failure.taskId }),
             ...(diagnostic === undefined ? {} : { diagnostic }),
           },
         }),
@@ -670,7 +673,9 @@ const continuationResult = (
           : {
               failure: {
                 code: outcome.failure.code,
-                ...(outcome.failure.taskId === undefined ? {} : { taskId: outcome.failure.taskId }),
+                ...(outcome.failure.taskId === undefined
+                  ? {}
+                  : { taskId: outcome.failure.taskId }),
                 ...(diagnostic === undefined ? {} : { diagnostic }),
               },
             }),

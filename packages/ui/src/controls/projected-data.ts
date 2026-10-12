@@ -376,8 +376,7 @@ export const parseTypedFieldValue = (
   if (typeof value === "number")
     return Number.isFinite(value) ? value : fail("A typed number must be finite", location);
   if (Array.isArray(value)) {
-    if (value.length > 200)
-      return fail("A several-choice value cannot exceed 200 options", location);
+    if (value.length > 200) return fail("A several-choice value cannot exceed 200 options", location);
     const selected = value.map((item) =>
       requireChoiceValue(item, "A several-choice value must contain option values", location),
     );
@@ -463,7 +462,10 @@ export const parseNumberInputPayload = (
 ): NumberInputPayload => {
   const record = requireRecord(value, "Projected control values must be an object", location);
   if (record.kind !== "number_input")
-    return fail(`Expected 'number_input' projected values, got '${String(record.kind)}'`, location);
+    return fail(
+      `Expected 'number_input' projected values, got '${String(record.kind)}'`,
+      location,
+    );
   requireExactKeys(record, ["kind", "value", "error"], location);
   if (
     record.value !== undefined &&
@@ -496,7 +498,11 @@ export const parseBooleanInputPayload = (
     ...(record.value === undefined
       ? {}
       : {
-          value: requireBoolean(record.value, "A boolean value must be true or false", location),
+          value: requireBoolean(
+            record.value,
+            "A boolean value must be true or false",
+            location,
+          ),
         }),
     ...optionalError(record, location),
   });
@@ -535,11 +541,7 @@ const parseDateTimeInputPayload = (
       `Expected 'date_time_input' projected values, got '${String(record.kind)}'`,
       location,
     );
-  requireExactKeys(
-    record,
-    ["kind", "value", "personTimeZone", "organizationTimeZone", "error"],
-    location,
-  );
+  requireExactKeys(record, ["kind", "value", "personTimeZone", "organizationTimeZone", "error"], location);
   if (
     record.value !== undefined &&
     record.value !== null &&
@@ -562,9 +564,7 @@ const parseDateTimeInputPayload = (
   return Object.freeze({
     kind: "date_time_input",
     ...(record.value === undefined ? {} : { value: record.value as string | null }),
-    ...(record.personTimeZone === undefined
-      ? {}
-      : { personTimeZone: record.personTimeZone as string }),
+    ...(record.personTimeZone === undefined ? {} : { personTimeZone: record.personTimeZone as string }),
     ...(record.organizationTimeZone === undefined
       ? {}
       : { organizationTimeZone: record.organizationTimeZone as string }),
@@ -581,7 +581,10 @@ export const parseChoiceInputPayload = (
   if (releaseVersion === "1.2.0") return parseDependentChoiceInputPayload(value, location);
   const record = requireRecord(value, "Projected control values must be an object", location);
   if (record.kind !== "choice_input")
-    return fail(`Expected 'choice_input' projected values, got '${String(record.kind)}'`, location);
+    return fail(
+      `Expected 'choice_input' projected values, got '${String(record.kind)}'`,
+      location,
+    );
   requireExactKeys(
     record,
     ["kind", "value", "options", "optionEvidence", "nextContinuationToken", "error"],
@@ -593,10 +596,7 @@ export const parseChoiceInputPayload = (
   if (record.optionEvidence !== undefined) {
     const parsed = referenceChoiceSelectionEvidenceMapSchema.safeParse(record.optionEvidence);
     if (!parsed.success || options === undefined)
-      return fail(
-        "Choice option evidence must map projected options to Query page evidence",
-        location,
-      );
+      return fail("Choice option evidence must map projected options to Query page evidence", location);
     if (
       options.some((option) => !Object.hasOwn(parsed.data, option.key)) ||
       Object.keys(parsed.data).some((key) => !options.some((option) => option.key === key))
@@ -613,11 +613,7 @@ export const parseChoiceInputPayload = (
           location,
         );
   if (record.value !== undefined && record.value !== null) {
-    const key = requireChoiceValue(
-      record.value,
-      "A choice value must be an option value",
-      location,
-    );
+    const key = requireChoiceValue(record.value, "A choice value must be an option value", location);
     if (options !== undefined && !options.some((option) => option.key === key))
       fail(`Choice value '${key}' is not a projected option`, location);
   }
@@ -637,25 +633,13 @@ export const parseDependentChoiceInputPayload = (
   location: DefinitionRenderErrorLocation = {},
 ): ChoiceInputPayload => {
   const record = requireRecord(value, "Projected control values must be an object", location);
-  requireExactKeys(
-    record,
-    [
-      "kind",
-      "value",
-      "options",
-      "optionEvidence",
-      "nextContinuationToken",
-      "error",
-      "dependencyKey",
-    ],
+  requireExactKeys(record,
+    ["kind", "value", "options", "optionEvidence", "nextContinuationToken", "error", "dependencyKey"],
     location,
   );
   const { dependencyKey, ...ordinary } = record;
-  if (
-    dependencyKey !== undefined &&
-    dependencyKey !== null &&
-    !builderKeySchema.safeParse(dependencyKey).success
-  )
+  if (dependencyKey !== undefined && dependencyKey !== null &&
+      !builderKeySchema.safeParse(dependencyKey).success)
     return fail("A Choice dependency must be an offered option key or null", location);
   return Object.freeze({
     ...parseChoiceInputPayload(ordinary, location),
@@ -740,7 +724,8 @@ export const parseValidationPayload = (
   if (record.kind !== "validation")
     return fail(`Expected 'validation' projected values, got '${String(record.kind)}'`, location);
   requireExactKeys(record, ["kind", "errors"], location);
-  if (!Array.isArray(record.errors)) return fail("Validation errors must be an array", location);
+  if (!Array.isArray(record.errors))
+    return fail("Validation errors must be an array", location);
   return Object.freeze({
     kind: "validation",
     errors: Object.freeze(
@@ -826,7 +811,8 @@ export const parseFormPayload = (
     return fail(`Expected 'form' projected values, got '${String(record.kind)}'`, location);
   requireExactKeys(record, ["kind", "ownerGroups"], location);
   if (record.ownerGroups === undefined) return Object.freeze({ kind: "form" });
-  if (!Array.isArray(record.ownerGroups)) return fail("Owner Groups must be a list", location);
+  if (!Array.isArray(record.ownerGroups))
+    return fail("Owner Groups must be a list", location);
   const ownerGroups = record.ownerGroups.map((candidate) => {
     const group = requireRecord(candidate, "An owner Group must be an object", location);
     requireExactKeys(group, ["groupId", "label"], location);

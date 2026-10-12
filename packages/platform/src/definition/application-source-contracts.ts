@@ -2,11 +2,7 @@ import { z } from "zod";
 import { applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
-import {
-  builderKeySchema,
-  namespacedKeySchema,
-  semanticVersionSchema,
-} from "../catalogue/identifiers";
+import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "../catalogue/identifiers";
 import { jsonValueSchema, labelSchema } from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
@@ -161,29 +157,9 @@ const declaresGatedSourcePlacement = (value: unknown): boolean => {
   return Object.values(record).some(declaresGatedSourcePlacement);
 };
 type SourceNavigation =
-  | {
-      id: string;
-      type: "heading";
-      label: string;
-      icon: z.infer<typeof vortexIconNameSchema>;
-      children: SourceNavigation[];
-    }
-  | {
-      id: string;
-      type: "page";
-      label: string;
-      icon: z.infer<typeof vortexIconNameSchema>;
-      page: string;
-      permission: string;
-    }
-  | {
-      id: string;
-      type: "external";
-      label: string;
-      icon: z.infer<typeof vortexIconNameSchema>;
-      address: string;
-      permission: string;
-    };
+  | { id: string; type: "heading"; label: string; icon: z.infer<typeof vortexIconNameSchema>; children: SourceNavigation[] }
+  | { id: string; type: "page"; label: string; icon: z.infer<typeof vortexIconNameSchema>; page: string; permission: string }
+  | { id: string; type: "external"; label: string; icon: z.infer<typeof vortexIconNameSchema>; address: string; permission: string };
 const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z
@@ -508,76 +484,28 @@ const sourceApplicationSearchSchema = z
   .object({
     enabled: sourceProvenanceUnchanged(z.boolean()),
     record_types: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
-                "search/recordTypes/#/recordType/**",
-              ]),
-              fields: sourceProvenanceUnchanged(
-                z
-                  .array(
-                    z
-                      .object({
-                        field: sourceProvenanceTarget(sourceQualifiedFieldSchema, [
-                          "search/recordTypes/#/fields/#/fieldId",
-                        ]),
-                        priority: sourceProvenanceUnchanged(z.enum(["first", "normal", "last"])),
-                      })
-                      .strict(),
-                  )
-                  .min(1)
-                  .max(100),
-              ),
-              title_field: sourceProvenanceTarget(sourceQualifiedFieldSchema, [
-                "search/recordTypes/#/titleFieldId",
-              ]),
-              subtitle_field: sourceProvenanceTarget(sourceQualifiedFieldSchema.optional(), [
-                "search/recordTypes/#/subtitleFieldId",
-              ]),
-              target_page: sourceProvenanceTarget(builderKeySchema, [
-                "search/recordTypes/#/targetPageId",
-              ]),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(20),
+      z.array(z.object({
+        record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["search/recordTypes/#/recordType/**"]),
+        fields: sourceProvenanceUnchanged(z.array(z.object({
+          field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["search/recordTypes/#/fields/#/fieldId"]),
+          priority: sourceProvenanceUnchanged(z.enum(["first", "normal", "last"])),
+        }).strict()).min(1).max(100)),
+        title_field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["search/recordTypes/#/titleFieldId"]),
+        subtitle_field: sourceProvenanceTarget(sourceQualifiedFieldSchema.optional(), ["search/recordTypes/#/subtitleFieldId"]),
+        target_page: sourceProvenanceTarget(builderKeySchema, ["search/recordTypes/#/targetPageId"]),
+      }).strict()).min(1).max(20),
     ),
   })
   .strict()
   .superRefine((value, context) => {
-    if (
-      new Set(value.record_types.map((entry) => entry.record_type)).size !==
-      value.record_types.length
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["record_types"],
-        message: "Search record types must be unique",
-      });
+    if (new Set(value.record_types.map((entry) => entry.record_type)).size !== value.record_types.length)
+      context.addIssue({ code: "custom", path: ["record_types"], message: "Search record types must be unique" });
     for (const [index, entry] of value.record_types.entries()) {
       if (new Set(entry.fields.map((field) => field.field)).size !== entry.fields.length)
-        context.addIssue({
-          code: "custom",
-          path: ["record_types", index, "fields"],
-          message: "Search fields must be unique",
-        });
-      for (const field of [
-        ...entry.fields.map((item) => item.field),
-        entry.title_field,
-        entry.subtitle_field,
-      ].filter((item) => item !== undefined))
-        if (
-          field.slice(0, field.lastIndexOf(":")) !==
-          entry.record_type.slice(0, entry.record_type.lastIndexOf(":"))
-        )
-          context.addIssue({
-            code: "custom",
-            path: ["record_types", index],
-            message: "Search fields must belong to the selected Module",
-          });
+        context.addIssue({ code: "custom", path: ["record_types", index, "fields"], message: "Search fields must be unique" });
+      for (const field of [...entry.fields.map((item) => item.field), entry.title_field, entry.subtitle_field].filter((item) => item !== undefined))
+        if (field.slice(0, field.lastIndexOf(":")) !== entry.record_type.slice(0, entry.record_type.lastIndexOf(":")))
+          context.addIssue({ code: "custom", path: ["record_types", index], message: "Search fields must belong to the selected Module" });
     }
   });
 
@@ -1024,7 +952,9 @@ export const sourceApplicationBodySchema = z
         message: "Shell content-slot aliases must be unique across the application",
       });
 
-    const placementEntries = value.shells.flatMap((shell) => sourcePlacementEntries(shell.layout));
+    const placementEntries = value.shells.flatMap((shell) =>
+      sourcePlacementEntries(shell.layout),
+    );
     const shellsByAlias = new Map(value.shells.map((shell) => [shell.id, shell]));
     const validateShellContent = (
       content: Record<string, { placements: Record<string, unknown> }>,
@@ -1175,7 +1105,9 @@ export const applicationSourceDocumentSchema = z
     root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId"]),
     key: sourceProvenanceUnchanged(namespacedKeySchema),
     kind: sourceProvenanceUnchanged(z.literal("application")),
-    body: sourceProvenanceUnchanged(z.preprocess(inspectSourceBounds, sourceApplicationBodySchema)),
+    body: sourceProvenanceUnchanged(
+      z.preprocess(inspectSourceBounds, sourceApplicationBodySchema),
+    ),
   })
   .strict();
 

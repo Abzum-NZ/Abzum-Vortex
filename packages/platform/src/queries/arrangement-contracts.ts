@@ -100,13 +100,9 @@ export type AggregateDescriptor = z.infer<typeof aggregateDescriptorSchema>;
 const aggregatesSchema = z
   .array(aggregateDescriptorSchema)
   .max(20)
-  .refine(
-    (aggregates) =>
-      new Set(aggregates.map((aggregate) => aggregate.alias)).size === aggregates.length,
-    {
-      message: "Each aggregate alias is used once",
-    },
-  );
+  .refine((aggregates) => new Set(aggregates.map((aggregate) => aggregate.alias)).size === aggregates.length, {
+    message: "Each aggregate alias is used once",
+  });
 
 /**
  * A computed value. Counts are whole numbers; sums and averages of whole and
@@ -286,7 +282,9 @@ export const protectedBoardArrangementResultSchema = z
     aggregates: protectedBoardAggregateResultsSchema,
   })
   .strict();
-export type ProtectedBoardArrangementResult = z.infer<typeof protectedBoardArrangementResultSchema>;
+export type ProtectedBoardArrangementResult = z.infer<
+  typeof protectedBoardArrangementResultSchema
+>;
 
 // Results
 

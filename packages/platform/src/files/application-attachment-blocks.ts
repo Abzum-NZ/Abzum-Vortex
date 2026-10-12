@@ -9,24 +9,18 @@ const safeDisplayNameSchema = z
 
 const verifiedMediaTypeSchema = z.string().min(1).max(200);
 
-const protectedDownloadHrefSchema = z
-  .string()
-  .max(96)
-  .superRefine((value, context) => {
-    const parts = value.split("/");
-    if (
-      parts.length !== 5 ||
-      parts[0] !== "" ||
-      parts[1] !== "api" ||
-      parts[2] !== "files" ||
-      !organizationIdSchema.safeParse(parts[3]).success ||
-      !fileIdSchema.safeParse(parts[4]).success
-    )
-      context.addIssue({
-        code: "custom",
-        message: "Download links must use the fixed same-origin File route",
-      });
-  });
+const protectedDownloadHrefSchema = z.string().max(96).superRefine((value, context) => {
+  const parts = value.split("/");
+  if (
+    parts.length !== 5 ||
+    parts[0] !== "" ||
+    parts[1] !== "api" ||
+    parts[2] !== "files" ||
+    !organizationIdSchema.safeParse(parts[3]).success ||
+    !fileIdSchema.safeParse(parts[4]).success
+  )
+    context.addIssue({ code: "custom", message: "Download links must use the fixed same-origin File route" });
+});
 
 /** Safe metadata for one attachment that passed the current protected File read decision. */
 export const attachmentListItemSchema = z
@@ -49,11 +43,7 @@ export const attachmentListPayloadSchema = z
     const links = new Set<string>();
     value.files.forEach((file, index) => {
       if (links.has(file.downloadHref))
-        context.addIssue({
-          code: "custom",
-          path: ["files", index, "downloadHref"],
-          message: "Attachment links must be unique",
-        });
+        context.addIssue({ code: "custom", path: ["files", index, "downloadHref"], message: "Attachment links must be unique" });
       links.add(file.downloadHref);
     });
   });

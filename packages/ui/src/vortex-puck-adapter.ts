@@ -155,7 +155,10 @@ const validateSettings = (
 export const createVortexPuckAdapter = (catalogueInput: unknown) => {
   const catalogue = immutablePlatformBlockCatalogueSchema.parse(catalogueInput);
   const releases = new Map(catalogue.releases.map((release) => [releaseKey(release), release]));
-  const releaseFor = (block: { blockId: string; releaseVersion: string }): PlatformBlockRelease => {
+  const releaseFor = (block: {
+    blockId: string;
+    releaseVersion: string;
+  }): PlatformBlockRelease => {
     const release = releases.get(releaseKey(block));
     if (!release)
       throw new VortexPuckAdapterError(

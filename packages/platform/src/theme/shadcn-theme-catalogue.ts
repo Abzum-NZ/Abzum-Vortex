@@ -100,7 +100,8 @@ export const shadcnThemeCatalogueDimension = (
 /** One dimension's options, in catalogue order. */
 export const shadcnThemeCatalogueOptions = (
   dimension: ShadcnThemeCatalogueDimensionKey,
-): readonly ShadcnThemeCatalogueOption[] => shadcnThemeCatalogueDimension(dimension)?.options ?? [];
+): readonly ShadcnThemeCatalogueOption[] =>
+  shadcnThemeCatalogueDimension(dimension)?.options ?? [];
 
 /** One option of one dimension, or undefined when the id is not offered by that dimension. */
 export const findShadcnThemeCatalogueOption = (

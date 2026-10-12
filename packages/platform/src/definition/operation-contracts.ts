@@ -127,7 +127,10 @@ export const eventOccurrenceEnvelopeSchema = z
     correlationId: correlationIdSchema,
     causationId: platformIdSchema.optional(),
     recordSequence: revisionSchema,
-    payload: z.union([standardEventOccurrencePayloadSchema, declaredEventOccurrencePayloadSchema]),
+    payload: z.union([
+      standardEventOccurrencePayloadSchema,
+      declaredEventOccurrencePayloadSchema,
+    ]),
   })
   .strict()
   .superRefine((value, context) => {

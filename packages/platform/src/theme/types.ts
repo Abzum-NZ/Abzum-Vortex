@@ -50,7 +50,10 @@ export type ComponentThemeOverrideContext = Readonly<{
    * Permitted token kinds for this component.
    * If omitted, all registered token kinds from themeTokenKindSchema are permitted.
    */
-  permittedTokenKinds?: ReadonlySet<ThemeTokenKind> | readonly ThemeTokenKind[] | undefined;
+  permittedTokenKinds?:
+    | ReadonlySet<ThemeTokenKind>
+    | readonly ThemeTokenKind[]
+    | undefined;
   /** Display-safe definition keys/aliases used only to locate a refusal. */
   pageKey?: BuilderKey | undefined;
   componentKey?: NamespacedKey | undefined;

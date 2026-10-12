@@ -353,7 +353,10 @@ export function validatePlacementTree(
       }
       seenPlacementIds.add(placementId);
 
-      const registration = registry.get(placement.block.blockId, placement.block.releaseVersion);
+      const registration = registry.get(
+        placement.block.blockId,
+        placement.block.releaseVersion,
+      );
       if (registration === undefined) {
         throw new DefinitionRenderError(
           registry.hasBlockId(placement.block.blockId) ? "MISMATCHED_RELEASE" : "UNKNOWN_RELEASE",
@@ -364,11 +367,7 @@ export function validatePlacementTree(
         );
       }
 
-      validateAccessibleName(
-        placement.settings,
-        registration.metadata.capabilities,
-        placementLocation,
-      );
+      validateAccessibleName(placement.settings, registration.metadata.capabilities, placementLocation);
       validatePlacementSlots(
         placement,
         registration.metadata,

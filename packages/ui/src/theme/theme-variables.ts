@@ -119,20 +119,14 @@ const BUILDER_KEY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 
 /** Only a validated six-digit hex or oklch() value reaches the stylesheet, never raw token text. */
-const isColorValue = (value: string): boolean => HEX_COLOR.test(value) || OKLCH_COLOR.test(value);
+const isColorValue = (value: string): boolean =>
+  HEX_COLOR.test(value) || OKLCH_COLOR.test(value);
 
 /**
  * Surface keys in the exact order #594 selects the surface its text, brand and focus
  * contrast checks run against. The painted surface must be that same surface.
  */
-const SURFACE_PRIORITY = [
-  "background",
-  "canvas",
-  "surface",
-  "bg",
-  "page_background",
-  "app_background",
-];
+const SURFACE_PRIORITY = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
 
 /**
  * The registered platform theme release's token values. Every renderer fallback below is
@@ -150,8 +144,7 @@ function platformColor(role: PlatformThemeTokenRoleKey): ColorPair {
 }
 
 /** The shadcn surfaces the vocabulary pairs with a `<role>_foreground` role. */
-type ShadcnFilledRole =
-  "card" | "popover" | "accent" | "sidebar" | "sidebar_primary" | "sidebar_accent";
+type ShadcnFilledRole = "card" | "popover" | "accent" | "sidebar" | "sidebar_primary" | "sidebar_accent";
 
 /** The registered release's base radius, which shadcn derives every corner size from. */
 const PLATFORM_RADIUS_BASE: string = (() => {
@@ -225,20 +218,8 @@ const PLATFORM_ELEVATION = [
 ] as const;
 
 const DENSITY = {
-  comfortable: {
-    controlY: "0.5rem",
-    controlX: "0.75rem",
-    minHeight: "2.5rem",
-    cellY: "0.625rem",
-    cellX: "0.875rem",
-  },
-  compact: {
-    controlY: "0.25rem",
-    controlX: "0.5rem",
-    minHeight: "2rem",
-    cellY: "0.375rem",
-    cellX: "0.5rem",
-  },
+  comfortable: { controlY: "0.5rem", controlX: "0.75rem", minHeight: "2.5rem", cellY: "0.625rem", cellX: "0.875rem" },
+  compact: { controlY: "0.25rem", controlX: "0.5rem", minHeight: "2rem", cellY: "0.375rem", cellX: "0.5rem" },
 } as const;
 
 const colorValue = (pair: ColorPair): string => `light-dark(${pair.light}, ${pair.dark})`;
@@ -265,9 +246,7 @@ const fontStack = (font: ShadcnFont): string =>
 const fontFamily = (familyKey: string): string | undefined => {
   const font = catalogueFont(familyKey);
   if (font !== undefined) return fontStack(font);
-  return BUILDER_KEY.test(familyKey)
-    ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}`
-    : undefined;
+  return BUILDER_KEY.test(familyKey) ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}` : undefined;
 };
 
 /**
@@ -375,8 +354,7 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
   const danger = filledPair(tokens, "danger");
 
   const focus = tokenOfKind(tokens, "focus", "focus");
-  const focusColor =
-    focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
+  const focusColor = focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
   const border = tokens.border;
   const borderColor =
     border?.kind === "border"
@@ -406,11 +384,8 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
   // Without a body token the page paints the default catalogue font; the heading paints the body
   // font unless the theme has a heading token.
   const bodyFamily =
-    body === undefined
-      ? fontStack(PLATFORM_FONTS.body)
-      : (fontFamily(body.family) ?? FONT_FALLBACK);
-  const headingFamily =
-    (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily;
+    body === undefined ? fontStack(PLATFORM_FONTS.body) : (fontFamily(body.family) ?? FONT_FALLBACK);
+  const headingFamily = (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily;
 
   // Every shadcn colour comes from the resolved theme when the role is present and well formed,
   // otherwise from the registered platform release, so the bridge holds no second palette.
@@ -418,7 +393,9 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
     colorValue(colorPair(tokens, role) ?? platformColor(role));
   // A fill and its #594-validated foreground change together, so a foreground is never painted on
   // a fill it was not judged against.
-  const shadcnFill = (role: ShadcnFilledRole): readonly [fill: string, foreground: string] => {
+  const shadcnFill = (
+    role: ShadcnFilledRole,
+  ): readonly [fill: string, foreground: string] => {
     const [fill, foreground]: readonly [ColorPair, ColorPair] = filledPair(tokens, role) ?? [
       platformColor(role),
       platformColor(`${role}_foreground` as const),
@@ -451,16 +428,13 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
       focusColor ?? (surfaceValidated ? text : PLATFORM_DEFAULTS.focus),
     ),
     // Visible focus is never thinner than #594's 1px minimum.
-    "--vortex-focus-width":
-      (focus === undefined ? undefined : rem(focus.widthRem, 0.0625)) ?? "0.125rem",
+    "--vortex-focus-width": (focus === undefined ? undefined : rem(focus.widthRem, 0.0625)) ?? "0.125rem",
     "--vortex-font-family": bodyFamily,
     "--vortex-font-size": (body === undefined ? undefined : rem(body.sizeRem, 0.5)) ?? "1rem",
-    "--vortex-line-height":
-      (body === undefined ? undefined : plainNumber(body.lineHeight)) ?? "1.5",
+    "--vortex-line-height": (body === undefined ? undefined : plainNumber(body.lineHeight)) ?? "1.5",
     "--vortex-font-weight": (body === undefined ? undefined : fontWeight(body.weight)) ?? "400",
     "--vortex-heading-font-family": headingFamily,
-    "--vortex-heading-font-size":
-      (heading === undefined ? undefined : rem(heading.sizeRem, 0.5)) ?? "1.25rem",
+    "--vortex-heading-font-size": (heading === undefined ? undefined : rem(heading.sizeRem, 0.5)) ?? "1.25rem",
     "--vortex-heading-line-height":
       (heading === undefined ? undefined : plainNumber(heading.lineHeight)) ?? "1.25",
     "--vortex-heading-font-weight":
@@ -477,8 +451,7 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
     "--vortex-radius-lg": corners("radius_lg", "0.5rem"),
     "--vortex-border-width":
       (border?.kind === "border" ? rem(border.widthRem, 0.0625) : undefined) ?? "0.0625rem",
-    "--vortex-border-style":
-      border?.kind === "border" && border.style === "dashed" ? "dashed" : "solid",
+    "--vortex-border-style": border?.kind === "border" && border.style === "dashed" ? "dashed" : "solid",
     "--vortex-elevation-low": elevation("elevation_low", PLATFORM_ELEVATION[1]),
     "--vortex-elevation-high": elevation("elevation_high", PLATFORM_ELEVATION[3]),
     "--vortex-control-padding-y": density.controlY,

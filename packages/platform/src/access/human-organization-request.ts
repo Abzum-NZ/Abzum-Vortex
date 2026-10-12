@@ -296,7 +296,8 @@ export const createHumanOrganizationRequestService = (
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
       if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
-      else if (refused) console.error(`[access] human organisation request refused: ${cause}`);
+      else if (refused)
+        console.error(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable", cause };
@@ -334,15 +335,7 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
       mapDatabaseRefusal: (code: string) => Result | undefined,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
-      runWithMode(
-        "change",
-        session,
-        candidate,
-        operation,
-        undefined,
-        undefined,
-        mapDatabaseRefusal,
-      ),
+      runWithMode("change", session, candidate, operation, undefined, undefined, mapDatabaseRefusal),
     runChangePrepared: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
@@ -358,12 +351,8 @@ export const createHumanOrganizationRequestService = (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
     ): Promise<OrganizationScopeResolutionResult> =>
-      runWithMode(
-        "read",
-        session,
-        candidate,
-        async (transaction, scope) => {
-          const rows = await transaction.query<ScopeRow>`
+      runWithMode("read", session, candidate, async (transaction, scope) => {
+        const rows = await transaction.query<ScopeRow>`
           select
             checked ->> 'tenantId' as tenant_id,
             checked ->> 'organizationId' as organization_id,
@@ -372,22 +361,19 @@ export const createHumanOrganizationRequestService = (
             checked ->> 'accessVersion' as access_version
           from vortex_access.validated_human_request_context() as checked
         `;
-          const checked = parseScope(rows);
-          if (
-            checked.tenantId !== scope.tenantId ||
-            checked.organizationId !== scope.organizationId ||
-            checked.organizationAccountId !== scope.organizationAccountId ||
-            (checked.applicationRootId === undefined) !== (scope.applicationRootId === undefined) ||
-            (checked.applicationRootId !== undefined &&
-              scope.applicationRootId !== undefined &&
-              !representsSameUuid(checked.applicationRootId, scope.applicationRootId)) ||
-            checked.accessVersion !== scope.accessVersion
-          )
-            throw new Error("INVALID_PROTECTED_CONTEXT_RESULT");
-          return checked;
-        },
-        undefined,
-        () => ({ kind: "suspended_super_administrator_account" as const }),
-      ),
+        const checked = parseScope(rows);
+        if (
+          checked.tenantId !== scope.tenantId ||
+          checked.organizationId !== scope.organizationId ||
+          checked.organizationAccountId !== scope.organizationAccountId ||
+          (checked.applicationRootId === undefined) !== (scope.applicationRootId === undefined) ||
+          (checked.applicationRootId !== undefined &&
+            scope.applicationRootId !== undefined &&
+            !representsSameUuid(checked.applicationRootId, scope.applicationRootId)) ||
+          checked.accessVersion !== scope.accessVersion
+        )
+          throw new Error("INVALID_PROTECTED_CONTEXT_RESULT");
+        return checked;
+      }, undefined, () => ({ kind: "suspended_super_administrator_account" as const })),
   });
 };

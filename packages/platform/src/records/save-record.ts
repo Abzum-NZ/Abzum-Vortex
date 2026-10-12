@@ -115,7 +115,9 @@ const writableSystemProjection = (
 /** @internal Shared only by the fixed named-action save composition. */
 export const revision = (candidate: unknown): number | undefined => {
   const value = databaseRevision(candidate);
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
 };
 
 const one = <Row>(rows: readonly Row[]): Row => {
@@ -494,9 +496,7 @@ const invalidSettingsCorrections = (
       const recordFieldKey =
         typeof schemaKey === "string" ? fieldBySchemaKey[schemaKey] : undefined;
       const fieldId =
-        recordFieldKey === undefined
-          ? undefined
-          : settingsFieldId(prepared.recordType, recordFieldKey);
+        recordFieldKey === undefined ? undefined : settingsFieldId(prepared.recordType, recordFieldKey);
       if (fieldId === undefined || !prepared.readableFieldIds.has(fieldId)) return undefined;
       corrections.set(fieldId, {
         code: "invalid_value",

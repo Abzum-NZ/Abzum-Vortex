@@ -49,11 +49,8 @@ const compiledSettingsFor = (
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> => {
   const result: Record<string, Readonly<Record<string, unknown>>> = {};
   const visit = (authoredContent: unknown, compiledContent: unknown): void => {
-    if (
-      !Array.isArray(authoredContent) ||
-      !Array.isArray(compiledContent) ||
-      authoredContent.length !== compiledContent.length
-    )
+    if (!Array.isArray(authoredContent) || !Array.isArray(compiledContent) ||
+      authoredContent.length !== compiledContent.length)
       throw new TypeError("Compiled Puck page placements do not match their authored page.");
     for (const [index, authoredRaw] of authoredContent.entries()) {
       const authoredNode = record(authoredRaw);
@@ -64,24 +61,12 @@ const compiledSettingsFor = (
       if (authoredNode.type !== compiledNode.type || typeof alias !== "string")
         throw new TypeError("Compiled Puck page placements do not match their authored page.");
       result[alias] = record(compiledProps.settings);
-      const authoredSlots = Object.keys(authoredProps).filter(
-        (key) =>
-          key !== "id" &&
-          key !== "settings" &&
-          key !== "vortex" &&
-          Array.isArray(authoredProps[key]),
-      );
-      const compiledSlots = Object.keys(compiledProps).filter(
-        (key) =>
-          key !== "id" &&
-          key !== "settings" &&
-          key !== "vortex" &&
-          Array.isArray(compiledProps[key]),
-      );
-      if (
-        authoredSlots.length !== compiledSlots.length ||
-        authoredSlots.some((key) => !compiledSlots.includes(key))
-      )
+      const authoredSlots = Object.keys(authoredProps).filter((key) =>
+        key !== "id" && key !== "settings" && key !== "vortex" && Array.isArray(authoredProps[key]));
+      const compiledSlots = Object.keys(compiledProps).filter((key) =>
+        key !== "id" && key !== "settings" && key !== "vortex" && Array.isArray(compiledProps[key]));
+      if (authoredSlots.length !== compiledSlots.length ||
+        authoredSlots.some((key) => !compiledSlots.includes(key)))
         throw new TypeError("Compiled Puck page slots do not match their authored page.");
       for (const key of authoredSlots) visit(authoredProps[key], compiledProps[key]);
     }
@@ -96,7 +81,10 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   pageAlias: string;
   compiledSlot?: CompiledSlot | undefined;
   disabled: boolean;
-  onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
+  onChange: (
+    expectedSource: ApplicationSourceDocument,
+    source: ApplicationSourceDocument,
+  ) => void;
 }>;
 
 export function ApplicationPagePuckEditor({
@@ -114,8 +102,7 @@ export function ApplicationPagePuckEditor({
   const pageSlot = page === undefined ? undefined : editablePageSlot(page);
   const slot = pageSlot?.slot;
   const originalPage = compiledSource.body.pages.find((candidate) => candidate.id === pageAlias);
-  const originalSlot =
-    originalPage === undefined ? undefined : editablePageSlot(originalPage)?.slot;
+  const originalSlot = originalPage === undefined ? undefined : editablePageSlot(originalPage)?.slot;
   const runtimeSettings = useMemo(() => {
     if (originalSlot === undefined || compiledSlot === undefined) return undefined;
     const authoredData = adapter.toPuckData(originalSlot);
@@ -166,11 +153,7 @@ export function ApplicationPagePuckEditor({
   if (page === undefined || slot === undefined)
     return <p role="status">Visual editing is available for pages with one page content slot.</p>;
   if (data === undefined)
-    return (
-      <p role="status">
-        This page needs a current compiled version before visual editing is available.
-      </p>
-    );
+    return <p role="status">This page needs a current compiled version before visual editing is available.</p>;
 
   return (
     <section className="space-y-3" aria-label="Visual page editor" aria-busy={disabled}>

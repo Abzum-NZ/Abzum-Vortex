@@ -45,7 +45,9 @@ export type ModulePageGeneratorInput = Readonly<{
   /** Placements retained in the target Application outside these four replacement pages. */
   retainedApplicationPlacementCount: number;
   /** Replacements keep the generated page identity and each form's bound submit control. */
-  authoredPageOverrides?: Readonly<Partial<Record<ModuleGeneratedPageKind, SourcePageDefinition>>>;
+  authoredPageOverrides?: Readonly<
+    Partial<Record<ModuleGeneratedPageKind, SourcePageDefinition>>
+  >;
 }>;
 
 type ParsedFlowBinding = ReturnType<typeof sourceComponentFlowBindingSchema.parse>;

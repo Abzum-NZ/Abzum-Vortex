@@ -53,12 +53,8 @@ const clone = <Value>(value: Value): Value => structuredClone(value);
 const sourceAliasPattern = /^[a-z][a-z0-9_]*$/;
 
 const sourceAliasBase = (puckId: string): string => {
-  const readable = puckId
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 140);
+  const readable = puckId.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "").slice(0, 140);
   return `${/^[a-z]/.test(readable) ? "" : "block_"}${readable || "item"}`.slice(0, 140);
 };
 
@@ -76,22 +72,16 @@ const generatedAlias = (puckId: string, reserved: ReadonlySet<string>): string =
 const sameJsonValue = (left: unknown, right: unknown): boolean => {
   if (left === right) return true;
   if (Array.isArray(left) || Array.isArray(right))
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((value, index) => sameJsonValue(value, right[index]))
-    );
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameJsonValue(value, right[index]));
   if (left === null || right === null || typeof left !== "object" || typeof right !== "object")
     return false;
   const a = object(left);
   const b = object(right);
   const keys = Object.keys(a).sort();
   const otherKeys = Object.keys(b).sort();
-  return (
-    keys.length === otherKeys.length &&
-    keys.every((key, index) => key === otherKeys[index] && sameJsonValue(a[key], b[key]))
-  );
+  return keys.length === otherKeys.length && keys.every((key, index) =>
+    key === otherKeys[index] && sameJsonValue(a[key], b[key]));
 };
 
 // Puck slots use the same declared key the page renderer passes to the component.
@@ -262,20 +252,15 @@ const sourceSettings = (
   allowed: ReadonlySet<string>,
   original: SourcePlacement["settings"] | undefined,
   compiled: Readonly<Record<string, unknown>>,
-): SourcePlacement["settings"] =>
-  Object.fromEntries(
-    Object.entries(object(candidate)).flatMap(([key, value]) => {
-      if (value === undefined) return [];
-      if (!allowed.has(key) && Object.hasOwn(compiled, key)) return [];
-      if (
-        original?.[key] === undefined &&
-        Object.hasOwn(compiled, key) &&
-        sameJsonValue(value, compiled[key])
-      )
-        return [];
-      return [[key, sourceBlockPropertyValueSchema.parse(sourcePropertyValue(value))]];
-    }),
-  ) as SourcePlacement["settings"];
+): SourcePlacement["settings"] => Object.fromEntries(
+  Object.entries(object(candidate)).flatMap(([key, value]) => {
+    if (value === undefined) return [];
+    if (!allowed.has(key) && Object.hasOwn(compiled, key)) return [];
+    if (original?.[key] === undefined && Object.hasOwn(compiled, key) &&
+      sameJsonValue(value, compiled[key])) return [];
+    return [[key, sourceBlockPropertyValueSchema.parse(sourcePropertyValue(value))]];
+  }),
+) as SourcePlacement["settings"];
 
 const sameSlot = (left: SlotIdentity, right: SlotIdentity): boolean =>
   left.kind === "root"
@@ -501,15 +486,11 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
           },
         };
         for (const [key, child] of Object.entries(slots))
-          props[puckSlotKey(key)] = toContent(
-            child,
-            {
-              kind: "child",
-              parentAlias: id,
-              slotKey: key,
-            },
-            runtimeSettings,
-          );
+          props[puckSlotKey(key)] = toContent(child, {
+            kind: "child",
+            parentAlias: id,
+            slotKey: key,
+          }, runtimeSettings);
         return { type: release.rendererKey, props } satisfies ComponentData;
       });
 
@@ -597,12 +578,11 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
           const puckId = text(props.id);
           if (aliasByPuckId.has(puckId)) refuse();
           const knownSourceId = baselinePlacements.has(puckId) && !assignedAliases.has(puckId);
-          const safeNewId =
-            sourceAliasPattern.test(puckId) && !aliases.has(puckId) && !assignedAliases.has(puckId);
-          const alias =
-            knownSourceId || safeNewId
-              ? puckId
-              : generatedAlias(puckId, new Set([...aliases, ...assignedAliases]));
+          const safeNewId = sourceAliasPattern.test(puckId) && !aliases.has(puckId) &&
+            !assignedAliases.has(puckId);
+          const alias = knownSourceId || safeNewId
+            ? puckId
+            : generatedAlias(puckId, new Set([...aliases, ...assignedAliases]));
           aliasByPuckId.set(puckId, alias);
           assignedAliases.add(alias);
           aliases.add(alias);
@@ -680,14 +660,8 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             "baselineOrder",
             "order",
           ]);
-          const {
-            order,
-            slot,
-            baselineOrder,
-            authored,
-            compiledSettings: compiledSettingsValue,
-            ...renderMetadata
-          } = metadata;
+          const { order, slot, baselineOrder, authored, compiledSettings: compiledSettingsValue,
+            ...renderMetadata } = metadata;
           const origin = slot === undefined ? destination : parseSlotIdentity(slot);
           const originalOrder =
             baselineOrder === undefined
@@ -717,22 +691,17 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
                 ]);
           // First parse the source fields without accepting any private Puck properties.
           const authoredBlock = object(fields.block);
-          const release =
-            releases.get(
-              `${text(authoredBlock.block_id)}:${text(authoredBlock.release_version)}`,
-            ) ?? refuse();
-          const compiledSettings =
-            compiledSettingsValue === undefined ? {} : object(compiledSettingsValue);
+          const release = releases.get(
+            `${text(authoredBlock.block_id)}:${text(authoredBlock.release_version)}`,
+          ) ?? refuse();
+          const compiledSettings = compiledSettingsValue === undefined
+            ? {} : object(compiledSettingsValue);
           const fieldSlot = sourcePlacementSlotSchema.parse({
             placements: {
               [id]: {
                 ...fields,
-                settings: sourceSettings(
-                  props.settings,
-                  new Set(release.properties.map((property) => property.key)),
-                  baselinePlacements.get(id)?.settings,
-                  compiledSettings,
-                ),
+                settings: sourceSettings(props.settings, new Set(release.properties.map((property) =>
+                  property.key)), baselinePlacements.get(id)?.settings, compiledSettings),
                 slots: {},
               },
             },

@@ -37,17 +37,19 @@ export const loadApplicationSource = (
 ): ApplicationSourceDocument => {
   const sourceObject = authoredSource as JsonObject;
   const body = sourceObject.body as JsonObject;
-  const dependencies = [...collectBlockReleases(body)].sort().map((releaseKey) => {
-    const release = releasesByKey.get(releaseKey);
-    if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
-    return {
-      kind: "platform_block" as const,
-      block_id: release.blockId,
-      release_version: release.releaseVersion,
-      content_fingerprint: release.contentFingerprint,
-      catalogue_fingerprint: release.catalogueFingerprint,
-    };
-  });
+  const dependencies = [...collectBlockReleases(body)]
+    .sort()
+    .map((releaseKey) => {
+      const release = releasesByKey.get(releaseKey);
+      if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
+      return {
+        kind: "platform_block" as const,
+        block_id: release.blockId,
+        release_version: release.releaseVersion,
+        content_fingerprint: release.contentFingerprint,
+        catalogue_fingerprint: release.catalogueFingerprint,
+      };
+    });
 
   const theme = {
     base: {

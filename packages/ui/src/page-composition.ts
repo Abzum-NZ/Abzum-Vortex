@@ -77,7 +77,10 @@ export const validatePlacementDependencies = (
   const releases = new Set(
     dependencies.map((dependency) => `${dependency.blockId}@${dependency.releaseVersion}`),
   );
-  const visit = (current: PlacementSlot, currentLocation: DefinitionRenderErrorLocation): void => {
+  const visit = (
+    current: PlacementSlot,
+    currentLocation: DefinitionRenderErrorLocation,
+  ): void => {
     for (const [placementId, placement] of Object.entries(current.placements)) {
       const placementLocation = {
         ...currentLocation,
@@ -454,11 +457,7 @@ export const resolveRootPlacementSlotWithContext = (options: {
       );
     }
 
-    const shell = shellForComposition(
-      targetPage.composition,
-      composition.shells,
-      targetPage.pageId,
-    );
+    const shell = shellForComposition(targetPage.composition, composition.shells, targetPage.pageId);
     return {
       slot: resolvePageCompositionSlot({
         composition: targetPage.composition,

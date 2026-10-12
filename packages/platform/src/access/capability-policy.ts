@@ -625,7 +625,8 @@ export type CapabilityPolicyPlatformOperatorService = ReturnType<
 >;
 
 type CapabilityCeilingPersonOperation =
-  "set_capability_policy_ceiling" | "revoke_capability_policy_ceiling";
+  | "set_capability_policy_ceiling"
+  | "revoke_capability_policy_ceiling";
 
 export type CapabilityCeilingPersonMutationResult =
   | (CapabilityCeilingResult & { readonly operation: "set_capability_policy_ceiling" })

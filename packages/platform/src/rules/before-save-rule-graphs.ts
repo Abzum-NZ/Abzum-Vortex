@@ -283,7 +283,8 @@ export const evaluateBeforeSaveRuleGraphs = (
         ),
     )
     .sort(
-      (left, right) => left.priority - right.priority || compareFlowText(left.ruleId, right.ruleId),
+      (left, right) =>
+        left.priority - right.priority || compareFlowText(left.ruleId, right.ruleId),
     );
   const applicableIds = new Set<string>(applicableGraphs.map((graph) => graph.ruleId));
   if (Object.keys(suppliedByRule).some((ruleId) => !applicableIds.has(ruleId)))

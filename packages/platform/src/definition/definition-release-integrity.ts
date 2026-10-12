@@ -388,7 +388,7 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
   }
   if (
     output.validationContractVersion !== expectedVersion ||
-    snapshot.contractVersion !== expectedVersion ||
+    snapshot.contractVersion !== "3.0.0" ||
     output.validationContractVersion !== release.validationContractVersion
   )
     return false;

@@ -67,14 +67,12 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
  * Projects one protected attachment field only after each current File decision and metadata read
  * agree with the exact installed subject tuple. A failed item discards the whole list.
  */
-export const projectReadOnlyAttachmentList = async (
-  input: Readonly<{
-    owner: ReadOnlyAttachmentOwner;
-    subjectValues: unknown;
-    maximumFiles: number;
-    readFile: (fileId: string) => Promise<ReadOnlyAttachmentFileEvidence>;
-  }>,
-): Promise<ReadOnlyAttachmentListProjection> => {
+export const projectReadOnlyAttachmentList = async (input: Readonly<{
+  owner: ReadOnlyAttachmentOwner;
+  subjectValues: unknown;
+  maximumFiles: number;
+  readFile: (fileId: string) => Promise<ReadOnlyAttachmentFileEvidence>;
+}>): Promise<ReadOnlyAttachmentListProjection> => {
   const organizationId = organizationIdSchema.safeParse(input.owner.organizationId);
   const applicationRootId = applicationRootIdSchema.safeParse(input.owner.applicationRootId);
   const recordTypeId = recordTypeIdSchema.safeParse(input.owner.recordTypeId);

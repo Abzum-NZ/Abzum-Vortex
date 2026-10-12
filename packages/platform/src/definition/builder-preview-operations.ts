@@ -148,9 +148,7 @@ export const builderPreviewReadResultSchema = z.union([
 
 export const builderPreviewDiscardResultSchema = z.union([
   builderPreviewOperationRefusalSchema,
-  z
-    .object({ kind: z.literal("discarded"), result: previewInstallationDiscardResultSchema })
-    .strict(),
+  z.object({ kind: z.literal("discarded"), result: previewInstallationDiscardResultSchema }).strict(),
 ]);
 
 export const builderPreviewRunFlowResultSchema = z.union([
@@ -179,15 +177,23 @@ export const builderPreviewSaveRecordResultSchema = z.union([
     .strict(),
 ]);
 
-export type BuilderPreviewOperationLocation = z.infer<typeof builderPreviewOperationLocationSchema>;
-export type BuilderPreviewOperationRefusal = z.infer<typeof builderPreviewOperationRefusalSchema>;
+export type BuilderPreviewOperationLocation = z.infer<
+  typeof builderPreviewOperationLocationSchema
+>;
+export type BuilderPreviewOperationRefusal = z.infer<
+  typeof builderPreviewOperationRefusalSchema
+>;
 export type BuilderPreviewCreateRequest = z.infer<typeof builderPreviewCreateRequestSchema>;
 export type BuilderPreviewReadRequest = z.infer<typeof builderPreviewReadRequestSchema>;
 export type BuilderPreviewDiscardRequest = z.infer<typeof builderPreviewDiscardRequestSchema>;
 export type BuilderPreviewRunFlowRequest = z.infer<typeof builderPreviewRunFlowRequestSchema>;
-export type BuilderPreviewSaveRecordRequest = z.infer<typeof builderPreviewSaveRecordRequestSchema>;
+export type BuilderPreviewSaveRecordRequest = z.infer<
+  typeof builderPreviewSaveRecordRequestSchema
+>;
 export type BuilderPreviewCreateResult = z.infer<typeof builderPreviewCreateResultSchema>;
 export type BuilderPreviewReadResult = z.infer<typeof builderPreviewReadResultSchema>;
 export type BuilderPreviewDiscardResult = z.infer<typeof builderPreviewDiscardResultSchema>;
 export type BuilderPreviewRunFlowResult = z.infer<typeof builderPreviewRunFlowResultSchema>;
-export type BuilderPreviewSaveRecordResult = z.infer<typeof builderPreviewSaveRecordResultSchema>;
+export type BuilderPreviewSaveRecordResult = z.infer<
+  typeof builderPreviewSaveRecordResultSchema
+>;

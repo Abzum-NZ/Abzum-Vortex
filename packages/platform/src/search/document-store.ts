@@ -123,12 +123,7 @@ export const searchableFieldConfigurationFor = (
     fields: Object.freeze(
       recordType.fields.flatMap((field): SearchableFieldConfigurationEntry[] => {
         const priority = field.searchPriority;
-        if (
-          priority === undefined ||
-          !isIndexableField({ ...field, priority }, policy) ||
-          !searchIndexFieldDiscloses(recordType.fields, field.fieldId, policy)
-        )
-          return [];
+        if (priority === undefined || !isIndexableField({ ...field, priority }, policy) || !searchIndexFieldDiscloses(recordType.fields, field.fieldId, policy)) return [];
         const optionLabels = optionLabelsFor(field);
         return [
           Object.freeze({
@@ -190,7 +185,9 @@ export type SearchDocumentDeletion = SearchDocumentIdentity &
   }>;
 
 export type SearchDocumentRefusalCode =
-  "invalid_snapshot" | "configuration_mismatch" | "shared_source_record";
+  | "invalid_snapshot"
+  | "configuration_mismatch"
+  | "shared_source_record";
 
 export type BuildSearchDocumentResult =
   | Readonly<{ success: true; output: SearchDocument | SearchDocumentDeletion }>
@@ -443,7 +440,12 @@ export type SearchDocumentStoreCommand = Readonly<{
  * its version).
  */
 export type SearchDocumentStoreOutcome =
-  "stored" | "replaced" | "rebuilt" | "replayed" | "ignored_older" | "ignored_deleted";
+  | "stored"
+  | "replaced"
+  | "rebuilt"
+  | "replayed"
+  | "ignored_older"
+  | "ignored_deleted";
 
 export const searchDocumentStoreCommand = (
   output: SearchDocument | SearchDocumentDeletion,

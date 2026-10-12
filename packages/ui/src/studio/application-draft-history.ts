@@ -56,7 +56,9 @@ export interface StudioApplicationDraftHistoryController {
   subscribe(listener: StudioApplicationDraftHistoryListener): () => void;
 }
 
-const snapshotSource = (source: ApplicationSourceDocument): StudioApplicationSourceSnapshot => {
+const snapshotSource = (
+  source: ApplicationSourceDocument,
+): StudioApplicationSourceSnapshot => {
   // Definition persists authored source as JSON, which omits optional undefined properties.
   const serialized: unknown = JSON.parse(JSON.stringify(source));
   return deepFreeze(applicationSourceDocumentSchema.parse(serialized));
@@ -70,7 +72,9 @@ const deepFreeze = <Value>(value: Value): Readonly<Value> => {
   return value;
 };
 
-const mutableSourceCopy = (source: StudioApplicationSourceSnapshot): ApplicationSourceDocument => {
+const mutableSourceCopy = (
+  source: StudioApplicationSourceSnapshot,
+): ApplicationSourceDocument => {
   const cloned: unknown = structuredClone(source);
   return applicationSourceDocumentSchema.parse(cloned);
 };
@@ -88,7 +92,8 @@ const sameValue = (left: unknown, right: unknown): boolean => {
 
   if (Array.isArray(left) && Array.isArray(right))
     return (
-      left.length === right.length && left.every((value, index) => sameValue(value, right[index]))
+      left.length === right.length &&
+      left.every((value, index) => sameValue(value, right[index]))
     );
 
   const leftRecord = left as Record<string, unknown>;
@@ -116,7 +121,8 @@ const applicationDraft = (draft: unknown): StudioStoredApplicationDraft | undefi
 
 const saveFailureOutcome = (error: unknown): StudioApplicationDraftSaveOutcome => {
   const code =
-    error !== null && typeof error === "object" && "code" in error && typeof error.code === "string"
+    error !== null && typeof error === "object" && "code" in error &&
+    typeof error.code === "string"
       ? error.code
       : undefined;
   if (code === "DEFINITION_DRAFT_STALE_OR_MISSING") return Object.freeze({ kind: "conflict" });

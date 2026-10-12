@@ -44,9 +44,7 @@ export type BeforeSaveRuleExecution = Readonly<{
   warnings: BeforeSaveRuleWarning[];
 }>;
 
-export const beginBeforeSaveRuleExecution = (
-  ruleSet: BeforeSaveRuleSet,
-): BeforeSaveRuleExecution => ({
+export const beginBeforeSaveRuleExecution = (ruleSet: BeforeSaveRuleSet): BeforeSaveRuleExecution => ({
   ruleSet,
   warnings: [],
 });

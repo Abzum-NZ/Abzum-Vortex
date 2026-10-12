@@ -93,7 +93,9 @@ export type FlowRunAsPrincipalAdministratorAuthority = z.infer<
 export type RegisterFlowRunAsPrincipalCommand = z.infer<
   typeof registerFlowRunAsPrincipalCommandSchema
 >;
-export type RevokeFlowRunAsPrincipalCommand = z.infer<typeof revokeFlowRunAsPrincipalCommandSchema>;
+export type RevokeFlowRunAsPrincipalCommand = z.infer<
+  typeof revokeFlowRunAsPrincipalCommandSchema
+>;
 export type ReadFlowRunAsPrincipalForRunCommand = z.infer<
   typeof readFlowRunAsPrincipalForRunCommandSchema
 >;
@@ -176,7 +178,9 @@ const parsePrincipal = (value: unknown): FlowRunAsPrincipal => {
   return parsed.data;
 };
 
-const parseMutation = (rows: readonly MutationResultRow[]): FlowRunAsPrincipalMutationResult => {
+const parseMutation = (
+  rows: readonly MutationResultRow[],
+): FlowRunAsPrincipalMutationResult => {
   const row = requireOne(rows);
   const parsed = flowRunAsPrincipalMutationResultSchema.safeParse({
     outcome: row.outcome,

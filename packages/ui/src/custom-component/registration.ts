@@ -125,5 +125,4 @@ export const createCustomComponentRegistrations = (
 /** Creates an immutable registry over exactly the supplied custom component releases. */
 export const createCustomComponentRegistry = (
   releases: readonly PlatformBlockRelease[],
-): PlatformComponentRegistry =>
-  createPlatformComponentRegistry(createCustomComponentRegistrations(releases));
+): PlatformComponentRegistry => createPlatformComponentRegistry(createCustomComponentRegistrations(releases));

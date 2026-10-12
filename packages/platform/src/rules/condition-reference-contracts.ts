@@ -13,21 +13,23 @@ import {
   conditionMaximumOperandCount,
   jsonValueSchema,
 } from "../catalogue/common";
-import {
-  builderKeySchema,
-  containedComponentIdSchema,
-  fieldIdSchema,
-} from "../catalogue/identifiers";
+import { builderKeySchema, containedComponentIdSchema, fieldIdSchema } from "../catalogue/identifiers";
 import { moduleFieldSchema } from "../definition/module-contracts";
 
 const conditionReferenceOperandSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("module_field"), fieldId: fieldIdSchema }).strict(),
-  z.object({ kind: z.literal("module_parameter"), key: builderKeySchema }).strict(),
+  z
+    .object({ kind: z.literal("module_parameter"), key: builderKeySchema })
+    .strict(),
   z.object({ kind: z.literal("module_literal"), value: jsonValueSchema }).strict(),
   z.object({ kind: z.literal("graph_current_field"), fieldId: fieldIdSchema }).strict(),
   z.object({ kind: z.literal("graph_previous_field"), fieldId: fieldIdSchema }).strict(),
-  z.object({ kind: z.literal("graph_input"), inputId: containedComponentIdSchema }).strict(),
-  z.object({ kind: z.literal("graph_variable"), variableId: containedComponentIdSchema }).strict(),
+  z
+    .object({ kind: z.literal("graph_input"), inputId: containedComponentIdSchema })
+    .strict(),
+  z
+    .object({ kind: z.literal("graph_variable"), variableId: containedComponentIdSchema })
+    .strict(),
   z.object({ kind: z.literal("graph_literal"), value: ruleGraphTypedValueSchema }).strict(),
 ]);
 
@@ -251,9 +253,7 @@ export const conditionReferenceContractSchema = boundedConditionReferenceInputSc
       : new Set(contract.declarations.inputs.map((input) => input.inputId.toLowerCase()));
     const graphVariableIds = module
       ? new Set<string>()
-      : new Set(
-          contract.declarations.variables.map((variable) => variable.variableId.toLowerCase()),
-        );
+      : new Set(contract.declarations.variables.map((variable) => variable.variableId.toLowerCase()));
 
     const operands = operandsIn(contract.condition);
     for (const { operand, path } of operands) {
@@ -287,21 +287,10 @@ export const conditionReferenceContractSchema = boundedConditionReferenceInputSc
           (operand.kind === "graph_current_field" || operand.kind === "graph_previous_field") &&
           !fieldIds.has(operand.fieldId.toLowerCase())
         )
-          context.addIssue({
-            code: "custom",
-            path,
-            message: "Rule graph field reference is unbound",
-          });
+          context.addIssue({ code: "custom", path, message: "Rule graph field reference is unbound" });
         if (operand.kind === "graph_input" && !graphInputIds.has(operand.inputId.toLowerCase()))
-          context.addIssue({
-            code: "custom",
-            path,
-            message: "Rule graph input reference is unbound",
-          });
-        if (
-          operand.kind === "graph_variable" &&
-          !graphVariableIds.has(operand.variableId.toLowerCase())
-        )
+          context.addIssue({ code: "custom", path, message: "Rule graph input reference is unbound" });
+        if (operand.kind === "graph_variable" && !graphVariableIds.has(operand.variableId.toLowerCase()))
           context.addIssue({
             code: "custom",
             path,

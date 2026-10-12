@@ -74,9 +74,7 @@ export function SearchAttachmentDisplay(
       "Attachment list received a different immutable release",
       location,
     );
-  if (
-    validateComponentSettings(props.settings, ATTACHMENT_LIST_BLOCK_RELEASE.properties).length !== 0
-  )
+  if (validateComponentSettings(props.settings, ATTACHMENT_LIST_BLOCK_RELEASE.properties).length !== 0)
     return refuse(location);
 
   const {

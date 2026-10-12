@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  personalDataClassSchema,
-  publicDisplaySchema,
-  searchPrioritySchema,
-} from "../catalogue/catalogues";
+import { personalDataClassSchema, publicDisplaySchema, searchPrioritySchema } from "../catalogue/catalogues";
 import {
   builderKeySchema,
   fingerprintSchema,
@@ -732,9 +728,10 @@ const sourceLinkSettingsSchema = z
     on_parent_delete: sourceProvenanceUnchanged(
       z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     ),
-    application_root_required: sourceProvenanceTarget(z.boolean().optional(), [
-      "applicationRootIdRequired",
-    ]),
+    application_root_required: sourceProvenanceTarget(
+      z.boolean().optional(),
+      ["applicationRootIdRequired"],
+    ),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z
@@ -1085,7 +1082,11 @@ const sourceFieldMembers = [
   sourceField("web_address", sourceWebAddressSettingsSchema, safeHttpsUrlSchema),
   sourceField("table", sourceTableSettingsSchema, sourceTableDefaultSchema),
   sourceField("link", sourceLinkSettingsSchema, sourceRecordLinkValueSchema),
-  sourceField("link_to_one_of_several", sourceMultiLinkSettingsSchema, sourceRecordLinkValueSchema),
+  sourceField(
+    "link_to_one_of_several",
+    sourceMultiLinkSettingsSchema,
+    sourceRecordLinkValueSchema,
+  ),
   sourceField("link_to_person", sourcePersonLinkSettingsSchema, sourcePersonLinkValueSchema),
   sourceField("calculation", sourceCalculationSettingsSchema, noDefaultSchema),
   sourceField("total", sourceTotalSettingsSchema, noDefaultSchema),
@@ -1614,19 +1615,17 @@ const moduleSourceRecordTypeSchema = z
       });
     const mayUpdate = isRegisteredWritableSystemProjection(value.key, projection.protected_view);
     if (
-      value.standard_actions.some(
-        (action) =>
-          action === "create" ||
-          action === "soft_delete" ||
-          action === "restore" ||
-          (action === "update" && !mayUpdate),
+      value.standard_actions.some((action) =>
+        action === "create" ||
+        action === "soft_delete" ||
+        action === "restore" ||
+        (action === "update" && !mayUpdate),
       )
     )
       context.addIssue({
         code: "custom",
         path: ["standard_actions"],
-        message:
-          "A system projection standard write action must be in the closed writable registration",
+        message: "A system projection standard write action must be in the closed writable registration",
       });
     const fields = new Map(value.fields.map((field) => [field.key, field]));
     const organization = fields.get(projection.organization_field);

@@ -179,11 +179,9 @@ const placementPermission = (
   const match = matches[0];
   if (
     !sameId(entry.applicationRootId, applicationRootId) ||
-    matches.length !== 1 ||
-    match === undefined ||
+    matches.length !== 1 || match === undefined ||
     (entry.ownerKind === "module" && !sameId(entry.ownerId, match.module.rootId))
-  )
-    throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
+  ) throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
 
   return {
     kind: "record",
@@ -197,14 +195,12 @@ const placementPermission = (
           : { namedAction: entry.permission.namedAction }),
       },
       target: { kind: "application", applicationRootId },
-      requiredPermissions: [
-        {
-          applicationRootId: entry.applicationRootId,
-          ownerKind: entry.ownerKind,
-          ownerId: entry.ownerId,
-          permissionId: entry.permission.permissionId,
-        },
-      ],
+      requiredPermissions: [{
+        applicationRootId: entry.applicationRootId,
+        ownerKind: entry.ownerKind,
+        ownerId: entry.ownerId,
+        permissionId: entry.permission.permissionId,
+      }],
       recordBinding: {
         moduleRootId: match.module.rootId,
         recordTypeId: match.record.recordTypeId,
@@ -446,8 +442,8 @@ export const createStoredPageCapabilityService = (
     const operationBindings = placementOperationBindings(context);
     const pagePermissionBinding = permission(page.accessPermissionKey);
     const resolvedComposition = readInstalledPageComposition(context, page.pageId);
-    const resolved =
-      resolvedComposition ?? resolvePageComposition(page, applicationRelease.content.shells);
+    const resolved = resolvedComposition ??
+      resolvePageComposition(page, applicationRelease.content.shells);
     const placements: Record<string, unknown>[] =
       resolved.roots.kind === "page"
         ? placementEntries(resolved.roots.main)
@@ -485,22 +481,16 @@ export const createStoredPageCapabilityService = (
                 ? {}
                 : {
                     viewPermission: placementPermission(
-                      context,
-                      "application.page.placement.view",
-                      applicationRootId,
-                      viewPermissionKey,
-                      viewBinding,
+                      context, "application.page.placement.view", applicationRootId,
+                      viewPermissionKey, viewBinding,
                     ),
                   }),
               ...(useBinding === undefined || usePermissionKey === undefined
                 ? {}
                 : {
                     usePermission: placementPermission(
-                      context,
-                      "application.page.placement.use",
-                      applicationRootId,
-                      usePermissionKey,
-                      useBinding,
+                      context, "application.page.placement.use", applicationRootId,
+                      usePermissionKey, useBinding,
                     ),
                   }),
               operationRequired: operation?.required === true,
@@ -521,9 +511,9 @@ export const createStoredPageCapabilityService = (
   ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     // This cache belongs to one projection transaction, never another page, actor or release.
     let subjectRead: Promise<PageSubjectReadResult> | undefined;
-    type ConditionReason = ReturnType<
-      NonNullable<AuthenticatedPageCapabilityDependencies<undefined>["visibilityConditionReason"]>
-    >;
+    type ConditionReason = ReturnType<NonNullable<
+      AuthenticatedPageCapabilityDependencies<undefined>["visibilityConditionReason"]
+    >>;
     let conditionReason: ConditionReason = "UNKNOWN";
     const refused = (reason: ConditionReason): false => {
       conditionReason = reason;
@@ -554,8 +544,7 @@ export const createStoredPageCapabilityService = (
                 scope.accessVersion,
                 scope.organizationAccountId,
               )
-            )
-              return false;
+            ) return false;
           }
 
           const contextRows = await transaction.query<{
@@ -575,8 +564,7 @@ export const createStoredPageCapabilityService = (
           const observedAt = databaseTimestamp(clockRows[0].observed_at);
           if (typeof observedAt !== "string") return false;
           const observedMilliseconds = Date.parse(observedAt);
-          return (
-            Number.isFinite(observedMilliseconds) &&
+          return Number.isFinite(observedMilliseconds) &&
             current.data.expiresAt !== undefined &&
             Date.parse(current.data.expiresAt) > observedMilliseconds &&
             (current.data.delegatedContext === undefined ||
@@ -589,8 +577,7 @@ export const createStoredPageCapabilityService = (
             current.data.applicationRootId !== undefined &&
             sameId(current.data.applicationRootId, scope.applicationRootId) &&
             current.data.accessVersion === scope.accessVersion &&
-            Date.parse(validUntil) > observedMilliseconds
-          );
+            Date.parse(validUntil) > observedMilliseconds;
         } catch {
           return false;
         }
@@ -622,16 +609,14 @@ export const createStoredPageCapabilityService = (
         if (unsupported) return refused("UNSUPPORTED_OPERAND");
         try {
           if (fieldIds.size === 0)
-            return supported(
-              evaluateTypedCondition({
-                condition: parsed.data,
-                sourceRecordFields: [],
-                declaredFieldIds: [],
-                fieldValues: {},
-                parameterDeclarations: [],
-                parameterValues: {},
-              }),
-            );
+            return supported(evaluateTypedCondition({
+              condition: parsed.data,
+              sourceRecordFields: [],
+              declaredFieldIds: [],
+              fieldValues: {},
+              parameterDeclarations: [],
+              parameterValues: {},
+            }));
 
           // A different destination page cannot borrow the selected page's address subject.
           const recordType =
@@ -687,16 +672,14 @@ export const createStoredPageCapabilityService = (
               return { kind: "not", condition: canonicalCondition(node.condition) };
             return { kind: node.kind, conditions: node.conditions.map(canonicalCondition) };
           };
-          return supported(
-            evaluateTypedCondition({
-              condition: canonicalCondition(parsed.data),
-              sourceRecordFields: fields,
-              declaredFieldIds: [...fieldIds].map((id) => fieldsById.get(id)!.fieldId),
-              fieldValues: values,
-              parameterDeclarations: [],
-              parameterValues: {},
-            }),
-          );
+          return supported(evaluateTypedCondition({
+            condition: canonicalCondition(parsed.data),
+            sourceRecordFields: fields,
+            declaredFieldIds: [...fieldIds].map((id) => fieldsById.get(id)!.fieldId),
+            fieldValues: values,
+            parameterDeclarations: [],
+            parameterValues: {},
+          }));
         } catch (error) {
           if (error instanceof TypedConditionEvaluationError)
             return refused("DECLARATION_UNPROVABLE");

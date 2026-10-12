@@ -115,10 +115,7 @@ import {
   visibleGuidedFormValues,
   visibleGuidedFormValidation,
 } from "./guided-form-steps";
-import {
-  humanOrganizationRequestDependencies,
-  humanOrganizationRequests,
-} from "./server-composition";
+import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 import {
   getIdentityAuthorityConfiguration,
   getIdentityJourneyConfiguration,
@@ -234,14 +231,18 @@ export type ApplicationPagePlacementReadResult =
   | Readonly<{
       kind: "available";
       data: Readonly<Record<string, PageDataState>>;
-      editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>> | null>>;
+      editFormBaselines: Readonly<
+        Record<string, Readonly<Record<string, JsonValue>> | null>
+      >;
       subject: ApplicationPageModel["subject"] | null;
     }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-type ApplicationPageInternalResult = ApplicationPageResult | Readonly<{ kind: "reload" }>;
+type ApplicationPageInternalResult =
+  | ApplicationPageResult
+  | Readonly<{ kind: "reload" }>;
 
 type ApplicationPageLoaderAddress = Readonly<{
   tenantShortName: string;
@@ -291,8 +292,8 @@ const projectedBodyContentAvailable = (
   const main = (projected.composition as { main: Slot }).main;
   const visibleContent = (slot: Slot, ancestors: Visibility): boolean =>
     Object.values(slot.placements).some((placement) =>
-      breakpoints.some(
-        (breakpoint) => ancestors[breakpoint] && placement.responsive[breakpoint].visible,
+      breakpoints.some((breakpoint) =>
+        ancestors[breakpoint] && placement.responsive[breakpoint].visible,
       ),
     );
   const visible: Visibility = { desktop: true, tablet: true, phone: true };
@@ -316,11 +317,9 @@ const projectedBodyContentAvailable = (
         tablet: ancestors.tablet && placement.responsive.tablet.visible,
         phone: ancestors.phone && placement.responsive.phone.visible,
       };
-      return Object.entries(placement.slots).some(
-        ([slotKey, child]) =>
-          (targets.get(placementId.toLowerCase())?.has(slotKey) === true &&
-            visibleContent(child, effective)) ||
-          visit(child, effective),
+      return Object.entries(placement.slots).some(([slotKey, child]) =>
+        (targets.get(placementId.toLowerCase())?.has(slotKey) === true &&
+          visibleContent(child, effective)) || visit(child, effective),
       );
     });
   return visit(main, visible);
@@ -356,14 +355,10 @@ const projectedUseAvailability = (placement: unknown): "available" | "unavailabl
   return "invalid";
 };
 
-const isUnboundReferenceChoicePlacement = (
-  placement: Readonly<Record<string, unknown>>,
-): boolean => {
+const isUnboundReferenceChoicePlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
   if (!hasReferenceChoiceSource(placement) || !isRecord(placement.settings)) return false;
   const source = placement.settings.choice_source;
-  return (
-    isRecord(source) && isRecord(source.properties) && !Object.hasOwn(source.properties, "input")
-  );
+  return isRecord(source) && isRecord(source.properties) && !Object.hasOwn(source.properties, "input");
 };
 
 const isEditFieldPlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
@@ -407,7 +402,9 @@ const selectedReadInputTypes = (flow: InstalledFlow): ReadonlyMap<string, string
         const reference =
           isRecord(record) && record.kind === "reference" ? record.reference : undefined;
         const inputName =
-          isRecord(reference) && reference.source === "input" && typeof reference.name === "string"
+          isRecord(reference) &&
+          reference.source === "input" &&
+          typeof reference.name === "string"
             ? reference.name
             : undefined;
         const declaration = inputName === undefined ? undefined : flow.inputs[inputName];
@@ -460,12 +457,10 @@ const fieldForPlacement = (
 const fieldControl = (placement: Readonly<Record<string, unknown>>): string | undefined => {
   const settings = placement.settings;
   const block = placement.block;
-  return isRecord(settings) &&
-    isRecord(block) &&
+  return isRecord(settings) && isRecord(block) &&
     typeof block.blockId === "string" &&
     sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
-    isRecord(settings.control) &&
-    settings.control.kind === "choice" &&
+    isRecord(settings.control) && settings.control.kind === "choice" &&
     typeof settings.control.value === "string"
     ? settings.control.value
     : undefined;
@@ -550,12 +545,11 @@ const projectReferenceChoicePage = async (
     return { kind: "refused" };
   if (
     request.installationRevision !== context.applicationReleaseRevision ||
-    request.releaseKey !==
-      [
-        application.releaseVersion,
-        application.contentFingerprint,
-        application.resolutionFingerprint,
-      ].join(":")
+    request.releaseKey !== [
+      application.releaseVersion,
+      application.contentFingerprint,
+      application.resolutionFingerprint,
+    ].join(":")
   )
     return { kind: "reload" };
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
@@ -565,8 +559,10 @@ const projectReferenceChoicePage = async (
     context,
     selection: { pageId: pageDefinition.pageId },
   }).project(session, selection);
-  if (projected.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  if (projected.kind !== "available" || projected.value === undefined) return { kind: "refused" };
+  if (projected.kind === "temporarily_unavailable")
+    return { kind: "temporarily_unavailable" };
+  if (projected.kind !== "available" || projected.value === undefined)
+    return { kind: "refused" };
   return { kind: "available", page: projected.value, context, selection, dependencies };
 };
 
@@ -706,7 +702,11 @@ const projectEditField = (
       )
         return undefined;
       const options = settings.options;
-      if (!isRecord(options) || options.kind !== "list" || !Array.isArray(options.items))
+      if (
+        !isRecord(options) ||
+        options.kind !== "list" ||
+        !Array.isArray(options.items)
+      )
         return undefined;
       const optionItems: unknown[] = options.items;
       if (
@@ -790,16 +790,14 @@ type ReferenceChoiceFirstPage = Readonly<{
 }>;
 
 /** Projects a saved record link only when the exact value is still offered by its declared Query. */
-const projectSelectedReferenceChoiceEditField = async (
-  args: Readonly<{
-    firstPage: ReferenceChoiceFirstPage | undefined;
-    field: ModuleField | undefined;
-    stored: JsonValue | undefined;
-    service: ReturnType<typeof createReferenceChoiceService>;
-    session: IdentitySession;
-    selection: OrganizationSelectionCandidate;
-  }>,
-): Promise<Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined> => {
+const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
+  firstPage: ReferenceChoiceFirstPage | undefined;
+  field: ModuleField | undefined;
+  stored: JsonValue | undefined;
+  service: ReturnType<typeof createReferenceChoiceService>;
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+}>): Promise<Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined> => {
   const first = args.firstPage;
   const field = args.field;
   if (first === undefined || field === undefined || args.stored === undefined) return undefined;
@@ -813,21 +811,17 @@ const projectSelectedReferenceChoiceEditField = async (
   if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
     return undefined;
   const queryTarget = command.source.query.recordType;
-  const queryAllowedTargets = command.allowedRecordTypes.filter(
-    (target) => target.state === "resolved",
-  );
+  const queryAllowedTargets = command.allowedRecordTypes.filter((target) => target.state === "resolved");
   if (
     queryAllowedTargets.length !== command.allowedRecordTypes.length ||
     queryAllowedTargets.length === 0 ||
-    !resolvedFieldTargets.some(
-      (target) =>
-        sameId(target.moduleRootId, queryTarget.moduleRootId) &&
-        sameId(target.recordTypeId, queryTarget.recordTypeId),
+    !resolvedFieldTargets.some((target) =>
+      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+      sameId(target.recordTypeId, queryTarget.recordTypeId),
     ) ||
-    !queryAllowedTargets.some(
-      (target) =>
-        sameId(target.moduleRootId, queryTarget.moduleRootId) &&
-        sameId(target.recordTypeId, queryTarget.recordTypeId),
+    !queryAllowedTargets.some((target) =>
+      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+      sameId(target.recordTypeId, queryTarget.recordTypeId),
     )
   )
     return undefined;
@@ -913,31 +907,37 @@ const projectSelectedReferenceChoiceEditField = async (
     });
     if (result.kind !== "available" || result.value.outcome !== "completed") return undefined;
     const page = result.value;
-    if (page.kind !== "record_reference" || !consumePage(page.choices, requestToken))
-      return undefined;
+    if (page.kind !== "record_reference" || !consumePage(page.choices, requestToken)) return undefined;
     pageCount += 1;
     requestToken = page.nextContinuationToken;
-    if (selected === undefined && requestToken !== undefined && seenTokens.has(requestToken))
-      return undefined;
+    if (selected === undefined && requestToken !== undefined && seenTokens.has(requestToken)) return undefined;
   }
 
   if (selected === undefined) return undefined;
   const visibleChoices = [...first.choices];
   if (!visibleChoices.some((choice) => choice.key === selected?.key)) visibleChoices.push(selected);
   const selectedToken = selectedEvidence?.continuationToken;
-  const optionEvidenceOverrides =
-    selectedToken === undefined ? {} : { [selected.key]: { continuationToken: selectedToken } };
+  const optionEvidenceOverrides = selectedToken === undefined
+    ? {}
+    : { [selected.key]: { continuationToken: selectedToken } };
   return {
     key: field.key,
     value: selected.key,
     data: {
       status: "ready",
-      values: projectReferenceChoiceInputValues(visibleChoices, selected.key, undefined, {
-        ...(first.nextContinuationToken === undefined
-          ? {}
-          : { nextContinuationToken: first.nextContinuationToken }),
-        ...(Object.keys(optionEvidenceOverrides).length === 0 ? {} : { optionEvidenceOverrides }),
-      }),
+      values: projectReferenceChoiceInputValues(
+        visibleChoices,
+        selected.key,
+        undefined,
+        {
+          ...(first.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: first.nextContinuationToken }),
+          ...(Object.keys(optionEvidenceOverrides).length === 0
+            ? {}
+            : { optionEvidenceOverrides }),
+        },
+      ),
     },
   };
 };
@@ -965,7 +965,8 @@ export const loadReferenceChoicePage = async (
     const placement = collectPlacements(projected.page).find(
       (entry) => entry.placementId === request.placementId && entry.formId !== undefined,
     );
-    if (placement === undefined || placement.formId === undefined) return { kind: "refused" };
+    if (placement === undefined || placement.formId === undefined)
+      return { kind: "refused" };
     const form = projectedReferenceChoiceForm(
       projected.page,
       context.releaseSet.modules,
@@ -986,10 +987,7 @@ export const loadReferenceChoicePage = async (
       const parent = form.fields.get(field.dependency.fromField);
       if (parent === undefined) return { kind: "refused" };
       const selected = await resolveReferenceChoiceOption({
-        service,
-        session,
-        selection,
-        field: parent,
+        service, session, selection, field: parent,
         key: request.dependencyChoice.key,
         evidence: request.dependencyChoice.evidence,
       });
@@ -1008,15 +1006,15 @@ export const loadReferenceChoicePage = async (
         ? {}
         : { continuationToken: request.continuationToken }),
     });
-    if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+    if (result.kind === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable" };
     if (result.kind !== "available" || result.value.outcome !== "completed")
       return { kind: "refused" };
 
     const pageChoices = result.value.choices;
-    let selectedChoice =
-      request.selectedKey === undefined
-        ? undefined
-        : pageChoices.find((choice) => choice.key === request.selectedKey);
+    let selectedChoice = request.selectedKey === undefined
+      ? undefined
+      : pageChoices.find((choice) => choice.key === request.selectedKey);
     let selectedEvidenceOverride: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> = {};
     if (
       selectedChoice === undefined &&
@@ -1035,25 +1033,29 @@ export const loadReferenceChoicePage = async (
         selectedEvidenceOverride = { [selectedChoice.key]: request.selectedEvidence };
     }
     const choices =
-      selectedChoice === undefined ||
-      pageChoices.some((choice) => choice.key === selectedChoice?.key)
+      selectedChoice === undefined || pageChoices.some((choice) => choice.key === selectedChoice?.key)
         ? pageChoices
         : [selectedChoice, ...pageChoices];
     return {
       kind: "completed",
-      values: projectReferenceChoiceInputValues(choices, selectedChoice?.key ?? null, undefined, {
-        ...(dependencyKey === undefined ? {} : { dependencyKey }),
-        ...(request.search === undefined ? {} : { search: request.search }),
-        ...(request.continuationToken === undefined
-          ? {}
-          : { continuationToken: request.continuationToken }),
-        ...(result.value.nextContinuationToken === undefined
-          ? {}
-          : { nextContinuationToken: result.value.nextContinuationToken }),
-        ...(Object.keys(selectedEvidenceOverride).length === 0
-          ? {}
-          : { optionEvidenceOverrides: selectedEvidenceOverride }),
-      }),
+      values: projectReferenceChoiceInputValues(
+        choices,
+        selectedChoice?.key ?? null,
+        undefined,
+        {
+          ...(dependencyKey === undefined ? {} : { dependencyKey }),
+          ...(request.search === undefined ? {} : { search: request.search }),
+          ...(request.continuationToken === undefined
+            ? {}
+            : { continuationToken: request.continuationToken }),
+          ...(result.value.nextContinuationToken === undefined
+            ? {}
+            : { nextContinuationToken: result.value.nextContinuationToken }),
+          ...(Object.keys(selectedEvidenceOverride).length === 0
+            ? {}
+            : { optionEvidenceOverrides: selectedEvidenceOverride }),
+        },
+      ),
     };
   } catch {
     return { kind: "temporarily_unavailable" };
@@ -1080,10 +1082,8 @@ const coerceInput = (raw: string, type: string): JsonValue | undefined => {
 /** Structured Notice-query inputs are plain JSON; the Query service validates their declared type. */
 const noticeQueryInput = (raw: string, type: string): JsonValue | undefined => {
   if (
-    type === "formatted_text" ||
-    type === "money" ||
-    type === "record_reference" ||
-    type === "organization_account_reference"
+    type === "formatted_text" || type === "money" ||
+    type === "record_reference" || type === "organization_account_reference"
   ) {
     try {
       const parsed = jsonValueSchema.safeParse(JSON.parse(raw));
@@ -1159,7 +1159,9 @@ const summaryAggregateCellValue = (
     }
     case "date":
     case "date_time":
-      return typeof result.value === "string" ? { kind: "date", iso: result.value } : undefined;
+      return typeof result.value === "string"
+        ? { kind: "date", iso: result.value }
+        : undefined;
     default:
       return undefined;
   }
@@ -1306,9 +1308,8 @@ type CalendarPlacementContract = Readonly<{
   defaultView: CalendarView;
 }>;
 
-const calendarFieldReference = (
-  value: BlockPropertyValueContract | undefined,
-): string | undefined => (value?.kind === "field_reference" ? value.fieldId : undefined);
+const calendarFieldReference = (value: BlockPropertyValueContract | undefined): string | undefined =>
+  value?.kind === "field_reference" ? value.fieldId : undefined;
 
 const calendarChoice = (value: BlockPropertyValueContract | undefined): string | undefined =>
   value?.kind === "choice" ? value.value : undefined;
@@ -1471,16 +1472,9 @@ const calendarWindowFilter = (
   return { kind: "all", conditions };
 };
 
-const calendarTitle = (
-  value: JsonValue | undefined,
-  field: { type: string; settings?: unknown },
-): string => {
+const calendarTitle = (value: JsonValue | undefined, field: { type: string; settings?: unknown }): string => {
   if (typeof value === "string") {
-    if (
-      field.type === "choice" &&
-      isRecord(field.settings) &&
-      Array.isArray(field.settings.options)
-    ) {
+    if (field.type === "choice" && isRecord(field.settings) && Array.isArray(field.settings.options)) {
       const option = field.settings.options.find(
         (candidate) => isRecord(candidate) && candidate.value === value,
       );
@@ -1551,12 +1545,11 @@ const loadInstalledContext = (
 
 type LocalPageCompositionStage = "INSTALLED_PAGE" | "PROJECTED_PAGE" | "PAGE_MODEL";
 type LocalPageCompositionResult = "AVAILABLE" | "UNAVAILABLE" | "TEMPORARILY_UNAVAILABLE";
-type LocalPageTableState =
-  "NOT_OBSERVED" | "ABSENT" | "READY" | "EMPTY" | "REFUSED" | "ERROR" | "MIXED";
+type LocalPageTableState = "NOT_OBSERVED" | "ABSENT" | "READY" | "EMPTY" | "REFUSED" | "ERROR" | "MIXED";
 
-type LocalProjectionObservation = Parameters<
-  NonNullable<StoredPageCapabilityDependencies["observeProjectionDecision"]>
->[0];
+type LocalProjectionObservation = Parameters<NonNullable<
+  StoredPageCapabilityDependencies["observeProjectionDecision"]
+>>[0];
 
 type LocalCompositionSnapshot = Readonly<{
   body: readonly Readonly<{ id: string; table: boolean; visible: boolean }>[];
@@ -1600,13 +1593,9 @@ const localPageCompositionMetrics = (
   const index = (root: unknown) => {
     const entries = new Map<string, Entry>();
     const slots = new Set<Record<string, unknown>>();
-    const slotOrder = new Map<
-      Record<string, unknown>,
-      {
-        ancestors: readonly Record<string, unknown>[];
-        ordered: boolean;
-      }
-    >();
+    const slotOrder = new Map<Record<string, unknown>, {
+      ancestors: readonly Record<string, unknown>[]; ordered: boolean;
+    }>();
     const visit = (
       candidate: unknown,
       ancestors: readonly Record<string, unknown>[],
@@ -1628,18 +1617,12 @@ const localPageCompositionMetrics = (
         const orderedIds: string[] = [];
         for (let position = 0; position < values.length; position += 1) {
           const descriptor = Object.getOwnPropertyDescriptor(values, String(position));
-          if (
-            descriptor === undefined ||
-            !("value" in descriptor) ||
-            typeof descriptor.value !== "string"
-          )
+          if (descriptor === undefined || !("value" in descriptor) || typeof descriptor.value !== "string")
             throw new Error("Diagnostic order unavailable");
           orderedIds.push(descriptor.value);
         }
-        slotOrdered &&=
-          orderedIds.length === ids.length &&
-          new Set(orderedIds).size === ids.length &&
-          orderedIds.every((id) => ids.includes(id));
+        slotOrdered &&= orderedIds.length === ids.length &&
+          new Set(orderedIds).size === ids.length && orderedIds.every((id) => ids.includes(id));
       }
       if (!slotOrdered) throw new Error("Diagnostic order unavailable");
       const lineage = [...ancestors, slot];
@@ -1656,21 +1639,13 @@ const localPageCompositionMetrics = (
         }
         // Classification uses permanent platform identity, never authored settings or names.
         const block = object(own(placement, "block"));
-        if (
-          typeof own(block, "blockId") !== "string" ||
-          typeof own(block, "releaseVersion") !== "string"
-        )
+        if (typeof own(block, "blockId") !== "string" ||
+            typeof own(block, "releaseVersion") !== "string")
           throw new Error("Diagnostic block unavailable");
-        entries.set(id, {
-          id,
-          placement,
-          ancestors: lineage,
-          visible: effective,
-          ordered: ordered && slotOrdered,
-        });
+        entries.set(id, { id, placement, ancestors: lineage,
+          visible: effective, ordered: ordered && slotOrdered });
         const children = object(own(placement, "slots"));
-        for (const key of keys(children))
-          visit(own(children, key), lineage, effective, ordered && slotOrdered);
+        for (const key of keys(children)) visit(own(children, key), lineage, effective, ordered && slotOrdered);
       }
     };
     visit(root, [], { desktop: true, tablet: true, phone: true }, true);
@@ -1681,10 +1656,9 @@ const localPageCompositionMetrics = (
   const bodyRoots: Record<string, unknown>[] = [];
   let tree: ReturnType<typeof index>;
   if (shellKind === "default") {
-    const main =
-      projected === undefined
-        ? own(composition, "main")
-        : own(object(own(object(projected), "composition")), "main");
+    const main = projected === undefined
+      ? own(composition, "main")
+      : own(object(own(object(projected), "composition")), "main");
     tree = index(main);
     bodyRoots.push(object(main));
   } else if (shellKind === "application") {
@@ -1696,24 +1670,13 @@ const localPageCompositionMetrics = (
     const shell = matches[0];
     const shellTree = index(shell.layout);
     const content = object(own(composition, "content"));
-    if (
-      shell.contentSlots.length > 4096 ||
-      new Set(shell.contentSlots.map((binding) => String(binding.slotId))).size !==
-        shell.contentSlots.length ||
-      new Set(
-        shell.contentSlots.map(
-          (binding) => `${binding.parentPlacementId}:${binding.parentSlotKey}`,
-        ),
-      ).size !== shell.contentSlots.length ||
-      keys(content).some(
-        (key) => !shell.contentSlots.some((binding) => String(binding.slotId) === key),
-      )
-    )
+    if (shell.contentSlots.length > 4096 ||
+        new Set(shell.contentSlots.map((binding) => String(binding.slotId))).size !== shell.contentSlots.length ||
+        new Set(shell.contentSlots.map((binding) => `${binding.parentPlacementId}:${binding.parentSlotKey}`)).size !== shell.contentSlots.length ||
+        keys(content).some((key) => !shell.contentSlots.some((binding) => String(binding.slotId) === key)))
       throw new Error("Diagnostic binding unavailable");
-    tree =
-      projected === undefined
-        ? shellTree
-        : index(own(object(own(object(projected), "composition")), "main"));
+    tree = projected === undefined ? shellTree
+      : index(own(object(own(object(projected), "composition")), "main"));
     for (const binding of shell.contentSlots) {
       const original = shellTree.entries.get(String(binding.parentPlacementId));
       if (original === undefined) throw new Error("Diagnostic binding unavailable");
@@ -1731,15 +1694,10 @@ const localPageCompositionMetrics = (
         for (const [id, entry] of body.entries) {
           if (tree.entries.has(id) || original.ancestors.length + entry.ancestors.length > 64)
             throw new Error("Diagnostic placement unavailable");
-          tree.entries.set(id, {
-            ...entry,
-            ordered: original.ordered && entry.ordered,
-            visible: {
-              desktop: original.visible.desktop && entry.visible.desktop,
+          tree.entries.set(id, { ...entry, ordered: original.ordered && entry.ordered,
+            visible: { desktop: original.visible.desktop && entry.visible.desktop,
               tablet: original.visible.tablet && entry.visible.tablet,
-              phone: original.visible.phone && entry.visible.phone,
-            },
-          });
+              phone: original.visible.phone && entry.visible.phone } });
         }
         for (const slot of body.slots) {
           if (tree.slots.has(slot)) throw new Error("Diagnostic duplicate slot");
@@ -1752,20 +1710,14 @@ const localPageCompositionMetrics = (
         // A removed shell ancestor has no projected body, not evidence of a named Access denial.
         const parent = tree.entries.get(String(binding.parentPlacementId));
         if (parent !== undefined)
-          bodyRoots.push(
-            object(own(object(own(parent.placement, "slots")), binding.parentSlotKey)),
-          );
+          bodyRoots.push(object(own(object(own(parent.placement, "slots")), binding.parentSlotKey)));
       }
     }
   } else throw new Error("Diagnostic composition unavailable");
   if (tree.entries.size + tree.slots.size > 4096) throw new Error("Diagnostic traversal bound");
   const body = [...tree.entries.values()].filter((entry) =>
-    entry.ancestors.some((slot) => bodyRoots.includes(slot)),
-  );
-  const topLevel = bodyRoots.reduce(
-    (count, root) => count + keys(object(own(root, "placements"))).length,
-    0,
-  );
+    entry.ancestors.some((slot) => bodyRoots.includes(slot)));
+  const topLevel = bodyRoots.reduce((count, root) => count + keys(object(own(root, "placements"))).length, 0);
   const hasBlock = (entry: Entry, id: string): boolean =>
     sameId(String(own(object(own(entry.placement, "block")), "blockId")), id);
   const tables = body.filter((entry) => hasBlock(entry, TABLE_BLOCK_RELEASE.blockId));
@@ -1774,105 +1726,61 @@ const localPageCompositionMetrics = (
     const states = new Set<LocalPageTableState>();
     for (const table of tables) {
       const descriptor = Object.getOwnPropertyDescriptor(data, table.id);
-      if (descriptor === undefined) {
-        states.add("NOT_OBSERVED");
-        continue;
-      }
+      if (descriptor === undefined) { states.add("NOT_OBSERVED"); continue; }
       if (!("value" in descriptor)) throw new Error("Diagnostic table state unavailable");
       const status = own(object(descriptor.value), "status");
-      const state =
-        status === "ready"
-          ? "READY"
-          : status === "empty"
-            ? "EMPTY"
-            : status === "refused"
-              ? "REFUSED"
-              : status === "error"
-                ? "ERROR"
-                : undefined;
+      const state = status === "ready" ? "READY" : status === "empty" ? "EMPTY"
+        : status === "refused" ? "REFUSED" : status === "error" ? "ERROR" : undefined;
       if (state === undefined) throw new Error("Diagnostic table state unavailable");
       states.add(state);
     }
-    tableState =
-      tables.length === 0
-        ? "ABSENT"
-        : states.size > 1
-          ? "MIXED"
-          : ([...states][0] ?? "NOT_OBSERVED");
+    tableState = tables.length === 0 ? "ABSENT" : states.size > 1 ? "MIXED"
+      : [...states][0] ?? "NOT_OBSERVED";
   }
   if (traversalBudget !== undefined) traversalBudget.visited = visited;
-  capture?.(
-    Object.freeze({
-      placementIds: Object.freeze([...tree.entries.keys()]),
-      body: Object.freeze(
-        body.map((entry) =>
-          Object.freeze({
-            id: entry.id,
-            table: hasBlock(entry, TABLE_BLOCK_RELEASE.blockId),
-            visible: entry.visible.desktop || entry.visible.tablet || entry.visible.phone,
-          }),
-        ),
-      ),
-    }),
-  );
-  return {
-    body: topLevel === 0 ? "NONE" : topLevel === 1 ? "ONE" : "MULTIPLE",
-    table: tables.length > 0,
-    form: body.some((entry) => hasBlock(entry, FORM_CONTAINER_BLOCK_RELEASE.blockId)),
-    ordered:
-      body.every((entry) => entry.ordered) &&
-      [...tree.slotOrder.values()]
-        .filter((slot) => slot.ancestors.some((ancestor) => bodyRoots.includes(ancestor)))
-        .every((slot) => slot.ordered),
+  capture?.(Object.freeze({
+    placementIds: Object.freeze([...tree.entries.keys()]),
+    body: Object.freeze(body.map((entry) => Object.freeze({
+      id: entry.id,
+      table: hasBlock(entry, TABLE_BLOCK_RELEASE.blockId),
+      visible: entry.visible.desktop || entry.visible.tablet || entry.visible.phone,
+    }))),
+  }));
+  return { body: topLevel === 0 ? "NONE" : topLevel === 1 ? "ONE" : "MULTIPLE",
+    table: tables.length > 0, form: body.some((entry) => hasBlock(entry, FORM_CONTAINER_BLOCK_RELEASE.blockId)),
+    ordered: body.every((entry) => entry.ordered) && [...tree.slotOrder.values()]
+      .filter((slot) => slot.ancestors.some((ancestor) => bodyRoots.includes(ancestor)))
+      .every((slot) => slot.ordered),
     visibleDesktop: body.some((entry) => entry.visible.desktop),
     visibleTablet: body.some((entry) => entry.visible.tablet),
-    visiblePhone: body.some((entry) => entry.visible.phone),
-    tableState,
-  };
+    visiblePhone: body.some((entry) => entry.visible.phone), tableState };
 };
 
-const localPageCompositionObserver = (installed: unknown, shells: readonly ApplicationShell[]) => {
+const localPageCompositionObserver = (
+  installed: unknown,
+  shells: readonly ApplicationShell[],
+) => {
   try {
     const attempted = new Set<LocalPageCompositionStage>();
-    return (
-      stage: LocalPageCompositionStage,
-      result: LocalPageCompositionResult,
-      projected?: unknown,
-      data?: Readonly<Record<string, PageDataState>>,
-    ): void => {
+    return (stage: LocalPageCompositionStage, result: LocalPageCompositionResult,
+      projected?: unknown, data?: Readonly<Record<string, PageDataState>>): void => {
       try {
-        if (
-          attempted.has(stage) ||
-          attempted.size >= 3 ||
-          process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
-          process.env.NODE_ENV === "production" ||
-          process.env.VORTEX_ENVIRONMENT !== "local"
-        )
-          return;
+        if (attempted.has(stage) || attempted.size >= 3 ||
+            process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
+            process.env.NODE_ENV === "production" || process.env.VORTEX_ENVIRONMENT !== "local") return;
         const journey = getIdentityJourneyConfiguration();
         const authority = getIdentityAuthorityConfiguration();
-        if (
-          authority.environment !== "local" ||
-          new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
-          new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
-          authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
-          authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json"
-        )
-          return;
+        if (authority.environment !== "local" ||
+            new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+            new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+            authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+            authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json") return;
         attempted.add(stage);
-        const metrics =
-          result === "AVAILABLE"
-            ? localPageCompositionMetrics(installed, shells, projected, data)
-            : {
-                body: "UNKNOWN",
-                table: false,
-                form: false,
-                ordered: false,
-                visibleDesktop: false,
-                visibleTablet: false,
-                visiblePhone: false,
-                tableState: "NOT_OBSERVED",
-              };
+        const metrics = result === "AVAILABLE"
+          ? localPageCompositionMetrics(installed, shells, projected, data)
+          : { body: "UNKNOWN", table: false, form: false, ordered: false,
+              visibleDesktop: false, visibleTablet: false, visiblePhone: false,
+              tableState: "NOT_OBSERVED" };
         const frame = JSON.stringify({ stage, result, ...metrics, readGate: "UNKNOWN" });
         const line = "VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC:" + frame;
         if (Buffer.byteLength(line, "utf8") <= 2048) console.info(line);
@@ -1888,21 +1796,16 @@ const localPageCompositionObserver = (installed: unknown, shells: readonly Appli
 /** One primary invocation only; internal placement identities never enter the fixed frame. */
 const localPageBundleObservation = () => {
   try {
-    if (
-      process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
-      process.env.NODE_ENV === "production" ||
-      process.env.VORTEX_ENVIRONMENT !== "local"
-    )
+    if (process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
+        process.env.NODE_ENV === "production" || process.env.VORTEX_ENVIRONMENT !== "local")
       return undefined;
     const journey = getIdentityJourneyConfiguration();
     const authority = getIdentityAuthorityConfiguration();
-    if (
-      authority.environment !== "local" ||
-      new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
-      new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
-      authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
-      authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json"
-    )
+    if (authority.environment !== "local" ||
+        new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+        new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+        authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+        authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json")
       return undefined;
 
     let bundlePartQueryAttempts = 0;
@@ -1925,10 +1828,7 @@ const localPageBundleObservation = () => {
       event: InstallationRuntimeBundleObservationEvent,
     ): void => {
       try {
-        if (finished) {
-          invalid = true;
-          return;
-        }
+        if (finished) { invalid = true; return; }
         switch (event) {
           case "PARTS_CACHE_HIT":
             cacheHitReads = increment(cacheHitReads);
@@ -1944,18 +1844,12 @@ const localPageBundleObservation = () => {
             pendingLoads = increment(pendingLoads);
             break;
           case "LOAD_COMPLETED":
-            if (pendingLoads === 0) {
-              invalid = true;
-              return;
-            }
+            if (pendingLoads === 0) { invalid = true; return; }
             pendingLoads -= 1;
             completedLoads = increment(completedLoads);
             break;
           case "LOAD_FAILED":
-            if (pendingLoads === 0) {
-              invalid = true;
-              return;
-            }
+            if (pendingLoads === 0) { invalid = true; return; }
             pendingLoads -= 1;
             failedLoads = increment(failedLoads);
             break;
@@ -1969,38 +1863,17 @@ const localPageBundleObservation = () => {
     return Object.freeze({
       observe,
       finish(): void {
-        if (finished) {
-          invalid = true;
-          return;
-        }
+        if (finished) { invalid = true; return; }
         finished = true;
         try {
-          if (
-            invalid ||
-            startedLoads === 0 ||
-            pendingLoads !== 0 ||
-            failedLoads !== 0 ||
-            completedLoads !== startedLoads ||
-            bundlePartQueryAttempts !== bundlePartQuerySuccesses
-          )
-            return;
+          if (invalid || startedLoads === 0 || pendingLoads !== 0 || failedLoads !== 0 ||
+              completedLoads !== startedLoads ||
+              bundlePartQueryAttempts !== bundlePartQuerySuccesses) return;
           const cache = readInstallationRuntimeBundleCacheStatus();
-          const counters = [
-            bundlePartQueryAttempts,
-            bundlePartQuerySuccesses,
-            cacheHitReads,
-            startedLoads,
-            completedLoads,
-            cache.maximumBytes,
-            cache.chargedBytes,
-            cache.entryCount,
-          ];
-          if (
-            counters.some((value) => !Number.isSafeInteger(value) || value < 0) ||
-            cache.sharedTierDisabled !== true ||
-            cache.chargedBytes > cache.maximumBytes
-          )
-            return;
+          const counters = [bundlePartQueryAttempts, bundlePartQuerySuccesses, cacheHitReads,
+            startedLoads, completedLoads, cache.maximumBytes, cache.chargedBytes, cache.entryCount];
+          if (counters.some((value) => !Number.isSafeInteger(value) || value < 0) ||
+              cache.sharedTierDisabled !== true || cache.chargedBytes > cache.maximumBytes) return;
           const frame = {
             schema: "page_bundle_observation_v1",
             stage: "PAGE_MODEL",
@@ -2034,21 +1907,16 @@ const localPageProjectionDecisionObserver = (
   shells: readonly ApplicationShell[],
 ) => {
   try {
-    if (
-      process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
-      process.env.NODE_ENV === "production" ||
-      process.env.VORTEX_ENVIRONMENT !== "local"
-    )
+    if (process.env.VORTEX_LOCAL_PAGE_COMPOSITION_DIAGNOSTIC !== "1" ||
+        process.env.NODE_ENV === "production" || process.env.VORTEX_ENVIRONMENT !== "local")
       return undefined;
     const journey = getIdentityJourneyConfiguration();
     const authority = getIdentityAuthorityConfiguration();
-    if (
-      authority.environment !== "local" ||
-      new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
-      new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
-      authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
-      authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json"
-    )
+    if (authority.environment !== "local" ||
+        new URL(journey.siteUrl).href !== "http://127.0.0.1:3000/" ||
+        new URL(journey.supabaseUrl).href !== "http://127.0.0.1:54321/" ||
+        authority.issuer !== "http://127.0.0.1:54321/auth/v1" ||
+        authority.jwksUrl !== "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json")
       return undefined;
     let observation: LocalProjectionObservation | undefined;
     let captured = false;
@@ -2067,47 +1935,26 @@ const localPageProjectionDecisionObserver = (
           observation = undefined;
           if (decisions === undefined || decisions.placements.length > 4096) return;
           const budget = { visited: decisions.placements.length };
-          const snapshots: { before?: LocalCompositionSnapshot; after?: LocalCompositionSnapshot } =
-            {};
-          const original = localPageCompositionMetrics(
-            installed,
-            shells,
-            undefined,
-            undefined,
-            (snapshot) => {
-              snapshots.before = snapshot;
-            },
-            budget,
-          );
-          const final = localPageCompositionMetrics(
-            installed,
-            shells,
-            projected,
-            undefined,
-            (snapshot) => {
-              snapshots.after = snapshot;
-            },
-            budget,
-          );
+          const snapshots: { before?: LocalCompositionSnapshot; after?: LocalCompositionSnapshot } = {};
+          const original = localPageCompositionMetrics(installed, shells, undefined, undefined,
+            (snapshot) => { snapshots.before = snapshot; }, budget);
+          const final = localPageCompositionMetrics(installed, shells, projected, undefined,
+            (snapshot) => { snapshots.after = snapshot; }, budget);
           const { before, after } = snapshots;
           if (before === undefined || after === undefined) return;
           const originalIds = new Set(before.placementIds);
           if (after.placementIds.some((id) => !originalIds.has(id))) return;
           const retained = new Set(after.placementIds);
           const trace = new Map(decisions.placements.map((entry) => [entry.placementId, entry]));
-          if (
-            trace.size !== decisions.placements.length ||
-            new Set([...trace.keys()].map((id) => id.toLowerCase())).size !== trace.size ||
-            before.placementIds.some((id) => !trace.has(id))
-          )
-            return;
-          const target =
-            before.body.find((entry) => entry.table && !retained.has(entry.id)) ??
+          if (trace.size !== decisions.placements.length ||
+              new Set([...trace.keys()].map((id) => id.toLowerCase())).size !== trace.size ||
+              before.placementIds.some((id) => !trace.has(id))) return;
+          const target = before.body.find((entry) => entry.table && !retained.has(entry.id)) ??
             before.body.find((entry) => entry.visible && !retained.has(entry.id));
           const decision = target === undefined ? undefined : trace.get(target.id);
           if (target !== undefined && decision === undefined) return;
-          const removedAncestors =
-            decision?.ancestorPlacementIds.filter((id) => !retained.has(id)) ?? [];
+          const removedAncestors = decision?.ancestorPlacementIds
+            .filter((id) => !retained.has(id)) ?? [];
           if (removedAncestors.length > 64) return;
           const ancestors = removedAncestors.map((id) => trace.get(id));
           if (ancestors.some((entry) => entry === undefined)) return;
@@ -2115,96 +1962,47 @@ const localPageProjectionDecisionObserver = (
           // retains every actual view/condition cause, rather than guessing a table read refusal.
           const viewRefused = ancestors.some((entry) => entry?.viewGate === "REFUSED");
           const conditionRefused = ancestors.some((entry) => entry?.condition === "NOT_TRUE");
-          const ancestor =
-            removedAncestors.length === 0
-              ? "NONE"
-              : viewRefused && conditionRefused
-                ? "MIXED"
-                : viewRefused
-                  ? "VIEW_REFUSED"
-                  : conditionRefused
-                    ? "CONDITION_NOT_TRUE"
-                    : "UNPROVABLE";
-          const projection =
-            target === undefined
-              ? before.placementIds.every((id) => retained.has(id))
-                ? "RETAINED"
-                : "UNPROVABLE"
-              : removedAncestors.length > 0
-                ? "ANCESTOR_PRUNED"
-                : decision?.viewGate === "REFUSED"
-                  ? "DIRECT_VIEW_PRUNED"
-                  : decision?.condition === "NOT_TRUE"
-                    ? "DIRECT_CONDITION_PRUNED"
-                    : "UNPROVABLE";
+          const ancestor = removedAncestors.length === 0 ? "NONE"
+            : viewRefused && conditionRefused ? "MIXED" : viewRefused ? "VIEW_REFUSED"
+            : conditionRefused ? "CONDITION_NOT_TRUE" : "UNPROVABLE";
+          const projection = target === undefined
+            ? before.placementIds.every((id) => retained.has(id)) ? "RETAINED" : "UNPROVABLE"
+            : removedAncestors.length > 0 ? "ANCESTOR_PRUNED"
+            : decision?.viewGate === "REFUSED" ? "DIRECT_VIEW_PRUNED"
+            : decision?.condition === "NOT_TRUE" ? "DIRECT_CONDITION_PRUNED" : "UNPROVABLE";
           const frame = {
-            schema: "page_projection_decision_v1",
-            stage: "PROJECTED_PAGE",
-            result: "AVAILABLE",
-            bodyBefore: original.body,
-            bodyAfter: final.body,
-            tableBefore: original.table,
-            tableAfter: final.table,
+            schema: "page_projection_decision_v1", stage: "PROJECTED_PAGE", result: "AVAILABLE",
+            bodyBefore: original.body, bodyAfter: final.body,
+            tableBefore: original.table, tableAfter: final.table,
             target: target === undefined ? "NONE" : target.table ? "TABLE" : "VISIBLE_BODY",
             viewGate: decision?.viewGate ?? "UNPROVABLE",
             condition: decision?.condition ?? "UNPROVABLE",
             conditionReason: decision?.conditionReason ?? "UNKNOWN",
-            ancestor,
-            projection,
-            useState: decision?.useState ?? "UNPROVABLE",
-            targetRead:
-              target?.table === true && !retained.has(target.id)
-                ? "TARGET_NOT_REACHED"
-                : "NOT_OBSERVED",
+            ancestor, projection, useState: decision?.useState ?? "UNPROVABLE",
+            targetRead: target?.table === true && !retained.has(target.id)
+              ? "TARGET_NOT_REACHED" : "NOT_OBSERVED",
             visibleAfter: after.body.some((entry) => entry.visible) ? "SOME" : "NONE",
           };
           const allowed: Readonly<Record<string, readonly (string | boolean)[]>> = {
-            schema: ["page_projection_decision_v1"],
-            stage: ["PROJECTED_PAGE"],
-            result: ["AVAILABLE"],
+            schema: ["page_projection_decision_v1"], stage: ["PROJECTED_PAGE"], result: ["AVAILABLE"],
             bodyBefore: ["NONE", "ONE", "MULTIPLE", "UNKNOWN"],
             bodyAfter: ["NONE", "ONE", "MULTIPLE", "UNKNOWN"],
-            tableBefore: [true, false],
-            tableAfter: [true, false],
+            tableBefore: [true, false], tableAfter: [true, false],
             target: ["TABLE", "VISIBLE_BODY", "NONE", "UNPROVABLE"],
             viewGate: ["ABSENT", "ALLOWED", "REFUSED", "UNPROVABLE"],
-            condition: [
-              "ABSENT",
-              "TRUE",
-              "NOT_TRUE",
-              "SKIPPED_VIEW",
-              "SKIPPED_ANCESTOR",
-              "UNPROVABLE",
-            ],
-            conditionReason: [
-              "ABSENT",
-              "SUPPORTED_TRUE",
-              "SUPPORTED_FALSE",
-              "UNSUPPORTED_OPERAND",
-              "SUBJECT_UNAVAILABLE",
-              "FIELD_UNAVAILABLE",
-              "DECLARATION_UNPROVABLE",
-              "SKIPPED_VIEW",
-              "SKIPPED_ANCESTOR",
-              "UNKNOWN",
-            ],
+            condition: ["ABSENT", "TRUE", "NOT_TRUE", "SKIPPED_VIEW", "SKIPPED_ANCESTOR", "UNPROVABLE"],
+            conditionReason: ["ABSENT", "SUPPORTED_TRUE", "SUPPORTED_FALSE", "UNSUPPORTED_OPERAND",
+              "SUBJECT_UNAVAILABLE", "FIELD_UNAVAILABLE", "DECLARATION_UNPROVABLE",
+              "SKIPPED_VIEW", "SKIPPED_ANCESTOR", "UNKNOWN"],
             ancestor: ["NONE", "VIEW_REFUSED", "CONDITION_NOT_TRUE", "MIXED", "UNPROVABLE"],
-            projection: [
-              "RETAINED",
-              "DIRECT_VIEW_PRUNED",
-              "DIRECT_CONDITION_PRUNED",
-              "ANCESTOR_PRUNED",
-              "UNPROVABLE",
-            ],
+            projection: ["RETAINED", "DIRECT_VIEW_PRUNED", "DIRECT_CONDITION_PRUNED",
+              "ANCESTOR_PRUNED", "UNPROVABLE"],
             useState: ["PLAIN_CONTENT", "AVAILABLE", "DISABLED", "UNPROVABLE"],
             targetRead: ["TARGET_NOT_REACHED", "NOT_OBSERVED"],
             visibleAfter: ["SOME", "NONE", "UNPROVABLE"],
           };
-          if (
-            Object.keys(frame).length !== 16 ||
-            Object.entries(frame).some(([key, value]) => !allowed[key]?.includes(value))
-          )
-            return;
+          if (Object.keys(frame).length !== 16 || Object.entries(frame)
+            .some(([key, value]) => !allowed[key]?.includes(value))) return;
           const line = "VORTEX_LOCAL_PAGE_PROJECTION_DECISION:" + JSON.stringify(frame);
           if (Buffer.byteLength(line, "utf8") <= 2048) console.info(line);
         } catch {
@@ -2236,14 +2034,10 @@ const loadApplicationPageInternal = async (
     applicationRootId: address.application.applicationRootId,
   };
 
-  const bundleObservation =
-    selectedPlacementIds === undefined &&
-    boardContinuation === undefined &&
+  const bundleObservation = selectedPlacementIds === undefined && boardContinuation === undefined &&
     tableContinuation === undefined &&
-    expectedInstallationRevision === undefined &&
-    initialContinuationKey === undefined
-      ? localPageBundleObservation()
-      : undefined;
+    expectedInstallationRevision === undefined && initialContinuationKey === undefined
+    ? localPageBundleObservation() : undefined;
 
   // The installed context is read once, under the person's own verified request scope.
   const loaded = await loadInstalledContext(
@@ -2276,28 +2070,23 @@ const loadApplicationPageInternal = async (
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) return { kind: "unavailable" };
 
-  const observeComposition =
-    selectedPlacementIds === undefined &&
-    boardContinuation === undefined &&
+  const observeComposition = selectedPlacementIds === undefined && boardContinuation === undefined &&
     tableContinuation === undefined &&
     pageDefinition.type !== "guided_form"
-      ? localPageCompositionObserver(pageDefinition, application.content.shells)
-      : undefined;
+    ? localPageCompositionObserver(pageDefinition, application.content.shells)
+    : undefined;
   observeComposition?.("INSTALLED_PAGE", "AVAILABLE");
-  const observeProjectionDecision =
-    selectedPlacementIds === undefined &&
-    boardContinuation === undefined &&
+  const observeProjectionDecision = selectedPlacementIds === undefined && boardContinuation === undefined &&
     tableContinuation === undefined &&
     pageDefinition.type !== "guided_form"
-      ? localPageProjectionDecisionObserver(pageDefinition, application.content.shells)
-      : undefined;
+    ? localPageProjectionDecisionObserver(pageDefinition, application.content.shells)
+    : undefined;
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
   const pageService = createStoredPageCapabilityService({
     ...dependencies,
     context,
-    ...(observeProjectionDecision === undefined
-      ? {}
+    ...(observeProjectionDecision === undefined ? {}
       : { observeProjectionDecision: observeProjectionDecision.capture }),
     selection: {
       pageId: pageDefinition.pageId,
@@ -2306,10 +2095,8 @@ const loadApplicationPageInternal = async (
   });
   const projectedPage = await pageService.project(session, selection);
   if (projectedPage.kind !== "available") {
-    observeComposition?.(
-      "PROJECTED_PAGE",
-      projectedPage.kind === "unavailable" ? "UNAVAILABLE" : "TEMPORARILY_UNAVAILABLE",
-    );
+    observeComposition?.("PROJECTED_PAGE", projectedPage.kind === "unavailable"
+      ? "UNAVAILABLE" : "TEMPORARILY_UNAVAILABLE");
     return projectedPage;
   }
   // An undefined projection is the page refused for this viewer: never an empty page.
@@ -2322,10 +2109,9 @@ const loadApplicationPageInternal = async (
   // The page capability projection is authoritative, but its derived choice settings still
   // contain every declared option. Work on a copy so gated options never reach the browser.
   const page = structuredClone(projectedPage.value);
-  const bodyContentAvailable =
-    pageDefinition.type === "guided_form"
-      ? undefined
-      : projectedBodyContentAvailable(pageDefinition, application.content.shells, page);
+  const bodyContentAvailable = pageDefinition.type === "guided_form"
+    ? undefined
+    : projectedBodyContentAvailable(pageDefinition, application.content.shells, page);
   const allPlacements = collectPlacements(page);
   if (boardContinuation !== undefined) {
     const targets = allPlacements.filter(({ placementId }) =>
@@ -2425,7 +2211,7 @@ const loadApplicationPageInternal = async (
       for (const field of recordType.fields) {
         if (
           !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
-          (field.type !== "several_choices" && field.type !== "choice")
+          field.type !== "several_choices" && field.type !== "choice"
         )
           continue;
         for (const option of field.settings.options) {
@@ -2528,26 +2314,18 @@ const loadApplicationPageInternal = async (
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
       return createHumanInstalledPageBundleContextLoader({
         transaction,
-        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-          installedReleaseCatalogue,
-          transaction,
-        ),
+        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
-        ...(bundleObservation === undefined
-          ? {}
-          : { observeBundleRead: bundleObservation.observe }),
+        ...(bundleObservation === undefined ? {} : { observeBundleRead: bundleObservation.observe }),
       });
     },
   });
   const applicationPageLinks = createApplicationPageLinkReader({
-    tenantShortName: address.tenantShortName,
-    organizationShortName: address.organizationShortName,
+    tenantShortName: address.tenantShortName, organizationShortName: address.organizationShortName,
   });
-  const linkTiles = createLinkTilesQueryResolver(
-    queries,
+  const linkTiles = createLinkTilesQueryResolver(queries,
     (viewer, identity) => recordLinks.read(viewer, identity),
-    (viewer, selector) => applicationPageLinks.read(viewer, selector),
-  );
+    (viewer, selector) => applicationPageLinks.read(viewer, selector));
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
@@ -2631,7 +2409,8 @@ const loadApplicationPageInternal = async (
       if (editFormId === undefined) continue;
       if (
         selectedForProjection.has(editFormId.toLowerCase()) ||
-        (isEditFieldPlacement(placement) && selectedForProjection.has(placementId.toLowerCase()))
+        (isEditFieldPlacement(placement) &&
+          selectedForProjection.has(placementId.toLowerCase()))
       ) {
         selectedForProjection.add(editFormId.toLowerCase());
         for (const entry of allPlacements)
@@ -2719,13 +2498,9 @@ const loadApplicationPageInternal = async (
         block.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
         block.releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion);
     if (
-      tableContract === undefined &&
-      detailContract === undefined &&
-      !isBoardBlock &&
-      !isQueryNoticeBlock &&
-      !isLinkTilesBlock
-    )
-      continue;
+      tableContract === undefined && detailContract === undefined &&
+      !isBoardBlock && !isQueryNoticeBlock && !isLinkTilesBlock
+    ) continue;
 
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const recordTypeId =
@@ -2734,15 +2509,8 @@ const loadApplicationPageInternal = async (
           ? undefined
           : pageSubjectRecordTypeId
         : isLinkTilesBlock
-          ? buildLinkTilesQueryBinding(
-              context,
-              queryId,
-              settings,
-              {},
-              isRecord(block) && typeof block.releaseVersion === "string"
-                ? block.releaseVersion
-                : "",
-            )?.recordTypeId
+          ? buildLinkTilesQueryBinding(context, queryId, settings, {},
+              isRecord(block) && typeof block.releaseVersion === "string" ? block.releaseVersion : "")?.recordTypeId
           : resolvedQueryRecordTypeId(context, queryId);
     if (recordTypeId === undefined) continue;
     recordTypeByPlacement.set(placementId.toLowerCase(), recordTypeId);
@@ -2784,9 +2552,7 @@ const loadApplicationPageInternal = async (
     [
       ...application.content.actions,
       ...context.releaseSet.modules.flatMap((module) => module.content.actions),
-    ].map(
-      (action) => [String(action.key).toLowerCase(), String(action.subjectRecordTypeId)] as const,
-    ),
+    ].map((action) => [String(action.key).toLowerCase(), String(action.subjectRecordTypeId)] as const),
   );
   const flowWrittenRecordTypes = (flowId: string): readonly string[] => {
     const types = new Set<string>();
@@ -2794,11 +2560,8 @@ const loadApplicationPageInternal = async (
     const literal = (task: FlowTask, name: string): string | undefined => {
       const properties = "properties" in task ? task.properties : undefined;
       const value = properties?.[name];
-      return isRecord(value) &&
-        value.kind === "literal" &&
-        isRecord(value.literal) &&
-        value.literal.type === "text" &&
-        typeof value.literal.value === "string"
+      return isRecord(value) && value.kind === "literal" && isRecord(value.literal) &&
+        value.literal.type === "text" && typeof value.literal.value === "string"
         ? value.literal.value
         : undefined;
     };
@@ -2849,11 +2612,12 @@ const loadApplicationPageInternal = async (
       recordTypeByPlacement.get(placementId.toLowerCase()) ??
       (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase())) ??
       pageSubjectRecordTypeId;
-    const editFormId = editFormPlacementIds.has(placementId)
-      ? placementId
-      : formId !== undefined && editFormPlacementIds.has(formId)
-        ? formId
-        : undefined;
+    const editFormId =
+      editFormPlacementIds.has(placementId)
+        ? placementId
+        : formId !== undefined && editFormPlacementIds.has(formId)
+          ? formId
+          : undefined;
     for (const binding of held) {
       const writtenTypes = flowWrittenRecordTypes(String(binding.flow.flowId));
       const targetTypes =
@@ -2862,8 +2626,8 @@ const loadApplicationPageInternal = async (
           : sourceRecordTypeId === undefined
             ? []
             : [sourceRecordTypeId];
-      const queryTargets = targetTypes.flatMap(
-        (recordTypeId) => dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? [],
+      const queryTargets = targetTypes.flatMap((recordTypeId) =>
+        dataPlacementsByRecordType.get(recordTypeId.toLowerCase()) ?? [],
       );
       const formTargets =
         editFormId === undefined ||
@@ -2961,14 +2725,12 @@ const loadApplicationPageInternal = async (
       typeof block.blockId === "string" &&
       sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
-    if (
-      isLinkTilesBlock &&
-      (!isRecord(block) ||
-        (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
-          block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion &&
-          block.releaseVersion !== APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion) ||
-        projectedUseAvailability(placement) !== "available")
-    ) {
+    if (isLinkTilesBlock && (
+      !isRecord(block) || (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
+        block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion &&
+        block.releaseVersion !== APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion) ||
+      projectedUseAvailability(placement) !== "available"
+    )) {
       data[placementId] = { status: "refused", reason: "not_permitted" };
       continue;
     }
@@ -2978,31 +2740,23 @@ const loadApplicationPageInternal = async (
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
     if (hasReferenceChoiceSource(placement)) {
-      const form =
-        formId === undefined
-          ? undefined
-          : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
+      const form = formId === undefined
+        ? undefined
+        : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
       const field = form?.placements.get(placementId);
       if (field === undefined || formId === undefined) {
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
         continue;
       }
-      const parent =
-        field.dependency === undefined
-          ? undefined
-          : [...(form?.placements ?? [])].find(
-              ([, candidate]) => candidate.fieldKey === field.dependency?.fromField,
-            );
+      const parent = field.dependency === undefined ? undefined :
+        [...(form?.placements ?? [])].find(([, candidate]) =>
+          candidate.fieldKey === field.dependency?.fromField,
+        );
       referenceChoiceInputs.push({
-        placementId,
-        formId,
-        fieldKey: field.fieldKey,
-        releaseVersion: field.releaseVersion,
-        ...(parent === undefined
-          ? {}
-          : {
-              dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] },
-            }),
+        placementId, formId, fieldKey: field.fieldKey, releaseVersion: field.releaseVersion,
+        ...(parent === undefined ? {} : {
+          dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] },
+        }),
       });
       if (field.dependency !== undefined) {
         data[placementId] = {
@@ -3066,16 +2820,14 @@ const loadApplicationPageInternal = async (
         sameId(String(module.rootId), subjectModuleRootId),
       );
       const subjectModule = subjectModuleMatches.length === 1 ? subjectModuleMatches[0] : undefined;
-      const subjectRecordTypes =
-        subjectModule?.content.recordTypes.filter((recordType) =>
-          sameId(String(recordType.recordTypeId), pageSubjectRecordTypeId),
-        ) ?? [];
+      const subjectRecordTypes = subjectModule?.content.recordTypes.filter((recordType) =>
+        sameId(String(recordType.recordTypeId), pageSubjectRecordTypeId),
+      ) ?? [];
       const subjectRecordType = subjectRecordTypes.length === 1 ? subjectRecordTypes[0] : undefined;
       const matchingFields =
         fieldId === undefined
           ? []
-          : (subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ??
-            []);
+          : subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ?? [];
       const attachmentField = matchingFields.length === 1 ? matchingFields[0] : undefined;
       if (fieldId === undefined || attachmentField?.type !== "attachment") {
         data[placementId] = { status: "refused", reason: "not_permitted" };
@@ -3090,73 +2842,75 @@ const loadApplicationPageInternal = async (
         continue;
       }
 
-      const currentAttachments = await humanOrganizationRequests(
-        dependencies.identityAuthorityId,
-      ).run(session, selection, async (transaction, scope) => {
-        if (
-          scope.accessVersion !== page.accessVersion ||
-          !sameId(String(scope.organizationId), String(context.organizationId)) ||
-          scope.applicationRootId === undefined ||
-          !sameId(String(scope.applicationRootId), String(context.applicationRootId))
-        )
-          return { kind: "stale" as const };
-        const currentSubject = await readPageSubjectInTransaction(transaction, {
-          recordTypeId: pageSubjectRecordTypeId,
-          recordId: subjectId.data,
-        });
-        if (currentSubject.kind !== "read")
-          return { kind: "subject" as const, subject: currentSubject };
-        const repository = createSqlFileReadRepository(transaction);
-        const projection = await projectReadOnlyAttachmentList({
-          owner: {
-            organizationId: String(context.organizationId),
-            applicationRootId: String(context.applicationRootId),
+      const currentAttachments = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        selection,
+        async (transaction, scope) => {
+          if (
+            scope.accessVersion !== page.accessVersion ||
+            !sameId(String(scope.organizationId), String(context.organizationId)) ||
+            scope.applicationRootId === undefined ||
+            !sameId(String(scope.applicationRootId), String(context.applicationRootId))
+          )
+            return { kind: "stale" as const };
+          const currentSubject = await readPageSubjectInTransaction(transaction, {
             recordTypeId: pageSubjectRecordTypeId,
             recordId: subjectId.data,
-            fieldId,
-          },
-          subjectValues: currentSubject.row.values,
-          maximumFiles,
-          readFile: async (candidateFileId): Promise<ReadOnlyAttachmentFileEvidence> => {
-            const parsedFileId = fileIdSchema.safeParse(candidateFileId);
-            if (!parsedFileId.success) return { kind: "refused" };
-            try {
-              const decision = await decideFileRead(transaction, parsedFileId.data);
-              if (decision.outcome !== "allowed") return { kind: "refused" };
-              const file = await repository.readFile(parsedFileId.data);
-              if (file === null) return { kind: "refused" };
-              return {
-                kind: "read",
-                decision,
-                metadata: {
-                  fileId: String(file.fileId),
-                  organizationId: String(file.organizationId),
-                  ...(file.applicationRootId === undefined
-                    ? {}
-                    : { applicationRootId: String(file.applicationRootId) }),
-                  ...(file.ownerRecordTypeId === undefined
-                    ? {}
-                    : { ownerRecordTypeId: String(file.ownerRecordTypeId) }),
-                  ...(file.ownerRecordId === undefined
-                    ? {}
-                    : { ownerRecordId: String(file.ownerRecordId) }),
-                  ...(file.ownerFieldId === undefined
-                    ? {}
-                    : { ownerFieldId: String(file.ownerFieldId) }),
-                  lifecycleState: file.lifecycleState,
-                  scannerResult: file.scannerResult,
-                  originalSafeDisplayName: file.originalSafeDisplayName,
-                  detectedMediaType: file.detectedMediaType,
-                  sizeBytes: file.sizeBytes,
-                },
-              };
-            } catch {
-              return { kind: "unavailable" };
-            }
-          },
-        });
-        return { kind: "projected" as const, subject: currentSubject, projection };
-      });
+          });
+          if (currentSubject.kind !== "read")
+            return { kind: "subject" as const, subject: currentSubject };
+          const repository = createSqlFileReadRepository(transaction);
+          const projection = await projectReadOnlyAttachmentList({
+            owner: {
+              organizationId: String(context.organizationId),
+              applicationRootId: String(context.applicationRootId),
+              recordTypeId: pageSubjectRecordTypeId,
+              recordId: subjectId.data,
+              fieldId,
+            },
+            subjectValues: currentSubject.row.values,
+            maximumFiles,
+            readFile: async (candidateFileId): Promise<ReadOnlyAttachmentFileEvidence> => {
+              const parsedFileId = fileIdSchema.safeParse(candidateFileId);
+              if (!parsedFileId.success) return { kind: "refused" };
+              try {
+                const decision = await decideFileRead(transaction, parsedFileId.data);
+                if (decision.outcome !== "allowed") return { kind: "refused" };
+                const file = await repository.readFile(parsedFileId.data);
+                if (file === null) return { kind: "refused" };
+                return {
+                  kind: "read",
+                  decision,
+                  metadata: {
+                    fileId: String(file.fileId),
+                    organizationId: String(file.organizationId),
+                    ...(file.applicationRootId === undefined
+                      ? {}
+                      : { applicationRootId: String(file.applicationRootId) }),
+                    ...(file.ownerRecordTypeId === undefined
+                      ? {}
+                      : { ownerRecordTypeId: String(file.ownerRecordTypeId) }),
+                    ...(file.ownerRecordId === undefined
+                      ? {}
+                      : { ownerRecordId: String(file.ownerRecordId) }),
+                    ...(file.ownerFieldId === undefined
+                      ? {}
+                      : { ownerFieldId: String(file.ownerFieldId) }),
+                    lifecycleState: file.lifecycleState,
+                    scannerResult: file.scannerResult,
+                    originalSafeDisplayName: file.originalSafeDisplayName,
+                    detectedMediaType: file.detectedMediaType,
+                    sizeBytes: file.sizeBytes,
+                  },
+                };
+              } catch {
+                return { kind: "unavailable" };
+              }
+            },
+          });
+          return { kind: "projected" as const, subject: currentSubject, projection };
+        },
+      );
       if (currentAttachments.kind === "temporarily_unavailable") {
         data[placementId] = { status: "error" };
       } else if (currentAttachments.kind === "unavailable") {
@@ -3199,8 +2953,7 @@ const loadApplicationPageInternal = async (
       !queryBoundLauncher &&
       !queryBoundSummary &&
       !queryBoundBoard
-    )
-      continue;
+    ) continue;
     // A Record detail on a detail or public page that binds no query reads its page subject: the
     // one record the page's own address names, of the page's declared record type, through the
     // record read path under the viewer's own authority. A public page shows no more than its
@@ -3278,16 +3031,12 @@ const loadApplicationPageInternal = async (
         continue;
       }
       const result = await linkTiles.resolve(
-        session,
-        selection,
-        context,
-        queryId,
-        settings,
-        inputValues,
+        session, selection, context, queryId, settings, inputValues,
         isRecord(block) && typeof block.releaseVersion === "string" ? block.releaseVersion : "",
       );
-      data[placementId] =
-        result.status === "ready" && result.values.rows.length === 0 ? { status: "empty" } : result;
+      data[placementId] = result.status === "ready" && result.values.rows.length === 0
+        ? { status: "empty" }
+        : result;
       continue;
     }
 
@@ -3309,12 +3058,7 @@ const loadApplicationPageInternal = async (
         continue;
       }
       data[placementId] = await queryNotices.resolve(
-        session,
-        selection,
-        context,
-        queryId,
-        settings,
-        inputValues,
+        session, selection, context, queryId, settings, inputValues,
       );
       continue;
     }
@@ -3430,9 +3174,7 @@ const loadApplicationPageInternal = async (
       }
 
       const fieldKeys = new Map(
-        targetRecordType.fields.map(
-          (field) => [String(field.fieldId).toLowerCase(), field.key] as const,
-        ),
+        targetRecordType.fields.map((field) => [String(field.fieldId).toLowerCase(), field.key] as const),
       );
       const launcherRows: ApplicationLauncherQueryRow[] = queryRows.map((row) => {
         const cells: Record<string, { kind: "text"; text: string }> = {};
@@ -3514,18 +3256,13 @@ const loadApplicationPageInternal = async (
       const summaryRecordType =
         recordTypeReference.state === "resolved"
           ? context.releaseSet.modules
-              .find((module) =>
-                sameId(String(module.rootId), String(recordTypeReference.moduleRootId)),
-              )
+              .find((module) => sameId(String(module.rootId), String(recordTypeReference.moduleRootId)))
               ?.content.recordTypes.find((recordType) =>
                 sameId(String(recordType.recordTypeId), String(recordTypeReference.recordTypeId)),
               )
           : undefined;
       const fieldById = new Map(
-        (summaryRecordType?.fields ?? []).map((field) => [
-          String(field.fieldId).toLowerCase(),
-          field,
-        ]),
+        (summaryRecordType?.fields ?? []).map((field) => [String(field.fieldId).toLowerCase(), field]),
       );
       const values: Array<{
         key: string;
@@ -3612,12 +3349,12 @@ const loadApplicationPageInternal = async (
           ? fieldById.get(mapping.durationFieldId.toLowerCase())
           : undefined;
       const titleField = fieldById.get(calendarContract.itemTitleFieldId.toLowerCase());
-      const selected = new Set(
-        bound.query.selectedFieldIds.map((fieldId) => fieldId.toLowerCase()),
-      );
+      const selected = new Set(bound.query.selectedFieldIds.map((fieldId) => fieldId.toLowerCase()));
       const dateFieldType = startField?.type;
       const filterableDateFields =
-        mapping.kind === "start_end" ? [startField, endField] : [startField];
+        mapping.kind === "start_end"
+          ? [startField, endField]
+          : [startField];
       const mappingValid =
         recordType !== undefined &&
         (dateFieldType === "date" || dateFieldType === "date_time") &&
@@ -3668,12 +3405,7 @@ const loadApplicationPageInternal = async (
         requestedFieldIds: [...new Set(requestedFieldIds.map((fieldId) => fieldId.toLowerCase()))],
         requestedSystemFieldKeys: [],
         sort: [],
-        filter: calendarWindowFilter(
-          mapping,
-          dateFieldType as "date" | "date_time",
-          window,
-          timeZone,
-        ),
+        filter: calendarWindowFilter(mapping, dateFieldType as "date" | "date_time", window, timeZone),
         sortableFieldIds: [],
         filterableFieldIds,
         searchableFieldIds: [],
@@ -3782,9 +3514,8 @@ const loadApplicationPageInternal = async (
           tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
             ? tableContinuation.request.page
             : 1,
-        ...(tableContinuation === undefined ||
-        !sameId(tableContinuation.placementId, placementId) ||
-        tableContinuation.request.continuationToken === undefined
+        ...(tableContinuation === undefined || !sameId(tableContinuation.placementId, placementId) ||
+          tableContinuation.request.continuationToken === undefined
           ? {}
           : { continuationToken: tableContinuation.request.continuationToken }),
         sort: state.sort,
@@ -3816,12 +3547,11 @@ const loadApplicationPageInternal = async (
     }
 
     const queryRecordType = bound.query.recordType;
-    const detailModule =
-      queryRecordType.state === "resolved"
-        ? context.releaseSet.modules.find((module) =>
-            sameId(String(module.rootId), String(queryRecordType.moduleRootId)),
-          )
-        : undefined;
+    const detailModule = queryRecordType.state === "resolved"
+      ? context.releaseSet.modules.find((module) =>
+          sameId(String(module.rootId), String(queryRecordType.moduleRootId)),
+        )
+      : undefined;
     if (detailModule === undefined) {
       logPlacementFailure(address, placementId, "detail_record_type_unavailable");
       data[placementId] = { status: "error" };
@@ -3885,9 +3615,8 @@ const loadApplicationPageInternal = async (
   // the Record writer still locks and rechecks the selected membership at save time.
   const ownershipByRecordType = new Map(
     context.releaseSet.modules.flatMap((module) =>
-      module.content.recordTypes.map(
-        (recordType) =>
-          [String(recordType.recordTypeId).toLowerCase(), recordType.ownershipMode] as const,
+      module.content.recordTypes.map((recordType) =>
+        [String(recordType.recordTypeId).toLowerCase(), recordType.ownershipMode] as const,
       ),
     ),
   );
@@ -3898,51 +3627,37 @@ const loadApplicationPageInternal = async (
       visited.add(id.toLowerCase());
       const flow = flowsById.get(id.toLowerCase());
       if (flow === undefined) return false;
-      const visitTasks = (tasks: readonly FlowTask[]): boolean =>
-        tasks.some((task) => {
-          const properties = "properties" in task ? task.properties : undefined;
-          const recordType = properties?.record_type;
-          if (
-            task.type === "record.save" &&
-            properties !== undefined &&
-            !Object.hasOwn(properties, "record") &&
-            isRecord(recordType) &&
-            recordType.kind === "literal" &&
-            isRecord(recordType.literal) &&
+      const visitTasks = (tasks: readonly FlowTask[]): boolean => tasks.some((task) => {
+        const properties = "properties" in task ? task.properties : undefined;
+        const recordType = properties?.record_type;
+        if (task.type === "record.save" && properties !== undefined &&
+            !Object.hasOwn(properties, "record") && isRecord(recordType) &&
+            recordType.kind === "literal" && isRecord(recordType.literal) &&
             recordType.literal.type === "text" &&
             typeof recordType.literal.value === "string" &&
-            ownershipByRecordType.get(recordType.literal.value.toLowerCase()) === "group"
-          )
-            return true;
-          if (
-            task.type === "run_flow" &&
-            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId))
-          )
-            return true;
-          return flowTaskChildLists(task).some((child) => visitTasks(child.tasks));
-        });
+            ownershipByRecordType.get(recordType.literal.value.toLowerCase()) === "group")
+          return true;
+        if (task.type === "run_flow" &&
+            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId)))
+          return true;
+        return flowTaskChildLists(task).some((child) => visitTasks(child.tasks));
+      });
       return visitTasks(flow.tasks) || visitTasks(flow.errors) || visitTasks(flow.finally);
     };
     return visitFlow(flowId);
   };
   const groupCreateBindings = placements.flatMap(({ placementId, placement }) => {
     const block = placement.block;
-    if (
-      !isRecord(block) ||
-      typeof block.blockId !== "string" ||
-      !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-    )
-      return [];
+    if (!isRecord(block) || typeof block.blockId !== "string" ||
+        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) return [];
     return (bindings[placementId] ?? [])
-      .filter((binding) => binding.event === "form_submit" && createsGroupRecord(binding.flowId))
+      .filter((binding) => binding.event === "form_submit" &&
+        createsGroupRecord(binding.flowId))
       .map((binding) => ({ formId: placementId, binding }));
   });
   if (groupCreateBindings.length > 0) {
-    if (
-      groupCreateBindings.some(
-        ({ binding }) => !binding.callerInputs.includes("selected_owner_group_id"),
-      )
-    )
+    if (groupCreateBindings.some(({ binding }) =>
+      !binding.callerInputs.includes("selected_owner_group_id")))
       return { kind: "temporarily_unavailable" };
     const choices = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
@@ -3958,10 +3673,7 @@ const loadApplicationPageInternal = async (
     if (choices.value.accessVersion !== page.accessVersion)
       return { kind: "temporarily_unavailable" };
     for (const formId of new Set(groupCreateBindings.map(({ formId }) => formId)))
-      data[formId] = {
-        status: "ready",
-        values: { kind: "form", ownerGroups: choices.value.groups },
-      };
+      data[formId] = { status: "ready", values: { kind: "form", ownerGroups: choices.value.groups } };
   }
 
   // A detail or form page offers its subject to the flows it starts; a public page never does.
@@ -3987,14 +3699,24 @@ const loadApplicationPageInternal = async (
     if (subjectCandidate !== undefined) {
       if (subjectRow?.kind === "temporarily_unavailable")
         return { kind: "temporarily_unavailable" };
-      if (subjectRow?.kind !== "read" || subject === undefined) return { kind: "unavailable" };
+      if (subjectRow?.kind !== "read" || subject === undefined)
+        return { kind: "unavailable" };
     }
     const recordType = getGuidedFormRecordType(pageDefinition, context.releaseSet.modules);
     if (recordType === undefined) return { kind: "unavailable" };
     const shells = context.releaseSet.application.content.shells;
-    const declaredStepFields = getGuidedFormStepFields(pageDefinition, recordType, shells);
+    const declaredStepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+    );
     const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page, shells);
-    const stepFields = getGuidedFormStepFields(pageDefinition, recordType, shells, page);
+    const stepFields = getGuidedFormStepFields(
+      pageDefinition,
+      recordType,
+      shells,
+      page,
+    );
     const flowId = getGuidedFormFlowId(page, application.content.flowBindings, shells);
     if (
       declaredStepFields === undefined ||
@@ -4026,7 +3748,11 @@ const loadApplicationPageInternal = async (
     const values = visibleGuidedFormValues(openedDraft.draft, stepFields);
     const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
     if (computedStepId === undefined) return { kind: "unavailable" };
-    const activeStepId = earlierGuidedStepId(stepFields, computedStepId, first(parameters.step));
+    const activeStepId = earlierGuidedStepId(
+      stepFields,
+      computedStepId,
+      first(parameters.step),
+    );
     Object.assign(data, guidedFormInputData(page, recordType, values, dateTimeZones));
     guidedForm = {
       draftId: String(openedDraft.draft.draftId),
@@ -4076,22 +3802,17 @@ const loadApplicationPageInternal = async (
       const projected: Record<string, PageDataState> = {};
       let complete = true;
       for (const entry of fields) {
-        let projectedField:
-          Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
+        let projectedField: Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
         if (isUnboundReferenceChoicePlacement(entry.placement)) {
           const firstPage = referenceChoiceFirstPages.get(entry.placementId);
-          const definition =
-            firstPage === undefined
-              ? undefined
-              : subjectRecordType.fields.find(
-                  (candidate) => candidate.key === firstPage.field.fieldKey,
-                );
-          const valueKey =
-            definition === undefined
-              ? undefined
-              : Object.keys(subjectRow.row.values).find((key) =>
-                  sameId(key, String(definition.fieldId)),
-                );
+          const definition = firstPage === undefined
+            ? undefined
+            : subjectRecordType.fields.find((candidate) => candidate.key === firstPage.field.fieldKey);
+          const valueKey = definition === undefined
+            ? undefined
+            : Object.keys(subjectRow.row.values).find((key) =>
+                sameId(key, String(definition.fieldId)),
+              );
           const parsedValueFieldId =
             valueKey === undefined ? undefined : fieldIdSchema.safeParse(valueKey);
           projectedField = await projectSelectedReferenceChoiceEditField({
@@ -4132,67 +3853,63 @@ const loadApplicationPageInternal = async (
 
   if (subjectUnreadable) return { kind: "unavailable" };
   const permittedKeys = new Set(address.application.pageKeys);
-  const applicationShellId =
-    "shellId" in pageDefinition.composition ? pageDefinition.composition.shellId : undefined;
-  const applicationShell =
-    applicationShellId === undefined
-      ? undefined
-      : application.content.shells.find((candidate) =>
-          sameId(candidate.shellId, applicationShellId),
-        );
+  const applicationShellId = "shellId" in pageDefinition.composition
+    ? pageDefinition.composition.shellId
+    : undefined;
+  const applicationShell = applicationShellId === undefined
+    ? undefined
+    : application.content.shells.find((candidate) => sameId(candidate.shellId, applicationShellId));
   if (applicationShellId !== undefined && applicationShell === undefined)
-    throw new Error(
-      `Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`,
-    );
+    throw new Error(`Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`);
   observeComposition?.("PAGE_MODEL", "AVAILABLE", page, data);
   const model: ApplicationPageModel = {
-    page,
-    pageId: pageDefinition.pageId,
-    pageName: pageDefinition.name,
-    shells: application.content.shells,
-    ...(applicationShell === undefined ? {} : { applicationShell }),
-    applicationName: address.application.name,
-    applicationHomePageKey: address.application.homePageKey,
-    availableApplications: address.read.applications.map((candidate) => ({
-      key: candidate.key,
-      name: candidate.name,
-      homePageKey: candidate.homePageKey,
-    })),
-    theme: application.content.theme,
-    navigation: navigation.value,
-    ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
-    data,
-    bindings,
-    refreshPlacementsByBinding,
-    editFormBaselines,
-    referenceChoiceInputs,
-    ...(guidedForm === undefined ? {} : { guidedForm }),
-    pages: application.content.pages
-      .filter((candidate) => permittedKeys.has(candidate.key))
-      .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
-    ...(subject === undefined ? {} : { subject }),
-    ...(adoptionTarget !== undefined &&
-    adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
-      ? {
-          adoption: {
-            offeredReleaseRevision: adoptionTarget.currentReleaseRevision,
-            offeredReleaseVersion: adoptionTarget.currentReleaseVersion,
-            installedReleaseRevision: context.applicationReleaseRevision,
-          },
-        }
-      : {}),
-    invocation: {
-      tenantShortName: address.tenantShortName,
-      organizationShortName: address.organizationShortName,
-      applicationKey: address.application.key,
-      pageKey: address.pageKey,
-      installationRevision: context.applicationReleaseRevision,
-      releaseKey: [
-        application.releaseVersion,
-        application.contentFingerprint,
-        application.resolutionFingerprint,
-      ].join(":"),
-    },
+      page,
+      pageId: pageDefinition.pageId,
+      pageName: pageDefinition.name,
+      shells: application.content.shells,
+      ...(applicationShell === undefined ? {} : { applicationShell }),
+      applicationName: address.application.name,
+      applicationHomePageKey: address.application.homePageKey,
+      availableApplications: address.read.applications.map((candidate) => ({
+        key: candidate.key,
+        name: candidate.name,
+        homePageKey: candidate.homePageKey,
+      })),
+      theme: application.content.theme,
+      navigation: navigation.value,
+      ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
+      data,
+      bindings,
+      refreshPlacementsByBinding,
+      editFormBaselines,
+      referenceChoiceInputs,
+      ...(guidedForm === undefined ? {} : { guidedForm }),
+      pages: application.content.pages
+        .filter((candidate) => permittedKeys.has(candidate.key))
+        .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
+      ...(subject === undefined ? {} : { subject }),
+      ...(adoptionTarget !== undefined &&
+      adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
+        ? {
+            adoption: {
+              offeredReleaseRevision: adoptionTarget.currentReleaseRevision,
+              offeredReleaseVersion: adoptionTarget.currentReleaseVersion,
+              installedReleaseRevision: context.applicationReleaseRevision,
+            },
+          }
+        : {}),
+      invocation: {
+        tenantShortName: address.tenantShortName,
+        organizationShortName: address.organizationShortName,
+        applicationKey: address.application.key,
+        pageKey: address.pageKey,
+        installationRevision: context.applicationReleaseRevision,
+        releaseKey: [
+          application.releaseVersion,
+          application.contentFingerprint,
+          application.resolutionFingerprint,
+        ].join(":"),
+      },
   };
   bundleObservation?.finish();
   return { kind: "available", model };

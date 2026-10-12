@@ -1,6 +1,10 @@
 import "server-only";
 
-import { themeTokenKindSchema, themeTokenValueSchema, type DefinitionRuleFailure } from "../schema";
+import {
+  themeTokenKindSchema,
+  themeTokenValueSchema,
+  type DefinitionRuleFailure,
+} from "../schema";
 import { createLocatedFailure, createThemeLocation } from "./errors";
 import type {
   ComponentThemeOverrideContext,

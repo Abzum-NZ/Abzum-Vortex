@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { applicationCompilationOutputSchema } from "./definition-compilation-contracts";
+import {
+  applicationCompilationOutputSchema,
+} from "./definition-compilation-contracts";
 import {
   applicationRootIdSchema,
   identityIdSchema,
@@ -110,7 +112,9 @@ export type PreviewInstallation = z.infer<typeof previewInstallationSchema>;
 export type PreviewInstallationExpiryRequest = z.input<
   typeof previewInstallationExpiryRequestSchema
 >;
-export type PreviewInstallationExpiryResult = z.infer<typeof previewInstallationExpiryResultSchema>;
+export type PreviewInstallationExpiryResult = z.infer<
+  typeof previewInstallationExpiryResultSchema
+>;
 export type PreviewInstallationDiscardResult = z.infer<
   typeof previewInstallationDiscardResultSchema
 >;

@@ -171,7 +171,8 @@ export const resolveInstalledPageIdentity = (
     if (original === undefined) return unavailable();
     const replacement = pages.find(
       (page) =>
-        page.replacementOfPageId !== undefined && sameId(page.replacementOfPageId, original.pageId),
+        page.replacementOfPageId !== undefined &&
+        sameId(page.replacementOfPageId, original.pageId),
     );
     const subject = subjectIdentity(context, original);
     // Resolve each declared endpoint's subject against real bound records, including unpaired

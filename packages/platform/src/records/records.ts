@@ -493,7 +493,9 @@ export const previewRecordReadResultV1Schema = z.discriminatedUnion("outcome", [
 
 export type PreviewRecordReadCommandV1 = z.infer<typeof previewRecordReadCommandV1Schema>;
 export type PreviewRecordReadResultV1 = z.infer<typeof previewRecordReadResultV1Schema>;
-export type TransferRecordOwnershipCommand = z.infer<typeof transferRecordOwnershipCommandSchema>;
+export type TransferRecordOwnershipCommand = z.infer<
+  typeof transferRecordOwnershipCommandSchema
+>;
 export type TransferRecordOwnershipResult = z.infer<typeof transferRecordOwnershipResultSchema>;
 export type RecordSaveFieldCorrection = z.infer<typeof recordSaveFieldCorrectionSchema>;
 export type SaveRecordResult = z.infer<typeof saveRecordResultSchema>;

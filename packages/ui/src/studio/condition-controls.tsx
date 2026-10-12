@@ -153,7 +153,10 @@ const numericTypes = new Set<StudioConditionSemanticType>([
   "whole_number",
   "decimal_number",
 ]);
-const exactNumericTypes = new Set<StudioConditionSemanticType>(["whole_number", "decimal_number"]);
+const exactNumericTypes = new Set<StudioConditionSemanticType>([
+  "whole_number",
+  "decimal_number",
+]);
 const maximumGroupChildren = 50;
 
 export type StudioConditionValidationIssue = Readonly<{
@@ -292,31 +295,14 @@ const contextIssues = (
 
   if (context.allowedOperators !== undefined) {
     if (!Array.isArray(context.allowedOperators))
-      issues.push(
-        makeIssue("invalid_context", ["allowedOperators"], "Allowed operators must be a list"),
-      );
+      issues.push(makeIssue("invalid_context", ["allowedOperators"], "Allowed operators must be a list"));
     else {
       const seenOperators = new Set<string>();
       for (const [index, operator] of context.allowedOperators.entries()) {
-        if (
-          typeof operator !== "string" ||
-          !Object.prototype.hasOwnProperty.call(operatorLabels, operator)
-        )
-          issues.push(
-            makeIssue(
-              "invalid_context",
-              ["allowedOperators", index],
-              "An allowed operator is invalid",
-            ),
-          );
+        if (typeof operator !== "string" || !Object.prototype.hasOwnProperty.call(operatorLabels, operator))
+          issues.push(makeIssue("invalid_context", ["allowedOperators", index], "An allowed operator is invalid"));
         if (seenOperators.has(operator))
-          issues.push(
-            makeIssue(
-              "invalid_context",
-              ["allowedOperators", index],
-              "An operator is listed more than once",
-            ),
-          );
+          issues.push(makeIssue("invalid_context", ["allowedOperators", index], "An operator is listed more than once"));
         seenOperators.add(operator);
       }
     }
@@ -340,23 +326,11 @@ const contextIssues = (
       !builderKeySchema.safeParse(declaration.key).success ||
       !validTypes.has(declaration.type)
     ) {
-      issues.push(
-        makeIssue(
-          "invalid_context",
-          ["parameterDeclarations", index],
-          "A parameter declaration is invalid",
-        ),
-      );
+      issues.push(makeIssue("invalid_context", ["parameterDeclarations", index], "A parameter declaration is invalid"));
       continue;
     }
     if (parameterDeclarations.has(declaration.key))
-      issues.push(
-        makeIssue(
-          "invalid_context",
-          ["parameterDeclarations", index],
-          "A parameter key is declared more than once",
-        ),
-      );
+      issues.push(makeIssue("invalid_context", ["parameterDeclarations", index], "A parameter key is declared more than once"));
     parameterDeclarations.set(declaration.key, declaration.type);
   }
 
@@ -364,23 +338,11 @@ const contextIssues = (
   for (const [index, fieldId] of context.declaredFieldIds.entries()) {
     const parsedFieldId = fieldIdSchema.safeParse(fieldId);
     if (!parsedFieldId.success) {
-      issues.push(
-        makeIssue(
-          "invalid_context",
-          ["declaredFieldIds", index],
-          "A declared field identity is invalid",
-        ),
-      );
+      issues.push(makeIssue("invalid_context", ["declaredFieldIds", index], "A declared field identity is invalid"));
       continue;
     }
     if (declaredFieldIds.has(parsedFieldId.data))
-      issues.push(
-        makeIssue(
-          "invalid_context",
-          ["declaredFieldIds", index],
-          "A field identity is declared more than once",
-        ),
-      );
+      issues.push(makeIssue("invalid_context", ["declaredFieldIds", index], "A field identity is declared more than once"));
     declaredFieldIds.add(parsedFieldId.data);
   }
 
@@ -397,20 +359,12 @@ const contextIssues = (
       typeof permission.role !== "string" ||
       !Object.prototype.hasOwnProperty.call(roleLabels, permission.role)
     ) {
-      issues.push(
-        makeIssue("invalid_context", ["allowedOperands", index], "An allowed operand is invalid"),
-      );
+      issues.push(makeIssue("invalid_context", ["allowedOperands", index], "An allowed operand is invalid"));
       continue;
     }
     const key = permissionKey(permission);
     if (seen.has(key))
-      issues.push(
-        makeIssue(
-          "invalid_context",
-          ["allowedOperands", index],
-          "An operand is listed more than once",
-        ),
-      );
+      issues.push(makeIssue("invalid_context", ["allowedOperands", index], "An operand is listed more than once"));
     seen.add(key);
 
     if (isFieldOperandPermission(permission)) {
@@ -421,39 +375,17 @@ const contextIssues = (
         !declaredFieldIds.has(permission.operand.fieldId) ||
         permission.role !== "current_field"
       )
-        issues.push(
-          makeIssue(
-            "invalid_context",
-            ["allowedOperands", index],
-            "A current field must match its Module metadata",
-          ),
-        );
+        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "A current field must match its Module metadata"));
     } else {
       const parsedKey = builderKeySchema.safeParse(permission.operand.key);
       const declaredType = parameterDeclarations.get(permission.operand.key);
-      if (
-        !parsedKey.success ||
-        declaredType === undefined ||
-        String(permission.role) === "current_field"
-      )
-        issues.push(
-          makeIssue(
-            "invalid_context",
-            ["allowedOperands", index],
-            "A parameter must match a Rule  declaration",
-          ),
-        );
+      if (!parsedKey.success || declaredType === undefined || String(permission.role) === "current_field")
+        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "A parameter must match a Rule  declaration"));
       if (
         permission.role === "trusted_account_context" &&
         declaredType !== "organization_account_reference"
       )
-        issues.push(
-          makeIssue(
-            "invalid_context",
-            ["allowedOperands", index],
-            "Trusted account context must use its declared account type",
-          ),
-        );
+        issues.push(makeIssue("invalid_context", ["allowedOperands", index], "Trusted account context must use its declared account type"));
     }
   }
   return issues;
@@ -464,11 +396,7 @@ const infoForOperand = (
   context: StudioConditionControlsContext,
 ): OperandInfo | undefined => {
   if (operand.source === "value")
-    return {
-      source: "value",
-      literal: operand.value,
-      semanticType: semanticTypeForLiteral(operand.value),
-    };
+    return { source: "value", literal: operand.value, semanticType: semanticTypeForLiteral(operand.value) };
   const permission = context.allowedOperands.find(
     (candidate) => permissionKey(candidate) === referenceKey(operand),
   );
@@ -567,7 +495,8 @@ const literalMatchesType = (value: JsonValue, type: StudioConditionSemanticType)
 const sameComparableType = (
   left: StudioConditionSemanticType,
   right: StudioConditionSemanticType,
-): boolean => left === right || (exactNumericTypes.has(left) && exactNumericTypes.has(right));
+): boolean =>
+  left === right || (exactNumericTypes.has(left) && exactNumericTypes.has(right));
 
 const exactNumericLiteral = (value: JsonValue | undefined): boolean =>
   value === null ||
@@ -594,11 +523,9 @@ const sharedType = (
 
   if (left.source === "reference" && right.source === "reference") {
     if (left.semanticType === right.semanticType) return left.semanticType;
-    return left.semanticType &&
-      right.semanticType &&
+    return left.semanticType && right.semanticType &&
       sameComparableType(left.semanticType, right.semanticType) &&
-      exactNumericOperand(left) &&
-      exactNumericOperand(right)
+      exactNumericOperand(left) && exactNumericOperand(right)
       ? "decimal_number"
       : undefined;
   }
@@ -608,8 +535,7 @@ const sharedType = (
   const referenceType = reference.semanticType;
   if (!referenceType || literal.literal === undefined) return undefined;
   if (literalMatchesType(literal.literal, referenceType)) return referenceType;
-  return numericTypes.has(referenceType) &&
-    exactNumericOperand(reference) &&
+  return numericTypes.has(referenceType) && exactNumericOperand(reference) &&
     exactNumericOperand(literal)
     ? "decimal_number"
     : undefined;
@@ -654,8 +580,7 @@ const operatorAcceptsOperands = (
   if (unaryOperators.has(operator)) return right === undefined;
   if (!right) return false;
 
-  if (operator === "equals" || operator === "not_equals")
-    return sharedType(left, right) !== undefined;
+  if (operator === "equals" || operator === "not_equals") return sharedType(left, right) !== undefined;
   if (operator === "contains" || operator === "not_contains") {
     const textOperands = canBeType(left, "text") && canBeType(right, "text");
     const elementType = collectionElementType(left, knownReferenceType(right));
@@ -666,28 +591,17 @@ const operatorAcceptsOperands = (
     return elementType !== undefined && canBeType(left, elementType);
   }
   const type = sharedType(left, right);
-  if (
-    type === "money" &&
-    left.source === "value" &&
-    right.source === "value" &&
-    left.literal !== null &&
-    right.literal !== null
-  ) {
+  if (type === "money" && left.source === "value" && right.source === "value" &&
+    left.literal !== null && right.literal !== null) {
     const leftMoney = moneyValueSchema.safeParse(left.literal);
     const rightMoney = moneyValueSchema.safeParse(right.literal);
-    if (
-      leftMoney.success &&
-      rightMoney.success &&
-      leftMoney.data.currency !== rightMoney.data.currency
-    )
-      return false;
+    if (leftMoney.success && rightMoney.success &&
+      leftMoney.data.currency !== rightMoney.data.currency) return false;
   }
   return type !== undefined && orderableTypes.has(type);
 };
 
-const defaultLiteralForType = (
-  type: StudioConditionSemanticType | undefined,
-): JsonValue | undefined => {
+const defaultLiteralForType = (type: StudioConditionSemanticType | undefined): JsonValue | undefined => {
   switch (type) {
     case "number":
     case "whole_number":
@@ -731,7 +645,11 @@ const candidateRightOperands = (
     if (type === "text") candidates.push({ source: "value", value: [] });
     if (type === "text_collection") candidates.push({ source: "value", value: "" });
     candidates.push({ source: "value", value: [] });
-    if (left.source === "value" && left.value !== null && !Array.isArray(left.value))
+    if (
+      left.source === "value" &&
+      left.value !== null &&
+      !Array.isArray(left.value)
+    )
       candidates.push({ source: "value", value: [left.value] });
     const elementType = leftInfo && collectionElementType(leftInfo);
     if (elementType) candidates.push(literalOperand(elementType));
@@ -752,21 +670,14 @@ export function studioConditionOperatorsFor(
   const leftInfo = infoForOperand(left, context);
   if (!leftInfo) return [];
   return operatorOptions.filter((option) => {
-    if (
-      context.allowedOperators !== undefined &&
-      !context.allowedOperators.includes(option.operator)
-    )
-      return false;
+    if (context.allowedOperators !== undefined && !context.allowedOperators.includes(option.operator)) return false;
     if (option.arity === "unary") return true;
-    const rightCandidates =
-      right === undefined
-        ? candidateRightOperands(left, context)
-        : [right, ...candidateRightOperands(left, context)];
+    const rightCandidates = right === undefined
+      ? candidateRightOperands(left, context)
+      : [right, ...candidateRightOperands(left, context)];
     return rightCandidates.some((candidate) => {
       const rightInfo = infoForOperand(candidate, context);
-      return (
-        rightInfo !== undefined && operatorAcceptsOperands(option.operator, leftInfo, rightInfo)
-      );
+      return rightInfo !== undefined && operatorAcceptsOperands(option.operator, leftInfo, rightInfo);
     });
   });
 }
@@ -824,13 +735,7 @@ const addContractLimitIssues = (
 ): void => {
   if (!isRecord(value) || typeof value.kind !== "string") return;
   if (depth > conditionMaximumNestingDepth) {
-    issues.push(
-      makeIssue(
-        "invalid_condition",
-        path,
-        `Condition nesting cannot exceed ${conditionMaximumNestingDepth} levels`,
-      ),
-    );
+    issues.push(makeIssue("invalid_condition", path, `Condition nesting cannot exceed ${conditionMaximumNestingDepth} levels`));
     return;
   }
   if (value.kind === "comparison") {
@@ -838,35 +743,17 @@ const addContractLimitIssues = (
       if (key === "right" && value.right === undefined) continue;
       operandCount.value += 1;
       if (operandCount.value > conditionMaximumOperandCount)
-        issues.push(
-          makeIssue(
-            "invalid_condition",
-            [...path, key],
-            `Condition operands cannot exceed ${conditionMaximumOperandCount}`,
-          ),
-        );
+        issues.push(makeIssue("invalid_condition", [...path, key], `Condition operands cannot exceed ${conditionMaximumOperandCount}`));
     }
     return;
   }
   if (value.kind === "not") {
-    addContractLimitIssues(
-      value.condition,
-      [...path, "condition"],
-      depth + 1,
-      operandCount,
-      issues,
-    );
+    addContractLimitIssues(value.condition, [...path, "condition"], depth + 1, operandCount, issues);
     return;
   }
   if ((value.kind === "all" || value.kind === "any") && Array.isArray(value.conditions))
     value.conditions.forEach((child, index) =>
-      addContractLimitIssues(
-        child,
-        [...path, "conditions", index],
-        depth + 1,
-        operandCount,
-        issues,
-      ),
+      addContractLimitIssues(child, [...path, "conditions", index], depth + 1, operandCount, issues),
     );
 };
 
@@ -876,7 +763,8 @@ export function validateStudioCondition(
   context: StudioConditionControlsContext,
 ): StudioConditionValidation {
   const issues = contextIssues(context);
-  if (value === undefined) return { condition: undefined, issues, isValid: issues.length === 0 };
+  if (value === undefined)
+    return { condition: undefined, issues, isValid: issues.length === 0 };
   const parsed = conditionNodeSchema.safeParse(value);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
@@ -899,9 +787,7 @@ export function validateStudioCondition(
   if (issues.some((issue) => issue.code === "invalid_context"))
     return { condition: parsed.data, issues, isValid: false };
 
-  const permissions = new Map(
-    context.allowedOperands.map((entry) => [permissionKey(entry), entry]),
-  );
+  const permissions = new Map(context.allowedOperands.map((entry) => [permissionKey(entry), entry]));
   const visit = (condition: ConditionNode, path: ConditionPath): void => {
     if (condition.kind === "not") {
       visit(condition.condition, [...path, "condition"]);
@@ -913,59 +799,28 @@ export function validateStudioCondition(
     }
     if (!isComparisonCondition(condition)) return;
 
-    const checkOperand = (
-      operand: ConditionOperand,
-      key: "left" | "right",
-    ): OperandInfo | undefined => {
+    const checkOperand = (operand: ConditionOperand, key: "left" | "right"): OperandInfo | undefined => {
       const operandPath = [...path, key];
       if (operand.source === "value") {
         if (!context.allowLiteralValues)
-          issues.push(
-            makeIssue(
-              "literal_not_permitted",
-              operandPath,
-              "This host does not allow literal values",
-            ),
-          );
+          issues.push(makeIssue("literal_not_permitted", operandPath, "This host does not allow literal values"));
       } else if (!permissions.has(referenceKey(operand))) {
-        issues.push(
-          makeIssue(
-            "operand_not_permitted",
-            operandPath,
-            "This operand is not permitted by the host",
-          ),
-        );
+        issues.push(makeIssue("operand_not_permitted", operandPath, "This operand is not permitted by the host"));
       }
       return infoForOperand(operand, context);
     };
 
     const left = checkOperand(condition.left, "left");
-    const right =
-      condition.right === undefined ? undefined : checkOperand(condition.right, "right");
-    if (
-      context.allowedOperators !== undefined &&
-      !context.allowedOperators.includes(condition.operator)
-    )
-      issues.push(
-        makeIssue(
-          "operator_incompatible",
-          [...path, "operator"],
-          "This operator is not permitted by the host",
-        ),
-      );
+    const right = condition.right === undefined ? undefined : checkOperand(condition.right, "right");
+    if (context.allowedOperators !== undefined && !context.allowedOperators.includes(condition.operator))
+      issues.push(makeIssue("operator_incompatible", [...path, "operator"], "This operator is not permitted by the host"));
     if (
       !unaryOperators.has(condition.operator) &&
       left !== undefined &&
       right !== undefined &&
       !operatorAcceptsOperands(condition.operator, left, right)
     )
-      issues.push(
-        makeIssue(
-          "operator_incompatible",
-          [...path, "operator"],
-          "This operator is not valid for the selected operand types",
-        ),
-      );
+      issues.push(makeIssue("operator_incompatible", [...path, "operator"], "This operator is not valid for the selected operand types"));
   };
   visit(parsed.data, []);
   return { condition: parsed.data, issues, isValid: issues.length === 0 };
@@ -995,8 +850,7 @@ const withDraftIssues = (
   isValid: validation.isValid && draftIssues.length === 0,
 });
 
-const contextOperandToken = (permission: StudioConditionOperandPermission): string =>
-  permissionKey(permission);
+const contextOperandToken = (permission: StudioConditionOperandPermission): string => permissionKey(permission);
 
 const operandToken = (operand: ConditionOperand): string =>
   operand.source === "value" ? "value" : referenceKey(operand);
@@ -1023,7 +877,8 @@ const describeCondition = (
       ? `${left} ${operator}`
       : `${left} ${operator} ${describeOperand(condition.right, context)}`;
   }
-  if (condition.kind === "not") return `not (${describeCondition(condition.condition, context)})`;
+  if (condition.kind === "not")
+    return `not (${describeCondition(condition.condition, context)})`;
   const joiningWord = condition.kind === "all" ? " and " : " or ";
   return `(${condition.conditions.map((child) => describeCondition(child, context)).join(joiningWord)})`;
 };
@@ -1033,7 +888,8 @@ const displayRole = (role: StudioConditionOperandRole): string => roleLabels[rol
 const errorForPath = (
   validation: StudioConditionValidation,
   path: ConditionPath,
-): string | undefined => validation.issues.find((issue) => pathEquals(issue.path, path))?.message;
+): string | undefined =>
+  validation.issues.find((issue) => pathEquals(issue.path, path))?.message;
 
 const infoForExpectedLiteral = (
   operand: ConditionOperand,
@@ -1044,25 +900,24 @@ const infoForExpectedLiteral = (
 ): StudioConditionSemanticType | undefined => {
   const operandInfo = infoForOperand(operand, context);
   const otherInfo = other ? infoForOperand(other, context) : undefined;
-  const otherType =
-    otherInfo?.semanticType ??
+  const otherType = otherInfo?.semanticType ??
     (other?.source === "value" ? semanticTypeForLiteral(other.value) : undefined);
   if (operator === "in" || operator === "not_in") {
     if (side === "right") return "text_collection";
     return otherInfo
-      ? (collectionElementType(
+      ? collectionElementType(
           otherInfo,
           operandInfo ? knownReferenceType(operandInfo) : undefined,
-        ) ?? otherType)
+        ) ?? otherType
       : otherType;
   }
   if (operator === "contains" || operator === "not_contains") {
     if (side === "left") return operandInfo?.semanticType ?? "text_collection";
     return otherInfo
-      ? (collectionElementType(
+      ? collectionElementType(
           otherInfo,
           operandInfo ? knownReferenceType(operandInfo) : undefined,
-        ) ?? "text")
+        ) ?? "text"
       : "text";
   }
   return otherType ?? infoForOperand(operand, context)?.semanticType;
@@ -1102,10 +957,9 @@ function LiteralEditor({
   onInvalid,
 }: LiteralEditorProps) {
   const error = errorForPath(validation, path);
-  const label =
-    collectionElementType && collectionElementType !== "text"
-      ? `Literal value (${collectionElementType.replaceAll("_", " ")} list, JSON array)`
-      : `Literal value${semanticType ? ` (${semanticType.replaceAll("_", " ")})` : ""}`;
+  const label = collectionElementType && collectionElementType !== "text"
+    ? `Literal value (${collectionElementType.replaceAll("_", " ")} list, JSON array)`
+    : `Literal value${semanticType ? ` (${semanticType.replaceAll("_", " ")})` : ""}`;
 
   if (collectionElementType && collectionElementType !== "text")
     return (
@@ -1170,17 +1024,15 @@ function LiteralEditor({
               onCommit(null);
             } else {
               const numericValue = Number(next);
-              const valid =
-                Number.isFinite(numericValue) &&
+              const valid = Number.isFinite(numericValue) &&
                 (semanticType !== "whole_number" || Number.isInteger(numericValue));
               if (valid) {
                 event.currentTarget.setCustomValidity("");
                 onCommit(numericValue);
               } else {
-                const message =
-                  semanticType === "whole_number"
-                    ? "Enter a whole number"
-                    : "Enter a finite number";
+                const message = semanticType === "whole_number"
+                  ? "Enter a whole number"
+                  : "Enter a finite number";
                 event.currentTarget.setCustomValidity(message);
                 event.currentTarget.reportValidity();
                 onInvalid(message);
@@ -1284,9 +1136,7 @@ function LiteralEditor({
             maxLength={3}
             type="text"
             value={currency}
-            onChange={(event) =>
-              onCommit({ amount, currency: event.currentTarget.value.toUpperCase() })
-            }
+            onChange={(event) => onCommit({ amount, currency: event.currentTarget.value.toUpperCase() })}
           />
         </label>
         {error && <span role="alert">{error}</span>}
@@ -1307,11 +1157,7 @@ function LiteralEditor({
       </label>
     );
 
-  if (
-    semanticType === "opaque_json" ||
-    semanticType === "record_reference" ||
-    semanticType === "organization_account_reference"
-  )
+  if (semanticType === "opaque_json" || semanticType === "record_reference" || semanticType === "organization_account_reference")
     return (
       <label>
         {label} (JSON value)
@@ -1427,71 +1273,26 @@ function TreeEditor({
               }}
               onRemove={() => {
                 if (condition.conditions.length <= 1) return;
-                onReplace(
-                  {
-                    ...condition,
-                    conditions: condition.conditions.filter(
-                      (_, childIndex) => childIndex !== index,
-                    ),
-                  },
-                  path,
-                );
+                onReplace({
+                  ...condition,
+                  conditions: condition.conditions.filter((_, childIndex) => childIndex !== index),
+                }, path);
               }}
               onInvalid={onInvalid}
             />
           );
         })}
         <div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddComparison ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("comparison")}
-          >
+          <Button type="button" variant="outline" size="sm" disabled={!canAddComparison || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("comparison")}>
             Add condition
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddGroup ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("all")}
-          >
+          <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("all")}>
             Add all group
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddGroup ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("any")}
-          >
+          <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("any")}>
             Add any group
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              !canAddGroup ||
-              condition.conditions.length >= maximumGroupChildren ||
-              createInitialStudioCondition(context) === undefined
-            }
-            onClick={() => addChild("not")}
-          >
+          <Button type="button" variant="outline" size="sm" disabled={!canAddGroup || condition.conditions.length >= maximumGroupChildren || createInitialStudioCondition(context) === undefined} onClick={() => addChild("not")}>
             Add not group
           </Button>
           {onRemove && (
@@ -1514,17 +1315,10 @@ function TreeEditor({
           validation={validation}
           path={[...path, "condition"]}
           remainingOperandCount={remainingOperandCount}
-          onReplace={(next, resolvedPath) =>
-            onReplace({ kind: "not", condition: next }, resolvedPath)
-          }
+          onReplace={(next, resolvedPath) => onReplace({ kind: "not", condition: next }, resolvedPath)}
           onInvalid={onInvalid}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onReplace(condition.condition, path)}
-        >
+        <Button type="button" variant="outline" size="sm" onClick={() => onReplace(condition.condition, path)}>
           Remove not
         </Button>
         {onRemove && (
@@ -1538,23 +1332,20 @@ function TreeEditor({
   if (!isComparisonCondition(condition)) return null;
 
   const leftInfo = infoForOperand(condition.left, context);
-  const availableOperators = studioConditionOperatorsFor(
-    condition.left,
-    condition.right,
-    context,
-  ).filter(
+  const availableOperators = studioConditionOperatorsFor(condition.left, condition.right, context).filter(
     (option) =>
-      option.arity === "unary" || condition.right !== undefined || remainingOperandCount > 0,
+      option.arity === "unary" ||
+      condition.right !== undefined ||
+      remainingOperandCount > 0,
   );
-  const currentOperatorAvailable =
-    leftInfo !== undefined &&
-    (unaryOperators.has(condition.operator) ||
-      (condition.right !== undefined &&
-        operatorAcceptsOperands(
-          condition.operator,
-          leftInfo,
-          infoForOperand(condition.right, context),
-        )));
+  const currentOperatorAvailable = leftInfo !== undefined && (
+    unaryOperators.has(condition.operator) ||
+    (condition.right !== undefined && operatorAcceptsOperands(
+      condition.operator,
+      leftInfo,
+      infoForOperand(condition.right, context),
+    ))
+  );
   const operatorIssue = errorForPath(validation, [...path, "operator"]);
   const compatibleOperand = (side: "left" | "right", candidate: ConditionOperand): boolean => {
     if (unaryOperators.has(condition.operator)) return side === "left";
@@ -1562,11 +1353,8 @@ function TreeEditor({
     if (!other) return false;
     const left = infoForOperand(side === "left" ? candidate : other, context);
     const right = infoForOperand(side === "right" ? candidate : other, context);
-    return (
-      left !== undefined &&
-      right !== undefined &&
-      operatorAcceptsOperands(condition.operator, left, right)
-    );
+    return left !== undefined && right !== undefined &&
+      operatorAcceptsOperands(condition.operator, left, right);
   };
   const literalChoice = (side: "left" | "right"): ConditionOperand | undefined => {
     if (!context.allowLiteralValues) return undefined;
@@ -1581,13 +1369,11 @@ function TreeEditor({
     return candidates.find((candidate) => compatibleOperand(side, candidate));
   };
   const changeOperand = (side: "left" | "right", token: string) => {
-    const selected =
-      token === "value"
-        ? literalChoice(side)
-        : context.allowedOperands.find(
-            (entry) =>
-              contextOperandToken(entry) === token && compatibleOperand(side, entry.operand),
-          )?.operand;
+    const selected = token === "value"
+      ? literalChoice(side)
+      : context.allowedOperands.find(
+          (entry) => contextOperandToken(entry) === token && compatibleOperand(side, entry.operand),
+        )?.operand;
     if (!selected) return;
     if (side === "left") onReplace({ ...condition, left: selected }, [...path, side]);
     else onReplace({ ...condition, right: selected }, [...path, side]);
@@ -1602,9 +1388,7 @@ function TreeEditor({
     const type = infoForExpectedLiteral(operand, other, context, condition.operator, side);
     const otherInfo = other ? infoForOperand(other, context) : undefined;
     const collectionType =
-      (condition.operator === "in" || condition.operator === "not_in") &&
-      side === "right" &&
-      otherInfo
+      (condition.operator === "in" || condition.operator === "not_in") && side === "right" && otherInfo
         ? isCollectionElementType(otherInfo.semanticType)
           ? otherInfo.semanticType
           : undefined
@@ -1617,30 +1401,22 @@ function TreeEditor({
     };
     if (operand.value === null) {
       const initial = defaultLiteralForType(type);
-      const editableValue: JsonValue =
-        initial === null
-          ? type === "money"
-            ? { amount: "", currency: "" }
-            : type === "record_reference" || type === "opaque_json"
-              ? {}
-              : ""
-          : (initial ?? "");
+      const editableValue: JsonValue = initial === null
+        ? type === "money"
+          ? { amount: "", currency: "" }
+          : type === "record_reference" || type === "opaque_json"
+            ? {}
+            : ""
+        : initial ?? "";
       return (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => commitLiteral(editableValue)}
-        >
+        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(editableValue)}>
           Set literal value (currently null)
         </Button>
       );
     }
     return (
       <>
-        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(null)}>
-          Use null literal
-        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => commitLiteral(null)}>Use null literal</Button>
         <LiteralEditor
           operand={operand}
           semanticType={type}
@@ -1667,35 +1443,31 @@ function TreeEditor({
       compatibleOperand(side, option.operand),
     );
     const selectableLiteral = literalChoice(side);
-    const currentSelectable =
-      operand.source === "value"
-        ? selectableLiteral !== undefined
-        : referenceOptions.some((option) => contextOperandToken(option) === operandToken(operand));
+    const currentSelectable = operand.source === "value"
+      ? selectableLiteral !== undefined
+      : referenceOptions.some((option) => contextOperandToken(option) === operandToken(operand));
     return (
       <fieldset>
         <legend>{side === "left" ? "Left operand" : "Right operand"}</legend>
         <label>
           Operand source
-          <NativeSelect
-            aria-invalid={operandError !== undefined}
-            value={operandToken(operand)}
-            onChange={(event) => changeOperand(side, event.currentTarget.value)}
-          >
-            {!currentSelectable && (
-              <option value={operandToken(operand)} disabled>
-                Current operand (not available)
-              </option>
-            )}
-            {referenceOptions.map((option, index) => (
-              <option
-                key={`${contextOperandToken(option)}:${index}`}
-                value={contextOperandToken(option)}
-              >
-                {option.label} ({displayRole(option.role)})
-              </option>
-            ))}
-            {selectableLiteral && <option value="value">Literal value</option>}
-          </NativeSelect>
+        <NativeSelect
+          aria-invalid={operandError !== undefined}
+          value={operandToken(operand)}
+          onChange={(event) => changeOperand(side, event.currentTarget.value)}
+        >
+          {!currentSelectable && (
+            <option value={operandToken(operand)} disabled>
+              Current operand (not available)
+            </option>
+          )}
+          {referenceOptions.map((option, index) => (
+            <option key={`${contextOperandToken(option)}:${index}`} value={contextOperandToken(option)}>
+              {option.label} ({displayRole(option.role)})
+            </option>
+          ))}
+          {selectableLiteral && <option value="value">Literal value</option>}
+        </NativeSelect>
         </label>
         {operandError && <span role="alert">{operandError}</span>}
         {literalEditor(operand, other, side)}
@@ -1723,24 +1495,18 @@ function TreeEditor({
               return;
             }
             const existingRight = condition.right;
-            const candidate =
-              existingRight &&
-              operatorAcceptsOperands(
-                operator,
-                leftInfo ?? { source: "value", semanticType: undefined, literal: null },
-                infoForOperand(existingRight, context),
-              )
-                ? existingRight
-                : rightForOperator(operator);
+            const candidate = existingRight && operatorAcceptsOperands(
+              operator,
+              leftInfo ?? { source: "value", semanticType: undefined, literal: null },
+              infoForOperand(existingRight, context),
+            ) ? existingRight : rightForOperator(operator);
             if (!candidate) return;
             onReplace({ kind: "comparison", operator, left: condition.left, right: candidate });
           }}
         >
           {!currentOperatorAvailable && (
             <option value={condition.operator} disabled>
-              {operatorOptions.find((option) => option.operator === condition.operator)?.label ??
-                condition.operator}{" "}
-              (not valid for these operands)
+              {operatorOptions.find((option) => option.operator === condition.operator)?.label ?? condition.operator} (not valid for these operands)
             </option>
           )}
           {rightOptions.map((option) => (
@@ -1751,16 +1517,18 @@ function TreeEditor({
         </NativeSelect>
         {operatorIssue && <span role="alert">{operatorIssue}</span>}
       </label>
-      {!unaryOperators.has(condition.operator) && <>{operandSelector("right")}</>}
+      {!unaryOperators.has(condition.operator) && (
+        <>
+          {operandSelector("right")}
+        </>
+      )}
       {onRemove && (
         <Button type="button" variant="outline" size="sm" onClick={onRemove}>
           Remove condition
         </Button>
       )}
       <Button
-        type="button"
-        variant="outline"
-        size="sm"
+        type="button" variant="outline" size="sm"
         disabled={createInitialStudioCondition(context) === undefined}
         onClick={() => {
           const replacement = createInitialStudioCondition(context);
@@ -1790,16 +1558,13 @@ export function StudioConditionControls({
 }: StudioConditionControlsProps) {
   const [draftIssues, setDraftIssues] = useState<readonly StudioConditionValidationIssue[]>([]);
   const baseValidation = validateStudioCondition(value, context);
-  const activeDraftIssues = draftIssues.filter((issue) =>
-    hasLiteralAtPath(baseValidation.condition, issue.path),
-  );
+  const activeDraftIssues = draftIssues.filter((issue) => hasLiteralAtPath(baseValidation.condition, issue.path));
   const validation = withDraftIssues(baseValidation, activeDraftIssues);
   const emit = (next: ConditionNode | undefined, resolvedPath?: ConditionPath) => {
     const nextValidation = validateStudioCondition(next, context);
-    const remainingIssues = activeDraftIssues.filter(
-      (issue) =>
-        (resolvedPath === undefined || !pathStartsWith(issue.path, resolvedPath)) &&
-        hasLiteralAtPath(nextValidation.condition, issue.path),
+    const remainingIssues = activeDraftIssues.filter((issue) =>
+      (resolvedPath === undefined || !pathStartsWith(issue.path, resolvedPath)) &&
+      hasLiteralAtPath(nextValidation.condition, issue.path),
     );
     setDraftIssues(remainingIssues);
     onChange(nextValidation.condition, withDraftIssues(nextValidation, remainingIssues));
@@ -1825,13 +1590,7 @@ export function StudioConditionControls({
       ) : !current ? (
         <div>
           <p>No condition has been configured.</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!initial}
-            onClick={() => emit(initial)}
-          >
+          <Button type="button" variant="outline" size="sm" disabled={!initial} onClick={() => emit(initial)}>
             Start with a condition
           </Button>
         </div>
@@ -1845,32 +1604,27 @@ export function StudioConditionControls({
             context={context}
             validation={validation}
             path={[]}
-            remainingOperandCount={conditionMaximumOperandCount - conditionOperandCount(current)}
+            remainingOperandCount={
+              conditionMaximumOperandCount - conditionOperandCount(current)
+            }
             onReplace={emit}
             onInvalid={(issue) => {
               const nextValidation = validateStudioCondition(current, context);
-              const issues = [
-                ...activeDraftIssues.filter((entry) => !pathEquals(entry.path, issue.path)),
-                issue,
-              ];
+              const issues = [...activeDraftIssues.filter((entry) => !pathEquals(entry.path, issue.path)), issue];
               setDraftIssues(issues);
               onChange(nextValidation.condition, withDraftIssues(nextValidation, issues));
             }}
           />
           <div>
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
+              type="button" variant="outline" size="sm"
               disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
               onClick={() => emit({ kind: "all", conditions: [current] })}
             >
               Wrap in all group
             </Button>
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
+              type="button" variant="outline" size="sm"
               disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
               onClick={() => emit({ kind: "any", conditions: [current] })}
             >
@@ -1878,9 +1632,7 @@ export function StudioConditionControls({
             </Button>
             {current.kind !== "not" && (
               <Button
-                type="button"
-                variant="outline"
-                size="sm"
+                type="button" variant="outline" size="sm"
                 disabled={conditionDepth(current) >= conditionMaximumNestingDepth}
                 onClick={() => emit({ kind: "not", condition: current })}
               >
@@ -1888,29 +1640,21 @@ export function StudioConditionControls({
               </Button>
             )}
             {current.kind === "not" && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => emit(current.condition)}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => emit(current.condition)}>
                 Remove not
               </Button>
             )}
-            {(current.kind === "all" || current.kind === "any") &&
-              current.conditions.length === 1 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const onlyChild = current.conditions[0];
-                    if (onlyChild) emit(onlyChild);
-                  }}
-                >
-                  Remove group
-                </Button>
-              )}
+            {(current.kind === "all" || current.kind === "any") && current.conditions.length === 1 && (
+              <Button
+                type="button" variant="outline" size="sm"
+                onClick={() => {
+                  const onlyChild = current.conditions[0];
+                  if (onlyChild) emit(onlyChild);
+                }}
+              >
+                Remove group
+              </Button>
+            )}
             <Button type="button" variant="outline" size="sm" onClick={() => emit(undefined)}>
               Clear condition
             </Button>

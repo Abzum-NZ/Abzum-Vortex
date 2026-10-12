@@ -204,9 +204,7 @@ export function resolveTheme(
 /**
  * Convenience helper returning just the deterministic final token map.
  */
-export function resolveThemeTokens(
-  input: ThemeResolutionInput,
-): Readonly<Record<string, ThemeTokenValue>>;
+export function resolveThemeTokens(input: ThemeResolutionInput): Readonly<Record<string, ThemeTokenValue>>;
 export function resolveThemeTokens(
   theme: ApplicationTheme,
   componentOverrideContext?: ComponentThemeOverrideContext | undefined,

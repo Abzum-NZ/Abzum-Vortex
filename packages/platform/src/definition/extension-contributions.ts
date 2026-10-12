@@ -1,4 +1,7 @@
-import type { ModuleContent, ModuleContribution } from "../schema";
+import type {
+  ModuleContent,
+  ModuleContribution,
+} from "../schema";
 import {
   canonicalJson,
   compareCanonicalStrings,
@@ -314,7 +317,9 @@ export const resolveModuleContributions = (
     });
   }
 
-  bindings.sort((left, right) => compareCanonicalStrings(bindingOrder(left), bindingOrder(right)));
+  bindings.sort((left, right) =>
+    compareCanonicalStrings(bindingOrder(left), bindingOrder(right)),
+  );
   conflicts.sort((left, right) =>
     compareCanonicalStrings(conflictOrder(left), conflictOrder(right)),
   );

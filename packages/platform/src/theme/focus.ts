@@ -9,7 +9,11 @@ import {
   WCAG_AA_NON_TEXT_MIN_CONTRAST,
 } from "./contrast";
 import { createLocatedFailure } from "./errors";
-import type { ThemeResolutionOptions, ThemeTokenValue, ThemeValidationFailure } from "./types";
+import type {
+  ThemeResolutionOptions,
+  ThemeTokenValue,
+  ThemeValidationFailure,
+} from "./types";
 
 const MINIMUM_VISIBLE_FOCUS_WIDTH_REM = 0.0625; // 1px at 16px base
 
@@ -76,7 +80,11 @@ export function validateFocusVisibility(
       }
 
       // 3. Contrast of focus color against surface
-      const lightRatio = contrastRatio(colorToken.light, surface.light, DEFAULT_LIGHT_SURFACE);
+      const lightRatio = contrastRatio(
+        colorToken.light,
+        surface.light,
+        DEFAULT_LIGHT_SURFACE,
+      );
       if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "HIDDEN_FOCUS",
@@ -86,7 +94,11 @@ export function validateFocusVisibility(
         });
       }
 
-      const darkRatio = contrastRatio(colorToken.dark, surface.dark, DEFAULT_DARK_SURFACE);
+      const darkRatio = contrastRatio(
+        colorToken.dark,
+        surface.dark,
+        DEFAULT_DARK_SURFACE,
+      );
       if (darkRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
         addFailure({
           code: "HIDDEN_FOCUS",

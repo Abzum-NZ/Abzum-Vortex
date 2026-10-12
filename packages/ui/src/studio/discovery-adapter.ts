@@ -146,12 +146,13 @@ export interface StudioDiscoveryAdapter {
  * Reference kinds the public-surface rule (`vortex.definition.application_public_surface`)
  * refuses in every public placement, whatever the draft contains.
  */
-const publicRefusedReferenceKinds: ReadonlySet<BlockReferencePropertyKind> =
-  new Set<BlockReferencePropertyKind>([
-    "relationship_reference",
-    "record_reference",
-    "pipeline_reference",
-  ]);
+const publicRefusedReferenceKinds: ReadonlySet<BlockReferencePropertyKind> = new Set<
+  BlockReferencePropertyKind
+>([
+  "relationship_reference",
+  "record_reference",
+  "pipeline_reference",
+]);
 
 const option = (id: string, key: string, name: string): StudioReferenceOption =>
   Object.freeze({ id, key, label: name.length > 0 ? name : key });

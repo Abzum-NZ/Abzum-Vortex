@@ -215,15 +215,13 @@ export const createConfiguredTenantAdministrationService = (
         };
       try {
         const value = command.data;
-        const rows = await run(
-          (transaction) => transaction.query<SuperAdministratorBootstrapRow>`
+        const rows = await run((transaction) => transaction.query<SuperAdministratorBootstrapRow>`
           select *
           from vortex_identity.bootstrap_vortex_super_administrator(
             ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid,
             ${value.identityId}::uuid
           )
-        `,
-        );
+        `);
         const row = one(rows);
         if (row === undefined)
           return {
@@ -548,7 +546,8 @@ export const createConfiguredTenantAdministrationService = (
 };
 
 const defaultService = createConfiguredTenantAdministrationService();
-export const bootstrapVortexSuperAdministrator = defaultService.bootstrapVortexSuperAdministrator;
+export const bootstrapVortexSuperAdministrator =
+  defaultService.bootstrapVortexSuperAdministrator;
 export const provisionTenant = defaultService.provisionTenant;
 export const adoptTenant = defaultService.adoptTenant;
 export const adoptOrganization = defaultService.adoptOrganization;

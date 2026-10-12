@@ -235,7 +235,7 @@ export const createRequestBoundTenantGovernanceService = (
     let identitySqlFailureObserved = false;
     let identitySqlFailure: unknown;
     try {
-      return await invocationTransaction.withSavepoint(async (identityTransactionScope) => {
+      return await invocationTransaction.withSavepoint(async identityTransactionScope => {
         await identityTransactionScope.query`set local role vortex_runtime`;
 
         const identityTransaction: RequestDatabaseTransaction = {
@@ -264,7 +264,8 @@ export const createRequestBoundTenantGovernanceService = (
         };
 
         const result = await operation(identityTransaction);
-        if (!state.identityQueryUsed) throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
+        if (!state.identityQueryUsed)
+          throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
 
         // Restore and verify the least-privileged request role before the exact-call child settles.
         await identityTransactionScope.query`set local role vortex_request`;
@@ -315,7 +316,7 @@ export const createRequestBoundTenantGovernanceService = (
       state.identityQueryUsed = false;
       state.boundRequest = boundRequest;
       try {
-        const result = await parentTransaction.withSavepoint(async (invocationTransaction) => {
+        const result = await parentTransaction.withSavepoint(async invocationTransaction => {
           state.invocationTransaction = invocationTransaction;
           try {
             const methodResult = await operation();
@@ -362,11 +363,13 @@ export const createRequestBoundTenantGovernanceService = (
     createOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.createOrganization>[1],
-    ) => invoke("createOrganization", session, () => service.createOrganization(session, command)),
+    ) =>
+      invoke("createOrganization", session, () => service.createOrganization(session, command)),
     renameOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.renameOrganization>[1],
-    ) => invoke("renameOrganization", session, () => service.renameOrganization(session, command)),
+    ) =>
+      invoke("renameOrganization", session, () => service.renameOrganization(session, command)),
     reparentOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.reparentOrganization>[1],

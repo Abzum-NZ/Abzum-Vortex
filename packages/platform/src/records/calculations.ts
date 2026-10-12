@@ -15,10 +15,7 @@ import { persistedRecordFieldValueMatches } from "./field-values";
 
 type CalculationField = Extract<ModuleField, { type: "calculation" }>;
 type CalculationExpression = CalculationField["settings"]["expression"];
-type CalculationNumberValue = Extract<
-  CalculationExpression,
-  { kind: "numeric" }
->["operands"][number];
+type CalculationNumberValue = Extract<CalculationExpression, { kind: "numeric" }>["operands"][number];
 type DateOffsetAmount = Extract<CalculationExpression, { kind: "date_offset" }>["amount"];
 
 export type RecordCalculationClock = Readonly<{
@@ -212,9 +209,7 @@ const dateAmountFormula = (
   if (candidate === undefined || candidate === null) return literal("whole_number", null);
   if (formulaTypeOf(field) === "money") return literal("money", candidate);
   const whole = typeof candidate === "number" ? candidate : Number(candidate);
-  return Number.isSafeInteger(whole)
-    ? literal("whole_number", whole)
-    : literal("whole_number", null);
+  return Number.isSafeInteger(whole) ? literal("whole_number", whole) : literal("whole_number", null);
 };
 
 const deadlineFormula = (
@@ -277,7 +272,7 @@ const calculationFormula = (
     const operands = expression.operands.map((operand) => numberFormula(operand, fields));
     if (operands.some((operand) => operand === undefined)) return undefined;
     const precision =
-      field.settings.resultType === "whole_number" ? 18 : (field.settings.decimalPlaces ?? 12);
+      field.settings.resultType === "whole_number" ? 18 : field.settings.decimalPlaces ?? 12;
     return numericOperation(expression.operation, operands as FlowFormula[], precision);
   }
   if (expression.kind === "date_offset") {
@@ -431,9 +426,7 @@ export const evaluateRecordCalculations = (
       !jsonValueSchema.safeParse(candidate).success ||
       !persistedRecordFieldValueMatches({ field, value: candidate })
     )
-      invalidValues.push(
-        issue("invalid_dependency_value", fieldId, ["authoritativeFieldValues", fieldId]),
-      );
+      invalidValues.push(issue("invalid_dependency_value", fieldId, ["authoritativeFieldValues", fieldId]));
     else values.set(fieldId, candidate as JsonValue);
   }
   if (invalidValues.length > 0) return { success: false, issues: invalidValues };
@@ -509,7 +502,10 @@ export const evaluateRecordCalculations = (
         const scope: FlowFormulaScope = {
           now,
           reference: (reference) => {
-            if (reference.source !== "module_field" || !declaredDependencies.has(reference.fieldId))
+            if (
+              reference.source !== "module_field" ||
+              !declaredDependencies.has(reference.fieldId)
+            )
               return undefined;
             const dependency = fields.get(reference.fieldId);
             if (dependency === undefined) return undefined;
@@ -549,7 +545,9 @@ export const evaluateRecordCalculations = (
             else calculated = formatExactDecimal(exact);
           } else calculated = evaluated.value;
         } else if (calculationInputsPresent(field, values)) {
-          evaluationIssue = formulaFailure(formula, scope) ?? "invalid_result";
+          evaluationIssue =
+            formulaFailure(formula, scope) ??
+            "invalid_result";
         }
       }
     }
@@ -579,9 +577,7 @@ const isReadTimeCalculationField = (field: CalculationField): boolean =>
   field.settings.evaluation === "read_time" || field.settings.expression.kind === "deadline_passed";
 
 /** Returns calculation fields that are worked out whenever their record is read. */
-export const readTimeCalculationFieldIds = (
-  recordType: RecordTypeDefinition,
-): readonly string[] => {
+export const readTimeCalculationFieldIds = (recordType: RecordTypeDefinition): readonly string[] => {
   const calculations = recordType.fields.filter(
     (field): field is CalculationField => field.type === "calculation",
   );
