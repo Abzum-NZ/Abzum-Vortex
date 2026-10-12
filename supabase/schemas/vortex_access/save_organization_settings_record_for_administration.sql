@@ -16,6 +16,8 @@ declare
   context_correlation_id uuid;
   saved record;
   default_application_root_id_value uuid;
+  failure_sqlstate text;
+  failure_message text;
 begin
   if p_record_id is null
     or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -23,7 +25,7 @@ begin
     or p_expected_revision not between 1 and 9007199254740990
     or pg_catalog.jsonb_typeof(p_core_values) is distinct from 'object'
     or pg_catalog.jsonb_typeof(p_extension_values) is distinct from 'object' then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'invalid_request');
   end if;
 
   context_value := vortex_access.validated_human_request_context();
@@ -33,7 +35,7 @@ begin
   end if;
   context_organization_id := (context_value ->> 'organizationId')::uuid;
   if p_record_id is distinct from context_organization_id then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'organization_mismatch');
   end if;
 
   perform 1
@@ -41,14 +43,14 @@ begin
   where access_version.organization_id = context_organization_id
   for update;
   if not found then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'organization_access_missing');
   end if;
 
   context_value := vortex_access.validated_human_request_context();
   context_correlation_id := (context_value ->> 'correlationId')::uuid;
 
   if not vortex_access.organization_runtime_settings_manage_is_current() then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'settings_permission_unavailable');
   end if;
 
   if p_core_values ? 'default_application_root_id'
@@ -57,7 +59,7 @@ begin
       or not pg_catalog.pg_input_is_valid(
         p_core_values ->> 'default_application_root_id', 'uuid'
       ) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused');
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'default_application_unavailable');
     end if;
     default_application_root_id_value :=
       (p_core_values ->> 'default_application_root_id')::uuid;
@@ -107,10 +109,22 @@ begin
   );
 exception
   when serialization_failure or deadlock_detected then
-    return pg_catalog.jsonb_build_object('outcome', 'conflict');
+    get stacked diagnostics
+      failure_sqlstate = returned_sqlstate,
+      failure_message = message_text;
+    raise log 'Organization settings persistence conflicted: % (%)', failure_message, failure_sqlstate;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict', 'reasonCode', 'persistence_conflict_' || failure_sqlstate
+    );
   when no_data_found or too_many_rows or insufficient_privilege or check_violation
     or object_not_in_prerequisite_state or invalid_text_representation then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
+    get stacked diagnostics
+      failure_sqlstate = returned_sqlstate,
+      failure_message = message_text;
+    raise log 'Organization settings persistence refused: % (%)', failure_message, failure_sqlstate;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'persistence_refused_' || failure_sqlstate
+    );
 end
 $function$;
 

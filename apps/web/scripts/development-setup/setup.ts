@@ -60,6 +60,8 @@ const initializeLandingZoneDefault = async (
 ): Promise<void> => {
   const { identityAuthorityId, stewardIdentityId, state } = facts;
   const { organizationId } = facts.system;
+  const session = nominatedOwnerSession(stewardIdentityId);
+  const requests = createHumanOrganizationRequestService({ identityAuthorityId });
   if (state.defaultApplicationInitializationCompleted) return;
   if (state.defaultApplicationInitializationAttempted) {
     state.defaultApplicationInitializationCompleted = true;
@@ -70,9 +72,7 @@ const initializeLandingZoneDefault = async (
     return;
   }
 
-  const session = nominatedOwnerSession(stewardIdentityId);
   const selection = organizationSelectionCandidateSchema.parse({ organizationId });
-  const requests = createHumanOrganizationRequestService({ identityAuthorityId });
   const observed = await requests.run(session, selection, async (transaction, scope) => {
     const before = await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
     const defaultApplicationRootId =
@@ -90,12 +90,14 @@ const initializeLandingZoneDefault = async (
   });
 
   if (observed.kind !== "available" || observed.value === undefined) {
-    state.defaultApplicationInitializationCompleted = true;
-    state.save();
-    log(
-      "Landing Zone default state was unavailable or changed during observation; leaving it unchanged",
-    );
-    return;
+    const details =
+      observed.kind === "temporarily_unavailable"
+        ? `temporarily unavailable${observed.cause === undefined ? "" : `: ${observed.cause}`}`
+        : observed.kind === "unavailable"
+          ? "unavailable; see the access log for the refusal cause"
+          : "the settings record was unavailable or changed during observation";
+    log(`Landing Zone default initialization failed: ${details}`);
+    throw new Error(`Landing Zone default initialization failed: ${details}`);
   }
 
   if (observed.value.defaultApplicationRootId !== null) {
@@ -155,8 +157,6 @@ const initializeLandingZoneDefault = async (
       submittedValues: { [defaultApplicationField.fieldId]: defaultApplicationRootId },
     },
   );
-  state.defaultApplicationInitializationCompleted = true;
-  state.save();
   const savedDefaultApplicationRootId =
     result.kind === "available" && result.value.outcome === "saved"
       ? result.value.readableValues[defaultApplicationField.fieldId]
@@ -168,13 +168,33 @@ const initializeLandingZoneDefault = async (
     typeof savedDefaultApplicationRootId === "string" &&
     savedDefaultApplicationRootId.toLowerCase() === defaultApplicationRootId.toLowerCase()
   ) {
+    state.defaultApplicationInitializationCompleted = true;
+    state.save();
     log(
       `initialized the organisation default to Landing Zone at settings revision ${result.value.concurrencyNumber}`,
     );
   } else {
+    if (
+      result.kind === "unavailable" ||
+      (result.kind === "available" && result.value.outcome !== "saved")
+    ) {
+      state.defaultApplicationInitializationAttempted = false;
+      state.save();
+    }
+    const details =
+      result.kind === "temporarily_unavailable"
+        ? `temporarily unavailable${result.cause === undefined ? "" : `: ${result.cause}`}`
+        : result.kind === "unavailable"
+          ? "unavailable; see the access log for the refusal cause"
+          : result.value.outcome === "refused"
+            ? `refused (${result.value.error.code})`
+            : result.value.outcome === "correction_required"
+              ? `correction required (${result.value.corrections.map(({ code }) => code).join(", ")})`
+              : `saved at revision ${result.value.concurrencyNumber} with default ${String(savedDefaultApplicationRootId)}`;
     log(
-      `Landing Zone default initialization was not confirmed (${result.kind}); no follow-up write will be made`,
+      `Landing Zone default initialization failed: ${details}; expected settings revision ${observed.value.revision + 1}`,
     );
+    throw new Error(`Landing Zone default initialization failed: ${details}`);
   }
 };
 
