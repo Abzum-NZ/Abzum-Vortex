@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vortex/platform/schema";
+import { describeFailure, type JsonValue } from "@vortex/platform/schema";
 import {
   performPresentationIntent,
   readConfirmIntent,
@@ -34,6 +34,12 @@ const maximumContinuationLength = 128;
 const maximumRounds = 25;
 
 const expectedIntentKind = { form: "show_form", confirm: "confirm" } as const;
+const isSurfaceCancellation = (error: unknown): boolean =>
+  error instanceof Error && error.name === "AbortError";
+const refuseInvalidServerFlowState = (stage: string): Readonly<{ kind: "refused" }> => {
+  console.error(`[flow] server response invalid: stage=${stage}`);
+  return { kind: "refused" };
+};
 
 /**
  * Carries out a server-driven flow in the page. The server runs every task from the first one; at a
@@ -49,6 +55,7 @@ export async function driveServerFlow(
   host: FlowIntentHost,
 ): Promise<ServerDrivenResult> {
   let response = first;
+  let awaitingSurface = false;
   try {
     for (let round = 0; round < maximumRounds; round += 1) {
       switch (response.kind) {
@@ -74,10 +81,10 @@ export async function driveServerFlow(
             response.continuation.length < minimumContinuationLength ||
             response.continuation.length > maximumContinuationLength
           )
-            return { kind: "refused" };
+            return refuseInvalidServerFlowState("continuation_intent");
           for (const intent of response.intents.slice(0, -1))
             if (intent.kind === "show_form" || intent.kind === "confirm")
-              return { kind: "refused" };
+              return refuseInvalidServerFlowState("unexpected_pause_intent");
             else await performPresentationIntent(intent, host);
 
           const continuation = response.continuation;
@@ -89,21 +96,22 @@ export async function driveServerFlow(
           };
           if (response.awaiting === "form") {
             const form = readFormIntent(waiting);
-            if (form === undefined) return { kind: "refused" };
+            if (form === undefined) return refuseInvalidServerFlowState("form_intent");
+            awaitingSurface = true;
             const answer = await host.showForm(form);
-            response = await client.resume(
-              flowId,
-              continuation,
-              answer,
-              evidence,
-            );
+            awaitingSurface = false;
+            response = await client.resume(flowId, continuation, answer, evidence);
           } else {
             const confirmation = readConfirmIntent(waiting);
-            if (confirmation === undefined) return { kind: "refused" };
+            if (confirmation === undefined)
+              return refuseInvalidServerFlowState("confirmation_intent");
+            awaitingSurface = true;
+            const confirmed = await host.confirm(confirmation);
+            awaitingSurface = false;
             response = await client.resume(
               flowId,
               continuation,
-              { kind: "confirm", confirmed: await host.confirm(confirmation) },
+              { kind: "confirm", confirmed },
               evidence,
             );
           }
@@ -111,8 +119,10 @@ export async function driveServerFlow(
         }
       }
     }
-    return { kind: "refused" };
-  } catch {
-    return { kind: "abandoned" };
+    return refuseInvalidServerFlowState("round_limit");
+  } catch (error) {
+    if (awaitingSurface && isSurfaceCancellation(error)) return { kind: "abandoned" };
+    console.error(`[flow] server-driven execution failed: ${describeFailure(error)}`);
+    return { kind: "unavailable" };
   }
 }

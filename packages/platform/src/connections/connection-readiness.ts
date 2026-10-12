@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  describeFailure,
   sameId,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
@@ -108,8 +109,8 @@ type SqlEvidenceRow = DatabaseRow & {
 export class ConnectionReadinessError extends Error {
   readonly code: ConnectionReadinessRefusalCode;
 
-  constructor(code: ConnectionReadinessRefusalCode, message: string) {
-    super(message);
+  constructor(code: ConnectionReadinessRefusalCode, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ConnectionReadinessError";
     this.code = code;
   }
@@ -276,6 +277,12 @@ export async function resolveConnectionInstanceReadiness(
         message: "Connection readiness parameters are invalid",
       });
     }
+    const failure = new ConnectionReadinessError(
+      "database_error",
+      "Connection readiness resolution failed",
+      { cause: error },
+    );
+    console.error(`[connection] readiness resolution failed: ${describeFailure(failure)}`);
     return Object.freeze({
       outcome: "refused",
       reasonCode: "database_error",
@@ -331,13 +338,18 @@ export async function readActiveConnectionEvidence(
       throw new ConnectionReadinessError(
         "connection_unavailable",
         "Active connection evidence is unavailable",
+        { cause: new Error("ACTIVE_CONNECTION_EVIDENCE_IDENTITY_MISMATCH") },
       );
     }
     return evidence;
-  } catch {
-    throw new ConnectionReadinessError(
+  } catch (error) {
+    if (error instanceof ConnectionReadinessError && error.cause === undefined) throw error;
+    const failure = new ConnectionReadinessError(
       "connection_unavailable",
       "Active connection evidence is unavailable",
+      { cause: error },
     );
+    console.error(`[connection] active evidence read failed: ${describeFailure(failure)}`);
+    throw failure;
   }
 }
