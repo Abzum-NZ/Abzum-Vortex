@@ -392,6 +392,7 @@ const uuidPattern = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const functionPattern = /\bcreate\s+(?:or\s+replace\s+)?function\s+(?:"?\w+"?\.)?"?\w+"?\s*\(/gi;
 const dropFunctionPattern =
   /^\s*drop\s+function\s+(?:if\s+exists\s+)?(?:"?\w+"?\.)?"?\w+"?\s*\(/gim;
+const renameFunctionPattern = /^\s*alter\s+function\s+(?:"?\w+"?\.)?"?\w+"?\s*\(/gim;
 const functionNamePattern = /\bfunction\s+((?:"?\w+"?\.)?"?\w+"?)\s*\(/i;
 const typeHeadPattern =
   /^(?:smallint|int2|int|integer|int4|bigint|int8|numeric|decimal|real|float4|float8|double\s+precision|smallserial|serial|bigserial|money|character\s+varying|character|varchar|text|bytea|timestamp|timestamptz|time|date|interval|bool|boolean|uuid|json|jsonb|xml|record|void|trigger|event_trigger|anyarray|anyelement|anyenum|anynonarray|anyrange|name|oid|regclass|regtype|inet|cidr|macaddr|tsvector|tsquery|pg_lsn|bit|varbit|vector|geometry|geography)\b/i;
@@ -454,6 +455,13 @@ function splitArguments(value: string): string[] {
   if (last) result.push(last);
   return result;
 }
+function normalizedType(value: string): string {
+  return value
+    .replaceAll('"', "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*([(),.]|\[|\])\s*/g, "$1")
+    .toLowerCase();
+}
 function argumentType(argument: string): string | undefined {
   const mode = /^(inout|in|out|variadic)\b\s*/i.exec(argument.trim())?.[1]?.toLowerCase();
   if (mode === "out") return undefined;
@@ -497,11 +505,7 @@ function argumentType(argument: string): string | undefined {
   const firstToken = /^"?([\w$]+)"?/.exec(value)?.[1] ?? "";
   const rest = value.slice(firstToken.length).trim();
   if (rest && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value))) value = rest;
-  return value
-    .replaceAll('"', "")
-    .replace(/\s+/g, " ")
-    .replace(/\s*([(),.]|\[|\])\s*/g, "$1")
-    .toLowerCase();
+  return normalizedType(value);
 }
 function functions(
   content: string,
@@ -538,14 +542,16 @@ function functions(
   }
   return result;
 }
-const latest = new Map<
-  string,
-  { definition: string; file: string; line: number; identity: string }
->();
-for (const file of files
+const migrationFiles = files
   .filter((file) => file.startsWith(paths.migrations) && file.endsWith(".sql"))
-  .sort()) {
+  .sort();
+const latest = new Map<string, { definition: string; file: string }>();
+const latestLive = new Map<string, { file: string; line: number; key: string }>();
+for (const file of migrationFiles) {
   const content = read(file);
+  const migrationFunctions = functions(content);
+  for (const [key, value] of migrationFunctions)
+    latest.set(key, { definition: value.definition, file });
   const events: Array<
     | {
         kind: "create";
@@ -554,8 +560,15 @@ for (const file of files
         value: ReturnType<typeof functions> extends Map<string, infer T> ? T : never;
       }
     | { kind: "drop"; offset: number; identity: string }
+    | {
+        kind: "rename";
+        offset: number;
+        fromIdentity: string;
+        toIdentity: string;
+        toName: string;
+      }
   > = [];
-  for (const [key, value] of functions(content))
+  for (const [key, value] of migrationFunctions)
     events.push({ kind: "create", offset: value.offset, key, value });
   for (const match of content.matchAll(dropFunctionPattern)) {
     const start = match.index + match[0].toLowerCase().indexOf("drop");
@@ -563,28 +576,56 @@ for (const file of files
     const close = closingParenthesis(content, open);
     const name = functionNamePattern.exec(match[0])?.[1]?.replaceAll('"', "").toLowerCase();
     if (close < 0 || !name) continue;
-    const argumentTypes = splitArguments(content.slice(open + 1, close)).map((argument) =>
-      argument
-        .replaceAll('"', "")
-        .replace(/\s+/g, " ")
-        .replace(/\s*([(),.]|\[|\])\s*/g, "$1")
-        .toLowerCase(),
-    );
+    const argumentTypes = splitArguments(content.slice(open + 1, close)).map(normalizedType);
     events.push({ kind: "drop", offset: start, identity: `${name}(${argumentTypes.join(",")})` });
+  }
+  for (const match of content.matchAll(renameFunctionPattern)) {
+    const start = match.index + match[0].toLowerCase().indexOf("alter");
+    const open = content.indexOf("(", start);
+    const close = closingParenthesis(content, open);
+    const oldName = functionNamePattern.exec(match[0])?.[1]?.replaceAll('"', "").toLowerCase();
+    if (close < 0 || !oldName) continue;
+    const statementEnd = content.indexOf(";", close + 1);
+    const statement = content.slice(close + 1, statementEnd < 0 ? undefined : statementEnd);
+    const renamedTo = /\brename\s+to\s+("?\w+"?)/i
+      .exec(statement)?.[1]
+      ?.replaceAll('"', "")
+      .toLowerCase();
+    if (!renamedTo) continue;
+    const schema = oldName.includes(".") ? `${oldName.slice(0, oldName.lastIndexOf("."))}.` : "";
+    const newName = `${schema}${renamedTo}`;
+    const argumentTypes = splitArguments(content.slice(open + 1, close)).map(normalizedType);
+    events.push({
+      kind: "rename",
+      offset: start,
+      fromIdentity: `${oldName}(${argumentTypes.join(",")})`,
+      toIdentity: `${newName}(${argumentTypes.join(",")})`,
+      toName: newName,
+    });
   }
   events.sort((left, right) => left.offset - right.offset);
   for (const event of events) {
     if (event.kind === "drop") {
-      for (const [key, value] of latest) if (value.identity === event.identity) latest.delete(key);
+      latestLive.delete(event.identity);
       continue;
     }
-    for (const [key, value] of latest)
-      if (value.identity === event.value.identity) latest.delete(key);
-    latest.set(event.key, {
-      definition: event.value.definition,
+    if (event.kind === "rename") {
+      const previous = latestLive.get(event.fromIdentity);
+      if (previous) {
+        latestLive.delete(event.fromIdentity);
+        latestLive.set(event.toIdentity, {
+          file,
+          line: lineAt(content, event.offset),
+          key: previous.key.replace(functionNamePattern, `function ${event.toName}(`),
+        });
+      }
+      continue;
+    }
+    latestLive.delete(event.value.identity);
+    latestLive.set(event.value.identity, {
       file,
       line: lineAt(content, event.value.offset),
-      identity: event.value.identity,
+      key: event.key,
     });
   }
 }
@@ -618,9 +659,9 @@ for (const file of files.filter(
       }
   }
 }
-for (const [key, migration] of latest)
-  if (!canonicalFunctions.has(migration.identity))
-    add("migration-orphan", migration.file, migration.line, key);
+for (const [identity, migration] of latestLive)
+  if (!canonicalFunctions.has(identity))
+    add("migration-orphan", migration.file, migration.line, migration.key);
 for (const file of files.filter(
   (file) => file.startsWith(paths.migrations) && file.endsWith(".sql"),
 )) {
