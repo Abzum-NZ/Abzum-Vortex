@@ -3,7 +3,7 @@ import {
   platformPermissionFor,
   platformPermissionOwnerId,
   isPlatformPermissionKey,
-} from "@vortex/modules";
+} from "@vortex/definitions";
 import { installPlatformPermissionSource } from "@vortex/platform/server";
 
 installPlatformPermissionSource({

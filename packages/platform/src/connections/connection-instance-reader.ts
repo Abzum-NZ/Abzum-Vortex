@@ -147,9 +147,9 @@ type PermissionCheck =
 
 /*
  * These are the permanent IDs of the pinned platform declaration in
- * modules/src/system-core/platform-permissions.ts and its platform owner in
- * modules/src/platform-permissions.ts. Keep the declaration exact here so this
- * low-level package does not acquire a new @vortex/modules dependency.
+ * packages/definitions/src/system-core/platform-permissions.ts and its platform owner in
+ * packages/definitions/src/platform-permissions.ts. Keep the declaration exact here so this
+ * low-level package does not acquire a new @vortex/definitions dependency.
  */
 const connectionManagementDeclaration = organizationAccessDeclarationSchema.parse({
   operationKey: "platform.organization.connections.manage",

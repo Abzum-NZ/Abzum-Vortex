@@ -44,7 +44,7 @@ import {
 import type { RequestDatabaseTransaction } from "@web/platform-server";
 import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createActiveApplicationInstallationRepository } from "@web/platform-server";
-import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/modules";
+import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { prepareRecordFieldValuesV2 } from "@web/platform-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";

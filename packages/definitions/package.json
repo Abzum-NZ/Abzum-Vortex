@@ -1,5 +1,5 @@
 {
-  "name": "@vortex/modules",
+  "name": "@vortex/definitions",
   "version": "0.0.0",
   "private": true,
   "type": "module",

@@ -36,7 +36,7 @@ import {
   tasksModule,
   tenantAdministrationApplication,
   tenantAdministrationModule,
-} from "@vortex/modules";
+} from "@vortex/definitions";
 import {
   developmentBuilderAuthority,
   inSystemTransaction,

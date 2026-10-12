@@ -56,10 +56,9 @@ body {
   }
 }
 
-/* Class names used by components in these workspaces generate utilities. */
+/* Class names used by application and UI components generate utilities. */
 @source "../..";
-@source "../../../apps";
-@source "../../../studio";
+@source "../../../../apps";
 
 /*
  * shadcn components use the dark: variant. It follows the colour scheme the theme bridge resolves,

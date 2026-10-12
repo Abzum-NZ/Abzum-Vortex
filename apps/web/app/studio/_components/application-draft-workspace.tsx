@@ -30,7 +30,7 @@ import {
   type StudioStoredApplicationDraft,
   type StudioCompositionContext,
   type StudioFlowTextContext,
-} from "@vortex/studio";
+} from "@vortex/ui/studio";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
 import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";

@@ -4,7 +4,7 @@ import {
   prepareOrganizationRoleChangeEvidence,
 } from "@web/platform-server";
 import { fingerprintCanonicalValue } from "@web/platform-server";
-import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
+import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import {
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,

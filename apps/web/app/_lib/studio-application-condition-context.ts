@@ -8,7 +8,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-serv
 import { BuilderAuthorityError, DefinitionStoreError, DefinitionPublicationError,
   createDatabaseDefinitionPublicationService, fingerprintCanonicalValue,
   readApplicationDefinitionDraft, requireBuilderAuthority } from "@web/platform-server";
-import type { StudioApplicationConditionContextResult } from "@vortex/studio";
+import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";

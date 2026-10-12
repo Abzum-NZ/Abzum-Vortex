@@ -23,7 +23,7 @@ import {
   type StudioCompositionAddSettings,
   type StudioCompositionScalarSettings,
   type StudioSemanticSelection,
-} from "@vortex/studio";
+} from "@vortex/ui/studio";
 
 type Props = Readonly<{
   context: StudioCompositionContext;

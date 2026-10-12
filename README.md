@@ -40,8 +40,8 @@ Application workflow steps use protected Vortex operations. Kestra's operational
 | --- | --- |
 | `apps/web/` | Existing Next.js UI, server entry points and deployment root |
 | `packages/platform/` | Domain schemas, server operations, and database access |
-| `ui/`, `studio/` | Shared UI components and the later designer |
-| `modules/` | Ordinary shipped application and module definitions |
+| `packages/ui/` | Shared UI components and the designer |
+| `packages/definitions/` | Ordinary shipped application and module definitions |
 | `supabase/` | Database configuration, schema, migrations and seed |
 | `workflows/kestra/` | Operational flows, scripts and delivery documentation |
 | `tooling/` | Workspace checks and development tools |
@@ -97,7 +97,7 @@ What the setup does, in order, through the protected entry points only (no table
 | Step | Result |
 | --- | --- |
 | Provision | The tenant and organisation "Abzum Development" with the nominated account as its steward (`provision_tenant` with a fixed development duplicate key, recorded as the provisioning receipt). |
-| Publish | IAM, Organisation Administration, Tenant Administration, CRM, Service Desk, Operations and Landing Zone, plus their modules from `modules/`, are published as 1.0.0 through the Definition store and publication service. |
+| Publish | IAM, Organisation Administration, Tenant Administration, CRM, Service Desk, Operations and Landing Zone, plus their modules from `packages/definitions/`, are published as 1.0.0 through the Definition store and publication service. |
 | Installer access | The steward, through the ordinary Access administration operations, creates the custom role "Application installer" (`platform.organization.applications.manage` only) and assigns it to themselves. A provisioned steward holds no installation permission. |
 | Install | The configured shipped applications are prepared and activated through the App installation coordinator, with an explicit initial record lifecycle policy (delete, 30-day recovery window) for each record type. |
 | Owner access | Through protected Access operations, setup accepts the shipped application role templates and assigns their roles to the nominated owner, so the owner can open the installed applications and operate the demo. |

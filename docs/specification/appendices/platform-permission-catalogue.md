@@ -26,12 +26,12 @@ The declaration sources and aggregate used by runtime packages are:
 
 | Purpose | Source |
 | --- | --- |
-| Organisation Administration's 14 platform permissions | `modules/src/organisation-administration/module.ts` |
-| The eight permissions without a system record type; declaration only, not an installable module | `modules/src/system-core/platform-permissions.ts` |
-| Aggregate platform permission declarations consumed by runtime packages | `modules/src/platform-permissions.ts` in `@vortex/modules` |
+| Organisation Administration's 14 platform permissions | `packages/definitions/src/organisation-administration/module.ts` |
+| The eight permissions without a system record type; declaration only, not an installable module | `packages/definitions/src/system-core/platform-permissions.ts` |
+| Aggregate platform permission declarations consumed by runtime packages | `packages/definitions/src/platform-permissions.ts` in `@vortex/definitions` |
 | Permission declaration schema only | `packages/platform/src/access/permissions.ts` in `@vortex/contracts` |
 
-`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/modules`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. The existing opaque meaning fingerprint for `platform.organization.connections.manage` stays stored data and is not recalculated or changed when its declaration moves:
+`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/definitions`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. The existing opaque meaning fingerprint for `platform.organization.connections.manage` stays stored data and is not recalculated or changed when its declaration moves:
 
 `sha256:809b4b3ad29ff61ab5ea73c06504909540b8111a2b3c2e1310559a7e9dc2e31e`
 

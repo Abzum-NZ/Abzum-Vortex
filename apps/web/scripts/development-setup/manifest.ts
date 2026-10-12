@@ -20,7 +20,7 @@ import { z } from "zod";
  */
 
 /**
- * The shipped applications of `@vortex/modules` the setup can install, by definition key. Anything
+ * The shipped applications of `@vortex/definitions` the setup can install, by definition key. Anything
  * else is refused before any write.
  */
 const shippedApplicationKeys = [

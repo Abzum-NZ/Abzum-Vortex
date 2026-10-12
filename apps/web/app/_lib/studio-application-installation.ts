@@ -69,7 +69,7 @@ import {
 } from "@web/platform-server";
 import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import { createRecordTypeLifecyclePolicyService } from "@web/platform-server";
-import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
+import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue, releaseSetContainsCustomComponents } from "./definition-catalogue";

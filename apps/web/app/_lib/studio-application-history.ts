@@ -13,7 +13,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import { BuilderAuthorityError, DefinitionStoreError, readApplicationDefinitionDraft,
   requireBuilderAuthority } from "@web/platform-server";
-import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
+import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 

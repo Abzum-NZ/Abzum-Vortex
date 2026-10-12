@@ -323,7 +323,7 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * paints the default catalogue font.
  * `light-dark()` serves forced light, forced dark and the system preference through the
  * container's `color-scheme` (a `.dark` ancestor sets it dark), and the shadcn `dark:` variant in
- * ui/src/styles/globals.css follows the same resolved mode, so `.dark` and `prefers-color-scheme`
+ * packages/ui/src/styles/globals.css follows the same resolved mode, so `.dark` and `prefers-color-scheme`
  * selections resolve the same map.
  *
  * A colour is applied only where #594 validated it against what is painted beneath it;

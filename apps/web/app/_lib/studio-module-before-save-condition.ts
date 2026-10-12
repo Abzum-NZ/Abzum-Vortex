@@ -37,7 +37,7 @@ import {
   type ModuleBeforeSaveConditionFlowChoice,
   type StoredModuleDefinitionDraft,
 } from "@web/platform-server";
-import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/modules";
+import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";

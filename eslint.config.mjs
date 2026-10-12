@@ -40,7 +40,7 @@ export default tseslint.config(
       "packages/platform/src/files/application-attachment-blocks.ts",
       "packages/platform/src/connections/outbound-target-policy.ts",
       "packages/platform/src/files/file-metadata.ts",
-      "ui/src/components/notice.tsx",
+      "packages/ui/src/components/notice.tsx",
     ],
     rules: { "no-control-regex": "off" },
   },
@@ -61,8 +61,8 @@ export default tseslint.config(
   {
     files: [
       "apps/web/scripts/development-setup/install.ts",
-      "ui/src/layout-styles.ts",
-      "ui/src/navigation/account-actions.tsx",
+      "packages/ui/src/layout-styles.ts",
+      "packages/ui/src/navigation/account-actions.tsx",
     ],
     rules: { "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }] },
   },
@@ -79,5 +79,5 @@ export default tseslint.config(
     rules: { "no-fallthrough": "off" },
   },
   // The rich text schema makes the emphasis style exhaustive at runtime.
-  { files: ["ui/src/display/rich-text.tsx"], rules: { "no-fallthrough": "off" } },
+  { files: ["packages/ui/src/display/rich-text.tsx"], rules: { "no-fallthrough": "off" } },
 );

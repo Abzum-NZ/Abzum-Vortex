@@ -7,7 +7,7 @@ import {
   type ModuleSourceDocument,
 } from "@vortex/platform/schema";
 import type { ModuleQueryFilterDraftContext } from "@web/platform-server";
-import type { StudioConditionControlsContext } from "@vortex/studio";
+import type { StudioConditionControlsContext } from "@vortex/ui/studio";
 
 type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
 type SourceCondition = NonNullable<ModuleSourceQuery["filter"]>;

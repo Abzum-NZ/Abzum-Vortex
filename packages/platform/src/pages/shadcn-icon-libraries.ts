@@ -2,7 +2,7 @@
  * The icon libraries shadcn/create offers at the pinned shadcn version (`PRESET_ICON_LIBRARIES` in
  * `shadcn/preset` 4.21.0), in the preset's order. An application theme selection names one of them;
  * the shared `ui` package renders every icon through an adapter for the selected library and loads
- * only that library's code. `ui/src/icons/icon-libraries.ts` checks this list against the pinned
+ * only that library's code. `packages/ui/src/icons/icon-libraries.ts` checks this list against the pinned
  * preset at compile time, so a shadcn upgrade that adds or removes a library cannot drift silently.
  */
 export const SHADCN_ICON_LIBRARIES = [

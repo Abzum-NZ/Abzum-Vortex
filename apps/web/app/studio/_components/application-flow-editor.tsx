@@ -7,7 +7,7 @@ import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flowRoundingModeSchema } from "@vortex/platform/schema";
-import type { StudioSemanticSelection } from "@vortex/studio";
+import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   projectStudioFlowTextEditor,
   projectStudioFlowPresentationPalette,
@@ -28,7 +28,7 @@ import {
   type StudioFlowCalculateOperand,
   type StudioFlowCalculateProjection,
   type StudioFlowCalculateSettings,
-} from "@vortex/studio";
+} from "@vortex/ui/studio";
 
 type FlowSelection = Extract<StudioSemanticSelection, { kind: "flow" }>;
 type Target = Readonly<{ id: string; path: readonly (string | number)[]; property: string }>;
