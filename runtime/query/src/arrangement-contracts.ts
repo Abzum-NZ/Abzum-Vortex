@@ -56,8 +56,6 @@ const arrangementSourcePlanSchema = z
     queryId: queryIdSchema,
   })
   .strict();
-type ArrangementSourcePlan = z.infer<typeof arrangementSourcePlanSchema>;
-
 /** A field the authorised plan selected, with its declared field type. */
 const arrangementFieldSchema = z
   .object({
