@@ -40,7 +40,7 @@ type ModuleQuery = ModuleRelease["content"]["queries"][number];
 type BoardMetric = BoardPayload["aggregates"][number];
 type BoardQueries = Pick<
   ReturnType<typeof createProtectedQueryService>,
-  "boardMembers" | "boardSummary"
+  "boardMembers" | "boardInitialPages" | "boardSummary"
 >;
 type PermissionProjectedPlacement = BlockPlacementContract &
   Readonly<{
