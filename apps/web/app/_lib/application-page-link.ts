@@ -14,9 +14,7 @@ import {
   type ApplicationPageLinkResult,
   type IdentitySession,
 } from "@vortex/platform/schema";
-import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createStoredPageCapabilityService } from "@web/platform-server";
-import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequestDependencies } from "./server-composition";
 
 const unavailable = Object.freeze({ availability: "unavailable" as const });
@@ -55,8 +53,6 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           organizationShortName.data,
           dependencies.identityAuthorityId,
           selector.data.applicationKey,
-          (transaction) =>
-            createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction),
         );
         const { read, context, identity: addressIdentity } = addressed;
         if (

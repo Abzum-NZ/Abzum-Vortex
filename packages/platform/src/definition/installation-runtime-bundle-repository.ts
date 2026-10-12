@@ -20,19 +20,10 @@ import {
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
-  configureInstallationRuntimeBundleCache,
-  readInstallationRuntimeBundleCachePart,
-  retainInstallationRuntimeBundleCachePart,
-} from "./installation-runtime-bundle-cache";
-import {
   DefinitionError,
   databaseErrorCode,
   unexpectedDefinitionFailure,
 } from "./definition-error";
-
-export {
-  configureInstallationRuntimeBundleCache,
-};
 
 type BundleIndexRow = DatabaseRow & { readonly bundle_index: unknown };
 type BundlePartsRow = DatabaseRow & { readonly bundle_parts: unknown };
@@ -82,39 +73,29 @@ const indexFromRow = (row: BundleIndexRow): InstallationRuntimeBundleIndex => {
   return parsed.data;
 };
 
-const sha256 = (content: string): string =>
-  `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`;
+const isUtf8ContinuationByte = (byte: number | undefined): boolean =>
+  byte !== undefined && (byte & 0xc0) === 0x80;
 
 const splitSection = (
   section: InstallationRuntimeBundleSection,
   serialized: string,
 ): InstallationRuntimeBundlePart[] => {
+  const bytes = Buffer.from(serialized, "utf8");
   const chunks: InstallationRuntimeBundlePart[] = [];
-  let content = "";
-  let byteSize = 0;
-  let ordinal = 0;
-
-  const save = () => {
-    if (content.length === 0) return;
+  let start = 0;
+  while (start < bytes.length) {
+    let end = Math.min(start + installationRuntimeBundleMaximumPartBytes, bytes.length);
+    while (end < bytes.length && isUtf8ContinuationByte(bytes[end])) end -= 1;
+    const slice = bytes.subarray(start, end);
     chunks.push({
       section,
-      ordinal,
-      byteSize,
-      sha256: sha256(content),
-      content,
+      ordinal: chunks.length,
+      byteSize: slice.length,
+      sha256: `sha256:${createHash("sha256").update(slice).digest("hex")}`,
+      content: slice.toString("utf8"),
     });
-    ordinal += 1;
-    content = "";
-    byteSize = 0;
-  };
-
-  for (const character of serialized) {
-    const characterBytes = Buffer.byteLength(character, "utf8");
-    if (byteSize + characterBytes > installationRuntimeBundleMaximumPartBytes) save();
-    content += character;
-    byteSize += characterBytes;
+    start = end;
   }
-  save();
   return chunks;
 };
 
@@ -161,8 +142,14 @@ export interface InstallationRuntimeBundleRepository {
   readSections(
     key: InstallationRuntimeBundleKey,
     sections?: readonly InstallationRuntimeBundleSection[],
-  ): Promise<Partial<Record<InstallationRuntimeBundleSection, JsonValue>>>;
+  ): Promise<InstallationRuntimeBundleSections>;
 }
+
+/** The reconstructed sections and the character length of the stored text they were parsed from. */
+export type InstallationRuntimeBundleSections = Readonly<{
+  sections: Partial<Record<InstallationRuntimeBundleSection, JsonValue>>;
+  textLength: number;
+}>;
 
 /** Stores exact-release bundle sections through the verified request transaction. */
 export const createInstallationRuntimeBundleRepository = (
@@ -202,15 +189,6 @@ export const createInstallationRuntimeBundleRepository = (
     });
     if (!command.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
     const expected = index.parts.filter((part) => command.data.sections.includes(part.section));
-    const cachedParts = expected.map((metadata) =>
-      readInstallationRuntimeBundleCachePart(index, metadata),
-    );
-    const completeCachedParts = cachedParts.filter(
-      (part): part is InstallationRuntimeBundlePart => part !== undefined,
-    );
-    if (expected.length > 0 && completeCachedParts.length === expected.length) {
-      return sortParts(completeCachedParts);
-    }
 
     try {
       const rows = await transaction.query<BundlePartsRow>`
@@ -243,18 +221,14 @@ export const createInstallationRuntimeBundleRepository = (
         if (
           metadata === undefined ||
           metadata.byteSize !== part.byteSize ||
-          metadata.sha256 !== part.sha256 ||
-          Buffer.byteLength(part.content, "utf8") !== part.byteSize ||
-          sha256(part.content) !== part.sha256
+          metadata.sha256 !== part.sha256
         )
           throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
         expectedByKey.delete(`${part.section}:${part.ordinal}`);
       }
       if (expectedByKey.size !== 0)
         throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
-      const sortedParts = sortParts(parts);
-      for (const part of sortedParts) retainInstallationRuntimeBundleCachePart(index, part);
-      return sortedParts;
+      return sortParts(parts);
     } catch (error) {
       throw mapFailure(error);
     }
@@ -316,6 +290,7 @@ export const createInstallationRuntimeBundleRepository = (
       const index = await readIndex(key.data);
       const parts = await readPartsWithIndex(key.data, command.data.sections, index);
       const reconstructed: Partial<Record<InstallationRuntimeBundleSection, JsonValue>> = {};
+      let textLength = 0;
       for (const section of command.data.sections) {
         const sectionParts = parts.filter((part) => part.section === section);
         if (
@@ -324,7 +299,9 @@ export const createInstallationRuntimeBundleRepository = (
         )
           throw new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED");
         try {
-          const value: unknown = JSON.parse(sectionParts.map((part) => part.content).join(""));
+          const text = sectionParts.map((part) => part.content).join("");
+          textLength += text.length;
+          const value: unknown = JSON.parse(text);
           const parsedValue = jsonValueSchema.safeParse(value);
           if (!parsedValue.success)
             throw unexpectedDefinitionFailure(
@@ -337,7 +314,7 @@ export const createInstallationRuntimeBundleRepository = (
           throw mapFailure(error);
         }
       }
-      return reconstructed;
+      return { sections: reconstructed, textLength };
     },
   });
 };

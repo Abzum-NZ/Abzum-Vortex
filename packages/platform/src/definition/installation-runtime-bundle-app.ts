@@ -195,28 +195,27 @@ export const assertPreparedInstallationRuntimeBundleMatches = async (
     state: "provisioned";
   }>[],
 ): Promise<InstallationRuntimeBundleIndex> => {
-  const command = buildInstallationRuntimeBundleWriteCommand(sourceCandidate);
-  const repository = createInstallationRuntimeBundleRepository(transaction);
-  const key = installationRuntimeBundleKey(
-    command.applicationRootId,
-    command.applicationReleaseRevision,
+  const sourceManifest = installationRuntimeBundleSourceManifestSchema.parse(
+    sourceCandidate.sourceManifest,
   );
-  const index = await repository.readIndex(key);
+  const repository = createInstallationRuntimeBundleRepository(transaction);
+  const index = await repository.readIndex(
+    installationRuntimeBundleKey(
+      sourceManifest.application.rootId,
+      sourceManifest.application.releaseRevision,
+    ),
+  );
   if (
-    canonicalJson(index.sourceManifest) !== canonicalJson(sourceCandidate.sourceManifest) ||
-    index.pinFingerprint !== command.pinFingerprint
+    canonicalJson(index.sourceManifest) !== canonicalJson(sourceManifest) ||
+    index.pinFingerprint !== sourceManifest.pinFingerprint
   )
     throw new Error("PREPARED_INSTALLATION_RUNTIME_BUNDLE_MISMATCH");
-  const stored = await repository.readSections(key, installationRuntimeBundleSections);
-  for (const section of installationRuntimeBundleSections)
-    if (canonicalJson(stored[section]) !== canonicalJson(command.sections[section]))
-      throw new Error("PREPARED_INSTALLATION_RUNTIME_BUNDLE_MISMATCH");
   const rows = await transaction.query<{ readonly asserted: unknown }>`
     select vortex_module.assert_prepared_installation_runtime_bundle(
-      ${command.applicationRootId}::uuid,
-      ${command.applicationReleaseRevision}::bigint,
+      ${sourceManifest.application.rootId}::uuid,
+      ${sourceManifest.application.releaseRevision}::bigint,
       ${JSON.stringify(moduleBindings)}::text::jsonb,
-      ${command.pinFingerprint}::text
+      ${sourceManifest.pinFingerprint}::text
     ) as asserted
   `;
   if (rows.length !== 1 || rows[0]?.asserted === null || rows[0]?.asserted === undefined)
@@ -229,24 +228,11 @@ export const writePreparedInstallationRuntimeBundle = async (
   sourceCandidate: PreparedInstallationRuntimeSource,
 ): Promise<InstallationRuntimeBundleIndex> => {
   const command = buildInstallationRuntimeBundleWriteCommand(sourceCandidate);
-  const repository = createInstallationRuntimeBundleRepository(transaction);
-  const index = await repository.write(command);
+  const index = await createInstallationRuntimeBundleRepository(transaction).write(command);
   if (
     canonicalJson(index.sourceManifest) !== canonicalJson(sourceCandidate.sourceManifest) ||
     index.pinFingerprint !== command.pinFingerprint
   )
     throw new Error("PREPARED_INSTALLATION_RUNTIME_BUNDLE_MISMATCH");
-  const stored = await repository.readSections(
-    installationRuntimeBundleKey(command.applicationRootId, command.applicationReleaseRevision),
-    installationRuntimeBundleSections,
-  );
-  for (const section of installationRuntimeBundleSections)
-    if (canonicalJson(stored[section]) !== canonicalJson(command.sections[section]))
-      throw new Error("PREPARED_INSTALLATION_RUNTIME_BUNDLE_MISMATCH");
   return index;
 };
-
-
-
-
-

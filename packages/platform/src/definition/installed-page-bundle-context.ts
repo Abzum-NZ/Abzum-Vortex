@@ -1,12 +1,9 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import {
   canonicalJson,
-  installationPreparedRecordAccessPlanSchema,
   installationRuntimeBundlePagesSectionSchema,
-  installationRuntimeBundleSections,
-  installationRuntimeBundleSourceManifestSchema,
+  type installationRuntimeBundleSections,
   jsonValueSchema,
   type InstallationRuntimeBundleSourceManifest,
   systemApplicationBoundReleaseSetResultSchema,
@@ -20,32 +17,13 @@ import {
   type ActiveInstallationBundleState,
 } from "./module-index";
 import { z } from "zod";
-import { buildInstallationRuntimeBundleWriteCommand } from "./installation-runtime-bundle-app";
 import {
-  createHumanInstalledRuntimeContextLoader,
+  assembleHumanInstalledRuntimeContext,
+  readHumanActiveInstallation,
   requireInstalledRuntimeContext,
   type HumanInstalledRuntimeContextDependencies,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
-
-const coldSourceSchema = z.object({
-  sourceManifest: installationRuntimeBundleSourceManifestSchema,
-  preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
-}).passthrough();
-
-const warmBundleIntegrityValidationVersion = 1;
-const warmBundleIntegrityProofLimit = 128;
-// These digests prove immutable content equality, never current Human authority.
-const warmBundleIntegrityProofs = new Set<string>();
-
-const retainWarmBundleIntegrityProof = (digest: string): void => {
-  if (warmBundleIntegrityProofs.has(digest)) return;
-  if (warmBundleIntegrityProofs.size >= warmBundleIntegrityProofLimit) {
-    const oldest = warmBundleIntegrityProofs.values().next().value;
-    if (oldest !== undefined) warmBundleIntegrityProofs.delete(oldest);
-  }
-  warmBundleIntegrityProofs.add(digest);
-};
 
 type InstalledPageBundleIdentityEvidence = Readonly<{
   organizationId: ActiveInstallationBundleState["identity"]["organizationId"];
@@ -57,19 +35,63 @@ type InstalledPageBundleIdentityEvidence = Readonly<{
   sourceManifest: InstallationRuntimeBundleSourceManifest;
 }>;
 
-const requireSection = <Section extends (typeof installationRuntimeBundleSections)[number]>(
+/** The validated, deep-frozen release set and page compositions of one immutable installed release. */
+type InstalledPageBundle = Readonly<{
+  releaseSet: SystemApplicationBoundReleaseSetResult;
+  compositions: ReadonlyMap<string, ResolvedPageComposition>;
+}>;
+
+/** Retained size of the cache, counted as the stored section text each parsed bundle came from. */
+const installedPageBundleCacheBudget = 256 * 1024 * 1024;
+const installedPageBundles = new Map<string, Readonly<{ bundle: InstalledPageBundle; size: number }>>();
+let installedPageBundlesSize = 0;
+
+const retainInstalledPageBundle = (key: string, bundle: InstalledPageBundle, size: number): void => {
+  const previous = installedPageBundles.get(key);
+  if (previous !== undefined) {
+    installedPageBundles.delete(key);
+    installedPageBundlesSize -= previous.size;
+  }
+  if (size > installedPageBundleCacheBudget) return;
+  for (const [oldest, entry] of installedPageBundles) {
+    if (installedPageBundlesSize + size <= installedPageBundleCacheBudget) break;
+    installedPageBundles.delete(oldest);
+    installedPageBundlesSize -= entry.size;
+  }
+  installedPageBundles.set(key, { bundle, size });
+  installedPageBundlesSize += size;
+};
+
+const installedPageBundleKey = (identity: ActiveInstallationBundleState["identity"]): string =>
+  JSON.stringify([
+    identity.organizationId.toLowerCase(),
+    identity.applicationRootId.toLowerCase(),
+    identity.applicationReleaseRevision,
+    identity.pinFingerprint,
+    identity.registeredApplication.contentFingerprint,
+    identity.registeredApplication.resolutionFingerprint,
+  ]);
+
+const requireSection = (
   sections: Readonly<Partial<Record<(typeof installationRuntimeBundleSections)[number], unknown>>>,
-  section: Section,
+  section: (typeof installationRuntimeBundleSections)[number],
 ): unknown => {
   const parsed = jsonValueSchema.safeParse(sections[section]);
   if (!parsed.success) throw new Error("INSTALLED_PAGE_BUNDLE_SECTION_UNAVAILABLE");
   return parsed.data;
 };
 
-const releaseSetFromSections = (
+const deepFreeze = <Value>(value: Value): Value => {
+  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
+  for (const key of Object.keys(value)) deepFreeze(Reflect.get(value, key));
+  Object.freeze(value);
+  return value;
+};
+
+const bundleFromSections = (
   sections: Readonly<Partial<Record<(typeof installationRuntimeBundleSections)[number], unknown>>>,
-  correlationId: string,
-): SystemApplicationBoundReleaseSetResult => {
+  correlationId: ActiveInstallationBundleState["identity"]["correlationId"],
+): InstalledPageBundle => {
   const pages = installationRuntimeBundlePagesSectionSchema.parse(requireSection(sections, "pages"));
   const flows = z.object({ flows: z.array(z.unknown()), flowBindings: z.array(z.unknown()) }).strict()
     .parse(requireSection(sections, "flows"));
@@ -83,7 +105,7 @@ const releaseSetFromSections = (
     theme: requireSection(sections, "theme"),
     platformBlockDependencies: requireSection(sections, "component_registry"),
   };
-  return systemApplicationBoundReleaseSetResultSchema.parse({
+  const releaseSet = deepFreeze(systemApplicationBoundReleaseSetResultSchema.parse({
     application: {
       ...pages.application.identity,
       correlationId,
@@ -95,44 +117,30 @@ const releaseSetFromSections = (
       correlationId,
       content: module.content,
     })),
-  });
-};
-
-const pageCompositions = (
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-  sections: Readonly<Partial<Record<(typeof installationRuntimeBundleSections)[number], unknown>>>,
-): ReadonlyMap<string, ResolvedPageComposition> => {
-  const pages = installationRuntimeBundlePagesSectionSchema.parse(requireSection(sections, "pages"));
+  }));
   const application = releaseSet.application;
   if (pages.resolvedCompositions.length !== application.content.pages.length)
     throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
-  const result = new Map<string, ResolvedPageComposition>();
+  const compositions = new Map<string, ResolvedPageComposition>();
   for (const [index, composition] of pages.resolvedCompositions.entries()) {
     const page = application.content.pages[index];
     if (page === undefined || page.pageId !== composition.pageId)
       throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
     const key = composition.pageId.toLowerCase();
-    if (result.has(key)) throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
-    result.set(key, deepFreeze({ page, roots: composition.roots }));
+    if (compositions.has(key)) throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
+    compositions.set(key, deepFreeze({ page, roots: composition.roots }));
   }
-  return result;
+  return Object.freeze({ releaseSet, compositions });
 };
 
-const deepFreeze = <Value>(value: Value): Value => {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  for (const key of Object.keys(value)) deepFreeze(Reflect.get(value, key));
-  Object.freeze(value);
-  return value;
-};
-
-const compareSections = (
-  actual: Readonly<Partial<Record<(typeof installationRuntimeBundleSections)[number], unknown>>>,
-  expected: Readonly<Record<(typeof installationRuntimeBundleSections)[number], unknown>>,
-): void => {
-  for (const section of installationRuntimeBundleSections)
-    if (canonicalJson(requireSection(actual, section)) !== canonicalJson(expected[section]))
-      throw new Error("INSTALLED_PAGE_BUNDLE_CONTENT_MISMATCH");
-};
+/** The release is immutable, but each request names its own correlation, so only the shallow records are re-stamped. */
+const withCorrelation = (
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+  correlationId: ActiveInstallationBundleState["identity"]["correlationId"],
+): SystemApplicationBoundReleaseSetResult => ({
+  application: Object.freeze({ ...releaseSet.application, correlationId }),
+  modules: releaseSet.modules.map((module) => Object.freeze({ ...module, correlationId })),
+});
 
 const identityMatchesReleaseSet = (
   state: ActiveInstallationBundleState,
@@ -174,116 +182,55 @@ const identityMatchesReleaseSet = (
   }
 };
 
-export type HumanInstalledPageBundleContextDependencies =
-  Omit<HumanInstalledRuntimeContextDependencies, "activeInstallationReader"> & Readonly<{
-    transaction: RequestDatabaseTransaction;
-    /** The protected, request-bound Definition consumer used only on a genuine cold repair. */
-    releaseSetReader: HumanInstalledRuntimeContextDependencies["releaseSetReader"];
-  }>;
+export type HumanInstalledPageBundleContextDependencies = Readonly<{
+  transaction: RequestDatabaseTransaction;
+  scope: HumanInstalledRuntimeContextDependencies["scope"];
+}>;
 
-/** Builds the genuine current HUMAN Page context from a verified warm bundle or one cold repair. */
+/**
+ * Builds the genuine current HUMAN Page context from the cached installed release. Only the active
+ * installation identity is read per request; the bundle is read and validated once per immutable
+ * release. A missing bundle is an install or activation defect and fails here instead of being repaired.
+ */
 export const createHumanInstalledPageBundleContextLoader = (
   dependencies: HumanInstalledPageBundleContextDependencies,
 ) => {
   const repository = createActiveInstallationBundleRepository(dependencies.transaction);
-  let compositions: ReadonlyMap<string, ResolvedPageComposition> | undefined;
-  let bundleIdentityEvidence: InstalledPageBundleIdentityEvidence | undefined;
-  const loader = createHumanInstalledRuntimeContextLoader({
-    activeInstallationReader: repository,
-    scope: dependencies.scope,
-    releaseSetReader: {
-      async read(command) {
-        const state = await repository.readCurrentState();
-        if (
-          state.identity.organizationId !== dependencies.scope.organizationId ||
-          state.identity.applicationRootId !== dependencies.scope.applicationRootId ||
-          state.identity.applicationReleaseRevision !== command.applicationReleaseRevision
-        ) throw new Error("INSTALLED_PAGE_BUNDLE_SCOPE_UNAVAILABLE");
-
-        if (!state.repairNeeded) {
-          const storedSections = await repository.readSections(state);
-          const releaseSet = releaseSetFromSections(storedSections, state.identity.correlationId);
-          identityMatchesReleaseSet(state, releaseSet);
-          const accessPlan = z.object({
-            preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
-          }).passthrough().safeParse(requireSection(storedSections, "access_plan"));
-          const prepared = accessPlan.success
-            ? installationPreparedRecordAccessPlanSchema.safeParse(accessPlan.data.preparedRecordAccessPlan)
-            : undefined;
-          if (prepared === undefined || !prepared.success)
-            throw new Error("INSTALLED_PAGE_BUNDLE_PLAN_UNAVAILABLE");
-          const bundleIndex = state.bundleIndex;
-          if (bundleIndex === null)
-            throw new Error("INSTALLED_PAGE_BUNDLE_INDEX_UNAVAILABLE");
-          const sourceManifest = installationRuntimeBundleSourceManifestSchema.parse(
-            bundleIndex.sourceManifest,
-          );
-          const integrityProof = createHash("sha256").update(canonicalJson({
-            validationContractVersion: warmBundleIntegrityValidationVersion,
-            index: bundleIndex,
-          })).digest("hex");
-          const integrityAlreadyProven = warmBundleIntegrityProofs.has(integrityProof);
-          if (!integrityAlreadyProven) {
-            const expected = buildInstallationRuntimeBundleWriteCommand({
-              releaseSet,
-              sourceManifest,
-              preparedRecordAccessPlan: prepared.data,
-            });
-            compareSections(storedSections, expected.sections);
-          }
-          compositions = pageCompositions(releaseSet, storedSections);
-          if (!integrityAlreadyProven) retainWarmBundleIntegrityProof(integrityProof);
-          bundleIdentityEvidence = deepFreeze({
-            organizationId: state.identity.organizationId,
-            applicationRootId: state.identity.applicationRootId,
-            applicationReleaseRevision: state.identity.applicationReleaseRevision,
-            pinFingerprint: state.identity.pinFingerprint,
-            moduleBindings: state.identity.moduleBindings,
-            pinFacts: state.identity.pinFacts,
-            sourceManifest,
-          });
-          return releaseSet;
-        }
-
-        const coldSource = coldSourceSchema.safeParse(state.coldSource);
-        if (!coldSource.success)
-          throw new Error("INSTALLED_PAGE_BUNDLE_COLD_SOURCE_UNAVAILABLE");
-        const releaseSet = systemApplicationBoundReleaseSetResultSchema.parse(
-          await dependencies.releaseSetReader.read({
-            applicationReleaseRevision: command.applicationReleaseRevision,
-          }),
-        );
-        identityMatchesReleaseSet(state, releaseSet);
-        const source = {
-          releaseSet,
-          sourceManifest: coldSource.data.sourceManifest,
-          preparedRecordAccessPlan: coldSource.data.preparedRecordAccessPlan,
-        };
-        const expected = buildInstallationRuntimeBundleWriteCommand(source);
-        const repairedIndex = await repository.repair(state, expected);
-        const repairedSections = await repository.readSections(state, repairedIndex);
-        compareSections(repairedSections, expected.sections);
-        compositions = pageCompositions(releaseSet, repairedSections);
-        bundleIdentityEvidence = deepFreeze({
-          organizationId: state.identity.organizationId,
-          applicationRootId: state.identity.applicationRootId,
-          applicationReleaseRevision: state.identity.applicationReleaseRevision,
-          pinFingerprint: state.identity.pinFingerprint,
-          moduleBindings: state.identity.moduleBindings,
-          pinFacts: state.identity.pinFacts,
-          sourceManifest: repairedIndex.sourceManifest,
-        });
-        return releaseSet;
-      },
-    },
-  });
-
   return Object.freeze({
     async load(): Promise<InstalledRuntimeContext> {
-      const context = await loader.load();
-      if (compositions === undefined || bundleIdentityEvidence === undefined)
-        throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
-      return retainPageCompositions(context, compositions, bundleIdentityEvidence);
+      const installation = await readHumanActiveInstallation({
+        activeInstallationReader: repository,
+        scope: dependencies.scope,
+      });
+      const state = await repository.readCurrentState();
+      const bundleIndex = state.bundleIndex;
+      if (bundleIndex === null) throw new Error("INSTALLED_PAGE_BUNDLE_INDEX_UNAVAILABLE");
+      const key = installedPageBundleKey(state.identity);
+      const cached = installedPageBundles.get(key);
+      let bundle: InstalledPageBundle;
+      if (cached === undefined) {
+        const { sections, textLength } = await repository.readSections(state);
+        bundle = bundleFromSections(sections, state.identity.correlationId);
+        identityMatchesReleaseSet(state, bundle.releaseSet);
+        retainInstalledPageBundle(key, bundle, textLength);
+      } else {
+        bundle = cached.bundle;
+        retainInstalledPageBundle(key, bundle, cached.size);
+      }
+      const context = assembleHumanInstalledRuntimeContext(
+        installation,
+        withCorrelation(bundle.releaseSet, state.identity.correlationId),
+        dependencies.scope,
+      );
+      return retainPageCompositions(context, bundle.compositions, deepFreeze({
+        organizationId: state.identity.organizationId,
+        applicationRootId: state.identity.applicationRootId,
+        applicationReleaseRevision: state.identity.applicationReleaseRevision,
+        pinFingerprint: state.identity.pinFingerprint,
+        moduleBindings: state.identity.moduleBindings,
+        pinFacts: state.identity.pinFacts,
+        sourceManifest: bundleIndex.sourceManifest,
+      }));
     },
   });
 };
