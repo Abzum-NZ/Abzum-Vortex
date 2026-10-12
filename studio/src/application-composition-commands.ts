@@ -1077,7 +1077,12 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
       }
       const node: unknown = content.find((value: unknown) => object(object(value).props).id === alias);
       const props = object(object(node).props);
-      props.vortex = { ...object(props.vortex), responsive };
+      const metadata = object(props.vortex);
+      const authored = object(metadata.authored);
+      props.vortex = {
+        ...metadata,
+        authored: { ...authored, responsive: structuredClone(responsive) },
+      };
     } else return { kind: "invalid" };
     if (target.region.shell) {
       const shell = bridge.fromPuckShell(target.region.shell, data);

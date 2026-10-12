@@ -49,6 +49,39 @@ const text = (value: unknown): string =>
   typeof value === "string" && value.length > 0 ? value : refuse();
 
 const clone = <Value>(value: Value): Value => structuredClone(value);
+const sourceAliasPattern = /^[a-z][a-z0-9_]*$/;
+
+const sourceAliasBase = (puckId: string): string => {
+  const readable = puckId.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "").slice(0, 140);
+  return `${/^[a-z]/.test(readable) ? "" : "block_"}${readable || "item"}`.slice(0, 140);
+};
+
+const generatedAlias = (puckId: string, reserved: ReadonlySet<string>): string => {
+  const base = sourceAliasBase(puckId);
+  let suffix = 2;
+  let alias = base;
+  while (reserved.has(alias)) {
+    const ending = `_${suffix++}`;
+    alias = `${base.slice(0, 160 - ending.length)}${ending}`;
+  }
+  return alias;
+};
+
+const sameJsonValue = (left: unknown, right: unknown): boolean => {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right))
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameJsonValue(value, right[index]));
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object")
+    return false;
+  const a = object(left);
+  const b = object(right);
+  const keys = Object.keys(a).sort();
+  const otherKeys = Object.keys(b).sort();
+  return keys.length === otherKeys.length && keys.every((key, index) =>
+    key === otherKeys[index] && sameJsonValue(a[key], b[key]));
+};
 
 // Puck slots use the same declared key the page renderer passes to the component.
 const puckSlotKey = (sourceKey: string): string => sourceKey;
@@ -213,13 +246,20 @@ const sourcePropertyValue = (candidate: unknown): unknown => {
   }
 };
 
-const sourceSettings = (candidate: unknown): SourcePlacement["settings"] =>
-  Object.fromEntries(
-    Object.entries(object(candidate)).map(([key, value]) => [
-      key,
-      sourceBlockPropertyValueV2Schema.parse(sourcePropertyValue(value)),
-    ]),
-  ) as SourcePlacement["settings"];
+const sourceSettings = (
+  candidate: unknown,
+  allowed: ReadonlySet<string>,
+  original: SourcePlacement["settings"] | undefined,
+  compiled: Readonly<Record<string, unknown>>,
+): SourcePlacement["settings"] => Object.fromEntries(
+  Object.entries(object(candidate)).flatMap(([key, value]) => {
+    if (value === undefined) return [];
+    if (!allowed.has(key) && Object.hasOwn(compiled, key)) return [];
+    if (original?.[key] === undefined && Object.hasOwn(compiled, key) &&
+      sameJsonValue(value, compiled[key])) return [];
+    return [[key, sourceBlockPropertyValueV2Schema.parse(sourcePropertyValue(value))]];
+  }),
+) as SourcePlacement["settings"];
 
 const sameSlot = (left: SlotIdentity, right: SlotIdentity): boolean =>
   left.kind === "root"
@@ -418,13 +458,18 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       visit(slot);
     };
 
-    const toContent = (slot: SourceSlot, identity: SlotIdentity): Content =>
+    const toContent = (
+      slot: SourceSlot,
+      identity: SlotIdentity,
+      runtimeSettings?: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
+    ): Content =>
       slot.order.desktop.map((id) => {
         const { settings, slots, ...metadata } = slot.placements[id]!;
         const release = releaseFor(slot.placements[id]!);
+        const compiledSettings = runtimeSettings?.[id] ?? {};
         const props: Record<string, unknown> & { id: string } = {
           id,
-          settings: clone(settings),
+          settings: { ...clone(compiledSettings), ...clone(settings) },
           vortex: {
             block: {
               blockId: metadata.block.block_id,
@@ -433,6 +478,7 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
             themeOverrides: puckThemeOverrides(metadata.theme_overrides),
             responsive: puckResponsive(metadata.responsive),
             authored: clone(metadata),
+            compiledSettings: clone(compiledSettings),
             slot: clone(identity),
             baselineOrder: clone(slot.order),
             order: clone(slot.order),
@@ -443,18 +489,22 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
             kind: "child",
             parentAlias: id,
             slotKey: key,
-          });
+          }, runtimeSettings);
         return { type: release.rendererKey, props } satisfies ComponentData;
       });
 
-    const dataFor = (slot: SourceSlot, reservations: Reservations): Data => {
+    const dataFor = (
+      slot: SourceSlot,
+      reservations: Reservations,
+      runtimeSettings?: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
+    ): Data => {
       validateTree(slot, reservations);
       return {
         root: {
           props: { gap: "medium", padding: "medium" },
           readOnly: { gap: true, padding: true },
         } as unknown as Data["root"],
-        content: toContent(slot, { kind: "root" }),
+        content: toContent(slot, { kind: "root" }, runtimeSettings),
         zones: {},
       };
     };
@@ -491,8 +541,11 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
       }
       closed(data.zones, []);
 
-      // Retain only aliases found in this original or supplied private tree.
+      // Puck-generated ids are opaque. Keep authored aliases and translate new ids to unique
+      // source-safe aliases before they enter source records or private order declarations.
       const aliases = new Set(baselinePlacements.keys());
+      const assignedAliases = new Set<string>();
+      const aliasByPuckId = new Map<string, string>();
       const pending = [{ value: data.content, depth: 1, exit: false }];
       const ancestors = new Set<object>();
       let count = 0;
@@ -515,7 +568,17 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
             refuse();
           const node = closed(raw, ["type", "props", "readOnly"]);
           const props = object(node.props);
-          aliases.add(text(props.id));
+          const puckId = text(props.id);
+          if (aliasByPuckId.has(puckId)) refuse();
+          const knownSourceId = baselinePlacements.has(puckId) && !assignedAliases.has(puckId);
+          const safeNewId = sourceAliasPattern.test(puckId) && !aliases.has(puckId) &&
+            !assignedAliases.has(puckId);
+          const alias = knownSourceId || safeNewId
+            ? puckId
+            : generatedAlias(puckId, new Set([...aliases, ...assignedAliases]));
+          aliasByPuckId.set(puckId, alias);
+          assignedAliases.add(alias);
+          aliases.add(alias);
           for (const [key, child] of Object.entries(props))
             if (key !== "id" && key !== "settings" && key !== "vortex")
               pending.push({ value: child, depth: depth + 1, exit: false });
@@ -526,7 +589,10 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
         const order = closed(candidateOrder, ["desktop", "tablet", "phone"]);
         const list = (value: unknown): string[] => {
           if (!Array.isArray(value)) return refuse();
-          const ids = value.map(text);
+          const ids = value.map((rawId) => {
+            const puckId = text(rawId);
+            return aliasByPuckId.get(puckId) ?? (aliases.has(puckId) ? puckId : refuse());
+          });
           if (new Set(ids).size !== ids.length || ids.some((id) => !aliases.has(id))) refuse();
           return ids;
         };
@@ -555,7 +621,8 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
         }
         closed(candidate, ["kind", "parentAlias", "slotKey"]);
         if (candidate.kind !== "child") return refuse();
-        const parentAlias = text(candidate.parentAlias);
+        const rawParentAlias = text(candidate.parentAlias);
+        const parentAlias = aliasByPuckId.get(rawParentAlias) ?? rawParentAlias;
         const slotKey = text(candidate.slotKey);
         if (!aliases.has(parentAlias)) refuse();
         return { kind: "child", parentAlias, slotKey };
@@ -572,7 +639,8 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
         for (const raw of content) {
           const node = closed(raw, ["type", "props", "readOnly"]);
           const props = object(node.props);
-          const id = text(props.id);
+          const puckId = text(props.id);
+          const id = aliasByPuckId.get(puckId) ?? refuse();
           if (seen.has(id)) refuse();
           seen.add(id);
           const metadata = closed(props.vortex, [
@@ -580,11 +648,13 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
             "themeOverrides",
             "responsive",
             "authored",
+            "compiledSettings",
             "slot",
             "baselineOrder",
             "order",
           ]);
-          const { order, slot, baselineOrder, authored, ...renderMetadata } = metadata;
+          const { order, slot, baselineOrder, authored, compiledSettings: compiledSettingsValue,
+            ...renderMetadata } = metadata;
           const origin = slot === undefined ? destination : parseSlotIdentity(slot);
           const originalOrder =
             baselineOrder === undefined
@@ -613,14 +683,24 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
                   "responsive",
                 ]);
           // First parse the source fields without accepting any private Puck properties.
+          const authoredBlock = object(fields.block);
+          const release = releases.get(
+            `${text(authoredBlock.block_id)}:${text(authoredBlock.release_version)}`,
+          ) ?? refuse();
+          const compiledSettings = compiledSettingsValue === undefined
+            ? {} : object(compiledSettingsValue);
           const fieldSlot = sourcePlacementSlotV2Schema.parse({
             placements: {
-              [id]: { ...fields, settings: sourceSettings(props.settings), slots: {} },
+              [id]: {
+                ...fields,
+                settings: sourceSettings(props.settings, new Set(release.properties.map((property) =>
+                  property.key)), baselinePlacements.get(id)?.settings, compiledSettings),
+                slots: {},
+              },
             },
             order: { desktop: [id] },
           });
           const placement = fieldSlot.placements[id]!;
-          const release = releaseFor(placement);
           if (text(node.type) !== release.rendererKey) refuse();
           const declarations = slotDeclarations(placement, release);
           const allowed = [
@@ -673,8 +753,10 @@ export const createVortexAuthoredPuckAdapterV2 = (catalogueInput: unknown) => {
     };
 
     return Object.freeze({
-      toPuckData: (sourceSlot: unknown): Data =>
-        safe(() => dataFor(parseSlot(sourceSlot), new Map())),
+      toPuckData: (
+        sourceSlot: unknown,
+        runtimeSettings?: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
+      ): Data => safe(() => dataFor(parseSlot(sourceSlot), new Map(), runtimeSettings)),
       fromPuckData: (originalSourceSlot: unknown, data: unknown): SourceSlot =>
         safe(() => inverse(parseSlot(originalSourceSlot), data, new Map())),
       toPuckShell: (sourceShell: unknown): Data =>
