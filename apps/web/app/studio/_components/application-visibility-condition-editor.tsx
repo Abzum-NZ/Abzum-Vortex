@@ -2,7 +2,7 @@
 import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { ConditionNode } from "@vortex/contracts";
+import type { ConditionNode } from "@vortex/platform/schema";
 import {
   StudioConditionControls, locateStudioVisibilityDraftIssue, parseStudioApplicationConditionContext,
   projectStudioVisibilityEditor, resolveStudioVisibilityTarget, sameStudioVisibilityValue, sameStudioVisibilityCondition,

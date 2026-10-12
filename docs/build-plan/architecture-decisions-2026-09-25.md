@@ -91,8 +91,8 @@ Publication refuses a flow that puts a task where it cannot run. Work moves betw
 ### The Vortex flow engine
 
 The flow engine is built in-house and is part of the application. It has three parts:
-- a pure interpreter in `runtime/rule`, shared by the browser and the server;
-- a server orchestrator in `runtime/app`, which runs protected tasks through the one protected-operation executor (#989);
+- a pure interpreter in `packages/platform/src/rules`, shared by the browser and the server;
+- a server orchestrator in `packages/platform/src/definition`, which runs protected tasks through the one protected-operation executor (#989);
 - a browser runner in `ui`, which runs interface tasks (#1013).
 
 **Who drives a flow:**

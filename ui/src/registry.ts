@@ -7,7 +7,7 @@ import {
   type ImmutablePlatformBlockCatalogueV2,
   type PlatformBlockReleaseV2,
   type ProjectedNavigation,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   DefinitionRenderError,
   type Breakpoint,

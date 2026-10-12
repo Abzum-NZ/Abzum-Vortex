@@ -22,7 +22,7 @@ import {
   type ConditionNode,
   type JsonValue,
   type ModuleFieldV3,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
 type ConditionOperand = ComparisonCondition["left"];

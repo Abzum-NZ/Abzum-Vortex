@@ -1,8 +1,6 @@
 packages:
   - apps/*
-  - contracts
-  - db
-  - runtime/*
+  - packages/platform
   - ui
   - studio
   - modules

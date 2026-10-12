@@ -1,6 +1,6 @@
 "use client";
 
-import { builderKeySchema } from "@vortex/contracts";
+import { builderKeySchema } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { DefinitionRenderError } from "../definition-error";

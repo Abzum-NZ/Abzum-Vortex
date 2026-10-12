@@ -1,6 +1,6 @@
 "use client";
 
-import { safeHttpsUrlSchema, type JsonValue } from "@vortex/contracts";
+import { safeHttpsUrlSchema, type JsonValue } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import type { FlowIntent } from "../flow-runtime/intents";
 

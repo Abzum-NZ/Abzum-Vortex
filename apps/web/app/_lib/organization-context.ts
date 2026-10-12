@@ -1,8 +1,8 @@
 import "server-only";
 
-import type { IdentitySession, OrganizationLauncherResolution } from "@vortex/contracts";
-import { readPermittedApplicationsAtAddress, type PermittedApplicationsRead } from "@vortex/app";
-import { createOrganizationLauncherService } from "@vortex/identity";
+import type { IdentitySession, OrganizationLauncherResolution } from "@vortex/platform/schema";
+import { readPermittedApplicationsAtAddress, type PermittedApplicationsRead } from "@web/platform-server";
+import { createOrganizationLauncherService } from "@web/platform-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 
 const organizationLauncherService = createOrganizationLauncherService();

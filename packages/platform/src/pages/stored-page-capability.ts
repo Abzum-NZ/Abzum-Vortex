@@ -1,0 +1,865 @@
+import { platformPermissionSource } from "../access/platform-permissions";
+import "server-only";
+
+import {
+  databaseTimestamp,
+  sameId,
+  conditionNodeSchema,
+  applicationRootIdSchema,
+  organizationRecordAccessDeclarationSchema,
+  pageIdSchema,
+  revisionSchema,
+  sessionContextSchema,
+  safeHttpsUrlSchema,
+  type IdentitySession,
+  type ApplicationRootId,
+  type OrganizationAccessDeclaration,
+  type OrganizationSelectionCandidate,
+  type PermissionDeclaration,
+  type PermissionRegistryEntryCandidate,
+  PLATFORM_SERVICE_OPERATIONS,
+  flowTaskChildLists,
+  flowTaskRegistry,
+  platformOperationKey,
+  type FlowDefinition,
+  type FlowTask,
+  type ProtectedReadModelKey,
+  type ConditionNode,
+  type JsonValue,
+} from "../schema";
+import { evaluateTypedConditionV2, TypedConditionEvaluationError } from "../rules/index";
+import {
+  createHumanOrganizationRequestService,
+  type HumanOrganizationRequestDependencies,
+  type HumanOrganizationRequestResult,
+} from "../access/index";
+import {
+  isTrustedInstalledPageBundleContext,
+  requireInstalledRuntimeContext,
+  matchesInstalledPageBundleIdentity,
+  readInstalledPageComposition,
+  resolveInstalledPageIdentity,
+  type InstalledRuntimeContext,
+} from "../definition/app-index";
+import {
+  createAuthenticatedPageCapabilityService,
+  type AuthenticatedPageCapabilityDependencies,
+  type FixedAuthenticatedPageCapability,
+} from "./authenticated-page-capability";
+import {
+  projectUnavailableLinkDestination,
+  type ProjectedLinkDestination,
+  type ProjectedPageCapability,
+} from "./page-capability-projection";
+import { resolvePageComposition } from "./page-composition-resolution";
+import { readPageSubjectInTransaction, type PageSubjectReadResult } from "./page-subject-read";
+import {
+  createProtectedReadModelResolver,
+  type ProtectedReadModelReaders,
+} from "./protected-read-model-resolution";
+
+/** Address candidates select a page and its subject; organisation, installation and release come from context. */
+export type StoredPageCapabilitySelection = Readonly<{
+  pageId: string;
+  /** Untrusted address candidate, used only with this page's exact declared protected subject. */
+  subjectRecordId?: string;
+}>;
+
+export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{
+    /**
+     * The single trusted installed context assembled by App. Page projects only from this exact
+     * release set and never re-reads or rebuilds organisation, release or permission authority.
+     */
+    context: InstalledRuntimeContext;
+    selection: StoredPageCapabilitySelection;
+    /**
+     * The existing protected Access and Identity readers, composed by the server. A read-model
+     * placement is refused while they are not supplied; Page never reads those tables itself.
+     */
+    protectedReadModelReaders?: ProtectedReadModelReaders;
+    /** Request-local primary projection diagnostic; never used by navigation probes. */
+    observeProjectionDecision?: AuthenticatedPageCapabilityDependencies<undefined>["observeProjectionDecision"];
+  }>;
+
+/** Live protected data for one visible read-model placement; never stored or copied. */
+export type StoredPageReadModelValue = Readonly<{
+  model: ProtectedReadModelKey;
+  value: unknown;
+  /** Current organisation Access version this value was read under. */
+  accessVersion: number;
+  /** Exact installed application release revision this value was read under. */
+  applicationReleaseRevision: number;
+}>;
+
+/**
+ * One declared link target the browser asks the server to re-check when a link is activated. It
+ * names a target kind and that target's permanent identity (or an external address); it carries no
+ * authority, so resolving it can never grant access to what it names.
+ */
+type StoredLinkTargetDeclaration =
+  | Readonly<{ kind: "page"; pageId: string }>
+  | Readonly<{ kind: "application"; applicationRootId: string }>
+  | Readonly<{ kind: "external"; address: string }>;
+
+/**
+ * One resolved page requirement: an application or bound-Module permission from the release's
+ * prepared registration, or an exact platform administration permission from the shipped
+ * platform catalogue. The two carry different authority shapes, so they stay distinct until the
+ * declaration is built.
+ */
+type PagePermissionBinding =
+  | Readonly<{ kind: "definition"; entry: PermissionRegistryEntryCandidate }>
+  | Readonly<{ kind: "platform"; permission: PermissionDeclaration }>;
+
+const declaration = (
+  operationKey: string,
+  applicationRootId: ApplicationRootId,
+  binding: PagePermissionBinding,
+): OrganizationAccessDeclaration =>
+  binding.kind === "platform"
+    ? {
+        operationKey,
+        action: {
+          actionKind: binding.permission.actionKind,
+          ...(binding.permission.namedAction === undefined
+            ? {}
+            : { namedAction: binding.permission.namedAction }),
+        },
+        target: { kind: "organization" },
+        requiredPermission: {
+          ownerKind: "platform",
+          ownerId: platformPermissionSource().ownerId,
+          permissionId: binding.permission.permissionId,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      }
+    : {
+        operationKey,
+        action: {
+          actionKind: binding.entry.permission.actionKind,
+          ...(binding.entry.permission.namedAction === undefined
+            ? {}
+            : { namedAction: binding.entry.permission.namedAction }),
+        },
+        target: { kind: "application", applicationRootId },
+        requiredPermission: {
+          applicationRootId: binding.entry.applicationRootId,
+          ownerKind: binding.entry.ownerKind,
+          ownerId: binding.entry.ownerId,
+          permissionId: binding.entry.permission.permissionId,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      };
+
+/** Exact installed descriptor selection, never a browser-supplied type or storage binding. */
+const placementPermission = (
+  context: InstalledRuntimeContext,
+  operationKey: string,
+  applicationRootId: ApplicationRootId,
+  permissionKey: string,
+  binding: PagePermissionBinding,
+): NonNullable<FixedAuthenticatedPageCapability["placements"][string]["viewPermission"]> => {
+  if (binding.kind === "platform" || binding.entry.permission.recordTypeId === undefined)
+    return {
+      kind: "permission",
+      permissionKey,
+      declaration: declaration(operationKey, applicationRootId, binding),
+    };
+
+  const entry = binding.entry;
+  const recordTypeId = entry.permission.recordTypeId;
+  const matches = context.releaseSet.modules.flatMap((module) =>
+    module.content.recordTypes
+      .filter((record) => sameId(record.recordTypeId, recordTypeId))
+      .map((record) => ({ module, record })),
+  );
+  const match = matches[0];
+  if (
+    !sameId(entry.applicationRootId, applicationRootId) ||
+    matches.length !== 1 || match === undefined ||
+    (entry.ownerKind === "module" && !sameId(entry.ownerId, match.module.rootId))
+  ) throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
+
+  return {
+    kind: "record",
+    permissionKey,
+    declaration: organizationRecordAccessDeclarationSchema.parse({
+      operationKey,
+      action: {
+        actionKind: entry.permission.actionKind,
+        ...(entry.permission.namedAction === undefined
+          ? {}
+          : { namedAction: entry.permission.namedAction }),
+      },
+      target: { kind: "application", applicationRootId },
+      requiredPermissions: [{
+        applicationRootId: entry.applicationRootId,
+        ownerKind: entry.ownerKind,
+        ownerId: entry.ownerId,
+        permissionId: entry.permission.permissionId,
+      }],
+      recordBinding: {
+        moduleRootId: match.module.rootId,
+        recordTypeId: match.record.recordTypeId,
+        storageContractId: match.record.storageContractId,
+        storageScope: match.record.storageScope,
+      },
+      recentAuthentication: { kind: "none" },
+      authority: { kind: "permission" },
+    }),
+  };
+};
+
+/** Whether a placement's flow bindings reach an operation, and whether all of them resolve. */
+type PlacementOperationBinding = Readonly<{ required: boolean; bound: boolean }>;
+
+const platformOperationsByKey = new Map(
+  Object.values(PLATFORM_SERVICE_OPERATIONS).map((entry) => [
+    platformOperationKey(entry.key),
+    entry,
+  ]),
+);
+
+/**
+ * Resolves every placement's compiled component flow bindings against this exact installed release.
+ * A placement requires an operation when one of its bound flows changes something, starts
+ * background work or calls a protected operation, or when any binding cannot be proved (a flow, an
+ * operation, a query or a record type missing from this release), so an unprovable binding fails
+ * closed even without a use gate. It is operation-bound only when it requires an operation and
+ * every task it reaches resolves: a platform-service operation is pinned by this release's
+ * verified dependency manifest with the exact release the catalogue registers, and a named action,
+ * query or record type belongs to a bound Module release. The operation is never named by the
+ * placement or the browser, and this only proves the binding resolves; the owning operation still
+ * re-checks its own authority when invoked.
+ */
+const placementOperationBindings = (
+  context: InstalledRuntimeContext,
+): ReadonlyMap<string, PlacementOperationBinding> => {
+  const release = context.releaseSet;
+  const application = release.application;
+  const manifest = application.dependencyManifest;
+  const flows = new Map(application.content.flows.map((flow) => [flow.id.toLowerCase(), flow]));
+  const lower = (values: Iterable<unknown>): Set<string> =>
+    new Set([...values].map((value) => String(value).toLowerCase()));
+  const actionKeys = new Set([
+    ...application.content.actions.map((action) => String(action.key)),
+    ...release.modules.flatMap((module) =>
+      module.content.actions.map((action) => String(action.key)),
+    ),
+  ]);
+  const recordTypeIds = lower(
+    release.modules.flatMap((module) =>
+      module.content.recordTypes.map((record) => record.recordTypeId),
+    ),
+  );
+  const queryIds = lower([
+    ...application.content.queries.map((query) => query.queryId),
+    ...release.modules.flatMap((module) => module.content.queries.map((query) => query.queryId)),
+  ]);
+  const literal = (task: FlowTask, name: string): string | undefined => {
+    const value = (
+      task as { properties?: Record<string, { kind: string; literal?: { value: unknown } }> }
+    ).properties?.[name];
+    return value?.kind === "literal" ? String(value.literal?.value) : undefined;
+  };
+  const operationResolves = (key: string | undefined): boolean => {
+    if (key === undefined) return false;
+    if (actionKeys.has(key)) return true;
+    const platform = platformOperationsByKey.get(key);
+    return (
+      platform !== undefined &&
+      manifest.some(
+        (entry) =>
+          entry.kind === "protected_operation" &&
+          entry.operation.owner.kind === "platform_service" &&
+          sameId(entry.operation.owner.serviceId, platform.release.serviceId) &&
+          sameId(entry.operation.operationId, platform.release.operationId) &&
+          entry.releaseVersion === platform.release.releaseVersion &&
+          entry.contentFingerprint === platform.release.contentFingerprint &&
+          entry.catalogueFingerprint === platform.release.catalogueFingerprint,
+      )
+    );
+  };
+  /** What one flow, and every flow it runs, needs and whether all of it resolves in this release. */
+  const analyse = (
+    flow: FlowDefinition,
+    seen: ReadonlySet<string>,
+  ): { required: boolean; resolved: boolean } => {
+    const outcome = { required: false, resolved: true };
+    const visit = (tasks: readonly FlowTask[]) => {
+      for (const task of tasks) {
+        if (task.type === "run_flow") {
+          const target = flows.get(String((task as { flowId: string }).flowId).toLowerCase());
+          if (target === undefined || seen.has(target.id)) outcome.resolved = false;
+          else {
+            const inner = analyse(target, new Set([...seen, target.id]));
+            outcome.required ||= inner.required;
+            outcome.resolved &&= inner.resolved;
+          }
+        } else if (Object.hasOwn(flowTaskRegistry, task.type)) {
+          const definition = flowTaskRegistry[task.type as keyof typeof flowTaskRegistry];
+          if (task.type === "operation.call") {
+            outcome.required = true;
+            if (!operationResolves(literal(task, "operation"))) outcome.resolved = false;
+          } else if (task.type === "record.query") {
+            if (!queryIds.has(String(literal(task, "query")).toLowerCase())) {
+              outcome.required = true;
+              outcome.resolved = false;
+            }
+          } else if (definition.effect === "change" || definition.effect === "background_start") {
+            outcome.required = true;
+            const recordType = literal(task, "record_type");
+            if (recordType !== undefined && !recordTypeIds.has(recordType.toLowerCase()))
+              outcome.resolved = false;
+            if (
+              task.type === "flow.run_background" &&
+              !flows.has(String(literal(task, "flow")).toLowerCase())
+            )
+              outcome.resolved = false;
+          }
+        } else outcome.resolved = false;
+        for (const child of flowTaskChildLists(task)) visit(child.tasks);
+      }
+    };
+    visit(flow.tasks);
+    visit(flow.errors);
+    visit(flow.finally);
+    return outcome;
+  };
+  const outcomes = new Map<string, { required: boolean; resolved: boolean }>();
+  for (const binding of application.content.flowBindings) {
+    const placementId = binding.controlId.toLowerCase();
+    const outcome = outcomes.get(placementId) ?? { required: false, resolved: true };
+    outcomes.set(placementId, outcome);
+    const flow = flows.get(binding.flow.flowId.toLowerCase());
+    // A flow this release does not contain fails closed like any binding that cannot be proved.
+    if (flow === undefined) {
+      outcome.required = true;
+      outcome.resolved = false;
+      continue;
+    }
+    const analysed = analyse(flow, new Set([flow.id]));
+    outcome.required ||= analysed.required;
+    outcome.resolved &&= analysed.resolved;
+  }
+  return new Map(
+    [...outcomes].map(([placementId, outcome]) => [
+      placementId,
+      { required: outcome.required, bound: outcome.required && outcome.resolved },
+    ]),
+  );
+};
+
+/** Finds a placement the viewer can see in the already permission-filtered projection. */
+const findProjectedPlacement = (
+  slot: unknown,
+  placementId: string,
+): Record<string, unknown> | undefined => {
+  const placements = (slot as { placements?: Record<string, Record<string, unknown>> } | undefined)
+    ?.placements;
+  if (placements === undefined) return undefined;
+  for (const [candidateId, placement] of Object.entries(placements)) {
+    if (sameId(candidateId, placementId)) return placement;
+    for (const child of Object.values((placement.slots ?? {}) as Record<string, unknown>)) {
+      const found = findProjectedPlacement(child, placementId);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+};
+
+const projectedRoots = (projected: Readonly<Record<string, unknown>>): unknown[] => {
+  const composition = projected.composition as Record<string, unknown> | undefined;
+  if (composition === undefined) return [];
+  if ("main" in composition) return [composition.main];
+  return Object.values((composition.stepContent ?? {}) as Record<string, unknown>);
+};
+
+const v2Placements = (slot: unknown): Record<string, unknown>[] => {
+  const candidate = slot as { placements: Record<string, Record<string, unknown>> };
+  return Object.entries(candidate.placements).flatMap(([placementId, placement]) => [
+    { placementId, ...placement },
+    ...Object.values(placement.slots as Record<string, unknown>).flatMap(v2Placements),
+  ]);
+};
+
+export const createStoredPageCapabilityService = (
+  dependencies: StoredPageCapabilityDependencies,
+) => {
+  // Only a context App assembled is accepted; a missing or look-alike object fails closed here.
+  const context = requireInstalledRuntimeContext(dependencies.context);
+  const applicationRootId = applicationRootIdSchema.parse(context.applicationRootId);
+  const releaseRevision = revisionSchema
+    .max(Number.MAX_SAFE_INTEGER)
+    .parse(context.applicationReleaseRevision);
+  const selectedPageId = pageIdSchema.parse(dependencies.selection.pageId);
+
+  // The loader has already verified this; Page still refuses, rather than projects, a context
+  // whose exact release, registration and scope disagree.
+  const applicationRelease = context.releaseSet.application;
+  const registration = context.permissionRegistration;
+  if (
+    applicationRelease.organizationId !== context.organizationId ||
+    applicationRelease.rootId !== context.applicationRootId ||
+    applicationRelease.releaseRevision !== releaseRevision ||
+    registration.organizationId !== context.organizationId ||
+    registration.applicationRootId !== context.applicationRootId ||
+    registration.applicationRelease.releaseRevision !== releaseRevision
+  )
+    throw new Error("STORED_PAGE_TRUSTED_CONTEXT_UNAVAILABLE");
+
+  const { observeProjectionDecision: _primaryObserver, ...requestDependencies } = {
+    ...dependencies,
+    correlationId: () => context.correlationId,
+  };
+  const requests = createHumanOrganizationRequestService(requestDependencies);
+
+  // Undefined means the selected page is not in the release: a lasting answer, not a fault.
+  const load = async (pageId: string): Promise<FixedAuthenticatedPageCapability | undefined> => {
+    const identity = resolveInstalledPageIdentity(context, { pageId });
+    if (identity === undefined) return undefined;
+    // Resolution reports the pair, but only the explicitly requested endpoint selects a page.
+    const pages = applicationRelease.content.pages.filter((page) =>
+      sameId(page.pageId, identity.requested.pageId),
+    );
+    if (pages.length !== 1 || pages[0] === undefined)
+      throw new Error("STORED_PAGE_DEFINITION_EVIDENCE_UNAVAILABLE");
+    const page = pages[0];
+    // A page requirement names either an exact application or bound-Module permission from this
+    // release's prepared registration, or an exact platform administration permission from the
+    // shipped platform catalogue. Anything else fails this page closed.
+    const permission = (key: string): PagePermissionBinding => {
+      const platform = platformPermissionSource().forKey(key);
+      if (platform !== undefined) return { kind: "platform", permission: platform };
+      const matches = registration.entries.filter((entry) => entry.permission.key === key);
+      if (matches.length !== 1 || matches[0] === undefined)
+        throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
+      return { kind: "definition", entry: matches[0] };
+    };
+    const operationBindings = placementOperationBindings(context);
+    const pagePermissionBinding = permission(page.accessPermissionKey);
+    const resolvedComposition = readInstalledPageComposition(context, page.pageId);
+    const resolved = resolvedComposition ??
+      resolvePageComposition(page, applicationRelease.content.shells);
+    const placements: Record<string, unknown>[] =
+      resolved.roots.kind === "page"
+        ? v2Placements(resolved.roots.main)
+        : Object.values(resolved.roots.stepContent).flatMap(v2Placements);
+    return {
+      page,
+      applicationShells: applicationRelease.content.shells,
+      ...(resolvedComposition === undefined
+        ? {}
+        : { resolvedComposition, resolvedCompositionContext: context }),
+      sourceCorrelationId: applicationRelease.correlationId,
+      applicationReleaseRevision: releaseRevision,
+      pagePermission: {
+        permissionKey: page.accessPermissionKey,
+        declaration: declaration(
+          "application.page.discover",
+          applicationRootId,
+          pagePermissionBinding,
+        ),
+      },
+      placements: Object.fromEntries(
+        placements.map((placement) => {
+          const placementId = String(placement.placementId);
+          const viewPermissionKey = placement.viewPermissionKey as string | undefined;
+          const usePermissionKey = placement.usePermissionKey as string | undefined;
+          const viewBinding =
+            viewPermissionKey === undefined ? undefined : permission(viewPermissionKey);
+          const useBinding =
+            usePermissionKey === undefined ? undefined : permission(usePermissionKey);
+          const operation = operationBindings.get(placementId.toLowerCase());
+          return [
+            placementId,
+            {
+              ...(viewBinding === undefined || viewPermissionKey === undefined
+                ? {}
+                : {
+                    viewPermission: placementPermission(
+                      context, "application.page.placement.view", applicationRootId,
+                      viewPermissionKey, viewBinding,
+                    ),
+                  }),
+              ...(useBinding === undefined || usePermissionKey === undefined
+                ? {}
+                : {
+                    usePermission: placementPermission(
+                      context, "application.page.placement.use", applicationRootId,
+                      usePermissionKey, useBinding,
+                    ),
+                  }),
+              operationRequired: operation?.required === true,
+              operationBound: operation?.bound === true,
+            },
+          ];
+        }),
+      ),
+    };
+  };
+
+  // Projects one loaded page for the viewer's current authority over this exact scope only.
+  const projectStored = (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    stored: FixedAuthenticatedPageCapability,
+    observeProjectionDecision?: StoredPageCapabilityDependencies["observeProjectionDecision"],
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    // This cache belongs to one projection transaction, never another page, actor or release.
+    let subjectRead: Promise<PageSubjectReadResult> | undefined;
+    type ConditionReason = ReturnType<NonNullable<
+      AuthenticatedPageCapabilityDependencies<undefined>["visibilityConditionReason"]
+    >>;
+    let conditionReason: ConditionReason = "UNKNOWN";
+    const refused = (reason: ConditionReason): false => {
+      conditionReason = reason;
+      return false;
+    };
+    const supported = (allowed: boolean): boolean => {
+      conditionReason = allowed ? "SUPPORTED_TRUE" : "SUPPORTED_FALSE";
+      return allowed;
+    };
+    return createAuthenticatedPageCapabilityService({
+      ...requestDependencies,
+      // Override the spread dependency so pageOpens cannot inherit the primary observer.
+      ...(observeProjectionDecision === undefined ? {} : { observeProjectionDecision }),
+      validateAccessEligibilityUntil: async (transaction, scope, validUntil) => {
+        try {
+          if (isTrustedInstalledPageBundleContext(context)) {
+            const bundleRows = await transaction.query<{
+              readonly bundle_state: unknown;
+            }>`
+              select vortex_module.read_active_installation_bundle_identity() as bundle_state
+            `;
+            if (
+              bundleRows.length !== 1 ||
+              bundleRows[0] === undefined ||
+              !matchesInstalledPageBundleIdentity(
+                context,
+                bundleRows[0].bundle_state,
+                scope.accessVersion,
+                scope.organizationAccountId,
+              )
+            ) return false;
+          }
+
+          const contextRows = await transaction.query<{
+            readonly request_context: unknown;
+          }>`
+            select vortex_access.validated_human_request_context() - 'channel' as request_context
+          `;
+          if (contextRows.length !== 1 || contextRows[0] === undefined) return false;
+          const current = sessionContextSchema.safeParse(contextRows[0].request_context);
+          if (!current.success || current.data.callerKind !== "human") return false;
+          const clockRows = await transaction.query<{
+            readonly observed_at: unknown;
+          }>`
+            select clock_timestamp() as observed_at
+          `;
+          if (clockRows.length !== 1 || clockRows[0] === undefined) return false;
+          const observedAt = databaseTimestamp(clockRows[0].observed_at);
+          if (typeof observedAt !== "string") return false;
+          const observedMilliseconds = Date.parse(observedAt);
+          return Number.isFinite(observedMilliseconds) &&
+            current.data.expiresAt !== undefined &&
+            Date.parse(current.data.expiresAt) > observedMilliseconds &&
+            (current.data.delegatedContext === undefined ||
+              Date.parse(current.data.delegatedContext.expiresAt) > observedMilliseconds) &&
+            (current.data.supportContext === undefined ||
+              Date.parse(current.data.supportContext.expiresAt) > observedMilliseconds) &&
+            sameId(current.data.tenantId, scope.tenantId) &&
+            sameId(current.data.organizationId, scope.organizationId) &&
+            sameId(current.data.organizationAccountId, scope.organizationAccountId) &&
+            current.data.applicationRootId !== undefined &&
+            sameId(current.data.applicationRootId, scope.applicationRootId) &&
+            current.data.accessVersion === scope.accessVersion &&
+            Date.parse(validUntil) > observedMilliseconds;
+        } catch {
+          return false;
+        }
+      },
+      visibilityConditionReason: () => conditionReason,
+      evaluateVisibilityCondition: async (transaction, scope, page, condition) => {
+        conditionReason = "UNKNOWN";
+        if (
+          scope.applicationRootId === undefined ||
+          !sameId(scope.organizationId, context.organizationId) ||
+          !sameId(scope.applicationRootId, applicationRootId)
+        )
+          return refused("DECLARATION_UNPROVABLE");
+        const parsed = conditionNodeSchema.safeParse(condition);
+        if (!parsed.success) return refused("DECLARATION_UNPROVABLE");
+        const fieldIds = new Set<string>();
+        let unsupported = false;
+        const collect = (node: ConditionNode): void => {
+          if (node.kind === "comparison") {
+            for (const operand of [node.left, node.right]) {
+              if (operand?.source === "parameter") unsupported = true;
+              if (operand?.source === "field") fieldIds.add(operand.fieldId.toLowerCase());
+            }
+          } else if (node.kind === "not") collect(node.condition);
+          else node.conditions.forEach(collect);
+        };
+        // Inspect every branch before any read; an unsupported operand cannot short-circuit to true.
+        collect(parsed.data);
+        if (unsupported) return refused("UNSUPPORTED_OPERAND");
+        try {
+          if (fieldIds.size === 0)
+            return supported(evaluateTypedConditionV2({
+              condition: parsed.data,
+              sourceRecordFields: [],
+              declaredFieldIds: [],
+              fieldValues: {},
+              parameterDeclarations: [],
+              parameterValues: {},
+            }));
+
+          // A different destination page cannot borrow the selected page's address subject.
+          const recordType =
+            sameId(page.pageId, selectedPageId) &&
+            (page.type === "detail" ||
+              page.type === "public" ||
+              page.type === "form" ||
+              page.type === "guided_form") &&
+            page.recordType?.state === "resolved"
+              ? page.recordType
+              : undefined;
+          const subjectRecordId = dependencies.selection.subjectRecordId;
+          if (recordType === undefined || subjectRecordId === undefined)
+            return refused("SUBJECT_UNAVAILABLE");
+          const modules = context.releaseSet.modules.filter((module) =>
+            sameId(module.rootId, recordType.moduleRootId),
+          );
+          if (modules.length !== 1) return refused("DECLARATION_UNPROVABLE");
+          const records = modules[0]!.content.recordTypes.filter((record) =>
+            sameId(record.recordTypeId, recordType.recordTypeId),
+          );
+          if (records.length !== 1) return refused("DECLARATION_UNPROVABLE");
+          const fields = records[0]!.fields;
+          const fieldsById = new Map(fields.map((field) => [field.fieldId.toLowerCase(), field]));
+          if (fieldsById.size !== fields.length || [...fieldIds].some((id) => !fieldsById.has(id)))
+            return refused("FIELD_UNAVAILABLE");
+          subjectRead ??= readPageSubjectInTransaction(transaction, {
+            recordTypeId: recordType.recordTypeId,
+            recordId: subjectRecordId,
+          });
+          const read = await subjectRead;
+          if (read.kind !== "read") return refused("SUBJECT_UNAVAILABLE");
+          const values: Record<string, JsonValue> = {};
+          for (const id of fieldIds) {
+            const matches = Object.entries(read.row.values).filter(([key]) => sameId(key, id));
+            // An unreadable/missing field is not a null field; duplicate identity aliases refuse.
+            if (matches.length !== 1) return refused("FIELD_UNAVAILABLE");
+            values[fieldsById.get(id)!.fieldId] = matches[0]![1];
+          }
+          type Operand = Extract<ConditionNode, { kind: "comparison" }>["left"];
+          const canonicalOperand = (operand: Operand): Operand =>
+            operand.source === "field"
+              ? { source: "field", fieldId: fieldsById.get(operand.fieldId.toLowerCase())!.fieldId }
+              : operand;
+          const canonicalCondition = (node: ConditionNode): ConditionNode => {
+            if (node.kind === "comparison")
+              return {
+                ...node,
+                left: canonicalOperand(node.left),
+                ...(node.right === undefined ? {} : { right: canonicalOperand(node.right) }),
+              };
+            if (node.kind === "not")
+              return { kind: "not", condition: canonicalCondition(node.condition) };
+            return { kind: node.kind, conditions: node.conditions.map(canonicalCondition) };
+          };
+          return supported(evaluateTypedConditionV2({
+            condition: canonicalCondition(parsed.data),
+            sourceRecordFields: fields,
+            declaredFieldIds: [...fieldIds].map((id) => fieldsById.get(id)!.fieldId),
+            fieldValues: values,
+            parameterDeclarations: [],
+            parameterValues: {},
+          }));
+        } catch (error) {
+          if (error instanceof TypedConditionEvaluationError)
+            return refused("DECLARATION_UNPROVABLE");
+          throw error;
+        }
+      },
+      adapter: {
+        load: async (_transaction, scope) => {
+          if (
+            scope.applicationRootId === undefined ||
+            !sameId(scope.organizationId, context.organizationId) ||
+            !sameId(scope.applicationRootId, applicationRootId)
+          )
+            throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
+          return stored;
+        },
+      },
+    }).project(session, candidate, undefined);
+  };
+
+  const project = async (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    observeProjectionDecision?: StoredPageCapabilityDependencies["observeProjectionDecision"],
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    if (
+      !sameId(candidate.organizationId, context.organizationId) ||
+      candidate.applicationRootId === undefined ||
+      !sameId(candidate.applicationRootId, applicationRootId)
+    )
+      return { kind: "unavailable" };
+    // Verify the session and application scope before projecting, so a caller without access
+    // gets the same answer whether or not the page exists. The context read is already done by
+    // App; the human request only proves the person's current authority over this scope.
+    const verified = await requests.run(session, candidate, async () => undefined);
+    if (verified.kind !== "available") return verified;
+    let fixed: FixedAuthenticatedPageCapability | undefined;
+    try {
+      fixed = await load(selectedPageId);
+    } catch {
+      return { kind: "temporarily_unavailable" };
+    }
+    if (fixed === undefined) return { kind: "unavailable" };
+    return projectStored(session, candidate, fixed, observeProjectionDecision);
+  };
+
+  /**
+   * True only when the viewer can currently open this page of the exact installed release, proved
+   * through the same page/access projection as `project`. Missing, refused, withdrawn and
+   * unprovable pages are all simply false, so no caller can tell them apart.
+   */
+  const pageOpens = async (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    pageId: string,
+  ): Promise<boolean> => {
+    let fixed: FixedAuthenticatedPageCapability | undefined;
+    try {
+      fixed = await load(pageId);
+    } catch {
+      return false;
+    }
+    if (fixed === undefined) return false;
+    const projected = await projectStored(session, candidate, fixed);
+    return projected.kind === "available" && projected.value !== undefined;
+  };
+
+  const readModels =
+    dependencies.protectedReadModelReaders === undefined
+      ? undefined
+      : createProtectedReadModelResolver(dependencies.protectedReadModelReaders);
+
+  return Object.freeze({
+    project: (session: IdentitySession, candidate: OrganizationSelectionCandidate) =>
+      project(session, candidate, dependencies.observeProjectionDecision),
+    /**
+     * Reads one read-model placement of the selected page live, at request time. The binding comes
+     * only from the exact release; the viewer must be able to see the page and that placement, and
+     * the owning reader then applies its own authority to the viewer's current session. Every
+     * refusal is the same neutral answer and is never an empty page.
+     */
+    async readModel(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      placementId: string,
+      requestCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<StoredPageReadModelValue>> {
+      const projected = await project(session, candidate);
+      if (projected.kind !== "available") return projected;
+      if (projected.value === undefined || readModels === undefined) return { kind: "unavailable" };
+      const placement = projectedRoots(projected.value)
+        .map((root) => findProjectedPlacement(root, placementId))
+        .find((found) => found !== undefined);
+      if (placement?.readModel === undefined) return { kind: "unavailable" };
+      // The tenant is the verified scope's own tenant, never page or browser input. The verified
+      // scope also fixes the Access version the read is answered under.
+      const scoped = await requests.run(session, candidate, async (_transaction, scope) =>
+        Object.freeze({ tenantId: String(scope.tenantId), accessVersion: scope.accessVersion }),
+      );
+      if (scoped.kind !== "available") return scoped;
+      const resolved = await readModels.resolve(
+        { session, selection: candidate, tenantId: scoped.value.tenantId },
+        placement.readModel,
+        requestCandidate,
+      );
+      return resolved.kind === "available"
+        ? {
+            kind: "available",
+            value: {
+              model: resolved.model,
+              value: resolved.value,
+              accessVersion: scoped.value.accessVersion,
+              applicationReleaseRevision: releaseRevision,
+            },
+          }
+        : resolved.kind === "unavailable"
+          ? { kind: "temporarily_unavailable" }
+          : { kind: "unavailable" };
+    },
+    /**
+     * Re-checks one declared link target against the viewer's current access at navigation time.
+     * The target is definition or record data and grants nothing. An external address is available
+     * once it satisfies the bounded HTTPS contract and is never fetched. An application is
+     * available only when the viewer can currently open its release home page or a role home page
+     * of this installed release (the homes the #599 launcher opens at; the destination still
+     * chooses its own home when opened); a page only when the viewer can currently open that page.
+     * A target in another application is resolved by that application's own installed service.
+     * Missing, refused, withdrawn and out-of-release targets, and a viewer whose current authority
+     * fails, all collapse to the same opaque unavailable state with no name, icon, address or
+     * reason. A selection outside this installed scope gets the same neutral refusal as the page.
+     */
+    async resolveLinkTarget(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      target: StoredLinkTargetDeclaration,
+    ): Promise<HumanOrganizationRequestResult<ProjectedLinkDestination>> {
+      if (
+        !sameId(candidate.organizationId, context.organizationId) ||
+        candidate.applicationRootId === undefined ||
+        !sameId(candidate.applicationRootId, applicationRootId)
+      )
+        return { kind: "unavailable" };
+      const unavailable = {
+        kind: "available",
+        value: projectUnavailableLinkDestination(),
+      } as const;
+
+      if (target.kind === "external") {
+        const address = safeHttpsUrlSchema.safeParse(target.address);
+        return address.success
+          ? {
+              kind: "available",
+              value: { availability: "available", kind: "external", address: address.data },
+            }
+          : unavailable;
+      }
+
+      if (target.kind === "application") {
+        const parsed = applicationRootIdSchema.safeParse(target.applicationRootId);
+        if (!parsed.success || !sameId(parsed.data, applicationRootId)) return unavailable;
+        const homes = [
+          applicationRelease.content.homePageId,
+          ...applicationRelease.content.roles.map((role) => role.homePageId),
+        ].filter((pageId, index, all) => all.findIndex((other) => sameId(other, pageId)) === index);
+        for (const pageId of homes)
+          if (await pageOpens(session, candidate, pageId))
+            return {
+              kind: "available",
+              value: { availability: "available", kind: "application", applicationRootId },
+            };
+        return unavailable;
+      }
+
+      const parsed = pageIdSchema.safeParse(target.pageId);
+      return parsed.success && (await pageOpens(session, candidate, parsed.data))
+        ? {
+            kind: "available",
+            value: { availability: "available", kind: "page", pageId: parsed.data },
+          }
+        : unavailable;
+    },
+  });
+};

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { QueryContinuationKey } from "@vortex/query";
+import type { QueryContinuationKey } from "@web/platform-server";
 import { requiredEnvironmentValue } from "./server-configuration";
 
 const environmentName = "VORTEX_QUERY_CONTINUATION_KEY";

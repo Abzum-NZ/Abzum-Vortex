@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import type { BlockPropertyValueV2Contract, PlatformBlockReleaseV2 } from "@vortex/contracts";
+import type { BlockPropertyValueV2Contract, PlatformBlockReleaseV2 } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../components/alert";
 import { Badge } from "../components/badge";
 import { Card, CardContent } from "../components/card";

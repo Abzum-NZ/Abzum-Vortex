@@ -4,7 +4,7 @@ import {
   clusterIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 

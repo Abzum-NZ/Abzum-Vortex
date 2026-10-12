@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vortex/contracts";
+import type { JsonValue } from "@vortex/platform/schema";
 import {
   performPresentationIntent,
   readConfirmIntent,

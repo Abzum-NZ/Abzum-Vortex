@@ -1,7 +1,7 @@
 import {
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import tilesSource from "./sources/landing-zone.tiles.json";
 
 /** The Landing Zone Module provides owner-scoped personal tiles. */

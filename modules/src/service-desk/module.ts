@@ -1,7 +1,7 @@
 import {
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import casesSource from "./sources/service-desk.cases.json";
 import knowledgeSource from "./sources/service-desk.knowledge.json";
 import serviceLevelsSource from "./sources/service-desk.sla.json";

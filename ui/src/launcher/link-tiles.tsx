@@ -11,7 +11,7 @@ import {
   type JsonValue,
   type MountedRecordPinFrame,
   type MountedRecordPinMembership,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
   Card,

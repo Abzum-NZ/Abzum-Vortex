@@ -3,7 +3,7 @@ import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { fingerprintSchema, pageCompositionV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
+import { fingerprintSchema, pageCompositionV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
 import {
   ApplicationPreview,
   createFullPlatformComponentRegistry,

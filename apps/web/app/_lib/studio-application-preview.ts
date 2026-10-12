@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/access";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
   applicationRootIdSchema,
   applicationSourceDocumentV2Schema,
@@ -16,8 +16,8 @@ import {
   type OrganizationId,
   type SelectedOrganizationScope,
   type SessionContext,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "@vortex/platform/schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   applicationPreviewBreakpoints,
   BuilderAuthorityError,
@@ -30,7 +30,7 @@ import {
   requireBuilderAuthority,
   type ApplicationPreviewArtifact,
   type ApplicationPreviewRefusalReason,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";

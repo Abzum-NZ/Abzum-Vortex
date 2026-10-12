@@ -1,4 +1,4 @@
-import type { BlockPlacementV2Contract } from "@vortex/contracts";
+import type { BlockPlacementV2Contract } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./definition-error";
 
 /**

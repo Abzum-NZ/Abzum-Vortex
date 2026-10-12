@@ -1,7 +1,7 @@
 import {
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import preferenceSource from "./sources/messages-preferences.preferences.json";
 
 /** The reusable account-owned Messages Preferences Module source. */

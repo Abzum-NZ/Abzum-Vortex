@@ -1,7 +1,7 @@
 import {
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 // Tenant Administration keeps its local tenant projection; the shared
 // organisation and tenant-administrator projections live in System Directory.

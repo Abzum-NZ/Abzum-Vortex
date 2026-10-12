@@ -1,6 +1,6 @@
 "use client";
 
-import { safeHttpsUrlMaximumLength, safeHttpsUrlSchema } from "@vortex/contracts";
+import { safeHttpsUrlMaximumLength, safeHttpsUrlSchema } from "@vortex/platform/schema";
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./alert";
 

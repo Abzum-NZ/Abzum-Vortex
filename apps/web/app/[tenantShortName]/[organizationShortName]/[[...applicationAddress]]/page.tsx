@@ -3,8 +3,8 @@ import "server-only";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
-import { ApplicationInstallationCoordinatorError } from "@vortex/app";
-import { recordIdSchema } from "@vortex/contracts";
+import { ApplicationInstallationCoordinatorError } from "@web/platform-server";
+import { recordIdSchema } from "@vortex/platform/schema";
 import {
   ALL_UI_STYLES_CSS,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,

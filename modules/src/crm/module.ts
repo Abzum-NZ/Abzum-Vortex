@@ -1,7 +1,7 @@
 import {
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import activitiesSource from "./sources/crm.activities.json";
 import opportunitiesSource from "./sources/crm.opportunities.json";
 import organisationsSource from "./sources/crm.organisations.json";

@@ -1,0 +1,30 @@
+{
+  "name": "@vortex/platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./schema": "./src/schema.ts",
+    "./server": "./src/server.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "catalog:",
+    "@supabase/supabase-js": "catalog:",
+    "postgres": "catalog:",
+    "semver": "catalog:",
+    "server-only": "0.0.1",
+    "shadcn": "4.21.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/semver": "catalog:"
+  },
+  "vortex": {
+    "tier": 1,
+    "environment": "server",
+    "ships": true
+  }
+}

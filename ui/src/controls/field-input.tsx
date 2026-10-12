@@ -5,7 +5,7 @@ import {
   FIELD_INPUT_CONTROL_RELEASES,
   fieldInputControlKeys,
   type FieldInputControlKey,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import type { ControlRenderProps } from "./control-context";
 import type { FieldInputPayload } from "./projected-data";

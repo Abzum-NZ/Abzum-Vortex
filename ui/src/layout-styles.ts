@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { BlockPlacementV2Contract } from "@vortex/contracts";
+import type { BlockPlacementV2Contract } from "@vortex/platform/schema";
 
 /**
  * One breakpoint's declared layout values. Derived from the canonical placement contract rather

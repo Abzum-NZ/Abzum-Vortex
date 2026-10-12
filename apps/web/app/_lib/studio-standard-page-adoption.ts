@@ -1,7 +1,7 @@
 import "server-only";
 
 import type {
-  sourceIdentityAssignmentV3Schema} from "@vortex/contracts";
+  sourceIdentityAssignmentV3Schema} from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   canonicalJson,
@@ -13,15 +13,15 @@ import {
   type StoredDefinitionSource,
   type SelectedOrganizationScope,
   type IdentitySession,
-} from "@vortex/contracts";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
+} from "@vortex/platform/schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   BuilderAuthorityError,
   createHumanApplicationDraftWriter,
   createBuilderAuthority,
   requireBuilderAuthority,
   type BuilderTargetFactsReader,
-} from "@vortex/access";
+} from "@web/platform-server";
 import {
   readApplicationDefinitionDraft,
   createDatabaseDefinitionPublicationRepository,
@@ -31,7 +31,7 @@ import {
   fingerprintCanonicalValue,
   readAuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import {

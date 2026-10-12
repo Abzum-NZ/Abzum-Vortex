@@ -2,7 +2,7 @@ import {
   applicationSourceDocumentV2Schema,
   DEFAULT_PLATFORM_THEME_RELEASE_V2,
   type ApplicationSourceDocumentV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 export type MinimumApplicationInputs = Readonly<{
   key: string;

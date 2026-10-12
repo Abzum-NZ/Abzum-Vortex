@@ -1,4 +1,4 @@
-import type { ApplicationThemeSelectionV2 } from "@vortex/contracts";
+import type { ApplicationThemeSelectionV2 } from "@vortex/platform/schema";
 import type { CSSProperties } from "react";
 import { createVortexStyleComponentVariables } from "./vortex-style-variables";
 

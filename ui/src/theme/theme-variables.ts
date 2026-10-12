@@ -7,7 +7,7 @@ import {
   type ApplicationContentV2,
   type PlatformThemeTokenRoleKeyV2,
   type ShadcnFont,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 /** Resolved #594 application theme, as materialised in application content. */
 export type ApplicationThemeV2 = ApplicationContentV2["theme"];

@@ -15,15 +15,15 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import type {
-  createReferenceChoiceService} from "@vortex/query";
+  createReferenceChoiceService} from "@web/platform-server";
 import {
   recordReferenceChoiceCommandSchema,
   resolveReferenceChoiceSelection,
   type RecordReferenceChoiceCommand,
   type ReferenceChoiceOption,
-} from "@vortex/query";
+} from "@web/platform-server";
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);

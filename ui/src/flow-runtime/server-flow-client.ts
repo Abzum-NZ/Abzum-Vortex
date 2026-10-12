@@ -9,7 +9,7 @@ import {
   type FormContinuationReceipt,
   type FormContinuationTarget,
   type JsonValue,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { isFlowIntent, type FlowIntent } from "./intents";
 
 /** The address the signed-in person is using; the server resolves everything else from it. */

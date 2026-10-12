@@ -15,7 +15,7 @@ import {
   type BlockPropertyValueV2Contract,
   type ComponentSettingFailure,
   type PlatformBlockReleaseV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 /** Actual Puck Data. Page, shell, and guided-step selection remain Vortex orchestration. */
 export type VortexPuckDataV2 = Data;

@@ -12,7 +12,7 @@ import {
   sourceThemeTokenValueV2Schema,
   validateComponentSettings,
   type PlatformBlockReleaseV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 type SourceSlot = ReturnType<typeof sourcePlacementSlotV2Schema.parse>;
 type SourcePlacement = SourceSlot["placements"][string];

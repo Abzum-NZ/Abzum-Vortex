@@ -3,9 +3,9 @@ import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState } from "react";
-import { canonicalJson, type ConditionNode, type DefinitionValidationResult } from "@vortex/contracts";
+import { canonicalJson, type ConditionNode, type DefinitionValidationResult } from "@vortex/platform/schema";
 import { StudioConditionControls, validateStudioCondition, type StudioConditionValidation } from "@vortex/studio";
-import type { ModuleBeforeSaveConditionDraftContext, ModuleBeforeSaveConditionFlowChoice } from "@vortex/definition";
+import type { ModuleBeforeSaveConditionDraftContext, ModuleBeforeSaveConditionFlowChoice } from "@web/platform-server";
 import type { StudioModuleBeforeSaveConditionResult, StudioModuleBeforeSaveConditionSnapshot } from "../../_lib/studio-module-before-save-condition";
 import { moduleBeforeSaveConditionControlsContext, sameModuleBeforeSaveCondition } from "../_lib/module-before-save-condition-commands";
 import { loadModuleBeforeSaveCondition, saveModuleBeforeSaveCondition, validateModuleBeforeSaveCondition } from "../modules/[organizationId]/[moduleRootId]/before-save/actions";

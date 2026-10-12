@@ -186,7 +186,7 @@ run label, signs the exact endpoint request fields with the callback key, disabl
 and returns only the endpoint's declared evaluator value or protected-operation result.
 
 The Workflow service's registration and start adapters resolve their provider target only through
-`runtime/workflow/src/kestra-instance.ts`, which knows only the application instance, reads its
+`packages/platform/src/workflows/kestra-instance.ts`, which knows only the application instance, reads its
 address only from `VORTEX_APPLICATION_KESTRA_URL`, and exposes no operations address, credential or
 secret. The application's server environment therefore needs no operations-instance address at all. An operational secret must never be added to the
 application instance's environment, and no Workflow adapter may be pointed at this operations

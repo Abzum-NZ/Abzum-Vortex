@@ -5,7 +5,7 @@ import {
   requireInstalledRuntimeContext,
   resolveInstalledPageIdentity,
   resolvePermittedApplicationAddress,
-} from "@vortex/app";
+} from "@web/platform-server";
 import {
   applicationPageLinkResultSchema,
   applicationPageLinkSelectorSchema,
@@ -13,9 +13,9 @@ import {
   sameId,
   type ApplicationPageLinkResult,
   type IdentitySession,
-} from "@vortex/contracts";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createStoredPageCapabilityService } from "@vortex/page";
+} from "@vortex/platform/schema";
+import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
+import { createStoredPageCapabilityService } from "@web/platform-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequestDependencies } from "./server-composition";
 

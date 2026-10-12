@@ -5,13 +5,13 @@ import {
   correlationIdSchema,
   identitySessionResolutionSchema,
   type IdentitySessionResolution,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createDefaultIdentitySessionService,
   createIdentityVerifier,
   type VerifiedSignInResult,
   type IdentityVerificationExecution,
-} from "@vortex/identity";
+} from "@web/platform-server";
 import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
 import {

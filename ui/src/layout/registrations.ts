@@ -5,7 +5,7 @@ import {
   CONTAINER_BLOCK_RELEASE_1_3_0,
   HEADING_BLOCK_RELEASE,
   LAYOUT_BLOCK_RELEASES,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createPlatformComponentRegistry,
   noRuntimeInputs,

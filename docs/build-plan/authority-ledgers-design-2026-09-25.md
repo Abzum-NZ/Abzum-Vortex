@@ -170,7 +170,7 @@ Role storage is also guarded by `protect_organization_role_identity`, `refuse_or
 ### L5 — Configured operator
 
 This is not a stored identity:
-- The configured runtime supplies `p_operator_actor_id` from `VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID` and `p_cluster_id` from `VORTEX_CLUSTER_ID` (`runtime/identity/src/configured-tenant-administration.ts`, kind `configured_system_operator`).
+- The configured runtime supplies `p_operator_actor_id` from `VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID` and `p_cluster_id` from `VORTEX_CLUSTER_ID` (`packages/platform/src/identity/configured-tenant-administration.ts`, kind `configured_system_operator`).
 - The database checks only that each is a non-nil UUID. Trust comes from `EXECUTE` being granted only to `vortex_runtime`.
 
 | Operation | Operator arguments | Receipt scope |

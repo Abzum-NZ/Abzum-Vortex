@@ -39,9 +39,7 @@ Application workflow steps use protected Vortex operations. Kestra's operational
 | Path | Responsibility |
 | --- | --- |
 | `apps/web/` | Existing Next.js UI, server entry points and deployment root |
-| `contracts/` | Current definition and operation schemas |
-| `runtime/` | Owning engines with explicit public interfaces |
-| `db/` | Database connection and transaction boundary |
+| `packages/platform/` | Domain schemas, server operations, and database access |
 | `ui/`, `studio/` | Shared UI components and the later designer |
 | `modules/` | Ordinary shipped application and module definitions |
 | `supabase/` | Database configuration, schema, migrations and seed |

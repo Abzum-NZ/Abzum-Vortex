@@ -18,7 +18,7 @@ import {
   storageContractIdSchema,
   timestampSchema,
   workflowIdSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { z } from "zod";
 
 export const studioApplicationInstallationSelectorSchema = z

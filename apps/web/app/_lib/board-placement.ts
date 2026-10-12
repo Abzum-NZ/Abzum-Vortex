@@ -14,16 +14,16 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
-} from "@vortex/contracts";
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/app";
-import type { createProtectedQueryService } from "@vortex/query";
+} from "@vortex/platform/schema";
+import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@web/platform-server";
+import type { createProtectedQueryService } from "@web/platform-server";
 import {
   arrangeProtectedBoard,
   type ProtectedBoardArrangementPage,
   type ProtectedBoardArrangementResult,
   type ProtectedQueryPageRow,
   type ProtectedQuerySummaryAggregateResult,
-} from "@vortex/query";
+} from "@web/platform-server";
 import {
   parseBoardPayload,
   parseDisplayData,

@@ -3,25 +3,25 @@ import "server-only";
 import {
   createBuilderAuthority,
   prepareApplicationRoleTemplatesForHumanRequest,
-} from "@vortex/access";
+} from "@web/platform-server";
 import {
   ApplicationInstallationCoordinatorError,
   applicationInstallationActivationRequestSchema,
   createApplicationInstallationCoordinator,
   type HumanInstallationDefinitionAccess,
-} from "@vortex/app";
+} from "@web/platform-server";
 import type {
   ApplicationRootId,
   IdentitySession,
   OrganizationId,
   SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabaseApplicationReleaseAdoptionTargetService,
   resolveModuleContributions,
   type ApplicationReleaseAdoptionTarget,
-} from "@vortex/definition";
+} from "@web/platform-server";
 import {
   installedReleaseCatalogue,
   releaseSetContainsCustomComponents,

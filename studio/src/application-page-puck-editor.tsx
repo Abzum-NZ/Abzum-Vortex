@@ -6,8 +6,8 @@ import {
   applicationSourceDocumentV2Schema,
   sourcePlacementSlotV2Schema,
   type ApplicationSourceDocumentV2,
-} from "@vortex/contracts";
-import type { placementSlotV2Schema } from "@vortex/contracts";
+} from "@vortex/platform/schema";
+import type { placementSlotV2Schema } from "@vortex/platform/schema";
 import {
   createFullPlatformComponentRegistry,
   createVortexPuckAdapterV2,

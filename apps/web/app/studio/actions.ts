@@ -11,8 +11,8 @@ import {
   sourceThemeTokenValueV2Schema,
   translateDefinitionRuleFailures,
   type ApplicationContentV2,
-} from "@vortex/contracts";
-import { fingerprintCanonicalValue, materialiseApplicationThemeV2, validateDefinitionSource } from "@vortex/definition";
+} from "@vortex/platform/schema";
+import { fingerprintCanonicalValue, materialiseApplicationThemeV2, validateDefinitionSource } from "@web/platform-server";
 import {
   parseStudioAppearanceRequest,
   studioAppearanceFailureCodes,

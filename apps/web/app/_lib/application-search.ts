@@ -1,13 +1,13 @@
 import "server-only";
 
 import { z } from "zod";
-import { createHumanInstalledRuntimeContextLoader, readAddressedApplicationAtAddress, requireInstalledRuntimeContext, resolvePermittedApplicationAddress } from "@vortex/app";
-import { activeApplicationInstallationEvidenceSchema, fieldIdSchema, jsonValueSchema, recordIdSchema, revisionSchema, sameId, type IdentitySession } from "@vortex/contracts";
-import type { DatabaseRow } from "@vortex/db";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createActiveApplicationInstallationRepository } from "@vortex/module";
-import { protectedQueryRowCapabilitiesSchema } from "@vortex/query";
-import { searchConfiguredApplication, searchDocumentSchemaVersion, type ApplicationSearchRecord, type SearchDocument } from "@vortex/search";
+import { createHumanInstalledRuntimeContextLoader, readAddressedApplicationAtAddress, requireInstalledRuntimeContext, resolvePermittedApplicationAddress } from "@web/platform-server";
+import { activeApplicationInstallationEvidenceSchema, fieldIdSchema, jsonValueSchema, recordIdSchema, revisionSchema, sameId, type IdentitySession } from "@vortex/platform/schema";
+import type { DatabaseRow } from "@web/platform-server";
+import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
+import { createActiveApplicationInstallationRepository } from "@web/platform-server";
+import { protectedQueryRowCapabilitiesSchema } from "@web/platform-server";
+import { searchConfiguredApplication, searchDocumentSchemaVersion, type ApplicationSearchRecord, type SearchDocument } from "@web/platform-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { applicationPageAddressPath } from "./address-paths";

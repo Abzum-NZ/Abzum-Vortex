@@ -11,7 +11,7 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from "react";
-import type { FlowRefusalFeedback } from "@vortex/contracts";
+import type { FlowRefusalFeedback } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
 import {

@@ -7,13 +7,13 @@ import type {
   ConditionNode,
   DefinitionValidationLocation,
   DefinitionValidationResult,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   StudioConditionControls,
   validateStudioCondition,
   type StudioConditionValidation,
 } from "@vortex/studio";
-import type { ModuleQueryFilterDraftContext, ModuleQueryFilterQueryChoice } from "@vortex/definition";
+import type { ModuleQueryFilterDraftContext, ModuleQueryFilterQueryChoice } from "@web/platform-server";
 import type {
   StudioModuleQueryFilterResult,
   StudioModuleQueryFilterSnapshot,

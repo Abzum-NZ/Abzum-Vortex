@@ -5,7 +5,7 @@ import type {
   GuidedFormPageCompositionV2,
   PageCompositionV2,
   PageDefinitionV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./definition-error";
 import { projectedAvailability } from "./placement-availability";
 import type { PlatformComponentRegistry } from "./registry";

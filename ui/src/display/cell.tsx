@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { safeHttpsUrlSchema } from "@vortex/contracts";
+import { safeHttpsUrlSchema } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { formatIsoDate, type DateFormatOptions } from "./date-format";
 import { FormattedDate } from "./date-format-context";

@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import type { ApplicationPuckRootShell } from "@vortex/contracts";
+import type { ApplicationPuckRootShell } from "@vortex/platform/schema";
 import {
   Breadcrumb,
   BreadcrumbItem,

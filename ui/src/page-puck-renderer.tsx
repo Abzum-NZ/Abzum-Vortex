@@ -6,7 +6,7 @@ import type {
   PageDefinitionV2,
   PageCompositionV2,
   ProjectedNavigation,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   ALL_UI_STYLES_CSS,
   createThemeRootProps,

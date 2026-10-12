@@ -5,7 +5,7 @@ import {
   DEFAULT_SHADCN_ICON_LIBRARY,
   resolveShadcnIconLibrary,
   type ShadcnIconLibrary,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 import { loadIconAdapter } from "./icon-libraries";
 import type { VortexIconName, VortexIconProps } from "./icon-names";

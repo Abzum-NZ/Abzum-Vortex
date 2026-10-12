@@ -1,4 +1,4 @@
-import type { ComponentFlowBinding } from "@vortex/contracts";
+import type { ComponentFlowBinding } from "@vortex/platform/schema";
 import type { FlowDispatchResult, FlowRuntime } from "./flow-runtime";
 
 /**

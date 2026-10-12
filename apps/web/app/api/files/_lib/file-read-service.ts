@@ -5,7 +5,7 @@ import {
   organizationIdSchema,
   type FileId,
   type IdentitySession,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   composeStorageAuthorityResolvers,
   createDefaultUpstreamStorageReader,
@@ -22,7 +22,7 @@ import {
   type FileReadRefusalReason,
   type FileReadResult,
   type StorageKeySigner,
-} from "@vortex/file";
+} from "@web/platform-server";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import {
   getIdentityAuthorityConfiguration,

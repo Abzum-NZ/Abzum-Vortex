@@ -1,4 +1,4 @@
-import { builderKeySchema } from "@vortex/contracts";
+import { builderKeySchema } from "@vortex/platform/schema";
 import { createDeclaredSettingsReader } from "../controls/control-context";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";

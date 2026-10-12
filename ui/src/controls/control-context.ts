@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { builderKeySchema, type BlockPropertyValueV2Contract } from "@vortex/contracts";
+import { builderKeySchema, type BlockPropertyValueV2Contract } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
 import type { PlatformBlockRenderProps } from "../registry";

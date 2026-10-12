@@ -31,7 +31,7 @@ import {
   type JsonValue,
   type OrganizationSelectionCandidate,
   type SafeFlowResultDescriptor,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import type {
   FlowNamedAction,
   FlowOrchestrator,
@@ -41,7 +41,7 @@ import type {
   FlowRunExpectation,
   FlowSubject,
   FlowUnavailableNotice,
-} from "@vortex/app";
+} from "@web/platform-server";
 
 /**
  * The one server entry point that runs the flow bound to a component event (architecture decision

@@ -13,7 +13,7 @@ import {
   type ApplicationSourceDocumentV2,
   type PlatformBlockReleaseV2,
   type BlockPropertySchemaV2Contract,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import { getStudioContextualPaletteGroups } from "./contextual-palette";
 import { createVortexAuthoredPuckAdapterV2 } from "./vortex-authored-puck-adapter";

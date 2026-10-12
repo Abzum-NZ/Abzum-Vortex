@@ -1,4 +1,4 @@
-import { revisionSchema } from "@vortex/contracts";
+import { revisionSchema } from "@vortex/platform/schema";
 import { loadStudioApplicationFirstInstall } from "../../../../../../_lib/studio-application-installation";
 import {
   studioApplicationFirstInstallSelectorSchema,

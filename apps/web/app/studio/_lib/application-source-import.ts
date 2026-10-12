@@ -8,7 +8,7 @@ import {
   revisionSchema,
   canonicalJson,
   type ApplicationSourceDocumentV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 export const maximumApplicationSourceImportBytes = 2 * 1024 * 1024;
 

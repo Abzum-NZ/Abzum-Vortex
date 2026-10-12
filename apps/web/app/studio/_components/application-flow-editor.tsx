@@ -6,7 +6,7 @@ import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { flowRoundingModeSchema } from "@vortex/contracts";
+import { flowRoundingModeSchema } from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "@vortex/studio";
 import {
   projectStudioFlowTextEditor,

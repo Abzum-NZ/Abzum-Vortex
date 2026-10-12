@@ -31,15 +31,15 @@ export default tseslint.config(
   },
   // These closures retain the owning instance while another object's callbacks use their own `this`.
   {
-    files: ["apps/web/app/_lib/private-invalidation-socket.ts", "db/src/request-lifetime.ts"],
+    files: ["apps/web/app/_lib/private-invalidation-socket.ts", "packages/platform/src/db/request-lifetime.ts"],
     rules: { "@typescript-eslint/no-this-alias": "off" },
   },
   // These expressions deliberately reject ASCII control characters in user supplied text.
   {
     files: [
-      "contracts/src/application-attachment-blocks.ts",
-      "runtime/connection/src/outbound-target-policy.ts",
-      "runtime/file/src/file-metadata.ts",
+      "packages/platform/src/files/application-attachment-blocks.ts",
+      "packages/platform/src/connections/outbound-target-policy.ts",
+      "packages/platform/src/files/file-metadata.ts",
       "ui/src/components/notice.tsx",
     ],
     rules: { "no-control-regex": "off" },
@@ -51,9 +51,9 @@ export default tseslint.config(
       "apps/web/app/_lib/guided-form-steps.ts",
       "apps/web/app/_lib/studio-application-installation.ts",
       "apps/web/app/studio/_components/application-search-editor.tsx",
-      "runtime/access/src/record-share-grants.ts",
-      "runtime/file/src/file-metadata.ts",
-      "runtime/page/src/stored-page-capability.ts",
+      "packages/platform/src/access/record-share-grants.ts",
+      "packages/platform/src/files/file-metadata.ts",
+      "packages/platform/src/pages/stored-page-capability.ts",
     ],
     rules: { "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }] },
   },
@@ -68,11 +68,11 @@ export default tseslint.config(
   },
   // postgres.Options uses the library's empty generic parameter to select its default shape.
   {
-    files: ["db/src/request-transaction.ts"],
+    files: ["packages/platform/src/db/request-transaction.ts"],
     rules: { "@typescript-eslint/no-empty-object-type": "off" },
   },
   // This timer must be declared before callbacks that can fire before it is assigned.
-  { files: ["db/src/request-owned-socket.ts"], rules: { "prefer-const": "off" } },
+  { files: ["packages/platform/src/db/request-owned-socket.ts"], rules: { "prefer-const": "off" } },
   // `problem` throws, so each switch arm terminates without an explicit break.
   {
     files: ["apps/web/app/_lib/studio-application-installation.ts"],

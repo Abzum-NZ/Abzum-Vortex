@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createOrganizationAccessAdministrationService } from "@vortex/access";
+import { createOrganizationAccessAdministrationService } from "@web/platform-server";
 import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
@@ -10,7 +10,7 @@ import {
   type OrganizationAdministrationPermission,
   type OrganizationAdministrationRoleAssignment,
   type OrganizationAdministrationRoleSummary,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { nominatedOwnerSession } from "./development-authority";
 import type { PublishedRelease } from "./state";
 

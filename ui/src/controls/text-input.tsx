@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ChangeEvent, type ReactElement } from "react";
-import { moduleFieldValueV2Schemas } from "@vortex/contracts";
+import { moduleFieldValueV2Schemas } from "@vortex/platform/schema";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Textarea } from "../components/textarea";

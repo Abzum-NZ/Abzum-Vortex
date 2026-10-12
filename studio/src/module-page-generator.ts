@@ -1,4 +1,4 @@
-import type { sourcePlacementSlotV2Schema } from "@vortex/contracts";
+import type { sourcePlacementSlotV2Schema } from "@vortex/platform/schema";
 import {
   flowContractVersion,
   flowTaskRegistry,
@@ -21,7 +21,7 @@ import {
   type SourceBlockPropertyValueV2Contract,
   type SourceFlow,
   type SourcePageDefinitionV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 /** The four normal Application page kinds projected from one bound Module record type. */
 export type ModuleGeneratedPageKind = "list" | "detail" | "create" | "edit";

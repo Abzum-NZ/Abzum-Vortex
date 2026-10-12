@@ -5,8 +5,8 @@ import {
   type ConditionNode,
   type JsonValue,
   type ModuleSourceDocument,
-} from "@vortex/contracts";
-import type { ModuleQueryFilterDraftContext } from "@vortex/definition";
+} from "@vortex/platform/schema";
+import type { ModuleQueryFilterDraftContext } from "@web/platform-server";
 import type { StudioConditionControlsContext } from "@vortex/studio";
 
 type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];

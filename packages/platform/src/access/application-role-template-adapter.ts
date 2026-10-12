@@ -1,0 +1,454 @@
+import "server-only";
+
+import {
+  applicationRootIdSchema,
+  preparedApplicationRoleTemplatesSchema,
+  projectLiveApplicationRolePermissions,
+  revisionSchema,
+  sessionContextSchema,
+  systemApplicationBoundReleaseSetResultSchema,
+  type ApplicationPermissionCatalogueSnapshot,
+  type ApplicationRole,
+  type ApplicationRoleTemplatePreparationBasis,
+  type ApplicationRootId,
+  type DefinitionConsumerReadResult,
+  type PermissionCatalogueLookupResult,
+  type PermissionRegistryEntryCandidate,
+  type PreparedApplicationPermissionRegistration,
+  type PreparedApplicationRoleTemplate,
+  type PreparedApplicationRoleTemplates,
+  type SessionContext,
+} from "../schema";
+import { canonicalJson, fingerprintCanonicalValue } from "../definition/definition-index";
+import {
+  PermissionRegistryPreparationError,
+  prepareApplicationPermissionRegistrationForHumanRequest,
+  prepareApplicationPermissionRegistrationFromReleaseSet,
+  verifyPreparedApplicationPermissionRegistration,
+  type PermissionRegistryDefinitionSetReader,
+} from "./permission-registry-definition-adapter";
+import type { PermissionRegistryPrivateRepository } from "./permission-registry-repository";
+import { isLiveSystemContext } from "./private-system-context";
+
+export const applicationRoleTemplatePreparationErrorCodes = [
+  "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
+  "APPLICATION_ROLE_TEMPLATE_CONTEXT_REFUSED",
+  "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
+  "APPLICATION_ROLE_TEMPLATE_DEFINITION_EVIDENCE_INVALID",
+  "APPLICATION_ROLE_TEMPLATE_PERMISSION_OWNERSHIP_AMBIGUOUS",
+  "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+] as const;
+
+export type ApplicationRoleTemplatePreparationErrorCode =
+  (typeof applicationRoleTemplatePreparationErrorCodes)[number];
+
+export class ApplicationRoleTemplatePreparationError extends Error {
+  readonly code: ApplicationRoleTemplatePreparationErrorCode;
+
+  constructor(code: ApplicationRoleTemplatePreparationErrorCode, options?: ErrorOptions) {
+    super(code, options);
+    this.name = "ApplicationRoleTemplatePreparationError";
+    this.code = code;
+  }
+}
+
+export type PrepareApplicationRoleRegistrationCandidateCommand = Readonly<{
+  applicationRootId: ApplicationRootId;
+  releaseRevision: number;
+}>;
+
+export type PrepareCurrentApplicationRoleTemplatesCommand = Readonly<{
+  applicationRootId: ApplicationRootId;
+}>;
+
+export interface ApplicationRoleTemplateAdapterDependencies {
+  readonly definitionReader: PermissionRegistryDefinitionSetReader;
+  readonly permissionRegistryFacts: Pick<
+    PermissionRegistryPrivateRepository,
+    "lookup" | "readApplicationSnapshot"
+  >;
+}
+
+type ApplicationDefinitionRead = Extract<DefinitionConsumerReadResult, { kind: "application" }>;
+
+const evidenceError = (cause?: unknown) =>
+  new ApplicationRoleTemplatePreparationError(
+    "APPLICATION_ROLE_TEMPLATE_DEFINITION_EVIDENCE_INVALID",
+    cause === undefined ? undefined : { cause },
+  );
+
+const parseContext = (candidate: SessionContext): SessionContext => {
+  const parsed = sessionContextSchema.safeParse(candidate);
+  if (!parsed.success || !isLiveSystemContext(parsed.data))
+    throw new ApplicationRoleTemplatePreparationError("APPLICATION_ROLE_TEMPLATE_CONTEXT_REFUSED");
+  return parsed.data;
+};
+
+const parseApplicationRootId = (candidate: unknown): ApplicationRootId => {
+  const parsed = applicationRootIdSchema.safeParse(candidate);
+  if (!parsed.success)
+    throw new ApplicationRoleTemplatePreparationError(
+      "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
+    );
+  return parsed.data;
+};
+
+const mapPermissionPreparationError = (error: unknown): never => {
+  if (!(error instanceof PermissionRegistryPreparationError)) throw evidenceError(error);
+  switch (error.code) {
+    case "INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND":
+      throw new ApplicationRoleTemplatePreparationError(
+        "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
+        { cause: error },
+      );
+    case "PERMISSION_REGISTRY_CONTEXT_REFUSED":
+      throw new ApplicationRoleTemplatePreparationError(
+        "APPLICATION_ROLE_TEMPLATE_CONTEXT_REFUSED",
+        { cause: error },
+      );
+    case "PERMISSION_REGISTRY_DEFINITION_UNAVAILABLE":
+      throw new ApplicationRoleTemplatePreparationError(
+        "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
+        { cause: error },
+      );
+    case "PERMISSION_REGISTRY_PERMISSION_OWNERSHIP_AMBIGUOUS":
+      throw new ApplicationRoleTemplatePreparationError(
+        "APPLICATION_ROLE_TEMPLATE_PERMISSION_OWNERSHIP_AMBIGUOUS",
+        { cause: error },
+      );
+    case "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID":
+      throw evidenceError(error);
+  }
+};
+
+const candidateEvidenceKey = (candidate: PermissionRegistryEntryCandidate): string =>
+  canonicalJson(candidate);
+
+const resolveTemplate = (
+  template: ApplicationRole,
+  registration: PreparedApplicationPermissionRegistration,
+): PreparedApplicationRoleTemplate => {
+  const wildcard = template.permissionSelection.kind === "application_wildcard";
+  const sourcePermissions = template.permissionKeys.map((key) => {
+    const matches = registration.entries.filter((entry) => {
+      if (entry.permission.key !== key) return false;
+      if (!wildcard) return true;
+      return (
+        entry.ownerKind === "application" &&
+        entry.applicationRootId === registration.applicationRootId &&
+        String(entry.ownerId) === String(registration.applicationRootId) &&
+        registration.applicationPermissionIds.includes(entry.permission.permissionId)
+      );
+    });
+    if (matches.length !== 1)
+      throw new ApplicationRoleTemplatePreparationError(
+        "APPLICATION_ROLE_TEMPLATE_PERMISSION_OWNERSHIP_AMBIGUOUS",
+      );
+    return matches[0]!;
+  });
+  return {
+    template,
+    sourceTemplateFingerprint: fingerprintCanonicalValue(template),
+    sourcePermissions,
+    livePermissions: [
+      ...projectLiveApplicationRolePermissions(
+        template.permissionSelection,
+        registration.applicationRootId,
+        sourcePermissions,
+      ),
+    ],
+  };
+};
+
+const buildCandidate = (
+  basis: ApplicationRoleTemplatePreparationBasis,
+  registrationValue: PreparedApplicationPermissionRegistration,
+  application: ApplicationDefinitionRead,
+): PreparedApplicationRoleTemplates => {
+  let permissionRegistration: PreparedApplicationPermissionRegistration;
+  try {
+    permissionRegistration = verifyPreparedApplicationPermissionRegistration(registrationValue);
+  } catch (error) {
+    throw evidenceError(error);
+  }
+  const core = {
+    contractVersion: "1.0.0" as const,
+    preparationBasis: basis,
+    permissionRegistration,
+    templates: application.content.roles.map((template) =>
+      resolveTemplate(template, permissionRegistration),
+    ),
+  };
+  return verifyPreparedApplicationRoleTemplates({
+    ...core,
+    candidateFingerprint: fingerprintCanonicalValue(core),
+  });
+};
+
+export const verifyPreparedApplicationRoleTemplates = (
+  candidateValue: unknown,
+): PreparedApplicationRoleTemplates => {
+  const parsed = preparedApplicationRoleTemplatesSchema.safeParse(candidateValue);
+  if (!parsed.success) throw evidenceError(parsed.error);
+  const candidate = parsed.data;
+  try {
+    verifyPreparedApplicationPermissionRegistration(candidate.permissionRegistration);
+  } catch (error) {
+    throw evidenceError(error);
+  }
+  if (
+    candidate.templates.some(
+      (prepared) =>
+        prepared.sourceTemplateFingerprint !== fingerprintCanonicalValue(prepared.template),
+    )
+  )
+    throw evidenceError();
+  const { candidateFingerprint, ...core } = candidate;
+  if (candidateFingerprint !== fingerprintCanonicalValue(core)) throw evidenceError();
+  return candidate;
+};
+
+/**
+ * Prepares one exact release's role templates from a release set read under the verified human
+ * request's own organisation scope. It mirrors {@link createApplicationRoleTemplateAdapter}'s
+ * registration candidate exactly, but the registration basis is the human request rather than a
+ * system context: it grants nothing, and the protected Access writer still re-verifies every
+ * fingerprint and continuity revision before any registration changes.
+ */
+export const prepareApplicationRoleTemplatesForHumanRequest = (
+  organizationId: string,
+  commandCandidate: PrepareApplicationRoleRegistrationCandidateCommand,
+  releaseSetCandidate: unknown,
+): PreparedApplicationRoleTemplates => {
+  const applicationRootId = parseApplicationRootId(commandCandidate?.applicationRootId);
+  const releaseRevision = revisionSchema
+    .max(Number.MAX_SAFE_INTEGER)
+    .safeParse(commandCandidate?.releaseRevision);
+  if (!releaseRevision.success)
+    throw new ApplicationRoleTemplatePreparationError(
+      "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
+    );
+  const releaseSet = systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
+  if (!releaseSet.success) throw evidenceError();
+
+  const permissionRegistration = (() => {
+    try {
+      return prepareApplicationPermissionRegistrationForHumanRequest(
+        organizationId,
+        { applicationRootId, releaseRevision: releaseRevision.data },
+        releaseSet.data,
+      );
+    } catch (error) {
+      return mapPermissionPreparationError(error);
+    }
+  })();
+  return buildCandidate(
+    { kind: "registration_candidate" },
+    permissionRegistration,
+    releaseSet.data.application as ApplicationDefinitionRead,
+  );
+};
+
+const registrationMatchesSnapshot = (
+  registration: PreparedApplicationPermissionRegistration,
+  snapshot: ApplicationPermissionCatalogueSnapshot | undefined,
+): snapshot is NonNullable<typeof snapshot> =>
+  snapshot !== undefined &&
+  snapshot.organizationId === registration.organizationId &&
+  snapshot.applicationRootId === registration.applicationRootId &&
+  canonicalJson(snapshot.applicationRelease) === canonicalJson(registration.applicationRelease) &&
+  snapshot.catalogueFingerprint === registration.applicationCatalogueFingerprint &&
+  canonicalJson(snapshot.permissionIds) === canonicalJson(registration.applicationPermissionIds);
+
+const uniqueSourcePermissions = (
+  candidate: PreparedApplicationRoleTemplates,
+): PermissionRegistryEntryCandidate[] => {
+  const unique = new Map<string, PermissionRegistryEntryCandidate>();
+  for (const prepared of candidate.templates)
+    for (const permission of prepared.sourcePermissions) {
+      const identity = `${permission.applicationRootId}:${permission.ownerKind}:${permission.ownerId}:${permission.permission.permissionId}`;
+      if (!unique.has(identity)) unique.set(identity, permission);
+    }
+  return [...unique.values()];
+};
+
+/** Fixed I/O concurrency, not an application permission or template limit. */
+const applicationRoleTemplateFactReadConcurrency = 16;
+
+const mapInDeterministicBatches = async <Input>(
+  values: readonly Input[],
+  concurrency: number,
+  map: (value: Input) => Promise<unknown>,
+): Promise<void> => {
+  for (let start = 0; start < values.length; start += concurrency) {
+    const settled = await Promise.allSettled(
+      values.slice(start, start + concurrency).map((value) => map(value)),
+    );
+    for (const result of settled) if (result.status === "rejected") throw result.reason;
+  }
+};
+
+export const createApplicationRoleTemplateAdapter = (
+  dependencies: ApplicationRoleTemplateAdapterDependencies,
+) => {
+  const prepareDefinitionEvidence = async (
+    context: SessionContext,
+    applicationRootId: ApplicationRootId,
+    releaseRevision: number,
+  ) => {
+    let releaseSet;
+    try {
+      releaseSet = await dependencies.definitionReader.read(context, {
+        applicationRootId,
+        applicationReleaseRevision: releaseRevision,
+      });
+    } catch (error) {
+      throw new ApplicationRoleTemplatePreparationError(
+        "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
+        { cause: error },
+      );
+    }
+    const permissionRegistration = (() => {
+      try {
+        return prepareApplicationPermissionRegistrationFromReleaseSet(
+          context,
+          { applicationRootId, releaseRevision },
+          releaseSet,
+        );
+      } catch (error) {
+        return mapPermissionPreparationError(error);
+      }
+    })();
+    const application = releaseSet.application as ApplicationDefinitionRead;
+    return { permissionRegistration, application };
+  };
+
+  return Object.freeze({
+    async prepareRegistrationCandidate(
+      contextCandidate: SessionContext,
+      commandCandidate: PrepareApplicationRoleRegistrationCandidateCommand,
+    ): Promise<PreparedApplicationRoleTemplates> {
+      const context = parseContext(contextCandidate);
+      const applicationRootId = parseApplicationRootId(commandCandidate?.applicationRootId);
+      const releaseRevision = revisionSchema
+        .max(Number.MAX_SAFE_INTEGER)
+        .safeParse(commandCandidate?.releaseRevision);
+      if (!releaseRevision.success)
+        throw new ApplicationRoleTemplatePreparationError(
+          "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
+        );
+      const evidence = await prepareDefinitionEvidence(
+        context,
+        applicationRootId,
+        releaseRevision.data,
+      );
+      return buildCandidate(
+        { kind: "registration_candidate" },
+        evidence.permissionRegistration,
+        evidence.application,
+      );
+    },
+
+    async prepareCurrentActive(
+      contextCandidate: SessionContext,
+      commandCandidate: PrepareCurrentApplicationRoleTemplatesCommand,
+    ): Promise<PreparedApplicationRoleTemplates> {
+      const context = parseContext(contextCandidate);
+      const applicationRootId = parseApplicationRootId(commandCandidate?.applicationRootId);
+      let initialSnapshot: ApplicationPermissionCatalogueSnapshot | undefined;
+      try {
+        initialSnapshot = await dependencies.permissionRegistryFacts.readApplicationSnapshot({
+          organizationId: context.organizationId,
+          applicationRootId,
+        });
+      } catch (error) {
+        throw new ApplicationRoleTemplatePreparationError(
+          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+          { cause: error },
+        );
+      }
+      if (initialSnapshot === undefined)
+        throw new ApplicationRoleTemplatePreparationError(
+          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+        );
+
+      const evidence = await prepareDefinitionEvidence(
+        context,
+        applicationRootId,
+        initialSnapshot.applicationRelease.releaseRevision,
+      );
+      if (!registrationMatchesSnapshot(evidence.permissionRegistration, initialSnapshot))
+        throw evidenceError();
+      const candidate = buildCandidate(
+        {
+          kind: "current_active_registration",
+          registrationRevision: initialSnapshot.registrationRevision,
+        },
+        evidence.permissionRegistration,
+        evidence.application,
+      );
+
+      await mapInDeterministicBatches(
+        uniqueSourcePermissions(candidate),
+        applicationRoleTemplateFactReadConcurrency,
+        async (permission) => {
+          let result: PermissionCatalogueLookupResult;
+          try {
+            result = await dependencies.permissionRegistryFacts.lookup({
+              organizationId: context.organizationId,
+              applicationRootId: permission.applicationRootId,
+              ownerKind: permission.ownerKind,
+              ownerId: permission.ownerId,
+              permissionId: permission.permission.permissionId,
+            });
+          } catch (error) {
+            throw new ApplicationRoleTemplatePreparationError(
+              "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+              { cause: error },
+            );
+          }
+          if (
+            result.outcome !== "available" ||
+            result.entry.organizationId !== context.organizationId ||
+            result.entry.registrationRevision !== initialSnapshot.registrationRevision ||
+            result.entry.applicationRootId === undefined ||
+            result.entry.ownerKind === "platform" ||
+            result.entry.sourceRelease.kind === "platform_catalogue" ||
+            candidateEvidenceKey({
+              applicationRootId: result.entry.applicationRootId,
+              ownerKind: result.entry.ownerKind,
+              ownerId: result.entry.ownerId,
+              permission: result.entry.permission,
+              sourceRelease: result.entry.sourceRelease,
+              meaningFingerprint: result.entry.meaningFingerprint,
+            }) !== candidateEvidenceKey(permission)
+          )
+            throw new ApplicationRoleTemplatePreparationError(
+              "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+            );
+        },
+      );
+
+      let finalSnapshot: ApplicationPermissionCatalogueSnapshot | undefined;
+      try {
+        finalSnapshot = await dependencies.permissionRegistryFacts.readApplicationSnapshot({
+          organizationId: context.organizationId,
+          applicationRootId,
+        });
+      } catch (error) {
+        throw new ApplicationRoleTemplatePreparationError(
+          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+          { cause: error },
+        );
+      }
+      if (
+        finalSnapshot === undefined ||
+        canonicalJson(finalSnapshot) !== canonicalJson(initialSnapshot)
+      )
+        throw new ApplicationRoleTemplatePreparationError(
+          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
+        );
+      return candidate;
+    },
+  });
+};

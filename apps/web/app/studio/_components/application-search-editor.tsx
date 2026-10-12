@@ -4,7 +4,7 @@ import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useState } from "react";
-import { applicationSourceDocumentV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/contracts";
+import { applicationSourceDocumentV2Schema, type ApplicationSourceDocumentV2 } from "@vortex/platform/schema";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
 
 type SearchSource = NonNullable<ApplicationSourceDocumentV2["body"]["search"]>;

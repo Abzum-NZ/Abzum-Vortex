@@ -6,7 +6,7 @@ import {
   namespacedKeySchema,
   semanticVersionSchema,
   timestampSchema,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./definition-error";
 import type { DisplayCellValue, DisplayField, RecordDetailPayload } from "./display/projected-data";
 import type {
@@ -20,7 +20,7 @@ import type {
 /**
  * The browser half of the generic connection administration page.
  *
- * It mirrors the resolution that `runtime/page/src/connection-administration.ts` projects over the
+ * It mirrors the resolution that `packages/platform/src/pages/connection-administration.ts` projects over the
  * #692 administration commands and their results, and it re-validates that payload here rather than
  * trusting it. A missing, extra, renamed or malformed property fails closed, exactly as the launcher
  * bindings and the projected display data do, so a page can only ever render what the server

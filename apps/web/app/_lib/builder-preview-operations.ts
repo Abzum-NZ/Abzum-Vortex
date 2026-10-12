@@ -2,12 +2,12 @@ import "server-only";
 
 import type { NextResponse} from "next/server";
 import type { NextRequest } from "next/server";
-import { createBuilderAuthority } from "@vortex/access";
+import { createBuilderAuthority } from "@web/platform-server";
 import {
   createFlowTestRunner,
   createPreviewInstallationCoordinator,
   PreviewInstallationCoordinatorError,
-} from "@vortex/app";
+} from "@web/platform-server";
 import {
   builderPreviewCreateRequestSchema,
   builderPreviewCreateResultSchema,
@@ -36,13 +36,13 @@ import {
   type OrganizationId,
   type SelectedOrganizationScope,
   type SessionContext,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import {
   createDatabaseDefinitionPublicationRepository,
   createDatabaseDefinitionPublicationService,
-} from "@vortex/definition";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/db";
-import { createPreviewRecordPort } from "@vortex/record";
+} from "@web/platform-server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import { createPreviewRecordPort } from "@web/platform-server";
 import type { z } from "zod";
 import { getIdentityAuthorityConfiguration, getIdentityJourneyConfiguration } from "../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../auth/_lib/session-server";

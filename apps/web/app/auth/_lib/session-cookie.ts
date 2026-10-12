@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { CookieOptions } from "@supabase/ssr";
-import { isLoopbackHostname } from "@vortex/contracts";
+import { isLoopbackHostname } from "@vortex/platform/schema";
 
 const sessionCookieChunkSize = 3_180;
 const sessionCookieMaximumChunks = 8;

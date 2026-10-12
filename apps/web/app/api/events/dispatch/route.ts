@@ -4,7 +4,7 @@ import {
   authenticateEventDispatcher,
   createEventDispatcherWakeup,
   eventDispatcherWakeupLimits,
-} from "@vortex/event";
+} from "@web/platform-server";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 

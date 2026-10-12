@@ -17,7 +17,7 @@ import {
   type FlowRoundingMode,
   type SourceFlow,
   type SourceFlowTask,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
 /** Client snapshots prevent stale edits; they provide no permission or execution authority. */

@@ -1,7 +1,7 @@
 import {
   sourceApplicationThemeSelectionV2Schema,
   type ApplicationSourceDocumentV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 import { loadApplicationSource } from "../application-source-loader";
 

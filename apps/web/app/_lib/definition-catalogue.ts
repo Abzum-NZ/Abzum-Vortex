@@ -8,8 +8,8 @@ import {
   PLATFORM_BLOCK_RELEASES,
   type PlatformBlockReleaseV2,
   type SystemApplicationBoundReleaseSetResult,
-} from "@vortex/contracts";
-import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@vortex/definition";
+} from "@vortex/platform/schema";
+import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@web/platform-server";
 
 /**
  * The publication catalogue every installed release was published against: every registered

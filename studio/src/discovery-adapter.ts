@@ -13,7 +13,7 @@ import {
   type ImmutablePlatformBlockCatalogueV2,
   type PlatformBlockReleaseSummaryV2,
   type PlatformCatalogueDiscoveryV2,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 
 /**
  * Studio discovery: inspector choices for a selected component, projected from the same

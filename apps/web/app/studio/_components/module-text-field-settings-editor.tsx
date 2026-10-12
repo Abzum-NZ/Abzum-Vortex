@@ -9,8 +9,8 @@ import {
   storedModuleDefinitionDraftSchema,
   translateDefinitionSchemaError,
   type DefinitionValidationLocation, type DefinitionValidationResult,
-} from "@vortex/contracts";
-import type { StoredModuleDefinitionDraft } from "@vortex/definition";
+} from "@vortex/platform/schema";
+import type { StoredModuleDefinitionDraft } from "@web/platform-server";
 import type {
   StudioModuleTextFieldDescriptor,
   StudioModuleTextFieldSettingsResult,

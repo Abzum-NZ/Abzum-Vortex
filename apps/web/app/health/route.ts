@@ -3,7 +3,7 @@ import {
   clampTelemetryDurationMs,
   correlationIdSchema,
   countersForOutcome,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { appTelemetry as telemetry } from "../_lib/server-composition";
 
 /**

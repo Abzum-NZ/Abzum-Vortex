@@ -5,19 +5,19 @@ import {
   readCurrentRecordOwnerGroupsAfterAuthorization,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
-} from "@vortex/access";
+} from "@web/platform-server";
 import {
   createHumanInstalledPageBundleContextLoader,
   createViewerSafeRecordLinkService,
   type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
-} from "@vortex/app";
+} from "@web/platform-server";
 import {
   readInstallationRuntimeBundleCacheStatus,
   type InstallationRuntimeBundleObservationEvent,
   type InstallationRuntimeBundleObservationObserver,
-} from "@vortex/module";
+} from "@web/platform-server";
 import {
   arrangeDataset,
   protectedQueryCommandSchema,
@@ -29,7 +29,7 @@ import {
   type ProtectedQuerySummaryAggregateResult,
   type ReferenceChoiceOption,
   type ReferenceChoiceInputValues,
-} from "@vortex/query";
+} from "@web/platform-server";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
@@ -54,7 +54,7 @@ import {
   type ProjectedNavigation,
   type ReadOnlyAttachmentFileEvidence,
   type StoredPageCapabilityDependencies,
-} from "@vortex/page";
+} from "@web/platform-server";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
@@ -92,9 +92,9 @@ import {
   type PageDefinitionV2,
   type ReferenceChoiceSelectionEvidence,
   recordLinkValueV2Schema,
-} from "@vortex/contracts";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/definition";
-import { createSqlFileReadRepository, decideFileRead } from "@vortex/file";
+} from "@vortex/platform/schema";
+import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
+import { createSqlFileReadRepository, decideFileRead } from "@web/platform-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { readApplicationReleaseAdoption } from "./application-release-adoption";

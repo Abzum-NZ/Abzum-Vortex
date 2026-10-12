@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { builderPreviewDiscardRequestSchema } from "@vortex/contracts";
+import { builderPreviewDiscardRequestSchema } from "@vortex/platform/schema";
 import {
   builderPreviewOperations,
   handleBuilderPreviewOperationRequest,

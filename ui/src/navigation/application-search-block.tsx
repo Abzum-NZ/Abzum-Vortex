@@ -1,6 +1,6 @@
 "use client";
 
-import type { BlockPropertyValueV2Contract } from "@vortex/contracts";
+import type { BlockPropertyValueV2Contract } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";

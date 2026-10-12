@@ -4,7 +4,7 @@ import {
   platformIdSchema,
   type ModulePlatformPermissionDeclaration,
   type PermissionDeclaration,
-} from "@vortex/contracts";
+} from "@vortex/platform/schema";
 import { organisationAdministrationPlatformPermissions } from "./organisation-administration/module";
 import { systemCorePlatformPermissions } from "./system-core/platform-permissions";
 
