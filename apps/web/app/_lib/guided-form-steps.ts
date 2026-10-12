@@ -50,14 +50,14 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { getQueryContinuationKey } from "./query-continuation-key";
 
-export type GuidedFormStepField = Readonly<{
+type GuidedFormStepField = Readonly<{
   field: ModuleFieldV3;
   fieldKey: string;
   placementId: string;
   required: boolean;
 }>;
 
-export type GuidedFormStepFields = Readonly<{
+type GuidedFormStepFields = Readonly<{
   stepId: string;
   summary: boolean;
   fields: readonly GuidedFormStepField[];
@@ -828,7 +828,7 @@ export const guidedFormDraftScope = (
     : { subjectRecordId: recordIdSchema.parse(subjectRecordId) }),
 });
 
-export type GuidedFormDraftOpenResult =
+type GuidedFormDraftOpenResult =
   | Readonly<{ kind: "available"; draft: PrivateFormDraft }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -855,7 +855,7 @@ export const openGuidedFormDraft = async (
     : { kind: "unavailable" };
 };
 
-export type GuidedFormStepUpdate = Readonly<{
+type GuidedFormStepUpdate = Readonly<{
   values: Readonly<Record<string, JsonValue>>;
   validation: Readonly<Record<string, PrivateFormDraftFieldValidation>>;
   valid: boolean;

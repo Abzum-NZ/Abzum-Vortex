@@ -25,7 +25,7 @@ export type SupportedRecordSystemFieldKey = (typeof supportedRecordSystemFieldKe
 export const supportedRecordSystemFieldKeySchema = z.enum(supportedRecordSystemFieldKeys);
 
 /** The record owner is exactly one account or one group, or absent (`null`). */
-export const recordSystemOwnerSchema = z
+const recordSystemOwnerSchema = z
   .discriminatedUnion("kind", [
     z
       .object({

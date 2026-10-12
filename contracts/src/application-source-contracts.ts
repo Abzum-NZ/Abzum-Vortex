@@ -480,7 +480,7 @@ const sourceInterfaceOperationSchema = z
         });
   });
 /** Application search selects fields the bound published Module already indexes. */
-export const sourceApplicationSearchSchema = z
+const sourceApplicationSearchSchema = z
   .object({
     enabled: sourceProvenanceUnchanged(z.boolean()),
     record_types: sourceProvenanceUnchanged(

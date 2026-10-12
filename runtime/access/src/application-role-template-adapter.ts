@@ -273,7 +273,7 @@ const uniqueSourcePermissions = (
 };
 
 /** Fixed I/O concurrency, not an application permission or template limit. */
-export const applicationRoleTemplateFactReadConcurrency = 16;
+const applicationRoleTemplateFactReadConcurrency = 16;
 
 const mapInDeterministicBatches = async <Input>(
   values: readonly Input[],

@@ -222,7 +222,7 @@ export type ApplicationPageModel = Readonly<{
   }>;
 }>;
 
-export type ApplicationPageResult =
+type ApplicationPageResult =
   | Readonly<{ kind: "available"; model: ApplicationPageModel }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -244,7 +244,7 @@ type ApplicationPageInternalResult =
   | ApplicationPageResult
   | Readonly<{ kind: "reload" }>;
 
-export type ApplicationPageLoaderAddress = Readonly<{
+type ApplicationPageLoaderAddress = Readonly<{
   tenantShortName: string;
   organizationShortName: string;
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
@@ -491,7 +491,7 @@ const collectPlacements = (
   return found;
 };
 
-export type ReferenceChoicePageResult =
+type ReferenceChoicePageResult =
   | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "refused" }>
@@ -620,14 +620,22 @@ const projectEditField = (
       displayed = stored ?? "";
       break;
     case "number":
-      if (stored !== null && (typeof stored !== "number" || !Number.isFinite(stored)))
+      displayed =
+        field.type === "money" && isRecord(stored) && typeof stored.amount === "string"
+          ? stored.amount
+          : stored;
+      if (
+        displayed !== null &&
+        !(typeof displayed === "number" && Number.isFinite(displayed)) &&
+        !(typeof displayed === "string" && exactDecimalTextV2Schema.safeParse(displayed).success)
+      )
         return undefined;
       if (
-        stored !== null &&
+        displayed !== null &&
         isRecord(settings.integer) &&
         settings.integer.kind === "boolean" &&
         settings.integer.value === true &&
-        !Number.isInteger(stored)
+        (typeof displayed !== "number" || !Number.isSafeInteger(displayed))
       )
         return undefined;
       kind = "number_input";
@@ -1202,7 +1210,7 @@ const fieldChoiceLabelsOf = (
   Object.fromEntries(
     module.content.recordTypes.flatMap((recordType) =>
       recordType.fields.flatMap((field) => {
-        if (field.type !== "several_choices") return [];
+        if (field.type !== "several_choices" && field.type !== "choice") return [];
         const labels = field.settings.options.flatMap((option) => {
           const permissionId = option.requiredPermissionId;
           const permissionKey =
@@ -1229,9 +1237,7 @@ const logPlacementFailure = (
   reason:
     | "read_model_not_served"
     | "query_not_bound"
-    | "subject_not_addressed"
     | "subject_unavailable"
-    | "subject_refused"
     | "detail_record_type_unavailable"
     | "detail_command_invalid"
     | "detail_query_unavailable"
@@ -2247,10 +2253,13 @@ const loadApplicationPageInternal = async (
     allPlacements.flatMap(({ placement }) => {
       const settings = placement.settings;
       if (!isRecord(settings)) return [];
-      const detail = readRecordDetailContract(
-        settings as Readonly<Record<string, BlockPropertyValueV2Contract>>,
-      );
-      return detail?.fields.map((field) => field.field.toLowerCase()) ?? [];
+      const contractSettings = settings as Readonly<Record<string, BlockPropertyValueV2Contract>>;
+      const detail = readRecordDetailContract(contractSettings);
+      const table = readRecordsTableContract(contractSettings);
+      return [
+        ...(detail?.fields.map((field) => field.field.toLowerCase()) ?? []),
+        ...(table?.columns.map((column) => column.field.toLowerCase()) ?? []),
+      ];
     }),
   );
   for (const module of context.releaseSet.modules)
@@ -2258,7 +2267,7 @@ const loadApplicationPageInternal = async (
       for (const field of recordType.fields) {
         if (
           !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
-          field.type !== "several_choices"
+          field.type !== "several_choices" && field.type !== "choice"
         )
           continue;
         for (const option of field.settings.options) {
@@ -2407,6 +2416,15 @@ const loadApplicationPageInternal = async (
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, { recordTypeId, recordId }));
+  // A detail address always names one readable record, even if its authored placements do not
+  // include a record-detail block. Other-org and unreadable IDs have the same outcome as absence.
+  if (pageDefinition.type === "detail") {
+    if (!subjectId.success || subjectType === undefined) return { kind: "unavailable" };
+    const addressedSubject = await readSubject(String(subjectType.recordTypeId), subjectId.data);
+    if (addressedSubject.kind === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable" };
+    if (addressedSubject.kind !== "read") return { kind: "unavailable" };
+  }
 
   if (
     selectedPlacementIds !== undefined &&
@@ -2679,6 +2697,10 @@ const loadApplicationPageInternal = async (
   }
 
   const data: Record<string, PageDataState> = {};
+  // Set when the record a detail or public page addresses cannot be shown to this viewer: it is
+  // missing, malformed, of another type or organisation, or not readable. The page then does not
+  // exist for them.
+  let subjectUnreadable = false;
   for (const { placementId, placement } of placements)
     if (fieldControl(placement) === "date_time")
       data[placementId] = {
@@ -3001,7 +3023,7 @@ const loadApplicationPageInternal = async (
         continue;
       }
       if (!subjectId.success) {
-        logPlacementFailure(address, placementId, "subject_not_addressed");
+        subjectUnreadable = true;
         data[placementId] = { status: "refused", reason: "not_found" };
         continue;
       }
@@ -3015,7 +3037,7 @@ const loadApplicationPageInternal = async (
         continue;
       }
       if (subject.kind === "refused") {
-        logPlacementFailure(address, placementId, "subject_refused");
+        subjectUnreadable = true;
         data[placementId] = { status: "refused", reason: "not_found" };
         continue;
       }
@@ -3543,6 +3565,7 @@ const loadApplicationPageInternal = async (
         settings,
         pageParameters,
         fieldLabels,
+        fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
         sort: state.sort,
         filters: state.filters,
         search: state.search,
@@ -3815,6 +3838,7 @@ const loadApplicationPageInternal = async (
       );
       if (!editBinding) continue;
       if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
+        if (subjectRow === undefined || subjectRow.kind === "refused") subjectUnreadable = true;
         data[placementId] = { status: "disabled", reason: "Record unavailable" };
         continue;
       }
@@ -3875,6 +3899,7 @@ const loadApplicationPageInternal = async (
     }
   }
 
+  if (subjectUnreadable) return { kind: "unavailable" };
   const permittedKeys = new Set(address.application.pageKeys);
   const applicationShellId = "shellId" in pageDefinition.composition
     ? pageDefinition.composition.shellId

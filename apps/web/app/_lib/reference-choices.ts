@@ -45,7 +45,7 @@ export type ReferenceChoiceFormField = Readonly<{
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 
-export type ReferenceChoiceFormFieldIndex = ReadonlyMap<string, ReferenceChoiceFormField>;
+type ReferenceChoiceFormFieldIndex = ReadonlyMap<string, ReferenceChoiceFormField>;
 
 export type ProjectedReferenceChoiceForm = Readonly<{
   fields: ReferenceChoiceFormFieldIndex;
@@ -142,7 +142,7 @@ const queryCommand = (
 };
 
 /** Resolves one trusted placement's source against the exact installed Module releases. */
-export const referenceChoiceFieldForPlacement = (
+const referenceChoiceFieldForPlacement = (
   placement: unknown,
   modules: readonly ModuleDefinitionConsumerReadResultV3[],
 ): ReferenceChoiceFormField | undefined => {
@@ -262,7 +262,7 @@ export const applicationHasAuthoredForm = (
 };
 
 /** Finds the exact form's choice inputs across the active Application release. */
-export const referenceChoiceFieldsForForm = (
+const referenceChoiceFieldsForForm = (
   application: ApplicationContentV2,
   modules: readonly ModuleDefinitionConsumerReadResultV3[],
   formId: string,

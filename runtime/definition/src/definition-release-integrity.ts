@@ -38,7 +38,7 @@ export const applicationDraftFromStoredRelease = (
   throw new TypeError("Stored Application compilation output has no supported stored shape");
 };
 
-export type StoredCustomerDefinitionReleaseEvidence = Readonly<{
+type StoredCustomerDefinitionReleaseEvidence = Readonly<{
   organizationId: OrganizationId;
   kind: "module" | "application";
   key: string;

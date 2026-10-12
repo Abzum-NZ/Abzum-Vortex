@@ -12,7 +12,7 @@ import { issueSessionCleanupProof } from "./session-cleanup-proof";
 import { identitySessionProxyHeader } from "./session-request-state";
 
 /** The one route that ends a browser session: it clears the session cookies, then shows sign-in. */
-export const SESSION_ENDED_PATH = "/auth/session-ended";
+const SESSION_ENDED_PATH = "/auth/session-ended";
 const sessionEndedDestination = "/auth/sign-in?status=session-ended";
 
 const directSignInDestination = (applicationHome?: ApplicationHomeContinuation): string => {
@@ -48,7 +48,7 @@ export const redirectToSessionEnd = async (
 };
 
 /** The identity-session results a signed-in surface continues with. */
-export type ContinuingIdentitySession = Extract<
+type ContinuingIdentitySession = Extract<
   IdentitySessionResolution,
   { kind: "active" | "temporarily_unavailable" }
 >;

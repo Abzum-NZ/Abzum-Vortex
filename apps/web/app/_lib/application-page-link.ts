@@ -22,7 +22,7 @@ import { humanOrganizationRequestDependencies } from "./server-composition";
 const unavailable = Object.freeze({ availability: "unavailable" as const });
 
 /** The server binds this address; a browser selector cannot choose another organization. */
-export type ApplicationPageLinkAddress = Readonly<{
+type ApplicationPageLinkAddress = Readonly<{
   tenantShortName: string;
   organizationShortName: string;
 }>;

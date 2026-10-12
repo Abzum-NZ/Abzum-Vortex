@@ -1,5 +1,6 @@
 import {
   builderKeySchema,
+  exactDecimalTextV2Schema,
   referenceChoiceSelectionEvidenceMapSchema,
   groupIdSchema,
   richTextDocumentV2Schema,
@@ -39,7 +40,7 @@ export type TypedRecordReference = Readonly<{
 }>;
 
 /** A field value containing the selected option values of a several_choices field. */
-export type TypedSeveralChoicesValue = readonly string[];
+type TypedSeveralChoicesValue = readonly string[];
 
 export type TypedFieldValue =
   | string
@@ -109,7 +110,7 @@ export type RichTextInputPayload = Readonly<{
 /** The ready values a number input accepts. */
 export type NumberInputPayload = Readonly<{
   kind: "number_input";
-  value?: number | null;
+  value?: string | number | null;
   error?: string;
 }>;
 
@@ -197,9 +198,7 @@ export type RichTextInputData = ControlDataState<RichTextInputPayload>;
 export type NumberInputData = ControlDataState<NumberInputPayload>;
 export type BooleanInputData = ControlDataState<BooleanInputPayload>;
 export type DateInputData = ControlDataState<DateInputPayload>;
-export type DateTimeInputData = ControlDataState<DateTimeInputPayload>;
 export type ChoiceInputData = ControlDataState<ChoiceInputPayload>;
-export type SeveralChoicesInputData = ControlDataState<SeveralChoicesInputPayload>;
 export type FieldInputData = ControlDataState<FieldInputPayload>;
 export type ValidationData = ControlDataState<ValidationPayload>;
 export type ButtonData = ControlDataState<ButtonPayload>;
@@ -471,12 +470,13 @@ export const parseNumberInputPayload = (
   if (
     record.value !== undefined &&
     record.value !== null &&
-    !(typeof record.value === "number" && Number.isFinite(record.value))
+    !(typeof record.value === "number" && Number.isFinite(record.value)) &&
+    !(typeof record.value === "string" && exactDecimalTextV2Schema.safeParse(record.value).success)
   )
-    fail("A number value must be a finite number or null", location);
+    fail("A number value must be exact decimal text, a finite number or null", location);
   return Object.freeze({
     kind: "number_input",
-    ...(record.value === undefined ? {} : { value: record.value as number | null }),
+    ...(record.value === undefined ? {} : { value: record.value as string | number | null }),
     ...optionalError(record, location),
   });
 };
@@ -531,7 +531,7 @@ export const parseDateInputPayload = (
 };
 
 /** Parses the offset-bearing instant a date-time field stores. */
-export const parseDateTimeInputPayload = (
+const parseDateTimeInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): DateTimeInputPayload => {
@@ -648,7 +648,7 @@ export const parseDependentChoiceInputPayload = (
 };
 
 /** Parses a multi-choice value as a bounded list of exact declared option values. */
-export const parseSeveralChoicesInputPayload = (
+const parseSeveralChoicesInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): SeveralChoicesInputPayload => {

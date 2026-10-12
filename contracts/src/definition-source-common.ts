@@ -122,7 +122,7 @@ export const sourceQualifiedRelationshipSchema = z
   .min(5)
   .max(250)
   .regex(/^[a-z][a-z0-9_.]*:[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/);
-export const definitionSourceContractVersion = "1.0.0" as const;
+const definitionSourceContractVersion = "1.0.0" as const;
 const sourceBinaryConditionOperatorSchema = z.enum([
   "equals",
   "not_equals",
@@ -193,7 +193,7 @@ const sourceQualifiedConditionOperandSchema = z.discriminatedUnion("source", [
  * The compact field/value and field/parameter forms remain convenient for authored JSON. The
  * explicit operand form is the complete representation and permits field-to-field comparisons.
  */
-export const sourceComparisonSchema = z.union([
+const sourceComparisonSchema = z.union([
   z
     .object({
       field: sourceProvenanceTarget(builderKeySchema, ["kind", "left/source", "left/fieldId"]),
@@ -232,7 +232,7 @@ export const sourceComparisonSchema = z.union([
     })
     .strict(),
 ]);
-export type SourceCondition =
+type SourceCondition =
   | z.infer<typeof sourceComparisonSchema>
   | { all: SourceCondition[] }
   | { any: SourceCondition[] }
@@ -333,7 +333,7 @@ const sourceQualifiedComparisonSchema = z.union([
     })
     .strict(),
 ]);
-export type SourceQualifiedCondition =
+type SourceQualifiedCondition =
   | z.infer<typeof sourceQualifiedComparisonSchema>
   | { all: SourceQualifiedCondition[] }
   | { any: SourceQualifiedCondition[] }

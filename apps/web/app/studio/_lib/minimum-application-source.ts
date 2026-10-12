@@ -16,7 +16,7 @@ export type MinimumApplicationInputs = Readonly<{
   homeName: string;
 }>;
 
-export type MinimumApplicationSourceResult =
+type MinimumApplicationSourceResult =
   | Readonly<{ kind: "valid"; source: ApplicationSourceDocumentV2 }>
   | Readonly<{ kind: "invalid"; message: string }>;
 

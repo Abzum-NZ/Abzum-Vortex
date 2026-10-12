@@ -17,4 +17,3 @@ export const flowNodeRunAsSchema = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("system"), executionBindingId: containedComponentIdSchema }).strict(),
 ]);
-export type FlowNodeRunAs = z.infer<typeof flowNodeRunAsSchema>;

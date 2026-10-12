@@ -21,7 +21,7 @@ import {
 } from "./field-parts";
 import { equalFormValue, useFormField, useFormFieldError } from "./form-context";
 
-export type SeveralChoicesInputProps = ControlRenderProps<SeveralChoicesInputPayload>;
+type SeveralChoicesInputProps = ControlRenderProps<SeveralChoicesInputPayload>;
 
 const EMPTY_SELECTION: readonly string[] = Object.freeze([]);
 

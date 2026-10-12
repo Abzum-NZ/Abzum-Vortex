@@ -17,13 +17,13 @@ type ThemeTokenValueV2 = ApplicationThemeV2["tokens"][string];
 export type ThemeMode = "light" | "dark" | "system";
 
 /** Resolved, validated #594 theme tokens keyed by builder key. */
-export type ThemeTokens = Readonly<Record<string, ThemeTokenValueV2>>;
+type ThemeTokens = Readonly<Record<string, ThemeTokenValueV2>>;
 
 /**
  * The only CSS custom properties the shared component stylesheet reads. Names are fixed
  * platform names; application token keys never become CSS names, selectors or class names.
  */
-export const THEME_VARIABLE_NAMES = [
+const THEME_VARIABLE_NAMES = [
   "--vortex-surface",
   "--vortex-text",
   "--vortex-text-muted",
@@ -105,8 +105,8 @@ export const THEME_VARIABLE_NAMES = [
   "--sidebar-ring",
 ] as const;
 
-export type ThemeVariableName = (typeof THEME_VARIABLE_NAMES)[number];
-export type ThemeCssVariables = Readonly<Record<ThemeVariableName, string>>;
+type ThemeVariableName = (typeof THEME_VARIABLE_NAMES)[number];
+type ThemeCssVariables = Readonly<Record<ThemeVariableName, string>>;
 
 type ColorPair = Readonly<{ light: string; dark: string }>;
 
@@ -250,10 +250,8 @@ const fontFamily = (familyKey: string): string | undefined => {
 };
 
 /**
- * The catalogue fonts a resolved theme paints with: the fonts its `body` and `heading` typography
- * tokens name, the default body font when it has no body token, and the body font for headings when
- * it has no heading token, exactly as `generateThemeCssVariables` paints them. The web app exposes
- * each catalogue face through `next/font/local`; the selected CSS variable loads its face on demand.
+ * The catalogue fonts the theme selects for its body and heading typography.
+ * @knipignore #2221 validates that changing font tokens changes the rendered application.
  */
 export function resolveThemeFonts(tokens: ThemeTokens = {}): readonly ShadcnFont[] {
   const body = tokenOfKind(tokens, "body", "typography");
@@ -333,7 +331,7 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * oklch() colours, finite numbers and builder-key font families are emitted, so a definition
  * cannot inject CSS.
  */
-export function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables {
+function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables {
   const appSurface = themeSurface(tokens);
   const appText = colorPair(tokens, "text");
   // Surface and text change together so body text is never painted on an unvalidated surface.

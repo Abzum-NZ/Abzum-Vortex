@@ -634,6 +634,7 @@ export const invitationAcceptanceWithAccessVersionSchema = z.discriminatedUnion(
  * SIX Group List One (Current Currency & Funds), published 2026-01-01.
  * This immutable version is the source of the initial SQL reference seed.
  * A later List One publication needs a new version and a forward migration.
+ * @knipignore The seed verifier resolves this export name from source text; #2236 consumes the frozen input.
  */
 export const currentIso4217Alpha3CodesV2026_01_01 = [
   "AED",
@@ -820,7 +821,10 @@ const currentIso4217Alpha3CodeSetV2026_01_01 = new Set<string>(
   currentIso4217Alpha3CodesV2026_01_01,
 );
 
-/** Immutable source of the initial organisation-settings date-format seed. */
+/**
+ * Immutable source of the initial organisation-settings date-format seed.
+ * @knipignore The seed verifier resolves this export name from source text; #2236 consumes the frozen input.
+ */
 export const organizationRuntimeSettingsDateFormatsV2026_09_29 = [
   "short",
   "medium",
@@ -838,7 +842,10 @@ export const organizationRuntimeSettingsDateFormatOptions = [
   { value: fullDateFormat, label: "Full" },
 ] as const;
 
-/** Immutable source of the initial organisation-settings number-format seed. */
+/**
+ * Immutable source of the initial organisation-settings number-format seed.
+ * @knipignore The seed verifier resolves this export name from source text; #2236 consumes the frozen input.
+ */
 export const organizationRuntimeSettingsNumberFormatsV2026_09_29 = [
   "auto",
   "always",
@@ -1726,8 +1733,9 @@ const recordGrantSchema = z
 
 const grantInstantParts = (value: string) => {
   // Date.parse keeps milliseconds only; grants can name finer ISO timestamp fractions.
-  const match =
-    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/.exec(
+    value,
+  );
   if (match === null) return undefined;
   const wholeSecondMilliseconds = Date.parse(`${match[1]}${match[3]}`);
   if (!Number.isFinite(wholeSecondMilliseconds)) return undefined;

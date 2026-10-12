@@ -7,7 +7,7 @@ import type { ConnectionTypeSourceDocument } from "@vortex/contracts";
  * catalogues carry, so a release fingerprint has one definition. This module is plain, erasable
  * TypeScript with no server-only import.
  */
-export type CatalogueReleaseFingerprints = Readonly<{
+type CatalogueReleaseFingerprints = Readonly<{
   contentFingerprint: `sha256:${string}`;
   catalogueFingerprint: `sha256:${string}`;
 }>;

@@ -152,7 +152,7 @@ export const definitionReleaseModuleTargetsMatch = (
   });
 };
 
-export type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid";
+type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid";
 
 export const verifyDefinitionCatalogueDependencies = async (
   manifest: readonly ExactDefinitionDependency[],

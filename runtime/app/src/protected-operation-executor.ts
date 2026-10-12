@@ -101,7 +101,7 @@ export type ProtectedOperationIdentity = z.infer<typeof protectedOperationIdenti
  * operation derive a stable administration duplicate key, so a retry of the same effect stays
  * idempotent at the database even when the flow run is repeated.
  */
-export type ProtectedOperationEffectKey = Readonly<{
+type ProtectedOperationEffectKey = Readonly<{
   runId: string;
   taskPath: string;
   iteration: string;
@@ -121,7 +121,7 @@ export type ProtectedOperationExecutionRequest =
       Readonly<{ session?: never; executionAuthorityContext: ExecutionAuthorityContext }>);
 
 /** A durable callback names a published operation and its verified run context, never a session. */
-export type DurableProtectedOperationExecutionRequest = Readonly<{
+type DurableProtectedOperationExecutionRequest = Readonly<{
   operation: ProtectedOperationIdentity;
   actorContext: unknown;
   inputs: Readonly<Record<string, unknown>>;

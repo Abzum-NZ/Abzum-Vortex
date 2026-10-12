@@ -108,7 +108,7 @@ export function resolveControlContext<Values>(
  * declares. The control and launcher settings readers build on this one implementation instead of
  * each carrying a near-identical copy.
  */
-export type DeclaredSettingsReader = Readonly<{
+type DeclaredSettingsReader = Readonly<{
   read: (
     key: string,
     kind: BlockPropertyValueV2Contract["kind"],
@@ -151,7 +151,7 @@ export function createDeclaredSettingsReader(
 }
 
 /** Typed, fail-closed reads of a placement's settings against its declared properties. */
-export type ControlSettings = Readonly<{
+type ControlSettings = Readonly<{
   text: (key: string) => string | undefined;
   boolean: (key: string) => boolean;
   number: (key: string) => number | undefined;

@@ -26,12 +26,12 @@ import type { DefinitionCompilerRefusalCode } from "./compilation-error";
  */
 
 /** The operation's inputs by name, each with whether it is required. */
-export type CallableOperationInputs = ReadonlyMap<string, boolean>;
+type CallableOperationInputs = ReadonlyMap<string, boolean>;
 
 /** Finds the operation a key names, or nothing when it names none. */
-export type CallableOperationLookup = (key: string) => CallableOperationInputs | undefined;
+type CallableOperationLookup = (key: string) => CallableOperationInputs | undefined;
 
-export type OperationCallIssue = Readonly<{
+type OperationCallIssue = Readonly<{
   flowKey: string;
   taskId: string;
   ruleCode: DefinitionCompilerRefusalCode;
@@ -44,14 +44,14 @@ export type ProtectedOperationReferenceLookups = Readonly<{
   relationshipRecordTypeIdsById: ReadonlyMap<string, readonly string[]>;
 }>;
 
-export type FlowNodeOperationReferences = Readonly<{
+type FlowNodeOperationReferences = Readonly<{
   flowId: FlowDefinition["id"];
   nodeId: FlowTask["id"];
   taskType: string;
   operations: readonly ProtectedOperationReference[];
 }>;
 
-export type FlowOperationNodeDescriptor = Readonly<{
+type FlowOperationNodeDescriptor = Readonly<{
   flowId: FlowDefinition["id"];
   nodeId: FlowTask["id"];
   taskType: string;

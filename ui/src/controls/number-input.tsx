@@ -24,8 +24,8 @@ import { useFormField } from "./form-context";
 export type NumberInputProps = ControlRenderProps<NumberInputPayload>;
 
 /**
- * Typed number input. Empty, unparsable or non-integer (when integer is declared) entry is the
- * typed value `null`; it is never truncated or coerced. Arrow-key stepping is the native control's.
+ * Number input. Decimal fields retain their exact entered text through submit; integer fields
+ * publish a safe integer. Empty or invalid entry is `null`.
  */
 export function NumberInput(props: NumberInputProps): ReactElement {
   const context = resolveControlContext<NumberInputPayload>(props, ["field_changed"]);
@@ -62,11 +62,12 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   const [raw, setRaw] = useSeededState(
     projected === undefined || projected === null ? "" : String(projected),
   );
-  const toTyped = (text: string): number | null => {
+  const toTyped = (text: string): string | number | null => {
     if (text.trim().length === 0) return null;
     const parsed = Number(text);
-    if (!Number.isFinite(parsed) || (integer && !Number.isInteger(parsed))) return null;
-    return parsed;
+    if (!Number.isFinite(parsed)) return null;
+    if (integer) return Number.isSafeInteger(parsed) ? parsed : null;
+    return text;
   };
   useFormField(fieldKey, props.placementId, toTyped(raw));
 

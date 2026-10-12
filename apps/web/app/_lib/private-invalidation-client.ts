@@ -17,12 +17,12 @@ export const privateInvalidationSelectorsSchema = z.object({
   targetApplicationKey: namespacedKeySchema,
 }).strict();
 
-export const privateInvalidationScopeSchema = z.object({
+const privateInvalidationScopeSchema = z.object({
   organizationId: organizationIdSchema,
   applicationRootId: applicationRootIdSchema,
 }).strict();
 
-export const privateInvalidationControlSchema = z.discriminatedUnion("kind", [
+const privateInvalidationControlSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ready"), scope: privateInvalidationScopeSchema }).strict(),
   z.object({ kind: z.literal("gap") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
@@ -44,7 +44,7 @@ export type WebPrivateInvalidationSelectors = z.infer<typeof privateInvalidation
 export type WebPrivateInvalidationScope = Readonly<z.infer<typeof privateInvalidationScopeSchema>>;
 export type WebPrivateInvalidationControl = z.infer<typeof privateInvalidationControlSchema>;
 
-export type WebPrivateInvalidationConnection =
+type WebPrivateInvalidationConnection =
   | Readonly<{ kind: "ready"; scope: WebPrivateInvalidationScope; reconnected: boolean }>
   | Readonly<{ kind: "gap" | "unavailable" | "disposed" }>;
 

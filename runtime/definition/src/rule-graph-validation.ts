@@ -25,17 +25,17 @@ export const ruleGraphValidationCodes = Object.freeze({
   variableAvailability: "vortex.definition.rule_graph_variable_availability",
 } as const);
 
-export type RuleGraphValidationCode =
+type RuleGraphValidationCode =
   (typeof ruleGraphValidationCodes)[keyof typeof ruleGraphValidationCodes];
 
-export type RuleGraphValidationIssue = Readonly<{
+type RuleGraphValidationIssue = Readonly<{
   ruleCode: RuleGraphValidationCode;
   family: DefinitionRuleFailureFamily;
   /** Canonical path relative to the graph root. */
   path: readonly (string | number)[];
 }>;
 
-export type RuleGraphValidationInput = Readonly<{
+type RuleGraphValidationInput = Readonly<{
   graph: RuleGraph;
   subjectRecordType: RecordTypeDefinitionV3;
   /** Subject and exact dependency record types available to this published Module. */

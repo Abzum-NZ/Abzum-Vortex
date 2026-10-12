@@ -3,18 +3,9 @@ import "server-only";
 import { createHash } from "node:crypto";
 import {
   sameId,
-  activeFileAttachmentReferenceSchema,
-  activeFileShareReferenceSchema,
-  activeFileSourceResponsibilityReferenceSchema,
-  fileLegalHoldProjectionSchema,
   fileRemovalAuthoritySnapshotSchema,
-  fileRemovalEligibilityBindingSchema,
   fileRemovalEligibilityDecisionSchema,
   fileRemovalEligibilityRequestSchema,
-  fileRemovalHoldAuthoritySnapshotSchema,
-  fileRemovalRecoveryPolicySnapshotSchema,
-  protectedLegalHoldReferenceSchema,
-  protectedLegalHoldScopeSchema,
   type FileRemovalAuthoritySnapshot,
   type FileRemovalEligibilityDecision,
   type FileRemovalEligibilityRequest,
@@ -24,35 +15,11 @@ import {
 } from "@vortex/contracts";
 
 export {
-  activeFileAttachmentReferenceSchema,
-  activeFileShareReferenceSchema,
-  activeFileSourceResponsibilityReferenceSchema,
-  fileLegalHoldProjectionSchema,
-  fileRemovalEligibilityBindingSchema,
-  fileRemovalHoldAuthoritySnapshotSchema,
-  fileRemovalRecoveryPolicySnapshotSchema,
-  protectedLegalHoldReferenceSchema,
-  protectedLegalHoldScopeSchema,
-};
-
-export {
-  fileRemovalAuthoritySnapshotSchema,
-  fileRemovalEligibilityDecisionSchema,
-  fileRemovalEligibilityRequestSchema,
-  type ActiveFileAttachmentReference,
-  type ActiveFileShareReference,
-  type ActiveFileSourceResponsibilityReference,
-  type FileLegalHoldProjection,
   type FileRemovalAuthoritySnapshot,
-  type FileRemovalEligibilityBinding,
   type FileRemovalEligibilityDecision,
   type FileRemovalEligibilityRequest,
-  type FileRemovalHoldAuthoritySnapshot,
   type FileRemovalOwnerBinding,
-  type FileRemovalRecoveryPolicySnapshot,
   type FileRemovalRefusalReason,
-  type ProtectedLegalHoldReference,
-  type ProtectedLegalHoldScope,
 } from "@vortex/contracts";
 
 export type FileHoldEvaluationScope = Readonly<{

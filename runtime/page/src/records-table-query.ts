@@ -53,6 +53,10 @@ export type RecordsTableQueryRequest = Readonly<{
   continuationToken?: string;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
+  /** Labels of the choices each choice field offers (field identity to options). */
+  fieldChoiceLabels?: Readonly<
+    Record<string, readonly Readonly<{ value: string; label: string }>[]>
+  >;
   /**
    * The viewer's chosen sort, from a `sort_changed` data event. It must be a declared sortable
    * field; `null` or absent uses the bound query's declared sort.
@@ -303,6 +307,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         {
           settings: request.settings,
           ...(request.fieldLabels === undefined ? {} : { fieldLabels: request.fieldLabels }),
+          ...(request.fieldChoiceLabels === undefined
+            ? {}
+            : { fieldChoiceLabels: request.fieldChoiceLabels }),
         },
         result.value.rows,
       );

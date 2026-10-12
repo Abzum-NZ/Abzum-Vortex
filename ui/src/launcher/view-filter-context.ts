@@ -5,14 +5,14 @@ import { cellValueToText } from "../display/cell";
 import type { DisplayRow } from "../display/projected-data";
 
 export const VIEW_FILTER_MATCH_MODES = ["contains", "starts_with", "exact"] as const;
-export type ViewFilterMatchMode = (typeof VIEW_FILTER_MATCH_MODES)[number];
+type ViewFilterMatchMode = (typeof VIEW_FILTER_MATCH_MODES)[number];
 
 /**
  * The local narrowing an enclosing `view_filter` applies to the launcher and tile placements in its
  * content slot. It only tests rows those placements already received; it holds no data of its own
  * and can never add a row, broaden a projection or ask for another read.
  */
-export type LauncherRowFilter = Readonly<{
+type LauncherRowFilter = Readonly<{
   /** True when the row stays visible; `defaultMatchKey` is the placement's own name cell. */
   matches: (row: DisplayRow, defaultMatchKey: string) => boolean;
   /** Authored text shown by a placement whose returned rows all fall outside the filter. */

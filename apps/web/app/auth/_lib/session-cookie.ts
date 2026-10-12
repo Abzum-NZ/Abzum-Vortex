@@ -3,9 +3,9 @@ import "server-only";
 import type { CookieOptions } from "@supabase/ssr";
 import { isLoopbackHostname } from "@vortex/contracts";
 
-export const sessionCookieChunkSize = 3_180;
-export const sessionCookieMaximumChunks = 8;
-export const sessionCookieMaximumBytes = sessionCookieChunkSize * sessionCookieMaximumChunks;
+const sessionCookieChunkSize = 3_180;
+const sessionCookieMaximumChunks = 8;
+const sessionCookieMaximumBytes = sessionCookieChunkSize * sessionCookieMaximumChunks;
 
 export type SessionCookie = Readonly<{ name: string; value: string }>;
 export type SessionCookieMutation = Readonly<{
@@ -13,7 +13,7 @@ export type SessionCookieMutation = Readonly<{
   value: string;
   options: CookieOptions;
 }>;
-export type SessionCookieHeaders = Readonly<Record<string, string>>;
+type SessionCookieHeaders = Readonly<Record<string, string>>;
 
 export type SessionCookieProfile = Readonly<{
   name: "__Host-vortex-session" | "vortex-local-session";
@@ -57,7 +57,7 @@ const cookieIndex = (name: string, profile: SessionCookieProfile): number | unde
   return Number(suffix);
 };
 
-export const inspectIdentitySessionCookies = (
+const inspectIdentitySessionCookies = (
   cookies: readonly SessionCookie[],
   profile: SessionCookieProfile,
 ): Readonly<{ kind: "missing" | "valid" | "invalid"; cookies: readonly SessionCookie[] }> => {
@@ -102,7 +102,7 @@ export const inspectIdentitySessionCookies = (
   return { kind: "valid", cookies: indexed.map(({ cookie }) => cookie) };
 };
 
-export const sessionCookieOptions = (
+const sessionCookieOptions = (
   profile: SessionCookieProfile,
   supplied: CookieOptions = {},
 ): CookieOptions => {
