@@ -1161,8 +1161,8 @@ const defaultStore = createOrganizationAccountStore();
 
 export const ensureIdentityProjection = defaultStore.ensureIdentityProjection;
 export const readIdentityProjection = defaultStore.readIdentityProjection;
-export const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
-export const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;
+const createInvitationAfterAuthorization = defaultStore.createInvitationAfterAuthorization;
+const revokeInvitationAfterAuthorization = defaultStore.revokeInvitationAfterAuthorization;
 export const listOffboardingOwnedRecords = defaultStore.listOffboardingOwnedRecords;
 export const transferOffboardingOwnedRecords = defaultStore.transferOffboardingOwnedRecords;
 export const beginOrganizationAccountClosing = defaultStore.beginOrganizationAccountClosing;
