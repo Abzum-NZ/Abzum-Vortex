@@ -402,9 +402,6 @@ importers:
       '@vortex/definition':
         specifier: workspace:*
         version: link:../definition
-      '@vortex/identity':
-        specifier: workspace:*
-        version: link:../identity
       '@vortex/modules':
         specifier: workspace:*
         version: link:../../modules

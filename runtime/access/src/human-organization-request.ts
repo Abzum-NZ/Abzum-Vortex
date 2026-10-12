@@ -43,7 +43,7 @@ export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type OrganizationScopeResolutionResult =
+type OrganizationScopeResolutionResult =
   | HumanOrganizationRequestResult<SelectedOrganizationScope>
   | Readonly<{ kind: "suspended_super_administrator_account" }>;
 
