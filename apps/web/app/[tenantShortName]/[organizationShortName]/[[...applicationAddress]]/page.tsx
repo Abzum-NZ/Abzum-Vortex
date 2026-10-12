@@ -456,9 +456,21 @@ export default async function ApplicationAddressPage({
     ...page.model,
     availableApplications: applicationSwitcherApplications,
   };
-  const search = await loadApplicationSearch(identity.session, {
-    tenantShortName, organizationShortName, applicationKey: resolved.application.key,
-  }, typeof parameters.q === "string" ? parameters.q === "" ? undefined : parameters.q : parameters.q === undefined ? undefined : "");
+  const searchExpression =
+    typeof parameters.q === "string"
+      ? parameters.q === "" ? undefined : parameters.q
+      : parameters.q === undefined ? undefined : "";
+  // The installed context already says whether search is configured; only a search request reads.
+  const search =
+    searchExpression === undefined
+      ? page.model.searchEnabled
+        ? ({ kind: "available", expression: "", results: [], more: false } as const)
+        : ({ kind: "disabled" } as const)
+      : await loadApplicationSearch(
+          identity.session,
+          { tenantShortName, organizationShortName, applicationKey: resolved.application.key },
+          searchExpression,
+        );
   const searchPageSubject = recordIdSchema.safeParse(parameters.record_id);
   const adoptionOutcome =
     parameters.adoption === "recent_authentication_required"

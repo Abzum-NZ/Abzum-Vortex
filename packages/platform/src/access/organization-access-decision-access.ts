@@ -150,12 +150,17 @@ export const runOrganizationAccessOperation = async <Result>(
   return { outcome: "completed", value: await operation(decision.data) };
 };
 
-/** Resolve a page's independent permission declarations in one protected database request. */
+/**
+ * Resolve independent permission declarations in one protected database request. Each decision
+ * carries the evidence of its eligibility: whether it is allowed and, when allowed, how long.
+ */
 export const decideOrganizationAccessBatch = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   declarationCandidates: readonly OrganizationAccessDeclaration[],
-): Promise<readonly boolean[]> => {
+): Promise<
+  readonly Readonly<{ allowed: boolean; correlationId: string; validUntil?: string }>[]
+> => {
   const resolvedScope = selectedOrganizationScopeSchema.safeParse(scope);
   const declarations = declarationCandidates.map((candidate) =>
     organizationAccessDeclarationSchema.safeParse(candidate),
@@ -197,6 +202,12 @@ export const decideOrganizationAccessBatch = async (
       !isBoundToRequest(eligibility, resolvedScope.data, declaration)
     )
       throw unavailableError(unavailableCode);
-    return eligibility.outcome === "eligible";
+    return eligibility.outcome === "eligible"
+      ? {
+          allowed: true,
+          correlationId: eligibility.correlationId,
+          validUntil: eligibility.validUntil,
+        }
+      : { allowed: false, correlationId: eligibility.correlationId };
   });
 };

@@ -152,6 +152,8 @@ export type ApplicationPageModel = Readonly<{
   applicationShell?: ApplicationShell;
   applicationName: string;
   applicationHomePageKey: string;
+  /** Whether the installed release configures search, so a page without a search request needs no search read. */
+  searchEnabled: boolean;
   availableApplications: readonly Readonly<{ key: string; name: string; homePageKey: string }>[];
   theme: InstalledRuntimeContext["releaseSet"]["application"]["content"]["theme"];
   navigation: ProjectedNavigation;
@@ -1757,7 +1759,7 @@ const loadApplicationPageInternal = async (
           declarations.push(declaration);
         }
         const decisions = await decideOrganizationAccessBatch(transaction, scope, declarations);
-        const allowed = keys.filter((_, index) => decisions[index]);
+        const allowed = keys.filter((_, index) => decisions[index]?.allowed === true);
         return { zones, allowed, accessVersion: scope.accessVersion };
       },
     );
@@ -1796,11 +1798,11 @@ const loadApplicationPageInternal = async (
   const applicationPageLinks = createApplicationPageLinkReader({
     tenantShortName: address.tenantShortName, organizationShortName: address.organizationShortName,
   });
-  const readTargetBatch = async <Input, Output>(
+  const readConcurrently = async <Input, Output>(
     candidates: readonly Input[],
     read: (candidate: Input) => Promise<Output>,
   ): Promise<readonly Output[]> => {
-    if (candidates.length > 10_000) throw new Error("LINK_TILE_TARGET_BATCH_TOO_LARGE");
+    if (candidates.length > 10_000) throw new Error("CONCURRENT_READ_BATCH_TOO_LARGE");
     const results = new Array<Output>(candidates.length);
     let nextIndex = 0;
     let failed = false;
@@ -1812,7 +1814,7 @@ const loadApplicationPageInternal = async (
         if (index >= candidates.length) return;
         try {
           const candidate = candidates[index];
-          if (candidate === undefined) throw new Error("LINK_TILE_TARGET_BATCH_INPUT_MISSING");
+          if (candidate === undefined) throw new Error("CONCURRENT_READ_BATCH_INPUT_MISSING");
           results[index] = await read(candidate);
         } catch (error) {
           if (!failed) {
@@ -1829,9 +1831,9 @@ const loadApplicationPageInternal = async (
   const linkTiles = createLinkTilesQueryResolver(
     queries,
     (viewer, identities) =>
-      readTargetBatch(identities, (identity) => recordLinks.read(viewer, identity)),
+      readConcurrently(identities, (identity) => recordLinks.read(viewer, identity)),
     (viewer, selectors) =>
-      readTargetBatch(selectors, (selector) => applicationPageLinks.read(viewer, selector)),
+      readConcurrently(selectors, (selector) => applicationPageLinks.read(viewer, selector)),
   );
   const loadCalendarSettings = () =>
     humanOrganizationRequests(dependencies.identityAuthorityId).run(
@@ -2161,7 +2163,9 @@ const loadApplicationPageInternal = async (
   const bindings: Record<string, PlacementFlowBinding[]> = {};
   const referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]> = [];
   const referenceChoiceFirstPages = new Map<string, ReferenceChoiceFirstPage>();
-  for (const { placementId, placement, formId } of placements) {
+  // Placement reads are independent: each reads under its own protected request and writes only
+  // its own placement entry, so they run concurrently and are assembled by placement identity.
+  const readPlacement = async ({ placementId, placement, formId }: (typeof placements)[number]): Promise<void> => {
     const held = application.content.flowBindings.filter((binding) =>
       sameId(binding.controlId, placementId),
     );
@@ -2239,7 +2243,7 @@ const loadApplicationPageInternal = async (
       projectedUseAvailability(placement) !== "available"
     )) {
       data[placementId] = { status: "refused", reason: "not_permitted" };
-      continue;
+      return;
     }
     const calendarContract = isCalendarBlock ? readCalendarPlacementContract(settings) : undefined;
     const isBoardBlock = isBoardPlacement(placement);
@@ -2253,7 +2257,7 @@ const loadApplicationPageInternal = async (
       const field = form?.placements.get(placementId);
       if (field === undefined || formId === undefined) {
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
-        continue;
+        return;
       }
       const parent = field.dependency === undefined ? undefined :
         [...(form?.placements ?? [])].find(([, candidate]) =>
@@ -2270,7 +2274,7 @@ const loadApplicationPageInternal = async (
           status: "ready",
           values: projectReferenceChoiceInputValues([], null, undefined, { dependencyKey: null }),
         };
-        continue;
+        return;
       }
       const result = await referenceChoices.run(session, selection, field.command);
       if (
@@ -2279,7 +2283,7 @@ const loadApplicationPageInternal = async (
         result.value.kind !== "record_reference"
       ) {
         data[placementId] = { status: "disabled", reason: "Choices unavailable" };
-        continue;
+        return;
       }
       referenceChoiceFirstPages.set(placementId, {
         field,
@@ -2299,14 +2303,14 @@ const loadApplicationPageInternal = async (
             : { nextContinuationToken: result.value.nextContinuationToken },
         ),
       };
-      continue;
+      return;
     }
     // A placement still bound to a legacy read model has no reader on this page: system record
     // types are read through the query path. It must never fall through to an empty display.
     if (placement.readModel !== undefined) {
       logPlacementFailure(address, placementId, "read_model_not_served");
       data[placementId] = { status: "error" };
-      continue;
+      return;
     }
     if (isAttachmentListBlock) {
       if (
@@ -2318,7 +2322,7 @@ const loadApplicationPageInternal = async (
         pageSubjectRecordTypeId === undefined
       ) {
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
       const fieldSetting = settings.field;
       const fieldId = fieldSetting?.kind === "field_reference" ? fieldSetting.fieldId : undefined;
@@ -2338,7 +2342,7 @@ const loadApplicationPageInternal = async (
       const attachmentField = matchingFields.length === 1 ? matchingFields[0] : undefined;
       if (fieldId === undefined || attachmentField?.type !== "attachment") {
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
       const maximumFiles = attachmentField.settings.multiple
         ? attachmentField.settings.maxFiles
@@ -2346,7 +2350,7 @@ const loadApplicationPageInternal = async (
       const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
       if (maximumFiles === undefined || !subjectId.success) {
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       const currentAttachments = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
@@ -2440,12 +2444,12 @@ const loadApplicationPageInternal = async (
                 ? { status: "error" }
                 : { status: "refused", reason: "not_permitted" };
       }
-      continue;
+      return;
     }
     if (isCalendarBlock && calendarContract === undefined) {
       logPlacementFailure(address, placementId, "calendar_settings_invalid");
       data[placementId] = { status: "refused", reason: "not_permitted" };
-      continue;
+      return;
     }
     const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
     const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
@@ -2460,7 +2464,7 @@ const loadApplicationPageInternal = async (
       !queryBoundLauncher &&
       !queryBoundSummary &&
       !queryBoundBoard
-    ) continue;
+    ) return;
     // A Record detail on a detail or public page that binds no query reads its page subject: the
     // one record the page's own address names, of the page's declared record type, through the
     // record read path under the viewer's own authority. A public page shows no more than its
@@ -2471,12 +2475,12 @@ const loadApplicationPageInternal = async (
       if (subjectType === undefined || pageDefinition.type === "form") {
         logPlacementFailure(address, placementId, "query_not_bound");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
       if (!subjectId.success) {
         subjectUnreadable = true;
         data[placementId] = { status: "refused", reason: "not_found" };
-        continue;
+        return;
       }
       const subjectModule = context.releaseSet.modules.find((module) =>
         sameId(String(module.rootId), String(subjectType.moduleRootId)),
@@ -2485,12 +2489,12 @@ const loadApplicationPageInternal = async (
       if (subject.kind === "temporarily_unavailable") {
         logPlacementFailure(address, placementId, "subject_unavailable");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
       if (subject.kind === "refused") {
         subjectUnreadable = true;
         data[placementId] = { status: "refused", reason: "not_found" };
-        continue;
+        return;
       }
       const display = projectRecordDetailData(
         {
@@ -2511,14 +2515,14 @@ const loadApplicationPageInternal = async (
           : display.status === "empty"
             ? { status: "empty" }
             : { status: "ready", values: display.values };
-      continue;
+      return;
     }
 
     const bound = queryId === undefined ? undefined : findModuleQuery(context, queryId);
     if (queryId === undefined || bound === undefined) {
       logPlacementFailure(address, placementId, "query_not_bound");
       data[placementId] = { status: "error" };
-      continue;
+      return;
     }
     const inputType = (input: string): string | undefined =>
       bound.query.inputs.find((declared) => declared.key === input)?.type;
@@ -2535,7 +2539,7 @@ const loadApplicationPageInternal = async (
       }
       if (invalidInput) {
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
       const result = await linkTiles.resolve(
         session, selection, context, queryId, settings, inputValues,
@@ -2544,13 +2548,13 @@ const loadApplicationPageInternal = async (
       data[placementId] = result.status === "ready" && result.values.rows.length === 0
         ? { status: "empty" }
         : result;
-      continue;
+      return;
     }
 
     if (isQueryNoticeBlock) {
       if (!isRecord(block) || block.releaseVersion !== QUERY_NOTICE_BLOCK_RELEASE.releaseVersion) {
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
       const inputValues: Record<string, JsonValue> = {};
       let invalidInput = false;
@@ -2562,12 +2566,12 @@ const loadApplicationPageInternal = async (
       }
       if (invalidInput) {
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
       data[placementId] = await queryNotices.resolve(
         session, selection, context, queryId, settings, inputValues,
       );
-      continue;
+      return;
     }
 
     if (queryBoundBoard) {
@@ -2584,7 +2588,7 @@ const loadApplicationPageInternal = async (
         queries,
         ...(continuation === undefined ? {} : { continuation }),
       });
-      continue;
+      return;
     }
 
     if (queryBoundLauncher) {
@@ -2593,13 +2597,13 @@ const loadApplicationPageInternal = async (
           permittedApplicationsRead?.kind === "temporarily_unavailable"
             ? { status: "error" }
             : { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
       const target = bound.query.recordType;
       if (target.state !== "resolved") {
         logPlacementFailure(address, placementId, "launcher_query_invalid");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
       const targetModule = context.releaseSet.modules.find((module) =>
         sameId(String(module.rootId), String(target.moduleRootId)),
@@ -2610,7 +2614,7 @@ const loadApplicationPageInternal = async (
       if (targetRecordType === undefined) {
         logPlacementFailure(address, placementId, "launcher_query_invalid");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
       const inputValues: Record<string, JsonValue> = {};
       for (const declared of bound.query.inputs) {
@@ -2633,7 +2637,7 @@ const loadApplicationPageInternal = async (
       if (!command.success) {
         logPlacementFailure(address, placementId, "launcher_query_invalid");
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       const queryRows: ProtectedQueryRow[] = [];
@@ -2677,7 +2681,7 @@ const loadApplicationPageInternal = async (
           failure === "unavailable"
             ? { status: "error" }
             : { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       const fieldKeys = new Map(
@@ -2700,7 +2704,7 @@ const loadApplicationPageInternal = async (
         launcherCellKey(settings, "icon_key", "icon"),
       );
       data[placementId] = { status: "ready", values };
-      continue;
+      return;
     }
 
     if (queryBoundSummary) {
@@ -2718,7 +2722,7 @@ const loadApplicationPageInternal = async (
       if (!command.success) {
         logPlacementFailure(address, placementId, "summary_query_invalid");
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       let summaryResult: Awaited<ReturnType<typeof queries.summarise>>;
@@ -2730,7 +2734,7 @@ const loadApplicationPageInternal = async (
       if (summaryResult.kind === "temporarily_unavailable") {
         logPlacementFailure(address, placementId, "summary_query_unavailable");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
       if (summaryResult.kind !== "available" || summaryResult.value.outcome !== "completed") {
         const isDatasetLimitExceeded =
@@ -2743,7 +2747,7 @@ const loadApplicationPageInternal = async (
           isDatasetLimitExceeded ? "summary_dataset_limit_exceeded" : "summary_query_refused",
         );
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       const declaredAggregates = bound.query.aggregates;
@@ -2756,7 +2760,7 @@ const loadApplicationPageInternal = async (
       ) {
         logPlacementFailure(address, placementId, "summary_result_invalid");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
 
       const recordTypeReference = bound.query.recordType;
@@ -2806,7 +2810,7 @@ const loadApplicationPageInternal = async (
           status: "ready",
           values: { kind: "summary_values", values },
         };
-      continue;
+      return;
     }
 
     if (isCalendarBlock && calendarContract !== undefined) {
@@ -2816,7 +2820,7 @@ const loadApplicationPageInternal = async (
       } catch {
         logPlacementFailure(address, placementId, "calendar_time_zone_unavailable");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
       if (
         organizationSettings.kind !== "available" ||
@@ -2834,7 +2838,7 @@ const loadApplicationPageInternal = async (
           organizationSettings.kind === "unavailable"
             ? { status: "refused", reason: "not_permitted" }
             : { status: "error" };
-        continue;
+        return;
       }
       const timeZone = organizationSettings.value.settings.timeZone;
       const recordTypeReference = bound.query.recordType;
@@ -2884,7 +2888,7 @@ const loadApplicationPageInternal = async (
       ) {
         logPlacementFailure(address, placementId, "calendar_settings_invalid");
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       const rawView = first(parameters[`view.${placementId}`]);
@@ -2921,7 +2925,7 @@ const loadApplicationPageInternal = async (
       if (!command.success) {
         logPlacementFailure(address, placementId, "calendar_query_invalid");
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       let queryResult: Awaited<ReturnType<typeof queries.run>>;
@@ -2933,12 +2937,12 @@ const loadApplicationPageInternal = async (
       if (queryResult.kind === "temporarily_unavailable") {
         logPlacementFailure(address, placementId, "calendar_query_unavailable");
         data[placementId] = { status: "error" };
-        continue;
+        return;
       }
       if (queryResult.kind !== "available" || queryResult.value.outcome !== "completed") {
         logPlacementFailure(address, placementId, "calendar_query_refused");
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       const fieldIds = [...new Set(requestedFieldIds.map((fieldId) => fieldId.toLowerCase()))];
@@ -2965,7 +2969,7 @@ const loadApplicationPageInternal = async (
       if (arranged.outcome !== "completed" || arranged.arrangement !== "calendar") {
         logPlacementFailure(address, placementId, "calendar_arrangement_refused");
         data[placementId] = { status: "refused", reason: "not_permitted" };
-        continue;
+        return;
       }
 
       const items = arranged.items.map((item) => {
@@ -2994,7 +2998,7 @@ const loadApplicationPageInternal = async (
           items,
         },
       };
-      continue;
+      return;
     }
 
     if (tableContract !== undefined) {
@@ -3050,7 +3054,7 @@ const loadApplicationPageInternal = async (
               : { sort: { columnKey: state.sort.fieldId, direction: state.sort.direction } }),
           },
         };
-      continue;
+      return;
     }
 
     const queryRecordType = bound.query.recordType;
@@ -3062,7 +3066,7 @@ const loadApplicationPageInternal = async (
     if (detailModule === undefined) {
       logPlacementFailure(address, placementId, "detail_record_type_unavailable");
       data[placementId] = { status: "error" };
-      continue;
+      return;
     }
 
     // A Record detail reads only the inputs its bound query declares, from the page's own query
@@ -3089,7 +3093,7 @@ const loadApplicationPageInternal = async (
     if (!command.success) {
       logPlacementFailure(address, placementId, "detail_command_invalid");
       data[placementId] = { status: "refused", reason: "not_permitted" };
-      continue;
+      return;
     }
     const result = await queries.run(session, selection, command.data);
     if (result.kind === "temporarily_unavailable") {
@@ -3115,7 +3119,8 @@ const loadApplicationPageInternal = async (
             ? { status: "empty" }
             : { status: "ready", values: display.values };
     }
-  }
+  };
+  await readConcurrently(placements, readPlacement);
 
   // A Group-owned create form needs an explicit owner from the viewer's current
   // memberships. Every Group returned here is eligible for initial Group ownership;
@@ -3376,6 +3381,7 @@ const loadApplicationPageInternal = async (
       ...(applicationShell === undefined ? {} : { applicationShell }),
       applicationName: address.application.name,
       applicationHomePageKey: address.application.homePageKey,
+      searchEnabled: application.content.search?.enabled === true,
       availableApplications: address.read.applications.map((candidate) => ({
         key: candidate.key,
         name: candidate.name,

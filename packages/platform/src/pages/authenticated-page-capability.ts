@@ -211,7 +211,22 @@ export const createAuthenticatedPageCapabilityService = <Command>(
         if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
           throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
 
-        const pageAccess = await evaluate(transaction, scope, loaded.pagePermission);
+        // One projection transaction decides each exact declaration once; repeated declarations
+        // reuse the decision and its validity deadline.
+        const decided = new Map<string, Awaited<ReturnType<typeof evaluate>>>();
+        const decide = async (binding: PermissionBinding | PlacementPermissionBinding) => {
+          const key = canonicalJson({
+            kind: isRecordPlacementBinding(binding) ? "record" : "permission",
+            declaration: binding.declaration,
+          });
+          let decision = decided.get(key);
+          if (decision === undefined) {
+            decision = await evaluate(transaction, scope, binding);
+            decided.set(key, decision);
+          }
+          return decision;
+        };
+        const pageAccess = await decide(loaded.pagePermission);
         if (!pageAccess.allowed) return undefined;
         const correlations = new Set([
           pageAccess.correlationId.toLowerCase(),
@@ -239,14 +254,14 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
               : binding.viewPermission !== undefined &&
                   sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
-                ? await evaluate(transaction, scope, binding.viewPermission)
+                ? await decide(binding.viewPermission)
                 : undefined;
           const use =
             required.usePermissionKey === undefined
               ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
               : binding.usePermission !== undefined &&
                   sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
-                ? await evaluate(transaction, scope, binding.usePermission)
+                ? await decide(binding.usePermission)
                 : undefined;
           if (view === undefined || use === undefined)
             throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
