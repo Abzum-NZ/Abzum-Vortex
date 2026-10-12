@@ -550,7 +550,7 @@ export const createStoredPageCapabilityService = (
           const contextRows = await transaction.query<{
             readonly request_context: unknown;
           }>`
-            select vortex_access.validated_human_request_context() as request_context
+            select vortex_access.validated_human_request_context() - 'channel' as request_context
           `;
           if (contextRows.length !== 1 || contextRows[0] === undefined) return false;
           const current = sessionContextSchema.safeParse(contextRows[0].request_context);
