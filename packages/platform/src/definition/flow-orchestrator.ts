@@ -82,6 +82,7 @@ import type {
   FlowEffectLedger,
   FlowEffectPrincipal,
 } from "./flow-continuation-store";
+import { reportUnexpectedFailure } from "./definition-error";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
 
 export type { FlowSubject };
@@ -505,8 +506,10 @@ const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
 const withinPayload = (candidate: unknown): boolean => {
   try {
     return (JSON.stringify(candidate) ?? "").length <= maximumPayloadCharacters;
-  } catch {
-    return false;
+  } catch (error) {
+    // JSON.stringify rejects only cyclic and BigInt values; anything else is a real defect.
+    if (error instanceof TypeError) return false;
+    throw error;
   }
 };
 
@@ -571,8 +574,10 @@ const carriesSensitive = (candidate: unknown, sensitive: readonly string[]): boo
   let text: string;
   try {
     text = JSON.stringify(candidate) ?? "";
-  } catch {
-    return true;
+  } catch (error) {
+    // JSON.stringify rejects only cyclic and BigInt values; anything else is a real defect.
+    if (error instanceof TypeError) return true;
+    throw error;
   }
   return sensitive.some((value) => text.includes(value));
 };
@@ -1100,7 +1105,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       // in this segment, but it must never be written to a continuation.
       run.selectedRecordReadSeen = true;
       return { outcome: "completed", outputs: { values } };
-    } catch {
+    } catch (error) {
+      reportUnexpectedFailure("selected record read task", error);
       return { outcome: "refused" };
     }
   };
@@ -1261,7 +1267,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             record_id: identity.recordId,
           },
         };
-      } catch {
+      } catch (error) {
+        reportUnexpectedFailure("record pin read task", error);
         return { outcome: "refused" };
       }
     }
@@ -1296,7 +1303,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     let claim: Awaited<ReturnType<FlowEffectLedger["begin"]>>;
     try {
       claim = await dependencies.ledger.begin(key);
-    } catch {
+    } catch (error) {
+      reportUnexpectedFailure("effect ledger claim", error);
       // Nothing was claimed, so nothing ran.
       return { outcome: "failed" };
     }
@@ -1325,7 +1333,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
                 return { outcome: "refused" };
             }
             return replayed.result;
-          } catch {
+          } catch (error) {
+            reportUnexpectedFailure("effect replay", error);
             return { outcome: "uncertain" };
           }
         }
@@ -1344,13 +1353,15 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     let ran: Awaited<ReturnType<typeof runPlan>>;
     try {
       ran = await runPlan(run, state, call, planned.plan);
-    } catch {
+    } catch (error) {
+      reportUnexpectedFailure("effect run", error);
       // Whether the effect committed is unknown; the open claim reports any repeat as uncertain.
       return { outcome: "uncertain" };
     }
     try {
       await dependencies.ledger.complete(key, ran.result.outcome, ran.stored);
-    } catch {
+    } catch (error) {
+      reportUnexpectedFailure("effect ledger completion", error);
       // The effect ran. Leaving the claim open makes any repeat report it uncertain, never re-run it.
     }
     return ran.result;
@@ -1377,24 +1388,24 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       };
     const { session, selection } = run.authority;
     const token = newToken();
-    let stored: Awaited<ReturnType<FlowContinuationStore["issue"]>>;
+    let stored: Awaited<ReturnType<FlowContinuationStore["issue"]>> | undefined;
     try {
       // A run holding a sensitive value (in a task output, variable or intent) is never stored, so
       // it ends here instead of waiting for the person.
-      if (carriesSensitive(step.state, run.sensitive)) throw new Error("FLOW_RUN_HOLDS_SENSITIVE");
-      stored = await dependencies.continuations.issue({
-        tokenHash: sha256(token),
-        runId: step.state.runId,
-        organizationId: selection.organizationId,
-        identityId: session.identityId,
-        flowId: run.flowId,
-        releaseKey: run.release.releaseKey,
-        state: step.state,
-        elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
-        lifetimeSeconds: flowContinuationLifetimeSeconds,
-      });
-    } catch {
-      stored = undefined;
+      if (!carriesSensitive(step.state, run.sensitive))
+        stored = await dependencies.continuations.issue({
+          tokenHash: sha256(token),
+          runId: step.state.runId,
+          organizationId: selection.organizationId,
+          identityId: session.identityId,
+          flowId: run.flowId,
+          releaseKey: run.release.releaseKey,
+          state: step.state,
+          elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
+          lifetimeSeconds: flowContinuationLifetimeSeconds,
+        });
+    } catch (error) {
+      reportUnexpectedFailure("flow continuation storage", error);
     }
     // A run that cannot be stored cannot be resumed, so it ends without continuing.
     if (stored === undefined)
@@ -1533,7 +1544,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
         if (!parsed.success || !command.success) return { kind: "unavailable" };
         return await runNamedAction(parsed.data.session, parsed.data.selection, command.data);
-      } catch {
+      } catch (error) {
+        reportUnexpectedFailure("named action execution", error);
         return { kind: "unavailable" };
       }
     },
@@ -1581,7 +1593,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           run.library,
         );
         return await drive(run, first);
-      } catch {
+      } catch (error) {
+        reportUnexpectedFailure("flow start", error);
         return refused;
       }
     },
@@ -1709,7 +1722,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           run.library,
         );
         return await drive(run, first);
-      } catch {
+      } catch (error) {
+        reportUnexpectedFailure("committed intent start", error);
         return refused;
       }
     },
@@ -1774,7 +1788,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           selectedRecordReadSeen: false,
         };
         return await drive(run, resumeFlowRun(state, answer, run.library));
-      } catch {
+      } catch (error) {
+        reportUnexpectedFailure("flow resume", error);
         return refused;
       }
     },
