@@ -2074,14 +2074,4 @@ export const moduleSourceDocumentSchema = z
   })
   .strict();
 
-type ModuleSourceField = z.infer<typeof moduleSourceFieldSchema>;
-type ModuleSourceActionInput = z.infer<typeof moduleSourceActionInputSchema>;
-type ModuleSourceAction = z.infer<typeof moduleSourceActionSchema>;
-type ModuleSourceRecordType = z.infer<typeof moduleSourceRecordTypeSchema>;
-type ModuleSourceSharingCondition = z.infer<typeof moduleSourceSharingConditionSchema>;
-type ModuleSourceQuerySort = z.infer<typeof moduleSourceQuerySortSchema>;
-type ModuleSourceQueryAggregate = z.infer<typeof moduleSourceQueryAggregateSchema>;
-type ModuleSourceQuery = z.infer<typeof moduleSourceQuerySchema>;
-type ModuleSourceContribution = z.infer<typeof moduleSourceContributionSchema>;
-type ModuleSourceBody = z.infer<typeof moduleSourceBodySchema>;
 export type ModuleSourceDocument = z.infer<typeof moduleSourceDocumentSchema>;
