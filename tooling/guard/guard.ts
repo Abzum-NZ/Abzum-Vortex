@@ -536,12 +536,12 @@ const mainBaseline = spawnSync("git", ["show", "origin/main:tooling/guard/baseli
   cwd: root,
   encoding: "utf8",
 });
-const allowed =
-  mainBaseline.status === 0
-    ? new Set(
-        (JSON.parse(mainBaseline.stdout) as string[]).filter((id) => isBlocking(id.split("|")[0])),
-      )
-    : null;
+const hasMainSnapshot = mainBaseline.status === 0;
+const allowed = hasMainSnapshot
+  ? new Set(
+      (JSON.parse(mainBaseline.stdout) as string[]).filter((id) => isBlocking(id.split("|")[0])),
+    )
+  : new Set(baseline);
 const historicalPaths = new Map<string, Set<string>>();
 function pathsForFile(file: string): Set<string> {
   const cached = historicalPaths.get(file);
@@ -569,7 +569,6 @@ function pathsForFile(file: string): Set<string> {
   return paths;
 }
 function existedUnderRenamedPath(id: string): boolean {
-  if (!allowed) return false;
   const first = id.indexOf("|");
   const second = id.indexOf("|", first + 1);
   if (first < 0 || second < 0) return false;
@@ -751,6 +750,7 @@ function mainFindingCount(rule: string, file: string, detail: string): number {
   return 0;
 }
 function presentOnMain(id: string, sourceFile: string): boolean {
+  if (!hasMainSnapshot) return true;
   const last = id.lastIndexOf("|");
   const occurrence = Number(id.slice(last + 1));
   const first = id.indexOf("|");
@@ -760,8 +760,10 @@ function presentOnMain(id: string, sourceFile: string): boolean {
   const detail = id.slice(second + 1, last);
   return mainFindingCount(rule, sourceFile, detail) >= occurrence;
 }
-function mainBaselineEntry(id: string): { id: string; sourceFile: string } | undefined {
-  if (!allowed) return undefined;
+function mainBaselineEntry(
+  id: string,
+  currentFile: string,
+): { id: string; sourceFile: string } | undefined {
   const first = id.indexOf("|");
   const second = id.indexOf("|", first + 1);
   if (first < 0 || second < 0) return undefined;
@@ -769,6 +771,7 @@ function mainBaselineEntry(id: string): { id: string; sourceFile: string } | und
   for (const path of pathsForFile(file)) {
     const candidate = `${id.slice(0, first + 1)}${path}${id.slice(second)}`;
     if (!allowed.has(candidate)) continue;
+    if (!hasMainSnapshot) return { id: candidate, sourceFile: currentFile };
     const sourceFile = sourceFromMain(file) !== undefined ? file : path;
     if (sourceFromMain(sourceFile) !== undefined) return { id: candidate, sourceFile };
   }
@@ -794,17 +797,15 @@ for (const id of baseline) {
 }
 // Only blocking findings belong in the baseline. New baseline entries must describe
 // violations already present in an unchanged main file; stale entries only warn.
-const growth = allowed
-  ? baseline.filter(
-      (id) =>
-        !allowed.has(id) &&
-        !existedUnderRenamedPath(id) &&
-        !(current.has(id) && unchangedFromMain(id.split("|")[1])),
-    )
-  : [];
+const growth = baseline.filter(
+  (id) =>
+    !allowed.has(id) &&
+    !existedUnderRenamedPath(id) &&
+    !(current.has(id) && unchangedFromMain(id.split("|")[1])),
+);
 const added = unique.filter((finding) => {
   if (!isBlocking(finding.rule) || unchangedFromMain(finding.file)) return false;
-  const baselineEntry = mainBaselineEntry(finding.id);
+  const baselineEntry = mainBaselineEntry(finding.id, finding.file);
   return !baselineEntry || !presentOnMain(baselineEntry.id, baselineEntry.sourceFile);
 });
 const warnings = unique.filter((finding) => !isBlocking(finding.rule));
