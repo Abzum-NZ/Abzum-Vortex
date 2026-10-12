@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,7 +45,7 @@ import { fileURLToPath } from "node:url";
  * person could select would be refused at publication. The existing 2.0.0 and 3.0.0 releases are
  * never written.
  *
- *   node tooling/import-shadcn-theme-catalogue.mjs            import and regenerate the catalogue
+ *   node tooling/import-shadcn-theme-catalogue.mjs            import and regenerate fingerprints
  *   node tooling/import-shadcn-theme-catalogue.mjs --check    fail when a generated file is stale
  */
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -53,6 +54,7 @@ const snapshotFile = path.join(catalogueDirectory, "shadcn-registry-4.21.0.sourc
 const platformThemeFile = path.join(catalogueDirectory, "platform-theme-catalogue.source.json");
 const releasesFile = path.join(catalogueDirectory, "shadcn-create-theme-releases.generated.json");
 const indexFile = path.join(catalogueDirectory, "shadcn-create-theme-catalogue.generated.json");
+const fingerprintsScript = path.join(root, "tooling", "generate-catalogue-fingerprints.mjs");
 
 /** The registered release every imported option is applied to. */
 const BASE_RELEASE_KEY = "PLATFORM_THEME_RELEASE_3_0_0";
@@ -687,11 +689,15 @@ const main = async () => {
       console.error("The shadcn catalogue is stale; run node tooling/import-shadcn-theme-catalogue.mjs");
       process.exitCode = 1;
     }
+    const fingerprints = spawnSync(process.execPath, [fingerprintsScript, "--check"], { stdio: "inherit" });
+    if (fingerprints.status !== 0) process.exitCode = 1;
     return;
   }
 
   if (currentReleases !== releasesOutput) await writeFile(releasesFile, releasesOutput, "utf8");
   if (currentIndex !== indexOutput) await writeFile(indexFile, indexOutput, "utf8");
+  const result = spawnSync(process.execPath, [fingerprintsScript], { stdio: "inherit" });
+  if (result.status !== 0) throw new Error("Regenerating catalogue fingerprints failed");
 };
 
 await main();

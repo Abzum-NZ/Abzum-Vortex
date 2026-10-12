@@ -24,7 +24,8 @@
     "styles:emit": "node tooling/emit-style-stylesheets.mjs",
     "fonts:emit": "node tooling/emit-font-assets.mjs",
     "build": "turbo run build",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
+    "catalogue:fingerprints": "node tooling/generate-catalogue-fingerprints.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
