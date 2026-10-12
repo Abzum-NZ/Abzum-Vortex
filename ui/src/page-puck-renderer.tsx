@@ -26,10 +26,14 @@ import {
   type PlatformComponentRegistry,
   type RuntimeInputsByPlacement,
 } from "./registry";
-import { getVortexPuckConfig, type VortexPuckMetadata } from "./puck-config";
+import {
+  getVortexPuckConfig,
+  VortexPuckThemeScopeProvider,
+  type VortexPuckMetadata,
+} from "./puck-config";
 import { createVortexPuckAdapterV2 } from "./vortex-puck-adapter";
 import {
-  resolveRootPlacementSlot,
+  resolveRootPlacementSlotWithContext,
   validatePlacementDependencies,
   validateProjectedAvailabilityTree,
   type GuidedFormCompositionV2,
@@ -146,17 +150,13 @@ export function PagePuckRenderer({
   timeZone,
   componentBundleOrigin,
 }: PagePuckRendererProps): ReactElement {
-  const slot = resolveRootPlacementSlot({
+  const { slot, permissionProjected } = resolveRootPlacementSlotWithContext({
     composition,
     shells,
     registry,
     ...(pageId === undefined ? {} : { pageId }),
     ...(activeStepId === undefined ? {} : { activeStepId }),
   });
-  const projected =
-    "composition" in composition &&
-    !("type" in composition && "name" in composition) &&
-    !("shellKind" in composition);
   const location = {
     ...(pageId === undefined ? {} : { pageId }),
     ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
@@ -164,11 +164,11 @@ export function PagePuckRenderer({
   };
   if ("pages" in composition && Array.isArray(composition.pages))
     validatePlacementDependencies(slot, composition.platformBlockDependencies, location);
-  validatePlacementTree(slot, registry, location, { allowEmptyRequiredSlots: projected });
+  validatePlacementTree(slot, registry, location, { allowEmptyRequiredSlots: permissionProjected });
   validateProjectedAvailabilityTree(slot, location);
   if (runtimeInputs !== undefined)
     assertRuntimeInputKeysArePlacements(collectPlacementIds(slot), runtimeInputs, location);
-  const data = adapterFor(registry).toPuckData(slot);
+  const data = adapterFor(registry).toPuckData(slot, breakpoint);
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const tokens = applicationTheme?.tokens ?? {};
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
@@ -179,7 +179,6 @@ export function PagePuckRenderer({
     ...(resolvePageHref === undefined ? {} : { resolvePageHref }),
     ...(currentPageId === undefined ? {} : { currentPageId }),
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
-    themeScope: { application: tokens, inherited: tokens },
   };
   const guidedSteps =
     "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;
@@ -203,7 +202,9 @@ export function PagePuckRenderer({
         <DateFormatProvider locale={locale} timeZone={timeZone}>
           {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
           <div className={className} style={style}>
-            <Render config={getVortexPuckConfig(registry)} data={data} metadata={metadata} />
+            <VortexPuckThemeScopeProvider scope={{ application: tokens, inherited: tokens }}>
+              <Render config={getVortexPuckConfig(registry)} data={data} metadata={metadata} />
+            </VortexPuckThemeScopeProvider>
           </div>
           {step?.summary !== true || guidedSummaryValues === undefined ? null : (
             <section aria-label="Review your answers" className="mt-6">

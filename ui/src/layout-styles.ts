@@ -62,9 +62,11 @@ export function computePlacementStyle(
   // Declared width
   if (layout.width.kind === "fill") {
     style.width = "100%";
+    style.gridColumn = "1 / -1";
   } else if (layout.width.kind === "content") {
     style.width = "fit-content";
     style.maxWidth = "100%";
+    style.gridColumn = "1 / -1";
   } else if (layout.width.kind === "grid") {
     const { startColumn, span } = layout.width;
     style.gridColumnStart = startColumn;

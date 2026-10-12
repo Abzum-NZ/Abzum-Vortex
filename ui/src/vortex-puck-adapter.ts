@@ -193,13 +193,17 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
       ),
     };
   };
-  const toContent = (slotInput: unknown): Content => {
+  /** Live content follows desktop order; explicit previews follow that breakpoint in the DOM. */
+  const toContent = (
+    slotInput: unknown,
+    breakpoint: keyof VortexSlot["order"] = "desktop",
+  ): Content => {
     // Permission projection annotates placements after definition compilation. Those annotations
     // are runtime metadata, while the authored placement schema remains strict.
     const source = asObject(slotInput, "slot");
     const rawPlacements = asObject(source.placements, "slot.placements");
     const slot = placementSlotV2Schema.parse(authoredSlot(source));
-    return slot.order.desktop.map((id) => {
+    return slot.order[breakpoint].map((id) => {
       const placement = slot.placements[id]!;
       const release = releaseFor(placement.block);
       const props: Record<string, unknown> = {
@@ -248,7 +252,7 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
           throw new VortexPuckAdapterError(
             `Undeclared Puck slot ${key} for ${release.rendererKey}`,
           );
-        props[key] = toContent(rawSlots[key] ?? child);
+        props[key] = toContent(rawSlots[key] ?? child, breakpoint);
       }
       return { type: release.rendererKey, props } as ComponentData;
     });
@@ -417,9 +421,9 @@ export const createVortexPuckAdapterV2 = (catalogueInput: unknown) => {
     }
   };
 
-  const toPuckData = (slot: unknown): Data => ({
+  const toPuckData = (slot: unknown, breakpoint?: keyof VortexSlot["order"]): Data => ({
     root: { props: { gap: "medium", padding: "medium" } } as unknown as Data["root"],
-    content: toContent(slot),
+    content: toContent(slot, breakpoint),
     zones: {},
   });
 

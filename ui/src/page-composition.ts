@@ -415,7 +415,7 @@ const validateMaterialisedDependencies = (
   }
 };
 
-const resolveRootPlacementSlotWithContext = (options: {
+export const resolveRootPlacementSlotWithContext = (options: {
   composition:
     | MaterialisedApplicationCompositionV2
     | PageDefinitionV2
