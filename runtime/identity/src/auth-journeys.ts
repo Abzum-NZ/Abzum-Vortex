@@ -114,11 +114,16 @@ export const localDevelopmentSignInAvailable = (
   try {
     validateConfiguration(configuration.journey);
     const authority = identityAuthoritySchema.safeParse(configuration.authority);
+    const site = new URL(configuration.journey.siteUrl);
     return (
       authority.success &&
       authority.data.environment === "local" &&
       identityIdSchema.safeParse(configuration.identityId).success &&
-      new URL(configuration.journey.siteUrl).href === "http://127.0.0.1:3000/" &&
+      site.protocol === "http:" &&
+      site.hostname === "127.0.0.1" &&
+      site.pathname === "/" &&
+      site.search.length === 0 &&
+      site.hash.length === 0 &&
       new URL(configuration.journey.supabaseUrl).href === "http://127.0.0.1:54321/" &&
       authority.data.issuer === "http://127.0.0.1:54321/auth/v1" &&
       authority.data.jwksUrl === "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json" &&
@@ -146,7 +151,8 @@ const confirmedLocalDevelopmentUser = (
   Number.isFinite(Date.parse(user.email_confirmed_at)) &&
   Date.parse(user.email_confirmed_at) <= Date.now() &&
   (user.banned_until === undefined ||
-    (Number.isFinite(Date.parse(user.banned_until)) && Date.parse(user.banned_until) <= Date.now()));
+    (Number.isFinite(Date.parse(user.banned_until)) &&
+      Date.parse(user.banned_until) <= Date.now()));
 
 export const signInWithLocalDevelopmentAccount = async (
   configuration: LocalDevelopmentSignInConfiguration,
@@ -161,7 +167,10 @@ export const signInWithLocalDevelopmentAccount = async (
       auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
     });
     const existing = await admin.auth.admin.getUserById(configuration.identityId);
-    if (existing.error || !confirmedLocalDevelopmentUser(existing.data.user, configuration.identityId))
+    if (
+      existing.error ||
+      !confirmedLocalDevelopmentUser(existing.data.user, configuration.identityId)
+    )
       return { ok: false, code: "vortex.identity.authority_unavailable" };
 
     // Recovery refuses absent users. Magic-link generation can create an account.

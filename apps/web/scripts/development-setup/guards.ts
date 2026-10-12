@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import {
+  builderKeySchema,
   identityAuthorityIdSchema,
   identityIdSchema,
   isLoopbackHostname,
@@ -30,16 +31,24 @@ export class DevelopmentSetupRefusal extends Error {
 export type FirstOwnerNomination =
   Readonly<{ kind: "identity"; identityId: string }> | Readonly<{ kind: "email"; email: string }>;
 
-export type DevelopmentSetupArguments = Readonly<{ firstOwner: FirstOwnerNomination }>;
+export type DevelopmentSetupArguments = Readonly<{
+  firstOwner: FirstOwnerNomination;
+  tenantShortName: string;
+  organizationShortName: string;
+  seedDemo: boolean;
+}>;
 
 const usage =
-  "Usage: pnpm setup:local -- --local-development (--first-owner-email <email> | --first-owner-identity-id <uuid>)";
+  "Usage: pnpm setup:local -- --local-development (--first-owner-email <email> | --first-owner-identity-id <uuid>) [--tenant-short-name <key>] [--organization-short-name <key>] [--seed-demo]";
 
 /** Parses exactly the supported flags; anything else is refused. */
 export const parseSetupArguments = (argv: readonly string[]): DevelopmentSetupArguments => {
   let localDevelopment = false;
   let email: string | undefined;
   let identityId: string | undefined;
+  let tenantShortName: string | undefined;
+  let organizationShortName: string | undefined;
+  let seedDemo = false;
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     if (flag === "--") continue;
@@ -47,13 +56,24 @@ export const parseSetupArguments = (argv: readonly string[]): DevelopmentSetupAr
       localDevelopment = true;
       continue;
     }
-    if (flag === "--first-owner-email" || flag === "--first-owner-identity-id") {
+    if (flag === "--seed-demo") {
+      seedDemo = true;
+      continue;
+    }
+    if (
+      flag === "--first-owner-email" ||
+      flag === "--first-owner-identity-id" ||
+      flag === "--tenant-short-name" ||
+      flag === "--organization-short-name"
+    ) {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--"))
         throw new DevelopmentSetupRefusal(`${flag} needs a value. ${usage}`);
       index += 1;
       if (flag === "--first-owner-email") email = value;
-      else identityId = value;
+      else if (flag === "--first-owner-identity-id") identityId = value;
+      else if (flag === "--tenant-short-name") tenantShortName = value;
+      else organizationShortName = value;
       continue;
     }
     throw new DevelopmentSetupRefusal(`Unsupported argument ${String(flag)}. ${usage}`);
@@ -70,12 +90,35 @@ export const parseSetupArguments = (argv: readonly string[]): DevelopmentSetupAr
     const parsed = identityIdSchema.safeParse(identityId);
     if (!parsed.success)
       throw new DevelopmentSetupRefusal("--first-owner-identity-id must be a UUID");
-    return { firstOwner: { kind: "identity", identityId: parsed.data } };
+    return {
+      firstOwner: { kind: "identity", identityId: parsed.data },
+      ...parsedOrganizationNames(tenantShortName, organizationShortName),
+      seedDemo,
+    };
   }
   const trimmed = email!.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+$/.test(trimmed))
     throw new DevelopmentSetupRefusal("--first-owner-email must be an email address");
-  return { firstOwner: { kind: "email", email: trimmed } };
+  return {
+    firstOwner: { kind: "email", email: trimmed },
+    ...parsedOrganizationNames(tenantShortName, organizationShortName),
+    seedDemo,
+  };
+};
+
+const parsedOrganizationNames = (
+  tenantShortName: string | undefined,
+  organizationShortName: string | undefined,
+): Pick<DevelopmentSetupArguments, "tenantShortName" | "organizationShortName"> => {
+  const tenantName = tenantShortName ?? "abzum";
+  const organizationName = organizationShortName ?? tenantName;
+  const tenant = builderKeySchema.safeParse(tenantName);
+  const organization = builderKeySchema.safeParse(organizationName);
+  if (!tenant.success || !organization.success)
+    throw new DevelopmentSetupRefusal(
+      "Tenant and organisation short names must be lowercase keys with underscores (for example val_demo).",
+    );
+  return { tenantShortName: tenant.data, organizationShortName: organization.data };
 };
 
 /**

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { z } from "zod";
 
 /**
  * The setup's own record of what it published, kept in the ignored `supabase/.temp` directory so a
@@ -16,8 +17,19 @@ export type PublishedRelease = Readonly<{
 /** A draft root created but not yet published, so an interrupted run resumes instead of repeating. */
 export type CreatedDraft = Readonly<{ rootId: string; draftRevision: number }>;
 
+export type DevelopmentSetupMetadata = Readonly<{
+  tenantId: string;
+  tenantShortName: string;
+  organizationShortName: string;
+  accessVersion: number;
+  systemActorId: string;
+  stewardIdentityId: string;
+  stewardOrganizationAccountId: string;
+}>;
+
 export type SetupState = {
   organizationId: string;
+  metadata: DevelopmentSetupMetadata;
   drafts: Record<string, CreatedDraft>;
   releases: Record<string, PublishedRelease>;
   installerRoleGranted: boolean;
@@ -49,7 +61,23 @@ export const findRepositoryRoot = (start = process.cwd()): string => {
 const stateFile = (): string =>
   join(findRepositoryRoot(), "supabase", ".temp", "development-setup-state.json");
 
-export const loadSetupState = (organizationId: string): SetupState => {
+const developmentSetupMetadataSchema = z
+  .object({
+    tenantId: z.uuid(),
+    tenantShortName: z.string().min(1),
+    organizationShortName: z.string().min(1),
+    accessVersion: z.number().int().nonnegative(),
+    systemActorId: z.uuid(),
+    stewardIdentityId: z.uuid(),
+    stewardOrganizationAccountId: z.uuid(),
+  })
+  .strict();
+
+export const loadSetupState = (
+  organizationId: string,
+  initialMetadata?: DevelopmentSetupMetadata,
+): SetupState => {
+  let metadata = initialMetadata;
   let releases: Record<string, PublishedRelease> = {};
   let drafts: Record<string, CreatedDraft> = {};
   let installerRoleGranted = false;
@@ -61,6 +89,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
   try {
     const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as {
       organizationId?: unknown;
+      metadata?: unknown;
       releases?: Record<string, PublishedRelease>;
       drafts?: Record<string, CreatedDraft>;
       installerRoleGranted?: boolean;
@@ -71,6 +100,10 @@ export const loadSetupState = (organizationId: string): SetupState => {
       defaultApplicationInitializationCompleted?: boolean;
     };
     if (stored.organizationId === organizationId) {
+      if (initialMetadata === undefined) {
+        const parsedMetadata = developmentSetupMetadataSchema.safeParse(stored.metadata);
+        if (parsedMetadata.success) metadata = parsedMetadata.data;
+      }
       releases = stored.releases ?? {};
       drafts = stored.drafts ?? {};
       installerRoleGranted = stored.installerRoleGranted === true;
@@ -94,8 +127,11 @@ export const loadSetupState = (organizationId: string): SetupState => {
   } catch {
     // No usable state: start empty.
   }
+  if (metadata === undefined)
+    throw new Error("Development setup metadata is unavailable for the selected organisation.");
   const state: SetupState = {
     organizationId,
+    metadata,
     drafts,
     releases,
     installerRoleGranted,
@@ -111,6 +147,7 @@ export const loadSetupState = (organizationId: string): SetupState => {
         `${JSON.stringify(
           {
             organizationId: state.organizationId,
+            metadata: state.metadata,
             drafts: state.drafts,
             releases: state.releases,
             installerRoleGranted: state.installerRoleGranted,
@@ -129,4 +166,11 @@ export const loadSetupState = (organizationId: string): SetupState => {
     },
   };
   return state;
+};
+
+/** Loads the most recently set up organisation for the standalone idempotent demo seeder. */
+export const loadCurrentSetupState = (): SetupState => {
+  const stored = JSON.parse(readFileSync(stateFile(), "utf8")) as { organizationId?: unknown };
+  const organizationId = z.uuid().parse(stored.organizationId);
+  return loadSetupState(organizationId);
 };
