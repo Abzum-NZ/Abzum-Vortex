@@ -20,6 +20,7 @@ import {
   getAccessibleName,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   parseBoardPayload,
+  parseTablePayload,
   FORM_CONTAINER_BLOCK_RELEASE,
   PagePuckRenderer,
   type PagePuckRendererProps,
@@ -90,6 +91,10 @@ import {
 } from "../../../../_lib/mounted-record-pin-watch-client";
 
 type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
+type TableContinuationTarget = Readonly<{
+  placementId: string;
+  request: Readonly<{ page: number; continuationToken?: string }>;
+}>;
 import type {
   GuidedFormAbandonRequest,
   GuidedFormConfirmRequest,
@@ -681,6 +686,17 @@ const boardPayloadFor = (candidate: unknown): BoardPayload | undefined => {
   }
 };
 
+const tablePayloadFor = (candidate: unknown): ReturnType<typeof parseTablePayload> | undefined => {
+  if (!isRecord(candidate) || candidate.status !== "ready") return undefined;
+  if (!isRecord(candidate.values) || candidate.values.kind !== "table") return undefined;
+  try {
+    return parseTablePayload(candidate.values);
+  } catch (error) {
+    console.error("[page] table payload invalid", error);
+    return undefined;
+  }
+};
+
 const sameBoardSource = (left: BoardPayload, right: BoardPayload): boolean =>
   left.plan.moduleRootId.toLowerCase() === right.plan.moduleRootId.toLowerCase() &&
   left.plan.moduleReleaseVersion === right.plan.moduleReleaseVersion &&
@@ -931,6 +947,11 @@ function ApplicationPageViewContent({
     generations: Map<string, ComponentRequestGeneration>;
   }>({ base: "", key: "", generations: new Map<string, ComponentRequestGeneration>() });
   const boardContinuationInFlightRef = useRef(new Set<string>());
+  const tableContinuationHistoryRef = useRef<{
+    scopeKey: string;
+    cursors: Map<string, Map<number, string>>;
+    inFlight: Set<string>;
+  }>({ scopeKey: "", cursors: new Map(), inFlight: new Set() });
   if (placementRequestsRef.current.base !== navigationBase) {
     navigationSequenceRef.current += 1;
     placementRequestsRef.current = {
@@ -988,11 +1009,20 @@ function ApplicationPageViewContent({
     [basePath, pageKeyOf],
   );
   const refreshPlacements = useCallback(
-    async (placementIds: readonly string[]): Promise<void> => {
+    async (
+      placementIds: readonly string[],
+      tableContinuation?: TableContinuationTarget,
+    ): Promise<void> => {
       const pageKey = currentPageKey;
       const requestScope = placementRequestsRef.current;
       // A callback retained by an earlier page must not start a read in the new page's scope.
       if (pageKey === undefined || requestScope.key !== navigationKey) return;
+      if (
+        tableContinuation !== undefined &&
+        (placementIds.length !== 1 ||
+          placementIds[0]?.toLowerCase() !== tableContinuation.placementId.toLowerCase())
+      )
+        return;
 
       const requests = new Map<string, ComponentRequestGeneration>();
       for (const placementId of new Set(placementIds)) {
@@ -1034,6 +1064,8 @@ function ApplicationPageViewContent({
               search: currentSearch,
             },
             batch.map(([, request]) => request.componentId),
+            undefined,
+            tableContinuation,
           );
         } catch {
           result = { kind: "temporarily_unavailable" };
@@ -2353,6 +2385,73 @@ function ApplicationPageViewContent({
     ],
   );
 
+  const continueTablePage = useCallback(
+    async (
+      placementId: string,
+      event: DisplaySemanticEvent,
+      table: ReturnType<typeof parseTablePayload>,
+    ): Promise<void> => {
+      if (
+        busy ||
+        event.event !== "page_changed" ||
+        "column" in event ||
+        !Number.isSafeInteger(event.page) ||
+        event.page < 1 ||
+        event.page > 100_000 ||
+        table.page === undefined ||
+        Math.abs(event.page - table.page) !== 1
+      )
+        return;
+      const parsedId = containedComponentIdSchema.safeParse(placementId);
+      if (!parsedId.success) return;
+
+      const scopeKey = `${navigationKey}\u0000${currentSearch}`;
+      let history = tableContinuationHistoryRef.current;
+      if (history.scopeKey !== scopeKey) {
+        history = { scopeKey, cursors: new Map(), inFlight: new Set() };
+        tableContinuationHistoryRef.current = history;
+      }
+      const placementKey = parsedId.data.toLowerCase();
+      let cursors = history.cursors.get(placementKey);
+      if (cursors === undefined) {
+        cursors = new Map();
+        history.cursors.set(placementKey, cursors);
+      }
+
+      let continuationToken: string | undefined;
+      if (event.page === table.page + 1) {
+        continuationToken = table.nextContinuationToken;
+        if (
+          table.hasNextPage !== true ||
+          continuationToken === undefined ||
+          (event.continuationToken !== undefined &&
+            event.continuationToken !== continuationToken)
+        )
+          return;
+        cursors.set(event.page, continuationToken);
+      } else if (event.page > 1) {
+        continuationToken = cursors.get(event.page);
+        if (continuationToken === undefined) return;
+      }
+
+      const requestKey = `${placementKey}\u0000${event.page}`;
+      if (history.inFlight.has(requestKey)) return;
+      history.inFlight.add(requestKey);
+      try {
+        await refreshPlacements([parsedId.data], {
+          placementId: parsedId.data,
+          request: {
+            page: event.page,
+            ...(continuationToken === undefined ? {} : { continuationToken }),
+          },
+        });
+      } finally {
+        history.inFlight.delete(requestKey);
+      }
+    },
+    [busy, currentSearch, navigationKey, refreshPlacements],
+  );
+
   const runtimeInputs = useMemo(() => {
     const inputs: Record<string, unknown> = {};
     // A placement may hold bindings (a form submits) without holding projected data, so both key
@@ -2376,6 +2475,7 @@ function ApplicationPageViewContent({
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
+      const tableData = tablePayloadFor(data);
       const boardRowActionBinding =
         boardData === undefined ? undefined : compatibleBoardRowAction(bindings);
       const declaredEvents = placementEventNames[placementId];
@@ -2431,6 +2531,9 @@ function ApplicationPageViewContent({
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
             continueBoardColumn(placementId, event);
+        if (tableData !== undefined && supportsEvent("page_changed"))
+          events.page_changed = (event: DisplaySemanticEvent) =>
+            continueTablePage(placementId, event, tableData);
         if (supportsEvent("refresh"))
           events.refresh = () => {
             void refreshPlacements([placementId]);
@@ -2755,6 +2858,7 @@ function ApplicationPageViewContent({
     onOpenApplication,
     unsavedWork,
     continueBoardColumn,
+    continueTablePage,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;

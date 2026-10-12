@@ -129,6 +129,8 @@ export type TablePayload = Readonly<{
   sort?: Readonly<{ columnKey: string; direction: "ascending" | "descending" }>;
   page?: number;
   pageCount?: number;
+  hasNextPage?: boolean;
+  nextContinuationToken?: string;
 }>;
 
 export type CalendarView = "month" | "week" | "agenda";
@@ -287,7 +289,7 @@ export type DisplaySemanticEvent =
       columnKey: string;
       direction: "ascending" | "descending";
     }>
-  | Readonly<{ event: "page_changed"; page: number }>
+  | Readonly<{ event: "page_changed"; page: number; continuationToken?: string }>
   | Readonly<{
       event: "page_changed";
       column: BoardColumnSelector;
@@ -910,13 +912,54 @@ export const parseTablePayload = (
     return fail(`Expected 'table' projected values, got '${String(record.kind)}'`, location);
   requireExactKeys(
     record,
-    ["kind", "columns", "rows", "selectedRecordIds", "sort", "page", "pageCount"],
+    [
+      "kind",
+      "columns",
+      "rows",
+      "selectedRecordIds",
+      "sort",
+      "page",
+      "pageCount",
+      "hasNextPage",
+      "nextContinuationToken",
+    ],
     location,
   );
   const columns = parseColumns(record.columns, location);
   const rows = parseRows(record.rows, location);
   const selection = parseSelection(record.selectedRecordIds, rows, location);
-  const pagination = parsePagination(record.page, record.pageCount, location);
+  const page =
+    record.page === undefined
+      ? undefined
+      : requirePositiveInteger(record.page, "Projected page must be a positive integer", location);
+  const pageCount =
+    record.pageCount === undefined
+      ? undefined
+      : requirePositiveInteger(
+          record.pageCount,
+          "Projected pageCount must be a positive integer",
+          location,
+        );
+  if (pageCount !== undefined && (page === undefined || page > pageCount))
+    fail("Projected pagination requires a page within pageCount", location);
+  if (record.hasNextPage !== undefined && typeof record.hasNextPage !== "boolean")
+    fail("Projected hasNextPage must be a boolean", location);
+  const hasNextPage = record.hasNextPage as boolean | undefined;
+  let nextContinuationToken: string | undefined;
+  if (record.nextContinuationToken !== undefined) {
+    nextContinuationToken = requireNonEmptyString(
+      record.nextContinuationToken,
+      "A table continuation token must be a non-empty string",
+      location,
+    );
+    if (nextContinuationToken.length > 65_536)
+      fail("A table continuation token is too long", location);
+  }
+  if (
+    (hasNextPage === true) !== (nextContinuationToken !== undefined) ||
+    ((hasNextPage !== undefined || nextContinuationToken !== undefined) && page === undefined)
+  )
+    fail("Table continuation state is incomplete", location);
   let sort: Readonly<{ columnKey: string; direction: "ascending" | "descending" }> | undefined;
   if (record.sort !== undefined) {
     const sortRecord = requireRecord(record.sort, "Projected sort is invalid", location);
@@ -938,7 +981,10 @@ export const parseTablePayload = (
     rows,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(sort === undefined ? {} : { sort }),
-    ...(pagination === undefined ? {} : pagination),
+    ...(page === undefined ? {} : { page }),
+    ...(pageCount === undefined ? {} : { pageCount }),
+    ...(hasNextPage === undefined ? {} : { hasNextPage }),
+    ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
   });
 };
 

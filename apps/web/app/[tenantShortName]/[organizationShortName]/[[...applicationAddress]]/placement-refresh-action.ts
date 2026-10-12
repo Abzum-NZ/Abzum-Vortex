@@ -41,6 +41,29 @@ const boardContinuationTargetSchema = z
   })
   .strict();
 
+const tableContinuationTargetSchema = z
+  .object({
+    placementId: containedComponentIdSchema,
+    request: z
+      .object({
+        page: z.number().int().min(1).max(100_000),
+        continuationToken: z.string().min(1).max(65_536).optional(),
+      })
+      .strict()
+      .superRefine((request, context) => {
+        if (
+          (request.page === 1 && request.continuationToken !== undefined) ||
+          (request.page > 1 && request.continuationToken === undefined)
+        )
+          context.addIssue({
+            code: "custom",
+            path: ["continuationToken"],
+            message: "The table page and continuation token do not agree",
+          });
+      }),
+  })
+  .strict();
+
 const unavailablePlacement = Object.freeze({ status: "error" }) satisfies PageDataState;
 
 const searchParametersOf = (
@@ -64,6 +87,7 @@ export async function rereadApplicationPlacements(
   addressInput: unknown,
   placementIdsInput: unknown,
   boardContinuationInput?: unknown,
+  tableContinuationInput?: unknown,
 ): Promise<ApplicationPagePlacementReadResult> {
   const address = placementRefreshAddressSchema.safeParse(addressInput);
   const placementIds = placementIdsSchema.safeParse(placementIdsInput);
@@ -71,16 +95,28 @@ export async function rereadApplicationPlacements(
     boardContinuationInput === undefined
       ? undefined
       : boardContinuationTargetSchema.safeParse(boardContinuationInput);
+  const tableContinuation =
+    tableContinuationInput === undefined
+      ? undefined
+      : tableContinuationTargetSchema.safeParse(tableContinuationInput);
   if (
     !address.success ||
     !placementIds.success ||
-    boardContinuation?.success === false
+    boardContinuation?.success === false ||
+    tableContinuation?.success === false ||
+    (boardContinuation?.success === true && tableContinuation?.success === true)
   )
     return { kind: "unavailable" };
   if (
     boardContinuation?.success === true &&
     (placementIds.data.length !== 1 ||
       placementIds.data[0]?.toLowerCase() !== boardContinuation.data.placementId.toLowerCase())
+  )
+    return { kind: "unavailable" };
+  if (
+    tableContinuation?.success === true &&
+    (placementIds.data.length !== 1 ||
+      placementIds.data[0]?.toLowerCase() !== tableContinuation.data.placementId.toLowerCase())
   )
     return { kind: "unavailable" };
 
@@ -113,6 +149,17 @@ export async function rereadApplicationPlacements(
       placementIds.data,
       address.data.installationRevision,
       boardContinuation?.success === true ? boardContinuation.data : undefined,
+      tableContinuation?.success === true
+        ? {
+            placementId: tableContinuation.data.placementId,
+            request: {
+              page: tableContinuation.data.request.page,
+              ...(tableContinuation.data.request.continuationToken === undefined
+                ? {}
+                : { continuationToken: tableContinuation.data.request.continuationToken }),
+            },
+          }
+        : undefined,
     );
   } catch {
     return {

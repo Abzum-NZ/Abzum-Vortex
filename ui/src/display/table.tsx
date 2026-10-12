@@ -432,6 +432,10 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
           <PaginationControl
             page={values.page}
             pageCount={values.pageCount}
+            {...(values.hasNextPage === undefined ? {} : { hasNextPage: values.hasNextPage })}
+            {...(values.nextContinuationToken === undefined
+              ? {}
+              : { nextContinuationToken: values.nextContinuationToken })}
             accessibleName={accessibleName}
             events={events}
           />
