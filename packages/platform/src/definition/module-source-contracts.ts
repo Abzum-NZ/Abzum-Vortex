@@ -323,9 +323,8 @@ export const sourcePermissionFieldPolicySchema = z
 // types Module actions add below, so its shape stays fixed across Modules.
 // ---------------------------------------------------------------------------
 
-// A text pattern must compile under the shared bounded contract and always
-// travels with a maximum length, so runtime matching stays bounded. Module and
-// application action and query inputs share this rule.
+// A text pattern must compile under the shared RE2 contract and always travels
+// with a maximum length. Module and application action and query inputs share it.
 const refineTextInputPattern = (
   validation: { maximum_length?: number | undefined; pattern?: string | undefined } | undefined,
   context: z.RefinementCtx,
@@ -341,7 +340,8 @@ const refineTextInputPattern = (
     context.addIssue({
       code: "custom",
       path: ["validation", "pattern"],
-      message: "Pattern is invalid or uses an unsupported unsafe construct",
+      message:
+        "Enter a valid RE2 pattern (maximum 500 characters; backreferences and lookaround are unsupported)",
     });
 };
 
