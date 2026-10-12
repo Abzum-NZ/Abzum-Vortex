@@ -1,9 +1,9 @@
 /*
  * Shared shadcn component reset, scoped to the application root.
  *
- * The component source in ui/src/components carries the shared class names. This file holds the
+ * The component source in packages/ui/src/components carries the shared class names. This file holds the
  * shared base layer only. The shadcn variables it paints with (--background, --card, --radius and
- * the rest) hold no palette here: the Vortex theme bridge (ui/src/theme/theme-variables.ts) sets
+ * the rest) hold no palette here: the Vortex theme bridge (packages/ui/src/theme/theme-variables.ts) sets
  * every one of them from the resolved theme on the root element and on each themed container.
  */
 [data-vortex-style] {

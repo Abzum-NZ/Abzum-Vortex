@@ -232,9 +232,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
-      '@vortex/modules':
+      '@vortex/definitions':
         specifier: workspace:*
-        version: link:modules
+        version: link:packages/definitions
       '@vortex/platform':
         specifier: workspace:*
         version: link:packages/platform
@@ -274,18 +274,15 @@ importers:
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0
-      '@vortex/modules':
+      '@vortex/definitions':
         specifier: workspace:*
-        version: link:../../modules
+        version: link:../../packages/definitions
       '@vortex/platform':
         specifier: workspace:*
         version: link:../../packages/platform
-      '@vortex/studio':
-        specifier: workspace:*
-        version: link:../../studio
       '@vortex/ui':
         specifier: workspace:*
-        version: link:../../ui
+        version: link:../../packages/ui
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -324,11 +321,11 @@ importers:
         specifier: 'catalog:'
         version: 4.23.15
 
-  modules:
+  packages/definitions:
     dependencies:
       '@vortex/platform':
         specifier: workspace:*
-        version: link:../packages/platform
+        version: link:../platform
 
   packages/platform:
     dependencies:
@@ -358,26 +355,7 @@ importers:
         specifier: 'catalog:'
         version: 7.8.0
 
-  studio:
-    dependencies:
-      '@puckeditor/core':
-        specifier: 'catalog:'
-        version: 0.23.0(@floating-ui/dom@1.8.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0))
-      '@vortex/platform':
-        specifier: workspace:*
-        version: link:../packages/platform
-      '@vortex/ui':
-        specifier: workspace:*
-        version: link:../ui
-      react:
-        specifier: 19.3.0
-        version: 19.3.0
-    devDependencies:
-      '@types/react':
-        specifier: 19.3.0
-        version: 19.3.0
-
-  ui:
+  packages/ui:
     dependencies:
       '@base-ui/react':
         specifier: 1.8.0
@@ -402,7 +380,7 @@ importers:
         version: 3.48.0(react@19.3.0)
       '@vortex/platform':
         specifier: workspace:*
-        version: link:../packages/platform
+        version: link:../platform
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1

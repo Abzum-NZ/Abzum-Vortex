@@ -42,7 +42,7 @@ const validate = (svg: string): void => {
 };
 
 async function main(): Promise<void> {
-const uiPackage = JSON.parse(await readFile(resolve(process.cwd(), "../../ui/package.json"), "utf8")) as { dependencies: Record<string, string> };
+const uiPackage = JSON.parse(await readFile(resolve(process.cwd(), "../../packages/ui/package.json"), "utf8")) as { dependencies: Record<string, string> };
 const sourcePackages = ["lucide-react", "@hugeicons/react", "@hugeicons/core-free-icons",
   "@tabler/icons-react", "@phosphor-icons/react", "@remixicon/react"];
 const libraries: Record<string, Record<string, string>> = {};

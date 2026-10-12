@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@vortex/platform",
     "@vortex/definitions",
-    "@vortex/ui/studio",
     "@vortex/ui",
   ],
   // No other origin may frame a Vortex page or response (clickjacking); same-origin framing stays

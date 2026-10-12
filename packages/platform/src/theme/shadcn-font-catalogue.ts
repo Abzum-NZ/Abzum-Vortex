@@ -4,7 +4,7 @@ import catalogue from "../catalogue/catalogue/shadcn-fonts.generated.json";
  * The shadcn/create font catalogue: every font shadcn/create offers at the pinned version, with
  * the pinned package and licence each one came from. Application theme selections name a body
  * font and a heading font from it; the theme resolution writes the selected fonts into the `body`
- * and `heading` typography tokens, and the theme bridge (ui/src/theme/theme-variables.ts) turns
+ * and `heading` typography tokens, and the theme bridge (packages/ui/src/theme/theme-variables.ts) turns
  * the family a token names into a CSS variable for the renderer to paint with.
  */
 export type ShadcnFont = Readonly<{

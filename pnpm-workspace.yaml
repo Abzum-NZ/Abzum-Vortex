@@ -1,9 +1,6 @@
 packages:
   - apps/*
-  - packages/platform
-  - ui
-  - studio
-  - modules
+  - packages/*
 allowBuilds:
   esbuild: false
 catalog:

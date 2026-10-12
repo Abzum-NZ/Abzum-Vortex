@@ -11,8 +11,8 @@ enforced by the platform and the database.
 | --- | --- |
 | `apps/web` | Next.js application and local development setup |
 | `packages/platform` | Domain schemas, server operations and database access |
-| `ui`, `studio` | Shared components and the designer |
-| `modules` | Shipped application and module definitions |
+| `packages/ui` | Shared components and the designer |
+| `packages/definitions` | Shipped application and module definitions |
 | `supabase` | Config, `schemas/` (canonical function files), `migrations/`, seed |
 | `workflows/kestra` | Operational flows and scripts |
 | `tooling` | Development tools (catalogue, style and font emitters, local database helpers) |

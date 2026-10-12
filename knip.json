@@ -21,12 +21,12 @@
     "packages/platform": {
       "entry": ["src/*/schema.ts", "src/*/index.ts", "src/definition/*-index.ts", "src/definition/compiler-api.ts"]
     },
-    "modules": {
+    "packages/definitions": {
       "includeEntryExports": false,
       "entry": ["src/*/{module,application}.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     },
-    "ui": {
+    "packages/ui": {
       "entry": ["src/icons/adapters/*.{ts,tsx}"],
       "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
     }

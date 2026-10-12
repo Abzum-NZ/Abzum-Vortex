@@ -145,11 +145,11 @@ if (!process.argv.includes("--worker")) {
   };
   const sources = [];
   const failures = [];
-  const modulesRoot = path.join(root, "modules", "src");
+  const modulesRoot = path.join(root, "packages", "definitions", "src");
   for (const directory of readdirSync(modulesRoot, { withFileTypes: true })) {
     if (!directory.isDirectory()) continue;
     for (const kind of ["module", "application"]) {
-      const relativePath = `modules/src/${directory.name}/${kind}.ts`;
+      const relativePath = `packages/definitions/src/${directory.name}/${kind}.ts`;
       if (!existsSync(path.join(root, relativePath))) continue;
       try {
         const exports = await import(`../${relativePath}`);
