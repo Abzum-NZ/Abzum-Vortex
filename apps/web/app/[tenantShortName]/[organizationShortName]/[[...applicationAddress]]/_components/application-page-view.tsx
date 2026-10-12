@@ -771,15 +771,21 @@ export function ApplicationPageView({
   model,
   guidedFormActions,
   onOpenApplication,
+  adoptReleaseAction,
   applicationSwitcherState,
-  applicationToolbar,
+  identityId,
+  applicationSearch,
+  applicationSearchPageSubject,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
-  applicationToolbar?: ReactNode;
+  identityId: string;
+  applicationSearch?: PagePuckRendererProps["applicationSearch"];
+  applicationSearchPageSubject?: string | undefined;
   pageFeedback?: ReactNode;
 }>): ReactElement {
   return (
@@ -788,8 +794,11 @@ export function ApplicationPageView({
         model={model}
         guidedFormActions={guidedFormActions}
         onOpenApplication={onOpenApplication}
+        adoptReleaseAction={adoptReleaseAction}
         applicationSwitcherState={applicationSwitcherState}
-        applicationToolbar={applicationToolbar}
+        identityId={identityId}
+        applicationSearch={applicationSearch}
+        applicationSearchPageSubject={applicationSearchPageSubject}
         pageFeedback={pageFeedback}
       />
     </UnsavedWorkProvider>
@@ -800,15 +809,21 @@ function ApplicationPageViewContent({
   model,
   guidedFormActions,
   onOpenApplication,
+  adoptReleaseAction,
   applicationSwitcherState,
-  applicationToolbar,
+  identityId,
+  applicationSearch,
+  applicationSearchPageSubject,
   pageFeedback,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
-  applicationToolbar?: ReactNode;
+  identityId: string;
+  applicationSearch?: PagePuckRendererProps["applicationSearch"];
+  applicationSearchPageSubject?: string | undefined;
   pageFeedback?: ReactNode;
 }>): ReactElement {
   const router = useRouter();
@@ -2758,8 +2773,25 @@ function ApplicationPageViewContent({
   ]);
 
   runtimeInputsRef.current = runtimeInputs;
+  const releaseAdoption = model.adoption;
   const accountActions: ApplicationAccountActions = {
+    identityId,
     organizationName: application.organizationShortName,
+    ...(releaseAdoption === undefined || adoptReleaseAction === undefined
+      ? {}
+      : {
+          releaseAdoption: {
+            version: releaseAdoption.offeredReleaseVersion,
+            adopt: async () => {
+              const formData = new FormData();
+              formData.set("applicationKey", model.invocation.applicationKey);
+              formData.set("pageKey", model.invocation.pageKey);
+              formData.set("targetReleaseRevision", String(releaseAdoption.offeredReleaseRevision));
+              formData.set("expectedActiveReleaseRevision", String(releaseAdoption.installedReleaseRevision));
+              await adoptReleaseAction(formData);
+            },
+          },
+        }),
     chooseOrganization: async () => {
       if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork())) return;
       router.push("/signed-in");
@@ -2779,7 +2811,6 @@ function ApplicationPageViewContent({
     organizationName: application.organizationShortName,
     pageName: model.pageName,
     applicationSwitcherState,
-    ...(applicationToolbar === undefined ? {} : { toolbarContent: applicationToolbar }),
     applications: model.availableApplications.map((candidate) => ({
       key: candidate.key,
       name: candidate.name,
@@ -2821,6 +2852,8 @@ function ApplicationPageViewContent({
         shells={model.shells}
         {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
         applicationShellRuntime={applicationShellRuntime}
+        applicationSearch={applicationSearch}
+        applicationSearchPageSubject={applicationSearchPageSubject}
         pageId={model.pageId}
         theme={model.theme}
         projectedNavigation={model.navigation}

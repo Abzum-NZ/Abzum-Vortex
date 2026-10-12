@@ -8,6 +8,37 @@
     "description": "Roles and Groups. People request, review, grant and remove access, and manage eligible and active privileged roles. Effective assignments always come from the protected Access source.",
     "icon": "users",
     "home_page": "iam_overview",
+    "search": {
+      "enabled": true,
+      "record_types": [
+        {
+          "record_type": "vortex.iam.core:access_request",
+          "fields": [
+            {
+              "field": "vortex.iam.core:access_request.request_number",
+              "priority": "first"
+            },
+            {
+              "field": "vortex.iam.core:access_request.title",
+              "priority": "first"
+            }
+          ],
+          "title_field": "vortex.iam.core:access_request.title",
+          "target_page": "iam_access_request_detail"
+        },
+        {
+          "record_type": "vortex.system_directory:person",
+          "fields": [
+            {
+              "field": "vortex.system_directory:person.display_name",
+              "priority": "first"
+            }
+          ],
+          "title_field": "vortex.system_directory:person.display_name",
+          "target_page": "iam_person_detail"
+        }
+      ]
+    },
     "module_bindings": [
       {
         "module": "vortex.iam.core",
@@ -589,7 +620,50 @@
                 }
               },
               "slots": {
-                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
+                "header": {
+                  "placements": {
+                    "application_search": {
+                      "block": {
+                        "block_id": "d5ecf8af-a6c4-4f0a-93e1-2c6d0a56a726",
+                        "release_version": "1.0.0"
+                      },
+                      "settings": {
+                        "placeholder": {
+                          "kind": "text",
+                          "value": "Search this application"
+                        },
+                        "submit_label": {
+                          "kind": "text",
+                          "value": "Search"
+                        }
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      },
+                      "slots": {}
+                    }
+                  },
+                  "order": {
+                    "desktop": [
+                      "application_search"
+                    ],
+                    "tablet": [
+                      "application_search"
+                    ],
+                    "phone": [
+                      "application_search"
+                    ]
+                  }
+                },
                 "content": {
                   "placements": {
                     "shell_body": {

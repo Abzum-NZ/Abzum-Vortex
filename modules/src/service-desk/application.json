@@ -8,6 +8,70 @@
                  "description":  "Customer support cases, service targets and reviewed knowledge.",
                  "icon":  "life-buoy",
                  "home_page":  "service_desk_overview",
+                 "search": {
+                   "enabled": true,
+                   "record_types": [
+                     {
+                       "record_type": "vortex.service_desk.cases:case",
+                       "fields": [
+                         {
+                           "field": "vortex.service_desk.cases:case.case_number",
+                           "priority": "first"
+                         },
+                         {
+                           "field": "vortex.service_desk.cases:case.subject",
+                           "priority": "first"
+                         }
+                       ],
+                       "title_field": "vortex.service_desk.cases:case.subject",
+                       "target_page": "service_desk_case_detail"
+                     },
+                     {
+                       "record_type": "vortex.service_desk.knowledge:article",
+                       "fields": [
+                         {
+                           "field": "vortex.service_desk.knowledge:article.title",
+                           "priority": "first"
+                         }
+                       ],
+                       "title_field": "vortex.service_desk.knowledge:article.title",
+                       "target_page": "service_desk_article"
+                     },
+                     {
+                       "record_type": "vortex.service_desk.sla:service_level",
+                       "fields": [
+                         {
+                           "field": "vortex.service_desk.sla:service_level.name",
+                           "priority": "first"
+                         }
+                       ],
+                       "title_field": "vortex.service_desk.sla:service_level.name",
+                       "target_page": "service_desk_service_level_detail"
+                     },
+                     {
+                       "record_type": "vortex.crm.organisations:company",
+                       "fields": [
+                         {
+                           "field": "vortex.crm.organisations:company.name",
+                           "priority": "first"
+                         }
+                       ],
+                       "title_field": "vortex.crm.organisations:company.name",
+                       "target_page": "service_desk_customer_detail"
+                     },
+                     {
+                       "record_type": "vortex.crm.people:contact",
+                       "fields": [
+                         {
+                           "field": "vortex.crm.people:contact.full_name",
+                           "priority": "first"
+                         }
+                       ],
+                       "title_field": "vortex.crm.people:contact.full_name",
+                       "target_page": "service_desk_requester_detail"
+                     }
+                   ]
+                 },
                  "module_bindings":  [
                                          {
                                              "module":  "vortex.crm.organisations",
@@ -3693,7 +3757,50 @@
                              }
                            },
                            "slots": {
-                             "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
+                             "header": {
+                               "placements": {
+                                 "application_search": {
+                                   "block": {
+                                     "block_id": "d5ecf8af-a6c4-4f0a-93e1-2c6d0a56a726",
+                                     "release_version": "1.0.0"
+                                   },
+                                   "settings": {
+                                     "placeholder": {
+                                       "kind": "text",
+                                       "value": "Search this application"
+                                     },
+                                     "submit_label": {
+                                       "kind": "text",
+                                       "value": "Search"
+                                     }
+                                   },
+                                   "theme_overrides": {},
+                                   "responsive": {
+                                     "desktop": {
+                                       "visible": true,
+                                       "width": {
+                                         "kind": "fill"
+                                       },
+                                       "height": {
+                                         "kind": "content"
+                                       }
+                                     }
+                                   },
+                                   "slots": {}
+                                 }
+                               },
+                               "order": {
+                                 "desktop": [
+                                   "application_search"
+                                 ],
+                                 "tablet": [
+                                   "application_search"
+                                 ],
+                                 "phone": [
+                                   "application_search"
+                                 ]
+                               }
+                             },
                              "content": {
                                "placements": {
                                  "shell_body": {

@@ -229,6 +229,11 @@ export const APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE: PlatformBlockReleaseV2 =
   sources.APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
 );
 
+/** Search results are rendered where the application definition places this block. */
+export const APPLICATION_SEARCH_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(
+  sources.APPLICATION_SEARCH_BLOCK_RELEASE,
+);
+
 /** Exact immutable metadata release for the form container block. */
 export const FORM_CONTAINER_BLOCK_RELEASE: PlatformBlockReleaseV2 = release(sources.FORM_CONTAINER_BLOCK_RELEASE);
 
@@ -422,10 +427,11 @@ export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.f
   HEADING_BLOCK_RELEASE,
 ]);
 
-/** The two immutable application navigation block releases, placed in a shell's layout. */
+/** Immutable application navigation and search releases, placed in a shell's layout. */
 export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockReleaseV2[] = Object.freeze([
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
+  APPLICATION_SEARCH_BLOCK_RELEASE,
 ]);
 
 /** All immutable platform block releases registered for the page builder. */

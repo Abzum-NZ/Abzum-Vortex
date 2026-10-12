@@ -3839,6 +3839,54 @@
     "supportedEvents": [],
     "supportedStateOperations": []
   },
+  "APPLICATION_SEARCH_BLOCK_RELEASE": {
+    "blockId": "d5ecf8af-a6c4-4f0a-93e1-2c6d0a56a726",
+    "key": "platform.navigation.application_search",
+    "releaseVersion": "1.0.0",
+    "name": "Application search",
+    "icon": "search",
+    "paletteGroup": "actions",
+    "rendererKey": "platform.renderer.application_search",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "placeholder",
+        "label": "Placeholder",
+        "help": "Prompt shown in the application search field",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120,
+        "defaultValue": {
+          "kind": "text",
+          "value": "Search this application"
+        }
+      },
+      {
+        "kind": "text",
+        "key": "submit_label",
+        "label": "Button label",
+        "help": "Label on the application search button",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 40,
+        "defaultValue": {
+          "kind": "text",
+          "value": "Search"
+        }
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content",
+      "publicSurface": "refused",
+      "accessibleName": "not_applicable"
+    },
+    "supportedEvents": [],
+    "supportedStateOperations": []
+  },
   "FORM_CONTAINER_BLOCK_RELEASE": {
     "blockId": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
     "key": "platform.form.container",

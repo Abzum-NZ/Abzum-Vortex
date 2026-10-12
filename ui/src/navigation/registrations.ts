@@ -1,6 +1,7 @@
 import {
   APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
+  APPLICATION_SEARCH_BLOCK_RELEASE,
   NAVIGATION_BLOCK_RELEASES,
 } from "@vortex/contracts";
 import {
@@ -22,7 +23,7 @@ export {
 };
 
 /**
- * Navigation and account blocks read their platform context from the signed-in page. Neither
+ * Navigation, account, and search blocks read platform context from the signed-in page. None
  * accepts authored runtime inputs or invents application data.
  */
 export const NAVIGATION_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
@@ -35,9 +36,13 @@ export const NAVIGATION_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegis
       metadata: APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
       parsePayload: noRuntimeInputs,
     }),
+    Object.freeze({
+      metadata: APPLICATION_SEARCH_BLOCK_RELEASE,
+      parsePayload: noRuntimeInputs,
+    }),
   ]);
 
-/** Creates an immutable registry for application navigation and account actions. */
+/** Creates an immutable registry for application navigation, account actions, and search. */
 export function createNavigationComponentRegistry(): PlatformComponentRegistry {
   return createPlatformComponentRegistry(NAVIGATION_COMPONENT_REGISTRATIONS);
 }

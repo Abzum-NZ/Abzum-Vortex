@@ -29,7 +29,6 @@ export type ApplicationShellRuntime = Readonly<{
   pageName: string;
   applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
   applications: readonly Readonly<{ key: string; name: string; href: string }>[];
-  toolbarContent?: ReactNode;
 }>;
 
 const shellFrameCss = `
@@ -220,7 +219,6 @@ export function ApplicationShellRoot({
           {presentation.topBar.breadcrumbs ? (
             <Breadcrumbs shellName={shell.name} runtime={runtime} />
           ) : null}
-          {runtime?.toolbarContent}
           <div className="ms-auto flex min-w-0 items-center gap-1">
             {presentation.topBar.organizationSwitcher ? (
               <OrganizationSwitcher runtime={runtime} />

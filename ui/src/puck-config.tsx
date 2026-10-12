@@ -30,6 +30,7 @@ import {
   APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
+  APPLICATION_SEARCH_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   ATTACHMENT_LIST_BLOCK_RELEASE,
   BOARD_BLOCK_RELEASE,
@@ -101,6 +102,10 @@ import { LinkTiles } from "./launcher/link-tiles";
 import { ViewFilter } from "./launcher/view-filter";
 import { ApplicationNavigationBlock } from "./navigation/navigation";
 import { ApplicationAccountActionsBlock } from "./navigation/account-actions";
+import {
+  ApplicationSearchBlock,
+  type ApplicationSearchRuntime,
+} from "./navigation/application-search-block";
 import { Container } from "./layout/container";
 import { Heading } from "./layout/heading";
 import { BoardDisplay } from "./display/board";
@@ -165,6 +170,10 @@ export type VortexPuckMetadata = Readonly<{
   componentBundleOrigin?: string | undefined;
   /** Runtime names and permitted links used by the definition-selected root shell. */
   applicationShellRuntime?: ApplicationShellRuntime | undefined;
+  /** Protected search results loaded for this page's definition-placed search block. */
+  applicationSearch?: ApplicationSearchRuntime | undefined;
+  /** Record subject preserved when submitting application search from a detail page. */
+  applicationSearchPageSubject?: string | undefined;
 }>;
 
 /**
@@ -255,6 +264,7 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   [BUTTON_BLOCK_RELEASE.rendererKey, Button],
   [APPLICATION_NAVIGATION_BLOCK_RELEASE.rendererKey, ApplicationNavigationBlock],
   [APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE.rendererKey, ApplicationAccountActionsBlock],
+  [APPLICATION_SEARCH_BLOCK_RELEASE.rendererKey, ApplicationSearchBlock],
   [APPLICATION_LAUNCHER_BLOCK_RELEASE.rendererKey, ApplicationLauncher],
   [LINK_TILES_BLOCK_RELEASE.rendererKey, LinkTiles],
   [RECORD_PIN_LINK_TILES_BLOCK_RELEASE.rendererKey, LinkTiles],
@@ -692,6 +702,12 @@ function PlacementBlock(props: {
             {...(metadataIn.componentBundleOrigin === undefined
               ? {}
               : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
+            {...(metadataIn.applicationSearch === undefined
+              ? {}
+              : { applicationSearch: metadataIn.applicationSearch })}
+            {...(metadataIn.applicationSearchPageSubject === undefined
+              ? {}
+              : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
           />
         ) : null}
       </div>
