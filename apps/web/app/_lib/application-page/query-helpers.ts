@@ -204,7 +204,6 @@ export const logPlacementFailure = (
   address: Readonly<{ application: PermittedApplication; pageKey: string }>,
   placementId: string,
   reason:
-    | "read_model_not_served"
     | "query_not_bound"
     | "subject_unavailable"
     | "detail_record_type_unavailable"

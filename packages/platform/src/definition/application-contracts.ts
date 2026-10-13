@@ -33,7 +33,7 @@ import {
   roleIdSchema,
   semanticVersionSchema,
 } from "../catalogue/identifiers";
-import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
+import { labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import { actionInputValueTypes, applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { permissionDeclarationSchema } from "../access/permissions";
 import {
@@ -622,9 +622,6 @@ const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
   "web_address",
 ]);
 
-// Keep legacy page settings decodable as opaque JSON; compilation ignores them.
-const retiredPageSettingSchema = jsonValueSchema.optional();
-
 /**
  * One declared application experience page: a normal page rendered for a fixed state. A
  * refused page and a missing page both resolve to `not_found`, so the two surfaces stay
@@ -640,7 +637,6 @@ const experienceGatedPlacementKeys = [
   "usePermissionKey",
   "visibilityCondition",
   "queryId",
-  "readModel",
 ] as const;
 
 const declaresGatedPlacement = (value: unknown): boolean => {
@@ -656,7 +652,7 @@ const declaresGatedPlacement = (value: unknown): boolean => {
  * An experience page is shown in place of a page the viewer cannot open, before any placement
  * authority or data is projected for it, so it must be presentation-only: neither the page nor
  * the application shell it uses may hold a placement with a view or use permission, a visibility
- * condition, a query or a read model.
+ * condition or a query.
  */
 export function isPresentationOnlyApplicationExperience(
   page: Readonly<{ composition: Readonly<{ shellKind: string; shellId?: string }> }>,
@@ -675,8 +671,6 @@ const pageCommon = {
   key: builderKeySchema,
   name: labelSchema,
   accessPermissionKey: namespacedKeySchema,
-  states: retiredPageSettingSchema,
-  standardPageReplacement: retiredPageSettingSchema,
 };
 
 const pageBase = {
@@ -690,8 +684,6 @@ const listPageSchema = z
     type: z.literal("list"),
     recordType: recordTypeReferenceSchema,
     queryId: queryIdSchema,
-    arrangements: retiredPageSettingSchema,
-    calendarMapping: retiredPageSettingSchema,
   })
   .strict();
 

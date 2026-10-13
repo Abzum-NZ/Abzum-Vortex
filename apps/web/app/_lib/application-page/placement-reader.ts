@@ -293,13 +293,6 @@ export const readPlacement = async (
     };
     return;
   }
-  // A placement still bound to a legacy read model has no reader on this page: system record
-  // types are read through the query path. It must never fall through to an empty display.
-  if (placement.readModel !== undefined) {
-    logPlacementFailure(address, placementId, "read_model_not_served");
-    data[placementId] = { status: "error" };
-    return;
-  }
   if (isAttachmentListBlock) {
     await readAttachmentListPlacement({
       block,

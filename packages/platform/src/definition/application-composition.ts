@@ -2251,9 +2251,7 @@ export const applicationCompositionCatalogueSnapshotSchema = z
   });
 
 /**
- * Closed, platform-declared protected read models. A page binds to one by key only; the request-time
- * resolver reads it live through the owning protected reader under the viewer's current authority.
- * Nothing here is copied into application records, and there are no free-form keys or filters.
+ * Closed, platform-declared protected read models that a module's protected view may name.
  */
 export const protectedReadModelKeys = [
   "people",
@@ -2274,135 +2272,6 @@ export const protectedReadModelKeys = [
   "application_role_templates",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
-export type ProtectedReadModelKey = z.infer<typeof protectedReadModelKeySchema>;
-
-export const protectedReadModelDeclarations = Object.freeze({
-  people: Object.freeze({
-    label: "People (Group membership)",
-    ownerReader: "access.listGroupMemberships",
-    filters: Object.freeze(["groupId"] as const),
-    resultContract: "ListOrganizationAdministrationMembershipsResult",
-  }),
-  organization_accounts: Object.freeze({
-    label: "Organisation accounts",
-    ownerReader: "access.listOrganizationAccounts",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationAccountsResult",
-  }),
-  roles: Object.freeze({
-    label: "Roles",
-    ownerReader: "access.listRoles",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationAdministrationRolesResult",
-  }),
-  permissions: Object.freeze({
-    label: "Permissions",
-    ownerReader: "access.listPermissions",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationAdministrationPermissionsResult",
-  }),
-  groups: Object.freeze({
-    label: "Groups",
-    ownerReader: "access.listGroups",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationAdministrationGroupsResult",
-  }),
-  effective_assignments: Object.freeze({
-    label: "Effective assignments",
-    ownerReader: "access.listRoleAssignments",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationAdministrationRoleAssignmentsResult",
-  }),
-  role_activations: Object.freeze({
-    label: "Role activations",
-    ownerReader: "access.listRoleActivations",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationAdministrationRoleActivationsResult",
-  }),
-  delegations: Object.freeze({
-    label: "Delegations",
-    ownerReader: "access.listDelegationAuthorities",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationAdministrationDelegationAuthoritiesResult",
-  }),
-  tenant_structure: Object.freeze({
-    label: "Tenant structure",
-    ownerReader: "identity.listTenantHierarchy",
-    filters: Object.freeze([] as const),
-    resultContract: "TenantHierarchyResult",
-  }),
-  organization_invitations: Object.freeze({
-    label: "Organisation invitations",
-    ownerReader: "access.listOrganizationInvitations",
-    filters: Object.freeze([] as const),
-    resultContract: "ListOrganizationInvitationsResult",
-  }),
-  organization_runtime_settings: Object.freeze({
-    label: "Organisation runtime settings",
-    ownerReader: "access.readOrganizationRuntimeSettings",
-    filters: Object.freeze([] as const),
-    resultContract: "ReadOrganizationRuntimeSettingsResult",
-  }),
-  tenants: Object.freeze({
-    label: "Tenants",
-    ownerReader: "identity.listTenants",
-    filters: Object.freeze([] as const),
-    resultContract: "TenantLauncherResult",
-  }),
-  tenant_administrators: Object.freeze({
-    label: "Tenant administrators",
-    ownerReader: "identity.listTenantAdministrators",
-    filters: Object.freeze([] as const),
-    resultContract: "TenantAssignmentReadResult",
-  }),
-  // Installed applications already project a registered protected view, so the
-  // ordinary query path reads them. The permitted-applications feed still serves
-  // them to pages and no owner reader replaces it yet, so a page binding to this
-  // read model refuses neutrally until that feed is replaced; `unavailable` is
-  // that fact, not a reader that does not exist.
-  installed_applications: Object.freeze({
-    label: "Installed applications",
-    ownerReader: "unavailable",
-    filters: Object.freeze([] as const),
-    resultContract: "ProtectedReadModelResolution",
-  }),
-  landing_zone_applications: Object.freeze({
-    label: "Landing Zone applications",
-    ownerReader: "unavailable",
-    filters: Object.freeze([] as const),
-    resultContract: "ProtectedReadModelResolution",
-  }),
-  application_role_templates: Object.freeze({
-    label: "Application role templates",
-    ownerReader: "unavailable",
-    filters: Object.freeze([] as const),
-    resultContract: "ProtectedReadModelResolution",
-  }),
-} satisfies Record<
-  ProtectedReadModelKey,
-  Readonly<{
-    label: string;
-    ownerReader: string;
-    filters: readonly "groupId"[];
-    resultContract: string;
-  }>
->);
-
-/** A placement's binding names one declared read model and nothing else. */
-export const protectedReadModelBindingSchema = z
-  .object({ key: sourceProvenanceUnchanged(protectedReadModelKeySchema) })
-  .strict();
-export type ProtectedReadModelBinding = z.infer<typeof protectedReadModelBindingSchema>;
-
-/** Request-time input is closed: a bounded page, the reader's own cursor and the declared filters. */
-export const protectedReadModelPageRequestSchema = z
-  .object({
-    pageSize: sourceProvenanceUnchanged(z.number().int().min(1).max(100)),
-    after: sourceProvenanceUnchanged(z.uuid().optional()),
-    groupId: sourceProvenanceUnchanged(z.uuid().optional()),
-  })
-  .strict();
-export type ProtectedReadModelPageRequest = z.infer<typeof protectedReadModelPageRequestSchema>;
 
 type BlockPlacement = {
   block: z.infer<typeof platformBlockReferenceSchema>;
@@ -2410,7 +2279,6 @@ type BlockPlacement = {
   usePermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
   visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
   queryId?: z.infer<typeof queryIdSchema> | undefined;
-  readModel?: ProtectedReadModelBinding | undefined;
   settings: Record<string, BlockPropertyValueContract>;
   themeOverrides: Record<string, z.infer<typeof themeTokenValueSchema>>;
   responsive: z.infer<typeof responsivePlacementSchema>;
@@ -2427,7 +2295,6 @@ type SourceBlockPlacement = {
   use_permission?: z.infer<typeof namespacedKeySchema> | undefined;
   visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   query?: z.infer<typeof builderKeySchema> | undefined;
-  read_model?: ProtectedReadModelKey | undefined;
   settings: Record<string, SourceBlockPropertyValueContract>;
   theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueSchema>>;
   responsive: z.infer<typeof sourceResponsivePlacementSchema>;
@@ -2451,7 +2318,6 @@ export const blockPlacementSchema: z.ZodType<BlockPlacement> = z.lazy(() =>
       usePermissionKey: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
       visibilityCondition: sourceProvenanceUnchanged(conditionNodeSchema.optional()),
       queryId: sourceProvenanceUnchanged(queryIdSchema.optional()),
-      readModel: sourceProvenanceUnchanged(protectedReadModelBindingSchema.optional()),
       settings: sourceProvenanceUnchanged(z.record(builderKeySchema, blockPropertyValueSchema)),
       themeOverrides: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
       responsive: sourceProvenanceUnchanged(responsivePlacementSchema),
@@ -2499,7 +2365,6 @@ export const sourceBlockPlacementSchema: z.ZodType<SourceBlockPlacement> = z.laz
       use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
       visibility_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
       query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema.optional(), ["queryId"]),
-      read_model: sourceProvenanceUnchanged(protectedReadModelKeySchema.optional()),
       settings: sourceProvenanceUnchanged(
         z.record(builderKeySchema, sourceBlockPropertyValueSchema),
       ),

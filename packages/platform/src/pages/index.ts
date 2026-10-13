@@ -36,7 +36,6 @@ export {
   createStoredPageCapabilityService,
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
-  type StoredPageReadModelValue,
 } from "./stored-page-capability";
 export {
   collectNavigationPermissionKeys,
@@ -52,12 +51,6 @@ export {
   type ProjectedNavigationItem,
   type StoredNavigationProjectionDependencies,
 } from "./navigation-projection";
-export {
-  createProtectedReadModelResolver,
-  type ProtectedReadModelReaders,
-  type ProtectedReadModelRequestContext,
-  type ProtectedReadModelResolution,
-} from "./protected-read-model-resolution";
 export {
   projectRecordDetailData,
   projectRecordsTableData,

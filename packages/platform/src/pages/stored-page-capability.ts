@@ -24,7 +24,6 @@ import {
   platformOperationKey,
   type FlowDefinition,
   type FlowTask,
-  type ProtectedReadModelKey,
   type ConditionNode,
   type JsonValue,
   type PlatformId,
@@ -55,10 +54,6 @@ import {
 import { resolvePageComposition } from "./page-composition-resolution";
 import { readPageSubjectInTransaction, type PageSubjectReadResult } from "./page-subject-read";
 import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
-import {
-  createProtectedReadModelResolver,
-  type ProtectedReadModelReaders,
-} from "./protected-read-model-resolution";
 
 /** Address candidates select a page and its subject; organisation, installation and release come from context. */
 export type StoredPageCapabilitySelection = Readonly<{
@@ -77,22 +72,7 @@ export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependenc
     selection: StoredPageCapabilitySelection;
     /** The shipped platform permission catalogue page requirements may name. */
     permissions: PlatformPermissionSource;
-    /**
-     * The existing protected Access and Identity readers, composed by the server. A read-model
-     * placement is refused while they are not supplied; Page never reads those tables itself.
-     */
-    protectedReadModelReaders?: ProtectedReadModelReaders;
   }>;
-
-/** Live protected data for one visible read-model placement; never stored or copied. */
-export type StoredPageReadModelValue = Readonly<{
-  model: ProtectedReadModelKey;
-  value: unknown;
-  /** Current organisation Access version this value was read under. */
-  accessVersion: number;
-  /** Exact installed application release revision this value was read under. */
-  applicationReleaseRevision: number;
-}>;
 
 class StoredPageCapabilityFailure extends Error {
   constructor(
@@ -366,31 +346,6 @@ const placementOperationBindings = (
       { required: outcome.required, bound: outcome.required && outcome.resolved },
     ]),
   );
-};
-
-/** Finds a placement the viewer can see in the already permission-filtered projection. */
-const findProjectedPlacement = (
-  slot: unknown,
-  placementId: string,
-): Record<string, unknown> | undefined => {
-  const placements = (slot as { placements?: Record<string, Record<string, unknown>> } | undefined)
-    ?.placements;
-  if (placements === undefined) return undefined;
-  for (const [candidateId, placement] of Object.entries(placements)) {
-    if (sameId(candidateId, placementId)) return placement;
-    for (const child of Object.values((placement.slots ?? {}) as Record<string, unknown>)) {
-      const found = findProjectedPlacement(child, placementId);
-      if (found !== undefined) return found;
-    }
-  }
-  return undefined;
-};
-
-const projectedRoots = (projected: Readonly<Record<string, unknown>>): unknown[] => {
-  const composition = projected.composition as Record<string, unknown> | undefined;
-  if (composition === undefined) return [];
-  if ("main" in composition) return [composition.main];
-  return Object.values((composition.stepContent ?? {}) as Record<string, unknown>);
 };
 
 const placementEntries = (slot: unknown): Record<string, unknown>[] => {
@@ -795,58 +750,9 @@ export const createStoredPageCapabilityService = (
     return projected.kind === "available" && projected.value !== undefined;
   };
 
-  const readModels =
-    dependencies.protectedReadModelReaders === undefined
-      ? undefined
-      : createProtectedReadModelResolver(dependencies.protectedReadModelReaders);
-
   return Object.freeze({
     project: (session: IdentitySession, candidate: OrganizationSelectionCandidate) =>
       project(session, candidate),
-    /**
-     * Reads one read-model placement of the selected page live, at request time. The binding comes
-     * only from the exact release; the viewer must be able to see the page and that placement, and
-     * the owning reader then applies its own authority to the viewer's current session. Every
-     * refusal is the same neutral answer and is never an empty page.
-     */
-    async readModel(
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      placementId: string,
-      requestCandidate: unknown,
-    ): Promise<HumanOrganizationRequestResult<StoredPageReadModelValue>> {
-      const projected = await project(session, candidate);
-      if (projected.kind !== "available") return projected;
-      if (projected.value === undefined || readModels === undefined) return { kind: "unavailable" };
-      const placement = projectedRoots(projected.value)
-        .map((root) => findProjectedPlacement(root, placementId))
-        .find((found) => found !== undefined);
-      if (placement?.readModel === undefined) return { kind: "unavailable" };
-      // The tenant is the verified scope's own tenant, never page or browser input. The verified
-      // scope also fixes the Access version the read is answered under.
-      const scoped = await requests.run(session, candidate, async (_transaction, scope) =>
-        Object.freeze({ tenantId: String(scope.tenantId), accessVersion: scope.accessVersion }),
-      );
-      if (scoped.kind !== "available") return scoped;
-      const resolved = await readModels.resolve(
-        { session, selection: candidate, tenantId: scoped.value.tenantId },
-        placement.readModel,
-        requestCandidate,
-      );
-      return resolved.kind === "available"
-        ? {
-            kind: "available",
-            value: {
-              model: resolved.model,
-              value: resolved.value,
-              accessVersion: scoped.value.accessVersion,
-              applicationReleaseRevision: releaseRevision,
-            },
-          }
-        : resolved.kind === "unavailable"
-          ? { kind: "temporarily_unavailable" }
-          : { kind: "unavailable" };
-    },
     /**
      * Re-checks one declared link target against the viewer's current access at navigation time.
      * The target is definition or record data and grants nothing. An external address is available

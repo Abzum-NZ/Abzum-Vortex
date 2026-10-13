@@ -223,7 +223,6 @@ export const createVortexPuckAdapter = (catalogueInput: unknown) => {
             ? {}
             : { visibilityCondition: clone(placement.visibilityCondition) }),
           ...(placement.queryId === undefined ? {} : { queryId: placement.queryId }),
-          ...(placement.readModel === undefined ? {} : { readModel: clone(placement.readModel) }),
           themeOverrides: clone(placement.themeOverrides),
           responsive: clone(placement.responsive),
           order: clone(slot.order),
@@ -300,7 +299,6 @@ export const createVortexPuckAdapter = (catalogueInput: unknown) => {
           "usePermissionKey",
           "visibilityCondition",
           "queryId",
-          "readModel",
           "themeOverrides",
           "responsive",
           "order",
@@ -399,9 +397,6 @@ export const createVortexPuckAdapter = (catalogueInput: unknown) => {
           ? {}
           : { visibilityCondition: clone(meta.visibilityCondition) }),
         ...(meta.queryId === undefined ? {} : { queryId: string(meta.queryId, "queryId") }),
-        ...(meta.readModel === undefined
-          ? {}
-          : { readModel: clone(asObject(meta.readModel, "readModel")) }),
         themeOverrides: clone(asObject(meta.themeOverrides, "themeOverrides")),
         responsive: clone(asObject(meta.responsive, "responsive")),
         slots,
