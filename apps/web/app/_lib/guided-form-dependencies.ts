@@ -1,14 +1,9 @@
 import "server-only";
 
-import {
-  createActiveApplicationInstallationRepository,
-  createDatabaseApplicationBoundReleaseSetService,
-  createHumanInstalledRuntimeContextLoader,
-} from "@vortex/platform/server";
+import { createHumanInstalledPageBundleContextLoader } from "@vortex/platform/server";
 import type { GuidedFormDependencies } from "@vortex/platform/server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
-import { installedReleaseCatalogue } from "./definition-catalogue";
 
 /**
  * Binds the platform's guided form logic to this application: the installed release catalogue and
@@ -18,12 +13,8 @@ export const guidedFormDependencies = (): GuidedFormDependencies => ({
   identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
   readContext: async (transaction, scope) => {
     if (scope.applicationRootId === undefined) return undefined;
-    return createHumanInstalledRuntimeContextLoader({
-      activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-      releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-        installedReleaseCatalogue,
-        transaction,
-      ),
+    return createHumanInstalledPageBundleContextLoader({
+      transaction,
       scope: {
         organizationId: scope.organizationId,
         applicationRootId: scope.applicationRootId,

@@ -3,7 +3,7 @@ import "server-only";
 export { createAppTelemetryCollector } from "./telemetry";
 export { createOperationsAlertSink } from "./operations-alert-sink";
 export { isReservedTenantSegment, readAddressedApplicationAtAddress, readAddressedApplicationFromInstalledBundleAtAddress, readPermittedApplicationsAtAddress, resolvePermittedApplicationAddress, type AddressedApplicationRead, type AddressedApplicationBundleRead, type ApplicationExperience, type PermittedApplication, type PermittedApplicationsRead } from "./application-address";
-export { createHumanInstalledRuntimeContextLoader, requireInstalledRuntimeContext, type InstalledRuntimeContext } from "./installed-runtime-context";
+export { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "./installed-runtime-context";
 export { createHumanInstalledPageBundleContextLoader, isTrustedInstalledPageBundleContext, isTrustedInstalledPageComposition, matchesInstalledPageBundleIdentity, readInstalledPageComposition } from "./installed-page-bundle-context";
 
 export { resolveInstalledPageIdentity } from "./standard-page-resolution";

@@ -201,19 +201,14 @@ export const createInstalledRuntimeContextLoader = (
   });
 
 /**
- * The human-request variant of the loader. The installation comes from the protected
- * active-installation read and the release set from the protected human Application-bound reader,
- * both under one already-resolved human request transaction whose organisation and application
- * scope Access verified for the signed-in person. It mints no system context or actor and widens no
- * grant: the assembled context only names the exact installed release, and every page, navigation
- * and data decision still runs through Access for that person.
+ * The inputs of a human-request context. The installation comes from the protected
+ * active-installation read under one already-resolved human request transaction whose organisation
+ * and application scope Access verified for the signed-in person. It mints no system context or
+ * actor and widens no grant: the assembled context only names the exact installed release, and
+ * every page, navigation and data decision still runs through Access for that person.
  */
 export type HumanInstalledRuntimeContextDependencies = Readonly<{
   activeInstallationReader: InstalledRuntimeActiveInstallationReader;
-  /** The protected human Application-bound release reader, such as the Definition database service. */
-  releaseSetReader: Readonly<{
-    read(command: { applicationReleaseRevision: number }): Promise<unknown>;
-  }>;
   /** The organisation and application the human request scope resolved for this person. */
   scope: Readonly<{ organizationId: string; applicationRootId: string }>;
 }>;
@@ -272,28 +267,6 @@ export const assembleHumanInstalledRuntimeContext = (
         ),
       ),
   );
-
-export const createHumanInstalledRuntimeContextLoader = (
-  dependencies: HumanInstalledRuntimeContextDependencies,
-) =>
-  Object.freeze({
-    async load(): Promise<InstalledRuntimeContext> {
-      const installation = await readHumanActiveInstallation(dependencies);
-      let releaseSetCandidate: unknown;
-      try {
-        releaseSetCandidate = await dependencies.releaseSetReader.read({
-          applicationReleaseRevision: installation.applicationReleaseRevision,
-        });
-      } catch (error) {
-        throw definitionFailure(error);
-      }
-      return assembleHumanInstalledRuntimeContext(
-        installation,
-        parseReleaseSet(releaseSetCandidate),
-        dependencies.scope,
-      );
-    },
-  });
 
 // Parsed into a fresh value so the context never aliases the reader's own result.
 const parseReleaseSet = (candidate: unknown): SystemApplicationBoundReleaseSetResult => {

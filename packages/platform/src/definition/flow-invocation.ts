@@ -44,7 +44,7 @@ import {
 import { createPageSubjectReader } from "../pages/page-subject-read";
 import { createNamedActionRecordPort } from "../records/action-record-port";
 import { createRecordSaveService } from "../records/save-record";
-import { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
+import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
 import {
@@ -55,8 +55,7 @@ import {
 } from "./flow-orchestrator";
 import { createFormContinuationService } from "./form-continuation";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
-import { createActiveApplicationInstallationRepository } from "./installation-binding-reader";
-import { createHumanInstalledRuntimeContextLoader } from "./installed-runtime-context";
+import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { ActionInputDefinition } from "./module-contracts";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
@@ -516,12 +515,8 @@ export async function invokeInstalledFlow(
     permissions: dependencies.releaseCatalogue.permissions,
     createInstalledContextLoader: (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
-      return createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-        releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-          dependencies.releaseCatalogue,
-          transaction,
-        ),
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
       });
     },
@@ -661,12 +656,8 @@ export async function invokeInstalledFlow(
               !sameId(scope.applicationRootId, installation.applicationRootId)
             )
               return false;
-            const current = await createHumanInstalledRuntimeContextLoader({
-              activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-              releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-                dependencies.releaseCatalogue,
-                transaction,
-              ),
+            const current = await createHumanInstalledPageBundleContextLoader({
+              transaction,
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
@@ -755,12 +746,8 @@ export async function invokeInstalledFlow(
               !sameId(scope.applicationRootId, installation.applicationRootId)
             )
               return false;
-            const current = await createHumanInstalledRuntimeContextLoader({
-              activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-              releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-                dependencies.releaseCatalogue,
-                transaction,
-              ),
+            const current = await createHumanInstalledPageBundleContextLoader({
+              transaction,
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
@@ -897,13 +884,13 @@ export async function invokeInstalledFlow(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
   ): Promise<InstalledFlowBindings | undefined> => {
-    const read = await requests.run(session, selection, async (transaction) => {
-      const installation =
-        await createActiveApplicationInstallationRepository(transaction).readCurrent();
-      const releaseSet = await createDatabaseApplicationBoundReleaseSetService(
-        dependencies.releaseCatalogue,
+    const read = await requests.run(session, selection, async (transaction, scope) => {
+      if (scope.applicationRootId === undefined) throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
+      const installation = await createHumanInstalledPageBundleContextLoader({
         transaction,
-      ).read({ applicationReleaseRevision: installation.applicationReleaseRevision });
+        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+      }).load();
+      const releaseSet = installation.releaseSet;
       const application = releaseSet.application;
       guidedControls.clear();
       for (const page of application.content.pages) {
