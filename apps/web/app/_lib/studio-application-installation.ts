@@ -1443,17 +1443,20 @@ const readCurrentFirstInstallCandidate = async (
 };
 
 const provisionedSetupAccessDeclaration = (key: string): OrganizationAccessDeclaration => {
-  const declaration = permissionDeclaration(key);
-  return key === "platform.organization.applications.install_scope"
-    ? organizationAccessDeclarationSchema.parse({
-        ...declaration,
-        authority: {
-          kind: "delegated_management",
-          before: { kind: "organization_catalogue" },
-          after: { kind: "organization_catalogue" },
-        },
-      })
-    : declaration;
+  const declaration = permissionDeclaration("platform.organization.applications.manage");
+  return organizationAccessDeclarationSchema.parse({
+    ...declaration,
+    operationKey: key,
+    ...(key === "platform.organization.applications.install_scope"
+      ? {
+          authority: {
+            kind: "delegated_management" as const,
+            before: { kind: "organization_catalogue" as const },
+            after: { kind: "organization_catalogue" as const },
+          },
+        }
+      : {}),
+  });
 };
 
 const readProvisionedSetupAccessDecision = async (
