@@ -6,6 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { recordIdSchema } from "@vortex/platform/schema";
 import {
   parsePermittedApplicationsLauncherProjection,
+  type ApplicationAccount,
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
@@ -256,15 +257,21 @@ export default async function ApplicationAddressPage({
     );
 
   if (email === undefined) throw new Error("Active identity session resolved without an email");
-  const launcher = await loadOrganizationLauncher(identity.session);
-  if (launcher.kind !== "available")
-    throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
-  const displayName = launcher.entries.find(
-    (entry) =>
-      entry.tenantShortName === tenantShortName &&
-      entry.organizationShortName === organizationShortName,
-  )?.accountDisplayName;
-  const account = displayName === undefined ? { email } : { email, displayName };
+  const accountWithName = (displayName: string | undefined): ApplicationAccount =>
+    displayName === undefined ? { email } : { email, displayName };
+  // Pages that do not already read the addressed organisation's account look it up here.
+  const loadAccount = async (): Promise<ApplicationAccount> => {
+    const launcher = await loadOrganizationLauncher(identity.session);
+    if (launcher.kind !== "available")
+      throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+    return accountWithName(
+      launcher.entries.find(
+        (entry) =>
+          entry.tenantShortName === tenantShortName &&
+          entry.organizationShortName === organizationShortName,
+      )?.accountDisplayName,
+    );
+  };
 
   if (addressSegments.length > 2) return unavailableFallback;
 
@@ -316,7 +323,7 @@ export default async function ApplicationAddressPage({
         shells={resolved.experience.shells}
         theme={resolved.experience.theme}
         organizationName={organizationShortName}
-        account={account}
+        account={await loadAccount()}
         platformBlockReleases={platformBlockReleasesFor(
           resolved.experience.page,
           resolved.experience.shells,
@@ -363,7 +370,7 @@ export default async function ApplicationAddressPage({
         placementId={organizationLauncherPlacementId}
         values={launcherValues}
         organizationName={resolved.read.organizationShortName}
-        account={account}
+        account={await loadAccount()}
         openApplication={openApplication}
         launcherHref={launcherPath(tenantShortName, organizationShortName)}
         platformBlockReleases={platformBlockReleasesFor(page, organizationLauncherShell)}
@@ -476,7 +483,7 @@ export default async function ApplicationAddressPage({
       onOpenApplication={openApplication}
       adoptReleaseAction={adoptRelease}
       applicationSwitcherState={applicationSwitcherState}
-      account={account}
+      account={accountWithName(resolved.read.accountDisplayName)}
       applicationSearch={search}
       applicationSearchPageSubject={searchPageSubject.success ? searchPageSubject.data : undefined}
       pageFeedback={

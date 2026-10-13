@@ -134,7 +134,7 @@ type RequestIdentityResolution = Readonly<{
   resolution: IdentitySessionResolution;
   /** Present only when this exact token passed Identity resolution. Server request only. */
   accessToken?: string;
-  /** The signed-in person's email from the same provider session; present with `accessToken`. */
+  /** The verified primary email of the identity that passed resolution; present with `accessToken`. */
   email?: string;
 }>;
 
@@ -173,15 +173,10 @@ const resolveRequestIdentity = async (
   const staged = boundary.stage.snapshot();
   if (staged.refused || staged.mutations.length > 0) return { resolution: unavailable() };
   const accessToken = current.data.session.access_token;
-  const resolution = await sessionService(execution).resolve(accessToken);
+  const { resolution, verifiedPrimaryEmail } = await sessionService(execution).resolveVerified(accessToken);
   execution?.checkpoint();
-  if (resolution.kind !== "active") return { resolution };
-  const email = current.data.session.user.email;
-  if (email === undefined || email === "") {
-    console.error("[identity] active session has no email on the provider user");
-    return { resolution: unavailable() };
-  }
-  return { resolution, accessToken, email };
+  if (resolution.kind !== "active" || verifiedPrimaryEmail === undefined) return { resolution };
+  return { resolution, accessToken, email: verifiedPrimaryEmail };
 };
 
 export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> =>
