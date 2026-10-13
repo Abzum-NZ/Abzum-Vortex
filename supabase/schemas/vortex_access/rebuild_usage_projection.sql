@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.rebuild_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_access.rebuild_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -8,8 +8,8 @@ declare
   discrepancy_count integer;
   discrepancy_alerts jsonb;
 begin
-  if p_identity_id is null or not vortex_context.is_non_nil_uuid(p_identity_id::text)
-    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+  if p_identity_id is null or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
+    or p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
     or p_period_start is null or p_period_end is null or p_period_start >= p_period_end
     or p_period_end - p_period_start > interval '366 days'
     or p_period_start <> (pg_catalog.date_trunc('day', p_period_start at time zone 'UTC') at time zone 'UTC')
@@ -82,7 +82,6 @@ begin
     discrepancy_count = excluded.discrepancy_count, alerts = excluded.alerts;
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.rebuild_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) OWNER TO postgres;
 

@@ -51,6 +51,8 @@ begin
   return sql_type;
 end
 $_$;
+alter function vortex_record.ensure_storage_conversion_column_internal(text,text,text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.ensure_storage_conversion_column_internal(p_table_token text, p_column_token text, p_database_value_type text) IS 'Private Record-owner helper: creates the nullable planned target column when absent and refuses a conflicting physical column; never touches the active source column.';
 

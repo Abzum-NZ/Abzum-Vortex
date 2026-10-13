@@ -34,7 +34,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.organization_accounts_administration_change_scope() OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.organization_accounts_administration_change_scope() IS 'Private fixed accounts.manage decision for organisation-local account lifecycle.';

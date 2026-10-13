@@ -7,7 +7,6 @@ begin
 end;
 $$;
 
-
 ALTER FUNCTION vortex_access.refuse_organization_role_history_mutation() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.refuse_organization_role_history_mutation() FROM PUBLIC;

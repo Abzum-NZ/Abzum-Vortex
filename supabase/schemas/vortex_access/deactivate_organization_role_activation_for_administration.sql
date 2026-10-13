@@ -74,10 +74,10 @@ begin
       'permission_unavailable', 'permission_not_effective',
       'authentication_unsatisfied', 'delegation_insufficient'
     ) then
-    activity_result := vortex_activity.append_organization_activity_entry(
+    activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
       'organization_account', context_account_id, 'revoke_role_activation',
-      array[context_organization_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+      array[context_organization_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
       context_correlation_id, 'refused'
     );
     if activity_result is distinct from 'inserted' then
@@ -107,10 +107,10 @@ begin
     null, null, context_account_id, context_correlation_id) as result;
   summary := vortex_access.project_organization_role_activation_summary(context_organization_id, p_role_activation_id);
   if summary is null then raise exception using errcode = '40001', message = 'Changed activation projection is unavailable'; end if;
-  activity_result := vortex_activity.append_organization_activity_entry(context_organization_id,
+  activity_result := vortex_record.append_organization_activity_entry(context_organization_id,
     p_activity_id, (changed.activation ->> 'changedAt')::timestamptz, 'organization_account',
     context_account_id, 'revoke_role_activation', array[p_role_activation_id]::uuid[],
-    array[]::uuid[], vortex_context.channel(), context_correlation_id, 'completed');
+    array[]::uuid[], vortex_platform.channel(), context_correlation_id, 'completed');
   if activity_result is distinct from 'inserted' then raise exception using errcode = '40001', message = 'Role activation Activity is stale'; end if;
   return query select 'completed'::text, context_organization_id, summary, changed.access_version;
 end $function$;

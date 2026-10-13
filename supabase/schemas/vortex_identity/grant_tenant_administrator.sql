@@ -24,9 +24,9 @@ declare
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
 begin
   capabilities := vortex_identity.tenant_capabilities_from_json(p_capabilities);
-  if p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or p_subject_identity_id is null or not vortex_context.is_non_nil_uuid(p_subject_identity_id::text)
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_subject_identity_id is null or not vortex_platform.is_non_nil_uuid(p_subject_identity_id::text)
     or p_command_fingerprint is null or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' or capabilities is null
     or p_starts_at is null or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and (p_expires_at <= p_starts_at or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz))) then
@@ -53,8 +53,8 @@ begin
   computed_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'grant_tenant_administrator',
       p_tenant_id::text, p_subject_identity_id::text, pg_catalog.array_to_string(capabilities, ','),
-      vortex_context.format_timestamp_utc(p_starts_at),
-      coalesce(vortex_context.format_timestamp_utc(p_expires_at), '')),
+      vortex_platform.format_timestamp_utc(p_starts_at),
+      coalesce(vortex_platform.format_timestamp_utc(p_expires_at), '')),
       'UTF8'), 'sha256'), 'hex');
   if not exists (
       select 1 from vortex_identity.identity_projections p
@@ -116,8 +116,7 @@ end
 $function$;
 
 revoke execute on function vortex_identity.grant_tenant_administrator(uuid, text, uuid, uuid, jsonb, timestamptz, timestamptz)
-  from public, anon, authenticated, service_role, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.grant_tenant_administrator(uuid, text, uuid, uuid, jsonb, timestamptz, timestamptz)
   to vortex_runtime;

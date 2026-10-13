@@ -115,7 +115,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async issue(input) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_workflow.issue_flow_continuation(
+            select vortex_platform.issue_flow_continuation(
               ${input.tokenHash}::text,
               ${input.runId}::uuid,
               ${input.organizationId}::uuid,
@@ -139,7 +139,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async consume(input) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_workflow.consume_flow_continuation(
+            select vortex_platform.consume_flow_continuation(
               ${input.tokenHash}::text,
               ${input.organizationId}::uuid,
               ${input.identityId}::uuid,
@@ -163,7 +163,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async begin(key) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_workflow.begin_flow_effect_with_origin(
+            select vortex_platform.begin_flow_effect_with_origin(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
               ${key.principal.kind}::text,
@@ -183,7 +183,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async complete(key, outcome, outputs) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_workflow.complete_flow_effect_with_origin(
+            select vortex_platform.complete_flow_effect_with_origin(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
               ${key.principal.kind}::text,

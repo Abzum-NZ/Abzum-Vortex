@@ -71,6 +71,8 @@ begin
   return 'present';
 end
 $_$;
+alter function vortex_record.observe_field_index_internal(text,text,text,text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.observe_field_index_internal(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) IS 'Physical observation of one exact field index: missing, invalid or present from the live catalogs, never raising.';
 

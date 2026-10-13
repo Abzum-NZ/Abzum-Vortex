@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.switch_storage_conversion_mappings_internal(p_conversion_contract_id uuid, p_owns_module boolean) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.switch_storage_conversion_mappings_internal(p_conversion_contract_id uuid, p_owns_module boolean) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -118,7 +118,7 @@ begin
 
   -- Any installation of such a release keeps the whole storage in place:
   -- retiring it would strip an installation of a required column.
-  dependent_count := vortex_module.count_storage_adoption_dependents_internal(
+  dependent_count := vortex_definition.count_storage_adoption_dependents_internal(
     catalogue_row.module_root_id, conversion.source_storage_contract_id,
     dependent_release_revisions
   );
@@ -184,6 +184,8 @@ exception
       message = 'Storage adoption evidence is unavailable';
 end
 $$;
+alter function vortex_record.switch_storage_conversion_mappings_internal(uuid,boolean) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.switch_storage_conversion_mappings_internal(p_conversion_contract_id uuid, p_owns_module boolean) IS 'Private helper: refuses while any installation of a release carrying the source field remains, then (Module owner only) switches the target mapping to active, the source mapping to retired and records the target field''s index; a completed switch is an unchanged replay; never drops a column.';
 

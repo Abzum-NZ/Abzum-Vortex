@@ -50,12 +50,11 @@ end
 $function$;
 
 revoke all on function vortex_access.list_organization_invitations_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_organization_invitations_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_invitations_projection(uuid, integer) is
   'Registered organisation-invitation projection: returns every invitation the current viewer may read under the fixed invitations.read decision, with the organisation, the invitation identity, the invitation revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. The secret and fingerprint are never projected.';

@@ -63,8 +63,7 @@ alter function vortex_record.complete_command_receipt_internal(text,uuid,uuid,bi
 
 revoke all on function vortex_record.complete_command_receipt_internal(
   text, uuid, uuid, bigint, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.complete_command_receipt_internal(
   text, uuid, uuid, bigint, text
 ) to vortex_record_adapter;

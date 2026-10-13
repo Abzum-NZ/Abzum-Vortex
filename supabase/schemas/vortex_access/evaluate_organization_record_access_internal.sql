@@ -58,9 +58,9 @@ begin
       select 1 from pg_catalog.jsonb_object_keys(facts_binding) as supplied(key)
       where supplied.key <> all (array['moduleRootId', 'recordTypeId', 'storageContractId', 'storageScope'])
     )
-    or not vortex_context.is_non_nil_uuid(facts_binding ->> 'moduleRootId')
-    or not vortex_context.is_non_nil_uuid(facts_binding ->> 'recordTypeId')
-    or not vortex_context.is_non_nil_uuid(facts_binding ->> 'storageContractId')
+    or not vortex_platform.is_non_nil_uuid(facts_binding ->> 'moduleRootId')
+    or not vortex_platform.is_non_nil_uuid(facts_binding ->> 'recordTypeId')
+    or not vortex_platform.is_non_nil_uuid(facts_binding ->> 'storageContractId')
     or facts_binding ->> 'storageScope' not in ('organization_shared', 'application_contained') then
     raise exception using errcode = '22023', message = 'Record access facts are invalid';
   end if;
@@ -87,14 +87,14 @@ begin
           'ownershipMode', 'ownershipRelationshipId', 'validationContractVersion', 'fields'
         ])
       )
-      or not vortex_context.is_non_nil_uuid(record_type_item ->> 'moduleRootId')
-      or not vortex_context.is_non_nil_uuid(record_type_item ->> 'recordTypeId')
-      or not vortex_context.is_non_nil_uuid(record_type_item ->> 'storageContractId')
+      or not vortex_platform.is_non_nil_uuid(record_type_item ->> 'moduleRootId')
+      or not vortex_platform.is_non_nil_uuid(record_type_item ->> 'recordTypeId')
+      or not vortex_platform.is_non_nil_uuid(record_type_item ->> 'storageContractId')
       or record_type_item ->> 'storageScope' not in ('organization_shared', 'application_contained')
       or record_type_item ->> 'ownershipMode' not in ('none', 'organization_account', 'group', 'inherited')
       or ((record_type_item ? 'ownershipRelationshipId') <> (record_type_item ->> 'ownershipMode' = 'inherited'))
       or (record_type_item ? 'ownershipRelationshipId'
-        and not vortex_context.is_non_nil_uuid(record_type_item ->> 'ownershipRelationshipId'))
+        and not vortex_platform.is_non_nil_uuid(record_type_item ->> 'ownershipRelationshipId'))
       or (record_type_item ? 'validationContractVersion' and (
         pg_catalog.jsonb_typeof(record_type_item -> 'validationContractVersion') <> 'string'
         or record_type_item ->> 'validationContractVersion' <> all (vortex_definition.accepted_contract_version('record_type'))
@@ -118,7 +118,7 @@ begin
           select 1 from pg_catalog.jsonb_object_keys(field_item) as supplied(key)
           where supplied.key <> all (array['fieldId', 'type', 'settings'])
         )
-        or not vortex_context.is_non_nil_uuid(field_item ->> 'fieldId')
+        or not vortex_platform.is_non_nil_uuid(field_item ->> 'fieldId')
         or pg_catalog.jsonb_typeof(field_item -> 'type') <> 'string'
         or (field_item ? 'settings' and pg_catalog.jsonb_typeof(field_item -> 'settings') <> 'object') then
         raise exception using errcode = '22023', message = 'Record access facts are invalid';
@@ -150,9 +150,9 @@ begin
           'relationshipId', 'fromModuleRootId', 'fromRecordTypeId', 'toRecordTypes'
         ])
       )
-      or not vortex_context.is_non_nil_uuid(relationship_item ->> 'relationshipId')
-      or not vortex_context.is_non_nil_uuid(relationship_item ->> 'fromModuleRootId')
-      or not vortex_context.is_non_nil_uuid(relationship_item ->> 'fromRecordTypeId')
+      or not vortex_platform.is_non_nil_uuid(relationship_item ->> 'relationshipId')
+      or not vortex_platform.is_non_nil_uuid(relationship_item ->> 'fromModuleRootId')
+      or not vortex_platform.is_non_nil_uuid(relationship_item ->> 'fromRecordTypeId')
       or pg_catalog.jsonb_typeof(relationship_item -> 'toRecordTypes') is distinct from 'array'
       or pg_catalog.jsonb_array_length(relationship_item -> 'toRecordTypes') = 0
       or exists (
@@ -164,8 +164,8 @@ begin
             select 1 from pg_catalog.jsonb_object_keys(target.value) as supplied(key)
             where supplied.key <> all (array['moduleRootId', 'recordTypeId'])
           )
-          or not vortex_context.is_non_nil_uuid(target.value ->> 'moduleRootId')
-          or not vortex_context.is_non_nil_uuid(target.value ->> 'recordTypeId')
+          or not vortex_platform.is_non_nil_uuid(target.value ->> 'moduleRootId')
+          or not vortex_platform.is_non_nil_uuid(target.value ->> 'recordTypeId')
       ) then
       raise exception using errcode = '22023', message = 'Record access facts are invalid';
     end if;
@@ -189,8 +189,8 @@ begin
         'conditionId', 'sourceRecordTypeId', 'publishedRevision', 'contractFingerprint',
         'parameters', 'condition', 'declaredFieldIds'
       ])
-      or not vortex_context.is_non_nil_uuid(condition_item ->> 'conditionId')
-      or not vortex_context.is_non_nil_uuid(condition_item ->> 'sourceRecordTypeId')
+      or not vortex_platform.is_non_nil_uuid(condition_item ->> 'conditionId')
+      or not vortex_platform.is_non_nil_uuid(condition_item ->> 'sourceRecordTypeId')
       or pg_catalog.jsonb_typeof(condition_item -> 'publishedRevision') <> 'number'
       or pg_catalog.jsonb_typeof(condition_item -> 'contractFingerprint') <> 'string'
       or pg_catalog.jsonb_typeof(condition_item -> 'parameters') <> 'array'
@@ -223,9 +223,9 @@ begin
       or record_item ->> 'lifecycleState' not in ('active', 'soft_deleted', 'removal_pending')
       or pg_catalog.jsonb_typeof(record_item -> 'fieldValues') <> 'object'
       or (record_item ? 'ownerOrganizationAccountId'
-        and not vortex_context.is_non_nil_uuid(record_item ->> 'ownerOrganizationAccountId'))
+        and not vortex_platform.is_non_nil_uuid(record_item ->> 'ownerOrganizationAccountId'))
       or (record_item ? 'ownerGroupId'
-        and not vortex_context.is_non_nil_uuid(record_item ->> 'ownerGroupId'))
+        and not vortex_platform.is_non_nil_uuid(record_item ->> 'ownerGroupId'))
       or (record_item ? 'ownerOrganizationAccountId' and record_item ? 'ownerGroupId') then
       raise exception using errcode = '22023', message = 'Record access facts are invalid';
     end if;
@@ -237,11 +237,11 @@ begin
     if not (record_scope_item ?& array[
         'storageScope', 'organizationId', 'moduleRootId', 'recordTypeId', 'storageContractId', 'recordId'
       ])
-      or not vortex_context.is_non_nil_uuid(record_scope_item ->> 'organizationId')
-      or not vortex_context.is_non_nil_uuid(record_scope_item ->> 'moduleRootId')
-      or not vortex_context.is_non_nil_uuid(record_scope_item ->> 'recordTypeId')
-      or not vortex_context.is_non_nil_uuid(record_scope_item ->> 'storageContractId')
-      or not vortex_context.is_non_nil_uuid(record_scope_item ->> 'recordId')
+      or not vortex_platform.is_non_nil_uuid(record_scope_item ->> 'organizationId')
+      or not vortex_platform.is_non_nil_uuid(record_scope_item ->> 'moduleRootId')
+      or not vortex_platform.is_non_nil_uuid(record_scope_item ->> 'recordTypeId')
+      or not vortex_platform.is_non_nil_uuid(record_scope_item ->> 'storageContractId')
+      or not vortex_platform.is_non_nil_uuid(record_scope_item ->> 'recordId')
       or (record_scope_item ->> 'storageScope') not in ('organization_shared', 'application_contained')
       or (
         (record_scope_item ->> 'storageScope') = 'organization_shared'
@@ -249,7 +249,7 @@ begin
       )
       or (
         (record_scope_item ->> 'storageScope') = 'application_contained'
-        and (scope_key_count <> 7 or not vortex_context.is_non_nil_uuid(record_scope_item ->> 'applicationRootId'))
+        and (scope_key_count <> 7 or not vortex_platform.is_non_nil_uuid(record_scope_item ->> 'applicationRootId'))
       ) then
       raise exception using errcode = '22023', message = 'Record access facts are invalid';
     end if;
@@ -276,9 +276,9 @@ begin
         select 1 from pg_catalog.jsonb_object_keys(edge_item) as supplied(key)
         where supplied.key <> all (array['relationshipId', 'fromRecordId', 'toRecordId'])
       )
-      or not vortex_context.is_non_nil_uuid(edge_item ->> 'relationshipId')
-      or not vortex_context.is_non_nil_uuid(edge_item ->> 'fromRecordId')
-      or not vortex_context.is_non_nil_uuid(edge_item ->> 'toRecordId') then
+      or not vortex_platform.is_non_nil_uuid(edge_item ->> 'relationshipId')
+      or not vortex_platform.is_non_nil_uuid(edge_item ->> 'fromRecordId')
+      or not vortex_platform.is_non_nil_uuid(edge_item ->> 'toRecordId') then
       raise exception using errcode = '22023', message = 'Record access facts are invalid';
     end if;
 
@@ -382,7 +382,7 @@ begin
     );
   end if;
 
-  select vortex_context.format_timestamp_utc(
+  select vortex_platform.format_timestamp_utc(
     pg_catalog.min((elem.value ->> 'validUntil')::timestamptz)
   )
   into decision_valid_until
@@ -397,8 +397,7 @@ end
 $function$;
 
 revoke execute on function vortex_access.evaluate_organization_record_access_internal(jsonb, uuid, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner, vortex_record_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.evaluate_organization_record_access_internal(jsonb, uuid, jsonb)
   to vortex_record_adapter;
 comment on function vortex_access.evaluate_organization_record_access_internal(jsonb, uuid, jsonb) is

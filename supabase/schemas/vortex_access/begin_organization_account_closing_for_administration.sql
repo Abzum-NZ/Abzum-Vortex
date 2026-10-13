@@ -22,7 +22,7 @@ declare
   resulting_version bigint;
 begin
   if p_organization_account_id is null
-    or not vortex_context.is_non_nil_uuid(p_organization_account_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
     or p_expected_revision is null
     or p_expected_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023', message = 'Account closing command is invalid';
@@ -82,7 +82,6 @@ $function$;
 comment on function vortex_access.begin_organization_account_closing_for_administration(uuid, bigint) is
   'Protected one-way active/suspended/closed-to-closing account command under accounts.manage; deletion is a separate, later fence.';
 
-revoke all on function vortex_access.begin_organization_account_closing_for_administration(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_access.begin_organization_account_closing_for_administration(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_access.begin_organization_account_closing_for_administration(uuid, bigint) to vortex_request;

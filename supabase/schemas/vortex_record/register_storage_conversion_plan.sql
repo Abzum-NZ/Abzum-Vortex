@@ -227,12 +227,11 @@ exception
 end
 $function$;
 
-alter function vortex_record.register_storage_conversion_plan(uuid,uuid,uuid,bigint,bigint) owner to vortex_record_owner;
+alter function vortex_record.register_storage_conversion_plan(uuid,uuid,uuid,bigint,bigint) owner to vortex_owner;
 
 revoke all on function vortex_record.register_storage_conversion_plan(
   uuid, uuid, uuid, bigint, bigint
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.register_storage_conversion_plan(
   uuid, uuid, uuid, bigint, bigint
 ) to vortex_request;

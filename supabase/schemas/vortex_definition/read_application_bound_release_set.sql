@@ -57,7 +57,7 @@ revoke all on function vortex_definition.read_application_bound_release_set(bigi
 
 grant execute on function vortex_definition.read_application_bound_release_set(bigint) to vortex_request;
 
-grant execute on function vortex_definition.read_application_bound_release_set(bigint) to vortex_definition_owner;
+grant execute on function vortex_definition.read_application_bound_release_set(bigint) to vortex_owner;
 
 comment on function vortex_definition.read_application_bound_release_set(bigint) is
   'Returns the exact local Application and complete exact Module dependency closure selected by validated human application context.';

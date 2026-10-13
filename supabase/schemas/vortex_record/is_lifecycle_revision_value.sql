@@ -8,5 +8,7 @@ CREATE FUNCTION vortex_record.is_lifecycle_revision_value(p_value jsonb) RETURNS
       and (p_value #>> '{}')::numeric between 1 and 9007199254740991
   end;
 $$;
+alter function vortex_record.is_lifecycle_revision_value(jsonb) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.is_lifecycle_revision_value(p_value jsonb) FROM PUBLIC;

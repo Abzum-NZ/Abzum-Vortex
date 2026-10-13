@@ -14,7 +14,7 @@ declare
 begin
   actor_identity_id := vortex_identity.tenant_request_actor_id();
   if p_limit is null or p_limit not between 1 and 101
-    or (p_after is not null and not vortex_context.is_non_nil_uuid(p_after::text)) then
+    or (p_after is not null and not vortex_platform.is_non_nil_uuid(p_after::text)) then
     raise exception using errcode = '22023',
       message = 'Tenant launcher request is invalid';
   end if;
@@ -51,8 +51,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.list_tenant_launcher(integer, uuid)
-  from public, anon, authenticated, service_role, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.list_tenant_launcher(integer, uuid)
   to vortex_runtime;

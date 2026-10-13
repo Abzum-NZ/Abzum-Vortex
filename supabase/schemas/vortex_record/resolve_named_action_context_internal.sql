@@ -52,7 +52,7 @@ begin
     p_record_type_id, 'update'
   );
   context_value := base_context -> 'context';
-  installation := vortex_module.read_current_active_installation();
+  installation := vortex_definition.read_current_active_installation();
 
   if p_action_owner_kind = 'application' then
     if p_action_owner_id <> (context_value ->> 'applicationRootId')::uuid
@@ -272,8 +272,7 @@ alter function vortex_record.resolve_named_action_context_internal(text,uuid,big
 
 revoke all on function vortex_record.resolve_named_action_context_internal(
   text, uuid, bigint, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.resolve_named_action_context_internal(
   text, uuid, bigint, uuid, uuid
 ) to vortex_record_adapter;

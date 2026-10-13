@@ -61,10 +61,9 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_definition.reachable_module_dependency_edges(p_root_id uuid, p_release_revision bigint) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_definition.reachable_module_dependency_edges(p_root_id uuid, p_release_revision bigint) IS 'Owner-private Module dependency pin set of one exact release: one row per Module root; raises 23514 when a root is pinned at more than one revision or an edge disagrees with its target release.';
 
 REVOKE ALL ON FUNCTION vortex_definition.reachable_module_dependency_edges(p_root_id uuid, p_release_revision bigint) FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_definition.reachable_module_dependency_edges(p_root_id uuid, p_release_revision bigint) TO vortex_module_owner;
+GRANT ALL ON FUNCTION vortex_definition.reachable_module_dependency_edges(p_root_id uuid, p_release_revision bigint) TO vortex_owner;

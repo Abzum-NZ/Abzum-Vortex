@@ -17,5 +17,7 @@ CREATE FUNCTION vortex_record.is_lifecycle_destination_list(p_values text[]) RET
     false
   );
 $$;
+alter function vortex_record.is_lifecycle_destination_list(text[]) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.is_lifecycle_destination_list(p_values text[]) FROM PUBLIC;

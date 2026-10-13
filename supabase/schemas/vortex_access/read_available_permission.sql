@@ -68,9 +68,11 @@ as $function$
       )
     )
 $function$;
+alter function vortex_access.read_available_permission(uuid,uuid,text,uuid,uuid) owner to vortex_owner;
+
 revoke execute on function vortex_access.read_available_permission(uuid, uuid, text, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_access.read_available_permission(uuid, uuid, text, uuid, uuid) is
   'Owner-only exact current permission lookup retaining application context, record scope and field policy.';
 alter function vortex_access.read_available_permission(uuid, uuid, text, uuid, uuid)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

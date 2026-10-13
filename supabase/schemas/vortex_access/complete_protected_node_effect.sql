@@ -16,14 +16,14 @@ as $function$
 declare
   checked jsonb;
 begin
-  checked := vortex_context.current_context();
+  checked := vortex_platform.current_context();
   if checked ->> 'callerKind' is distinct from 'human'
     or checked ->> 'channel' is distinct from 'durable_workflow'
     or pg_catalog.lower(checked ->> 'organizationId') is distinct from p_organization_id::text
     or pg_catalog.lower(checked ->> 'identityId') is distinct from p_identity_id::text
     or not exists (
       select 1
-      from vortex_workflow.protected_workflow_runs as stored
+      from vortex_platform.protected_workflow_runs as stored
       where stored.run_id = p_run_id
         and stored.organization_id = p_organization_id
         and stored.identity_id = p_identity_id
@@ -34,7 +34,7 @@ begin
     return false;
   end if;
 
-  return vortex_workflow.complete_flow_effect(
+  return vortex_platform.complete_flow_effect(
     p_run_id, p_organization_id, p_identity_id, p_task_path, p_iteration,
     p_outcome, p_outputs
   );

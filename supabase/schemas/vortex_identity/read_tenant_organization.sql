@@ -12,8 +12,8 @@ declare
   actor_identity_id uuid;
 begin
   actor_identity_id := vortex_identity.tenant_request_actor_id();
-  if p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text) then
+  if p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_organization_id is null or not vortex_platform.is_non_nil_uuid(p_organization_id::text) then
     raise exception using errcode = '22023', message = 'Tenant organization request is invalid';
   end if;
   perform vortex_identity.require_current_tenant_capability(
@@ -35,8 +35,7 @@ end
 $function$;
 
 revoke execute on function vortex_identity.read_tenant_organization(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.read_tenant_organization(uuid, uuid)
   to vortex_runtime;
 

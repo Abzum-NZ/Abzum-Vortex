@@ -30,8 +30,7 @@ alter function vortex_record.lock_command_receipt_internal(text,uuid) owner to v
 
 revoke all on function vortex_record.lock_command_receipt_internal(
   text, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.lock_command_receipt_internal(
   text, uuid
 ) to vortex_record_adapter;

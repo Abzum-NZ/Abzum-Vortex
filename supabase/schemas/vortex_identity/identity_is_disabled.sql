@@ -13,10 +13,10 @@ as $function$
   )
 $function$;
 
-revoke all on function vortex_identity.identity_is_disabled(uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.identity_is_disabled(uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.identity_is_disabled(uuid) is
   'Private environment-wide disabled fact: true only after a completed identity disablement.';
 
-alter function vortex_identity.identity_is_disabled(uuid) owner to vortex_identity_owner;
+alter function vortex_identity.identity_is_disabled(uuid) owner to vortex_owner;
 grant execute on function vortex_identity.identity_is_disabled(uuid) to postgres;

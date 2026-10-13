@@ -49,7 +49,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
   installation := case when preview_installation is null
-    then vortex_module.read_current_active_installation()
+    then vortex_definition.read_current_active_installation()
     else preview_installation end;
 
   return vortex_record.load_record_access_facts_from_installation_internal(
@@ -69,8 +69,7 @@ alter function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bi
 
 revoke all on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint

@@ -421,7 +421,7 @@ begin
       value_expression := case mapping_row.database_value_type
         when 'decimal' then pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', mapping_row.physical_column_token)
         when 'timestamp_with_time_zone' then pg_catalog.format(
-          'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.%I))',
+          'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(stored.%I))',
           mapping_row.physical_column_token
         )
         when 'date' then pg_catalog.format(
@@ -567,7 +567,7 @@ begin
           );
         else
           value_expression := pg_catalog.format(
-            'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(pg_catalog.%s((candidate.projected_values ->> %L)::timestamp with time zone) filter (where %s)))',
+            'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(pg_catalog.%s((candidate.projected_values ->> %L)::timestamp with time zone) filter (where %s)))',
             case aggregate_operation when 'minimum' then 'min' else 'max' end,
             aggregate_field_id, aggregate_present_sql
           );
@@ -937,8 +937,7 @@ $function$;
 alter function vortex_record.run_module_query_summary(uuid,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb)
   to vortex_request;
 

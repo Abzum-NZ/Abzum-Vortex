@@ -55,7 +55,7 @@ begin
   end if;
   organization_id_value := (context_value ->> 'organizationId')::uuid;
   application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
-  installation := vortex_module.read_current_offboarding_inventory_installation_internal();
+  installation := vortex_definition.read_current_offboarding_inventory_installation_internal();
 
   for catalogue_row in
     select catalogue.*
@@ -213,8 +213,7 @@ alter function vortex_record.list_offboarding_owned_records_internal(uuid, text,
 
 revoke all on function vortex_record.list_offboarding_owned_records_internal(
   uuid, text, uuid, uuid, uuid, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.list_offboarding_owned_records_internal(
   uuid, text, uuid, uuid, uuid, integer

@@ -162,7 +162,7 @@ export const createInstallationRuntimeBundleRepository = (
     if (!key.success) throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
     try {
       const rows = await transaction.query<BundleIndexRow>`
-        select vortex_module.read_installation_runtime_bundle_index(
+        select vortex_definition.read_installation_runtime_bundle_index(
           ${key.data.applicationRootId}::uuid,
           ${key.data.applicationReleaseRevision}::bigint,
           ${key.data.bundleFormatVersion}::integer
@@ -192,7 +192,7 @@ export const createInstallationRuntimeBundleRepository = (
 
     try {
       const rows = await transaction.query<BundlePartsRow>`
-        select vortex_module.read_installation_runtime_bundle_parts(
+        select vortex_definition.read_installation_runtime_bundle_parts(
           ${command.data.applicationRootId}::uuid,
           ${command.data.applicationReleaseRevision}::bigint,
           ${command.data.bundleFormatVersion}::integer,
@@ -247,7 +247,7 @@ export const createInstallationRuntimeBundleRepository = (
       }
       try {
         const rows = await transaction.query<BundleIndexRow>`
-          select vortex_module.write_installation_runtime_bundle_internal(
+          select vortex_definition.write_installation_runtime_bundle_internal(
             ${command.applicationRootId}::uuid,
             ${command.applicationReleaseRevision}::bigint,
             ${command.bundleFormatVersion}::integer,

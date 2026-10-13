@@ -25,14 +25,16 @@ as $function$
       and tenant.state = 'active'
   );
 $function$;
+alter function vortex_identity.has_active_identity_organization_account_internal(uuid,uuid) owner to vortex_owner;
+
 
 revoke all on function vortex_identity.has_active_identity_organization_account_internal(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.has_active_identity_organization_account_internal(uuid, uuid)
-  to vortex_invalidation_owner;
+  to vortex_owner;
 
 comment on function vortex_identity.has_active_identity_organization_account_internal(uuid, uuid) is
   'Private exact active Identity account membership predicate for one identity and organisation; exposes only its Boolean liveness result.';
 
 alter function vortex_identity.has_active_identity_organization_account_internal(uuid, uuid)
-  owner to vortex_identity_owner;
+  owner to vortex_owner;

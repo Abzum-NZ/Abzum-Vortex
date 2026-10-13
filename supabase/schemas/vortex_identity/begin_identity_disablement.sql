@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) RETURNS TABLE(outcome text, sessions_revoked integer, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) RETURNS TABLE(outcome text, sessions_revoked integer, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -12,10 +12,10 @@ begin
     or p_correlation_id is null
     or p_command_fingerprint is null
     or p_actor_identity_id = p_subject_identity_id
-    or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
-    or not vortex_context.is_non_nil_uuid(p_subject_identity_id::text)
-    or not vortex_context.is_non_nil_uuid(p_command_id::text)
-    or not vortex_context.is_non_nil_uuid(p_correlation_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_actor_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_subject_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_command_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_correlation_id::text)
     or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
   then
     raise exception 'invalid identity disablement command' using errcode = '22023';
@@ -92,7 +92,6 @@ begin
   return query select 'started'::text, null::integer, existing.correlation_id;
 end
 $_$;
-
 
 ALTER FUNCTION vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) OWNER TO postgres;
 

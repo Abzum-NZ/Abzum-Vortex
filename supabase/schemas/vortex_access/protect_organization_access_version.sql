@@ -17,7 +17,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.protect_organization_access_version() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_organization_access_version() FROM PUBLIC;

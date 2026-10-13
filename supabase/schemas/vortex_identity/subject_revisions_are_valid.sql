@@ -20,7 +20,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_identity.subject_revisions_are_valid(p_subject_ids uuid[], p_subject_revisions bigint[]) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_identity.subject_revisions_are_valid(p_subject_ids uuid[], p_subject_revisions bigint[]) FROM PUBLIC;

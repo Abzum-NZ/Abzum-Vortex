@@ -67,12 +67,11 @@ end
 $function$;
 
 revoke all on function vortex_access.list_organization_roles_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_organization_roles_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_roles_projection(uuid, integer) is
   'Registered role projection: returns every current local role the fixed platform.organization.roles.read decision admits, with the organisation, the role identity, the role live revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Acceptance evidence and audit columns are never projected.';

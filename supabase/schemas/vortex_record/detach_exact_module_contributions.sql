@@ -31,7 +31,7 @@ declare
   contribution_ids uuid[] := array[]::uuid[];
   any_change boolean := false;
 begin
-  if not vortex_context.is_non_nil_uuid(p_module_root_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991
     or pg_catalog.jsonb_typeof(p_contributions) is distinct from 'array'
     or pg_catalog.jsonb_array_length(p_contributions) < 1
@@ -80,9 +80,9 @@ begin
     exception when invalid_text_representation then
       raise exception using errcode = '22023', message = 'Module contribution identity is invalid';
     end;
-    if not vortex_context.is_non_nil_uuid(contributor_root_id::text)
-      or not vortex_context.is_non_nil_uuid(target_module_root_id::text)
-      or not vortex_context.is_non_nil_uuid(target_record_type_id::text)
+    if not vortex_platform.is_non_nil_uuid(contributor_root_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_module_root_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_record_type_id::text)
       or contributor_root_id <> p_module_root_id
       or target_module_root_id = p_module_root_id then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
@@ -126,7 +126,7 @@ begin
     contribution_kind := contribution ->> 'kind';
     if contribution_id is null
       or contribution_kind is null
-      or not vortex_context.is_non_nil_uuid(contribution_id::text)
+      or not vortex_platform.is_non_nil_uuid(contribution_id::text)
       or contribution_kind not in ('field', 'action') then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
     end if;
@@ -141,7 +141,7 @@ begin
     exception when invalid_text_representation then
       raise exception using errcode = '22023', message = 'Contributed field identity is invalid';
     end;
-    if not vortex_context.is_non_nil_uuid(field_id_value::text)
+    if not vortex_platform.is_non_nil_uuid(field_id_value::text)
       or field_id_value <> contribution_id then
       raise exception using errcode = '22023', message = 'Contributed field identity is invalid';
     end if;
@@ -188,12 +188,11 @@ exception
 end
 $function$;
 
-alter function vortex_record.detach_exact_module_contributions(uuid,bigint,jsonb,boolean) owner to vortex_record_owner;
+alter function vortex_record.detach_exact_module_contributions(uuid,bigint,jsonb,boolean) owner to vortex_owner;
 
 revoke all on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean)
-  to vortex_module_owner;
+  to vortex_owner;
 comment on function vortex_record.detach_exact_module_contributions(uuid, bigint, jsonb, boolean) is
   'Private exact-release contributor storage teardown: retires each contributed field mapping without dropping its column or overwriting retained values, so a reinstall can reactivate the same lineage.';

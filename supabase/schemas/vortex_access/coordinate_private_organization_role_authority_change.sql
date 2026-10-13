@@ -42,7 +42,7 @@ begin
     or pg_catalog.jsonb_typeof(p_prepared_evidence) is distinct from 'object'
     or pg_catalog.jsonb_typeof(p_prepared_evidence -> 'candidate')
       is distinct from 'object'
-    or vortex_context.is_non_nil_uuid(p_activity_id::text) is not true then
+    or vortex_platform.is_non_nil_uuid(p_activity_id::text) is not true then
     raise exception using errcode = '22023',
       message = 'Private Organization role-authority input is invalid';
   end if;
@@ -56,9 +56,9 @@ begin
   )
     or pg_catalog.jsonb_typeof(candidate -> 'organizationId')
       is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(candidate ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'organizationId')
     or pg_catalog.jsonb_typeof(candidate -> 'roleId') is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(candidate ->> 'roleId') then
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'roleId') then
     raise exception using errcode = '22023',
       message = 'Private Organization role-authority input is invalid';
   end if;
@@ -150,7 +150,7 @@ begin
     elsif policy_choice #>> '{activationPolicy,selection}' = 'new' then
       policy_changed := true;
     elsif policy_choice #>> '{activationPolicy,selection}' = 'existing'
-      and vortex_context.is_non_nil_uuid(
+      and vortex_platform.is_non_nil_uuid(
         policy_choice #>> '{activationPolicy,reference,activationPolicyId}'
       )
       and pg_catalog.jsonb_typeof(
@@ -240,11 +240,11 @@ begin
     p_prepared_evidence, context_account_id, context_correlation_id
   ) as result;
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id, p_activity_id,
     (changed.role ->> 'changedAt')::timestamptz,
     'organization_account', context_account_id, operation_name,
-    array[target_role_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+    array[target_role_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
     context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then

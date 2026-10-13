@@ -27,6 +27,8 @@ begin
     else array[target_identity, source_identity] end;
 end
 $$;
+alter function vortex_record.relationship_edge_lock_identities_internal(uuid,uuid,uuid,uuid,uuid) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.relationship_edge_lock_identities_internal(p_relationship_id uuid, p_from_storage_contract_id uuid, p_from_record_id uuid, p_to_storage_contract_id uuid, p_to_record_id uuid) IS 'Sorted participant identities one relationship edge mutation locks: the source always, and the new target when an edge is installed.';
 

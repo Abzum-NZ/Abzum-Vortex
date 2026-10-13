@@ -42,12 +42,11 @@ begin
 end
 $function$;
 
-alter function vortex_access.read_capability_reservation_balance(uuid, uuid, text, text) owner to vortex_access_owner;
+alter function vortex_access.read_capability_reservation_balance(uuid, uuid, text, text) owner to vortex_owner;
 
 comment on function vortex_access.read_capability_reservation_balance(uuid, uuid, text, text) is
   'Returns current balance evidence after exact request-scope validation and policy resolution.';
 
 revoke execute on function vortex_access.read_capability_reservation_balance(uuid, uuid, text, text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.read_capability_reservation_balance(uuid, uuid, text, text) to vortex_request;

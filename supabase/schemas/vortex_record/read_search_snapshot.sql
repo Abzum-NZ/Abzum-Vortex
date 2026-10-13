@@ -25,7 +25,7 @@ begin
 
   -- Only the system context of one Application reads a record for indexing,
   -- so a human or public request can never reach this function's result.
-  context_value := vortex_context.current_context();
+  context_value := vortex_platform.current_context();
   if context_value ->> 'callerKind' is distinct from 'system'
     or not context_value ? 'applicationRootId' then
     raise exception using errcode = '42501',
@@ -34,7 +34,7 @@ begin
   context_organization_id := (context_value ->> 'organizationId')::uuid;
 
   plan := vortex_record.resolve_installation_access_plan_internal(
-    vortex_module.read_active_installation_for_scope_internal(
+    vortex_definition.read_active_installation_for_scope_internal(
       context_organization_id, (context_value ->> 'applicationRootId')::uuid
     )
   );
@@ -98,8 +98,7 @@ $function$;
 alter function vortex_record.read_search_snapshot(uuid,uuid) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_search_snapshot(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_record.read_search_snapshot(uuid, uuid) to vortex_request;
 
 comment on function vortex_record.read_search_snapshot(uuid, uuid) is

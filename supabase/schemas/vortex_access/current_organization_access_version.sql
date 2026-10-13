@@ -28,7 +28,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.current_organization_access_version(p_tenant_id uuid, p_organization_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.current_organization_access_version(p_tenant_id uuid, p_organization_id uuid) IS 'Returns only the current version for one exact active tenant and organisation.';

@@ -32,7 +32,7 @@ import type {
  * and Application: the tenant, access version and system actor come from
  * `vortex_access.resolve_search_index_scope`, never from the occurrence.
  * `vortex_record.read_search_snapshot` answers only to that system context, so
- * no request-bound read can reach it, and `vortex_search.put_document` writes
+ * no request-bound read can reach it, and `vortex_record.put_document` writes
  * into the context organisation only.
  *
  * Event delivery is also the backfill: a consumer registered after records were
@@ -167,7 +167,7 @@ export const createSearchIndexDependencies = (): SearchIndexOccurrenceDependenci
         occurrence.installation.applicationRootId,
         (transaction) =>
           transaction.query<DatabaseRow>`
-            select outcome from vortex_search.put_document(
+            select outcome from vortex_record.put_document(
               ${command.organizationId}::uuid, ${command.recordTypeId}::uuid,
               ${command.recordId}::uuid, ${command.applicationRootId}::uuid,
               ${command.sourceRecordVersion}::bigint, ${command.deleted}::boolean,

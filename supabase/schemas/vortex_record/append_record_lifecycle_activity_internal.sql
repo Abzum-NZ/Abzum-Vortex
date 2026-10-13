@@ -35,12 +35,12 @@ begin
     raise exception using errcode = '42501',
       message = 'Record lifecycle Activity requires an Application context';
   end if;
-  append_result := vortex_activity.append_organization_activity_entry(
+  append_result := vortex_record.append_organization_activity_entry(
     (context_value ->> 'organizationId')::uuid,
     p_activity_id, occurred_at_value, 'organization_account',
     (context_value ->> 'organizationAccountId')::uuid,
     case p_operation when 'delete' then 'delete_record' else 'restore_record' end,
-    p_subject_ids, array[]::uuid[], vortex_context.channel(),
+    p_subject_ids, array[]::uuid[], vortex_platform.channel(),
     (context_value ->> 'correlationId')::uuid, 'completed'
   );
   if append_result is distinct from 'inserted' then
@@ -56,8 +56,7 @@ alter function vortex_record.append_record_lifecycle_activity_internal(uuid, tex
 
 revoke all on function vortex_record.append_record_lifecycle_activity_internal(
   uuid, text, uuid[]
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.append_record_lifecycle_activity_internal(
   uuid, text, uuid[]
 ) to vortex_record_adapter;

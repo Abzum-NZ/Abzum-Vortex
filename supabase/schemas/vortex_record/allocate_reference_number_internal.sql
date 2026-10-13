@@ -46,5 +46,7 @@ begin
     || suffix_value;
 end
 $$;
+alter function vortex_record.allocate_reference_number_internal(uuid,uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.allocate_reference_number_internal(p_organization_id uuid, p_storage_contract_id uuid, p_field_id uuid, p_application_root_id uuid, p_settings jsonb) FROM PUBLIC;

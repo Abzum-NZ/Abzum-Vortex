@@ -33,12 +33,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.read_exact_module_storage_provision(uuid,bigint) owner to vortex_record_owner;
+alter function vortex_record.read_exact_module_storage_provision(uuid,bigint) owner to vortex_owner;
 
 revoke all on function vortex_record.read_exact_module_storage_provision(uuid, bigint)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.read_exact_module_storage_provision(uuid, bigint)
-  to vortex_module_owner;
+  to vortex_owner;
 comment on function vortex_record.read_exact_module_storage_provision(uuid, bigint) is
   'Record-owned read of one exact immutable Module release provision for installation activation.';

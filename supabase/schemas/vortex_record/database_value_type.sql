@@ -39,5 +39,7 @@ CREATE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
     end
   end
 $$;
+alter function vortex_record.database_value_type(jsonb) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.database_value_type(p_field jsonb) FROM PUBLIC;

@@ -34,7 +34,7 @@ begin
   end if;
 
   select locked.* into current_mapping
-  from vortex_module.lock_prepared_installation_runtime_mapping_internal(
+  from vortex_definition.lock_prepared_installation_runtime_mapping_internal(
     p_application_root_id,
     p_application_release_revision,
     p_expected_module_bindings
@@ -128,13 +128,14 @@ exception
       message = 'Prepared Record access plan evidence is ambiguous';
 end
 $function$;
+alter function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb) owner to vortex_record_adapter;
+
 
 alter function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)
   owner to vortex_record_adapter;
 revoke all on function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)
-  to vortex_module_owner;
+  to vortex_owner;
 comment on function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb) is
   'Resolves and immutably stores the exact prepared Record access plan for a first-install provisioned Module mapping.';

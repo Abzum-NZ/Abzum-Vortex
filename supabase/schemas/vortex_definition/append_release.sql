@@ -63,7 +63,7 @@ declare
   dependency_manifest_value jsonb;
   permissions_value jsonb;
 begin
-  human_publication := vortex_context.current_context() ->> 'callerKind' = 'human';
+  human_publication := vortex_platform.current_context() ->> 'callerKind' = 'human';
   if human_publication then
     checked_context := vortex_access.validated_human_request_context();
     if checked_context ->> 'callerKind' is distinct from 'human'

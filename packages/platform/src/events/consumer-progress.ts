@@ -275,7 +275,7 @@ export const createEventConsumerProgressRepository = (
       const input = validateClaimInput(inputCandidate);
       try {
         const rows = await transaction.query<ConsumerProgressRow>`
-          select vortex_event.claim_consumer_occurrences(
+          select vortex_platform.claim_consumer_occurrences(
             ${input.consumerKey}::text,
             ${input.batchSize}::integer,
             ${input.leaseSeconds}::integer
@@ -291,7 +291,7 @@ export const createEventConsumerProgressRepository = (
       const input = validateLeaseRenewalInput(inputCandidate);
       try {
         const rows = await transaction.query<ConsumerProgressRow>`
-          select vortex_event.renew_consumer_occurrence_lease(
+          select vortex_platform.renew_consumer_occurrence_lease(
             ${input.consumerKey}::text,
             ${input.ackCursor}::uuid,
             ${input.occurrenceId}::uuid,
@@ -308,7 +308,7 @@ export const createEventConsumerProgressRepository = (
       const input = validateAcknowledgementInput(inputCandidate);
       try {
         const rows = await transaction.query<ConsumerProgressRow>`
-          select vortex_event.acknowledge_consumer_occurrence(
+          select vortex_platform.acknowledge_consumer_occurrence(
             ${input.consumerKey}::text,
             ${input.ackCursor}::uuid,
             ${input.occurrenceId}::uuid

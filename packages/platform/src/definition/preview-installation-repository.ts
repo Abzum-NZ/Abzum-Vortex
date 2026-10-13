@@ -107,7 +107,7 @@ export const createPreviewInstallationRepository = (
       if (!candidate.success) throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
       try {
         const rows = await transaction.query<PreviewRow>`
-          select vortex_module.create_preview_installation(
+          select vortex_definition.create_preview_installation(
             ${requestCandidate.applicationRootId}::uuid,
             ${requestCandidate.expectedDraftRevision}::bigint,
             ${JSON.stringify(candidate.data)}::text::jsonb
@@ -125,7 +125,7 @@ export const createPreviewInstallationRepository = (
     async read(address) {
       try {
         const rows = await transaction.query<PreviewRow>`
-          select vortex_module.read_preview_installation(
+          select vortex_definition.read_preview_installation(
             ${address.previewInstallationId}::uuid
           ) as preview_installation
         `;
@@ -139,7 +139,7 @@ export const createPreviewInstallationRepository = (
     async discard(address) {
       try {
         const rows = await transaction.query<PreviewRow>`
-          select vortex_module.discard_preview_installation(
+          select vortex_definition.discard_preview_installation(
             ${address.previewInstallationId}::uuid
           ) as preview_installation
         `;
@@ -161,7 +161,7 @@ export const createPreviewInstallationRepository = (
 
     async expire(requestCandidate) {
       const rows = await transaction.query<ExpiryRow>`
-        select vortex_module.expire_preview_installations(
+        select vortex_definition.expire_preview_installations(
           ${requestCandidate.limit ?? 100}::integer
         ) as expired_count
       `.catch((error: unknown) => {

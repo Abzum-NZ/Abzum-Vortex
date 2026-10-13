@@ -292,7 +292,7 @@ const runPage = async (
     return refusal("cursor_stale");
 
   const rows = await transaction.query<ResultRow>`
-    select vortex_activity.read_organization_activity_page(
+    select vortex_record.read_organization_activity_page(
       ${filter.occurredFrom ?? null}::timestamptz,
       ${filter.occurredTo ?? null}::timestamptz,
       ${filter.actorKind ?? null}::text,
@@ -338,7 +338,7 @@ const runAggregate = async (
 ): Promise<ActivityHistoryResult> => {
   const filter = command.filter;
   const rows = await transaction.query<ResultRow>`
-    select vortex_activity.read_organization_activity_aggregates(
+    select vortex_record.read_organization_activity_aggregates(
       ${filter.occurredFrom ?? null}::timestamptz,
       ${filter.occurredTo ?? null}::timestamptz,
       ${filter.actorKind ?? null}::text,

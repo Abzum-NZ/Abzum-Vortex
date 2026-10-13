@@ -57,8 +57,7 @@ alter function vortex_record.apply_lifecycle_record_changes(uuid,text,uuid,uuid,
 
 revoke all on function vortex_record.apply_lifecycle_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_lifecycle_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) to vortex_runtime;

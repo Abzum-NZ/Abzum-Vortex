@@ -1,11 +1,11 @@
-CREATE FUNCTION vortex_identity.validated_human_account_context() RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_identity.validated_human_account_context() RETURNS jsonb
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
 declare
   checked jsonb;
 begin
-  checked := vortex_context.current_context();
+  checked := vortex_platform.current_context();
   if checked ->> 'callerKind' is distinct from 'human'
     or not checked ?& array['identityId', 'organizationAccountId'] then
     raise exception using errcode = '42501', message = 'Organisation-account operation requires human context';
@@ -36,8 +36,7 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_identity.validated_human_account_context() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_identity.validated_human_account_context() FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_identity.validated_human_account_context() TO vortex_identity_owner;
+GRANT ALL ON FUNCTION vortex_identity.validated_human_account_context() TO vortex_owner;

@@ -267,8 +267,7 @@ $function$;
 alter function vortex_record.write_relationship_value_internal(uuid,uuid,uuid,jsonb,boolean) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
   'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';

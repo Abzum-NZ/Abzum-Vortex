@@ -26,15 +26,16 @@ begin
   return selected_values;
 end
 $function$;
+alter function vortex_access.validation_reference_list(text) owner to vortex_owner;
+
 
 revoke all on function vortex_access.validation_reference_list(text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.validation_reference_list(text)
-  to vortex_request, vortex_runtime, vortex_identity_owner, postgres;
+  to vortex_request, vortex_runtime, vortex_owner, postgres;
 
 comment on function vortex_access.validation_reference_list(text) is
   'Returns the ordered values of one seeded validation reference list; refuses an unknown or empty list so no check can pass against a missing list.';
 
 alter function vortex_access.validation_reference_list(text)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

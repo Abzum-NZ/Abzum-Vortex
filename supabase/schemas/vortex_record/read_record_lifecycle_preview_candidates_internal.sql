@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -18,8 +18,8 @@ begin
     or ((p_after_created_at is null) <> (p_after_record_id is null))
     or (p_after_record_id is not null
       and p_after_record_id = '00000000-0000-0000-0000-000000000000'::uuid)
-    or p_organization_id <> vortex_context.organization_id()
-    or p_application_root_id is distinct from vortex_context.application_root_id(false) then
+    or p_organization_id <> vortex_platform.organization_id()
+    or p_application_root_id is distinct from vortex_platform.application_root_id(false) then
     raise exception using errcode = '42501',
       message = 'Record lifecycle preview candidates are unavailable';
   end if;
@@ -81,8 +81,10 @@ begin
   return result_value;
 end
 $_$;
+alter function vortex_record.read_record_lifecycle_preview_candidates_internal(text,uuid,uuid,uuid,timestamp with time zone,uuid,integer) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) IS 'Private adapter-owned, forced-RLS lifecycle candidate page and global-position projection for Record owner.';
 
 REVOKE ALL ON FUNCTION vortex_record.read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_record.read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) TO vortex_record_owner;
+GRANT ALL ON FUNCTION vortex_record.read_record_lifecycle_preview_candidates_internal(p_physical_table_token text, p_organization_id uuid, p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) TO vortex_owner;

@@ -78,5 +78,7 @@ begin
   );
 end
 $$;
+alter function vortex_record.named_action_command_closure_internal(jsonb,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.named_action_command_closure_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_submitted_values jsonb, p_creations jsonb) FROM PUBLIC;

@@ -124,7 +124,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
   installation := case when preview_installation is null
-    then vortex_module.read_current_active_installation()
+    then vortex_definition.read_current_active_installation()
     else preview_installation end;
 
   select release.compilation_output #> '{canonical,content}'
@@ -337,8 +337,7 @@ alter function vortex_record.prepare_base_record_save(uuid,text,uuid,uuid,bigint
 
 revoke all on function vortex_record.prepare_base_record_save(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.prepare_base_record_save(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) to vortex_runtime;

@@ -21,9 +21,9 @@ declare
   resolved_access_version bigint;
   granted_actor_ids uuid[];
 begin
-  if p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text)
-    or p_application_root_id is null or not vortex_context.is_non_nil_uuid(p_application_root_id::text)
-    or p_flow_id is null or not vortex_context.is_non_nil_uuid(p_flow_id::text)
+  if p_organization_id is null or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_application_root_id is null or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
+    or p_flow_id is null or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
     or p_operation_key is null
     or pg_catalog.octet_length(p_operation_key) not between 1 and 128
     or p_operation_key !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' then
@@ -92,8 +92,7 @@ $function$;
 
 revoke all on function vortex_access.resolve_durable_system_actor_scope(
   uuid, uuid, uuid, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.resolve_durable_system_actor_scope(
   uuid, uuid, uuid, text
 ) to vortex_runtime;

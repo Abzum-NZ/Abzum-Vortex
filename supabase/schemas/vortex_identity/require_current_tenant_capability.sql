@@ -45,8 +45,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.require_current_tenant_capability(uuid, uuid, text, timestamptz)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.require_current_tenant_capability(uuid, uuid, text, timestamptz) is
   'Requires one current tenant capability, the default capability-limits read permission for an active tenant administrator, or the independent active Vortex super-administrator assignment.';

@@ -330,7 +330,7 @@ begin
   perform vortex_record.append_base_save_activity_internal(
     p_activity_id, 'update', p_record_id, changed_field_ids, 'completed'
   );
-  event_result := vortex_event.append_record_occurrences(
+  event_result := vortex_platform.append_record_occurrences(
     (meta ->> 'storageContractId')::uuid,
     p_record_id,
     pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
@@ -390,11 +390,12 @@ exception
     );
 end
 $function$;
+alter function vortex_record.save_organization_settings_record(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid) owner to vortex_record_adapter;
+
 
 revoke all on function vortex_record.save_organization_settings_record(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.save_organization_settings_record(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
 ) to vortex_runtime;

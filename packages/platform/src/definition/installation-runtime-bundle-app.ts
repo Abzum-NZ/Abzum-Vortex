@@ -211,7 +211,7 @@ export const assertPreparedInstallationRuntimeBundleMatches = async (
   )
     throw new Error("PREPARED_INSTALLATION_RUNTIME_BUNDLE_MISMATCH");
   const rows = await transaction.query<{ readonly asserted: unknown }>`
-    select vortex_module.assert_prepared_installation_runtime_bundle(
+    select vortex_definition.assert_prepared_installation_runtime_bundle(
       ${sourceManifest.application.rootId}::uuid,
       ${sourceManifest.application.releaseRevision}::bigint,
       ${JSON.stringify(moduleBindings)}::text::jsonb,

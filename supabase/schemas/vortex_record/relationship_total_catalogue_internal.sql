@@ -15,7 +15,7 @@ declare
   rule_subject_record_type_ids jsonb := '[]'::jsonb;
   record_type jsonb;
 begin
-  installation := vortex_module.read_current_active_installation();
+  installation := vortex_definition.read_current_active_installation();
   for binding in
     select item.value
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') item(value)
@@ -73,8 +73,7 @@ $function$;
 alter function vortex_record.relationship_total_catalogue_internal() owner to vortex_record_adapter;
 
 revoke all on function vortex_record.relationship_total_catalogue_internal()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.relationship_total_catalogue_internal()
   to vortex_record_adapter;
 comment on function vortex_record.relationship_total_catalogue_internal() is

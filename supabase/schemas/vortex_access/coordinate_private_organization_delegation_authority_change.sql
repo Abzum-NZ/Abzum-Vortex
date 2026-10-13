@@ -39,10 +39,10 @@ declare
 begin
   if p_operation is null
     or p_operation not in ('grant_delegation', 'replace_delegation_scope')
-    or vortex_context.is_non_nil_uuid(
+    or vortex_platform.is_non_nil_uuid(
       p_delegation_authority_id::text
     ) is not true
-    or vortex_context.is_non_nil_uuid(p_activity_id::text) is not true
+    or vortex_platform.is_non_nil_uuid(p_activity_id::text) is not true
     or p_prepared_scope is null
     or pg_catalog.jsonb_typeof(p_prepared_scope) is distinct from 'object'
     or not p_prepared_scope ? 'kind'
@@ -75,7 +75,7 @@ begin
         or (
           p_holder_kind = 'organization_account'
           and (
-            vortex_context.is_non_nil_uuid(
+            vortex_platform.is_non_nil_uuid(
               p_organization_account_id::text
             ) is not true
             or p_group_id is not null
@@ -84,7 +84,7 @@ begin
         or (
           p_holder_kind = 'group'
           and (
-            vortex_context.is_non_nil_uuid(p_group_id::text) is not true
+            vortex_platform.is_non_nil_uuid(p_group_id::text) is not true
             or p_organization_account_id is not null
           )
         )
@@ -206,12 +206,12 @@ begin
     p_starts_at, p_expires_at, context_account_id, context_correlation_id
   ) as result;
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id, p_activity_id,
     (changed.delegation ->> 'changedAt')::timestamptz,
     'organization_account', context_account_id, p_operation,
     array[p_delegation_authority_id]::uuid[], array[]::uuid[],
-    vortex_context.channel(), context_correlation_id, 'completed'
+    vortex_platform.channel(), context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then
     raise exception using errcode = '40001',

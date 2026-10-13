@@ -29,7 +29,7 @@ declare
   matched_identity_count bigint;
   unique_identity_count bigint;
 begin
-  raw_context := vortex_context.current_context();
+  raw_context := vortex_platform.current_context();
   if raw_context ->> 'callerKind' = 'human' then
     if p_kind is distinct from 'application'
       or p_root_id is null

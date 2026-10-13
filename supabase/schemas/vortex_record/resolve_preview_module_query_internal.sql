@@ -313,13 +313,14 @@ begin
   );
 end
 $function$;
+alter function vortex_record.resolve_preview_module_query_internal(uuid,uuid) owner to vortex_record_adapter;
+
 
 alter function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is

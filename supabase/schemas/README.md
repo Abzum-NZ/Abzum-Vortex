@@ -24,6 +24,11 @@ The 20261014 baseline has 705 functions, each with one canonical file. The 244 f
 the initial squash copy their definition, owner, comment when present, and privileges from the
 baseline without changing the function.
 
+Migration `20261014001100_collapse_schemas_and_owner_roles` moved those functions into the five schemas
+(`vortex_identity`, `vortex_access`, `vortex_definition`, `vortex_record`, `vortex_platform`) and
+merged the per-schema owner roles into `vortex_owner`; the directories and owner statements here
+follow it. `vortex_record_adapter` and `vortex_record_inventory` remain separate restricted roles.
+
 ## Migration rule
 
 - A migration that creates a function or changes its definition carries the complete body,

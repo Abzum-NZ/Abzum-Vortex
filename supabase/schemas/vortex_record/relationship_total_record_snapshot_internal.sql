@@ -68,7 +68,7 @@ begin
           case ordered_fields.value ->> 'databaseValueType'
             when 'decimal' then pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', ordered_fields.value ->> 'token')
             when 'timestamp_with_time_zone' then pg_catalog.format(
-              'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.%I))',
+              'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(stored.%I))',
               ordered_fields.value ->> 'token'
             )
             when 'date' then pg_catalog.format(
@@ -126,8 +126,7 @@ alter function vortex_record.relationship_total_record_snapshot_internal(jsonb,u
 revoke all on function vortex_record.relationship_total_record_snapshot_internal(
   jsonb, uuid, uuid, boolean
 )
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.relationship_total_record_snapshot_internal(
   jsonb, uuid, uuid, boolean
 )

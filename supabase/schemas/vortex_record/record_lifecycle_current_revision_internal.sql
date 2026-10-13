@@ -27,5 +27,7 @@ begin
   end;
 end
 $$;
+alter function vortex_record.record_lifecycle_current_revision_internal(uuid,uuid) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.record_lifecycle_current_revision_internal(p_record_type_id uuid, p_record_id uuid) FROM PUBLIC;

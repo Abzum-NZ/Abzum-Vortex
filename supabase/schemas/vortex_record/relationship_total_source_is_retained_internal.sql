@@ -37,5 +37,7 @@ begin
   return lifecycle_state_value is not null and lifecycle_state_value <> 'active';
 end
 $_$;
+alter function vortex_record.relationship_total_source_is_retained_internal(jsonb,uuid,uuid,uuid,uuid) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.relationship_total_source_is_retained_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_organization_id uuid, p_application_root_id uuid) FROM PUBLIC;

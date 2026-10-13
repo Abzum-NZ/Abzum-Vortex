@@ -103,8 +103,7 @@ $function$;
 alter function vortex_record.reserve_named_action_creation_locks_internal(uuid,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.reserve_named_action_creation_locks_internal(uuid, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.reserve_named_action_creation_locks_internal(uuid, jsonb)
   to vortex_record_adapter;
 

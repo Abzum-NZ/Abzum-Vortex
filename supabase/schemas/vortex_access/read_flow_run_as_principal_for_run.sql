@@ -18,12 +18,12 @@ declare
   current_principal vortex_access.flow_run_as_principals%rowtype;
   actor_state text;
 begin
-  if p_execution_binding_id is null or not vortex_context.is_non_nil_uuid(p_execution_binding_id::text)
-    or p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text)
-    or p_application_root_id is null or not vortex_context.is_non_nil_uuid(p_application_root_id::text)
+  if p_execution_binding_id is null or not vortex_platform.is_non_nil_uuid(p_execution_binding_id::text)
+    or p_organization_id is null or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_application_root_id is null or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_release_version is null
     or p_release_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-    or p_flow_id is null or not vortex_context.is_non_nil_uuid(p_flow_id::text) then
+    or p_flow_id is null or not vortex_platform.is_non_nil_uuid(p_flow_id::text) then
     raise exception using errcode = '22023', message = 'Flow run-as principal read command is invalid';
   end if;
 
@@ -108,8 +108,7 @@ $function$;
 
 revoke all on function vortex_access.read_flow_run_as_principal_for_run(
   uuid, uuid, uuid, text, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_access.read_flow_run_as_principal_for_run(
   uuid, uuid, uuid, text, uuid

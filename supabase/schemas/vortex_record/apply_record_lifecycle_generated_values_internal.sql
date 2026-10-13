@@ -106,8 +106,7 @@ alter function vortex_record.apply_record_lifecycle_generated_values_internal(js
 revoke all on function vortex_record.apply_record_lifecycle_generated_values_internal(
   jsonb, boolean, jsonb
 )
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.apply_record_lifecycle_generated_values_internal(
   jsonb, boolean, jsonb
 ) is

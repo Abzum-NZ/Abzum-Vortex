@@ -17,11 +17,11 @@ begin
       'applicationRootId', 'accessVersion', 'correlationId'
     ])
     or initial_context ->> 'callerKind' is distinct from 'human'
-    or not vortex_context.is_non_nil_uuid(initial_context ->> 'tenantId')
-    or not vortex_context.is_non_nil_uuid(initial_context ->> 'organizationId')
-    or not vortex_context.is_non_nil_uuid(initial_context ->> 'organizationAccountId')
-    or not vortex_context.is_non_nil_uuid(initial_context ->> 'applicationRootId')
-    or not vortex_context.is_non_nil_uuid(initial_context ->> 'correlationId')
+    or not vortex_platform.is_non_nil_uuid(initial_context ->> 'tenantId')
+    or not vortex_platform.is_non_nil_uuid(initial_context ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(initial_context ->> 'organizationAccountId')
+    or not vortex_platform.is_non_nil_uuid(initial_context ->> 'applicationRootId')
+    or not vortex_platform.is_non_nil_uuid(initial_context ->> 'correlationId')
     or not pg_catalog.pg_input_is_valid(initial_context ->> 'accessVersion', 'bigint')
     or (initial_context ->> 'accessVersion')::bigint not between 1 and 9007199254740991 then
     raise exception using errcode = '42501',
@@ -62,9 +62,7 @@ $function$;
 alter function vortex_access.lock_human_request_access_version_internal() owner to postgres;
 
 revoke all on function vortex_access.lock_human_request_access_version_internal()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_access_owner, vortex_definition_owner, vortex_identity_owner,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.lock_human_request_access_version_internal()
   to vortex_record_adapter;
 comment on function vortex_access.lock_human_request_access_version_internal() is

@@ -125,8 +125,7 @@ $function$;
 
 alter function vortex_record.canonical_record_value_matches(jsonb, text, text) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.canonical_record_value_matches(jsonb, text, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+revoke all on function vortex_record.canonical_record_value_matches(jsonb, text, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.canonical_record_value_matches(jsonb, text, text) is
   'Private pure check that one value is the canonical V2 shape for its declared field type; never raises and decides no authority.';

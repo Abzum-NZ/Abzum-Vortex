@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.authorize_storage_conversion_internal(p_storage_contract_id uuid, p_installed_release_revision bigint) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.authorize_storage_conversion_internal(p_storage_contract_id uuid, p_installed_release_revision bigint) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -59,7 +59,7 @@ begin
 
   if catalogue_row.storage_scope = 'application_contained' then
     if not coalesce(
-      vortex_context.is_non_nil_uuid(checked_context ->> 'applicationRootId'), false
+      vortex_platform.is_non_nil_uuid(checked_context ->> 'applicationRootId'), false
     ) then
       raise exception using errcode = '42501',
         message = 'Storage conversion requires an application context';
@@ -78,7 +78,7 @@ begin
   );
 
   if p_installed_release_revision is not null
-    and not vortex_module.storage_conversion_is_installed_internal(
+    and not vortex_definition.storage_conversion_is_installed_internal(
       permission_decision.organization_id, scope_application_root_id,
       p_storage_contract_id, catalogue_row.module_root_id, p_installed_release_revision
     ) then
@@ -100,6 +100,8 @@ exception
       message = 'Storage conversion authority is unavailable';
 end
 $$;
+alter function vortex_record.authorize_storage_conversion_internal(uuid,bigint) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.authorize_storage_conversion_internal(p_storage_contract_id uuid, p_installed_release_revision bigint) IS 'Private authority for storage conversion: Application-management permission, validated tenant scope, Module ownership and, when named, an active installation of the exact source release.';
 

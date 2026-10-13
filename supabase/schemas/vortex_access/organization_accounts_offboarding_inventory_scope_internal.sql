@@ -7,7 +7,6 @@ CREATE FUNCTION vortex_access.organization_accounts_offboarding_inventory_scope_
   from vortex_access.organization_accounts_administration_change_scope() as authorized;
 $$;
 
-
 ALTER FUNCTION vortex_access.organization_accounts_offboarding_inventory_scope_internal() OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.organization_accounts_offboarding_inventory_scope_internal() IS 'Private adapter-only bridge for the fixed accounts.manage check in account-offboarding inventory.';

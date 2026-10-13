@@ -66,8 +66,7 @@ alter function vortex_record.save_base_record(uuid,text,uuid,uuid,bigint,jsonb,j
 
 revoke all on function vortex_record.save_base_record(
   uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 revoke execute on function vortex_record.save_base_record(uuid, text, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid, uuid)
 from vortex_runtime;
 

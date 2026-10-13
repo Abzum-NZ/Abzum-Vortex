@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.read_index_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.read_index_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -38,7 +38,7 @@ begin
   -- context inside it and is never taken from the caller.
   select pg_catalog.array_agg(distinct targets.storage_contract_id)
     into target_storage_contract_ids
-  from vortex_module.read_lifecycle_activation_targets_internal(
+  from vortex_definition.read_lifecycle_activation_targets_internal(
     p_organization_id, p_application_root_id, p_application_release_revision,
     p_expected_module_bindings
   ) as targets;
@@ -143,6 +143,8 @@ begin
   );
 end
 $$;
+alter function vortex_record.read_index_readiness(uuid,uuid,bigint,jsonb) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.read_index_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) IS 'Live readiness of every exact field index an activating Application installation owns: uniqueness indexes are activation requirements, performance indexes are advisory.';
 

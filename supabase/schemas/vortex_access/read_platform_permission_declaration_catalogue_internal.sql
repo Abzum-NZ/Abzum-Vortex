@@ -241,13 +241,14 @@ from valid
 join expected on true
 where valid.expected_set_valid
 $function$;
+alter function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint) owner to vortex_owner;
+
 
 revoke all on function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)
   to postgres;
 comment on function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint) is
   'Returns the complete trusted platform permission declaration catalogue for a supported registration revision only to the authorized postgres caller.';
 alter function vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

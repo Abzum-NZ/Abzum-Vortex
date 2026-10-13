@@ -40,11 +40,10 @@ $function$;
 
 revoke all on function vortex_identity.assert_organization_runtime_settings_values(
   text, text, text, text, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_identity.assert_organization_runtime_settings_values(
   text, text, text, text, text
-) to vortex_identity_owner;
+) to vortex_owner;
 
 comment on function vortex_identity.assert_organization_runtime_settings_values(
   text, text, text, text, text

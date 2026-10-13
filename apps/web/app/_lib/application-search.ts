@@ -133,7 +133,7 @@ export const loadApplicationSearch = async (
           for (;;) {
             const rows = await transaction.query<DatabaseRow>`
               select record_id, source_record_version, document_schema_version, entries, content_fingerprint
-              from vortex_search.documents as documents
+              from vortex_record.documents as documents
               where organization_id = ${scope.organizationId}::uuid
                 and (application_root_id = ${scopedApplicationRootId}::uuid or application_root_id is null)
                 and record_type_id = ${recordTypeId}::uuid and not deleted
@@ -201,7 +201,7 @@ export const loadApplicationSearch = async (
             // Record authority.
             const rows = await transaction.query<DatabaseRow>`
               with active_installation as materialized (
-                select vortex_module.read_current_active_installation() as value
+                select vortex_definition.read_current_active_installation() as value
               ), verified_installation as materialized (
                 select value from active_installation
                 where pg_catalog.lower(value ->> 'organizationId') = pg_catalog.lower(${scope.organizationId}::text)

@@ -43,10 +43,10 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.ensure_identity_projection(uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.ensure_identity_projection(uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.ensure_identity_projection(uuid, uuid) to vortex_runtime;
 
 comment on function vortex_identity.ensure_identity_projection(uuid, uuid) is null;
 
-alter function vortex_identity.ensure_identity_projection(uuid, uuid) owner to vortex_identity_owner;
+alter function vortex_identity.ensure_identity_projection(uuid, uuid) owner to vortex_owner;

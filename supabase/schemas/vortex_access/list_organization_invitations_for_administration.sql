@@ -17,7 +17,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.list_organization_invitations_for_administration(p_after_invitation_id uuid, p_page_size integer) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.list_organization_invitations_for_administration(p_after_invitation_id uuid, p_page_size integer) IS 'Protected bounded local-ID invitation page under the fixed invitations.read decision.';

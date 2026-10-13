@@ -25,6 +25,8 @@ begin
   end;
 end
 $$;
+alter function vortex_record.soft_delete_record_internal(uuid,uuid,bigint) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.soft_delete_record_internal(p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) IS 'Private revision-checked recoverable delete primitive with current Access and declared incoming relationship handling; it sets no recovery policy.';
 

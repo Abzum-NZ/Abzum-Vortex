@@ -365,7 +365,7 @@ const projectPermittedApplication = async (
   experiences: ApplicationExperience[];
 }> | null> => {
   const releaseRows = await transaction.query<CurrentReleaseRow>`
-    select vortex_module.is_current_application_address_release(
+    select vortex_definition.is_current_application_address_release(
       ${candidate.releaseRevision}::bigint
     ) as current_release
   `;
@@ -640,7 +640,7 @@ export const readAddressedActiveApplicationIdentity = async (
       if (scope.applicationRootId !== undefined)
         throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
       const rows = await transaction.query<AddressedIdentityRow>`
-        select vortex_module.resolve_addressed_active_application_identity(
+        select vortex_definition.resolve_addressed_active_application_identity(
           ${applicationKey.data}::text
         ) as addressed_identity
       `;

@@ -70,12 +70,11 @@ end
 $function$;
 
 revoke all on function vortex_access.list_organization_accounts_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_organization_accounts_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_accounts_projection(uuid, integer) is
   'Registered organisation-account projection: returns every account of the organisation to a viewer the fixed accounts.read decision admits, otherwise only the active accounts with their display name and state to a live human member, with the organisation, the account identity, the account revision and the safe projected attribute values keyed by lowercase field key, or no row when neither rule admits the viewer.';

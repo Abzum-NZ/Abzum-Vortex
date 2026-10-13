@@ -95,7 +95,7 @@ begin
   end if;
 
   if changed.outcome = 'changed' then
-    append_result := vortex_activity.append_organization_activity_entry(
+    append_result := vortex_record.append_organization_activity_entry(
       authority.organization_id,
       p_activity_id,
       pg_catalog.statement_timestamp(),
@@ -104,7 +104,7 @@ begin
       coordinated_operation || '_application_access',
       array[p_application_root_id]::uuid[],
       array[]::uuid[],
-      vortex_context.channel(),
+      vortex_platform.channel(),
       authority.correlation_id,
       'completed'
     );
@@ -134,8 +134,7 @@ $function$;
 
 revoke all on function vortex_access.change_application_installation_access(
   uuid, uuid, text, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
 grant execute on function vortex_access.change_application_installation_access(
   uuid, uuid, text, jsonb
 ) to vortex_request;

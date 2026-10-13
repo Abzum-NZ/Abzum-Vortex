@@ -25,7 +25,6 @@ CREATE FUNCTION vortex_access.read_organization_group_membership(p_organization_
     and membership.membership_id = p_membership_id
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_group_membership(p_organization_id uuid, p_membership_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_group_membership(p_organization_id uuid, p_membership_id uuid) IS 'Owner-only exact membership fact read with database-time temporal status.';

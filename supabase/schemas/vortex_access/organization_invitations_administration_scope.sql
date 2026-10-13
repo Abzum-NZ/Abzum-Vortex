@@ -34,7 +34,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.organization_invitations_administration_scope() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.organization_invitations_administration_scope() FROM PUBLIC;

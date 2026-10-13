@@ -417,7 +417,7 @@ export const buildSearchDocument = (
 };
 
 /**
- * Arguments of `vortex_search.put_document`, in its parameter order. The
+ * Arguments of `vortex_record.put_document`, in its parameter order. The
  * organisation must be the established request organisation; a deletion marker
  * carries no entries or fingerprint.
  */

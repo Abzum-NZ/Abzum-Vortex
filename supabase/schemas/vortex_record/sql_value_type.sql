@@ -13,5 +13,7 @@ CREATE FUNCTION vortex_record.sql_value_type(p_database_value_type text) RETURNS
     else 'text'
   end
 $$;
+alter function vortex_record.sql_value_type(text) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.sql_value_type(p_database_value_type text) FROM PUBLIC;

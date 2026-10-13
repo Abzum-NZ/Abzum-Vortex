@@ -17,5 +17,7 @@ CREATE FUNCTION vortex_record.ownership_transfer_command_fingerprint_internal(p_
     )::text, 'UTF8')), 'hex'
   )
 $$;
+alter function vortex_record.ownership_transfer_command_fingerprint_internal(uuid,uuid,uuid,bigint,text,uuid,text,uuid) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.ownership_transfer_command_fingerprint_internal(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_operation_identity text, p_source_organization_account_id uuid) FROM PUBLIC;

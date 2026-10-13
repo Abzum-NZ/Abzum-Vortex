@@ -15,17 +15,17 @@ begin
     or pg_catalog.octet_length(p_operation_key) not between 1 and 128
     or p_operation_key !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
     or p_flow_id is null
-    or not vortex_context.is_non_nil_uuid(p_flow_id::text) then
+    or not vortex_platform.is_non_nil_uuid(p_flow_id::text) then
     raise exception using errcode = '22023',
       message = 'Durable system actor purpose is invalid';
   end if;
 
-  checked := vortex_context.current_context();
+  checked := vortex_platform.current_context();
   if checked ->> 'callerKind' is distinct from 'system'
     or checked ->> 'channel' is distinct from 'durable_workflow'
     or checked ? 'supportContext'
     or not checked ? 'applicationRootId'
-    or not vortex_context.is_non_nil_uuid(checked ->> 'systemActorId') then
+    or not vortex_platform.is_non_nil_uuid(checked ->> 'systemActorId') then
     raise exception using errcode = '42501',
       message = 'Durable system actor context is required';
   end if;
@@ -76,8 +76,7 @@ end
 $function$;
 
 revoke all on function vortex_access.validated_durable_system_request_context(text, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.validated_durable_system_request_context(text, uuid)
   to vortex_request;
 

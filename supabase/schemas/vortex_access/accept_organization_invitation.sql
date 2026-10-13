@@ -131,7 +131,6 @@ begin
 end
 $_$;
 
-
 ALTER FUNCTION vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) IS 'Runtime invitation acceptance under the organization access-version lock.';

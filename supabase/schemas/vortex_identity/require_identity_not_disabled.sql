@@ -1,17 +1,16 @@
-CREATE FUNCTION vortex_identity.require_identity_not_disabled(p_identity_id uuid) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_identity.require_identity_not_disabled(p_identity_id uuid) RETURNS void
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
 begin
   if p_identity_id is null
-    or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or vortex_identity.identity_is_disabled(p_identity_id)
   then
     raise exception using errcode = '42501', message = 'Identity is unavailable';
   end if;
 end
 $$;
-
 
 ALTER FUNCTION vortex_identity.require_identity_not_disabled(p_identity_id uuid) OWNER TO postgres;
 

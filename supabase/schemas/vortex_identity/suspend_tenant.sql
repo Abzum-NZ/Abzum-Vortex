@@ -12,10 +12,10 @@ as $function$
   )
 $function$;
 
-revoke execute on function vortex_identity.suspend_tenant(uuid,uuid,uuid,text,uuid,bigint) from public, anon, authenticated, service_role, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke execute on function vortex_identity.suspend_tenant(uuid,uuid,uuid,text,uuid,bigint) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.suspend_tenant(uuid,uuid,uuid,text,uuid,bigint) to vortex_runtime;
 
 comment on function vortex_identity.suspend_tenant(uuid,uuid,uuid,text,uuid,bigint) is 'Configured-system-only non-cascading suspension of one active tenant.';
 
-alter function vortex_identity.suspend_tenant(uuid,uuid,uuid,text,uuid,bigint) owner to vortex_identity_owner;
+alter function vortex_identity.suspend_tenant(uuid,uuid,uuid,text,uuid,bigint) owner to vortex_owner;

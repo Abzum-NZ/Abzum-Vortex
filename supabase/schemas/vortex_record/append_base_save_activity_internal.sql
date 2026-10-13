@@ -37,12 +37,12 @@ begin
     raise exception using errcode = '42501',
       message = 'Record save Activity requires an Application context';
   end if;
-  append_result := vortex_activity.append_organization_activity_entry(
+  append_result := vortex_record.append_organization_activity_entry(
     (context_value ->> 'organizationId')::uuid,
     p_activity_id, occurred_at_value, 'organization_account',
     (context_value ->> 'organizationAccountId')::uuid,
     case when p_operation = 'create' then 'create_record' else 'update_record' end,
-    array[p_subject_id]::uuid[], p_changed_field_ids, vortex_context.channel(),
+    array[p_subject_id]::uuid[], p_changed_field_ids, vortex_platform.channel(),
     (context_value ->> 'correlationId')::uuid, p_outcome
   );
   if append_result is distinct from 'inserted' then
@@ -59,8 +59,7 @@ alter function vortex_record.append_base_save_activity_internal(
 
 revoke all on function vortex_record.append_base_save_activity_internal(
   uuid, text, uuid, uuid[], text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.append_base_save_activity_internal(
   uuid, text, uuid, uuid[], text
 ) to vortex_record_adapter;

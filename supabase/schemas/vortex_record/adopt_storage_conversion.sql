@@ -170,6 +170,8 @@ exception
       message = 'Storage adoption evidence is unavailable';
 end
 $_$;
+alter function vortex_record.adopt_storage_conversion(uuid,bigint,uuid,uuid) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.adopt_storage_conversion(p_conversion_contract_id uuid, p_expected_plan_revision bigint, p_application_root_id uuid, p_module_root_id uuid) IS 'Atomic storage adoption for one detached installation: refuses stale or incomplete plans and any remaining installation of a release carrying the source field, then switches the target mapping to active and the source mapping to retired together; never drops a column.';
 

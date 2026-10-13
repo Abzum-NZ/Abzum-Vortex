@@ -159,4 +159,4 @@ grant execute on function vortex_access.read_current_application_role_ids_for_la
 comment on function vortex_access.read_current_application_role_ids_for_launcher() is
   'Returns only current direct or group application-role source identities for the validated human application context; page authority is checked separately.';
 
-alter function vortex_access.read_current_application_role_ids_for_launcher() owner to vortex_access_owner;
+alter function vortex_access.read_current_application_role_ids_for_launcher() owner to vortex_owner;

@@ -24,9 +24,9 @@ security definer
 set search_path = ''
 as $function$
 begin
-  if p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+  if p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
     or (p_organization_id is not null
-      and not vortex_context.is_non_nil_uuid(p_organization_id::text))
+      and not vortex_platform.is_non_nil_uuid(p_organization_id::text))
     or not vortex_access.capability_policy_key_is_valid(p_capability_key)
     or not vortex_access.capability_policy_unit_is_valid(p_unit)
     or p_evaluated_at is null
@@ -104,8 +104,7 @@ $function$;
 
 revoke all on function vortex_access.capability_limit_bounds_internal(
   uuid, uuid, text, text, timestamptz, boolean
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.capability_limit_bounds_internal(
   uuid, uuid, text, text, timestamptz, boolean

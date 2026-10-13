@@ -49,8 +49,8 @@ read operation so a missing projection is never recreated as a side effect of ch
 Supabase Auth remains the durable session store and Vortex adds no database session relation.
 
 Lint is restricted to Vortex-owned schemas. The database baseline covers `public`, and the private
-`vortex_context`, `vortex_identity`, `vortex_definition`, `vortex_access`, `vortex_activity`,
-`vortex_module` and `vortex_record` schemas, plus the generated `record_data` schema. Each issue
+`vortex_platform`, `vortex_identity`, `vortex_definition`, `vortex_access` and `vortex_record`
+schemas, plus the generated `record_data` schema. Each issue
 that introduces another private service schema must add it to
 `workflows/kestra/database-verification.json`, which both the local and operated lint commands read
 their schema list from. Supabase-managed extension functions are deliberately excluded because their
@@ -83,7 +83,7 @@ migrations and controlled database verification. Vercel never receives it.
 The server runtime instead connects as the restricted `vortex_runtime` login.
 Inside one explicit transaction, that role establishes one complete
 transaction-local context through its private initializer, which stores the
-validated context in the owner-only `vortex_context.request_contexts` row for the
+validated context in the owner-only `vortex_platform.request_contexts` row for the
 current backend and transaction and refuses re-establishment; a value written
 into any session setting is ignored, and neither login role can read or write the
 table. It then enters the non-login `vortex_request` role with `SET LOCAL ROLE`
@@ -108,7 +108,7 @@ Local and pgTAP checks may connect as the local owner and switch to the request
 role to prove its restrictions. An owner-control assertion may prove that a
 refused row exists, but it never represents an application success path.
 A suite that switches account mid-transaction clears the owner row
-(`delete from vortex_context.request_contexts where backend_pid = pg_catalog.pg_backend_pid();`)
+(`delete from vortex_platform.request_contexts where backend_pid = pg_catalog.pg_backend_pid();`)
 before initialising again.
 
 Before the Access service is available, the private Definition entry points accept only a validated
@@ -167,7 +167,7 @@ Later pgTAP suites include
 the schema owner, direct Data API denial, public creation denial, and absence of
 future-object default grants without installing any permanent test function.
 Ordinary service schemas omit the helper's optional runtime-usage flag. The
-`vortex_context`, `vortex_identity` and `vortex_access` schemas pass `true` only where their
+`vortex_platform`, `vortex_identity` and `vortex_access` schemas pass `true` only where their
 named runtime functions require schema usage; object execution remains
 explicitly granted. `vortex_identity` gives `vortex_request` no schema usage or function grant in
 Phase 2. Runtime invitation acceptance is available only through `vortex_access`, which commits the

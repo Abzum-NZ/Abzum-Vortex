@@ -44,7 +44,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.protect_organization_direct_record_share() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_organization_direct_record_share() FROM PUBLIC;

@@ -126,6 +126,8 @@ begin
   );
 end
 $_$;
+alter function vortex_record.record_index_build_result(uuid,uuid,uuid,text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.record_index_build_result(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_expected_definition_fingerprint text) IS 'Records the observed physical state of a leased index build, marking present only when the live definition matches the claimed fingerprint.';
 

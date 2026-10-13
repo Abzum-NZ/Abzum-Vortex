@@ -28,11 +28,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.read_identity_projection(uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.read_identity_projection(uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.read_identity_projection(uuid) to vortex_runtime;
 
 comment on function vortex_identity.read_identity_projection(uuid) is
   'Returns one existing cluster-local identity projection without creating or changing it.';
 
-alter function vortex_identity.read_identity_projection(uuid) owner to vortex_identity_owner;
+alter function vortex_identity.read_identity_projection(uuid) owner to vortex_owner;

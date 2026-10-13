@@ -15,9 +15,9 @@ declare
   target record; changed record; command_fingerprint text;
   subject_ids uuid[]; subject_revisions bigint[];
 begin
-  if p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or p_organization_account_id is null
-    or not vortex_context.is_non_nil_uuid(p_organization_account_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
     or p_expected_revision is null
     or p_expected_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023', message = 'Account reactivation command is invalid';
@@ -102,8 +102,7 @@ comment on function vortex_access.reactivate_organization_account_for_administra
   'Protected suspended-or-closed-to-active account command using the existing guarded owner and accepted receipt.';
 
 revoke execute on function
-  vortex_access.reactivate_organization_account_for_administration(uuid, uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  vortex_access.reactivate_organization_account_for_administration(uuid, uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function
   vortex_access.reactivate_organization_account_for_administration(uuid, uuid, bigint) to vortex_request;

@@ -129,13 +129,14 @@ begin
   end;
 end
 $function$;
+alter function vortex_record.change_record_relationship_internal(uuid,uuid,bigint,uuid,jsonb) owner to vortex_record_adapter;
+
 
 alter function vortex_record.change_record_relationship_internal(uuid,uuid,bigint,uuid,jsonb)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.change_record_relationship_internal(uuid, uuid, bigint, uuid, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.change_record_relationship_internal(uuid, uuid, bigint, uuid, jsonb) is
   'Private revision-checked relationship primitive: decides source update and target eligibility, changes the edge atomically, and returns the actual saved identity, revision for the live application-contained copy owner to publish.';

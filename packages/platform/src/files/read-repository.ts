@@ -91,7 +91,7 @@ export const locateFileApplication = async (
   return fileApplicationLocationSchema.parse(
     singleResult(
       await transaction.query<ResultRow>`
-        select vortex_file.read_file_application(${fileId}::uuid) as result
+        select vortex_platform.read_file_application(${fileId}::uuid) as result
       `,
     ),
   );
@@ -119,14 +119,14 @@ export const decideFileRead = async (
   return fileReadDecisionSchema.parse(
     singleResult(
       await transaction.query<ResultRow>`
-        select vortex_file.decide_file_read(${fileId}::uuid) as result
+        select vortex_platform.decide_file_read(${fileId}::uuid) as result
       `,
     ),
   );
 };
 
 /**
- * The durable read-grant store over the `vortex_file` download-grant
+ * The durable read-grant store over the `vortex_platform` download-grant
  * functions, bound to one protected request transaction.
  */
 export const createSqlFileReadRepository = (
@@ -136,7 +136,7 @@ export const createSqlFileReadRepository = (
     readFile: async (fileId: FileId): Promise<FileRecord | null> => {
       const result = singleResult(
         await transaction.query<ResultRow>`
-          select vortex_file.read_file_for_download(${fileId}::uuid) as result
+          select vortex_platform.read_file_for_download(${fileId}::uuid) as result
         `,
       );
       if (result === null) return null;
@@ -146,7 +146,7 @@ export const createSqlFileReadRepository = (
       const result = asObject(
         singleResult(
           await transaction.query<ResultRow>`
-            select vortex_file.record_file_download_grant(
+            select vortex_platform.record_file_download_grant(
               ${grant.oneTimeId}::uuid,
               ${grant.fileId}::uuid,
               ${grant.recordTypeId}::uuid,
@@ -165,7 +165,7 @@ export const createSqlFileReadRepository = (
     claimDownloadGrant: async (oneTimeId): Promise<ClaimedDownloadGrant | null> => {
       const result = singleResult(
         await transaction.query<ResultRow>`
-            select vortex_file.claim_file_download_grant(${oneTimeId}::uuid) as result
+            select vortex_platform.claim_file_download_grant(${oneTimeId}::uuid) as result
           `,
       );
       if (result === null) return null;

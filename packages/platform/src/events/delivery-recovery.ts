@@ -398,7 +398,7 @@ export const createEventDeliveryRecoveryRepository = (
       const input = validateFailureReportInput(inputCandidate);
       try {
         const rows = await transaction.query<DeliveryRecoveryRow>`
-          select vortex_event.record_consumer_occurrence_delivery_failure(
+          select vortex_platform.record_consumer_occurrence_delivery_failure(
             ${input.consumerKey}::text,
             ${input.occurrenceId}::uuid,
             ${input.claimCursor}::uuid,
@@ -417,7 +417,7 @@ export const createEventDeliveryRecoveryRepository = (
       const input = validateRecoveryInput(inputCandidate);
       try {
         const rows = await transaction.query<DeliveryRecoveryRow>`
-          select vortex_event.recover_consumer_occurrence_claim(
+          select vortex_platform.recover_consumer_occurrence_claim(
             ${input.consumerKey}::text,
             ${input.occurrenceId}::uuid,
             ${input.expectedFailureCount}::integer,
@@ -434,7 +434,7 @@ export const createEventDeliveryRecoveryRepository = (
       const input = validateListInput(inputCandidate);
       try {
         const rows = await transaction.query<DeliveryRecoveryRow>`
-          select vortex_event.list_terminally_failed_consumer_occurrences(
+          select vortex_platform.list_terminally_failed_consumer_occurrences(
             ${input.consumerKey}::text,
             ${input.limit}::integer
           ) as result

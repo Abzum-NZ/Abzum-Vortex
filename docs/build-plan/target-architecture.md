@@ -111,6 +111,7 @@ flowchart LR
 - `vortex_owner` owns every object.
 - `vortex_runtime` is the application login and may only execute the API functions.
 - `vortex_record_adapter` is the role the record-data RLS policies are written for.
+- `vortex_record_inventory` is the second restricted role: the account-deletion inventory reads record data through organisation-scoped policies.
 
 Per-schema owner roles are removed. The provisioning defect of 12 October came from grants missing across them.
 

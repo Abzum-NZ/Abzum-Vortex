@@ -63,7 +63,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.list_organization_groups_for_administration(p_after_group_id uuid, p_page_size integer) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.list_organization_groups_for_administration(p_after_group_id uuid, p_page_size integer) IS 'Returns one bounded stable-ID Group administration page after the fixed teams-read decision.';

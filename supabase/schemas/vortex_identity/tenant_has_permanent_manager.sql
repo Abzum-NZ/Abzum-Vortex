@@ -24,9 +24,9 @@ as $function$
   )
 $function$;
 
-revoke execute on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke execute on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) is 'Identity-owned current permanent tenant-manager predicate shared by protected tenant operations.';
 
-alter function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) owner to vortex_identity_owner;
+alter function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) owner to vortex_owner;
 grant execute on function vortex_identity.tenant_has_permanent_manager(uuid,timestamp with time zone,uuid) to postgres;

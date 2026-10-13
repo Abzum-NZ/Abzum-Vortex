@@ -193,7 +193,7 @@ export const createEventDispatchBacklogReader = (
       try {
         const rows = await run((transaction) =>
           transaction.query<BacklogRow>`
-            select vortex_event.event_dispatch_backlog_status() as result
+            select vortex_platform.event_dispatch_backlog_status() as result
           `,
         );
         const first = rows[0];

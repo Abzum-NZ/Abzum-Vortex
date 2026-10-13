@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -8,8 +8,8 @@ declare
   revoked record; command_fingerprint text;
   subject_ids uuid[]; subject_revisions bigint[];
 begin
-  if p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or p_invitation_id is null or not vortex_context.is_non_nil_uuid(p_invitation_id::text)
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_invitation_id is null or not vortex_platform.is_non_nil_uuid(p_invitation_id::text)
     or p_expected_revision is null
     or p_expected_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023', message = 'Invitation revocation command is invalid';
@@ -78,7 +78,6 @@ begin
     receipt.receipt_id, receipt.accepted_at, scope.access_version;
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) OWNER TO postgres;
 

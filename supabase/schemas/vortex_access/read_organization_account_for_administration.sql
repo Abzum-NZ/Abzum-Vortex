@@ -17,7 +17,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) IS 'Protected exact account detail under the fixed accounts.read decision.';

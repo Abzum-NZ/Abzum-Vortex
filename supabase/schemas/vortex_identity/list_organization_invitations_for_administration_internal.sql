@@ -75,11 +75,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.list_organization_invitations_for_administration_internal(
   uuid, uuid, integer
 ) is 'Identity-owned bounded organisation-scoped safe invitation projection without secret or fingerprint.';
 
-alter function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) owner to vortex_identity_owner;
+alter function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) owner to vortex_owner;
 grant execute on function vortex_identity.list_organization_invitations_for_administration_internal(uuid, uuid, integer) to postgres;

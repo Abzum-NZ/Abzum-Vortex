@@ -19,6 +19,8 @@ begin
   );
 end
 $$;
+alter function vortex_record.relationship_edge_record_identity_internal(uuid,uuid,uuid) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.relationship_edge_record_identity_internal(p_relationship_id uuid, p_storage_contract_id uuid, p_record_id uuid) IS 'Permanent identity of one participant of one relationship edge: relationship, storage contract and record. Malformed or sentinel identities raise.';
 

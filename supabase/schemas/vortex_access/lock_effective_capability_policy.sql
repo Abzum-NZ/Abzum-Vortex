@@ -57,11 +57,10 @@ $function$;
 
 revoke execute on function vortex_access.lock_effective_capability_policy(
   uuid, uuid, text, text, timestamptz
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.lock_effective_capability_policy(uuid, uuid, text, text, timestamptz) is
   'Locks the live platform ceiling and the tenant and organisation allocations for the scope, then returns the lowest of them as the effective limit; an allocation can only narrow the ceiling.';
 
 alter function vortex_access.lock_effective_capability_policy(uuid, uuid, text, text, timestamptz) owner to postgres;
-grant execute on function vortex_access.lock_effective_capability_policy(uuid, uuid, text, text, timestamptz) to vortex_access_owner;
+grant execute on function vortex_access.lock_effective_capability_policy(uuid, uuid, text, text, timestamptz) to vortex_owner;

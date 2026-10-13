@@ -107,7 +107,7 @@ begin
       message = 'Provisioned lifecycle setup authority is unavailable';
   end if;
 
-  projection := vortex_module.read_provisioned_lifecycle_setup_targets_internal(
+  projection := vortex_definition.read_provisioned_lifecycle_setup_targets_internal(
     p_application_root_id,
     p_application_release_revision,
     p_expected_module_bindings
@@ -505,13 +505,14 @@ exception
       message = 'Provisioned lifecycle setup request is invalid';
 end
 $function$;
+alter function vortex_record.read_provisioned_lifecycle_policy_setup(uuid,bigint,jsonb) owner to vortex_owner;
+
 
 alter function vortex_record.read_provisioned_lifecycle_policy_setup(uuid, bigint, jsonb)
-  owner to vortex_record_owner;
+  owner to vortex_owner;
 
 revoke all on function vortex_record.read_provisioned_lifecycle_policy_setup(uuid, bigint, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
 grant execute on function vortex_record.read_provisioned_lifecycle_policy_setup(uuid, bigint, jsonb)
   to vortex_request;
 

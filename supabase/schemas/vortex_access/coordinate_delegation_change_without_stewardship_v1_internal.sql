@@ -309,7 +309,6 @@ begin
 end
 $_$;
 
-
 ALTER FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_scope_fingerprint text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_scope_fingerprint text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only atomic delegation grant, whole-scope replacement or terminal revocation. It changes Access once but grants no caller authority.';

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.read_application_index_status(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.read_application_index_status(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -49,7 +49,7 @@ begin
   -- inside it and the supplied value must match it.
   select pg_catalog.array_agg(distinct targets.storage_contract_id)
     into target_storage_contract_ids
-  from vortex_module.read_lifecycle_activation_targets_internal(
+  from vortex_definition.read_lifecycle_activation_targets_internal(
     p_organization_id, p_application_root_id, p_application_release_revision,
     p_expected_module_bindings
   ) as targets;
@@ -210,6 +210,8 @@ begin
   );
 end
 $$;
+alter function vortex_record.read_application_index_status(uuid,uuid,bigint,jsonb) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.read_application_index_status(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) IS 'Protected live status of every exact field index one active Application installation owns: pending, running, ready, interrupted or conflicting, with bounded progress and no physical detail.';
 

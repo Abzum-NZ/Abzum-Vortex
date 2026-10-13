@@ -222,7 +222,7 @@ begin
       notice_sequence := pg_catalog.nextval(
         'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
       );
-      perform vortex_invalidation.publish_change_notice(
+      perform vortex_platform.publish_change_notice(
         (context_value ->> 'organizationId')::uuid,
         (context_value ->> 'applicationRootId')::uuid,
         p_record_type_id, saved_record_id, new_concurrency_number, 'changed',
@@ -256,6 +256,6 @@ end
 $function$;
 
 alter function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) owner to vortex_record_adapter;
-revoke all on function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_module_owner;
+revoke all on function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) to vortex_record_adapter;
 comment on function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) is null;

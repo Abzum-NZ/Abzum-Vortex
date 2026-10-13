@@ -295,7 +295,7 @@ export const createModuleInstallationStorageRepository = (
     try {
       const rows = await transaction.query<ContributionRow>`
         select *
-        from vortex_module.provision_module_contribution_storage(
+        from vortex_definition.provision_module_contribution_storage(
           ${command.applicationRootId}::uuid,
           ${command.applicationReleaseRevision}::bigint,
           ${command.moduleRootId}::uuid,
@@ -321,7 +321,7 @@ export const createModuleInstallationStorageRepository = (
       try {
         const rows = await transaction.query<ProvisionRow>`
           select *
-          from vortex_module.provision_module_installation_storage(
+          from vortex_definition.provision_module_installation_storage(
             ${command.data.applicationRootId}::uuid,
             ${command.data.applicationReleaseRevision}::bigint,
             ${command.data.moduleRootId}::uuid,

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.ensure_account_deletion_fence_internal(p_physical_table_token text) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_record.ensure_account_deletion_fence_internal(p_physical_table_token text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -31,7 +31,7 @@ begin
     execute pg_catalog.format(
       'create policy record_account_deletion_inventory on record_data.%I
          for select to vortex_record_inventory
-         using (organisation_id = vortex_context.organization_id())',
+         using (organisation_id = vortex_platform.organization_id())',
       p_physical_table_token
     );
   end if;
@@ -49,6 +49,8 @@ begin
   );
 end
 $_$;
+alter function vortex_record.ensure_account_deletion_fence_internal(text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.ensure_account_deletion_fence_internal(p_physical_table_token text) IS 'Private provisioner for one Record table: owner index, inventory read policy and the ownership fence trigger.';
 

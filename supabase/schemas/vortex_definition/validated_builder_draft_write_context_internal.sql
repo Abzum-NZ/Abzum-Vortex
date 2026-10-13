@@ -115,6 +115,8 @@ begin
   return checked_context;
 end
 $function$;
+alter function vortex_definition.validated_builder_draft_write_context_internal(uuid) owner to vortex_owner;
+
 
 revoke all on function vortex_definition.validated_builder_draft_write_context_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
@@ -125,4 +127,4 @@ comment on function vortex_definition.validated_builder_draft_write_context_inte
   'Private live human Application and Module draft guard for the existing create/save function owner; locks Access and classified roots and rechecks exact current permissions and deadlines.';
 
 alter function vortex_definition.validated_builder_draft_write_context_internal(uuid)
-  owner to vortex_definition_owner;
+  owner to vortex_owner;

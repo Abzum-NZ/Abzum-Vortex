@@ -8,5 +8,7 @@ CREATE FUNCTION vortex_record.is_lifecycle_destination(p_value text) RETURNS boo
     false
   );
 $_$;
+alter function vortex_record.is_lifecycle_destination(text) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.is_lifecycle_destination(p_value text) FROM PUBLIC;

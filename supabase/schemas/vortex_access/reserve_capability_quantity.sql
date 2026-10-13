@@ -21,7 +21,7 @@ begin
     or p_policy_claim is null or pg_catalog.jsonb_typeof(p_policy_claim) <> 'object'
     or not vortex_access.capability_policy_quantity_is_valid(p_requested_quantity)
     or p_duplicate_key is null
-    or not vortex_context.is_non_nil_uuid(p_duplicate_key::text) then
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text) then
     raise exception using errcode = '22023', message = 'Capability reservation command is invalid';
   end if;
   select locked.* into effective
@@ -217,8 +217,7 @@ comment on function vortex_access.reserve_capability_quantity(
   'Resolves and locks current organisation-preferred policy, then atomically reserves or records a safe refusal.';
 
 revoke execute on function
-  vortex_access.reserve_capability_quantity(uuid, uuid, text, text, jsonb, numeric, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  vortex_access.reserve_capability_quantity(uuid, uuid, text, text, jsonb, numeric, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function
   vortex_access.reserve_capability_quantity(uuid, uuid, text, text, jsonb, numeric, uuid) to vortex_request;

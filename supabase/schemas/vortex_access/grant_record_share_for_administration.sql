@@ -48,26 +48,26 @@ declare
   earliest_authority_until timestamptz;
 begin
   if p_direct_share_id is null
-    or not vortex_context.is_non_nil_uuid(p_direct_share_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_direct_share_id::text)
     or p_record_id is null
-    or not vortex_context.is_non_nil_uuid(p_record_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_record_id::text)
     or p_recipient_kind is null
     or p_recipient_kind not in ('organization_account', 'group')
     or (p_recipient_kind = 'organization_account' and (
       p_organization_account_id is null
-      or not vortex_context.is_non_nil_uuid(p_organization_account_id::text)
+      or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
       or p_group_id is not null
     ))
     or (p_recipient_kind = 'group' and (
       p_group_id is null
-      or not vortex_context.is_non_nil_uuid(p_group_id::text)
+      or not vortex_platform.is_non_nil_uuid(p_group_id::text)
       or p_organization_account_id is not null
     ))
     or p_readable_field_ids is null
     or pg_catalog.cardinality(p_readable_field_ids) = 0
-    or not vortex_context.uuid_array_is_canonical(p_readable_field_ids)
+    or not vortex_platform.uuid_array_is_canonical(p_readable_field_ids)
     or p_changeable_field_ids is null
-    or not vortex_context.uuid_array_is_canonical(p_changeable_field_ids)
+    or not vortex_platform.uuid_array_is_canonical(p_changeable_field_ids)
     or not (p_changeable_field_ids <@ p_readable_field_ids)
     or p_starts_at is null
     or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
@@ -76,7 +76,7 @@ begin
     or p_reason is null
     or pg_catalog.char_length(p_reason) not between 1 and 500
     or p_activity_id is null
-    or not vortex_context.is_non_nil_uuid(p_activity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_activity_id::text)
     or p_facts is null
     or pg_catalog.jsonb_typeof(p_facts) <> 'object'
     or pg_catalog.jsonb_typeof(p_facts -> 'binding') <> 'object' then
@@ -386,8 +386,7 @@ $function$;
 revoke execute on function vortex_access.grant_record_share_for_administration(
   uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text,
   uuid, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.grant_record_share_for_administration(
   uuid, uuid, text, uuid, uuid, uuid[], uuid[], timestamptz, timestamptz, text,

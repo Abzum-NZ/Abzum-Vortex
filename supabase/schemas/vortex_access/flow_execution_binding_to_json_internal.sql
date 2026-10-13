@@ -34,16 +34,15 @@ as $function$
     'permittedInputs', b.permitted_inputs,
     'state', b.state,
     'revision', b.revision,
-    'recordedAt', vortex_context.format_timestamp_utc(b.recorded_at)
+    'recordedAt', vortex_platform.format_timestamp_utc(b.recorded_at)
   )
   || case when b.expires_at is null then '{}'::jsonb else pg_catalog.jsonb_build_object(
-    'expiresAt', vortex_context.format_timestamp_utc(b.expires_at)) end
+    'expiresAt', vortex_platform.format_timestamp_utc(b.expires_at)) end
   || case when b.revoked_at is null then '{}'::jsonb else pg_catalog.jsonb_build_object(
-    'revokedAt', vortex_context.format_timestamp_utc(b.revoked_at)) end
+    'revokedAt', vortex_platform.format_timestamp_utc(b.revoked_at)) end
 $function$;
 
-revoke all on function vortex_access.flow_execution_binding_to_json_internal(vortex_access.flow_execution_bindings) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_access.flow_execution_binding_to_json_internal(vortex_access.flow_execution_bindings) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.flow_execution_binding_to_json_internal(vortex_access.flow_execution_bindings) is
   'Projects one stored flow execution binding into its canonical JSON form.';

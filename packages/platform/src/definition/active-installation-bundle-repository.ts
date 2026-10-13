@@ -147,7 +147,7 @@ export const createActiveInstallationBundleRepository = (
     statePromise = (async () => {
       try {
         const rows = await transaction.query<StateRow>`
-          select vortex_module.read_active_installation_bundle_identity() as bundle_state
+          select vortex_definition.read_active_installation_bundle_identity() as bundle_state
         `;
         if (rows.length !== 1 || rows[0] === undefined)
           throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");

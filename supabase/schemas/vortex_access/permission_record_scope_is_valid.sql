@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
     AS $_$
@@ -59,8 +59,8 @@ begin
         or not (route_value ?& array['relationshipId', 'sourcePermissionId'])
         or pg_catalog.jsonb_typeof(route_value -> 'relationshipId') <> 'string'
         or pg_catalog.jsonb_typeof(route_value -> 'sourcePermissionId') <> 'string'
-        or not vortex_context.is_non_nil_uuid(route_value ->> 'relationshipId')
-        or not vortex_context.is_non_nil_uuid(route_value ->> 'sourcePermissionId') then
+        or not vortex_platform.is_non_nil_uuid(route_value ->> 'relationshipId')
+        or not vortex_platform.is_non_nil_uuid(route_value ->> 'sourcePermissionId') then
         return false;
       end if;
       route_identity := '3:' || pg_catalog.lower(route_value ->> 'relationshipId')
@@ -96,7 +96,7 @@ begin
         'conditionId', 'publishedRevision', 'contractFingerprint', 'parameterBindings'
       ])
       or pg_catalog.jsonb_typeof(saved_condition -> 'conditionId') <> 'string'
-      or not vortex_context.is_non_nil_uuid(saved_condition ->> 'conditionId')
+      or not vortex_platform.is_non_nil_uuid(saved_condition ->> 'conditionId')
       or pg_catalog.jsonb_typeof(saved_condition -> 'publishedRevision') <> 'number'
       or (saved_condition ->> 'publishedRevision') !~ '^[1-9][0-9]*$'
       or (saved_condition ->> 'publishedRevision')::numeric > 9007199254740991
@@ -155,11 +155,9 @@ begin
 end
 $_$;
 
-
 ALTER FUNCTION vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) IS 'Private strict validator for canonical unique record-scope routes, the sole all-record route rule and the saved-condition envelope shape.';
-
 
 SET default_tablespace = '';
 

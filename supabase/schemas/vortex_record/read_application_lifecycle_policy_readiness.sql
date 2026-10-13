@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -28,7 +28,7 @@ begin
   -- completeness check below cannot disagree with the policies collected.
   select pg_catalog.array_agg(distinct targets.storage_contract_id)
     into target_storage_contract_ids
-  from vortex_module.read_lifecycle_activation_targets_internal(
+  from vortex_definition.read_lifecycle_activation_targets_internal(
     p_organization_id, p_application_root_id, p_application_release_revision,
     p_expected_module_bindings
   ) as targets;
@@ -71,7 +71,7 @@ begin
           message = 'Record-type lifecycle archive policy scope is unavailable';
       end if;
 
-      if not vortex_module.record_lifecycle_workflow_is_installed_internal(
+      if not vortex_definition.record_lifecycle_workflow_is_installed_internal(
         p_organization_id,
         p_application_root_id,
         target.storage_contract_id,
@@ -82,7 +82,7 @@ begin
           message = 'Record-type lifecycle archive workflow is unavailable';
       end if;
 
-      connection_readiness := vortex_connection.resolve_connection_instance_readiness(
+      connection_readiness := vortex_platform.resolve_connection_instance_readiness(
         p_organization_id,
         p_application_root_id,
         (policy_row.policy_body ->> 'archiveConnectionInstanceId')::uuid,
@@ -173,6 +173,8 @@ begin
   );
 end
 $$;
+alter function vortex_record.read_application_lifecycle_policy_readiness(uuid,uuid,bigint,jsonb) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) IS 'Complete executable-policy snapshot for one activating Application installation: every owned record type''s current policy, the organisation ceilings and the live archive readiness those policies name.';
 

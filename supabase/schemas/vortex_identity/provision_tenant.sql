@@ -57,9 +57,9 @@ declare
   replay_assignment_id uuid;
   replay_account_id uuid;
 begin
-  if not vortex_context.is_non_nil_uuid(p_cluster_id::text)
-    or not vortex_context.is_non_nil_uuid(p_operator_actor_id::text)
-    or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+  if not vortex_platform.is_non_nil_uuid(p_cluster_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_operator_actor_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or p_command_fingerprint is null
     or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
     raise exception using errcode = '22023', message = 'Tenant provisioning input is invalid';
@@ -271,8 +271,7 @@ $function$;
 revoke execute on function vortex_identity.provision_tenant(
   uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
   text, text, text, text, text, text
-) from public, anon, authenticated, service_role, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.provision_tenant(
   uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
   text, text, text, text, text, text

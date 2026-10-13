@@ -19,7 +19,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
 
-  preview_value := vortex_module.read_preview_record_installation_internal(
+  preview_value := vortex_definition.read_preview_record_installation_internal(
     address_value::uuid
   );
   if preview_value is null then
@@ -28,13 +28,14 @@ begin
   return preview_value;
 end
 $function$;
+alter function vortex_record.read_current_preview_installation_internal() owner to vortex_record_adapter;
+
 
 alter function vortex_record.read_current_preview_installation_internal()
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_current_preview_installation_internal()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.read_current_preview_installation_internal()
   to vortex_record_adapter;
 comment on function vortex_record.read_current_preview_installation_internal() is

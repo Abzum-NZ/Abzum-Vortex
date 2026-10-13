@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.evaluate_current_record_ownership_visibility(p_permission_record_scope jsonb, p_ownership_mode text, p_binding_organization_id uuid, p_binding_application_root_id uuid, p_binding_module_root_id uuid, p_binding_record_type_id uuid, p_binding_storage_contract_id uuid, p_binding_storage_scope text, p_record_scope jsonb, p_owner_organization_account_id uuid, p_owner_group_id uuid, p_current_organization_id uuid, p_current_application_root_id uuid, p_current_organization_account_id uuid, p_checked_at timestamp with time zone) RETURNS TABLE(admitted boolean, valid_until timestamp with time zone)
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_current_record_ownership_visibility(p_permission_record_scope jsonb, p_ownership_mode text, p_binding_organization_id uuid, p_binding_application_root_id uuid, p_binding_module_root_id uuid, p_binding_record_type_id uuid, p_binding_storage_contract_id uuid, p_binding_storage_scope text, p_record_scope jsonb, p_owner_organization_account_id uuid, p_owner_group_id uuid, p_current_organization_id uuid, p_current_application_root_id uuid, p_current_organization_account_id uuid, p_checked_at timestamp with time zone) RETURNS TABLE(admitted boolean, valid_until timestamp with time zone)
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -92,13 +92,13 @@ begin
   ]) then
     raise exception using errcode = '22023', message = 'Record identity is invalid';
   end if;
-  if not vortex_context.is_non_nil_uuid(p_record_scope ->> 'organizationId')
-    or not vortex_context.is_non_nil_uuid(p_record_scope ->> 'moduleRootId')
-    or not vortex_context.is_non_nil_uuid(p_record_scope ->> 'recordTypeId')
-    or not vortex_context.is_non_nil_uuid(p_record_scope ->> 'storageContractId')
-    or not vortex_context.is_non_nil_uuid(p_record_scope ->> 'recordId')
+  if not vortex_platform.is_non_nil_uuid(p_record_scope ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(p_record_scope ->> 'moduleRootId')
+    or not vortex_platform.is_non_nil_uuid(p_record_scope ->> 'recordTypeId')
+    or not vortex_platform.is_non_nil_uuid(p_record_scope ->> 'storageContractId')
+    or not vortex_platform.is_non_nil_uuid(p_record_scope ->> 'recordId')
     or (record_storage_scope = 'application_contained'
-      and not vortex_context.is_non_nil_uuid(
+      and not vortex_platform.is_non_nil_uuid(
         p_record_scope ->> 'applicationRootId'
       )) then
     raise exception using errcode = '22023', message = 'Record identity is invalid';
@@ -172,7 +172,6 @@ begin
   return query select false, null::timestamptz;
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.evaluate_current_record_ownership_visibility(p_permission_record_scope jsonb, p_ownership_mode text, p_binding_organization_id uuid, p_binding_application_root_id uuid, p_binding_module_root_id uuid, p_binding_record_type_id uuid, p_binding_storage_contract_id uuid, p_binding_storage_scope text, p_record_scope jsonb, p_owner_organization_account_id uuid, p_owner_group_id uuid, p_current_organization_id uuid, p_current_application_root_id uuid, p_current_organization_account_id uuid, p_checked_at timestamp with time zone) OWNER TO postgres;
 

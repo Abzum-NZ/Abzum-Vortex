@@ -16,7 +16,7 @@ declare
   context_organization_id uuid;
   stored_origin_kind text;
 begin
-  established_context := vortex_context.current_context();
+  established_context := vortex_platform.current_context();
 
   case established_context ->> 'callerKind'
     when 'human' then

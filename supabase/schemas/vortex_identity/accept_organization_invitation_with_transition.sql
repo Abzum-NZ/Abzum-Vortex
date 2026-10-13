@@ -79,11 +79,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.accept_organization_invitation_with_transition(
   text, uuid, text, text, uuid
 ) is 'Owner-only Identity invitation transition with explicit Access change classification.';
 
-alter function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) owner to vortex_identity_owner;
+alter function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) owner to vortex_owner;
 grant execute on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) to postgres;

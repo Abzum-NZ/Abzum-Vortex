@@ -131,8 +131,7 @@ $function$;
 alter function vortex_record.read_record_capabilities_internal(uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb) is
   'Private record capabilities: returns the permitted update, delete and restore actions and changeable fields of one readable record, reusing the read facts and field bounds of its read decision.';

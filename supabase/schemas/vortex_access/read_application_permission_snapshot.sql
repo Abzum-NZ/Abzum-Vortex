@@ -51,13 +51,15 @@ as $function$
     registration.source_resolution_fingerprint,
     registration.permission_catalogue_fingerprint
 $function$;
+alter function vortex_access.read_application_permission_snapshot(uuid,uuid) owner to vortex_owner;
+
 revoke execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
-  to vortex_module_owner;
+  to vortex_owner;
 grant execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
-  to vortex_invalidation_owner;
+  to vortex_owner;
 comment on function vortex_access.read_application_permission_snapshot(uuid, uuid) is
   'Owner-only active exact release reference and deterministic application-only permission snapshot; role templates remain in Definition.';
 alter function vortex_access.read_application_permission_snapshot(uuid, uuid)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

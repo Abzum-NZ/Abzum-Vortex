@@ -12,5 +12,7 @@ CREATE FUNCTION vortex_record.field_storage_meaning(p_field jsonb) RETURNS jsonb
     'settings', p_field -> 'settings'
   )
 $$;
+alter function vortex_record.field_storage_meaning(jsonb) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.field_storage_meaning(p_field jsonb) FROM PUBLIC;

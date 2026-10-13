@@ -12,7 +12,7 @@ exception when others then return null;
 end
 $function$;
 
-revoke execute on function vortex_identity.tenant_capabilities_from_json(jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke execute on function vortex_identity.tenant_capabilities_from_json(jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.tenant_capabilities_from_json(jsonb) is null;
 

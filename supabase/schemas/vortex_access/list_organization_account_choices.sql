@@ -17,7 +17,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.list_organization_account_choices(p_search text, p_page_size integer, p_after_sort_key text, p_after_organization_account_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.list_organization_account_choices(p_search text, p_page_size integer, p_after_sort_key text, p_after_organization_account_id uuid) IS 'Active accounts in the validated current organisation for an account-reference choice; scope comes only from the validated human request.';

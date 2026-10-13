@@ -28,7 +28,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_identity.protect_organization_invitation() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_identity.protect_organization_invitation() FROM PUBLIC;

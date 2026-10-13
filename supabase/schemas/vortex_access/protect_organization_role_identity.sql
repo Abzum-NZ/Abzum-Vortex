@@ -37,7 +37,6 @@ begin
 end;
 $$;
 
-
 ALTER FUNCTION vortex_access.protect_organization_role_identity() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_organization_role_identity() FROM PUBLIC;

@@ -43,8 +43,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.tenant_structural_capability_set_is_canonical(text[])
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.tenant_structural_capability_set_is_canonical(text[]) is
   'Validates a canonical nonempty set of tenant capability permissions against the single closed permission set.';

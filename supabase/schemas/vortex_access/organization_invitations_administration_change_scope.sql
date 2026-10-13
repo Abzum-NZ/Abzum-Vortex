@@ -34,7 +34,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.organization_invitations_administration_change_scope() OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.organization_invitations_administration_change_scope() IS 'Private fixed invitations.manage decision for no-intent invitation changes.';

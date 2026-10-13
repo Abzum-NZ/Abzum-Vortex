@@ -20,17 +20,16 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.validated_human_request_context() OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.validated_human_request_context() IS 'Fails closed unless the current human account and Access version are still live.';
 
 REVOKE ALL ON FUNCTION vortex_access.validated_human_request_context() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_request;
-GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_module_owner;
+GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
 GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_record_adapter;
-GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_record_owner;
-GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_access_owner;
-GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_definition_owner;
-GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_activity_owner;
-GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_page_owner;
+GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
+GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
+GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
+GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
+GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;

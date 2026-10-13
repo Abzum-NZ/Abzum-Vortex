@@ -23,7 +23,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.record_share_grant_uuid_array_internal(p_value jsonb, p_minimum integer, p_maximum integer) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.record_share_grant_uuid_array_internal(p_value jsonb, p_minimum integer, p_maximum integer) FROM PUBLIC;

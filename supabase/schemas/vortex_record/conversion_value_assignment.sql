@@ -23,6 +23,8 @@ CREATE FUNCTION vortex_record.conversion_value_assignment(p_conversion_semantic 
     else null
   end
 $$;
+alter function vortex_record.conversion_value_assignment(text,text,text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.conversion_value_assignment(p_conversion_semantic text, p_source_column_token text, p_target_column_token text) IS 'Exact SQL assignment migrating one source column into one planned target column for a supported conversion semantic.';
 

@@ -59,8 +59,7 @@ end
 $function$;
 
 revoke all on function vortex_access.read_own_profile()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.read_own_profile() to vortex_request;
 
 comment on function vortex_access.read_own_profile() is

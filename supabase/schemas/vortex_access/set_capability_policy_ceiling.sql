@@ -35,10 +35,10 @@ declare
   command_fingerprint text;
   resulting_revision bigint;
 begin
-  if p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or p_assignment_id is null or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
-    or p_policy_id is null or not vortex_context.is_non_nil_uuid(p_policy_id::text)
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_assignment_id is null or not vortex_platform.is_non_nil_uuid(p_assignment_id::text)
+    or p_policy_id is null or not vortex_platform.is_non_nil_uuid(p_policy_id::text)
     or p_policy_revision is null or p_policy_revision not between 1 and 9007199254740991
     or p_starts_at is null or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and (p_expires_at <= p_starts_at
@@ -218,8 +218,7 @@ $function$;
 
 revoke execute on function vortex_access.set_capability_policy_ceiling(
   uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz, bigint
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.set_capability_policy_ceiling(
   uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz, bigint
 ) to vortex_runtime, vortex_request;

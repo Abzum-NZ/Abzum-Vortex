@@ -8,5 +8,7 @@ CREATE FUNCTION vortex_record.index_scope_columns(p_storage_scope text) RETURNS 
     else null
   end
 $$;
+alter function vortex_record.index_scope_columns(text) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.index_scope_columns(p_storage_scope text) FROM PUBLIC;

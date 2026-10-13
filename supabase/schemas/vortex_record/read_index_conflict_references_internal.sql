@@ -100,9 +100,11 @@ begin
   return pg_catalog.jsonb_build_object('outcome', 'readable', 'records', readable_references);
 end
 $_$;
+alter function vortex_record.read_index_conflict_references_internal(uuid,text,text,text) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) IS 'Adapter-owned resolution of one uniqueness index conflict: duplicate record identities only, each behind the exact read decision, collapsing wholly to one generic refusal when any participant is unreadable.';
 
 REVOKE ALL ON FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) FROM vortex_record_adapter;
-GRANT ALL ON FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) TO vortex_record_owner;
+GRANT ALL ON FUNCTION vortex_record.read_index_conflict_references_internal(p_record_type_id uuid, p_table_token text, p_scope_columns text, p_column_token text) TO vortex_owner;

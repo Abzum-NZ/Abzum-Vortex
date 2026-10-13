@@ -30,7 +30,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.lock_current_record_owner_group_internal(p_group_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.lock_current_record_owner_group_internal(p_group_id uuid) IS 'Private current Group-membership check used only by the Record create primitive; locks the exact active Group and live membership for the transaction.';

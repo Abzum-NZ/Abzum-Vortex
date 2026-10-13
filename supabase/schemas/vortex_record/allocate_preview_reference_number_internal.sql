@@ -18,9 +18,9 @@ declare
   prefix_value text;
   suffix_value text;
 begin
-  if not vortex_context.is_non_nil_uuid(p_preview_installation_id::text)
-    or not vortex_context.is_non_nil_uuid(p_storage_contract_id::text)
-    or not vortex_context.is_non_nil_uuid(p_field_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_storage_contract_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_field_id::text)
     or pg_catalog.jsonb_typeof(p_settings) is distinct from 'object'
     or pg_catalog.jsonb_typeof(p_settings -> 'digits') is distinct from 'number'
     or (p_settings ->> 'digits')::integer not between 1 and 20
@@ -79,13 +79,14 @@ begin
     || suffix_value;
 end
 $function$;
+alter function vortex_record.allocate_preview_reference_number_internal(uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
+
 
 alter function vortex_record.allocate_preview_reference_number_internal(uuid, uuid, uuid, jsonb)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.allocate_preview_reference_number_internal(uuid, uuid, uuid, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.allocate_preview_reference_number_internal(uuid, uuid, uuid, jsonb)
   to vortex_record_adapter;
 comment on function vortex_record.allocate_preview_reference_number_internal(uuid, uuid, uuid, jsonb) is

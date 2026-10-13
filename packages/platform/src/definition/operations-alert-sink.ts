@@ -27,7 +27,7 @@ const persistAlertSignal = async (
 ): Promise<void> => {
   await runtimeTransaction(async (transaction) => {
     await transaction.query`
-      select vortex_operations.record_alert_signal(
+      select vortex_platform.record_alert_signal(
         ${record.code}::text,
         ${record.severity}::text,
         ${record.affectedService}::text,

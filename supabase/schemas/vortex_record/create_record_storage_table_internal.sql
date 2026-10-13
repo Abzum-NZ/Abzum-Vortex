@@ -17,9 +17,9 @@ declare
   scope_check text;
   owner_check text;
 begin
-  if not vortex_context.is_non_nil_uuid(p_storage_contract_id::text)
-    or not vortex_context.is_non_nil_uuid(p_module_root_id::text)
-    or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_storage_contract_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
     or p_storage_scope not in ('organization_shared', 'application_contained')
     or p_ownership_mode not in ('none', 'organization_account', 'group', 'inherited') then
     raise exception using errcode = '22023', message = 'Record storage identity is invalid';
@@ -80,34 +80,34 @@ begin
   execute pg_catalog.format('alter table record_data.%I force row level security', table_token);
   execute pg_catalog.format(
     'create policy record_select on record_data.%I for select to vortex_record_adapter using (
-      organisation_id = vortex_context.organization_id()
+      organisation_id = vortex_platform.organization_id()
       and case when application_root_id is null then true
-        else application_root_id = vortex_context.application_root_id(true) end
+        else application_root_id = vortex_platform.application_root_id(true) end
     )', table_token
   );
   execute pg_catalog.format(
     'create policy record_insert on record_data.%I for insert to vortex_record_adapter with check (
-      organisation_id = vortex_context.organization_id()
+      organisation_id = vortex_platform.organization_id()
       and case when application_root_id is null then true
-        else application_root_id = vortex_context.application_root_id(true) end
+        else application_root_id = vortex_platform.application_root_id(true) end
     )', table_token
   );
   execute pg_catalog.format(
     'create policy record_update on record_data.%I for update to vortex_record_adapter using (
-      organisation_id = vortex_context.organization_id()
+      organisation_id = vortex_platform.organization_id()
       and case when application_root_id is null then true
-        else application_root_id = vortex_context.application_root_id(true) end
+        else application_root_id = vortex_platform.application_root_id(true) end
     ) with check (
-      organisation_id = vortex_context.organization_id()
+      organisation_id = vortex_platform.organization_id()
       and case when application_root_id is null then true
-        else application_root_id = vortex_context.application_root_id(true) end
+        else application_root_id = vortex_platform.application_root_id(true) end
     )', table_token
   );
   execute pg_catalog.format(
     'create policy record_delete on record_data.%I for delete to vortex_record_adapter using (
-      organisation_id = vortex_context.organization_id()
+      organisation_id = vortex_platform.organization_id()
       and case when application_root_id is null then true
-        else application_root_id = vortex_context.application_root_id(true) end
+        else application_root_id = vortex_platform.application_root_id(true) end
     )', table_token
   );
   execute pg_catalog.format(
@@ -117,12 +117,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.create_record_storage_table_internal(uuid,uuid,uuid,text,text) owner to vortex_record_owner;
+alter function vortex_record.create_record_storage_table_internal(uuid,uuid,uuid,text,text) owner to vortex_owner;
 
 revoke all on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text)
-  to vortex_record_owner;
+  to vortex_owner;
 comment on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text) is
   'Creates one generated Record storage table with its fixed scope checks and request-adapter policies.';

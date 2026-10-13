@@ -1,14 +1,14 @@
-CREATE FUNCTION vortex_identity.require_request_identity_not_disabled() RETURNS void
+CREATE OR REPLACE FUNCTION vortex_identity.require_request_identity_not_disabled() RETURNS void
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
 declare
   checked jsonb;
 begin
-  checked := vortex_context.current_context();
+  checked := vortex_platform.current_context();
   if checked ->> 'callerKind' is null
     or checked ->> 'callerKind' not in ('human', 'federated')
-    or not vortex_context.is_non_nil_uuid(checked ->> 'identityId')
+    or not vortex_platform.is_non_nil_uuid(checked ->> 'identityId')
   then
     raise exception using errcode = '42501', message = 'Identity is unavailable';
   end if;
@@ -18,7 +18,6 @@ begin
   );
 end
 $$;
-
 
 ALTER FUNCTION vortex_identity.require_request_identity_not_disabled() OWNER TO postgres;
 

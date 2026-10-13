@@ -80,7 +80,7 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) to vortex_runtime;
 
@@ -88,5 +88,5 @@ comment on function vortex_identity.initialize_organization_runtime_settings(
   uuid, text, text, text, text, text
 ) is 'Trusted explicit Identity setup for one organisation runtime-settings row; identical retries return the current existing row and conflicting retries refuse.';
 
-alter function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) owner to vortex_identity_owner;
+alter function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) owner to vortex_owner;
 grant execute on function vortex_identity.initialize_organization_runtime_settings(uuid, text, text, text, text, text) to postgres;

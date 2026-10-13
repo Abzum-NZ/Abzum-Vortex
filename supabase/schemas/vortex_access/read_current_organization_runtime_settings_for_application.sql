@@ -13,7 +13,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.read_current_organization_runtime_settings_for_application() OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_current_organization_runtime_settings_for_application() IS 'Narrow request-role reader for an already-authorised application transaction; it reads only its established organisation and returns absence when setup is incomplete.';

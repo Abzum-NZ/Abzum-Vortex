@@ -14,7 +14,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_identity.protect_tenant_identity() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_identity.protect_tenant_identity() FROM PUBLIC;

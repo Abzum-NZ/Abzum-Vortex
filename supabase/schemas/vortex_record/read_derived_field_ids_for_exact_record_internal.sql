@@ -29,5 +29,7 @@ begin
   );
 end
 $$;
+alter function vortex_record.read_derived_field_ids_for_exact_record_internal(uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.read_derived_field_ids_for_exact_record_internal(p_record_type_id uuid, p_record_id uuid, p_required_field_ids jsonb, p_seen_derived_field_keys jsonb) FROM PUBLIC;

@@ -21,6 +21,8 @@ CREATE FUNCTION vortex_record.conversion_semantic_for_types(p_source_database_va
     else null
   end
 $$;
+alter function vortex_record.conversion_semantic_for_types(text,text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.conversion_semantic_for_types(p_source_database_value_type text, p_target_database_value_type text) IS 'Closed, lossless conversion semantic for an exact source/target database value type pair, or null when the pair is unsupported.';
 

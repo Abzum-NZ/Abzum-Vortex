@@ -35,7 +35,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.expire_stale_capability_reservations(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.expire_stale_capability_reservations(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text) IS 'Expires only the established request-scope capability reservations past their server deadline.';

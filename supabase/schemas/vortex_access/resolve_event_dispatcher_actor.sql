@@ -41,8 +41,7 @@ end
 $function$;
 
 revoke all on function vortex_access.resolve_event_dispatcher_actor()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.resolve_event_dispatcher_actor()
   to vortex_runtime;
 

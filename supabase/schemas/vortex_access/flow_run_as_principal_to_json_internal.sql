@@ -21,18 +21,17 @@ as $function$
     end,
     'state', p_principal.state,
     'revision', p_principal.revision,
-    'recordedAt', vortex_context.format_timestamp_utc(p_principal.recorded_at)
+    'recordedAt', vortex_platform.format_timestamp_utc(p_principal.recorded_at)
   )
   || case when p_principal.expires_at is null then '{}'::jsonb else pg_catalog.jsonb_build_object(
-    'expiresAt', vortex_context.format_timestamp_utc(p_principal.expires_at)) end
+    'expiresAt', vortex_platform.format_timestamp_utc(p_principal.expires_at)) end
   || case when p_principal.revoked_at is null then '{}'::jsonb else pg_catalog.jsonb_build_object(
-    'revokedAt', vortex_context.format_timestamp_utc(p_principal.revoked_at)) end
+    'revokedAt', vortex_platform.format_timestamp_utc(p_principal.revoked_at)) end
 $function$;
 
 revoke all on function vortex_access.flow_run_as_principal_to_json_internal(
   vortex_access.flow_run_as_principals
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.flow_run_as_principal_to_json_internal(
   vortex_access.flow_run_as_principals

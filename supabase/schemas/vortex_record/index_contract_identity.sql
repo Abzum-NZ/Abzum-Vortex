@@ -22,5 +22,7 @@ CREATE FUNCTION vortex_record.index_contract_identity(p_storage_contract_id uuid
     ) as digest_hex
   ) as source
 $$;
+alter function vortex_record.index_contract_identity(uuid,uuid) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.index_contract_identity(p_storage_contract_id uuid, p_field_id uuid) FROM PUBLIC;

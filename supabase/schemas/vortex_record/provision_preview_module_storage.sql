@@ -30,8 +30,8 @@ declare
   index_token text;
   storage_identities jsonb := '[]'::jsonb;
 begin
-  if not vortex_context.is_non_nil_uuid(p_preview_installation_id::text)
-    or not vortex_context.is_non_nil_uuid(p_module_root_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023', message = 'Preview storage selector is invalid';
   end if;
@@ -81,8 +81,8 @@ begin
     end;
     storage_scope_value := record_type ->> 'storageScope';
     ownership_mode_value := record_type ->> 'ownershipMode';
-    if not vortex_context.is_non_nil_uuid(storage_id::text)
-      or not vortex_context.is_non_nil_uuid(record_type_id_value::text)
+    if not vortex_platform.is_non_nil_uuid(storage_id::text)
+      or not vortex_platform.is_non_nil_uuid(record_type_id_value::text)
       or storage_scope_value not in ('organization_shared', 'application_contained')
       or ownership_mode_value not in ('none', 'organization_account', 'group', 'inherited')
       or pg_catalog.jsonb_typeof(record_type -> 'fields') <> 'array'
@@ -130,7 +130,7 @@ begin
       exception when invalid_text_representation then
         raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
       end;
-      if not vortex_context.is_non_nil_uuid(field_id_value::text)
+      if not vortex_platform.is_non_nil_uuid(field_id_value::text)
         or field_value ->> 'type' is null
         or pg_catalog.jsonb_typeof(field_value -> 'required') <> 'boolean'
         or pg_catalog.jsonb_typeof(field_value -> 'unique') <> 'boolean'
@@ -199,12 +199,11 @@ exception
 end
 $function$;
 
-alter function vortex_record.provision_preview_module_storage(uuid,uuid,bigint) owner to vortex_record_owner;
+alter function vortex_record.provision_preview_module_storage(uuid,uuid,bigint) owner to vortex_owner;
 
 revoke all on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
-  to vortex_module_owner;
+  to vortex_owner;
 comment on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint) is
   'Creates fresh empty Record storage for every record type in one exact published Module release, without provisioning its live release identities.';

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.save_initial_record_type_lifecycle_policy_for_provisioned_setup(p_binding_application_root_id uuid, p_expected_binding_revision bigint, p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_activity_id uuid, p_policy jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.save_initial_record_type_lifecycle_policy_for_provisioned_setup(p_binding_application_root_id uuid, p_expected_binding_revision bigint, p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_activity_id uuid, p_policy jsonb) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -137,7 +137,7 @@ begin
 
   -- The exact provisioned binding revision, and (for an archive policy) the
   -- workflow of that exact immutable Application release.
-  if not vortex_module.record_lifecycle_provisioned_setup_target_internal(
+  if not vortex_definition.record_lifecycle_provisioned_setup_target_internal(
     authority.organization_id,
     p_binding_application_root_id,
     p_expected_binding_revision,
@@ -159,7 +159,7 @@ begin
         message = 'Record-type lifecycle policy archive workflow is unavailable';
     end if;
 
-    connection_readiness := vortex_connection.resolve_connection_instance_readiness(
+    connection_readiness := vortex_platform.resolve_connection_instance_readiness(
       authority.organization_id,
       p_application_root_id,
       (full_policy ->> 'archiveConnectionInstanceId')::uuid,
@@ -207,6 +207,8 @@ begin
   return full_policy;
 end
 $$;
+alter function vortex_record.save_initial_record_type_lifecycle_policy_for_provisioned_setup(uuid,bigint,uuid,uuid,bigint,uuid,jsonb) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.save_initial_record_type_lifecycle_policy_for_provisioned_setup(p_binding_application_root_id uuid, p_expected_binding_revision bigint, p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_activity_id uuid, p_policy jsonb) IS 'Narrow provisioned-setup save of one record type''s first lifecycle policy at revision 1, under one exact provisioned binding revision, exact organisation limits revision and the current applications.manage human authority; an existing policy is refused, never updated.';
 

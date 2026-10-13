@@ -18,7 +18,7 @@ declare
   allowed_destinations_value text[];
 begin
   if p_organization_id is null
-    or not vortex_context.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_limits is null
     or pg_catalog.jsonb_typeof(p_limits) <> 'object'
     or not p_limits ?& array[
@@ -31,7 +31,7 @@ begin
       'allowUnlimitedRetentionDays', 'allowUnlimitedRecordCount', 'allowedActions',
       'allowedArchiveDestinations'
     ] <> '{}'::jsonb
-    or not vortex_context.is_non_nil_uuid(p_limits ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(p_limits ->> 'organizationId')
     or pg_catalog.lower(p_limits ->> 'organizationId')
       <> pg_catalog.lower(p_organization_id::text)
     or (p_limits -> 'settingsRevision') <> pg_catalog.to_jsonb(1)
@@ -160,12 +160,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.initialize_organization_lifecycle_limits(uuid,jsonb) owner to vortex_record_owner;
+alter function vortex_record.initialize_organization_lifecycle_limits(uuid,jsonb) owner to vortex_owner;
 
-revoke all on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb)
-  to vortex_record_owner;
+  to vortex_owner;
 grant execute on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) to vortex_runtime;
 
 comment on function vortex_record.initialize_organization_lifecycle_limits(uuid, jsonb) is

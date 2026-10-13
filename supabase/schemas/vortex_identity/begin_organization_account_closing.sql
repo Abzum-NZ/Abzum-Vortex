@@ -49,10 +49,10 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.begin_organization_account_closing(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.begin_organization_account_closing(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.begin_organization_account_closing(uuid, bigint) is
   'Owner-only active/suspended/closed-to-closing transition; Access composes it with version invalidation and stewardship.';
 
-alter function vortex_identity.begin_organization_account_closing(uuid, bigint) owner to vortex_identity_owner;
+alter function vortex_identity.begin_organization_account_closing(uuid, bigint) owner to vortex_owner;
 grant execute on function vortex_identity.begin_organization_account_closing(uuid, bigint) to postgres;

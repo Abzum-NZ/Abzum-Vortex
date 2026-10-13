@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.account_retains_owned_records_internal(p_organization_account_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_record.account_retains_owned_records_internal(p_organization_account_id uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -13,7 +13,7 @@ begin
       message = 'Account deletion inventory selector is invalid';
   end if;
 
-  organization_id_value := vortex_context.organization_id();
+  organization_id_value := vortex_platform.organization_id();
   if organization_id_value is null then
     raise exception using errcode = '55000',
       message = 'Account deletion inventory completeness cannot be proved';
@@ -55,6 +55,8 @@ begin
   return false;
 end
 $_$;
+alter function vortex_record.account_retains_owned_records_internal(uuid) owner to vortex_record_inventory;
+
 
 COMMENT ON FUNCTION vortex_record.account_retains_owned_records_internal(p_organization_account_id uuid) IS 'Private all-scope account-deletion inventory over every physical Record table in the organisation; returns only whether any owned row remains.';
 

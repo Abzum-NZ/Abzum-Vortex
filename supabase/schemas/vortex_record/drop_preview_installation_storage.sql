@@ -11,7 +11,7 @@ declare
   storage_row record;
   removed_count integer := 0;
 begin
-  if not vortex_context.is_non_nil_uuid(p_preview_installation_id::text) then
+  if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text) then
     raise exception using errcode = '22023', message = 'Preview storage identity is invalid';
   end if;
 
@@ -62,12 +62,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.drop_preview_installation_storage(uuid) owner to vortex_record_owner;
+alter function vortex_record.drop_preview_installation_storage(uuid) owner to vortex_owner;
 
 revoke all on function vortex_record.drop_preview_installation_storage(uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.drop_preview_installation_storage(uuid)
-  to vortex_module_owner;
+  to vortex_owner;
 comment on function vortex_record.drop_preview_installation_storage(uuid) is
   'Drops only the isolated storage identities marked for one preview installation, including its preview records and record metadata.';

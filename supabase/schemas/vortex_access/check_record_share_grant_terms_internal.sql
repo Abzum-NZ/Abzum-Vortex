@@ -241,7 +241,6 @@ begin
 end
 $_$;
 
-
 ALTER FUNCTION vortex_access.check_record_share_grant_terms_internal(p_terms jsonb, p_context jsonb) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.check_record_share_grant_terms_internal(p_terms jsonb, p_context jsonb) FROM PUBLIC;

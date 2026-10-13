@@ -15,13 +15,14 @@ as $function$
     and declaration.steward_minimum
   order by declaration.permission_id
 $function$;
+alter function vortex_access.read_guarded_platform_permission_minimum_internal() owner to vortex_owner;
+
 
 revoke all on function vortex_access.read_guarded_platform_permission_minimum_internal()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.read_guarded_platform_permission_minimum_internal()
   to postgres;
 comment on function vortex_access.read_guarded_platform_permission_minimum_internal() is
   'Returns the complete guarded platform permanent-steward permission identity and meaning set only to the authorized postgres caller.';
 alter function vortex_access.read_guarded_platform_permission_minimum_internal()
-  owner to vortex_access_owner;
+  owner to vortex_owner;

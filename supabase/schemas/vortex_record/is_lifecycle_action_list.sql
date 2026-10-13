@@ -19,5 +19,7 @@ CREATE FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) RETURNS 
     false
   );
 $$;
+alter function vortex_record.is_lifecycle_action_list(text[]) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) FROM PUBLIC;

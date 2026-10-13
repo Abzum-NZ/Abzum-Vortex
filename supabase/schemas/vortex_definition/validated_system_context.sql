@@ -1,11 +1,11 @@
-CREATE FUNCTION vortex_definition.validated_system_context() RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_definition.validated_system_context() RETURNS jsonb
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
 declare
   checked jsonb;
 begin
-  checked := vortex_context.current_context();
+  checked := vortex_platform.current_context();
 
   if checked ->> 'callerKind' is distinct from 'system' then
     raise exception using
@@ -27,7 +27,6 @@ begin
   return checked;
 end
 $$;
-
 
 ALTER FUNCTION vortex_definition.validated_system_context() OWNER TO postgres;
 

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.preview_record_lifecycle_candidates(p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_after_record_id uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 100) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.preview_record_lifecycle_candidates(p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_after_record_id uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 100) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -45,7 +45,7 @@ begin
       message = 'Record lifecycle preview target is unavailable';
   end if;
 
-  if not vortex_module.record_lifecycle_target_is_installed_internal(
+  if not vortex_definition.record_lifecycle_target_is_installed_internal(
     authority.organization_id, p_application_root_id, p_storage_contract_id
   ) then
     raise exception using errcode = '42501',
@@ -85,6 +85,8 @@ begin
   ) || candidate_page;
 end
 $$;
+alter function vortex_record.preview_record_lifecycle_candidates(uuid,uuid,timestamp with time zone,uuid,integer) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.preview_record_lifecycle_candidates(p_storage_contract_id uuid, p_application_root_id uuid, p_after_created_at timestamp with time zone, p_after_record_id uuid, p_limit integer) IS 'Protected read-only preview of record lifecycle policy and deterministic candidate records for #117 handoff; performs no mutation or deletion.';
 

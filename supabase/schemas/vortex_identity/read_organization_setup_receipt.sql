@@ -265,8 +265,7 @@ end
 $function$;
 
 revoke execute on function vortex_identity.read_organization_setup_receipt(uuid, text, uuid)
-  from public, anon, authenticated, service_role, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.read_organization_setup_receipt(uuid, text, uuid)
   to vortex_runtime;
 

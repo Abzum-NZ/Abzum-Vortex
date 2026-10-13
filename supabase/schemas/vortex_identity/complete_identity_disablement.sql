@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_identity.complete_identity_disablement(p_command_id uuid, p_correlation_id uuid, p_outcome text) RETURNS TABLE(outcome text, sessions_revoked integer)
+CREATE OR REPLACE FUNCTION vortex_identity.complete_identity_disablement(p_command_id uuid, p_correlation_id uuid, p_outcome text) RETURNS TABLE(outcome text, sessions_revoked integer)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -9,7 +9,7 @@ declare
 begin
   if p_command_id is null
     or p_correlation_id is null
-    or not vortex_context.is_non_nil_uuid(p_correlation_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_correlation_id::text)
     or p_outcome is null
     or p_outcome not in ('disabled', 'subject_not_found', 'provider_unavailable')
   then
@@ -69,7 +69,6 @@ begin
   return query select p_outcome, revoked;
 end
 $$;
-
 
 ALTER FUNCTION vortex_identity.complete_identity_disablement(p_command_id uuid, p_correlation_id uuid, p_outcome text) OWNER TO postgres;
 

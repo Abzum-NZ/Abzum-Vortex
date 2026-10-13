@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
     AS $_$
@@ -65,14 +65,13 @@ begin
       );
   elsif p_semantic_type in ('record_reference', 'organization_account_reference') then
     return pg_catalog.jsonb_typeof(p_value) = 'string'
-      and vortex_context.is_non_nil_uuid(p_value #>> '{}');
+      and vortex_platform.is_non_nil_uuid(p_value #>> '{}');
   elsif p_semantic_type = 'opaque_json' then
     return true;
   end if;
   return false;
 end
 $_$;
-
 
 ALTER FUNCTION vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) OWNER TO postgres;
 
