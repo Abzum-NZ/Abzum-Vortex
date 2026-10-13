@@ -357,12 +357,10 @@ begin
     source_role_id, derived_application_root_id, derived_source_role_id,
     derived_source_definition_key, derived_source_release_revision,
     derived_source_release_version,
-    derived_source_validation_contract_version,
-    derived_source_content_fingerprint,
-    derived_source_resolution_fingerprint, live_revision, created_by, created_at
+    derived_source_validation_contract_version, live_revision, created_by, created_at
   ) values (
     p_organization_id, p_role_id, 'custom', p_role_key, null, null,
-    null, null, null, null, null, null, null, null, 1,
+    null, null, null, null, null, null, 1,
     p_changed_by, checked_at
   );
 
