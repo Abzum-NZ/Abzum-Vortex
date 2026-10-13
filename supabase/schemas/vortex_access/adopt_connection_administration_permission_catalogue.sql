@@ -1,11 +1,15 @@
-CREATE FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS bigint
+CREATE OR REPLACE FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS bigint
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   connection_permission_id constant uuid := 'ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   settings_permission_id constant uuid := 'c658c254-2884-414a-9012-512c0cfe4b34';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   assignments_permission_id constant uuid := '156d01f3-8f80-45fb-8fc8-b31c47dbb1df';
   catalogue_fingerprint constant text :=
     'sha256:2fe313d69f53d7ce9247aa0ae05b5cc837872f49285e577f9dc9e1f21f3c842e';
@@ -317,12 +321,12 @@ begin
       lifecycle, privilege_classification, assignment_policy,
       policy_continuity_revision, authority_continuity_revision,
       activation_policy_id, activation_policy_revision,
-      activation_policy_fingerprint, role_key, label, description,
+      role_key, label, description,
       source_definition_key, source_release_revision, source_release_version,
       source_validation_contract_version, source_content_fingerprint,
       source_resolution_fingerprint, source_template_fingerprint,
       source_catalogue_fingerprint, accepted_registration_revision,
-      template_continuity_revision, accepted_grant_fingerprint,
+      template_continuity_revision,
       changed_by, changed_at, change_correlation_id
     ) values (
       p_organization_id, administrator_role.role_id,
@@ -334,7 +338,6 @@ begin
       previous_revision.authority_continuity_revision + 1,
       previous_revision.activation_policy_id,
       previous_revision.activation_policy_revision,
-      previous_revision.activation_policy_fingerprint,
       previous_revision.role_key, previous_revision.label,
       previous_revision.description, previous_revision.source_definition_key,
       previous_revision.source_release_revision,
@@ -346,7 +349,6 @@ begin
       previous_revision.source_catalogue_fingerprint,
       previous_revision.accepted_registration_revision,
       previous_revision.template_continuity_revision,
-      previous_revision.accepted_grant_fingerprint,
       p_changed_by, operation_at, p_correlation_id
     );
 

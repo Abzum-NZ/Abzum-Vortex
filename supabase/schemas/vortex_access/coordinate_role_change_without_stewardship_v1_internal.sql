@@ -33,7 +33,6 @@ declare
   target_authority_continuity_revision bigint;
   target_activation_policy_id uuid;
   target_activation_policy_revision bigint;
-  target_activation_policy_fingerprint text;
   target_application_root_id uuid;
   target_source_role_id uuid;
   target_source_definition_key text;
@@ -46,7 +45,6 @@ declare
   target_source_catalogue_fingerprint text;
   target_accepted_registration_revision bigint;
   target_template_continuity_revision bigint;
-  target_accepted_grant_fingerprint text;
   target_role_revision bigint;
   candidate_permissions jsonb;
   canonical_permissions jsonb;
@@ -58,8 +56,6 @@ declare
   policy_choice jsonb;
   policy_value jsonb;
   policy_reference jsonb;
-  supplied_new_policy_fingerprint text;
-  supplied_accepted_grant_fingerprint text;
   manifest jsonb;
   canonical_assignments jsonb;
   manifest_required boolean := false;
@@ -77,22 +73,11 @@ begin
   if p_evidence is null
     or pg_catalog.jsonb_typeof(p_evidence) is distinct from 'object'
     or p_evidence - array[
-      'contractVersion', 'candidate', 'newActivationPolicyFingerprint',
-      'acceptedGrantFingerprint', 'affectedAssignmentManifest'
+      'contractVersion', 'candidate', 'affectedAssignmentManifest'
     ]::text[] <> '{}'::jsonb
     or not (p_evidence ?& array['contractVersion', 'candidate'])
     or p_evidence ->> 'contractVersion' is distinct from '1.0.0'
     or pg_catalog.jsonb_typeof(p_evidence -> 'candidate') is distinct from 'object'
-    or (p_evidence ? 'newActivationPolicyFingerprint' and (
-      pg_catalog.jsonb_typeof(p_evidence -> 'newActivationPolicyFingerprint')
-        is distinct from 'string'
-      or p_evidence ->> 'newActivationPolicyFingerprint' !~ '^sha256:[a-f0-9]{64}$'
-    ))
-    or (p_evidence ? 'acceptedGrantFingerprint' and (
-      pg_catalog.jsonb_typeof(p_evidence -> 'acceptedGrantFingerprint')
-        is distinct from 'string'
-      or p_evidence ->> 'acceptedGrantFingerprint' !~ '^sha256:[a-f0-9]{64}$'
-    ))
     or (p_evidence ? 'affectedAssignmentManifest' and
       pg_catalog.jsonb_typeof(p_evidence -> 'affectedAssignmentManifest')
         is distinct from 'object')
@@ -296,26 +281,23 @@ begin
         end if;
         policy_reference := policy_choice #> '{activationPolicy,reference}';
         if policy_reference - array[
-          'activationPolicyId', 'revision', 'fingerprint'
+          'activationPolicyId', 'revision'
         ]::text[] <> '{}'::jsonb
           or not (policy_reference ?& array[
-            'activationPolicyId', 'revision', 'fingerprint'
+            'activationPolicyId', 'revision'
           ])
           or pg_catalog.jsonb_typeof(policy_reference -> 'activationPolicyId') <> 'string'
           or pg_catalog.jsonb_typeof(policy_reference -> 'revision') <> 'number'
-          or pg_catalog.jsonb_typeof(policy_reference -> 'fingerprint') <> 'string'
           or (policy_reference ->> 'revision')::numeric < 1
           or (policy_reference ->> 'revision')::numeric > 9007199254740991
           or (policy_reference ->> 'revision')::numeric <>
-            pg_catalog.trunc((policy_reference ->> 'revision')::numeric)
-          or policy_reference ->> 'fingerprint' !~ '^sha256:[a-f0-9]{64}$' then
+            pg_catalog.trunc((policy_reference ->> 'revision')::numeric) then
           raise exception using errcode = '22023',
             message = 'Existing activation policy evidence is invalid';
         end if;
         target_activation_policy_id := (policy_reference ->> 'activationPolicyId')::uuid;
         target_activation_policy_revision :=
           (policy_reference ->> 'revision')::numeric::bigint;
-        target_activation_policy_fingerprint := policy_reference ->> 'fingerprint';
       elsif policy_choice #>> '{activationPolicy,selection}' = 'new' then
         if (policy_choice -> 'activationPolicy') - array['selection', 'policy']::text[] <>
             '{}'::jsonb
@@ -396,12 +378,6 @@ begin
         target_activation_policy_id := (policy_value ->> 'activationPolicyId')::uuid;
         target_activation_policy_revision :=
           (policy_value ->> 'revision')::numeric::bigint;
-        supplied_new_policy_fingerprint := p_evidence ->> 'newActivationPolicyFingerprint';
-        if supplied_new_policy_fingerprint is null then
-          raise exception using errcode = '22023',
-            message = 'New activation policy fingerprint is required';
-        end if;
-        target_activation_policy_fingerprint := supplied_new_policy_fingerprint;
       else
         raise exception using errcode = '22023',
           message = 'Activation-required policy selection is invalid';
@@ -409,12 +385,6 @@ begin
     else
       raise exception using errcode = '22023', message = 'Assignment policy is invalid';
     end if;
-  end if;
-
-  if (policy_value is not null) is distinct from
-      (p_evidence ? 'newActivationPolicyFingerprint') then
-    raise exception using errcode = '22023',
-      message = 'New activation policy fingerprint presence is invalid';
   end if;
 
   if candidate_permissions is not null then
@@ -513,17 +483,6 @@ begin
       raise exception using errcode = '22023',
         message = 'Role permission identities must be unique';
     end if;
-  end if;
-
-  supplied_accepted_grant_fingerprint := p_evidence ->> 'acceptedGrantFingerprint';
-  if operation_name in ('accept_new_application_role', 'accept_application_role_revision') then
-    if supplied_accepted_grant_fingerprint is null then
-      raise exception using errcode = '22023',
-        message = 'Application acceptance fingerprint is required';
-    end if;
-  elsif supplied_accepted_grant_fingerprint is not null then
-    raise exception using errcode = '22023',
-      message = 'This role-change intent cannot carry accepted-grant evidence';
   end if;
 
   if prepared_templates is not null then
@@ -628,10 +587,6 @@ begin
       selected_template ->> 'sourceTemplateFingerprint';
     target_source_catalogue_fingerprint :=
       prepared_templates #>> '{permissionRegistration,applicationCatalogueFingerprint}';
-
-    if operation_name in ('accept_new_application_role', 'accept_application_role_revision') then
-      target_accepted_grant_fingerprint := supplied_accepted_grant_fingerprint;
-    end if;
   end if;
 
   manifest := p_evidence -> 'affectedAssignmentManifest';
@@ -860,7 +815,6 @@ begin
       target_source_catalogue_fingerprint := null;
       target_accepted_registration_revision := null;
       target_template_continuity_revision := null;
-      target_accepted_grant_fingerprint := null;
     end if;
   else
     select stored.* into role_identity
@@ -936,7 +890,6 @@ begin
       target_description := current_revision.description;
       target_activation_policy_id := current_revision.activation_policy_id;
       target_activation_policy_revision := current_revision.activation_policy_revision;
-      target_activation_policy_fingerprint := current_revision.activation_policy_fingerprint;
     end if;
     target_source_definition_key := current_revision.source_definition_key;
     target_source_release_revision := current_revision.source_release_revision;
@@ -949,7 +902,6 @@ begin
     target_source_catalogue_fingerprint := current_revision.source_catalogue_fingerprint;
     target_accepted_registration_revision := current_revision.accepted_registration_revision;
     target_template_continuity_revision := current_revision.template_continuity_revision;
-    target_accepted_grant_fingerprint := current_revision.accepted_grant_fingerprint;
   elsif operation_name = 'revise_custom_permissions' then
     target_lifecycle := 'active';
     target_source_definition_key := null;
@@ -962,7 +914,6 @@ begin
     target_source_catalogue_fingerprint := null;
     target_accepted_registration_revision := null;
     target_template_continuity_revision := null;
-    target_accepted_grant_fingerprint := null;
   elsif operation_name = 'accept_application_role_revision' then
     target_lifecycle := 'active';
   end if;
@@ -971,15 +922,13 @@ begin
     if target_assignment_policy = 'standing' then
       target_activation_policy_id := null;
       target_activation_policy_revision := null;
-      target_activation_policy_fingerprint := null;
     elsif policy_value is null then
       perform 1
       from vortex_access.organization_role_activation_policy_revisions as policy
       where policy.organization_id = target_organization_id
         and policy.role_id = target_role_id
         and policy.activation_policy_id = target_activation_policy_id
-        and policy.revision = target_activation_policy_revision
-        and policy.policy_fingerprint = target_activation_policy_fingerprint;
+        and policy.revision = target_activation_policy_revision;
       if not found then
         raise exception using errcode = '40001',
           message = 'Existing role activation policy is stale or unavailable';
@@ -1008,9 +957,7 @@ begin
       and current_revision.activation_policy_id is not distinct from
         target_activation_policy_id
       and current_revision.activation_policy_revision is not distinct from
-        target_activation_policy_revision
-      and current_revision.activation_policy_fingerprint is not distinct from
-        target_activation_policy_fingerprint then
+        target_activation_policy_revision then
       target_policy_continuity_revision := current_revision.policy_continuity_revision;
     else
       if current_revision.policy_continuity_revision = 9007199254740991 then
@@ -1077,9 +1024,7 @@ begin
     and current_revision.accepted_registration_revision is not distinct from
       target_accepted_registration_revision
     and current_revision.template_continuity_revision is not distinct from
-      target_template_continuity_revision
-    and current_revision.accepted_grant_fingerprint is not distinct from
-      target_accepted_grant_fingerprint then
+      target_template_continuity_revision then
     raise exception using errcode = '40001',
       message = 'Explicit application acceptance must change accepted source evidence';
   end if;
@@ -1095,8 +1040,6 @@ begin
       or current_revision.activation_policy_id is distinct from target_activation_policy_id
       or current_revision.activation_policy_revision is distinct from
         target_activation_policy_revision
-      or current_revision.activation_policy_fingerprint is distinct from
-        target_activation_policy_fingerprint
       or current_revision.lifecycle is distinct from target_lifecycle
       or permissions_changed
       or current_revision.source_definition_key is distinct from target_source_definition_key
@@ -1116,9 +1059,7 @@ begin
       or current_revision.accepted_registration_revision is distinct from
         target_accepted_registration_revision
       or current_revision.template_continuity_revision is distinct from
-        target_template_continuity_revision
-      or current_revision.accepted_grant_fingerprint is distinct from
-        target_accepted_grant_fingerprint;
+        target_template_continuity_revision;
     if not configured_state_changed then
       raise exception using errcode = '40001',
         message = 'Organization role candidate does not change configured state';
@@ -1336,13 +1277,13 @@ begin
   if policy_value is not null then
     insert into vortex_access.organization_role_activation_policy_revisions (
       organization_id, role_id, activation_policy_id, revision,
-      policy_fingerprint, maximum_activation_duration_seconds,
+      maximum_activation_duration_seconds,
       reason_required, authentication_requirement,
       authentication_maximum_age_seconds, required_caller_execution_binding_id,
       changed_by, changed_at, change_correlation_id
     ) values (
       target_organization_id, target_role_id, target_activation_policy_id,
-      target_activation_policy_revision, target_activation_policy_fingerprint,
+      target_activation_policy_revision,
       (policy_value ->> 'maximumActivationDurationSeconds')::numeric::bigint,
       (policy_value ->> 'reasonRequired')::boolean,
       policy_value #>> '{recentAuthentication,kind}',
@@ -1359,12 +1300,12 @@ begin
     lifecycle, privilege_classification, assignment_policy,
     policy_continuity_revision, authority_continuity_revision,
     activation_policy_id, activation_policy_revision,
-    activation_policy_fingerprint, role_key, label, description,
+    role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
     source_validation_contract_version, source_content_fingerprint,
     source_resolution_fingerprint, source_template_fingerprint,
     source_catalogue_fingerprint, accepted_registration_revision,
-    template_continuity_revision, accepted_grant_fingerprint,
+    template_continuity_revision,
     changed_by, changed_at, change_correlation_id
   ) values (
     target_organization_id, target_role_id, target_role_revision,
@@ -1372,13 +1313,13 @@ begin
     target_privilege_classification, target_assignment_policy,
     target_policy_continuity_revision, target_authority_continuity_revision,
     target_activation_policy_id, target_activation_policy_revision,
-    target_activation_policy_fingerprint, target_role_key, target_label,
+    target_role_key, target_label,
     target_description, target_source_definition_key,
     target_source_release_revision, target_source_release_version,
     target_source_validation_contract_version, target_source_content_fingerprint,
     target_source_resolution_fingerprint, target_source_template_fingerprint,
     target_source_catalogue_fingerprint, target_accepted_registration_revision,
-    target_template_continuity_revision, target_accepted_grant_fingerprint,
+    target_template_continuity_revision,
     p_changed_by, operation_at, p_correlation_id
   );
 
@@ -1419,8 +1360,7 @@ begin
         'kind', 'activation_required',
         'activationPolicy', pg_catalog.jsonb_build_object(
           'activationPolicyId', revision.activation_policy_id,
-          'revision', revision.activation_policy_revision,
-          'fingerprint', revision.activation_policy_fingerprint
+          'revision', revision.activation_policy_revision
         )
       )
     end,
@@ -1470,8 +1410,7 @@ begin
         'sourceTemplateFingerprint', revision.source_template_fingerprint,
         'sourceCatalogueFingerprint', revision.source_catalogue_fingerprint,
         'acceptedRegistrationRevision', revision.accepted_registration_revision,
-        'templateContinuityRevision', revision.template_continuity_revision,
-        'acceptedGrantFingerprint', revision.accepted_grant_fingerprint
+        'templateContinuityRevision', revision.template_continuity_revision
       )
     )
     when identity.derived_application_root_id is not null then
@@ -1510,7 +1449,6 @@ begin
       'roleId', policy.role_id,
       'activationPolicyId', policy.activation_policy_id,
       'revision', policy.revision,
-      'fingerprint', policy.policy_fingerprint,
       'maximumActivationDurationSeconds', policy.maximum_activation_duration_seconds,
       'reasonRequired', policy.reason_required,
       'recentAuthentication', case

@@ -36,8 +36,7 @@ begin
       revision.authority_continuity_revision,
       revision.policy_continuity_revision,
       revision.activation_policy_id,
-      revision.activation_policy_revision,
-      revision.activation_policy_fingerprint
+      revision.activation_policy_revision
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
       on revision.organization_id = role.organization_id
@@ -152,8 +151,6 @@ begin
       and activation.activation_policy_id = role.activation_policy_id
       and activation.activation_policy_revision =
         role.activation_policy_revision
-      and activation.activation_policy_fingerprint =
-        role.activation_policy_fingerprint
     where role.assignment_policy = 'activation_required'
 
     union all
@@ -201,8 +198,6 @@ begin
       and activation.activation_policy_id = role.activation_policy_id
       and activation.activation_policy_revision =
         role.activation_policy_revision
-      and activation.activation_policy_fingerprint =
-        role.activation_policy_fingerprint
     join vortex_access.organization_group_memberships as membership
       on membership.organization_id = assignment.organization_id
       and membership.group_id = assignment.group_id

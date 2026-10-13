@@ -162,20 +162,13 @@ begin
       and (policy_choice #>>
         '{activationPolicy,reference,revision}')::numeric =
         pg_catalog.trunc((policy_choice #>>
-          '{activationPolicy,reference,revision}')::numeric)
-      and pg_catalog.jsonb_typeof(
-        policy_choice #> '{activationPolicy,reference,fingerprint}'
-      ) = 'string'
-      and policy_choice #>> '{activationPolicy,reference,fingerprint}'
-        ~ '^sha256:[a-f0-9]{64}$' then
+          '{activationPolicy,reference,revision}')::numeric) then
       policy_changed := current_revision.assignment_policy <> 'activation_required'
         or current_revision.activation_policy_id is distinct from
           (policy_choice #>>
             '{activationPolicy,reference,activationPolicyId}')::uuid
         or current_revision.activation_policy_revision is distinct from
-          (policy_choice #>> '{activationPolicy,reference,revision}')::numeric::bigint
-        or current_revision.activation_policy_fingerprint is distinct from
-          policy_choice #>> '{activationPolicy,reference,fingerprint}';
+          (policy_choice #>> '{activationPolicy,reference,revision}')::numeric::bigint;
     else
       raise exception using errcode = '22023',
         message = 'Private Organization role-authority input is invalid';
@@ -206,7 +199,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '87c96495-c806-4692-9bc2-250ddb10613c'
       ),
       'recentAuthentication', case

@@ -101,7 +101,6 @@ begin
     and policy.role_id = activation.role_id
     and policy.activation_policy_id = activation.activation_policy_id
     and policy.revision = activation.activation_policy_revision
-    and policy.policy_fingerprint = activation.activation_policy_fingerprint
   where activation.organization_id = scope.organization_id
     and activation.role_activation_id = p_role_activation_id;
 

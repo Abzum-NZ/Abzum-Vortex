@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.protect_organization_role_activation() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_organization_role_activation() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -28,8 +28,6 @@ begin
       old.policy_continuity_revision
     or new.activation_policy_id is distinct from old.activation_policy_id
     or new.activation_policy_revision is distinct from old.activation_policy_revision
-    or new.activation_policy_fingerprint is distinct from
-      old.activation_policy_fingerprint
     or new.eligibility_source_kind is distinct from old.eligibility_source_kind
     or new.role_assignment_id is distinct from old.role_assignment_id
     or new.role_assignment_revision is distinct from old.role_assignment_revision

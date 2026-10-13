@@ -54,7 +54,6 @@ begin
       and policy.role_id = revision.role_id
       and policy.activation_policy_id = revision.activation_policy_id
       and policy.revision = revision.activation_policy_revision
-      and policy.policy_fingerprint = revision.activation_policy_fingerprint
     where role.organization_id = scope.organization_id
       and (p_after_role_id is null or role.role_id > p_after_role_id)
     order by role.role_id

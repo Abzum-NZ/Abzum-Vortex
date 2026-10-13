@@ -4,7 +4,6 @@ import {
   actorIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
-  fingerprintSchema,
   organizationIdSchema,
   revisionSchema,
   roleActivationPolicyIdSchema,
@@ -206,14 +205,6 @@ const isApplicationAcceptance = (
   candidate.operation === "accept_new_application_role" ||
   candidate.operation === "accept_application_role_revision";
 
-const newPolicy = (candidate: z.infer<typeof organizationRoleChangeCandidateSchema>) => {
-  if (!("assignmentPolicy" in candidate)) return undefined;
-  return candidate.assignmentPolicy.kind === "activation_required" &&
-    candidate.assignmentPolicy.activationPolicy.selection === "new"
-    ? candidate.assignmentPolicy.activationPolicy.policy
-    : undefined;
-};
-
 const permissionEvidenceMatches = (
   permission: z.infer<typeof rolePermissionEntrySchema>,
   source: z.infer<
@@ -324,27 +315,11 @@ export const preparedOrganizationRoleChangeSchema = z
   .object({
     contractVersion: z.literal("1.0.0"),
     candidate: organizationRoleChangeCandidateSchema,
-    newActivationPolicyFingerprint: fingerprintSchema.optional(),
-    acceptedGrantFingerprint: fingerprintSchema.optional(),
     affectedAssignmentManifest: roleChangeManifestSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
     const candidate = value.candidate;
-    const policyIsNew = newPolicy(candidate) !== undefined;
-    if (policyIsNew !== (value.newActivationPolicyFingerprint !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["newActivationPolicyFingerprint"],
-        message: "New policy evidence is present exactly when a policy revision is created",
-      });
-    if (isApplicationAcceptance(candidate) !== (value.acceptedGrantFingerprint !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["acceptedGrantFingerprint"],
-        message: "Application acceptance requires its separate provenance fingerprint",
-      });
-
     const permissions = "permissions" in candidate ? candidate.permissions : undefined;
     if (
       permissions?.some(
@@ -445,7 +420,6 @@ export const organizationRoleChangeResultSchema = z
         normalizedUuid(value.role.assignmentPolicy.activationPolicy.activationPolicyId) !==
           normalizedUuid(policy.activationPolicyId) ||
         value.role.assignmentPolicy.activationPolicy.revision !== policy.revision ||
-        value.role.assignmentPolicy.activationPolicy.fingerprint !== policy.fingerprint ||
         policy.changedByActorId !== value.role.changedByActorId ||
         policy.changeCorrelationId !== value.correlationId ||
         !representsSameInstant(policy.changedAt, value.role.changedAt))

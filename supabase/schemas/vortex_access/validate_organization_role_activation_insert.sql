@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.validate_organization_role_activation_insert() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.validate_organization_role_activation_insert() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -32,7 +32,7 @@ begin
   select role.live_revision, revision.lifecycle, revision.assignment_policy,
     revision.authority_continuity_revision,
     revision.policy_continuity_revision, revision.activation_policy_id,
-    revision.activation_policy_revision, revision.activation_policy_fingerprint,
+    revision.activation_policy_revision,
     policy.maximum_activation_duration_seconds
   into role_fact
   from vortex_access.organization_roles as role
@@ -45,7 +45,6 @@ begin
     and policy.role_id = revision.role_id
     and policy.activation_policy_id = revision.activation_policy_id
     and policy.revision = revision.activation_policy_revision
-    and policy.policy_fingerprint = revision.activation_policy_fingerprint
   where role.organization_id = new.organization_id
     and role.role_id = new.role_id;
 
@@ -58,8 +57,6 @@ begin
     or role_fact.policy_continuity_revision <> new.policy_continuity_revision
     or role_fact.activation_policy_id <> new.activation_policy_id
     or role_fact.activation_policy_revision <> new.activation_policy_revision
-    or role_fact.activation_policy_fingerprint <>
-      new.activation_policy_fingerprint
     or extract(epoch from (new.expires_at - new.activated_at)) >
       role_fact.maximum_activation_duration_seconds then
     raise exception using errcode = '23514',
