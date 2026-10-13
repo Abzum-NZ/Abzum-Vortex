@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import {
+  DEFAULT_APPLICATION_THEME_SELECTION,
   findShadcnFontByFamilyKey,
   resolveShadcnFontSelection,
   shadcnFontStack,
@@ -177,7 +178,7 @@ function platformDefaults(tokens: ThemeTokens): Readonly<{
 }
 
 /** The catalogue's default body and heading fonts, which a theme without a font of its own paints. */
-const PLATFORM_FONTS = resolveShadcnFontSelection();
+const PLATFORM_FONTS = resolveShadcnFontSelection(DEFAULT_APPLICATION_THEME_SELECTION);
 
 const PLATFORM_ELEVATION = [
   "none",

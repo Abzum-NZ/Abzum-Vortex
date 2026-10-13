@@ -1,45 +1,20 @@
 import "server-only";
 
 import {
-  DEFAULT_APPLICATION_THEME_SELECTION,
   applicationThemeSchema,
   type DefinitionRuleFailure,
 } from "../schema";
 import { validatePublicPlatformAssets } from "./assets";
 import { validateThemeContrast } from "./contrast";
-import { createLocatedFailure, ThemeValidationError } from "./errors";
+import { createLocatedFailure } from "./errors";
 import { validateFocusVisibility } from "./focus";
-import { validateComponentThemeOverrides } from "./overrides";
 import { validateThemeSelectionOptions } from "./selection";
 import type {
   ApplicationTheme,
-  ComponentThemeOverrideContext,
-  ResolvedTheme,
-  ThemeResolutionInput,
   ThemeResolutionOptions,
-  ThemeTokenValue,
   ThemeValidationFailure,
   ThemeValidationResult,
 } from "./types";
-
-function isThemeResolutionInput(value: unknown): value is ThemeResolutionInput {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "theme" in value &&
-    typeof (value as { theme: unknown }).theme === "object"
-  );
-}
-
-function deepFreeze<T>(value: T): T {
-  if (typeof value !== "object" || value === null) return value;
-  if (Object.isFrozen(value)) return value;
-  Object.freeze(value);
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child);
-  }
-  return value;
-}
 
 /**
  * Validates an application theme without throwing.
@@ -101,122 +76,4 @@ export function validateApplicationTheme(
     failures,
     ruleFailures,
   };
-}
-
-/**
- * Resolves the complete, deterministic final token set from a materialized application
- * theme plus optional component overrides.
- *
- * Rejects insufficient contrast, hidden focus, private/unapproved assets, and invalid
- * token-kind/component overrides by throwing ThemeValidationError with located errors.
- *
- * Produces identical output for runtime and preview. Pure function: no organisation or
- * business name branches.
- */
-export function resolveTheme(input: ThemeResolutionInput): ResolvedTheme;
-export function resolveTheme(
-  theme: ApplicationTheme,
-  componentOverrideContext?: ComponentThemeOverrideContext | undefined,
-  options?: ThemeResolutionOptions | undefined,
-): ResolvedTheme;
-export function resolveTheme(
-  first: ApplicationTheme | ThemeResolutionInput,
-  second?: ComponentThemeOverrideContext | undefined,
-  third?: ThemeResolutionOptions | undefined,
-): ResolvedTheme {
-  let theme: ApplicationTheme;
-  let overrideContext: ComponentThemeOverrideContext | undefined;
-  let options: ThemeResolutionOptions | undefined;
-
-  if (isThemeResolutionInput(first)) {
-    theme = first.theme;
-    overrideContext = first.componentOverrideContext;
-    options = first.options;
-  } else {
-    theme = first;
-    overrideContext = second;
-    options = third;
-  }
-
-  // 1. Validate Base Application Theme
-  const baseValidation = validateApplicationTheme(theme, options);
-  const allFailures: ThemeValidationFailure[] = [...baseValidation.failures];
-  const allRuleFailures: DefinitionRuleFailure[] = [...baseValidation.ruleFailures];
-
-  // 2. Process & Validate Component Overrides
-  const parsedTheme = applicationThemeSchema.safeParse(theme);
-  if (!parsedTheme.success) {
-    throw new ThemeValidationError(allFailures, allRuleFailures);
-  }
-  const canonicalTheme = parsedTheme.data;
-  let effectiveTokens: Record<string, ThemeTokenValue> = { ...canonicalTheme.tokens };
-
-  if (overrideContext !== undefined && baseValidation.valid) {
-    const overrideResult = validateComponentThemeOverrides(
-      canonicalTheme.tokens,
-      overrideContext,
-      options,
-    );
-    allFailures.push(...overrideResult.failures);
-    allRuleFailures.push(...overrideResult.ruleFailures);
-
-    if (overrideResult.failures.length === 0) {
-      effectiveTokens = { ...effectiveTokens, ...overrideResult.effectiveOverrides };
-
-      // Re-verify contrast, focus and assets on the effective merged token set
-      const mergedContrast = validateThemeContrast(effectiveTokens, options);
-      allFailures.push(...mergedContrast.failures);
-      allRuleFailures.push(...mergedContrast.ruleFailures);
-
-      const mergedFocus = validateFocusVisibility(effectiveTokens, options);
-      allFailures.push(...mergedFocus.failures);
-      allRuleFailures.push(...mergedFocus.ruleFailures);
-
-      const mergedAssets = validatePublicPlatformAssets(effectiveTokens, options);
-      allFailures.push(...mergedAssets.failures);
-      allRuleFailures.push(...mergedAssets.ruleFailures);
-    }
-  }
-
-  // 3. Reject with located definition failures if any validation failed
-  if (allFailures.length > 0) {
-    throw new ThemeValidationError(allFailures, allRuleFailures);
-  }
-
-  // 4. Construct deterministic sorted token map
-  const sortedKeys = Object.keys(effectiveTokens).sort();
-  const deterministicTokens: Record<string, ThemeTokenValue> = {};
-  for (const key of sortedKeys) {
-    const token = effectiveTokens[key];
-    if (token !== undefined) {
-      deterministicTokens[key] = deepFreeze(structuredClone(token));
-    }
-  }
-  Object.freeze(deterministicTokens);
-
-  return deepFreeze({
-    base: structuredClone(canonicalTheme.base),
-    style: canonicalTheme.selection?.style ?? DEFAULT_APPLICATION_THEME_SELECTION.style,
-    tokens: deterministicTokens,
-  });
-}
-
-/**
- * Convenience helper returning just the deterministic final token map.
- */
-export function resolveThemeTokens(input: ThemeResolutionInput): Readonly<Record<string, ThemeTokenValue>>;
-export function resolveThemeTokens(
-  theme: ApplicationTheme,
-  componentOverrideContext?: ComponentThemeOverrideContext | undefined,
-  options?: ThemeResolutionOptions | undefined,
-): Readonly<Record<string, ThemeTokenValue>>;
-export function resolveThemeTokens(
-  first: ApplicationTheme | ThemeResolutionInput,
-  second?: ComponentThemeOverrideContext | undefined,
-  third?: ThemeResolutionOptions | undefined,
-): Readonly<Record<string, ThemeTokenValue>> {
-  const resolved = isThemeResolutionInput(first)
-    ? resolveTheme(first)
-    : resolveTheme(first, second, third);
-  return resolved.tokens;
 }
