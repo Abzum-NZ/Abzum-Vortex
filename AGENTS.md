@@ -57,7 +57,7 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 - No process artefacts in product code: no review receipts, fingerprints, continuity or evidence.
 - Fail loudly on platform-produced data: never turn a parse failure or database error into a silent
   `null`/"unavailable"; log the cause.
-- No layers without two implementations; no source file over 1,500 lines.
+- No layers without two implementations; no source file over 1,500 lines (TypeScript and canonical `supabase/schemas/` files; migrations are exempt because they carry full function bodies, one per PR).
 - Every behaviour change is walked through in the running app on a freshly reset local database
   before merge; visible changes include screenshots in the pull request.
 

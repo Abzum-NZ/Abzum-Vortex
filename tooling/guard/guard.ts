@@ -169,7 +169,9 @@ for (const file of codeFiles) {
   const baselineLineCount = baselineMigrationFiles.get(file);
   if (baselineLineCount !== undefined && lineCount > baselineLineCount)
     throw new Error(`Generated baseline migration grew: ${file}`);
-  if (lineCount > 1500 && baselineLineCount === undefined)
+  // Migrations carry every changed function's full body and are one per PR, so only source and
+  // canonical schema files are held to the size cap.
+  if (lineCount > 1500 && !file.startsWith(paths.migrations))
     add("file-size", file, 1501, `${lineCount} lines`);
   if (/-v[2-9]\d*(?=\.)/i.test(basename(file))) add("versioned-file", file, 1, basename(file));
   const fileArea = area(file);
