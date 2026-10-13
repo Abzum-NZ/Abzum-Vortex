@@ -44,7 +44,9 @@ export type BeforeSaveRuleExecution = Readonly<{
   warnings: BeforeSaveRuleWarning[];
 }>;
 
-export const beginBeforeSaveRuleExecution = (ruleSet: BeforeSaveRuleSet): BeforeSaveRuleExecution => ({
+export const beginBeforeSaveRuleExecution = (
+  ruleSet: BeforeSaveRuleSet,
+): BeforeSaveRuleExecution => ({
   ruleSet,
   warnings: [],
 });
@@ -55,7 +57,13 @@ type BeforeSaveRuleApplication =
       candidateValues: Readonly<Record<string, JsonValue>>;
       requirements: readonly BeforeSaveRuleRequirement[];
     }>
-  | Readonly<{ success: false; reason: "refused"; fieldId?: string }>
+  | Readonly<{
+      success: false;
+      reason: "refused";
+      code: string;
+      message: string;
+      fieldId?: string;
+    }>
   | Readonly<{ success: false; reason: "unavailable" }>;
 
 const generatedFieldTypes = new Set<string>(["reference_number", "calculation", "total"]);
@@ -154,6 +162,8 @@ export const applyBeforeSaveRules = (input: {
     return {
       success: false,
       reason: "refused",
+      code: result.refusal.code,
+      message: result.refusal.message,
       ...(result.refusal.fieldId === undefined ? {} : { fieldId: result.refusal.fieldId }),
     };
   }

@@ -23,7 +23,12 @@ const safeErrorVariant = <Code extends keyof typeof safeOperationErrorCatalogue>
 export const safeErrorResponseSchema = z.discriminatedUnion("code", [
   safeErrorVariant("invalid_request"),
   safeErrorVariant("not_found"),
-  safeErrorVariant("operation_refused"),
+  safeErrorVariant("operation_refused").extend({
+    reason: z
+      .object({ code: z.string().min(1), message: z.string().min(1) })
+      .strict()
+      .optional(),
+  }),
   safeErrorVariant("conflict"),
   safeErrorVariant("rate_limited"),
   safeErrorVariant("temporarily_unavailable"),
