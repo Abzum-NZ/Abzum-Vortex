@@ -1,10 +1,11 @@
 "use server";
 
-import { loadStudioModuleFieldLabel, saveStudioModuleFieldChange } from "../../../../../_lib/studio-module-field-label";
 import {
+  loadStudioModuleFieldLabel,
   loadStudioModuleTextFieldSettings,
+  saveStudioModuleFieldChange,
   saveStudioModuleTextFieldSettings,
-} from "../../../../../_lib/studio-module-text-field-settings";
+} from "../../../../../_lib/studio-module-field-edits";
 
 export async function saveModuleTextFieldSettings(organizationId: string, candidate: unknown) {
   return saveStudioModuleTextFieldSettings(organizationId, candidate);

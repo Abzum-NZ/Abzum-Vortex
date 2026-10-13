@@ -17,3 +17,11 @@ export {
   type StudioModuleBeforeSaveConditionResult,
   type StudioModuleBeforeSaveConditionSnapshot,
 } from "./module-before-save-condition-edit";
+export {
+  moduleFieldEdits,
+  type StudioModuleFieldChangeResult,
+  type StudioModuleFieldDescriptor,
+  type StudioModuleFieldLabelResult,
+  type StudioModuleTextFieldDescriptor,
+  type StudioModuleTextFieldSettingsResult,
+} from "./module-field-edit";
