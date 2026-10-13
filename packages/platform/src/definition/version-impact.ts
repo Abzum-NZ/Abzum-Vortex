@@ -10,7 +10,6 @@ import {
 } from "./definitions";
 import {
   applicationRootIdSchema,
-  fingerprintSchema,
   moduleRootIdSchema,
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
@@ -216,7 +215,6 @@ export const definitionVersionImpactRequestSchema = z.discriminatedUnion("kind",
 
 const resultCommon = {
   subject: definitionVersionSubjectSchema,
-  comparisonFingerprint: fingerprintSchema,
 };
 
 export const noDefinitionChangeResultSchema = z

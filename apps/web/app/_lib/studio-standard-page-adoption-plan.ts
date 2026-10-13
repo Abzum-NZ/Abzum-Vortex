@@ -784,7 +784,6 @@ export const buildPageAdoptionPlan = (input: Readonly<{
     candidateReleaseRevision: release.publication.revision,
     candidateContentFingerprint: release.publication.contentFingerprint,
     candidateResolutionFingerprint: release.compilationOutput.resolutionFingerprint,
-    candidateComparisonFingerprint: release.comparisonFingerprint,
     originalPageId,
     replacementPageId,
     target,

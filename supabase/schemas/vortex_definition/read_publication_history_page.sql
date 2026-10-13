@@ -66,7 +66,7 @@ begin
       'authoredSourceFingerprint',release.authored_source_fingerprint,
       'sourceContractVersion',release.source_contract_version,'compilationOutput',release.compilation_output,
       'resolutionSnapshot',release.resolution_snapshot,'resolutionFingerprint',release.resolution_fingerprint,
-        'comparisonFingerprint',release.comparison_fingerprint,'impactReasons',release.impact_reasons)
+        'impactReasons',release.impact_reasons)
     )
   ) order by release.release_revision asc), '[]'::jsonb), max(release.release_revision)
   into entries, next_after from page as release;
