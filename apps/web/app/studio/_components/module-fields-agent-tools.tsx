@@ -90,6 +90,9 @@ export function ModuleFieldsAgentTools({ draft, onDraftChange }: {
       if (input.fieldAlias !== undefined && existing === undefined)
         return { outcome: "not_found", message: "That record type or field is not in the current draft. Call list_module_fields." };
       const type = input.type ?? existing?.type ?? "";
+      if (existing !== undefined && existing.type === type && input.maxLength !== undefined)
+        return { outcome: "invalid_input", issues: [{ path: "maxLength",
+          message: "maxLength is only taken with a type change here; the field keeps its type, so nothing was saved. Leave maxLength out." }] };
       const result = await saveModuleFieldChange(current.organizationId, {
         rootId: current.rootId,
         expectedDraftRevision: current.draftRevision,
