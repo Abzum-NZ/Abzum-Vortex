@@ -2,6 +2,7 @@
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -66,6 +67,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
   /** An agent call is changing the shared draft, so this editor takes no edit until it finishes. */
   locked: boolean;
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const [baseline, setBaseline] = useState(draft);
   const [choices, setChoices] = useState(() => descriptorsFor(draft));
   const [selectedKey, setSelectedKey] = useState(() => choices[0] === undefined ? "" : selectionKey(choices[0]));
@@ -219,7 +221,11 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
 
   const reopen = async () => {
     if (locked || !active.current || pending.current) return;
-    if (dirty && !window.confirm("Discard the pending text setting and reopen this Module's saved draft?")) return;
+    if (dirty && !await confirm({
+      title: "Reopen the saved Module draft?",
+      description: "Discard the pending text setting and reopen this Module's saved draft?",
+      confirmLabel: "Discard setting",
+    })) return;
     const captured = buffer.current;
     const epoch = ++generation.current;
     const mounted = lifetime.current;
@@ -265,10 +271,14 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
     </header>
     <form className="space-y-4" onSubmit={save}>
       <label className="block space-y-1"><span>Module text field</span>
-        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || locked || choices.length === 0} onChange={(event) => {
+        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || locked || choices.length === 0} onChange={async (event) => {
           if (pending.current) return;
           const next = choices.find((field) => selectionKey(field) === event.target.value);
-          if (next === undefined || (dirty && !window.confirm("Discard the pending setting and select another field?"))) return;
+          if (next === undefined || (dirty && !await confirm({
+            title: "Select another field?",
+            description: "Discard the pending setting and select another field?",
+            confirmLabel: "Discard setting",
+          }))) return;
           const nextKey = selectionKey(next);
           const nextValue = String(next.maxLength);
           buffer.current = { baseline, selectedKey: nextKey, maxLength: nextValue };
@@ -310,5 +320,6 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
         </li>)}
       </ul> : null}
     </form>
+    {confirmDialog}
   </main>;
 }

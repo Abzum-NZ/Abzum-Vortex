@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
 import { canonicalJson, type ConditionNode, type DefinitionValidationResult } from "@vortex/platform/schema";
@@ -28,6 +29,7 @@ const buttonClass = "";
 
 /** Existing top-level predicates only. Apply and history are local; Save is an explicit Human operation. */
 export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, initial }: Props) {
+  const [confirm, confirmDialog] = useConfirm();
   const [choices, setChoices] = useState(choicesFor(initial));
   const [context, setContext] = useState(contextFor(initial));
   const [selected, setSelected] = useState(contextFor(initial) === undefined ? "" : contextKey(contextFor(initial)!));
@@ -70,7 +72,11 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
   };
   const load = async (nextSelection: string, reopening: boolean) => {
     if (busy) return;
-    if ((dirty || staged) && !window.confirm("Discard pending condition edits and load the saved draft? Choose Cancel to keep editing.")) return;
+    if ((dirty || staged) && !await confirm({
+      title: "Discard the pending condition edits?",
+      description: "Discard pending condition edits and load the saved draft? Choose Cancel to keep editing.",
+      confirmLabel: "Discard and load",
+    })) return;
     const selectedEpoch = ++selectionEpoch.current;
     const requestId = ++requestEpoch.current;
     const choice = choices.find((entry) => selectionKey(entry.alias, entry.taskId) === nextSelection);
@@ -211,5 +217,6 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
     {validationErrors}
     <p aria-live="polite" role="status">{message}</p>
     <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void load(selectedRef.current, true)} disabled={busy}>Reopen</Button>
+    {confirmDialog}
   </main>;
 }
