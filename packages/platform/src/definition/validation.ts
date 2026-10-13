@@ -30,11 +30,9 @@ import {
   definitionSourceDocumentSchema,
   definitionCompilationRequestSchema,
   definitionPublicationContextSchema,
-  definitionRuleFailureFamilyByCode,
   builderKeySchema,
   platformIdSchema,
   namespacedKeySchema,
-  translateDefinitionSchemaError,
   valueTypesCompatible,
   flowReadFieldsProjectionSchema,
   flowTaskChildLists,
@@ -53,7 +51,6 @@ import {
   type DefinitionPublicationContext,
   type DefinitionPublicationHistoryEvidence,
   type DefinitionRuleFailure,
-  type DefinitionValidationErrorCode,
   type DefinitionValidationLocation,
   type FlowDefinition,
   type FlowTask,
@@ -269,11 +266,6 @@ const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
       types.every((type) => ["record.delete", "record.changes", "event.announce"].includes(type)))
   );
 };
-
-const schemaFailureFamily = {
-  ...definitionRuleFailureFamilyByCode,
-  definition_validation_failed: "invalid_value",
-} as const satisfies Record<DefinitionValidationErrorCode, DefinitionRuleFailure["family"]>;
 
 const sourceCollectionLocationKind = {
   record_types: "record_type",
@@ -585,62 +577,28 @@ function sourceShapeRule(context: PreparedValidationContext): DefinitionRuleFail
     const parsed = context.parsedSources?.[index] ?? parseEditSaveSource(source);
     if (parsed.success) return [];
     const translation = sourceTranslationContext(source);
-    if (!translation)
-      return parsed.error.issues.map((issue) => ({
+    return parsed.error.issues.map((issue): DefinitionRuleFailure => {
+      const path = issue.path.filter((part): part is string | number => typeof part !== "symbol");
+      const family: DefinitionRuleFailure["family"] =
+        issue.code === "unrecognized_keys"
+          ? "unknown_property"
+          : issue.code === "invalid_value"
+            ? "unsupported_choice"
+            : issue.code === "too_small" && (issue.origin === "array" || issue.origin === "set")
+              ? "too_few_items"
+              : issue.code === "too_big" && (issue.origin === "array" || issue.origin === "set")
+                ? "too_many_items"
+                : issue.code === "invalid_type" && sourceValueAtPath(source, path) === undefined
+                  ? "required_value"
+                  : "invalid_value";
+      const effectivePath =
+        path.at(-1) === "platform_block_dependencies" ? (unlistedBlockPath(source) ?? path) : path;
+      return {
         ruleCode: "vortex.definition.source_shape",
-        family:
-          issue.code === "unrecognized_keys"
-            ? ("unknown_property" as const)
-            : issue.code === "invalid_value"
-              ? ("unsupported_choice" as const)
-              : issue.code === "too_small" && issue.origin === "array"
-                ? ("too_few_items" as const)
-                : issue.code === "too_big" && issue.origin === "array"
-                  ? ("too_many_items" as const)
-                  : issue.code === "invalid_type" &&
-                      sourceValueAtPath(
-                        source,
-                        issue.path.filter(
-                          (part): part is string | number => typeof part !== "symbol",
-                        ),
-                      ) === undefined
-                    ? ("required_value" as const)
-                    : ("invalid_value" as const),
-      }));
-    const translated = translateDefinitionSchemaError(parsed.error, {
-      correlationId: "00000000-0000-4000-8000-000000000000",
-      rootLocation: translation.rootLocation,
-      pathMap: [
-        ...parsed.error.issues.map((issue) => {
-          const path = issue.path.filter(
-            (part): part is string | number => typeof part !== "symbol",
-          );
-          const effectivePath =
-            path.at(-1) === "platform_block_dependencies"
-              ? (unlistedBlockPath(source) ?? path)
-              : path;
-          return { sourcePath: path, location: issueLocation(translation, effectivePath) };
-        }),
-        ...translation.pathMap,
-      ],
-      requiredPaths: parsed.error.issues
-        .filter(
-          (issue) =>
-            issue.code === "invalid_type" &&
-            sourceValueAtPath(
-              source,
-              issue.path.filter((part): part is string | number => typeof part !== "symbol"),
-            ) === undefined,
-        )
-        .map((issue) =>
-          issue.path.filter((part): part is string | number => typeof part !== "symbol"),
-        ),
+        family,
+        ...(translation ? { location: issueLocation(translation, effectivePath) } : {}),
+      };
     });
-    return translated.errors.map((error) => ({
-      ruleCode: "vortex.definition.source_shape",
-      family: schemaFailureFamily[error.code],
-      ...(error.location ? { location: error.location } : {}),
-    }));
   });
 }
 
