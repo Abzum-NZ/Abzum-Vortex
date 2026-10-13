@@ -8,6 +8,7 @@ import {
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowTaskRegistry,
+  namespacedKeySchema,
   validateFlowTaskPlacement,
   organizationIdSchema,
   parseFlowReference,
@@ -804,5 +805,195 @@ export const applyStudioFlowRemoveCommand = (
     return validatedEdit(candidate, expectedSelection, command.taskId, current);
   } catch (cause) {
     return { kind: "invalid", cause, reason: "The draft could not be read to remove this task." };
+  }
+};
+
+// ─── Task settings: a form generated from the registry's property declarations ───────────────
+
+/** How the form edits a setting; each maps to one typed literal, chosen by the registry's declared type. */
+export type StudioFlowSettingControl = "text" | "whole_number" | "decimal_number" | "yes_no" | "date" | "date_time";
+export type StudioFlowSettingValue = string | boolean;
+
+export type StudioFlowSettingField = Readonly<{
+  key: string;
+  label: string;
+  required: boolean;
+  /** The control that edits it, or null when the setting can only be read here. */
+  control: StudioFlowSettingControl | null;
+  /** The current plain value, or null when the setting is absent or not editable. */
+  value: StudioFlowSettingValue | null;
+  display: string;
+  /** Why a setting is read-only, in plain language. */
+  note?: string;
+}>;
+
+export type StudioFlowSettingsProjection =
+  | Readonly<{ kind: "available"; fields: readonly StudioFlowSettingField[]; note?: string }>
+  | Readonly<{ kind: "unavailable"; reason: string; cause?: unknown }>;
+
+export type StudioFlowSettingCommand = Readonly<{
+  kind: "set_task_setting";
+  taskId: string;
+  taskPath: readonly (string | number)[];
+  property: string;
+  /** The new plain value, or null to remove an optional setting. */
+  value: StudioFlowSettingValue | null;
+}>;
+
+type SettingKind = Readonly<{ control: StudioFlowSettingControl; literal: StudioFlowSettingControl }>;
+type SettingValue = SeededTask["properties"][string];
+
+/** The declared property types a plain-value form can edit. Every other type (references, formulas, maps) is read-only. */
+const settingKinds: Readonly<Partial<Record<FlowTaskPropertyType, SettingKind>>> = {
+  text: { control: "text", literal: "text" },
+  message_text: { control: "text", literal: "text" },
+  builder_key: { control: "text", literal: "text" },
+  namespaced_key: { control: "text", literal: "text" },
+  whole_number: { control: "whole_number", literal: "whole_number" },
+  decimal_number: { control: "decimal_number", literal: "decimal_number" },
+  yes_no: { control: "yes_no", literal: "yes_no" },
+  date: { control: "date", literal: "date" },
+  date_time: { control: "date_time", literal: "date_time" },
+};
+
+const humanize = (key: string): string => {
+  const words = key.replace(/_/g, " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+};
+
+const registeredTask = (task: SourceFlowTask): SeededTask | undefined =>
+  "properties" in task && "version" in task ? task : undefined;
+
+const definitionOf = (task: SeededTask): FlowTaskTypeDefinition | undefined => {
+  const definition = Object.values(flowTaskRegistry).find((entry) => entry.type === task.type);
+  return definition !== undefined && definition.version === task.version ? definition : undefined;
+};
+
+/** The plain value a task already holds for a setting; undefined when it is not a plain literal of the declared type. */
+const plainSettingValue = (kind: SettingKind, value: SettingValue): StudioFlowSettingValue | undefined => {
+  if (value.kind !== "literal" || value.literal.type !== kind.literal) return undefined;
+  const raw = value.literal.value;
+  if (typeof raw === "string" || typeof raw === "boolean") return raw;
+  return typeof raw === "number" ? String(raw) : undefined;
+};
+
+const readOnlyNote = (kind: SettingKind | undefined, present: boolean): string =>
+  kind === undefined
+    ? "This setting points at other parts of the application or holds structured data, so it is shown here but edited in the source."
+    : present ? "This setting is a reference or a calculation, not a plain value, so it is shown here but not edited."
+      : "This setting cannot be edited here.";
+
+/** The settings form of one selected task, derived only from the registry's declarations for its type. */
+export const projectStudioFlowTaskSettings = (
+  context: StudioFlowTextContext,
+  selection: FlowSelection,
+  taskId: string,
+  taskPath: readonly (string | number)[],
+): StudioFlowSettingsProjection => {
+  try {
+    const current = outline(context, selection);
+    const entry = current.entries.find(({ task, path }) => task.id === taskId && samePath(path, taskPath));
+    if (entry === undefined) return { kind: "unavailable", reason: "That task is no longer in the draft." };
+    const task = registeredTask(entry.task);
+    if (task === undefined)
+      return { kind: "available", fields: [], note: "This task controls the order of the flow. Its condition, cases or items are not edited here." };
+    const definition = definitionOf(task);
+    if (definition === undefined)
+      return { kind: "unavailable", reason: `Task type ${task.type} version ${task.version} is not in the task registry, so its settings cannot be edited.` };
+    const fields = Object.entries(definition.properties).map(([key, declaration]): StudioFlowSettingField => {
+      const kind = settingKinds[declaration.type];
+      const raw = Object.hasOwn(task.properties, key) ? task.properties[key] : undefined;
+      const value = kind === undefined || raw === undefined ? undefined : plainSettingValue(kind, raw);
+      const editable = kind !== undefined && (raw === undefined || value !== undefined);
+      return { key, label: humanize(key), required: declaration.required,
+        control: editable ? kind.control : null, value: value ?? null,
+        display: raw === undefined ? "Not set" : JSON.stringify(raw, null, 2),
+        ...(editable ? {} : { note: readOnlyNote(kind, raw !== undefined) }) };
+    });
+    // Settings the registry does not declare stay visible rather than disappearing.
+    for (const [key, raw] of Object.entries(task.properties))
+      if (!Object.hasOwn(definition.properties, key))
+        fields.push({ key, label: humanize(key), required: false, control: null, value: null,
+          display: JSON.stringify(raw, null, 2), note: "The task registry does not declare this setting, so it cannot be edited here." });
+    return { kind: "available", fields };
+  } catch (cause) {
+    return { kind: "unavailable", cause, reason: "The settings of this task could not be read from the draft." };
+  }
+};
+
+type SettingLiteral = Extract<SettingValue, { kind: "literal" }>["literal"];
+
+/** Turns the form's value into the typed literal, or the reason it does not fit the declared type. */
+const settingLiteral = (type: FlowTaskPropertyType, kind: SettingKind, value: StudioFlowSettingValue):
+  { ok: true; literal: SettingLiteral } | { ok: false; reason: string } => {
+  if (kind.control === "yes_no")
+    return typeof value === "boolean" ? { ok: true, literal: { type: "yes_no", value } } : { ok: false, reason: "Choose yes or no." };
+  if (typeof value !== "string") return { ok: false, reason: "Enter a value." };
+  const text = kind.control === "text" ? value : value.trim();
+  if (text.length === 0) return { ok: false, reason: "Enter a value, or remove the setting if it is optional." };
+  if (type === "builder_key" && !builderKeySchema.safeParse(text).success)
+    return { ok: false, reason: "Use lowercase words separated by underscores, up to 40 characters." };
+  if (type === "namespaced_key" && !namespacedKeySchema.safeParse(text).success)
+    return { ok: false, reason: "Use lowercase dot-separated names, such as record.saved." };
+  if (type === "message_text" && text.length > 2_000) return { ok: false, reason: "Use at most 2000 characters." };
+  if (kind.control === "whole_number") {
+    if (!/^-?(?:0|[1-9]\d*)$/.test(text) || !Number.isSafeInteger(Number(text)))
+      return { ok: false, reason: "Enter a whole number without decimals or spaces." };
+    return { ok: true, literal: { type: "whole_number", value: Number(text) } };
+  }
+  const literal = { type: kind.literal, value: text };
+  const checked = flowLiteralSchema.safeParse(literal);
+  if (!checked.success) return { ok: false, reason: checked.error.issues[0]?.message ?? "This value does not fit the setting." };
+  return { ok: true, literal };
+};
+
+/** Sets or removes one declared setting of one task, from the registry's own property declaration; no per-task code. */
+export const applyStudioFlowSettingCommand = (
+  current: StudioFlowTextContext,
+  expected: StudioFlowTextContext,
+  selection: StudioSemanticSelection | null,
+  expectedSelection: FlowSelection,
+  command: StudioFlowSettingCommand,
+): StudioFlowEditResult => {
+  if (!sameContext(current, expected, selection, expectedSelection)) return staleEdit();
+  try {
+    if (command.kind !== "set_task_setting" || !builderKeySchema.safeParse(command.taskId).success)
+      return { kind: "invalid", reason: "This is not a valid settings command." };
+    const original = outline(current, expectedSelection);
+    const entry = original.entries.find(({ task, path }) => task.id === command.taskId && samePath(path, command.taskPath));
+    if (entry === undefined) return staleEdit("That task no longer exists in the draft.");
+    const originalTask = registeredTask(entry.task);
+    const definition = originalTask === undefined ? undefined : definitionOf(originalTask);
+    const declaration = definition === undefined || !Object.hasOwn(definition.properties, command.property)
+      ? undefined : definition.properties[command.property];
+    if (originalTask === undefined || declaration === undefined)
+      return { kind: "unsupported", reason: "The task registry does not declare this setting for this task, so it cannot be edited." };
+    const kind = settingKinds[declaration.type];
+    if (kind === undefined)
+      return { kind: "unsupported", reason: "This setting points at other parts of the application or holds structured data, so it cannot be edited as a plain value." };
+    const existing = Object.hasOwn(originalTask.properties, command.property) ? originalTask.properties[command.property] : undefined;
+    if (existing !== undefined && plainSettingValue(kind, existing) === undefined)
+      return { kind: "unsupported", reason: "This setting is a reference or a calculation, so it cannot be edited as a plain value." };
+    let replacement: SettingValue | undefined;
+    if (command.value === null) {
+      if (declaration.required)
+        return { kind: "invalid", reason: `${humanize(command.property)} is required, so it cannot be removed.` };
+    } else {
+      const literal = settingLiteral(declaration.type, kind, command.value);
+      if (!literal.ok) return { kind: "invalid", reason: literal.reason };
+      replacement = { kind: "literal", literal: literal.literal };
+    }
+    if (JSON.stringify(existing) === JSON.stringify(replacement))
+      return { kind: "invalid", reason: "The draft already has this value. Nothing was changed." };
+    const candidate: ApplicationSourceDocument = structuredClone(current.source);
+    const detached = outline({ ...current, source: candidate }, expectedSelection);
+    const target = detached.entries.find(({ task, path }) => task.id === command.taskId && samePath(path, command.taskPath));
+    const task = target === undefined ? undefined : registeredTask(target.task);
+    if (task === undefined) return staleEdit();
+    if (replacement === undefined) delete task.properties[command.property];
+    else task.properties[command.property] = replacement;
+    return validatedEdit(candidate, expectedSelection, command.taskId, current);
+  } catch (cause) {
+    return { kind: "invalid", cause, reason: "The draft could not be read to change this setting." };
   }
 };

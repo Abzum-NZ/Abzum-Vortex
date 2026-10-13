@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { identityIdSchema } from "@vortex/platform/schema";
+import { isLocalSupabaseApiUrl, supabaseWorkdirArguments } from "../development-setup/guards";
 import { findRepositoryRoot } from "../development-setup/state";
 import { loadLocalWebEnvironment } from "./local-environment";
 
@@ -12,7 +13,8 @@ type LocalSupabaseStatus = Readonly<{ API_URL: string; SECRET_KEY: string }>;
 const localSupabaseStatus = (): LocalSupabaseStatus => {
   const root = findRepositoryRoot();
   const cli = join(root, "node_modules", "supabase", "dist", "supabase.js");
-  const result = spawnSync(process.execPath, [cli, "status", "--output", "json"], {
+  const statusArguments = [cli, "status", "--output", "json", ...supabaseWorkdirArguments()];
+  const result = spawnSync(process.execPath, statusArguments, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     cwd: root,
@@ -53,9 +55,8 @@ export const validateDemoOwnerConfiguration = (): Readonly<{ email: string; pass
 export const ensureLocalDemoOwner = async (): Promise<string> => {
   const { email, password } = validateDemoOwnerConfiguration();
   const status = localSupabaseStatus();
-  const apiUrl = new URL(status.API_URL);
-  if (apiUrl.protocol !== "http:" || apiUrl.hostname !== "127.0.0.1" || apiUrl.port !== "54321")
-    throw new Error("The local Supabase Auth endpoint must be http://127.0.0.1:54321.");
+  if (!isLocalSupabaseApiUrl(new URL(status.API_URL)))
+    throw new Error("The local Supabase Auth endpoint must be a loopback HTTP origin.");
   const admin = createClient(status.API_URL, status.SECRET_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
