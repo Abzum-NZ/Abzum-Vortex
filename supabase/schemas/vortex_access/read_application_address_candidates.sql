@@ -1,7 +1,8 @@
 create or replace function vortex_access.read_application_address_candidates(
   p_identity_id uuid,
   p_tenant_short_name text,
-  p_organization_short_name text
+  p_organization_short_name text,
+  p_include_experiences boolean
 )
 returns jsonb
 language plpgsql
@@ -17,7 +18,6 @@ declare
   experience_values jsonb;
   role_values jsonb;
   permission_values jsonb;
-  permissions_by_application jsonb;
   home_page_key text;
 begin
   if p_identity_id is null
@@ -62,35 +62,6 @@ begin
 
   -- The organisation scope above is the viewer's only scope check: every
   -- candidate below is already an active registration of this organisation.
-  -- Permission entries of every candidate application are aggregated once.
-  select coalesce(pg_catalog.jsonb_object_agg(grouped.application_root_id, grouped.entries), '{}'::jsonb)
-  into permissions_by_application
-  from (
-    select entry.registration_owner_id as application_root_id,
-      pg_catalog.jsonb_agg(
-        pg_catalog.jsonb_build_object(
-          'key', entry.permission_key,
-          'applicationRootId', entry.application_root_id,
-          'ownerKind', entry.owner_kind,
-          'ownerId', entry.owner_id,
-          'permissionId', entry.permission_id,
-          'actionKind', entry.action_kind,
-          'namedAction', entry.named_action
-        ) order by entry.permission_key collate "C", entry.permission_id
-      ) as entries
-    from vortex_access.permission_catalogue_entries as entry
-    join vortex_access.permission_registrations as registration
-      on registration.organization_id = entry.organization_id
-      and registration.registration_kind = entry.registration_kind
-      and registration.registration_owner_id = entry.registration_owner_id
-      and registration.revision = entry.registration_revision
-      and registration.state = 'active'
-    where entry.organization_id = addressed_organization.organization_id
-      and entry.registration_kind = 'application'
-      and entry.application_root_id = entry.registration_owner_id
-    group by entry.registration_owner_id
-  ) as grouped;
-
   for application_row in
     select root.root_id, root.key as application_key, release.compilation_output,
       registration.source_revision as release_revision
@@ -146,13 +117,15 @@ begin
     -- App can render an application's own not-found, unavailable and error surfaces. A refused
     -- page and a missing page both resolve to the same not_found experience. Experiences are an
     -- optional release field: an absent one declares none, a present one must be an array.
-    experience_values := application_row.compilation_output #> '{canonical,content,experiences}';
-    if experience_values is null then
-      experience_values := '[]'::jsonb;
-    elsif pg_catalog.jsonb_typeof(experience_values) is distinct from 'array' then
-      raise exception using errcode = 'XX001',
-        message = pg_catalog.format(
-          'Published application %s has malformed experiences', application_row.application_key);
+    if p_include_experiences then
+      experience_values := application_row.compilation_output #> '{canonical,content,experiences}';
+      if experience_values is null then
+        experience_values := '[]'::jsonb;
+      elsif pg_catalog.jsonb_typeof(experience_values) is distinct from 'array' then
+        raise exception using errcode = 'XX001',
+          message = pg_catalog.format(
+            'Published application %s has malformed experiences', application_row.application_key);
+      end if;
     end if;
 
     role_values := application_row.compilation_output #> '{canonical,content,roles}';
@@ -162,7 +135,35 @@ begin
           'Published application %s has malformed roles', application_row.application_key);
     end if;
 
-    permission_values := permissions_by_application -> (application_row.root_id::text);
+    -- Page discovery only consults the page's access permission. Avoid
+    -- serializing unrelated application actions into every address read.
+    select coalesce(pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'key', entry.permission_key,
+        'applicationRootId', entry.application_root_id,
+        'ownerKind', entry.owner_kind,
+        'ownerId', entry.owner_id,
+        'permissionId', entry.permission_id,
+        'actionKind', entry.action_kind,
+        'namedAction', entry.named_action
+      ) order by entry.permission_key collate "C", entry.permission_id
+    ), '[]'::jsonb)
+    into permission_values
+    from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and registration.revision = entry.registration_revision
+      and registration.state = 'active'
+    where entry.organization_id = addressed_organization.organization_id
+      and entry.registration_kind = 'application'
+      and entry.registration_owner_id = application_row.root_id
+      and entry.application_root_id = entry.registration_owner_id
+      and entry.permission_key in (
+        select page.value ->> 'accessPermissionKey'
+        from pg_catalog.jsonb_array_elements(page_values) as page(value)
+      );
 
     application_values := application_values || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
@@ -182,6 +183,18 @@ begin
           )
           from pg_catalog.jsonb_array_elements(page_values) as page(value)
         ),
+        'roles', (
+          select pg_catalog.jsonb_agg(
+            pg_catalog.jsonb_build_object(
+              'roleId', role.value ->> 'roleId',
+              'key', role.value ->> 'key',
+              'homePageId', role.value ->> 'homePageId'
+            ) order by role.value ->> 'key' collate "C"
+          )
+          from pg_catalog.jsonb_array_elements(role_values) as role(value)
+        ),
+        'permissions', coalesce(permission_values, '[]'::jsonb)
+      ) || case when p_include_experiences then pg_catalog.jsonb_build_object(
         'experiences', coalesce((
           select pg_catalog.jsonb_agg(
             pg_catalog.jsonb_build_object('state', experience.value ->> 'state', 'page', page.value)
@@ -198,25 +211,15 @@ begin
               '[]'::jsonb
             )
           else '[]'::jsonb
-        end,
-        'roles', (
-          select pg_catalog.jsonb_agg(
-            pg_catalog.jsonb_build_object(
-              'roleId', role.value ->> 'roleId',
-              'key', role.value ->> 'key',
-              'homePageId', role.value ->> 'homePageId'
-            ) order by role.value ->> 'key' collate "C"
-          )
-          from pg_catalog.jsonb_array_elements(role_values) as role(value)
-        ),
-        'permissions', coalesce(permission_values, '[]'::jsonb)
+        end
       ) || case
-        when pg_catalog.jsonb_array_length(experience_values) > 0
+        when p_include_experiences and pg_catalog.jsonb_array_length(experience_values) > 0
           then pg_catalog.jsonb_build_object(
             'theme', application_row.compilation_output #> '{canonical,content,theme}'
           )
         else '{}'::jsonb
       end
+      else '{}'::jsonb end
     );
   end loop;
 
@@ -230,15 +233,15 @@ begin
 end
 $function$;
 
-revoke all on function vortex_access.read_application_address_candidates(uuid, text, text)
+revoke all on function vortex_access.read_application_address_candidates(uuid, text, text, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-grant execute on function vortex_access.read_application_address_candidates(uuid, text, text)
+grant execute on function vortex_access.read_application_address_candidates(uuid, text, text, boolean)
   to vortex_runtime;
 
-comment on function vortex_access.read_application_address_candidates(uuid, text, text) is
+comment on function vortex_access.read_application_address_candidates(uuid, text, text, boolean) is
   'Private App candidate read for one exact live human organisation address; only App may project metadata after current page Access decisions.';
 
-alter function vortex_access.read_application_address_candidates(p_identity_id uuid, p_tenant_short_name text, p_organization_short_name text) owner to vortex_owner;
+alter function vortex_access.read_application_address_candidates(p_identity_id uuid, p_tenant_short_name text, p_organization_short_name text, p_include_experiences boolean) owner to vortex_owner;
 
-grant execute on function vortex_access.read_application_address_candidates(p_identity_id uuid, p_tenant_short_name text, p_organization_short_name text) to postgres;
+grant execute on function vortex_access.read_application_address_candidates(p_identity_id uuid, p_tenant_short_name text, p_organization_short_name text, p_include_experiences boolean) to postgres;
