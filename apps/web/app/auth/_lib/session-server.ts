@@ -22,6 +22,7 @@ import {
 } from "./session-cookie";
 import { createIdentitySessionClient, type IdentitySessionClient } from "./supabase-session-client";
 import { identitySessionProxyHeader } from "./session-request-state";
+import { mapWebError } from "../../_lib/web-error-mapper";
 import {
   getIdentityAuthorityConfiguration,
   getIdentityJourneyConfiguration,
@@ -71,14 +72,26 @@ const providerFailure = (error: unknown): IdentitySessionResolution =>
 const revokeIssuedProviderSession = async (
   signedIn: Extract<VerifiedSignInResult, { ok: true }>,
 ): Promise<void> => {
+  // Revocation is best effort; the failed pair is never committed to the browser.
+  const logRevokeFailure = (error: unknown): void => {
+    mapWebError(error, {
+      route: "auth/session",
+      operation: "revoke-uncommitted-provider-session",
+      code: "SESSION_PROVIDER_REVOKE_FAILED",
+      fallback: undefined,
+    });
+  };
   try {
     const cleanup = createIdentitySessionClient([]);
-    await cleanup.client.auth
-      .setSession({ access_token: signedIn.accessToken, refresh_token: signedIn.refreshToken })
-      .catch(() => undefined);
-    await cleanup.client.auth.signOut({ scope: "local" }).catch(() => undefined);
-  } catch {
-    // Revocation is best effort; the failed pair is never committed to the browser.
+    const set = await cleanup.client.auth.setSession({
+      access_token: signedIn.accessToken,
+      refresh_token: signedIn.refreshToken,
+    });
+    if (set.error) logRevokeFailure(set.error);
+    const out = await cleanup.client.auth.signOut({ scope: "local" });
+    if (out.error) logRevokeFailure(out.error);
+  } catch (error) {
+    logRevokeFailure(error);
   }
 };
 
@@ -122,8 +135,13 @@ export const bootstrapIdentitySession = async (
         }
       }
     }
-  } catch {
-    outcome = unavailable();
+  } catch (error) {
+    outcome = mapWebError(error, {
+      route: "auth/session",
+      operation: "bootstrap-identity-session",
+      code: "SESSION_BOOTSTRAP_FAILED",
+      fallback: unavailable(),
+    });
   }
 
   if (!committed) await revokeIssuedProviderSession(signedIn);
@@ -153,8 +171,15 @@ const resolveRequestIdentity = async (
     boundary = createIdentitySessionClient(await requestCookies(), {
       verificationOnly: true, ...(execution === undefined ? {} : { execution }),
     });
-  } catch {
-    return { resolution: unavailable() };
+  } catch (error) {
+    return {
+      resolution: mapWebError(error, {
+        route: "auth/session",
+        operation: "create-session-client",
+        code: "SESSION_CLIENT_UNAVAILABLE",
+        fallback: unavailable(),
+      }),
+    };
   }
   if (boundary.stage.initialState.kind === "missing")
     return { resolution: identitySessionResolutionSchema.parse({ kind: "missing" }) };
@@ -210,14 +235,33 @@ export const revokeIdentitySession = async (
   let boundary: IdentitySessionClient;
   try {
     boundary = createIdentitySessionClient(sessionCookies);
-  } catch {
-    return undefined;
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/session",
+      operation: "create-revocation-client",
+      code: "SESSION_REVOKE_CLIENT_UNAVAILABLE",
+      fallback: undefined,
+    });
   }
   try {
-    if (boundary.stage.initialState.kind === "valid")
-      await boundary.client.auth.signOut({ scope: "local" });
-  } catch {
+    if (boundary.stage.initialState.kind === "valid") {
+      const signedOut = await boundary.client.auth.signOut({ scope: "local" });
+      if (signedOut.error)
+        mapWebError(signedOut.error, {
+          route: "auth/session",
+          operation: "revoke-provider-session",
+          code: "SESSION_PROVIDER_REVOKE_FAILED",
+          fallback: undefined,
+        });
+    }
+  } catch (error) {
     // Revocation is best effort; the cookies are cleared regardless.
+    mapWebError(error, {
+      route: "auth/session",
+      operation: "revoke-provider-session",
+      code: "SESSION_PROVIDER_REVOKE_FAILED",
+      fallback: undefined,
+    });
   }
   return boundary.profile;
 };

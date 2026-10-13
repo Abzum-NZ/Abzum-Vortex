@@ -73,11 +73,17 @@ const expiredAt = (clock: () => Date, deadlineMilliseconds: number): boolean => 
   return !Number.isFinite(now) || now >= deadlineMilliseconds;
 };
 
+/** Stream cleanup is best effort: it never changes the import outcome, but a failure is logged. */
+const logStreamCleanupFailure = (code: string, error: unknown): void => {
+  console.warn(code, { cause: error instanceof Error ? error.name : typeof error });
+};
+
 const cancelStream = (stream: ReadableStream<Uint8Array>): void => {
   try {
     const reader = stream.getReader();
     cancelReaderAndRelease(reader);
-  } catch {
+  } catch (error) {
+    logStreamCleanupFailure("FILE_IMPORT_STREAM_CANCEL_FAILED", error);
     if (!stream.locked) void stream.cancel().catch(() => undefined);
   }
 };
@@ -158,13 +164,15 @@ type ReaderReadResult =
 const cancelReaderAndRelease = (reader: ReadableStreamDefaultReader<Uint8Array>): void => {
   try {
     void reader.cancel().catch(() => undefined);
-  } catch {
+  } catch (error) {
     // A completed stream may already have released its reader.
+    logStreamCleanupFailure("FILE_IMPORT_READER_CANCEL_FAILED", error);
   } finally {
     try {
       reader.releaseLock();
-    } catch {
+    } catch (error) {
       // Cancellation is best-effort after the protected decision closes.
+      logStreamCleanupFailure("FILE_IMPORT_READER_RELEASE_FAILED", error);
     }
   }
 };
@@ -195,8 +203,9 @@ const readUntil = (
         if (settled) {
           try {
             reader.releaseLock();
-          } catch {
+          } catch (error) {
             // The stream may still be cancelling after the bounded read ended.
+            logStreamCleanupFailure("FILE_IMPORT_READER_RELEASE_FAILED", error);
           }
           return;
         }
@@ -232,8 +241,9 @@ const deadlineOwnedStream = (
     }
     try {
       reader.releaseLock();
-    } catch {
+    } catch (error) {
       // The completed upstream reader may already have released its lock.
+      logStreamCleanupFailure("FILE_IMPORT_READER_RELEASE_FAILED", error);
     }
   };
 
@@ -273,7 +283,8 @@ const consumeAuthorizedStream = async (
   let reader: ReadableStreamDefaultReader<Uint8Array>;
   try {
     reader = stream.getReader();
-  } catch {
+  } catch (error) {
+    logStreamCleanupFailure("FILE_IMPORT_STREAM_NOT_READABLE", error);
     cancelStream(stream);
     return null;
   }
@@ -306,15 +317,17 @@ const consumeAuthorizedStream = async (
     }
     if (offset !== sizeBytes || expiredAt(clock, deadlineMilliseconds)) return null;
     return bytes;
-  } catch {
+  } catch (error) {
+    logStreamCleanupFailure("FILE_IMPORT_STREAM_READ_FAILED", error);
     void reader.cancel().catch(() => undefined);
     return null;
   } finally {
     if (release) {
       try {
         reader.releaseLock();
-      } catch {
+      } catch (error) {
         // A failed read or cancellation can leave a pending underlying read.
+        logStreamCleanupFailure("FILE_IMPORT_READER_RELEASE_FAILED", error);
       }
     }
   }
@@ -438,8 +451,9 @@ export const createFileRecordImportSourceService = (
       if (reader === undefined) return;
       try {
         void reader.cancel().catch(() => undefined);
-      } catch {
+      } catch (error) {
         // The reader may already be closed or released after a completed body.
+        logStreamCleanupFailure("FILE_IMPORT_READER_CANCEL_FAILED", error);
       }
     };
 

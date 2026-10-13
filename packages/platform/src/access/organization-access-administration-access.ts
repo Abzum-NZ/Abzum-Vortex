@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   databaseRevision,
+  describeFailure,
   sameId,
   activityIdSchema,
   affectedRoleAssignmentSchema,
@@ -481,12 +482,29 @@ const isRecordedRefusal = (
   return true;
 };
 
+/** Logs one refused or failed administration operation with a stable reason code and the cause. */
+const refuseAdministration = <Outcome>(
+  operation: string,
+  code: string,
+  outcome: Outcome,
+  cause?: unknown,
+): Outcome => {
+  console.error(
+    `[access] administration ${operation} ${code}${cause === undefined ? "" : `: ${describeFailure(cause)}`}`,
+  );
+  return outcome;
+};
+
 const mapRecordedRefusal = async <Result>(
+  operation: string,
   request: Promise<HumanOrganizationRequestResult<Result | RecordedRefusal>>,
 ): Promise<HumanOrganizationRequestResult<Result>> => {
   const result = await request;
   if (result.kind !== "available") return result;
-  if (result.value === recordedRefusal) return { kind: "unavailable" };
+  if (result.value === recordedRefusal)
+    return refuseAdministration(operation, "ACCESS_ADMIN_REFUSED_BY_DATABASE", {
+      kind: "unavailable",
+    } as const);
   return { kind: "available", value: result.value as Result };
 };
 
@@ -494,8 +512,8 @@ const mapRecordedRefusal = async <Result>(
  * A preparation read that finds nothing usable is a permission-shaped refusal, so the protected
  * request runner maps it to the same neutral unavailability as a refused operation.
  */
-const preparationUnavailable = (): Error => {
-  const error = new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+const preparationUnavailable = (cause?: unknown): Error => {
+  const error = new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE", { cause });
   Object.assign(error, { code: "42501" });
   return error;
 };
@@ -510,8 +528,8 @@ const sealPreparedRoleChangeTemplates = (core: unknown): PreparedApplicationRole
     throw preparationUnavailable();
   try {
     return verifyPreparedApplicationRoleTemplates(core);
-  } catch {
-    throw preparationUnavailable();
+  } catch (error) {
+    throw preparationUnavailable(error);
   }
 };
 
@@ -528,8 +546,8 @@ const sealPreparedRoleChange = (
       candidate,
       ...(affectedAssignments === undefined ? {} : { affectedAssignments }),
     });
-  } catch {
-    throw preparationUnavailable();
+  } catch (error) {
+    throw preparationUnavailable(error);
   }
 };
 
@@ -601,14 +619,28 @@ export const createOrganizationAccessAdministrationService = (
   ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
     const command =
       changeOrganizationAdministrationRoleAuthorityCommandSchema.safeParse(commandCandidate);
-    if (!command.success) return { kind: "unavailable" };
+    if (!command.success)
+      return refuseAdministration(
+        "changeRoleAuthority",
+        "ACCESS_ADMIN_COMMAND_INVALID",
+        { kind: "unavailable" } as const,
+        command.error,
+      );
     let evidence: PreparedOrganizationRoleChange;
     try {
       evidence = verifyPreparedOrganizationRoleChangeEvidence(command.data.evidence);
-    } catch {
-      return { kind: "unavailable" };
+    } catch (error) {
+      return refuseAdministration(
+        "changeRoleAuthority",
+        "ACCESS_ADMIN_EVIDENCE_REJECTED",
+        { kind: "unavailable" } as const,
+        error,
+      );
     }
-    if (!expectedOperations.includes(evidence.candidate.operation)) return { kind: "unavailable" };
+    if (!expectedOperations.includes(evidence.candidate.operation))
+      return refuseAdministration("changeRoleAuthority", "ACCESS_ADMIN_OPERATION_NOT_EXPECTED", {
+        kind: "unavailable",
+      } as const);
     // A new role starts at revision 1; an accepted revision advances the reviewed live revision.
     const expectedLiveRevision =
       "expectedRoleRevision" in evidence.candidate
@@ -617,11 +649,17 @@ export const createOrganizationAccessAdministrationService = (
     let activityId: string;
     try {
       activityId = activityIdSchema.parse(newActivityId());
-    } catch {
-      return { kind: "temporarily_unavailable" };
+    } catch (error) {
+      return refuseAdministration(
+        "changeRoleAuthority",
+        "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+        { kind: "temporarily_unavailable" } as const,
+        error,
+      );
     }
 
     return mapRecordedRefusal(
+      "changeRoleAuthority",
       requests.runChange(session, candidate, async (transaction, scope) => {
         // The evidence names its organisation; it must be the one the request context selected.
         if (!sameId(evidence.candidate.organizationId, scope.organizationId))
@@ -664,17 +702,29 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationGroupResult>> => {
       const command =
         createOrganizationAdministrationGroupCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "createGroup",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let groupId: string;
       let activityId: string;
       try {
         groupId = groupIdSchema.parse(newGroupId());
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "createGroup",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
 
       return mapRecordedRefusal(
+        "createGroup",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const rows = await transaction.query<GroupChangeRow>`
             select outcome, organization_id, group_summary, access_version
@@ -705,15 +755,27 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationGroupResult>> => {
       const command =
         renameOrganizationAdministrationGroupCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "renameGroup",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "renameGroup",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
 
       return mapRecordedRefusal(
+        "renameGroup",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const rows = await transaction.query<GroupChangeRow>`
             select outcome, organization_id, group_summary, access_version
@@ -743,15 +805,27 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationGroupResult>> => {
       const command =
         retireOrganizationAdministrationGroupCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "retireGroup",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "retireGroup",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
 
       return mapRecordedRefusal(
+        "retireGroup",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<GroupChangeRow>`
@@ -794,17 +868,29 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         addOrganizationAdministrationMembershipCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "addGroupMembership",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let membershipId: string;
       let activityId: string;
       try {
         membershipId = membershipIdSchema.parse(newMembershipId());
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "addGroupMembership",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
 
       return mapRecordedRefusal(
+        "addGroupMembership",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<MembershipChangeRow>`
@@ -862,15 +948,27 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         removeOrganizationAdministrationMembershipCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "removeGroupMembership",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "removeGroupMembership",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
 
       return mapRecordedRefusal(
+        "removeGroupMembership",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<MembershipChangeRow>`
@@ -919,15 +1017,27 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
       const command =
         reviseOrganizationAdministrationRoleMetadataCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "reviseRoleMetadata",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "reviseRoleMetadata",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
 
       return mapRecordedRefusal(
+        "reviseRoleMetadata",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleChangeRow>`
@@ -969,15 +1079,27 @@ export const createOrganizationAccessAdministrationService = (
       commandCandidate: RetireOrganizationAdministrationRoleCommand,
     ): Promise<HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleResult>> => {
       const command = retireOrganizationAdministrationRoleCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "retireRole",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "retireRole",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
 
       return mapRecordedRefusal(
+        "retireRole",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const prepared = prepareOrganizationRoleChangeEvidence({
             candidate: {
@@ -1027,13 +1149,29 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<PreparedOrganizationRoleChange>> => {
       const command =
         prepareOrganizationAdministrationRoleChangeCommandSchema.safeParse(commandCandidate);
-      if (!command.success || command.data.acceptBroadenedAuthority !== "accept")
-        return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "prepareRoleChange",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
+      if (command.data.acceptBroadenedAuthority !== "accept")
+        return refuseAdministration(
+          "prepareRoleChange",
+          "ACCESS_ADMIN_BROADENED_AUTHORITY_NOT_ACCEPTED",
+          { kind: "unavailable" } as const,
+        );
       let roleId: OrganizationRoleChangeCandidate["roleId"];
       try {
         roleId = roleIdSchema.parse(randomUUID());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "prepareRoleChange",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
       return requests.run(session, candidate, async (transaction, scope) => {
         const preparation = {
@@ -1126,8 +1264,19 @@ export const createOrganizationAccessAdministrationService = (
         prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema.safeParse(
           commandCandidate,
         );
-      if (!command.success || command.data.acceptBroadenedAuthority !== "accept")
-        return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "prepareApplicationRoleRevisionAcceptance",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
+      if (command.data.acceptBroadenedAuthority !== "accept")
+        return refuseAdministration(
+          "prepareApplicationRoleRevisionAcceptance",
+          "ACCESS_ADMIN_BROADENED_AUTHORITY_NOT_ACCEPTED",
+          { kind: "unavailable" } as const,
+        );
       return requests.run(session, candidate, async (transaction, scope) => {
         const preparation = {
           operation: command.data.operation,
@@ -1258,16 +1407,28 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         assignOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "assignRoleAssignment",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let roleAssignmentId: string;
       let activityId: string;
       try {
         roleAssignmentId = roleAssignmentIdSchema.parse(newRoleAssignmentId());
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "assignRoleAssignment",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
       return mapRecordedRefusal(
+        "assignRoleAssignment",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleAssignmentChangeRow>`
@@ -1324,8 +1485,15 @@ export const createOrganizationAccessAdministrationService = (
       commandCandidate: OrganizationStewardshipAppointmentCommand,
     ): Promise<HumanOrganizationRequestResult<OrganizationStewardshipAppointmentAttempt>> => {
       const command = organizationStewardshipAppointmentCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "appointOrganizationSteward",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       return mapRecordedRefusal(
+        "appointOrganizationSteward",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<StewardshipAppointmentRow>`
@@ -1364,8 +1532,7 @@ export const createOrganizationAccessAdministrationService = (
           const summary = organizationStewardshipAppointmentResultSchema
             .omit({ operation: true, outcome: true, accessVersion: true })
             .safeParse(row.appointment_summary);
-          if (!summary.success)
-            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          if (!summary.success) throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
           const parsed = organizationStewardshipAppointmentResultSchema.safeParse({
             ...summary.data,
             operation: "appoint_organization_steward",
@@ -1396,14 +1563,26 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         revokeOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "revokeRoleAssignment",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "revokeRoleAssignment",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
       return mapRecordedRefusal(
+        "revokeRoleAssignment",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleAssignmentChangeRow>`
@@ -1454,14 +1633,26 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         deactivateOrganizationAdministrationRoleActivationCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "deactivateRoleActivation",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "deactivateRoleActivation",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
       return mapRecordedRefusal(
+        "deactivateRoleActivation",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleActivationChangeRow>`
@@ -1513,14 +1704,26 @@ export const createOrganizationAccessAdministrationService = (
         revokeOrganizationAdministrationDelegationAuthorityCommandSchema.safeParse(
           commandCandidate,
         );
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "revokeDelegationAuthority",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
-        return { kind: "temporarily_unavailable" };
+      } catch (error) {
+        return refuseAdministration(
+          "revokeDelegationAuthority",
+          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
+          { kind: "temporarily_unavailable" } as const,
+          error,
+        );
       }
       return mapRecordedRefusal(
+        "revokeDelegationAuthority",
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<DelegationAuthorityChangeRow>`
@@ -1589,10 +1792,8 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<UpdateOwnProfileResult | "conflict">> =>
       localAdministration.updateOwnProfile(session, candidate, commandCandidate),
 
-    readOwnProfile: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-    ) => localAdministration.readOwnProfile(session, candidate),
+    readOwnProfile: async (session: IdentitySession, candidate: OrganizationSelectionCandidate) =>
+      localAdministration.readOwnProfile(session, candidate),
 
     createOrganizationInvitation: async (
       session: IdentitySession,
@@ -1612,7 +1813,13 @@ export const createOrganizationAccessAdministrationService = (
       commandCandidate: ListOrganizationAdministrationGroupsCommand,
     ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationGroupsResult>> => {
       const command = listOrganizationAdministrationGroupsCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listGroups",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -1648,7 +1855,13 @@ export const createOrganizationAccessAdministrationService = (
       commandCandidate: ReadOrganizationAdministrationGroupCommand,
     ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationGroupResult>> => {
       const command = readOrganizationAdministrationGroupCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readGroup",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -1683,7 +1896,13 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationMembershipsResult>> => {
       const command =
         listOrganizationAdministrationMembershipsCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listGroupMemberships",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -1725,7 +1944,13 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationMembershipResult>> => {
       const command =
         readOrganizationAdministrationMembershipCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readGroupMembership",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -1760,7 +1985,13 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationPermissionsResult>> => {
       const command =
         listOrganizationAdministrationPermissionsCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listPermissions",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const after = command.data.after;
@@ -1819,7 +2050,13 @@ export const createOrganizationAccessAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationPermissionResult>> => {
       const command =
         readOrganizationAdministrationPermissionCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readPermission",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const reference = command.data.reference;
@@ -1863,7 +2100,13 @@ export const createOrganizationAccessAdministrationService = (
       commandCandidate: ListOrganizationAdministrationRolesCommand,
     ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationRolesResult>> => {
       const command = listOrganizationAdministrationRolesCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listRoles",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -1899,7 +2142,13 @@ export const createOrganizationAccessAdministrationService = (
       commandCandidate: ReadOrganizationAdministrationRoleCommand,
     ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationRoleResult>> => {
       const command = readOrganizationAdministrationRoleCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readRole",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -1941,7 +2190,13 @@ export const createOrganizationAccessAdministrationService = (
         listOrganizationAdministrationApplicationRoleTemplatesCommandSchema.safeParse(
           commandCandidate,
         );
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listApplicationRoleTemplates",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const after = command.data.after;
@@ -1998,7 +2253,13 @@ export const createOrganizationAccessAdministrationService = (
         readOrganizationAdministrationApplicationRoleTemplateCommandSchema.safeParse(
           commandCandidate,
         );
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readApplicationRoleTemplate",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const reference = command.data.reference;
@@ -2043,7 +2304,13 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         listOrganizationAdministrationRoleAssignmentsCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listRoleAssignments",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -2084,7 +2351,13 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         readOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readRoleAssignment",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -2129,7 +2402,13 @@ export const createOrganizationAccessAdministrationService = (
         listOrganizationAdministrationDelegationAuthoritiesCommandSchema.safeParse(
           commandCandidate,
         );
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listDelegationAuthorities",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -2170,7 +2449,13 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         readOrganizationAdministrationDelegationAuthorityCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readDelegationAuthority",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -2213,7 +2498,13 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         listOrganizationAdministrationRoleActivationsCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "listRoleActivations",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(
@@ -2254,7 +2545,13 @@ export const createOrganizationAccessAdministrationService = (
     > => {
       const command =
         readOrganizationAdministrationRoleActivationCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "unavailable" };
+      if (!command.success)
+        return refuseAdministration(
+          "readRoleActivation",
+          "ACCESS_ADMIN_COMMAND_INVALID",
+          { kind: "unavailable" } as const,
+          command.error,
+        );
 
       return requests.run(session, candidate, async (transaction, scope) => {
         const row = requireOne(

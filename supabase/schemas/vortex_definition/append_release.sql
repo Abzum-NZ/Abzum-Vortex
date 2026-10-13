@@ -10,7 +10,6 @@ returns table (
   release_version text,
   content_fingerprint text,
   resolution_fingerprint text,
-  comparison_fingerprint text,
   dependency_manifest jsonb,
   published_at timestamptz,
   published_by uuid
@@ -57,7 +56,6 @@ declare
   content_fingerprint_value text;
   resolution_fingerprint_value text;
   validation_contract_version_value text;
-  comparison_fingerprint_value text;
   impact_reasons_value jsonb;
   release_note_value text;
   dependency_manifest_value jsonb;
@@ -159,13 +157,13 @@ begin
       where supplied.key not in (
         'releaseVersion', 'compilationOutput', 'resolutionSnapshot', 'contentFingerprint',
         'resolutionFingerprint', 'validationContractVersion',
-        'comparisonFingerprint', 'impactReasons', 'releaseNote', 'dependencies'
+        'impactReasons', 'releaseNote', 'dependencies'
       )
     )
     or (
       select pg_catalog.count(*)
       from pg_catalog.jsonb_object_keys(p_release)
-    ) <> 10 then
+    ) <> 9 then
     raise exception using
       errcode = '22023',
       message = 'Definition release append has an invalid request shape';
@@ -177,7 +175,6 @@ begin
   content_fingerprint_value := p_release ->> 'contentFingerprint';
   resolution_fingerprint_value := p_release ->> 'resolutionFingerprint';
   validation_contract_version_value := p_release ->> 'validationContractVersion';
-  comparison_fingerprint_value := p_release ->> 'comparisonFingerprint';
   impact_reasons_value := p_release -> 'impactReasons';
   release_note_value := p_release ->> 'releaseNote';
   dependency_manifest_value := p_release -> 'dependencies';
@@ -189,7 +186,6 @@ begin
     or resolution_fingerprint_value !~ '^sha256:[a-f0-9]{64}$'
     or validation_contract_version_value !~
       '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
-    or comparison_fingerprint_value !~ '^sha256:[a-f0-9]{64}$'
     or pg_catalog.jsonb_typeof(impact_reasons_value) is distinct from 'array'
     or exists (
       select 1
@@ -232,8 +228,9 @@ begin
       message = 'Definition root does not belong to the context organization';
   end if;
 
-  if human_publication and (root_row.kind is distinct from 'application'
-    or root_row.application_origin_kind is distinct from 'ordinary') then
+  if human_publication and (root_row.kind not in ('application', 'module')
+    or (root_row.kind = 'application'
+      and root_row.application_origin_kind is distinct from 'ordinary')) then
     raise exception using errcode = '42501',
       message = 'Definition publication authority is unavailable';
   end if;
@@ -898,13 +895,13 @@ begin
     root_id, release_revision, release_version, authored_source,
     authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,
     content_fingerprint, resolution_fingerprint, validation_contract_version,
-    comparison_fingerprint, impact_reasons, release_note, published_at, published_by
+    impact_reasons, release_note, published_at, published_by
   ) values (
     p_root_id, draft_row.draft_revision, release_version_value, draft_row.draft_source,
     draft_row.source_fingerprint, draft_row.source_contract_version, compilation_output_value,
     resolution_snapshot_value,
     content_fingerprint_value, resolution_fingerprint_value, validation_contract_version_value,
-    comparison_fingerprint_value, impact_reasons_value, release_note_value, operation_at,
+    impact_reasons_value, release_note_value, operation_at,
     context_actor_id
   );
 
@@ -1045,7 +1042,6 @@ begin
     release.release_version,
     release.content_fingerprint,
     release.resolution_fingerprint,
-    release.comparison_fingerprint,
     coalesce((
       select pg_catalog.jsonb_agg(
         case dependency.dependency_kind
@@ -1097,4 +1093,4 @@ revoke execute on function vortex_definition.append_release(uuid, bigint, text, 
 grant execute on function vortex_definition.append_release(uuid, bigint, text, jsonb)
   to vortex_request;
 comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) is
-  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits ordinary human Application publication only under locked current draft/release permissions and original account attribution, then advances only its root pointer.';
+  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits ordinary human Application and Module publication only under locked current draft/release permissions and original account attribution, then advances only its root pointer.';

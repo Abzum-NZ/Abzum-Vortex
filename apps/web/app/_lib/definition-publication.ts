@@ -1,26 +1,48 @@
 import "server-only";
 
 import {
-  createHumanApplicationPublisher,
-  type HumanApplicationPublicationPreparationResult,
-  type HumanApplicationPublicationResult,
+  createHumanDefinitionPublisher,
+  type HumanDefinitionKind,
+  type HumanDefinitionPublicationDraftResult,
+  type HumanDefinitionPublicationPreparationResult,
+  type HumanDefinitionPublicationResult,
 } from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
 import { mapWebError } from "./web-error-mapper";
 
-/** Each call resolves the current human; the browser supplies only a strict command. */
-export const prepareHumanApplicationPublication = async (
-  organizationId: string, candidate: unknown,
-): Promise<HumanApplicationPublicationPreparationResult> => {
+export const loadHumanDefinitionPublicationDraft = async (
+  organizationId: string, rootId: string, definitionKind: HumanDefinitionKind,
+): Promise<HumanDefinitionPublicationDraftResult> => {
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    return await createHumanApplicationPublisher({
+    return await createHumanDefinitionPublisher({
       requests: humanOrganizationRequests(), catalogue: installedReleaseCatalogue,
-    }).prepare(resolved.session, organizationId, candidate);
+    }).readDraft(resolved.session, organizationId, rootId, definitionKind);
+  } catch (error) {
+    return mapWebError(error, {
+      route: "definition-publication",
+      operation: "read-draft",
+      code: "DEFINITION_PUBLICATION_DRAFT_READ_FAILED",
+      fallback: { kind: "temporarily_unavailable" },
+    });
+  }
+};
+
+/** Each call resolves the current human; the browser supplies only a strict command. */
+export const prepareHumanDefinitionPublication = async (
+  organizationId: string, candidate: unknown, definitionKind: HumanDefinitionKind,
+): Promise<HumanDefinitionPublicationPreparationResult> => {
+  try {
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    return await createHumanDefinitionPublisher({
+      requests: humanOrganizationRequests(), catalogue: installedReleaseCatalogue,
+    }).prepare(resolved.session, organizationId, candidate, definitionKind);
   } catch (error) {
     return mapWebError(error, {
       route: "definition-publication",
@@ -31,16 +53,16 @@ export const prepareHumanApplicationPublication = async (
   }
 };
 
-export const publishHumanApplication = async (
-  organizationId: string, candidate: unknown,
-): Promise<HumanApplicationPublicationResult> => {
+export const publishHumanDefinition = async (
+  organizationId: string, candidate: unknown, definitionKind: HumanDefinitionKind,
+): Promise<HumanDefinitionPublicationResult> => {
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-    return await createHumanApplicationPublisher({
+    return await createHumanDefinitionPublisher({
       requests: humanOrganizationRequests(), catalogue: installedReleaseCatalogue,
-    }).publish(resolved.session, organizationId, candidate);
+    }).publish(resolved.session, organizationId, candidate, definitionKind);
   } catch (error) {
     return mapWebError(error, {
       route: "definition-publication",

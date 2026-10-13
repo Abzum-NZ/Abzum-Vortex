@@ -53,6 +53,13 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Hard-coded non-nil UUIDs in SQL functions",
   },
+  "migration-owner-role": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "Forward migrations must run object DDL under an explicitly set role, not postgres, and end with reset role;",
+  },
   "versioned-export": {
     tier: "blocking",
     owner: "lead",
@@ -104,7 +111,8 @@ export const guardRules = {
     tier: "warning",
     owner: "lead",
     reviewBy: "2027-01-15",
-    description: "Silent handling of a failed safeParse result",
+    description:
+      "Silent handling of a failed safeParse result, a catch, or a refusal branch that neither logs nor rethrows",
   },
   "invalid-guard-allow": {
     tier: "blocking",
@@ -138,6 +146,7 @@ export const scannedRuleIds = new Set([
   "migration-mismatch",
   "migration-orphan",
   "function-uuid",
+  "migration-owner-role",
   "versioned-export",
   "versioned-file",
   "file-size",

@@ -48,6 +48,7 @@ import {
   sameStudioApplicationSourceImportSnapshot,
   type StudioApplicationSourceImportSnapshot,
 } from "../_lib/application-source-import";
+import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 
 type WorkspaceProps = Readonly<{
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
@@ -74,7 +75,7 @@ const inputClass = "w-full";
 const buttonClass = "";
 
 class StudioSaveError extends Error {
-  constructor(readonly code: string) {
+  constructor(readonly code: string, readonly reason?: string) {
     super(code);
     this.name = "StudioSaveError";
   }
@@ -134,9 +135,9 @@ function NewApplicationWorkspace({ organizationId }: { organizationId: string })
         setMessage("Draft created. Opening the saved workspace…");
       } else {
         setMessage(result.kind === "conflict"
-          ? "This application key already exists or the draft changed. No draft was created."
+          ? conflictMessage(result.reason, "No draft was created.")
           : result.kind === "refused"
-            ? "The source or current draft permission was refused. No draft was created."
+            ? refusalMessage(result.reason, "No draft was created.")
             : "Creation could not be verified. Your inputs are preserved; try again.");
       }
     } catch {
@@ -236,7 +237,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       }
       throw new StudioSaveError(result.kind === "conflict"
         ? "DEFINITION_DRAFT_STALE_OR_MISSING"
-        : result.kind === "refused" ? "DEFINITION_CONTEXT_REFUSED" : "STUDIO_SAVE_FAILED");
+        : result.kind === "refused" ? "DEFINITION_CONTEXT_REFUSED" : "STUDIO_SAVE_FAILED",
+        result.kind === "conflict" || result.kind === "refused" ? result.reason : undefined);
     },
   }));
   const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source }));
@@ -500,7 +502,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
           parsed.data.releaseVersion === confirmation.assignedVersion &&
           parsed.data.contentFingerprint === confirmation.contentFingerprint &&
           parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
-          parsed.data.comparisonFingerprint === confirmation.comparisonFingerprint &&
           canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
           previewGeneration.current += 1;
           setPublishedPublication(parsed.data);
@@ -614,8 +615,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     }
     provisionalSaveDraft.current = null;
     setMessage(result.kind === "saved" ? `Saved revision ${result.draftRevision}.`
-      : result.kind === "conflict" ? "The saved draft changed. Local edits are preserved. Reopen explicitly to use the current saved draft."
-        : result.kind === "refused" ? "The current draft permission or source was refused. Local edits are preserved."
+      : result.kind === "conflict" ? `${conflictMessage(result.reason, "Local edits are preserved.")} Reopen explicitly to use the current saved draft.`
+        : result.kind === "refused" ? refusalMessage(result.reason, "Local edits are preserved.")
           : result.kind === "busy" ? "A save is already in progress."
             : "The save could not be verified. Local edits are preserved; reopen or try again.");
   };

@@ -39,9 +39,6 @@ declare
   target_source_release_revision bigint;
   target_source_release_version text;
   target_source_validation_contract_version text;
-  target_source_content_fingerprint text;
-  target_source_resolution_fingerprint text;
-  target_source_catalogue_fingerprint text;
   target_accepted_registration_revision bigint;
   target_template_continuity_revision bigint;
   target_role_revision bigint;
@@ -572,14 +569,6 @@ begin
     target_source_validation_contract_version :=
       prepared_templates #>>
         '{permissionRegistration,applicationRelease,validationContractVersion}';
-    target_source_content_fingerprint :=
-      prepared_templates #>>
-        '{permissionRegistration,applicationRelease,contentFingerprint}';
-    target_source_resolution_fingerprint :=
-      prepared_templates #>>
-        '{permissionRegistration,applicationRelease,resolutionFingerprint}';
-    target_source_catalogue_fingerprint :=
-      prepared_templates #>> '{permissionRegistration,applicationCatalogueFingerprint}';
   end if;
 
   manifest := p_evidence -> 'affectedAssignmentManifest';
@@ -761,7 +750,6 @@ begin
       source_role_id, derived_application_root_id, derived_source_role_id,
       derived_source_definition_key, derived_source_release_revision,
       derived_source_release_version, derived_source_validation_contract_version,
-      derived_source_content_fingerprint, derived_source_resolution_fingerprint,
       live_revision, created_by, created_at
     ) values (
       target_organization_id, target_role_id, target_role_kind, target_role_key,
@@ -779,10 +767,6 @@ begin
         then target_source_release_version else null end,
       case when operation_name = 'create_custom_from_template'
         then target_source_validation_contract_version else null end,
-      case when operation_name = 'create_custom_from_template'
-        then target_source_content_fingerprint else null end,
-      case when operation_name = 'create_custom_from_template'
-        then target_source_resolution_fingerprint else null end,
       1, p_changed_by, operation_at
     );
 
@@ -799,9 +783,6 @@ begin
       target_source_release_revision := null;
       target_source_release_version := null;
       target_source_validation_contract_version := null;
-      target_source_content_fingerprint := null;
-      target_source_resolution_fingerprint := null;
-      target_source_catalogue_fingerprint := null;
       target_accepted_registration_revision := null;
       target_template_continuity_revision := null;
     end if;
@@ -885,9 +866,6 @@ begin
     target_source_release_version := current_revision.source_release_version;
     target_source_validation_contract_version :=
       current_revision.source_validation_contract_version;
-    target_source_content_fingerprint := current_revision.source_content_fingerprint;
-    target_source_resolution_fingerprint := current_revision.source_resolution_fingerprint;
-    target_source_catalogue_fingerprint := current_revision.source_catalogue_fingerprint;
     target_accepted_registration_revision := current_revision.accepted_registration_revision;
     target_template_continuity_revision := current_revision.template_continuity_revision;
   elsif operation_name = 'revise_custom_permissions' then
@@ -896,9 +874,6 @@ begin
     target_source_release_revision := null;
     target_source_release_version := null;
     target_source_validation_contract_version := null;
-    target_source_content_fingerprint := null;
-    target_source_resolution_fingerprint := null;
-    target_source_catalogue_fingerprint := null;
     target_accepted_registration_revision := null;
     target_template_continuity_revision := null;
   elsif operation_name = 'accept_application_role_revision' then
@@ -1000,12 +975,6 @@ begin
       target_source_release_version
     and current_revision.source_validation_contract_version is not distinct from
       target_source_validation_contract_version
-    and current_revision.source_content_fingerprint is not distinct from
-      target_source_content_fingerprint
-    and current_revision.source_resolution_fingerprint is not distinct from
-      target_source_resolution_fingerprint
-    and current_revision.source_catalogue_fingerprint is not distinct from
-      target_source_catalogue_fingerprint
     and current_revision.accepted_registration_revision is not distinct from
       target_accepted_registration_revision
     and current_revision.template_continuity_revision is not distinct from
@@ -1033,12 +1002,6 @@ begin
       or current_revision.source_release_version is distinct from target_source_release_version
       or current_revision.source_validation_contract_version is distinct from
         target_source_validation_contract_version
-      or current_revision.source_content_fingerprint is distinct from
-        target_source_content_fingerprint
-      or current_revision.source_resolution_fingerprint is distinct from
-        target_source_resolution_fingerprint
-      or current_revision.source_catalogue_fingerprint is distinct from
-        target_source_catalogue_fingerprint
       or current_revision.accepted_registration_revision is distinct from
         target_accepted_registration_revision
       or current_revision.template_continuity_revision is distinct from
@@ -1285,9 +1248,7 @@ begin
     activation_policy_id, activation_policy_revision,
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint,
-    source_catalogue_fingerprint, accepted_registration_revision,
+    source_validation_contract_version, accepted_registration_revision,
     template_continuity_revision,
     changed_by, changed_at, change_correlation_id
   ) values (
@@ -1299,9 +1260,7 @@ begin
     target_role_key, target_label,
     target_description, target_source_definition_key,
     target_source_release_revision, target_source_release_version,
-    target_source_validation_contract_version, target_source_content_fingerprint,
-    target_source_resolution_fingerprint,
-    target_source_catalogue_fingerprint, target_accepted_registration_revision,
+    target_source_validation_contract_version, target_accepted_registration_revision,
     target_template_continuity_revision,
     p_changed_by, operation_at, p_correlation_id
   );
@@ -1387,10 +1346,10 @@ begin
           'releaseRevision', revision.source_release_revision,
           'releaseVersion', revision.source_release_version,
           'validationContractVersion', revision.source_validation_contract_version,
-          'contentFingerprint', revision.source_content_fingerprint,
-          'resolutionFingerprint', revision.source_resolution_fingerprint
+          'contentFingerprint', registration.source_content_fingerprint,
+          'resolutionFingerprint', registration.source_resolution_fingerprint
         ),
-        'sourceCatalogueFingerprint', revision.source_catalogue_fingerprint,
+        'sourceCatalogueFingerprint', registration.permission_catalogue_fingerprint,
         'acceptedRegistrationRevision', revision.accepted_registration_revision,
         'templateContinuityRevision', revision.template_continuity_revision
       )
@@ -1407,9 +1366,7 @@ begin
             'releaseRevision', identity.derived_source_release_revision,
             'releaseVersion', identity.derived_source_release_version,
             'validationContractVersion',
-              identity.derived_source_validation_contract_version,
-            'contentFingerprint', identity.derived_source_content_fingerprint,
-            'resolutionFingerprint', identity.derived_source_resolution_fingerprint
+              identity.derived_source_validation_contract_version
           )
         )
       )
@@ -1421,6 +1378,11 @@ begin
     on revision.organization_id = identity.organization_id
     and revision.role_id = identity.role_id
     and revision.revision = identity.live_revision
+  left join vortex_access.permission_registration_revisions as registration
+    on registration.organization_id = revision.organization_id
+    and registration.registration_kind = revision.source_registration_kind
+    and registration.registration_owner_id = revision.application_root_id
+    and registration.revision = revision.accepted_registration_revision
   where identity.organization_id = target_organization_id
     and identity.role_id = target_role_id;
 
@@ -1471,3 +1433,5 @@ comment on function vortex_access.coordinate_role_change_without_stewardship_v1_
   jsonb, uuid, uuid
 ) is
   'Owner-only atomic seven-intent role governance composition. It verifies exact evidence and manifests, changes Access once, and grants no caller authority.';
+
+grant execute on function vortex_access.coordinate_role_change_without_stewardship_v1_internal(jsonb, uuid, uuid) to postgres;

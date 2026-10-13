@@ -199,6 +199,65 @@ for (const file of codeFiles) {
           );
       }
     }
+    // Forward migrations from #2379 on must run object DDL under an explicitly set role. Without one
+    // the migration runs as postgres, whose schema privileges are revoked after the baseline, so
+    // `supabase db reset` fails with permission denied even though a superuser proof passes. The
+    // role must be closed again with `reset role;` as the last statement, so the migration row is
+    // not recorded as the owner role.
+    const migrationTimestamp = /^\d{14}/.exec(basename(file))?.[0];
+    if (
+      file.startsWith(paths.migrations) &&
+      !baselineMigrationFiles.has(file) &&
+      migrationTimestamp !== undefined &&
+      migrationTimestamp >= "20261014002300"
+    ) {
+      // Block and `--` comments are blanked (not removed) so line numbers stay exact.
+      const code = content
+        .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "))
+        .split("\n")
+        .map((line) => line.replace(/--.*$/, (comment) => " ".repeat(comment.length)))
+        .join("\n");
+      const events = [
+        ...[
+          ...code.matchAll(
+            /\bset\s+(?:local\s+)?role\s+([\w"]+)\s*;|\breset\s+role\s*;/gi,
+          ),
+        ].map((match) => ({
+          index: match.index,
+          role: match[1]?.replace(/"/g, "").toLowerCase(),
+          ddl: false,
+        })),
+        ...[
+          ...code.matchAll(
+            /\b(?:create\s+(?:or\s+replace\s+|unique\s+)?|alter\s+|drop\s+)(?:function|table|(?:materialized\s+)?view|index|type|sequence|trigger)\b/gi,
+          ),
+        ].map((match) => ({ index: match.index, role: undefined, ddl: true })),
+      ].sort((a, b) => a.index - b.index);
+      let activeRole: string | undefined;
+      for (const event of events) {
+        if (!event.ddl) {
+          activeRole = event.role;
+          continue;
+        }
+        if (activeRole === undefined || activeRole === "postgres")
+          add(
+            "migration-owner-role",
+            file,
+            lineAt(code, event.index),
+            code.slice(event.index).replace(/\s+/g, " ").slice(0, 60).toLowerCase(),
+          );
+      }
+      // A migration that runs DDL must also close the owner role, otherwise Supabase records the
+      // migration row as that role and `supabase db reset` fails on the migrations schema.
+      const lastCode = code.trimEnd();
+      if (events.some((event) => event.ddl) && !/\breset\s+role\s*;$/i.test(lastCode))
+        add(
+          "migration-owner-role",
+          file,
+          lineAt(code, lastCode.length - 1),
+          "missing closing reset role",
+        );
+    }
     continue;
   }
   const source = ts.createSourceFile(
@@ -263,6 +322,7 @@ for (const file of codeFiles) {
       add("process-artifact", file, lineAt(content, node.getStart(source)), node.text);
     }
     if (fileArea === "platform" || fileArea === "schema") checkSilentParse(node);
+    if (fileArea === "platform" || fileArea === "web") checkSilentFailure(node);
     ts.forEachChild(node, visit);
   }
   function checkImport(specifier: string, offset: number): void {
@@ -326,6 +386,71 @@ for (const file of codeFiles) {
         return failureCondition(node.left, variable) ?? failureCondition(node.right, variable);
     }
     return undefined;
+  }
+  const refusalStatuses = new Set([
+    "refused",
+    "unavailable",
+    "temporarily_unavailable",
+    "task_refused",
+  ]);
+  function logsOrRethrows(node: ts.Node): boolean {
+    let found = false;
+    function scan(value: ts.Node): void {
+      if (ts.isThrowStatement(value)) found = true;
+      if (
+        ts.isCallExpression(value) &&
+        /(?:^(?:console|logger)\.|log|refus|fail|report|captureException|mapWebError|describe)/i.test(
+          value.expression.getText(source),
+        )
+      )
+        found = true;
+      ts.forEachChild(value, scan);
+    }
+    scan(node);
+    return found;
+  }
+  function refusalReturn(node: ts.Node): boolean {
+    let found = false;
+    function scan(value: ts.Node): void {
+      if (
+        ts.isReturnStatement(value) &&
+        value.expression &&
+        ts.isObjectLiteralExpression(value.expression) &&
+        value.expression.properties.some(
+          (property) =>
+            ts.isPropertyAssignment(property) &&
+            (property.name.getText(source) === "status" ||
+              property.name.getText(source) === "kind") &&
+            ts.isStringLiteralLike(property.initializer) &&
+            refusalStatuses.has(property.initializer.text),
+        )
+      )
+        found = true;
+      if (!ts.isFunctionLike(value)) ts.forEachChild(value, scan);
+    }
+    scan(node);
+    return found;
+  }
+  /** A catch clause or refusal branch must log its cause or rethrow it. */
+  function checkSilentFailure(node: ts.Node): void {
+    if (ts.isCatchClause(node) && !logsOrRethrows(node.block))
+      silentFindings.push({
+        file,
+        line: lineAt(content, node.getStart(source)),
+        variable: "catch",
+        branch: "catch",
+      });
+    if (
+      ts.isIfStatement(node) &&
+      refusalReturn(node.thenStatement) &&
+      !logsOrRethrows(node.thenStatement)
+    )
+      silentFindings.push({
+        file,
+        line: lineAt(content, node.getStart(source)),
+        variable: "refusal",
+        branch: "refusal",
+      });
   }
   function silentReturn(node: ts.Node): boolean {
     let hasReturn = false;
@@ -662,8 +787,7 @@ for (const file of files.filter(
     const migration = latest.get(key);
     const matchesMigration =
       migration !== undefined &&
-      migration.definition.replace(/\s+/g, " ") ===
-        value.definition.replace(/\s+/g, " ");
+      migration.definition.replace(/\s+/g, " ") === value.definition.replace(/\s+/g, " ");
     if (!matchesMigration) {
       add(
         "migration-mismatch",

@@ -16,6 +16,7 @@ import type {
   StudioModuleTextFieldSettingsResult,
 } from "../../_lib/studio-module-text-field-settings";
 import { reopenModuleTextFieldSettings, saveModuleTextFieldSettings } from "../modules/[organizationId]/[moduleRootId]/fields/actions";
+import { moduleSaveRefusal } from "./studio-refusal-messages";
 
 const inputClass = "w-full";
 const buttonClass = "";
@@ -195,8 +196,9 @@ export function ModuleTextFieldSettingsEditor({ draft, fields }: {
         setValidation(result.validation);
         setMessage("The setting could not be saved. Correct the located validation feedback; your pending value is preserved.");
       } else setMessage(result.kind === "conflict"
-        ? "The Module draft changed. Your pending value is preserved. Reopen explicitly before retrying."
-        : result.kind === "refused" ? "This save was refused. Your pending value is preserved."
+        ? (result.reason === "draft_missing" ? "The Module draft no longer exists. Your pending value is preserved."
+          : "The Module draft changed. Your pending value is preserved. Reopen explicitly before retrying.")
+        : result.kind === "refused" ? `${moduleSaveRefusal(result.reason)} Your pending value is preserved.`
           : "The save could not be verified. Your pending value is preserved.");
     } catch {
       if (isCurrent()) setMessage("The save could not be verified. Your pending value is preserved.");

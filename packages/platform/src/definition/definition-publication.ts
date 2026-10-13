@@ -116,6 +116,7 @@ export type DefinitionPublicationFailureCode =
   | "INVALID_DEFINITION_PUBLICATION_COMMAND"
   | "DEFINITION_DRAFT_STALE_OR_MISSING"
   | "DEFINITION_ORGANIZATION_MISMATCH"
+  | "DEFINITION_PUBLICATION_AUTHORITY_UNAVAILABLE"
   | "DEFINITION_SOURCE_EVIDENCE_MISMATCH"
   | "DEFINITION_HISTORY_INVALID"
   | "DEFINITION_DEPENDENCY_MISSING"
@@ -251,7 +252,6 @@ export type DefinitionReleaseAppend = Readonly<{
   draft: StoredDefinitionDraft;
   compilationOutput: PublishableCompilationOutput;
   assignedVersion: string;
-  comparisonFingerprint: string;
   reasons: DefinitionPublicationConfirmation["reasons"];
   dependencyManifest: readonly ExactDefinitionDependency[];
   resolutionSnapshot: DefinitionResolution;
@@ -1799,7 +1799,6 @@ const prepareFromReader = async (
     assignedVersion: finalImpact.assignedVersion,
     contentFingerprint: compilationOutput.artifact.contentFingerprint,
     resolutionFingerprint: compilationOutput.resolutionFingerprint,
-    comparisonFingerprint: finalImpact.comparisonFingerprint,
     dependencyManifest: manifestFor(dependencies, compilationOutput, resolution),
     reasons: finalImpact.reasons,
     ...(finalImpact.outcome === "release_required" ? { impact: finalImpact.impact } : {}),
@@ -3104,7 +3103,6 @@ export const createDefinitionPublicationService = (
         draft: recomputed.draft,
         compilationOutput: recomputed.compilationOutput,
         assignedVersion: confirmation.assignedVersion,
-        comparisonFingerprint: confirmation.comparisonFingerprint,
         reasons: confirmation.reasons,
         dependencyManifest: confirmation.dependencyManifest,
         resolutionSnapshot: recomputed.resolutionSnapshot,
@@ -3120,7 +3118,6 @@ export const createDefinitionPublicationService = (
         published.releaseVersion !== confirmation.assignedVersion ||
         published.contentFingerprint !== confirmation.contentFingerprint ||
         published.resolutionFingerprint !== confirmation.resolutionFingerprint ||
-        published.comparisonFingerprint !== confirmation.comparisonFingerprint ||
         fingerprintCanonicalValue(published.dependencyManifest) !==
           fingerprintCanonicalValue(confirmation.dependencyManifest)
       )
