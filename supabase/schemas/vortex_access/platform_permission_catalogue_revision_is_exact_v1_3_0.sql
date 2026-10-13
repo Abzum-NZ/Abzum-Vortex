@@ -1,11 +1,15 @@
-CREATE FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) RETURNS boolean
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   security_permission_id constant uuid := 'e85c2232-2ed7-4ce8-b1e5-7e2ad8e2b847';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   support_request_permission_id constant uuid := '014d2898-1969-4434-805c-eeb0f0e6f797';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   support_approve_permission_id constant uuid := '07e4653c-d358-489f-8067-46e085d99478';
   catalogue_fingerprint constant text :=
     'sha256:a434c97c26cd25dfce1e95b83f0dbfe5c5b6de739b35b2729d7f4306bc62285a';
@@ -47,8 +51,6 @@ begin
          registration.state, registration.source_definition_key,
          registration.source_version, registration.source_revision,
          registration.validation_contract_version,
-         registration.source_content_fingerprint,
-         registration.source_resolution_fingerprint,
          registration.permission_catalogue_fingerprint,
          registration.candidate_fingerprint, registration.changed_at,
          registration.changed_by, registration.change_correlation_id
@@ -56,8 +58,6 @@ begin
          history.state, history.source_definition_key,
          history.source_version, history.source_revision,
          history.validation_contract_version,
-         history.source_content_fingerprint,
-         history.source_resolution_fingerprint,
          history.permission_catalogue_fingerprint,
          history.candidate_fingerprint, history.changed_at,
          history.changed_by, history.change_correlation_id
@@ -221,6 +221,6 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) OWNER TO postgres;
+ALTER FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) OWNER TO vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) FROM PUBLIC;

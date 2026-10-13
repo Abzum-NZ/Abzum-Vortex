@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) RETURNS boolean
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
@@ -44,6 +44,11 @@ begin
     and history.registration_kind = registration.registration_kind
     and history.registration_owner_id = registration.registration_owner_id
     and history.revision = registration.revision
+  join vortex_definition.releases as release
+    on release.root_id = registration.registration_owner_id
+    and release.release_revision = registration.source_revision
+    and release.release_version = registration.source_version
+    and release.validation_contract_version = registration.validation_contract_version
   where registration.organization_id = p_organization_id
     and registration.registration_kind = 'application'
     and registration.registration_owner_id = p_application_root_id
@@ -54,8 +59,8 @@ begin
     and registration.source_revision = (release_value ->> 'releaseRevision')::bigint
     and registration.validation_contract_version =
       release_value ->> 'validationContractVersion'
-    and registration.source_content_fingerprint = release_value ->> 'contentFingerprint'
-    and registration.source_resolution_fingerprint = release_value ->> 'resolutionFingerprint'
+    and release.content_fingerprint = release_value ->> 'contentFingerprint'
+    and release.resolution_fingerprint = release_value ->> 'resolutionFingerprint'
     and registration.permission_catalogue_fingerprint =
       p_candidate ->> 'applicationCatalogueFingerprint'
     and registration.candidate_fingerprint = p_candidate ->> 'candidateFingerprint'
@@ -63,13 +68,11 @@ begin
     and row(
       registration.state, registration.source_definition_key, registration.source_version,
       registration.source_revision, registration.validation_contract_version,
-      registration.source_content_fingerprint, registration.source_resolution_fingerprint,
       registration.permission_catalogue_fingerprint, registration.candidate_fingerprint,
       registration.changed_at, registration.changed_by, registration.change_correlation_id
     ) is not distinct from row(
       history.state, history.source_definition_key, history.source_version,
       history.source_revision, history.validation_contract_version,
-      history.source_content_fingerprint, history.source_resolution_fingerprint,
       history.permission_catalogue_fingerprint, history.candidate_fingerprint,
       history.changed_at, history.changed_by, history.change_correlation_id
     );
@@ -140,6 +143,6 @@ exception
 end
 $$;
 
-ALTER FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) OWNER TO postgres;
+ALTER FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) OWNER TO vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) FROM PUBLIC;

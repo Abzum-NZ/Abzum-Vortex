@@ -247,16 +247,24 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'unavailable');
     end if;
 
-    application_release := pg_catalog.jsonb_build_object(
+    select pg_catalog.jsonb_build_object(
       'kind', 'application',
       'definitionKey', application_registration.source_definition_key,
       'rootId', application_registration.registration_owner_id,
       'releaseRevision', application_registration.source_revision,
       'releaseVersion', application_registration.source_version,
       'validationContractVersion', application_registration.validation_contract_version,
-      'contentFingerprint', application_registration.source_content_fingerprint,
-      'resolutionFingerprint', application_registration.source_resolution_fingerprint
-    );
+      'contentFingerprint', release.content_fingerprint,
+      'resolutionFingerprint', release.resolution_fingerprint
+    ) into application_release
+    from vortex_definition.releases as release
+    where release.root_id = application_registration.registration_owner_id
+      and release.release_revision = application_registration.source_revision
+      and release.release_version = application_registration.source_version
+      and release.validation_contract_version = application_registration.validation_contract_version;
+    if not found then
+      return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+    end if;
 
     -- The same entry projection and order that
     -- vortex_access.application_permission_registration_matches_candidate compares, so the stored
@@ -333,8 +341,6 @@ begin
       and release.release_revision = application_registration.source_revision
       and release.release_version = application_registration.source_version
       and release.validation_contract_version = application_registration.validation_contract_version
-      and release.content_fingerprint = application_registration.source_content_fingerprint
-      and release.resolution_fingerprint = application_registration.source_resolution_fingerprint
     cross join lateral pg_catalog.jsonb_array_elements(
       release.compilation_output #> '{canonical,content,roles}'
     ) as template(value)

@@ -53,8 +53,6 @@ begin
       and release.release_revision = registration.source_revision
       and release.release_version = registration.source_version
       and release.validation_contract_version = registration.validation_contract_version
-      and release.content_fingerprint = registration.source_content_fingerprint
-      and release.resolution_fingerprint = registration.source_resolution_fingerprint
     where registration.organization_id = scope_row.organization_id
       and release.compilation_output ->> 'kind' = 'application'
     order by root.root_id

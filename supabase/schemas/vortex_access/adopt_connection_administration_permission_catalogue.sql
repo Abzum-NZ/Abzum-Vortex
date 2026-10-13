@@ -90,17 +90,9 @@ begin
   for update;
 
   insert into vortex_access.permission_registration_revisions (
-    organization_id, registration_kind, registration_owner_id, revision,
-    state, operation, source_definition_key, source_version,
-    source_revision, validation_contract_version,
-    source_content_fingerprint, source_resolution_fingerprint,
-    permission_catalogue_fingerprint, candidate_fingerprint,
-    changed_at, changed_by, change_correlation_id
+    organization_id, registration_kind, registration_owner_id, revision, state, operation, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, candidate_fingerprint, changed_at, changed_by, change_correlation_id
   ) values (
-    p_organization_id, 'platform', platform_owner_id, 4,
-    'active', 'platform_metadata_revision', null, '1.2.0',
-    null, null, null, null, catalogue_fingerprint, catalogue_fingerprint,
-    operation_at, p_changed_by, p_correlation_id
+    p_organization_id, 'platform', platform_owner_id, 4, 'active', 'platform_metadata_revision', null, '1.2.0', null, null, catalogue_fingerprint, catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
   );
 
   insert into vortex_access.permission_catalogue_entries (
