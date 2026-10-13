@@ -127,7 +127,7 @@ begin
     end if;
     ordinal_value := (creation ->> 'ordinal')::integer;
     record_type_id_value := (creation ->> 'recordTypeId')::uuid;
-    if ordinal_value < 1 or record_type_id_value = nil_uuid
+    if ordinal_value < 0 or record_type_id_value = nil_uuid
       or ordinal_value = any (ordinals) then
       raise exception using errcode = '22023',
         message = 'Named action creation ordinal is invalid';
@@ -145,7 +145,7 @@ begin
         message = 'Named action creation result key is invalid';
     end if;
     ordinal_value := ordinal_key::integer;
-    if ordinal_value < 1 or ordinal_key is distinct from ordinal_value::text
+    if ordinal_value < 0 or ordinal_key is distinct from ordinal_value::text
       or not (ordinal_value = any (ordinals))
       or ordinal_value = any (seen_map_ordinals) then
       raise exception using errcode = '22023',

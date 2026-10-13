@@ -1689,7 +1689,7 @@ begin
       created_ordinal := (final_created_tuple ->> 'ordinal')::integer;
       created_record_id := (final_created_tuple ->> 'recordId')::uuid;
       created_concurrency_number := (final_created_tuple ->> 'concurrencyNumber')::bigint;
-      if created_ordinal < 1
+      if created_ordinal < 0
         or created_ordinal = any (seen_created_ordinals)
         or created_record_id = '00000000-0000-0000-0000-000000000000'::uuid
         or created_record_id = any (seen_created_ids)
