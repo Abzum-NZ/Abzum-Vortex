@@ -94,15 +94,19 @@ const one = <Row>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
+/** The refusal the person sees is a closed safe code; the server log keeps the real reason. */
 const safeRefusal = (
   correlationId: string,
   code: "invalid_request" | "operation_refused" | "conflict",
-): ExecuteNamedActionResult =>
-  executeNamedActionResultSchema.parse({
+  reason: string,
+): ExecuteNamedActionResult => {
+  console.error(`[named-action] refused (${code}) ${correlationId}: ${reason}`);
+  return executeNamedActionResultSchema.parse({
     contractVersion: "2.0.0",
     outcome: "refused",
     error: { code, messageKey: `errors.${code}`, correlationId },
   });
+};
 
 const completedResult = (candidate: Record<string, unknown>) => {
   const parsedRevision = revision(candidate.concurrencyNumber);
@@ -468,7 +472,7 @@ export type NamedActionRecordPortDependencies = HumanOrganizationRequestDependen
 type FlowComposition =
   | Readonly<{ kind: "composed"; composition: NamedActionComposition }>
   | Readonly<{ kind: "refused"; normalizedInputs: Readonly<Record<string, JsonValue>> }>
-  | Readonly<{ kind: "invalid" }>;
+  | Readonly<{ kind: "invalid"; reason: string }>;
 
 /**
  * Runs the named action's flow once for the prepared subject and turns what it collected into the
@@ -482,12 +486,21 @@ const composeFromFlow = (
   run: ActionFlowRunner,
 ): FlowComposition => {
   const normalizedInputs = normalizeActionInputs(prepared.action, suppliedInputs);
-  if (normalizedInputs === undefined) return { kind: "invalid" };
+  if (normalizedInputs === undefined)
+    return {
+      kind: "invalid",
+      reason: `the supplied inputs (${Object.keys(suppliedInputs).join(", ") || "none"}) do not match the inputs the action declares (${prepared.action.inputs.map((input) => `${input.key}: ${input.type}`).join(", ") || "none"})`,
+    };
   const outcome = run(actionFlowSeed(prepared, normalizedInputs, issuedAt));
   if (outcome.kind === "refused") return { kind: "refused", normalizedInputs };
-  if (outcome.kind !== "collected") return { kind: "invalid" };
+  if (outcome.kind !== "collected") return { kind: "invalid", reason: outcome.reason };
   const composition = composeFlowEffects(prepared, normalizedInputs, outcome, issuedAt);
-  return composition === undefined ? { kind: "invalid" } : { kind: "composed", composition };
+  return composition === undefined
+    ? {
+        kind: "invalid",
+        reason: "the tasks the flow collected do not compose into the installed action's tasks",
+      }
+    : { kind: "composed", composition };
 };
 
 /**
@@ -535,29 +548,45 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             if (preview.outcome === "refused_recorded") return recordedRefusal;
             if (preview.outcome === "conflict")
               return preview.correlationId
-                ? safeRefusal(preview.correlationId, "conflict")
+                ? safeRefusal(
+                    preview.correlationId,
+                    "conflict",
+                    "the subject record's revision moved before the preview",
+                  )
                 : recordedRefusal;
             if (preview.outcome === "permission_refused") {
               const denied = await prepare(transaction, command.data, activityId, false);
               return denied.outcome === "refused_recorded"
                 ? recordedRefusal
                 : "correlationId" in denied && denied.correlationId
-                  ? safeRefusal(denied.correlationId, "operation_refused")
+                  ? safeRefusal(
+                      denied.correlationId,
+                      "operation_refused",
+                      "the action's permission was not granted for the subject record",
+                    )
                   : recordedRefusal;
             }
             if (preview.outcome !== "previewed")
               return preview.correlationId
-                ? safeRefusal(preview.correlationId, "operation_refused")
+                ? safeRefusal(
+                    preview.correlationId,
+                    "operation_refused",
+                    `the preview was ${preview.outcome}, not previewed`,
+                  )
                 : recordedRefusal;
             const previewRun = composeFromFlow(preview, command.data.inputs, issuedAt, run);
             if (previewRun.kind === "invalid")
-              return safeRefusal(preview.correlationId, "invalid_request");
+              return safeRefusal(preview.correlationId, "invalid_request", previewRun.reason);
             const previewInputs =
               previewRun.kind === "composed"
                 ? previewRun.composition.normalizedInputs
                 : previewRun.normalizedInputs;
             if (!(await validateReferenceInputs(transaction, command.data, previewInputs)))
-              return safeRefusal(preview.correlationId, "operation_refused");
+              return safeRefusal(
+                preview.correlationId,
+                "operation_refused",
+                "a record reference input does not name a record the action may use",
+              );
 
             // A refused precondition writes nothing, so it has no totals to prepare.
             const totalPreparation: RelationshipTotalPreparationOutcome =
@@ -573,31 +602,51 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             if (totalPreparation.outcome === "restart") return restart;
             if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
             if (totalPreparation.outcome === "conflict")
-              return safeRefusal(preview.correlationId, "conflict");
+              return safeRefusal(
+                preview.correlationId,
+                "conflict",
+                "the relationship totals preparation found a revision conflict",
+              );
             if (totalPreparation.outcome === "refused")
-              return safeRefusal(preview.correlationId, "operation_refused");
+              return safeRefusal(
+                preview.correlationId,
+                "operation_refused",
+                "the relationship totals preparation refused the change",
+              );
 
             const prepared = await prepare(transaction, command.data, activityId, false);
             if (prepared.outcome === "completed") return prepared.result;
             if (prepared.outcome === "refused_recorded") return recordedRefusal;
             if (prepared.outcome === "conflict")
               return prepared.correlationId
-                ? safeRefusal(prepared.correlationId, "conflict")
+                ? safeRefusal(
+                    prepared.correlationId,
+                    "conflict",
+                    "the subject record's revision moved before the locked preparation",
+                  )
                 : recordedRefusal;
             if (prepared.outcome !== "prepared")
               return prepared.correlationId
-                ? safeRefusal(prepared.correlationId, "operation_refused")
+                ? safeRefusal(
+                    prepared.correlationId,
+                    "operation_refused",
+                    `the locked preparation was ${prepared.outcome}, not prepared`,
+                  )
                 : recordedRefusal;
             const preparedRun = composeFromFlow(prepared, command.data.inputs, issuedAt, run);
             if (preparedRun.kind === "invalid")
-              return safeRefusal(prepared.correlationId, "invalid_request");
+              return safeRefusal(prepared.correlationId, "invalid_request", preparedRun.reason);
             // The record moved between the preview and the locked preparation: run again.
             if (preparedRun.kind !== previewRun.kind) return restart;
             if (preparedRun.kind === "refused") {
               const refusal = await refusePrecondition(transaction, command.data, activityId);
               return refusal.outcome === "refused_recorded"
                 ? recordedRefusal
-                : safeRefusal(prepared.correlationId, "operation_refused");
+                : safeRefusal(
+                    prepared.correlationId,
+                    "operation_refused",
+                    "the action's precondition refused the subject record",
+                  );
             }
             const composition = preparedRun.composition;
             const previewComposition = (
@@ -632,7 +681,11 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 (ruleSet.rules.length > 0 &&
                   (composition.creations.length > 0 || composition.relationshipCopies.length > 0))
               )
-                return safeRefusal(prepared.correlationId, "operation_refused");
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "the before-save rules cannot cover the relationship copies or creations this action writes",
+                );
               if (Object.keys(composition.submittedValues).length > 0)
                 attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
             }
@@ -700,13 +753,21 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 !calculated.success ||
                 (totalPreparation.outcome === "prepared" && root === undefined)
               )
-                return safeRefusal(prepared.correlationId, "operation_refused");
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "the subject values the action writes did not calculate",
+                );
               if (
                 calculated.pendingChecks.some(
                   (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
                 )
               )
-                return safeRefusal(prepared.correlationId, "operation_refused");
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "a pending check on the subject values is not authorised",
+                );
               if (
                 "creationPendingChecks" in calculated &&
                 Object.values(calculated.creationPendingChecks).some((checks) =>
@@ -716,7 +777,11 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                   ),
                 )
               )
-                return safeRefusal(prepared.correlationId, "operation_refused");
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "a pending check on a created record is not authorised",
+                );
               finalValues =
                 "sourceFinalValues" in calculated
                   ? { ...calculated.sourceFinalValues }
@@ -747,7 +812,11 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       settings?.timeZone,
                     );
               if (createdFinalValues === undefined)
-                return safeRefusal(prepared.correlationId, "operation_refused");
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "a record the action creates did not calculate",
+                );
               // `values` stays the composed authored field map, which the
               // database re-derives from the installed action; `finalValues`
               // adds the generated fields the evaluator produced, exactly as
@@ -786,11 +855,16 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             if (stored.outcome === "restart") return restart;
             if (stored.outcome === "refused_recorded") return recordedRefusal;
             if (stored.outcome === "conflict")
-              return safeRefusal(prepared.correlationId, "conflict");
+              return safeRefusal(
+                prepared.correlationId,
+                "conflict",
+                "the record changes were refused for a revision conflict",
+              );
             if (stored.outcome !== "saved" && stored.outcome !== "completed")
               return safeRefusal(
                 prepared.correlationId,
                 stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
+                `the record changes were ${String(stored.outcome)} (${String(stored.reasonCode ?? "no reason code")})`,
               );
             const storedResult = completedResult(stored);
             // A writer replay means this command already completed, its delete
@@ -851,6 +925,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             value: safeRefusal(
               refused.correlationId,
               refused.outcome === "conflict" ? "conflict" : "operation_refused",
+              `the subject delete was ${refused.outcome}`,
             ),
           };
         }
