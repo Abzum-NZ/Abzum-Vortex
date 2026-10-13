@@ -199,6 +199,33 @@ for (const file of codeFiles) {
           );
       }
     }
+    // Forward migrations from #2379 on must switch to the owner role before their first DDL, or
+    // `supabase db reset` fails with permission denied for schema, even though a superuser proof passes.
+    const migrationTimestamp = /^\d{14}/.exec(basename(file))?.[0];
+    if (
+      file.startsWith(paths.migrations) &&
+      !baselineMigrationFiles.has(file) &&
+      migrationTimestamp !== undefined &&
+      migrationTimestamp >= "20261014002300"
+    ) {
+      // Comment lines are blanked (not removed) so line numbers stay exact.
+      const code = content
+        .split("\n")
+        .map((line) => (line.trimStart().startsWith("--") ? "" : line))
+        .join("\n");
+      const firstDdl =
+        /\b(create\s+(or\s+replace\s+)?(function|table)|alter\s+(function|table)|drop\s+(function|table))\b/i.exec(
+          code,
+        );
+      const ownerRole = /\bset\s+local\s+role\s+vortex_owner\s*;/i.exec(code);
+      if (firstDdl && (!ownerRole || ownerRole.index > firstDdl.index))
+        add(
+          "migration-owner-role",
+          file,
+          lineAt(code, firstDdl.index),
+          code.slice(firstDdl.index).replace(/\s+/g, " ").slice(0, 60).toLowerCase(),
+        );
+    }
     continue;
   }
   const source = ts.createSourceFile(

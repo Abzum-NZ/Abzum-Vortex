@@ -53,6 +53,12 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Hard-coded non-nil UUIDs in SQL functions",
   },
+  "migration-owner-role": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description: "Forward migrations with function or table DDL must set the owner role first",
+  },
   "versioned-export": {
     tier: "blocking",
     owner: "lead",
@@ -138,6 +144,7 @@ export const scannedRuleIds = new Set([
   "migration-mismatch",
   "migration-orphan",
   "function-uuid",
+  "migration-owner-role",
   "versioned-export",
   "versioned-file",
   "file-size",
