@@ -32,7 +32,7 @@ import {
 import type {
   KestraFlowRegistrationCommand,
   KestraFlowRegistrationResult,
-} from "./flow-registration-repository";
+} from "./flow-registration";
 import { workflowServiceKestraInstanceKind } from "./kestra-instance";
 
 /**

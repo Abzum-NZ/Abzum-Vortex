@@ -28,7 +28,7 @@ import {
   retainedRunAuthoritySchema,
   type VerifiedDurableActorContext,
 } from "./durable-actor-context";
-import { protectedRunRegisteredReleaseSchema } from "./flow-registration-repository";
+import { protectedRunRegisteredReleaseSchema } from "./flow-registration";
 
 const maximumCallbackAttempts = 5;
 const callbackRetryDelayMs = 1_000;
