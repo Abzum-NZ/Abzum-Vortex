@@ -1,20 +1,37 @@
-import { applicationContentSchema, applicationVersionImpactRequestSchema, moduleContentSchema, moduleVersionImpactRequestSchema, unresolvedRecordTypeReferencePaths, definitionVersionImpactRequestSchema, definitionVersionImpactResultSchema, stableDefinitionReleaseVersionSchema, type DefinitionPublicationHistoryEvidence, type DefinitionVersionImpactRequest, type DefinitionVersionImpactResult, type DefinitionVersionSubject, type ApplicationVersionImpactRequest, type ModuleVersionImpactRequest, type PublishedApplicationDefinition, type VersionImpact } from "../schema";
+import {
+  applicationContentSchema,
+  applicationVersionImpactRequestSchema,
+  moduleContentSchema,
+  moduleVersionImpactRequestSchema,
+  unresolvedRecordTypeReferencePaths,
+  definitionVersionImpactRequestSchema,
+  definitionVersionImpactResultSchema,
+  stableDefinitionReleaseVersionSchema,
+  type DefinitionPublicationHistoryEvidence,
+  type DefinitionVersionImpactRequest,
+  type DefinitionVersionImpactResult,
+  type DefinitionVersionSubject,
+  type ApplicationVersionImpactRequest,
+  type ModuleVersionImpactRequest,
+  type PublishedApplicationDefinition,
+  type VersionImpact,
+} from "../schema";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertUnambiguousApplicationContent,
-  assertUnambiguousModuleContent,
   compareApplicationContents,
-  compareModuleContents,
   normaliseApplicationContent,
+} from "./comparison-policy/application-contents";
+import { compareModuleContents } from "./comparison-policy/module-contents";
+import {
+  assertUnambiguousModuleContent,
   normaliseModuleContent,
-} from "./comparison-policy";
+} from "./comparison-policy/normalisation";
 import { assignNextDefinitionVersion, compareStableVersions } from "./semantic-version";
 import { refuseVersionImpact } from "./version-impact-error";
 
 type SupportedVersionImpactRequest =
-  | DefinitionVersionImpactRequest
-  | ApplicationVersionImpactRequest
-  | ModuleVersionImpactRequest;
+  DefinitionVersionImpactRequest | ApplicationVersionImpactRequest | ModuleVersionImpactRequest;
 
 type HistoryRelease = SupportedVersionImpactRequest["history"][number];
 
@@ -251,4 +268,3 @@ export const compareDefinitionVersionImpactWithEvidence = (
     evidence,
   );
 };
-
