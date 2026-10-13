@@ -4,10 +4,8 @@ import { createHash } from "node:crypto";
 import {
   createBuilderAuthority,
   prepareApplicationRoleTemplatesForHumanRequest,
-  requireBuilderAuthority,
   runOrganizationAccessOperation,
   type BuilderOperation,
-  type BuilderConferredPermission,
   type HumanOrganizationRequestResult,
 } from "@vortex/platform/server";
 import {
@@ -17,20 +15,13 @@ import {
 } from "@vortex/platform/server";
 import {
   canonicalJson,
-  databaseTimestamp,
   describeFailure,
-  moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
   organizationAccessDecisionSchema,
   organizationAccessDeclarationSchema,
-  projectLiveApplicationRolePermissions,
   organizationIdSchema,
-  organizationPermissionEligibilitySchema,
-  protectedOperationChannelSchema,
   sameId,
-  sessionContextSchema,
   systemApplicationBoundReleaseSetResultSchema,
-  timestampSchema,
   workflowIdSchema,
   type ActiveApplicationInstallationEvidence,
   type IdentitySession,
@@ -42,12 +33,32 @@ import {
   type RecordTypeLifecyclePolicy,
   type StorageContractId,
   type SelectedOrganizationScope,
-  type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
 import {
   InstallationArchiveConnectionError,
+  InstallationProblem,
   ProvisionedSetupError,
+  firstInstallConferredPermissions,
+  installationOperation,
+  installationPermissionDeclaration,
+  installationProblem,
+  installationTargetFacts,
+  readBuilderOperationDeadlines,
+  readInstallationAuthorityDeadlines,
+  readInstallationBindings,
+  readInstallationDatabaseTime,
+  readInstallationHumanContext,
+  readInstallationOrdinaryRoot,
+  readInstallationPermissionDeadline,
+  readInstallationReleaseSet,
+  releaseSetModuleTuples,
+  requireInstallationAuthority,
+  sameActiveBindings,
+  sortedBindingTuples,
+  type InstallationBindings,
+  type InstallationHumanContext,
+  type InstallationProblemShape,
   assertProvisionedSetupMatchesInstallation,
   initialLifecyclePolicyMatches,
   readProvisionedLifecycleSetup,
@@ -58,21 +69,18 @@ import {
   readInstallationArchiveConnectionOptions,
   readSelectedInstallationArchiveConnection,
 } from "@vortex/platform/server";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
+import type { RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
-  builderRecentAuthentication,
   createDatabaseApplicationBoundReleaseSetService,
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabaseFirstInstallApplicationReleaseSetService,
   createDatabasePreparedInstallationRuntimeSourceService,
-  deriveBuilderRequirements,
   readApplicationDefinitionDraft,
   resolveModuleContributions,
 } from "@vortex/platform/server";
 import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
 import { createRecordTypeLifecyclePolicyService } from "@vortex/platform/server";
-import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
-import { z } from "zod";
+import type { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue, releaseSetContainsCustomComponents } from "./definition-catalogue";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
@@ -113,7 +121,7 @@ import {
 import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 
-type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
+type HumanContext = InstallationHumanContext;
 type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRoleTemplatesForHumanRequest>;
 type ReleaseIdentityInput = Readonly<{
   releaseRevision: number;
@@ -123,16 +131,6 @@ type ReleaseIdentityInput = Readonly<{
   resolutionFingerprint: string;
 }>;
 
-const installationBindingsSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    applicationRootId: studioApplicationInstallationSelectorSchema.shape.rootId,
-    registeredReleaseRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
-  })
-  .strict();
-
-type InstallationBindings = z.infer<typeof installationBindingsSchema>;
 type ReadState = Readonly<{
   active: ActiveApplicationInstallationEvidence;
   activeReleaseSet: SystemApplicationBoundReleaseSetResult;
@@ -145,21 +143,10 @@ type AuthorizedState = Readonly<{
   checkedAt: string;
 }>;
 
-type Problem = Readonly<{
-  kind: "conflict" | "refused" | "authentication_required" | "temporarily_unavailable" | "failed";
-  unavailableReason?: "not_installed" | "not_newer" | "module_set_changed" |
-    "installation_incomplete" | "registration_misaligned" | "unsupported_root";
-}>;
-
-class InstallationProblem extends Error {
-  constructor(readonly problem: Problem) {
-    super(problem.kind);
-    this.name = "InstallationProblem";
-  }
-}
+type Problem = InstallationProblemShape;
 
 function problem(kind: Problem["kind"], unavailableReason?: Problem["unavailableReason"]): never {
-  throw new InstallationProblem({ kind, ...(unavailableReason === undefined ? {} : { unavailableReason }) });
+  return installationProblem(unavailableReason ?? kind, kind, unavailableReason);
 }
 
 const safeFailure = (error: unknown): Problem => {
@@ -216,183 +203,6 @@ const exactSession = async (): Promise<IdentitySession | undefined> => {
 
 const sameUuid = (left: string, right: string): boolean => sameId(left, right);
 
-const databaseNow = async (transaction: RequestDatabaseTransaction): Promise<string> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select pg_catalog.clock_timestamp() as checked_at
-  `;
-  const parsed = timestampSchema.safeParse(databaseTimestamp(rows[0]?.checked_at));
-  if (rows.length !== 1 || !parsed.success) problem("temporarily_unavailable");
-  return parsed.data;
-};
-
-const readHumanContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-  expected: Readonly<{ organizationId: string; applicationRootId?: string }>,
-): Promise<HumanContext> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_access.validated_human_request_context() as request_context,
-      pg_catalog.clock_timestamp() as checked_at
-  `;
-  const row = rows[0];
-  const transport = z.record(z.string(), z.unknown()).safeParse(row?.request_context);
-  if (rows.length !== 1 || !transport.success) problem("refused");
-  const { channel: rawChannel, ...sessionContext } = transport.data;
-  const channel = protectedOperationChannelSchema.safeParse(rawChannel);
-  if (!channel.success || channel.data !== "web") problem("refused");
-  const parsed = sessionContextSchema.safeParse(sessionContext);
-  const clock = timestampSchema.safeParse(databaseTimestamp(row?.checked_at));
-  if (!parsed.success || parsed.data.callerKind !== "human" || !clock.success) problem("refused");
-  const context = parsed.data;
-  const now = Date.parse(clock.data);
-  const appScopeMatches = expected.applicationRootId === undefined
-    ? scope.applicationRootId === undefined && context.applicationRootId === undefined
-    : scope.applicationRootId !== undefined && context.applicationRootId !== undefined &&
-      sameUuid(scope.applicationRootId, expected.applicationRootId) &&
-      sameUuid(context.applicationRootId, expected.applicationRootId);
-  if (!appScopeMatches ||
-    !sameUuid(scope.organizationId, expected.organizationId) ||
-    !sameUuid(context.tenantId, scope.tenantId) ||
-    !sameUuid(context.organizationId, scope.organizationId) ||
-    !sameUuid(context.organizationAccountId, scope.organizationAccountId) ||
-    context.accessVersion !== scope.accessVersion ||
-    !sameUuid(context.identityId, session.identityId) ||
-    !sameUuid(context.sessionId, session.sessionId) ||
-    context.authenticationStrength !== session.authenticationStrength ||
-    context.issuedAt !== issuedAt || context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !== (session.primaryAuthenticatedAt !== undefined ||
-      session.multiFactorAuthenticatedAt !== undefined ? session.accessTokenIssuedAt : undefined) ||
-    context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-    context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
-    context.delegatedContext !== undefined || context.supportContext !== undefined ||
-    Date.parse(context.issuedAt) > now || Date.parse(context.expiresAt) <= now ||
-    Date.parse(context.issuedAt) >= Date.parse(context.expiresAt))
-    problem("refused");
-  return context;
-};
-
-const readOrdinaryRoot = async (
-  transaction: RequestDatabaseTransaction,
-  rootId: string,
-): Promise<Readonly<{ isSystemApplication: false }>> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  if (rows.length !== 1 || rows[0]?.outcome !== "available") problem("refused", "unsupported_root");
-  if (rows[0]?.application_origin_kind !== "ordinary") problem("refused", "unsupported_root");
-  return { isSystemApplication: false };
-};
-
-const targetFacts = async (
-  transaction: RequestDatabaseTransaction,
-  _scope: SelectedOrganizationScope,
-  rootId: string | undefined,
-) => {
-  if (rootId === undefined) problem("refused", "unsupported_root");
-  return readOrdinaryRoot(transaction, rootId);
-};
-
-const permissionDeclaration = (key: string, requiresRecentAuthentication = false) => {
-  const permission = platformPermissionDeclarations.find((entry) => entry.key === key);
-  if (permission === undefined) problem("temporarily_unavailable");
-  return organizationAccessDeclarationSchema.parse({
-    operationKey: key,
-    action: { actionKind: permission.actionKind },
-    target: { kind: "organization" },
-    requiredPermission: {
-      ownerKind: "platform",
-      ownerId: platformPermissionOwnerId,
-      permissionId: permission.permissionId,
-    },
-    recentAuthentication: requiresRecentAuthentication
-      ? builderRecentAuthentication
-      : { kind: "none" },
-    authority: { kind: "permission" },
-  });
-};
-
-const readPermissionDeadline = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  context: HumanContext,
-  key: string,
-  requiresRecentAuthentication = false,
-): Promise<string> => {
-  const decision = await runOrganizationAccessOperation(
-    transaction,
-    scope,
-    permissionDeclaration(key, requiresRecentAuthentication),
-    async (allowed) => allowed,
-  );
-  if (decision.outcome !== "completed")
-    problem(decision.reasonCode === "authentication_required" ? "authentication_required" : "refused");
-  const parsed = organizationPermissionEligibilitySchema.safeParse({
-    ...decision.value,
-    outcome: "eligible",
-  });
-  if (!parsed.success || parsed.data.outcome !== "eligible") problem("refused");
-  if (parsed.data.target.kind !== "organization" ||
-    !sameUuid(parsed.data.organizationId, context.organizationId) ||
-    !sameUuid(parsed.data.organizationAccountId, context.organizationAccountId) ||
-    parsed.data.accessVersion !== context.accessVersion ||
-    !sameUuid(parsed.data.correlationId, context.correlationId) ||
-    Date.parse(parsed.data.checkedAt) > Date.parse(parsed.data.validUntil)) problem("refused");
-  return parsed.data.validUntil;
-};
-
-const requireAuthority = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  operation: BuilderOperation,
-): Promise<void> => {
-  const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
-  await requireBuilderAuthority(authority, operation).catch((error: unknown) => {
-    if (error instanceof Error && "code" in error &&
-      String((error as { readonly code?: unknown }).code) === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")
-      problem("authentication_required");
-    problem("refused");
-  });
-};
-
-const readReleaseSet = async (
-  transaction: RequestDatabaseTransaction,
-  rootId: string,
-  releaseRevision: number,
-  organizationId: string,
-  correlationId: string,
-): Promise<SystemApplicationBoundReleaseSetResult> => {
-  let candidate: unknown;
-  try {
-    candidate = await createDatabaseApplicationReleaseAdoptionReleaseSetService(
-      installedReleaseCatalogue,
-      transaction,
-    ).read({ applicationRootId: rootId, applicationReleaseRevision: releaseRevision });
-  } catch (error) {
-    if (!(error instanceof DefinitionError) || error.code === "DEFINITION_READ_FAILED")
-      problem("temporarily_unavailable");
-    problem("refused");
-  }
-  const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
-  if (!parsed.success || parsed.data.modules.length === 0 ||
-    parsed.data.application.kind !== "application" ||
-    !sameUuid(parsed.data.application.organizationId, organizationId) ||
-    !sameUuid(parsed.data.application.rootId, rootId) ||
-    parsed.data.application.releaseRevision !== releaseRevision ||
-    !sameUuid(parsed.data.application.correlationId, correlationId))
-    problem("refused");
-  const roots = new Set<string>();
-  for (const module of parsed.data.modules) {
-    if (!sameUuid(module.organizationId, organizationId) ||
-      !sameUuid(module.correlationId, correlationId) || roots.has(module.rootId.toLowerCase()))
-      problem("refused");
-    roots.add(module.rootId.toLowerCase());
-  }
-  return parsed.data;
-};
-
 const releaseIdentity = (release: ReleaseIdentityInput): StudioApplicationInstallationReleaseIdentity => {
   const parsed = studioApplicationInstallationReleaseIdentitySchema.safeParse({
     releaseRevision: release.releaseRevision,
@@ -405,63 +215,17 @@ const releaseIdentity = (release: ReleaseIdentityInput): StudioApplicationInstal
   return parsed.data;
 };
 
-const releaseSetModuleTuples = (releaseSet: SystemApplicationBoundReleaseSetResult): readonly unknown[][] =>
-  releaseSet.modules.map((module) => [
-    module.organizationId.toLowerCase(),
-    module.rootId.toLowerCase(),
-    module.definitionKey,
-    module.releaseRevision,
-    module.releaseVersion,
-    module.validationContractVersion,
-    module.contentFingerprint,
-    module.resolutionFingerprint,
-  ]).sort((left, right) => String(left[1]) < String(right[1]) ? -1 :
-    String(left[1]) > String(right[1]) ? 1 : 0);
-
-const bindingTuple = (binding: ModuleInstallationBindingEvidence): readonly unknown[] => [
-  binding.organizationId.toLowerCase(),
-  binding.applicationRootId.toLowerCase(),
-  binding.moduleRootId.toLowerCase(),
-  binding.bindingRevision,
-  binding.applicationReleaseRevision,
-  binding.moduleReleaseRevision,
-  binding.state,
-];
-
-const sortedBindingTuples = (
-  bindings: readonly ModuleInstallationBindingEvidence[],
-): readonly (readonly unknown[])[] => bindings.map(bindingTuple)
-  .sort((left, right) => {
-    const leftKey = JSON.stringify(left);
-    const rightKey = JSON.stringify(right);
-    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-  });
-
 const fingerprint = (domain: string, value: unknown): string =>
   `sha256:${createHash("sha256").update(JSON.stringify([domain, value]), "utf8").digest("hex")}`;
 
 const same = (left: unknown, right: unknown): boolean => canonicalJson(left) === canonicalJson(right);
-
-const readInstallationBindings = async (
-  transaction: RequestDatabaseTransaction,
-  rootId: string,
-): Promise<InstallationBindings> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_definition.read_application_installation_bindings(${rootId}::uuid) as bindings
-  `;
-  if (rows.length !== 1) problem("refused", "installation_incomplete");
-  const parsed = installationBindingsSchema.safeParse(rows[0]?.bindings);
-  if (!parsed.success || !sameUuid(parsed.data.applicationRootId, rootId))
-    problem("refused", "installation_incomplete");
-  return parsed.data;
-};
 
 const readCurrentState = async (
   transaction: RequestDatabaseTransaction,
   selector: StudioApplicationInstallationSelector,
   context: HumanContext,
 ): Promise<ReadState> => {
-  await readOrdinaryRoot(transaction, selector.rootId);
+  await readInstallationOrdinaryRoot(transaction, selector.rootId);
   let active: ActiveApplicationInstallationEvidence;
   try {
     active = await createActiveApplicationInstallationRepository(transaction).readCurrent();
@@ -496,15 +260,15 @@ const readCurrentState = async (
     problem("refused", bindings.registeredReleaseRevision !== active.applicationReleaseRevision
       ? "registration_misaligned" : "installation_incomplete");
 
-  const activeReleaseSet = await readReleaseSet(
-    transaction,
+  const activeReleaseSet = await readInstallationReleaseSet(
+    transaction, installedReleaseCatalogue,
     selector.rootId,
     active.applicationReleaseRevision,
     selector.organizationId,
     context.correlationId,
   );
-  const selectedReleaseSet = await readReleaseSet(
-    transaction,
+  const selectedReleaseSet = await readInstallationReleaseSet(
+    transaction, installedReleaseCatalogue,
     selector.rootId,
     selector.releaseRevision,
     selector.organizationId,
@@ -570,150 +334,6 @@ const assertStateEligible = (
   if (!sameModules) problem("refused", "module_set_changed");
 };
 
-const installOperation = (
-  rootId: string,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-) => ({
-  kind: "installation" as const,
-  applicationRootId: rootId,
-  change: "install_or_upgrade" as const,
-  containsCustomComponents: releaseSetContainsCustomComponents(releaseSet),
-  acceptedPermissions: [],
-});
-
-const readInstallationAuthorityDeadlines = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  context: HumanContext,
-  rootId: string,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-): Promise<readonly string[]> => {
-  const operation = installOperation(rootId, releaseSet);
-  const facts = await targetFacts(transaction, scope, rootId);
-  const requirements = deriveBuilderRequirements(operation, facts);
-  if (requirements.refused || requirements.permissionKeys.length === 0 ||
-    requirements.delegatedPermissions.length !== 0) problem("refused");
-
-  const deadlines: string[] = [];
-  for (const [index, key] of requirements.permissionKeys.entries()) {
-    deadlines.push(await readPermissionDeadline(
-      transaction,
-      scope,
-      context,
-      key,
-      requirements.recentAuthentication && index === 0,
-    ));
-  }
-  return deadlines;
-};
-
-const firstInstallConferredPermissions = (
-  prepared: PreparedFirstInstallRegistration,
-): readonly BuilderConferredPermission[] => {
-  const permissions = new Map<string, BuilderConferredPermission>();
-  for (const template of prepared.templates) {
-    for (const entry of [
-      ...projectLiveApplicationRolePermissions(
-        template.template.permissionSelection,
-        prepared.permissionRegistration.applicationRootId,
-        template.sourcePermissions,
-      ),
-      ...template.livePermissions,
-    ]) {
-      const permission: BuilderConferredPermission = {
-        applicationRootId: String(entry.applicationRootId),
-        ownerKind: entry.ownerKind,
-        ownerId: String(entry.ownerId),
-        permissionId: String(entry.permission.permissionId),
-      };
-      permissions.set([
-        permission.applicationRootId,
-        permission.ownerKind,
-        permission.ownerId,
-        permission.permissionId,
-      ].join(":").toLowerCase(), permission);
-    }
-  }
-  return [...permissions.values()];
-};
-
-const readBuilderOperationDeadlines = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  context: HumanContext,
-  operation: BuilderOperation,
-): Promise<readonly string[]> => {
-  const facts = await targetFacts(transaction, scope,
-    operation.kind === "installation" ? operation.applicationRootId : operation.rootId);
-  const requirements = deriveBuilderRequirements(operation, facts);
-  if (requirements.refused || requirements.permissionKeys.length === 0) problem("refused");
-
-  const deadlines: string[] = [];
-  for (const [index, key] of requirements.permissionKeys.entries()) {
-    deadlines.push(await readPermissionDeadline(
-      transaction,
-      scope,
-      context,
-      key,
-      requirements.recentAuthentication && index === 0,
-    ));
-  }
-
-  if (requirements.delegatedPermissions.length > 0) {
-    const applications = platformPermissionDeclarations.find(
-      (entry) => entry.key === "platform.organization.applications.manage",
-    );
-    if (applications === undefined) problem("temporarily_unavailable");
-    const decision = await runOrganizationAccessOperation(
-      transaction,
-      scope,
-      organizationAccessDeclarationSchema.parse({
-        operationKey: "platform.organization.application_role_templates.accept",
-        action: { actionKind: applications.actionKind },
-        target: { kind: "organization" },
-        requiredPermission: {
-          ownerKind: "platform",
-          ownerId: platformPermissionOwnerId,
-          permissionId: applications.permissionId,
-        },
-        recentAuthentication: requirements.recentAuthentication
-          ? builderRecentAuthentication
-          : { kind: "none" },
-        authority: {
-          kind: "delegated_management",
-          before: { kind: "none" },
-          after: {
-            kind: "bounded",
-            permissions: requirements.delegatedPermissions.map((permission) => ({
-              applicationRootId: permission.applicationRootId.toLowerCase(),
-              ownerKind: permission.ownerKind,
-              ownerId: permission.ownerId.toLowerCase(),
-              permissionId: permission.permissionId.toLowerCase(),
-            })),
-          },
-        },
-      }),
-      async (allowed) => allowed,
-    );
-    if (decision.outcome !== "completed")
-      problem(decision.reasonCode === "authentication_required" ? "authentication_required" : "refused");
-    const eligibility = organizationPermissionEligibilitySchema.safeParse({
-      ...decision.value,
-      outcome: "eligible",
-    });
-    if (!eligibility.success || eligibility.data.outcome !== "eligible" ||
-      eligibility.data.target.kind !== "organization" ||
-      !sameUuid(eligibility.data.organizationId, context.organizationId) ||
-      !sameUuid(eligibility.data.organizationAccountId, context.organizationAccountId) ||
-      eligibility.data.accessVersion !== context.accessVersion ||
-      !sameUuid(eligibility.data.correlationId, context.correlationId) ||
-      Date.parse(eligibility.data.checkedAt) > Date.parse(eligibility.data.validUntil))
-      problem("refused");
-    deadlines.push(eligibility.data.validUntil);
-  }
-  return deadlines;
-};
-
 const sameSnapshotState = (
   left: StudioApplicationInstallationSnapshot,
   right: StudioApplicationInstallationSnapshot,
@@ -763,16 +383,16 @@ const withCurrentAuthorizedState = async (
     { organizationId: selector.organizationId, applicationRootId: selector.rootId },
     async (transaction, scope, issuedAt) => {
       try {
-        const context = await readHumanContext(transaction, scope, session, issuedAt, {
+        const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
           organizationId: selector.organizationId,
           applicationRootId: selector.rootId,
         });
-        await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
         const firstState = await readCurrentState(transaction, selector, context);
         assertStateEligible(selector, firstState, allowEqual);
-        await requireAuthority(transaction, scope, installOperation(selector.rootId, firstState.selectedReleaseSet));
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(firstState.selectedReleaseSet)));
 
-        const finalContext = await readHumanContext(transaction, scope, session, issuedAt, {
+        const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
           organizationId: selector.organizationId,
           applicationRootId: selector.rootId,
         });
@@ -790,16 +410,16 @@ const withCurrentAuthorizedState = async (
           selectedReleaseSet: finalState.selectedReleaseSet,
           bindings: finalState.bindings,
         })) problem("conflict");
-        await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
-        await requireAuthority(transaction, scope, installOperation(selector.rootId, finalState.selectedReleaseSet));
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(finalState.selectedReleaseSet)));
 
-        const draftDeadline = await readPermissionDeadline(
-          transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
+        const draftDeadline = await readInstallationPermissionDeadline(
+          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
         );
         const installationDeadlines = await readInstallationAuthorityDeadlines(
-          transaction, scope, finalContext, selector.rootId, finalState.selectedReleaseSet,
+          transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(finalState.selectedReleaseSet),
         );
-        const completedAt = await databaseNow(transaction);
+        const completedAt = await readInstallationDatabaseTime(transaction);
         const deadline = Math.min(
           Date.parse(finalContext.expiresAt),
           Date.parse(draftDeadline),
@@ -819,7 +439,7 @@ const withCurrentAuthorizedState = async (
     },
   );
   if (result.kind === "available") return result.value;
-  if (captured !== undefined) throw new InstallationProblem(captured);
+  if (captured !== undefined) throw new InstallationProblem(captured, "transaction_failure_captured");
   if (result.kind === "unavailable") problem("refused");
   problem("temporarily_unavailable");
 };
@@ -835,10 +455,10 @@ const readActiveObservation = async (
     { organizationId, applicationRootId: rootId },
     async (transaction, scope, issuedAt) => {
       try {
-        const context = await readHumanContext(
+        const context = await readInstallationHumanContext(
           transaction, scope, session, issuedAt, { organizationId, applicationRootId: rootId },
         );
-        await requireAuthority(transaction, scope, { kind: "draft_change", rootId });
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId });
         const active = await createActiveApplicationInstallationRepository(transaction).readCurrent();
         if (!sameUuid(active.organizationId, organizationId) || !sameUuid(active.applicationRootId, rootId))
           problem("refused");
@@ -852,27 +472,28 @@ const readActiveObservation = async (
           registration.moduleBindings.some((binding) => binding.state !== "active" && binding.state !== "detached") ||
           !same(sortedBindingTuples(registeredActive), sortedBindingTuples(active.moduleBindings)))
           problem("refused");
-        const releaseSet = await readReleaseSet(
-          transaction, rootId, active.applicationReleaseRevision, organizationId, context.correlationId,
+        const releaseSet = await readInstallationReleaseSet(
+    transaction, installedReleaseCatalogue,
+    rootId, active.applicationReleaseRevision, organizationId, context.correlationId,
         );
         if (releaseSet.modules.length !== active.moduleBindings.length ||
           active.moduleBindings.some((binding) => !releaseSet.modules.some((module) =>
             sameUuid(module.rootId, binding.moduleRootId) && module.releaseRevision === binding.moduleReleaseRevision)))
           problem("refused");
-        await readOrdinaryRoot(transaction, rootId);
-        await requireAuthority(transaction, scope, installOperation(rootId, releaseSet));
-        const finalContext = await readHumanContext(
+        await readInstallationOrdinaryRoot(transaction, rootId);
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(rootId, releaseSetContainsCustomComponents(releaseSet)));
+        const finalContext = await readInstallationHumanContext(
           transaction, scope, session, issuedAt, { organizationId, applicationRootId: rootId },
         );
         if (!same(context, finalContext)) problem("refused");
-        await requireAuthority(transaction, scope, { kind: "draft_change", rootId });
-        const draftDeadline = await readPermissionDeadline(
-          transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId });
+        const draftDeadline = await readInstallationPermissionDeadline(
+          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
         );
         const installationDeadlines = await readInstallationAuthorityDeadlines(
-          transaction, scope, finalContext, rootId, releaseSet,
+          transaction, scope, finalContext, platformPermissionSource, rootId, releaseSetContainsCustomComponents(releaseSet),
         );
-        const completedAt = await databaseNow(transaction);
+        const completedAt = await readInstallationDatabaseTime(transaction);
         const deadline = Math.min(
           Date.parse(finalContext.expiresAt),
           Date.parse(draftDeadline),
@@ -887,7 +508,7 @@ const readActiveObservation = async (
     },
   );
   if (result.kind === "available") return result.value;
-  if (captured !== undefined) throw new InstallationProblem(captured);
+  if (captured !== undefined) throw new InstallationProblem(captured, "transaction_failure_captured");
   problem(result.kind === "unavailable" ? "refused" : "temporarily_unavailable");
 };
 
@@ -913,14 +534,6 @@ export const loadStudioApplicationInstallation = async (
   } catch (error) {
     return toLoadFailure(safeFailure(error));
   }
-};
-
-const sameActiveBindings = (
-  candidate: unknown,
-  expected: readonly ModuleInstallationBindingEvidence[],
-): boolean => {
-  const parsed = z.array(moduleInstallationBindingEvidenceSchema).max(10_000).safeParse(candidate);
-  return parsed.success && same(sortedBindingTuples(parsed.data), sortedBindingTuples(expected));
 };
 
 const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
@@ -995,11 +608,11 @@ const coordinatorFor = (selector: StudioApplicationInstallationSelector, baselin
         try {
           if (!sameUuid(scope.organizationId, selector.organizationId) || scope.applicationRootId !== undefined)
             problem("refused");
-          const context = await readHumanContext(transaction, scope, session, issuedAt, {
+          const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
             organizationId: selector.organizationId,
           });
-          await readOrdinaryRoot(transaction, selector.rootId);
-          await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
+          await readInstallationOrdinaryRoot(transaction, selector.rootId);
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
           await currentInstallationStateForCoordinator(transaction, selector, baseline, thisStep, context);
           return await operation(transaction, scope, issuedAt);
         } catch (error) {
@@ -1014,7 +627,7 @@ const coordinatorFor = (selector: StudioApplicationInstallationSelector, baselin
   return createApplicationInstallationCoordinator({
     installerRequests,
     resolveModuleContributions,
-    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource }),
+    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts: installationTargetFacts, permissions: platformPermissionSource }),
     containsCustomComponents: releaseSetContainsCustomComponents,
     humanDefinitionAccess: humanDefinitionAccess(),
   });
@@ -1394,12 +1007,12 @@ const readCurrentFirstInstallCandidate = async (
     session,
     { organizationId: selector.organizationId },
     async (transaction, scope, issuedAt) => {
-      const context = await readHumanContext(transaction, scope, session, issuedAt, {
+      const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
         organizationId: selector.organizationId,
       });
       if (scope.applicationRootId !== undefined) problem("refused");
-      await readOrdinaryRoot(transaction, selector.rootId);
-      await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
+      await readInstallationOrdinaryRoot(transaction, selector.rootId);
+      await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
       await firstInstallHistoryMatchesDraft(
         transaction, scope, selector, history, inspected.snapshot.definitionKey,
       );
@@ -1407,24 +1020,24 @@ const readCurrentFirstInstallCandidate = async (
       if (!firstInstallSetMatchesHistory(releaseSet, inspected.metadata, selector) ||
         releaseSet.application.definitionKey !== inspected.snapshot.definitionKey)
         problem("conflict");
-      await requireAuthority(transaction, scope, installOperation(selector.rootId, releaseSet));
+      await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
       await firstInstallHistoryMatchesDraft(
         transaction, scope, selector, history, inspected.snapshot.definitionKey,
       );
       const bindings = await readInstallationBindings(transaction, selector.rootId);
-      const finalContext = await readHumanContext(transaction, scope, session, issuedAt, {
+      const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
         organizationId: selector.organizationId,
       });
       if (!same(context, finalContext)) problem("refused");
-      await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
-      await requireAuthority(transaction, scope, installOperation(selector.rootId, releaseSet));
-      const draftDeadline = await readPermissionDeadline(
-        transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
+      await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
+      await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
+      const draftDeadline = await readInstallationPermissionDeadline(
+          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
       );
       const installationDeadlines = await readInstallationAuthorityDeadlines(
-        transaction, scope, finalContext, selector.rootId, releaseSet,
-      );
-      const checkedAt = await databaseNow(transaction);
+          transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(releaseSet),
+        );
+      const checkedAt = await readInstallationDatabaseTime(transaction);
       if (Date.parse(checkedAt) >= Math.min(
         Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
         ...installationDeadlines.map((deadline) => Date.parse(deadline)),
@@ -1453,7 +1066,7 @@ const readCurrentFirstInstallCandidate = async (
 };
 
 const provisionedSetupAccessDeclaration = (key: string): OrganizationAccessDeclaration => {
-  const declaration = permissionDeclaration("platform.organization.applications.manage");
+  const declaration = installationPermissionDeclaration(platformPermissionSource, "platform.organization.applications.manage");
   return organizationAccessDeclarationSchema.parse({
     ...declaration,
     operationKey: key,
@@ -1545,7 +1158,7 @@ const readProvisionedSetupInternalInTransaction = async (
     transaction, selector, releaseSet, bindings, firstInstallWorkflows(releaseSet),
   );
 
-  const context = await readHumanContext(transaction, scope, session, issuedAt, {
+  const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
     organizationId: selector.organizationId,
     applicationRootId: selector.rootId,
   });
@@ -1554,12 +1167,12 @@ const readProvisionedSetupInternalInTransaction = async (
     readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.applications.install_scope"),
     readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.record_lifecycle.manage_policy"),
   ]);
-  const finalContext = await readHumanContext(transaction, scope, session, issuedAt, {
+  const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
     organizationId: selector.organizationId,
     applicationRootId: selector.rootId,
   });
   if (!same(context, finalContext)) problem("refused");
-  const completion = await databaseNow(transaction);
+  const completion = await readInstallationDatabaseTime(transaction);
   const completionMs = Date.parse(completion);
   if (decisions.some((decision) =>
     !sameUuid(decision.correlationId, context.correlationId) ||
@@ -1596,12 +1209,12 @@ const readCurrentProvisionedSetup = async (
     { organizationId: selector.organizationId, applicationRootId: selector.rootId },
     async (transaction, scope, issuedAt) => {
       try {
-        const context = await readHumanContext(transaction, scope, session, issuedAt, {
+        const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
           organizationId: selector.organizationId,
           applicationRootId: selector.rootId,
         });
-        await readOrdinaryRoot(transaction, selector.rootId);
-        await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
+        await readInstallationOrdinaryRoot(transaction, selector.rootId);
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
         await firstInstallHistoryMatchesDraft(
           transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
         );
@@ -1615,7 +1228,7 @@ const readCurrentProvisionedSetup = async (
           !sameUuid(currentRelease.data.application.rootId, selector.rootId) ||
           !sameFirstInstallRelease(currentRelease.data, expectedReleaseSet))
           problem("conflict");
-        await requireAuthority(transaction, scope, installOperation(selector.rootId, currentRelease.data));
+        await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(currentRelease.data)));
         const setup = await readProvisionedSetupInTransaction(
           transaction, scope, session, issuedAt, selector, currentRelease.data,
         );
@@ -1676,11 +1289,11 @@ const firstInstallDefinitionAccess = (
       async (transaction, scope, issuedAt) => {
         try {
           if (scope.applicationRootId !== undefined) problem("refused");
-          const context = await readHumanContext(transaction, scope, session, issuedAt, {
+          const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
             organizationId: selector.organizationId,
           });
-          await readOrdinaryRoot(transaction, selector.rootId);
-          await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
+          await readInstallationOrdinaryRoot(transaction, selector.rootId);
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
           await firstInstallHistoryMatchesDraft(
             transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
           );
@@ -1689,19 +1302,19 @@ const firstInstallDefinitionAccess = (
           await firstInstallHistoryMatchesDraft(
             transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
           );
-          const finalContext = await readHumanContext(transaction, scope, session, issuedAt, {
+          const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
             organizationId: selector.organizationId,
           });
           if (!same(context, finalContext)) problem("refused");
-          await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
-          await requireAuthority(transaction, scope, installOperation(selector.rootId, releaseSet));
-          const draftDeadline = await readPermissionDeadline(
-            transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
+          const draftDeadline = await readInstallationPermissionDeadline(
+          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
           );
           const installDeadlines = await readInstallationAuthorityDeadlines(
-            transaction, scope, finalContext, selector.rootId, releaseSet,
-          );
-          const completedAt = await databaseNow(transaction);
+          transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(releaseSet),
+        );
+          const completedAt = await readInstallationDatabaseTime(transaction);
           if (Date.parse(completedAt) >= Math.min(
             Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
             ...installDeadlines.map((deadline) => Date.parse(deadline)),
@@ -1816,17 +1429,17 @@ const firstInstallCoordinator = (
           if (!sameUuid(candidate.organizationId, selector.organizationId) ||
             candidate.applicationRootId !== undefined || scope.applicationRootId !== undefined)
             problem("refused");
-          const context = await readHumanContext(transaction, scope, session, issuedAt, {
+          const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
             organizationId: selector.organizationId,
           });
-          await readOrdinaryRoot(transaction, selector.rootId);
-          await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
+          await readInstallationOrdinaryRoot(transaction, selector.rootId);
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
           await firstInstallHistoryMatchesDraft(
             transaction, scope, selector, expected.history, expected.selected.definitionKey,
           );
           const releaseSet = await readFirstInstallReleaseSet(transaction, selector, context);
           if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
-          await requireAuthority(transaction, scope, installOperation(selector.rootId, releaseSet));
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
           const before = await readInstallationBindings(transaction, selector.rootId);
           if (currentStep === 0 && mode === "prepare" &&
             before.registeredReleaseRevision !== expected.registeredReleaseRevision)
@@ -1841,20 +1454,20 @@ const firstInstallCoordinator = (
             const prepared = preparedRegistration;
             if (prepared === undefined) problem("temporarily_unavailable");
             registrationContext = context;
-            const draftDeadline = await readPermissionDeadline(
-              transaction, scope, context, "platform.organization.definition_drafts.manage",
+            const draftDeadline = await readInstallationPermissionDeadline(
+          transaction, scope, context, platformPermissionSource, "platform.organization.definition_drafts.manage",
             );
             const acceptedInstall = {
-              ...installOperation(selector.rootId, releaseSet),
+              ...installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)),
               acceptedPermissions: firstInstallConferredPermissions(prepared),
             } satisfies BuilderOperation;
             const installDeadlines = await readBuilderOperationDeadlines(
-              transaction, scope, context, acceptedInstall,
+              transaction, scope, context, platformPermissionSource, acceptedInstall,
             );
             registrationDeadline = [context.expiresAt, draftDeadline, ...installDeadlines]
               .reduce((earliest, deadline) =>
                 Date.parse(deadline) < Date.parse(earliest) ? deadline : earliest);
-            const prewriteAt = await databaseNow(transaction);
+            const prewriteAt = await readInstallationDatabaseTime(transaction);
             if (!Number.isFinite(Date.parse(prewriteAt)) ||
               !Number.isFinite(Date.parse(registrationDeadline)) ||
               Date.parse(prewriteAt) >= Date.parse(registrationDeadline)) problem("refused");
@@ -1865,7 +1478,7 @@ const firstInstallCoordinator = (
               registrationDeadline === undefined ||
               value !== (before.registeredReleaseRevision !== selector.releaseRevision))
               problem("conflict");
-            const completedAt = await databaseNow(transaction);
+            const completedAt = await readInstallationDatabaseTime(transaction);
             if (!Number.isFinite(Date.parse(completedAt)) ||
               Date.parse(completedAt) >= Date.parse(registrationDeadline) ||
               Date.parse(completedAt) >= Date.parse(registrationContext.expiresAt))
@@ -1887,24 +1500,24 @@ const firstInstallCoordinator = (
           await firstInstallHistoryMatchesDraft(
             transaction, scope, selector, expected.history, expected.selected.definitionKey,
           );
-          const finalContext = await readHumanContext(transaction, scope, session, issuedAt, {
+          const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
             organizationId: selector.organizationId,
           });
           if (!same(context, finalContext)) problem("refused");
           if (currentStep === 0) {
-            const completedAt = await databaseNow(transaction);
+            const completedAt = await readInstallationDatabaseTime(transaction);
             if (Date.parse(finalContext.expiresAt) <= Date.parse(completedAt)) problem("refused");
             return value;
           }
-          await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
-          await requireAuthority(transaction, scope, installOperation(selector.rootId, releaseSet));
-          const draftDeadline = await readPermissionDeadline(
-            transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
+          await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
+          const draftDeadline = await readInstallationPermissionDeadline(
+          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
           );
           const installDeadlines = await readInstallationAuthorityDeadlines(
-            transaction, scope, finalContext, selector.rootId, releaseSet,
-          );
-          const completedAt = await databaseNow(transaction);
+          transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(releaseSet),
+        );
+          const completedAt = await readInstallationDatabaseTime(transaction);
           if (Date.parse(completedAt) >= Math.min(
             Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
             ...installDeadlines.map((deadline) => Date.parse(deadline)),
@@ -1922,7 +1535,7 @@ const firstInstallCoordinator = (
   return createApplicationInstallationCoordinator({
     installerRequests,
     resolveModuleContributions,
-    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource }),
+    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts: installationTargetFacts, permissions: platformPermissionSource }),
     containsCustomComponents: releaseSetContainsCustomComponents,
     humanDefinitionAccess: firstInstallDefinitionAccess(
       selector,
@@ -2142,26 +1755,26 @@ const firstInstallAppCompletion = async (
   await firstInstallHistoryMatchesDraft(
     transaction, scope, selector, history, releaseSet.application.definitionKey,
   );
-  await readOrdinaryRoot(transaction, selector.rootId);
-  await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
-  await requireAuthority(transaction, scope, installOperation(selector.rootId, releaseSet));
-  const finalContext = await readHumanContext(transaction, scope, session, issuedAt, {
+  await readInstallationOrdinaryRoot(transaction, selector.rootId);
+  await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
+  await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
+  const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
     organizationId: selector.organizationId,
     applicationRootId: selector.rootId,
   });
   if (!same(initialContext, finalContext)) problem("refused");
-  const draftDeadline = await readPermissionDeadline(
-    transaction, scope, finalContext, "platform.organization.definition_drafts.manage",
+  const draftDeadline = await readInstallationPermissionDeadline(
+          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
   );
   const installDeadlines = await readInstallationAuthorityDeadlines(
-    transaction, scope, finalContext, selector.rootId, releaseSet,
-  );
+          transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(releaseSet),
+        );
   const setupDecisions = await Promise.all([
     readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.applications.install"),
     readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.applications.install_scope"),
     readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.record_lifecycle.manage_policy"),
   ]);
-  const completedAt = await databaseNow(transaction);
+  const completedAt = await readInstallationDatabaseTime(transaction);
   const retainedDeadlines = [draftDeadline, ...installDeadlines,
     ...setupDecisions.map((decision) => decision.validUntil)];
   let minimumValidUntil = finalContext.expiresAt;
@@ -2195,19 +1808,19 @@ const readFirstInstallAppState = async (
   selector: StudioApplicationFirstInstallSelector,
   expected: StudioApplicationFirstInstallSnapshot,
 ): Promise<FirstInstallAppState> => {
-  const context = await readHumanContext(transaction, scope, session, issuedAt, {
+  const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
     organizationId: selector.organizationId,
     applicationRootId: selector.rootId,
   });
-  await readOrdinaryRoot(transaction, selector.rootId);
-  await requireAuthority(transaction, scope, { kind: "draft_change", rootId: selector.rootId });
+  await readInstallationOrdinaryRoot(transaction, selector.rootId);
+  await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
   await firstInstallHistoryMatchesDraft(
     transaction, scope, selector, expected.history, expected.selected.definitionKey,
   );
   const releaseSet = await readAppScopedFirstInstallReleaseSet(transaction, selector);
   if (!same(firstInstallSelectedIdentity(releaseSet), expected.selected) ||
     !same(firstInstallWorkflows(releaseSet), expected.workflows)) problem("conflict");
-  await requireAuthority(transaction, scope, installOperation(selector.rootId, releaseSet));
+  await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
   const bindings = await readInstallationBindings(transaction, selector.rootId);
   const state = firstInstallState(selector, releaseSet, bindings);
   if (state !== "provisioned_inactive") firstInstallUnavailable("installation_incomplete");
