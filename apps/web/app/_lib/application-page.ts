@@ -26,9 +26,6 @@ import {
   type ReferenceChoiceInputValues,
 } from "@web/platform-server";
 import {
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  SUMMARY_VALUES_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE,
   applicationLauncherQueryRowsToListValues,
   type ApplicationLauncherQueryRow,
   type DisplayCellValue,
@@ -53,6 +50,9 @@ import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  SUMMARY_VALUES_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE,
   BOARD_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
@@ -60,6 +60,8 @@ import {
   LINK_TILES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+} from "@vortex/platform/server";
+import {
   calendarBlockSourceIsSupported,
   calendarMappingSchema,
   flowTaskChildLists,

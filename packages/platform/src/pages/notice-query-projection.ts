@@ -2,7 +2,6 @@ import "server-only";
 
 import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "../definition/app-index";
 import {
-  QUERY_NOTICE_BLOCK_RELEASE,
   sameId,
   validateComponentSettings,
   type BlockPropertyValueContract,
@@ -10,6 +9,7 @@ import {
   type JsonValue,
   type OrganizationSelectionCandidate,
 } from "../schema";
+import { QUERY_NOTICE_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,

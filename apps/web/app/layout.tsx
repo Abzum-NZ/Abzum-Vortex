@@ -6,6 +6,7 @@ import {
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
 } from "@vortex/ui";
+import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
 import "@vortex/ui/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -18,7 +19,11 @@ export const metadata: Metadata = {
  * person's colour-scheme preference. The bootstrap landing, sign-in, organisation chooser and
  * error pages read them before any organisation is known, so they reveal no organisation theme.
  */
-const PLATFORM_THEME_STYLE = createThemeRootProps(undefined, "system").style;
+const PLATFORM_THEME_STYLE = createThemeRootProps(
+  undefined,
+  DEFAULT_PLATFORM_THEME_RELEASE.tokens,
+  "system",
+).style;
 
 /**
  * The platform root's style attributes. No organisation is known here, so they resolve to the

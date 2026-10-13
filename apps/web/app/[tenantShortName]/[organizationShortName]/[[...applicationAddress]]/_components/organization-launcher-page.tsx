@@ -1,18 +1,19 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import type { ApplicationShell, PageDefinition } from "@vortex/platform/schema";
+import type { ApplicationShell, PageDefinition, PlatformBlockRelease } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
   createFullPlatformComponentRegistry,
   PagePuckRenderer,
+  type FieldInputControlReleaseMap,
+  type PlatformThemeTokens,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
 import type { permittedApplicationsToListValues } from "@vortex/ui";
 import { signOut } from "../../../../auth/actions";
-
-const registry = createFullPlatformComponentRegistry();
 
 export function OrganizationLauncherPage({
   page,
@@ -24,6 +25,9 @@ export function OrganizationLauncherPage({
   openApplication,
   studio,
   launcherHref,
+  platformBlockReleases,
+  fieldInputControlReleases,
+  platformThemeTokens,
 }: Readonly<{
   page: PageDefinition;
   shell: ApplicationShell;
@@ -34,8 +38,15 @@ export function OrganizationLauncherPage({
   openApplication: (event: DisplaySemanticEvent) => Promise<void>;
   studio?: Readonly<{ href: string; placementId: string }>;
   launcherHref: string;
+  platformBlockReleases: readonly PlatformBlockRelease[];
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
   const router = useRouter();
+  const registry = useMemo(
+    () => createFullPlatformComponentRegistry(platformBlockReleases),
+    [platformBlockReleases],
+  );
   return (
     <ApplicationAccountActionsProvider
       actions={{
@@ -50,6 +61,8 @@ export function OrganizationLauncherPage({
         composition={page}
         shells={[shell]}
         registry={registry}
+        fieldInputControlReleases={fieldInputControlReleases}
+        platformThemeTokens={platformThemeTokens}
         pageId={page.pageId}
         applicationSurface
         themeMode="system"

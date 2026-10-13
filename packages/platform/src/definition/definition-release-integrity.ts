@@ -169,7 +169,6 @@ const exactApplicationFlowTargetsMatch = (
         releaseVersion: operation.release.releaseVersion,
         contentFingerprint: operation.release.contentFingerprint,
         resolutionFingerprint: output.resolutionFingerprint,
-        catalogueFingerprint: operation.release.catalogueFingerprint,
       }),
     ),
   ]);
@@ -194,7 +193,6 @@ const exactApplicationFlowTargetsMatch = (
       return (
         entry.resolutionFingerprint === output.resolutionFingerprint &&
         entry.operation.owner.kind === "platform_service" &&
-        entry.catalogueFingerprint !== undefined &&
         expectedSubjects.has(flowManifestSubject(entry))
       );
     if (entry.kind !== "application_flow" && entry.kind !== "application_flow_node") return false;
@@ -292,8 +290,7 @@ const exactApplicationDependenciesMatch = (
           (entry) =>
             entry.blockId === dependency.blockId &&
             entry.releaseVersion === dependency.releaseVersion &&
-            entry.contentFingerprint === dependency.contentFingerprint &&
-            entry.catalogueFingerprint === dependency.catalogueFingerprint,
+            entry.contentFingerprint === dependency.contentFingerprint,
         ),
     )
   )
@@ -304,8 +301,7 @@ const exactApplicationDependenciesMatch = (
     theme.length !== 1 ||
     theme[0]!.catalogueThemeId !== base.catalogueThemeId ||
     theme[0]!.releaseVersion !== base.releaseVersion ||
-    theme[0]!.contentFingerprint !== base.contentFingerprint ||
-    theme[0]!.catalogueFingerprint !== base.catalogueFingerprint
+    theme[0]!.contentFingerprint !== base.contentFingerprint
   )
     return false;
   // The compiler places authoritative target evidence on each target, so the stored flow-target

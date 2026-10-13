@@ -5175,7 +5175,7 @@ function applicationProvenance(
       entries.push({
         canonicalPath,
         origin: "resolved",
-        sourcePath: ["body", "theme", "base", "content_fingerprint"],
+        sourcePath: ["body", "theme", "base", "release_version"],
         ruleCode: RESOLUTION_RULE,
       });
       continue;
@@ -5198,7 +5198,7 @@ function applicationProvenance(
       entries.push({
         canonicalPath,
         origin: "resolved",
-        sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "content_fingerprint"],
+        sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "release_version"],
         ruleCode: RESOLUTION_RULE,
       });
       continue;

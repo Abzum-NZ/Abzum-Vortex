@@ -3,8 +3,6 @@
 import type { ReactElement } from "react";
 import { Icon, resolveVortexIconName } from "../icons";
 import {
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   type ProjectedApplicationPageLinkTiles,
   mountedRecordPinElementProperty,
   type ProjectedRecordPinTiles,
@@ -162,9 +160,8 @@ const titleText = (value: JsonValue): string =>
 
 /** The same registered renderer keeps old releases in their original external-only component. */
 export function LinkTiles(props: RecordPinRenderProps): ReactElement {
-  return props.metadata.blockId === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.blockId &&
-    (props.metadata.releaseVersion === RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion ||
-      props.metadata.releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion)
+  return props.metadata.key === "platform.launcher.link_tiles" &&
+    (props.metadata.releaseVersion === "1.1.0" || props.metadata.releaseVersion === "1.2.0")
     ? <RecordPinTiles {...props} /> : <ExternalLinkTiles {...props} />;
 }
 

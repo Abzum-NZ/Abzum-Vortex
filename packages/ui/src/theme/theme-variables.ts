@@ -1,12 +1,12 @@
 import type { CSSProperties } from "react";
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE,
   findShadcnFontByFamilyKey,
   resolveShadcnFontSelection,
   shadcnFontStack,
   type ApplicationContent,
   type PlatformThemeTokenRoleKey,
-  type ShadcnFont,
+  type PlatformThemeRelease,
+  type ShadcnFontOption,
 } from "@vortex/platform/schema";
 
 /** Resolved #594 application theme, as materialised in application content. */
@@ -18,6 +18,7 @@ export type ThemeMode = "light" | "dark" | "system";
 
 /** Resolved, validated #594 theme tokens keyed by builder key. */
 type ThemeTokens = Readonly<Record<string, ThemeTokenValue>>;
+export type PlatformThemeTokens = PlatformThemeRelease["tokens"];
 
 /**
  * The only CSS custom properties the shared component stylesheet reads. Names are fixed
@@ -128,16 +129,9 @@ const isColorValue = (value: string): boolean =>
  */
 const SURFACE_PRIORITY = ["background", "canvas", "surface", "bg", "page_background", "app_background"];
 
-/**
- * The registered platform theme release's token values. Every renderer fallback below is
- * read from here, so the renderer holds no second palette: the shared vocabulary and the
- * registered release are its only source of default colours, type, spacing and shape.
- */
-const PLATFORM_TOKENS: ThemeTokens = DEFAULT_PLATFORM_THEME_RELEASE.tokens;
-
 /** The registered release's value for one shared colour role, or a loud failure if absent. */
-function platformColor(role: PlatformThemeTokenRoleKey): ColorPair {
-  const pair = colorPair(PLATFORM_TOKENS, role);
+function platformColor(tokens: ThemeTokens, role: PlatformThemeTokenRoleKey): ColorPair {
+  const pair = colorPair(tokens, role);
   if (pair === undefined)
     throw new Error(`Platform theme release is missing colour role "${role}"`);
   return pair;
@@ -146,26 +140,8 @@ function platformColor(role: PlatformThemeTokenRoleKey): ColorPair {
 /** The shadcn surfaces the vocabulary pairs with a `<role>_foreground` role. */
 type ShadcnFilledRole = "card" | "popover" | "accent" | "sidebar" | "sidebar_primary" | "sidebar_accent";
 
-/** The registered release's base radius, which shadcn derives every corner size from. */
-const PLATFORM_RADIUS_BASE: string = (() => {
-  const token = PLATFORM_TOKENS.radius_base;
-  if (token?.kind !== "corners" || !Number.isFinite(token.rem) || token.rem < 0)
-    throw new Error('Platform theme release is missing corners role "radius_base"');
-  return `${token.rem}rem`;
-})();
-
-/** #594 default contrast surface, taken from the registered release's background role. */
-const DEFAULT_SURFACE: ColorPair = platformColor("background");
-const DEFAULT_TEXT: ColorPair = platformColor("text");
-
-/** The registered release's focus colour role, so the renderer never assumes it by name. */
-const PLATFORM_FOCUS_COLOR_ROLE: PlatformThemeTokenRoleKey =
-  PLATFORM_TOKENS.focus?.kind === "focus"
-    ? (PLATFORM_TOKENS.focus.colorToken as PlatformThemeTokenRoleKey)
-    : "primary";
-
 /** Platform fallbacks, each read from the registered release's matching vocabulary role. */
-const PLATFORM_DEFAULTS: Readonly<{
+function platformDefaults(tokens: ThemeTokens): Readonly<{
   textMuted: ColorPair;
   border: ColorPair;
   accent: ColorPair;
@@ -179,35 +155,29 @@ const PLATFORM_DEFAULTS: Readonly<{
   warningText: ColorPair;
   infoText: ColorPair;
   focus: ColorPair;
-}> = {
-  textMuted: platformColor("muted_text"),
-  border: platformColor("border_color"),
-  accent: platformColor("primary"),
-  primary: platformColor("primary"),
-  onPrimary: platformColor("primary_foreground"),
-  secondary: platformColor("secondary"),
-  onSecondary: platformColor("secondary_foreground"),
-  danger: platformColor("danger"),
-  onDanger: platformColor("danger_foreground"),
-  dangerText: platformColor("danger_text"),
-  warningText: platformColor("warning_text"),
-  infoText: platformColor("info_text"),
-  focus: platformColor(PLATFORM_FOCUS_COLOR_ROLE),
-};
+}> {
+  const focus = tokens.focus;
+  if (focus?.kind !== "focus")
+    throw new Error('Platform theme release is missing focus role "focus"');
+  return {
+    textMuted: platformColor(tokens, "muted_text"),
+    border: platformColor(tokens, "border_color"),
+    accent: platformColor(tokens, "primary"),
+    primary: platformColor(tokens, "primary"),
+    onPrimary: platformColor(tokens, "primary_foreground"),
+    secondary: platformColor(tokens, "secondary"),
+    onSecondary: platformColor(tokens, "secondary_foreground"),
+    danger: platformColor(tokens, "danger"),
+    onDanger: platformColor(tokens, "danger_foreground"),
+    dangerText: platformColor(tokens, "danger_text"),
+    warningText: platformColor(tokens, "warning_text"),
+    infoText: platformColor(tokens, "info_text"),
+    focus: platformColor(tokens, focus.colorToken as PlatformThemeTokenRoleKey),
+  };
+}
 
 /** The catalogue's default body and heading fonts, which a theme without a font of its own paints. */
 const PLATFORM_FONTS = resolveShadcnFontSelection();
-
-/**
- * The registered release names its typography families by placeholder (`body`, `heading`) rather
- * than by a catalogue font, so a theme that still carries a placeholder paints the default fonts.
- */
-const PLATFORM_FAMILY_FONTS: ReadonlyMap<string, ShadcnFont> = new Map(
-  (["body", "heading"] as const).flatMap((key) => {
-    const token = PLATFORM_TOKENS[key];
-    return token?.kind === "typography" ? [[token.family, PLATFORM_FONTS[key]] as const] : [];
-  }),
-);
 
 const PLATFORM_ELEVATION = [
   "none",
@@ -237,14 +207,20 @@ const fontWeight = (value: number): string | undefined =>
  * The catalogue font a typography family key names, or a registered-release placeholder, which
  * stands for the default font. Any other key names a font the catalogue does not ship.
  */
-const catalogueFont = (familyKey: string): ShadcnFont | undefined =>
-  findShadcnFontByFamilyKey(familyKey) ?? PLATFORM_FAMILY_FONTS.get(familyKey);
+const catalogueFont = (familyKey: string, platformTokens: ThemeTokens): ShadcnFontOption | undefined => {
+  const registeredFamily = (["body", "heading"] as const).find((key) => {
+    const token = platformTokens[key];
+    return token?.kind === "typography" && token.family === familyKey;
+  });
+  return findShadcnFontByFamilyKey(familyKey) ??
+    (registeredFamily === undefined ? undefined : PLATFORM_FONTS[registeredFamily]);
+};
 
-const fontStack = (font: ShadcnFont): string =>
+const fontStack = (font: ShadcnFontOption): string =>
   `var(--vortex-font-${font.id}, ${shadcnFontStack(font)})`;
 
-const fontFamily = (familyKey: string): string | undefined => {
-  const font = catalogueFont(familyKey);
+const fontFamily = (familyKey: string, platformTokens: ThemeTokens): string | undefined => {
+  const font = catalogueFont(familyKey, platformTokens);
   if (font !== undefined) return fontStack(font);
   return BUILDER_KEY.test(familyKey) ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}` : undefined;
 };
@@ -253,11 +229,15 @@ const fontFamily = (familyKey: string): string | undefined => {
  * The catalogue fonts the theme selects for its body and heading typography.
  * @knipignore #2221 validates that changing font tokens changes the rendered application.
  */
-export function resolveThemeFonts(tokens: ThemeTokens = {}): readonly ShadcnFont[] {
+export function resolveThemeFonts(
+  platformThemeTokens: PlatformThemeTokens,
+  tokens: ThemeTokens = {},
+): readonly ShadcnFontOption[] {
+  const platformTokens: ThemeTokens = platformThemeTokens;
   const body = tokenOfKind(tokens, "body", "typography");
   const heading = tokenOfKind(tokens, "heading", "typography");
-  const bodyFont = body === undefined ? PLATFORM_FONTS.body : catalogueFont(body.family);
-  const headingFont = heading === undefined ? bodyFont : catalogueFont(heading.family);
+  const bodyFont = body === undefined ? PLATFORM_FONTS.body : catalogueFont(body.family, platformTokens);
+  const headingFont = heading === undefined ? bodyFont : catalogueFont(heading.family, platformTokens);
   return [...new Set([bodyFont, headingFont].filter((font) => font !== undefined))];
 }
 
@@ -331,7 +311,19 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * oklch() colours, finite numbers and builder-key font families are emitted, so a definition
  * cannot inject CSS.
  */
-function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables {
+function generateThemeCssVariables(
+  platformThemeTokens: PlatformThemeTokens,
+  themeTokens?: ThemeTokens,
+): ThemeCssVariables {
+  const platformTokens: ThemeTokens = platformThemeTokens;
+  const PLATFORM_DEFAULTS = platformDefaults(platformTokens);
+  const platformRadiusToken = tokenOfKind(platformTokens, "radius_base", "corners");
+  if (platformRadiusToken === undefined || !Number.isFinite(platformRadiusToken.rem) || platformRadiusToken.rem < 0)
+    throw new Error('Platform theme release is missing corners role "radius_base"');
+  const platformRadiusBase = `${platformRadiusToken.rem}rem`;
+  const DEFAULT_SURFACE = platformColor(platformTokens, "background");
+  const DEFAULT_TEXT = platformColor(platformTokens, "text");
+  const tokens = themeTokens ?? {};
   const appSurface = themeSurface(tokens);
   const appText = colorPair(tokens, "text");
   // Surface and text change together so body text is never painted on an unvalidated surface.
@@ -383,22 +375,22 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
 
   // Without a body token the page paints the default catalogue font; the heading paints the body
   // font unless the theme has a heading token.
-  const bodyFamily =
-    body === undefined ? fontStack(PLATFORM_FONTS.body) : (fontFamily(body.family) ?? FONT_FALLBACK);
-  const headingFamily = (heading === undefined ? undefined : fontFamily(heading.family)) ?? bodyFamily;
+  const bodyFamily = body === undefined ? fontStack(PLATFORM_FONTS.body) :
+    (fontFamily(body.family, platformTokens) ?? FONT_FALLBACK);
+  const headingFamily = (heading === undefined ? undefined : fontFamily(heading.family, platformTokens)) ?? bodyFamily;
 
   // Every shadcn colour comes from the resolved theme when the role is present and well formed,
   // otherwise from the registered platform release, so the bridge holds no second palette.
   const shadcnColour = (role: PlatformThemeTokenRoleKey): string =>
-    colorValue(colorPair(tokens, role) ?? platformColor(role));
+    colorValue(colorPair(tokens, role) ?? platformColor(platformTokens, role));
   // A fill and its #594-validated foreground change together, so a foreground is never painted on
   // a fill it was not judged against.
   const shadcnFill = (
     role: ShadcnFilledRole,
   ): readonly [fill: string, foreground: string] => {
     const [fill, foreground]: readonly [ColorPair, ColorPair] = filledPair(tokens, role) ?? [
-      platformColor(role),
-      platformColor(`${role}_foreground` as const),
+      platformColor(platformTokens, role),
+      platformColor(platformTokens, `${role}_foreground` as const),
     ];
     return [colorValue(fill), colorValue(foreground)];
   };
@@ -482,7 +474,7 @@ function generateThemeCssVariables(tokens: ThemeTokens = {}): ThemeCssVariables 
     "--chart-3": shadcnColour("chart_3"),
     "--chart-4": shadcnColour("chart_4"),
     "--chart-5": shadcnColour("chart_5"),
-    "--radius": corners("radius_base", PLATFORM_RADIUS_BASE),
+    "--radius": corners("radius_base", platformRadiusBase),
     "--sidebar": sidebar,
     "--sidebar-foreground": sidebarForeground,
     "--sidebar-primary": sidebarPrimary,
@@ -512,10 +504,11 @@ export type ThemeRootProps = Readonly<{
  */
 export function createThemeRootProps(
   theme: ApplicationTheme | undefined,
+  platformThemeTokens: PlatformThemeTokens,
   mode: ThemeMode = "light",
 ): ThemeRootProps {
   const style: CSSProperties & ThemeCssVariables = {
-    ...generateThemeCssVariables(theme?.tokens),
+    ...generateThemeCssVariables(platformThemeTokens, theme?.tokens),
     // Maia's pinned style uses wider component spacing; carry that choice on this app root so
     // another application on the same page keeps its own style values.
     "--vortex-component-spacing": theme?.selection?.style === "maia" ? "0.4rem" : "0.25rem",
@@ -545,11 +538,12 @@ export type PlacementThemeScope = Readonly<{
 export function resolvePlacementTheme(
   scope: PlacementThemeScope,
   overrides: ThemeTokens,
+  platformThemeTokens: PlatformThemeTokens,
 ): Readonly<{ style: CSSProperties | undefined; scope: PlacementThemeScope }> {
   if (Object.keys(overrides).length === 0) return { style: undefined, scope };
   const effective: ThemeTokens = { ...scope.application, ...overrides };
-  const next = generateThemeCssVariables(effective);
-  const current = generateThemeCssVariables(scope.inherited);
+  const next = generateThemeCssVariables(platformThemeTokens, effective);
+  const current = generateThemeCssVariables(platformThemeTokens, scope.inherited);
   const changed: CSSProperties & Partial<Record<ThemeVariableName, string>> = {};
   for (const name of THEME_VARIABLE_NAMES) {
     if (next[name] !== current[name]) changed[name] = next[name];

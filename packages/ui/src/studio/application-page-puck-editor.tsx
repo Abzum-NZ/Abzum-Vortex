@@ -10,8 +10,11 @@ import {
   sourcePlacementSlotSchema,
   type ApplicationSourceDocument,
   type PageSlotAddress,
+  type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import type { placementSlotSchema } from "@vortex/platform/schema";
+import type { FieldInputControlReleaseMap } from "../registry";
+import type { PlatformThemeTokens } from "../theme";
 import {
   createFullPlatformComponentRegistry,
   createVortexPuckAdapter,
@@ -22,10 +25,6 @@ import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { createVortexAuthoredPuckAdapter } from "./vortex-authored-puck-adapter";
 
-const registry = createFullPlatformComponentRegistry();
-const config = getVortexPuckConfig(registry);
-const adapter = createVortexAuthoredPuckAdapter(registry.toPlatformBlockCatalogue());
-const runtimeAdapter = createVortexPuckAdapter(registry.toPlatformBlockCatalogue());
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
 const record = (value: unknown): Record<string, unknown> => {
   if (value === null || typeof value !== "object" || Array.isArray(value))
@@ -68,6 +67,9 @@ const compiledSettingsFor = (
 export type ApplicationPagePuckEditorProps = Readonly<{
   source: ApplicationSourceDocument;
   compiledSource: ApplicationSourceDocument;
+  platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
   pageAlias: string;
   /** The compiled slots of this page keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, CompiledSlot>> | undefined;
@@ -115,10 +117,24 @@ function ApplicationPageSlotPuckEditor({
   compiledSource,
   pageAlias,
   compiledSlots,
+  platformBlockCatalogue,
+  fieldInputControlReleases,
+  platformThemeTokens,
   at,
   disabled,
   onChange,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
+  const registry = useMemo(
+    () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
+    [platformBlockCatalogue],
+  );
+  const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
+  const config = useMemo(
+    () => getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens),
+    [registry, fieldInputControlReleases, platformThemeTokens],
+  );
+  const adapter = useMemo(() => createVortexAuthoredPuckAdapter(catalogue), [catalogue]);
+  const runtimeAdapter = useMemo(() => createVortexPuckAdapter(catalogue), [catalogue]);
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
   const sourceRef = useRef(source);

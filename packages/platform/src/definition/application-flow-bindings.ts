@@ -261,7 +261,6 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
       kind: z.literal("protected_operation"),
       operation: protectedOperationReferenceSchema,
       ...flowTargetDependencyCommon,
-      catalogueFingerprint: fingerprintSchema.optional(),
     })
     .strict(),
   z
@@ -296,7 +295,6 @@ export const platformServiceOperationReleaseSchema = z
     operationId: platformIdSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
     contentFingerprint: fingerprintSchema,
-    catalogueFingerprint: fingerprintSchema,
   })
   .strict();
 

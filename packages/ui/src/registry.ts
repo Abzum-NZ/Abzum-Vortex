@@ -4,6 +4,7 @@ import {
   platformBlockReleaseSchema,
   type ApplicationCompositionPolicy,
   type BlockPropertyValueContract,
+  type FieldInputControlKey,
   type ImmutablePlatformBlockCatalogue,
   type PlatformBlockRelease,
   type ProjectedNavigation,
@@ -34,6 +35,9 @@ export type PlatformComponentPayloadParser = (
 
 /** Raw, not yet validated component runtime inputs keyed by stable placement identity. */
 export type RuntimeInputsByPlacement = Readonly<Record<string, unknown>>;
+export type FieldInputControlReleaseMap = Readonly<
+  Record<FieldInputControlKey, PlatformBlockRelease>
+>;
 
 /** The runtime inputs of a placement that declares none. */
 export const EMPTY_RUNTIME_INPUTS: PlatformBlockRuntimeInputs = Object.freeze({});
@@ -173,6 +177,7 @@ export type PlatformBlockRenderProps = Readonly<{
   /** Live pages use viewport media rules; preview renders only its selected breakpoint. */
   responsiveLayout?: boolean;
   metadata: PlatformBlockRelease;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
   themeOverrides?: Readonly<Record<string, unknown>>;
   availability: "available" | "unavailable";
   unavailableReason?: "operation_unavailable";
@@ -214,6 +219,21 @@ export type PlatformComponentRenderer = ComponentType<PlatformBlockRenderProps>;
  * Puck component config (`puck-config.tsx`) binds every renderer key to its render function.
  */
 export type PlatformComponentRegistration = Readonly<{
+  parsePayload: PlatformComponentPayloadParser;
+}> &
+  (
+    | Readonly<{
+        metadata: PlatformBlockRelease;
+        releaseIdentity?: never;
+      }>
+    | Readonly<{
+        metadata?: never;
+        releaseIdentity: Readonly<{ key: string; releaseVersion: string }>;
+    }>
+  );
+
+/** Registration after its exact release identity has been resolved from the supplied catalogue. */
+export type RegisteredPlatformComponent = Readonly<{
   metadata: PlatformBlockRelease;
   parsePayload: PlatformComponentPayloadParser;
 }>;
@@ -226,7 +246,7 @@ export interface PlatformComponentRegistry {
   /**
    * Look up exact registration by block ID and release version.
    */
-  get(blockId: string, releaseVersion: string): PlatformComponentRegistration | undefined;
+  get(blockId: string, releaseVersion: string): RegisteredPlatformComponent | undefined;
 
   /**
    * Check if an exact block ID and release version is registered.
@@ -241,7 +261,7 @@ export interface PlatformComponentRegistry {
   /**
    * List all registered components.
    */
-  list(): readonly PlatformComponentRegistration[];
+  list(): readonly RegisteredPlatformComponent[];
 
   /**
    * List all block releases, matching the catalogue validation snapshot format.
@@ -273,26 +293,41 @@ const deepFreeze = <Value>(value: Value): Value => {
  */
 export function createPlatformComponentRegistry(
   registrations: Iterable<PlatformComponentRegistration> = [],
+  platformReleases: readonly PlatformBlockRelease[] = [],
 ): PlatformComponentRegistry {
-  const byIdentity = new Map<string, PlatformComponentRegistration>();
+  const byIdentity = new Map<string, RegisteredPlatformComponent>();
   const blockKeyById = new Map<string, string>();
   const blockIdByKey = new Map<string, string>();
   const knownBlockIds = new Set<string>();
-  const list: PlatformComponentRegistration[] = [];
+  const list: RegisteredPlatformComponent[] = [];
 
   for (const registration of registrations) {
-    const parsedMetadata = platformBlockReleaseSchema.safeParse(registration.metadata);
+    const candidateMetadata =
+      registration.metadata ??
+      platformReleases.find(
+        (release) =>
+          release.key === registration.releaseIdentity?.key &&
+          release.releaseVersion === registration.releaseIdentity.releaseVersion,
+      );
+    if (candidateMetadata === undefined) {
+      const { key, releaseVersion } = registration.releaseIdentity ?? {
+        key: "unknown",
+        releaseVersion: "unknown",
+      };
+      throw new DefinitionRenderError(
+        "UNKNOWN_RELEASE",
+        `Platform block release '${key}@${releaseVersion}' is not present in the supplied catalogue`,
+        { releaseVersion },
+      );
+    }
+    const parsedMetadata = platformBlockReleaseSchema.safeParse(candidateMetadata);
     if (!parsedMetadata.success) {
       throw new DefinitionRenderError(
         "INVALID_COMPOSITION",
-        `Invalid platform block release metadata for '${registration.metadata?.blockId ?? "unknown"}': ${parsedMetadata.error.message}`,
+        `Invalid platform block release metadata for '${candidateMetadata.blockId}': ${parsedMetadata.error.message}`,
         {
-          ...(registration.metadata?.blockId === undefined
-            ? {}
-            : { blockId: registration.metadata.blockId }),
-          ...(registration.metadata?.releaseVersion === undefined
-            ? {}
-            : { releaseVersion: registration.metadata.releaseVersion }),
+          blockId: candidateMetadata.blockId,
+          releaseVersion: candidateMetadata.releaseVersion,
         },
       );
     }
@@ -336,7 +371,7 @@ export function createPlatformComponentRegistry(
       );
     }
 
-    const frozenRegistration: PlatformComponentRegistration = Object.freeze({
+    const frozenRegistration: RegisteredPlatformComponent = Object.freeze({
       metadata,
       parsePayload: registration.parsePayload,
     });
@@ -352,7 +387,7 @@ export function createPlatformComponentRegistry(
   const frozenReleases = Object.freeze(list.map((item) => item.metadata));
 
   const registry: PlatformComponentRegistry = {
-    get(blockId: string, releaseVersion: string): PlatformComponentRegistration | undefined {
+    get(blockId: string, releaseVersion: string): RegisteredPlatformComponent | undefined {
       return byIdentity.get(`${blockId}:${releaseVersion}`);
     },
 
@@ -364,7 +399,7 @@ export function createPlatformComponentRegistry(
       return knownBlockIds.has(blockId);
     },
 
-    list(): readonly PlatformComponentRegistration[] {
+    list(): readonly RegisteredPlatformComponent[] {
       return frozenList;
     },
 

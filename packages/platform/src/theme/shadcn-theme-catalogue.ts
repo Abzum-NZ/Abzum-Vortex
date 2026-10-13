@@ -1,18 +1,10 @@
-import {
-  type ApplicationThemeSelection,
-  applicationThemeSelectionSchema,
-  type SourceApplicationThemeSelection,
-  sourceApplicationThemeSelectionSchema,
-} from "../definition/application-composition";
-import index from "../catalogue/catalogue/shadcn-create-theme-catalogue.generated.json";
+import index from "../catalogue/catalogue/shadcn-create-theme-catalogue.json";
 
 /**
- * The shadcn/create theme catalogue index #1274 generated, exposed to the application theme
- * contract, the designer and the API/MCP draft operations. It lists every option of every
- * dimension at the pinned shadcn version, each option's release identity (or its refusal), the
- * token keys it sets, and its menu variant descriptor. It imports only the small
- * index; the option releases themselves are server-side and live in
- * `contracts/src/shadcn-theme-releases.ts`.
+ * The checked-in shadcn 4.21.0 theme catalogue index used by server-side theme selection and
+ * draft operations. It lists every option of every dimension at the pinned shadcn version, each
+ * option's release identity (or its refusal), the token keys it sets, and its menu variant
+ * descriptor. The option releases themselves live in `theme/shadcn-theme-releases.ts`.
  */
 export const shadcnThemeCatalogueDimensionKeys = [
   "style",
@@ -33,7 +25,7 @@ export type ShadcnThemeOptionRelease = Readonly<{
 }>;
 
 /**
- * One colour the generator derived because shadcn's value falls short of the platform contrast
+ * One colour corrected because shadcn's value falls short of the platform contrast
  * gate: the token and mode, shadcn's value, the compliant value (same hue and chroma, nearest
  * lightness) and the ratio it had to meet.
  */
@@ -45,7 +37,7 @@ export type ShadcnThemeContrastDerivation = Readonly<{
   requirement: string;
 }>;
 
-/** One catalogue option as the generator wrote it. Only the fields its dimension declares appear. */
+/** One checked-in catalogue option. Only the fields its dimension declares appear. */
 export type ShadcnThemeCatalogueOption = Readonly<{
   id: string;
   label: string;
@@ -109,35 +101,6 @@ export const findShadcnThemeCatalogueOption = (
   optionId: string,
 ): ShadcnThemeCatalogueOption | undefined =>
   shadcnThemeCatalogueOptions(dimension).find((option) => option.id === optionId);
-
-/**
- * The platform default selection: the base-nova style, neutral base colour, neutral theme, neutral
- * chart colour, default radius, default menu colour and subtle menu accent. It names no font, so
- * it paints the font catalogue's defaults (contracts/src/shadcn-font-catalogue.ts). Every shipped
- * application pins this so a new application starts from the platform look.
- */
-export const DEFAULT_APPLICATION_THEME_SELECTION: ApplicationThemeSelection =
-  applicationThemeSelectionSchema.parse({
-    style: "nova",
-    baseColor: "neutral",
-    theme: "neutral",
-    chartColor: "neutral",
-    radius: "default",
-    menuColor: "default",
-    menuAccent: "subtle",
-  });
-
-/** The platform default selection in its authored form, which shipped application sources pin. */
-export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION: SourceApplicationThemeSelection =
-  sourceApplicationThemeSelectionSchema.parse({
-    style: DEFAULT_APPLICATION_THEME_SELECTION.style,
-    base_color: DEFAULT_APPLICATION_THEME_SELECTION.baseColor,
-    theme: DEFAULT_APPLICATION_THEME_SELECTION.theme,
-    chart_color: DEFAULT_APPLICATION_THEME_SELECTION.chartColor,
-    radius: DEFAULT_APPLICATION_THEME_SELECTION.radius,
-    menu_color: DEFAULT_APPLICATION_THEME_SELECTION.menuColor,
-    menu_accent: DEFAULT_APPLICATION_THEME_SELECTION.menuAccent,
-  });
 
 /**
  * Whether a pinned platform theme release is the catalogue's base release. Every catalogue option

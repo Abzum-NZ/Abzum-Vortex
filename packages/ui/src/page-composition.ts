@@ -413,10 +413,7 @@ const validateMaterialisedDependencies = (
         { blockId: dependency.blockId, releaseVersion: dependency.releaseVersion },
       );
     }
-    if (
-      registration.metadata.contentFingerprint !== dependency.contentFingerprint ||
-      registration.metadata.catalogueFingerprint !== dependency.catalogueFingerprint
-    ) {
+    if (registration.metadata.contentFingerprint !== dependency.contentFingerprint) {
       throw new DefinitionRenderError(
         "MISMATCHED_RELEASE",
         `Materialised composition dependency '${dependency.blockId}:${dependency.releaseVersion}' does not match registry metadata`,

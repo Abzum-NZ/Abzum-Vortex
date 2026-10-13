@@ -3,6 +3,7 @@ import {
   type PlatformComponentRegistration,
   type PlatformComponentRegistry,
 } from "./registry";
+import type { PlatformBlockRelease } from "@vortex/platform/schema";
 import { DISPLAY_COMPONENT_REGISTRATIONS } from "./display/registrations";
 import { ATTACHMENT_COMPONENT_REGISTRATIONS } from "./search-attachment-blocks";
 import { CONTROL_COMPONENT_REGISTRATIONS } from "./controls/registrations";
@@ -22,6 +23,8 @@ export const ALL_PLATFORM_COMPONENT_REGISTRATIONS: readonly PlatformComponentReg
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with every display, control, launcher, layout and navigation release. */
-export function createFullPlatformComponentRegistry(): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(ALL_PLATFORM_COMPONENT_REGISTRATIONS);
+export function createFullPlatformComponentRegistry(
+  platformReleases: readonly PlatformBlockRelease[],
+): PlatformComponentRegistry {
+  return createPlatformComponentRegistry(ALL_PLATFORM_COMPONENT_REGISTRATIONS, platformReleases);
 }

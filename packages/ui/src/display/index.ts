@@ -77,17 +77,7 @@ export { type DisplayRenderProps } from "./context";
 
 // Display Registrations & Registry
 export {
-  DISPLAY_BLOCK_RELEASES,
   DISPLAY_COMPONENT_REGISTRATIONS,
-  GROUPED_DATA_BLOCK_RELEASE,
-  LIST_BLOCK_RELEASE,
-  NOTICE_BLOCK_RELEASE,
-  QUERY_NOTICE_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE,
-  RICH_TEXT_BLOCK_RELEASE,
-  SUMMARY_VALUES_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE,
-  TEXT_BLOCK_RELEASE,
   createDisplayComponentRegistry,
 } from "./registrations";
 

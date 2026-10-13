@@ -2,19 +2,23 @@ import "server-only";
 
 import {
   DEFAULT_APPLICATION_THEME_SELECTION,
-  SHADCN_HEADING_FONT_INHERIT,
   applicationThemeSelectionSchema,
-  findShadcnFont,
-  findShadcnThemeCatalogueOption,
-  isShadcnIconLibrary,
-  isShadcnThemeCatalogueBaseRelease,
-  resolveShadcnFontSelection,
-  shadcnFontFamilyKey,
-  shadcnThemeCatalogueDimensionKeys,
   themeTokenValueSchema,
   type ApplicationThemeSelection,
   type DefinitionRuleFailure,
 } from "../schema";
+import {
+  SHADCN_HEADING_FONT_INHERIT,
+  findShadcnFont,
+  resolveShadcnFontSelection,
+  shadcnFontFamilyKey,
+} from "./shadcn-font-catalogue";
+import { isShadcnIconLibrary } from "../pages/shadcn-icon-libraries";
+import {
+  findShadcnThemeCatalogueOption,
+  isShadcnThemeCatalogueBaseRelease,
+  shadcnThemeCatalogueDimensionKeys,
+} from "./shadcn-theme-catalogue";
 import { findShadcnThemeRelease } from "./shadcn-theme-releases";
 import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure, createThemeLocation } from "./errors";

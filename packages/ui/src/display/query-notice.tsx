@@ -1,5 +1,5 @@
 import {
-  QUERY_NOTICE_BLOCK_RELEASE,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   recordIdSchema,
   revisionSchema,
   validateComponentSettings,
@@ -25,6 +25,7 @@ export type QueryNoticePayload = Readonly<{
   items: readonly QueryNoticeItem[];
   truncated: boolean;
 }>;
+const QUERY_NOTICE_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.QUERY_NOTICE_BLOCK_RELEASE;
 
 function refuse(location: DefinitionRenderErrorLocation): never {
   throw new DefinitionRenderError(
@@ -112,14 +113,11 @@ export const QUERY_NOTICE_PAYLOAD_PARSER = createPayloadParser({
 export function QueryNoticeDisplay(props: DisplayRenderProps<QueryNoticePayload>): ReactElement {
   const metadata = props.metadata;
   const location = { placementId: props.placementId, blockId: metadata.blockId, releaseVersion: metadata.releaseVersion };
-  if (metadata.blockId !== QUERY_NOTICE_BLOCK_RELEASE.blockId ||
-      metadata.key !== QUERY_NOTICE_BLOCK_RELEASE.key ||
-      metadata.releaseVersion !== QUERY_NOTICE_BLOCK_RELEASE.releaseVersion ||
-      metadata.rendererKey !== QUERY_NOTICE_BLOCK_RELEASE.rendererKey ||
-      metadata.contentFingerprint !== QUERY_NOTICE_BLOCK_RELEASE.contentFingerprint ||
-      metadata.catalogueFingerprint !== QUERY_NOTICE_BLOCK_RELEASE.catalogueFingerprint)
+  if (metadata.key !== QUERY_NOTICE_RELEASE.key ||
+      metadata.releaseVersion !== QUERY_NOTICE_RELEASE.releaseVersion ||
+      metadata.rendererKey !== "platform.renderer.query_notice")
     throw new DefinitionRenderError("MISMATCHED_RELEASE", "Query Notice received a different immutable release", location);
-  if (validateComponentSettings(props.settings, QUERY_NOTICE_BLOCK_RELEASE.properties).length !== 0)
+  if (validateComponentSettings(props.settings, metadata.properties).length !== 0)
     refuse(location);
   const dismissal = props.settings.dismissible;
   const dismissible = dismissal?.kind === "boolean" ? dismissal.value : false;

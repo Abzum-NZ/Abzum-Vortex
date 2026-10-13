@@ -6,6 +6,7 @@ export {
   type PlacementThemeScope,
   type ThemeMode,
   type ThemeRootProps,
+  type PlatformThemeTokens,
 } from "./theme-variables";
 
 export { ALL_UI_STYLES_CSS } from "./theme-styles";

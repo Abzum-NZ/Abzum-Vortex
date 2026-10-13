@@ -1502,7 +1502,6 @@ export const platformBlockReleaseSchema = z
     key: sourceProvenanceUnchanged(namespacedKeySchema),
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
     name: sourceProvenanceUnchanged(labelSchema),
     icon: sourceProvenanceUnchanged(iconKeySchema),
     paletteGroup: sourceProvenanceUnchanged(blockPaletteGroupSchema),
@@ -1663,7 +1662,6 @@ export const platformBlockDependencySchema = z
     blockId: sourceProvenanceUnchanged(blockIdSchema),
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
@@ -1672,8 +1670,6 @@ export const sourcePlatformBlockDependencySchema = z
     kind: sourceProvenanceUnchanged(z.literal("platform_block")),
     block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),
     release_version: sourceProvenanceUnchanged(semanticVersionSchema),
-    content_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    catalogue_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
@@ -1983,7 +1979,6 @@ export const exactPlatformThemeDependencySchema = z
     catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
@@ -1992,14 +1987,18 @@ export const sourceExactPlatformThemeDependencySchema = z
     kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
     catalogue_theme_id: sourceProvenanceUnchanged(platformIdSchema),
     release_version: sourceProvenanceUnchanged(semanticVersionSchema),
-    content_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    catalogue_fingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
+/** Identity pinned by shipped definitions for the platform's default theme release. */
+export const DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY = Object.freeze({
+  catalogueThemeId: platformIdSchema.parse("3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09"),
+  releaseVersion: semanticVersionSchema.parse("3.0.0"),
+});
+
 /**
- * One option id from the generated shadcn/create theme catalogue
- * (`../catalogue/catalogue/shadcn-create-theme-catalogue.generated.json`). Option ids are
+ * One option id from the checked-in shadcn/create theme catalogue
+ * (`../catalogue/catalogue/shadcn-create-theme-catalogue.json`). Option ids are
  * lowercase kebab-case, for example `default-translucent`, and are matched against the catalogue
  * exactly.
  */
@@ -2060,6 +2059,27 @@ export const sourceApplicationThemeSelectionSchema = z
   .strict();
 export type SourceApplicationThemeSelection = z.infer<typeof sourceApplicationThemeSelectionSchema>;
 
+/** Small authored and canonical values for the platform's current default theme selection. */
+export const DEFAULT_APPLICATION_THEME_SELECTION = applicationThemeSelectionSchema.parse({
+  style: "nova",
+  baseColor: "neutral",
+  theme: "neutral",
+  chartColor: "neutral",
+  radius: "default",
+  menuColor: "default",
+  menuAccent: "subtle",
+});
+
+export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION = sourceApplicationThemeSelectionSchema.parse({
+  style: "nova",
+  base_color: "neutral",
+  theme: "neutral",
+  chart_color: "neutral",
+  radius: "default",
+  menu_color: "default",
+  menu_accent: "subtle",
+});
+
 /** Maps an authored selection onto its canonical form. */
 export const canonicalApplicationThemeSelection = (
   source: SourceApplicationThemeSelection,
@@ -2113,7 +2133,6 @@ export const platformThemeReleaseSchema = z
     catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
-    catalogueFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
   })
   .strict();
@@ -2928,7 +2947,6 @@ export type PlatformBlockReleaseSummary = Readonly<
     | "key"
     | "releaseVersion"
     | "contentFingerprint"
-    | "catalogueFingerprint"
     | "name"
     | "icon"
     | "paletteGroup"
@@ -3011,7 +3029,6 @@ const summarisePlatformBlockRelease = (
     key: release.key,
     releaseVersion: release.releaseVersion,
     contentFingerprint: release.contentFingerprint,
-    catalogueFingerprint: release.catalogueFingerprint,
     name: release.name,
     icon: release.icon,
     paletteGroup: release.paletteGroup,

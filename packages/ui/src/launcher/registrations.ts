@@ -1,12 +1,9 @@
 import {
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  LINK_TILES_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   projectedApplicationPageLinkTilesSchema,
   projectedRecordPinTilesSchema,
   mountedRecordPinFrameSchema,
-  VIEW_FILTER_BLOCK_RELEASE,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
@@ -23,17 +20,6 @@ import {
   parseDisplayEventHandlers,
   parseListPayload,
 } from "../display/projected-data";
-
-/**
- * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
- * these registrations only pair each registered release with its renderer, so a renderer
- * change cannot redefine or extend what authors may place.
- */
-export {
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  LINK_TILES_BLOCK_RELEASE,
-  VIEW_FILTER_BLOCK_RELEASE,
-};
 
 /**
  * The launcher and tile blocks are read-only display surfaces over the one `list` payload they
@@ -102,28 +88,30 @@ const APPLICATION_PAGE_LINK_PAYLOAD_PARSER: PlatformComponentPayloadParser = (va
 export const LAUNCHER_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     Object.freeze({
-      metadata: APPLICATION_LAUNCHER_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_LAUNCHER_BLOCK_RELEASE,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: LINK_TILES_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LINK_TILES_BLOCK_RELEASE,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
       parsePayload: RECORD_PIN_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
       parsePayload: APPLICATION_PAGE_LINK_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: VIEW_FILTER_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.VIEW_FILTER_BLOCK_RELEASE,
       parsePayload: noRuntimeInputs,
     }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with all launcher components. */
-export function createLauncherComponentRegistry(): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(LAUNCHER_COMPONENT_REGISTRATIONS);
+export function createLauncherComponentRegistry(
+  platformReleases: readonly PlatformBlockRelease[],
+): PlatformComponentRegistry {
+  return createPlatformComponentRegistry(LAUNCHER_COMPONENT_REGISTRATIONS, platformReleases);
 }

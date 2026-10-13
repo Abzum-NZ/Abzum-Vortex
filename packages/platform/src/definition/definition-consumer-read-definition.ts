@@ -128,8 +128,7 @@ export const verifyDefinitionCatalogueDependencies = async (
         release.key !== dependency.key ||
         release.rootId !== dependency.rootId ||
         release.releaseVersion !== dependency.releaseVersion ||
-        release.contentFingerprint !== dependency.contentFingerprint ||
-        release.catalogueFingerprint !== dependency.catalogueFingerprint
+        release.contentFingerprint !== dependency.contentFingerprint
       )
         return "invalid";
       continue;
@@ -144,8 +143,7 @@ export const verifyDefinitionCatalogueDependencies = async (
       if (
         release.blockId !== dependency.blockId ||
         release.releaseVersion !== dependency.releaseVersion ||
-        release.contentFingerprint !== dependency.contentFingerprint ||
-        release.catalogueFingerprint !== dependency.catalogueFingerprint
+        release.contentFingerprint !== dependency.contentFingerprint
       )
         return "invalid";
       continue;
@@ -165,8 +163,7 @@ export const verifyDefinitionCatalogueDependencies = async (
         release.serviceId !== dependency.operation.owner.serviceId ||
         release.operationId !== dependency.operation.operationId ||
         release.releaseVersion !== dependency.releaseVersion ||
-        release.contentFingerprint !== dependency.contentFingerprint ||
-        release.catalogueFingerprint !== dependency.catalogueFingerprint
+        release.contentFingerprint !== dependency.contentFingerprint
       )
         return "invalid";
       continue;
@@ -198,8 +195,7 @@ export const verifyDefinitionCatalogueDependencies = async (
     if (
       release.catalogueThemeId !== dependency.catalogueThemeId ||
       release.releaseVersion !== dependency.releaseVersion ||
-      release.contentFingerprint !== dependency.contentFingerprint ||
-      release.catalogueFingerprint !== dependency.catalogueFingerprint
+      release.contentFingerprint !== dependency.contentFingerprint
     )
       return "invalid";
   }
@@ -332,4 +328,3 @@ export const projectStoredConsumerRelease = async (
     );
   return result.data;
 };
-

@@ -156,7 +156,6 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
       kind: z.literal("connection_type"),
       ...exactDependencyCommon,
       rootId: connectionTypeIdSchema,
-      catalogueFingerprint: fingerprintSchema,
     })
     .strict(),
   z
@@ -167,7 +166,6 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
         .refine((value) => value !== "00000000-0000-0000-0000-000000000000"),
       releaseVersion: stableDefinitionReleaseVersionSchema,
       contentFingerprint: fingerprintSchema,
-      catalogueFingerprint: fingerprintSchema,
     })
     .strict(),
   z
@@ -176,7 +174,6 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
       blockId: blockIdSchema,
       releaseVersion: stableDefinitionReleaseVersionSchema,
       contentFingerprint: fingerprintSchema,
-      catalogueFingerprint: fingerprintSchema,
     })
     .strict(),
   flowTargetDependencySchema,

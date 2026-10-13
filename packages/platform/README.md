@@ -24,6 +24,13 @@ The source folders group implementation by domain:
 - `rules` and `workflows`: typed conditions and flow interpretation, plus durable workflow starts and Kestra integration.
 - `theme`: theme selection, resolution and validation.
 
+The files `src/catalogue/catalogue/shadcn-create-theme-catalogue.json`,
+`shadcn-create-theme-releases.json` and `shadcn-fonts.json` are checked-in shadcn 4.21.0 catalogue
+data. Theme and font release data stays behind the server entry; `shadcn-font-options.json` is the
+small browser-safe font view used by the renderer. The unused registry source snapshot and its
+importer were removed, so these files are maintained as platform data rather than generated at
+build time.
+
 These folders describe source ownership; the package entry points above define what consumers can import. A schema parse establishes that data matches its contract. It does not authenticate a caller, decide permissions, read protected current state, commit a transaction or perform an operation.
 
 Definition validation errors are maintained in the catalogue contract and translated into a safe public result. See [the validation error guide](VALIDATION_ERRORS.md) for the error codes and translation rules.

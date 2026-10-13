@@ -9,6 +9,11 @@ import {
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
+import {
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  PLATFORM_BLOCK_RELEASES,
+} from "@vortex/platform/server";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import { ApplicationPageView } from "./_components/application-page-view";
@@ -271,6 +276,9 @@ export default async function ApplicationAddressPage({
         theme={resolved.experience.theme}
         organizationName={organizationShortName}
         identityId={identity.session.identityId}
+        platformBlockReleases={PLATFORM_BLOCK_RELEASES}
+        fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+        platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
       />
     );
   }
@@ -313,6 +321,9 @@ export default async function ApplicationAddressPage({
         identityId={identity.session.identityId}
         openApplication={openApplication}
         launcherHref={launcherPath(tenantShortName, organizationShortName)}
+        platformBlockReleases={PLATFORM_BLOCK_RELEASES}
+        fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+        platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
         {...(studio === undefined ? {} : { studio })}
       />
     );
@@ -410,6 +421,9 @@ export default async function ApplicationAddressPage({
   return (
     <ApplicationPageView
       model={applicationModel}
+      platformBlockReleases={PLATFORM_BLOCK_RELEASES}
+      fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+      platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
       onOpenApplication={openApplication}
       adoptReleaseAction={adoptRelease}
       applicationSwitcherState={applicationSwitcherState}

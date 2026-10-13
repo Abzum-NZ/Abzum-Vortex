@@ -1,27 +1,6 @@
 import {
-  BOARD_BLOCK_RELEASE,
-  CALENDAR_BLOCK_RELEASE,
-  DISPLAY_BLOCK_RELEASES,
-  GROUPED_DATA_BLOCK_RELEASE,
-  GROUPED_DATA_BLOCK_RELEASE_1_1_0,
-  LIST_BLOCK_RELEASE,
-  LIST_BLOCK_RELEASE_1_1_0,
-  NOTICE_BLOCK_RELEASE,
-  QUERY_NOTICE_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-  RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
-  RICH_TEXT_BLOCK_RELEASE,
-  RICH_TEXT_BLOCK_RELEASE_1_1_0,
-  SUMMARY_VALUES_BLOCK_RELEASE,
-  SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
-  TABLE_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE_1_1_0,
-  TABLE_BLOCK_RELEASE_1_2_0,
-  TABLE_BLOCK_RELEASE_1_3_0,
-  TABLE_BLOCK_RELEASE_1_4_0,
-  TEXT_BLOCK_RELEASE,
-  TEXT_BLOCK_RELEASE_1_1_0,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
@@ -57,26 +36,6 @@ import {
 import { QUERY_NOTICE_PAYLOAD_PARSER } from "./query-notice";
 
 /**
- * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
- * these registrations only pair each registered release with its renderer, so a renderer
- * change cannot redefine or extend what authors may place.
- */
-export {
-  DISPLAY_BLOCK_RELEASES,
-
-
-  GROUPED_DATA_BLOCK_RELEASE,
-  LIST_BLOCK_RELEASE,
-  NOTICE_BLOCK_RELEASE,
-  QUERY_NOTICE_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE,
-  RICH_TEXT_BLOCK_RELEASE,
-  SUMMARY_VALUES_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE,
-  TEXT_BLOCK_RELEASE,
-};
-
-/**
  * The parser a display block's registration supplies: its own ready values under `data` and its own
  * declared semantic callbacks under `events`. Each block names one payload parser, so an accepted
  * payload shape is that block's alone and adding a data component needs no renderer change.
@@ -104,101 +63,103 @@ const SUMMARY_VALUES_PAYLOAD_PARSER = displayPayloadParser<SummaryPayload>(parse
 export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     Object.freeze({
-      metadata: TEXT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE,
       parsePayload: TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: RICH_TEXT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RICH_TEXT_BLOCK_RELEASE,
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: LIST_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LIST_BLOCK_RELEASE,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: TABLE_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: RECORD_DETAIL_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: GROUPED_DATA_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.GROUPED_DATA_BLOCK_RELEASE,
       parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: SUMMARY_VALUES_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: NOTICE_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE,
       parsePayload: noRuntimeInputs,
     }),
     Object.freeze({
-      metadata: QUERY_NOTICE_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.QUERY_NOTICE_BLOCK_RELEASE,
       parsePayload: QUERY_NOTICE_PAYLOAD_PARSER,
     }),
     // Release 1.1.0 adds the optional authored empty message; the same parser serves both releases.
     Object.freeze({
-      metadata: TEXT_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE_1_1_0,
       parsePayload: TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: RICH_TEXT_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RICH_TEXT_BLOCK_RELEASE_1_1_0,
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: LIST_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LIST_BLOCK_RELEASE_1_1_0,
       parsePayload: LIST_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: TABLE_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_1_0,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: GROUPED_DATA_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.GROUPED_DATA_BLOCK_RELEASE_1_1_0,
       parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
     // Release 1.2.0 declares the data contract as settings; the same renderers and parsers read it.
     Object.freeze({
-      metadata: TABLE_BLOCK_RELEASE_1_2_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_2_0,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
     }),
     // Release 1.3.0 adds configured row behaviours; the same parser reads them.
     Object.freeze({
-      metadata: TABLE_BLOCK_RELEASE_1_3_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_3_0,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     // Release 1.4.0 adds the interactive filter, search, sort, paging and selection controls and
     // each action's declared capability; the same parser reads them.
     Object.freeze({
-      metadata: TABLE_BLOCK_RELEASE_1_4_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE_1_4_0,
       parsePayload: TABLE_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: CALENDAR_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CALENDAR_BLOCK_RELEASE,
       parsePayload: CALENDAR_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      metadata: BOARD_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BOARD_BLOCK_RELEASE,
       parsePayload: BOARD_PAYLOAD_PARSER,
     }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with every display block release. */
-export function createDisplayComponentRegistry(): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(DISPLAY_COMPONENT_REGISTRATIONS);
+export function createDisplayComponentRegistry(
+  platformReleases: readonly PlatformBlockRelease[],
+): PlatformComponentRegistry {
+  return createPlatformComponentRegistry(DISPLAY_COMPONENT_REGISTRATIONS, platformReleases);
 }

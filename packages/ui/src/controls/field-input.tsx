@@ -2,7 +2,6 @@
 
 import type { ComponentType, ReactElement } from "react";
 import {
-  FIELD_INPUT_CONTROL_RELEASES,
   fieldInputControlKeys,
   type FieldInputControlKey,
 } from "@vortex/platform/schema";
@@ -27,7 +26,7 @@ type FieldInputComponent = ComponentType<ControlRenderProps<FieldInputPayload>>;
  * The one renderer for every automatic field input. The compiler derived its `control` from the
  * referenced module field type and validated the derived settings against that control's own
  * release, so this adapter delegates to the exact registered input control with the release
- * metadata in FIELD_INPUT_CONTROL_RELEASES. A placement without a derived control, or carrying
+ * metadata in the server-projected release map. A placement without a derived control, or carrying
  * projected values of a different control's shape, is refused rather than rendered with an
  * invented one.
  */
@@ -82,5 +81,12 @@ export function FieldInput(props: FieldInputProps): ReactElement {
       location,
     );
   const Component = COMPONENTS[key];
-  return <Component {...props} metadata={FIELD_INPUT_CONTROL_RELEASES[key]} />;
+  const release = props.fieldInputControlReleases[key];
+  if (release === undefined)
+    throw new DefinitionRenderError(
+      "UNKNOWN_RELEASE",
+      `Automatic field input control '${key}' is not present in the supplied catalogue`,
+      location,
+    );
+  return <Component {...props} metadata={release} />;
 }

@@ -3,13 +3,16 @@ import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { fingerprintSchema, pageCompositionSchema, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import { fingerprintSchema, pageCompositionSchema, type ApplicationSourceDocument,
+  type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   ApplicationPreview,
   createFullPlatformComponentRegistry,
   parseApplicationPreviewArtifact,
   type ApplicationPreviewArtifact,
   type ApplicationPreviewBreakpoint,
+  type FieldInputControlReleaseMap,
+  type PlatformThemeTokens,
 } from "@vortex/ui";
 import { previewStudioApplicationHomepage } from "../preview-actions";
 
@@ -82,11 +85,18 @@ class PreviewRenderBoundary extends Component<{
 }
 
 /** Consumes only the protected saved-draft producer; it never sends local source or effects. */
-export function ApplicationDraftPreview({ context, readContext }: {
+export function ApplicationDraftPreview({ context, readContext, platformBlockCatalogue,
+  fieldInputControlReleases, platformThemeTokens }: {
   context: SavedHomepagePreviewContext | null;
   readContext: () => SavedHomepagePreviewContext | null;
+  platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
 }) {
-  const registry = useMemo(() => createFullPlatformComponentRegistry(), []);
+  const registry = useMemo(
+    () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
+    [platformBlockCatalogue],
+  );
   const [breakpoint, setBreakpoint] = useState<ApplicationPreviewBreakpoint>("desktop");
   const selectedBreakpoint = useRef<ApplicationPreviewBreakpoint>("desktop");
   const [selection, setSelection] = useState<PreviewSelection | null>(null);
@@ -266,6 +276,8 @@ export function ApplicationDraftPreview({ context, readContext }: {
           message: "This saved page could not be rendered. No substitute content is shown." });
       }}>
       <ApplicationPreview artifact={visible.artifact} registry={registry}
+        fieldInputControlReleases={fieldInputControlReleases}
+        platformThemeTokens={platformThemeTokens}
         breakpoint={visible.request.breakpoint} onSimulation={() => {
           if (isCurrent(visible.request)) setSimulation("Simulated interaction only. No business action was performed.");
         }} />

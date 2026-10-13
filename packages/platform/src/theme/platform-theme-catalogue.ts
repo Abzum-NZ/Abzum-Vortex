@@ -3,7 +3,7 @@ import {
   type PlatformThemeRelease,
   type PlatformThemeTokenRoleKey,
 } from "../definition/application-composition";
-import { generatedReleaseFingerprints } from "../catalogue/catalogue/generated-fingerprints";
+import { platformThemeReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import source from "../catalogue/catalogue/platform-theme-catalogue.source.json";
 
 const deepFreeze = <Value>(value: Value): Value => {
@@ -22,10 +22,8 @@ const currentTokens: Record<PlatformThemeTokenRoleKey, unknown> =
   source.PLATFORM_THEME_RELEASE_3_0_0.tokens;
 
 /**
- * One registered platform theme release: a source definition plus the canonical-JSON SHA-256
- * fingerprints that `pnpm catalogue:fingerprints` derives from the same token content into
- * catalogue/catalogue-fingerprints.generated.json, merged in by theme id and release version and
- * never written by hand. It is parsed through the release contract at module load and deep-frozen.
+ * One registered platform theme release: a source definition plus its canonical-JSON content hash,
+ * computed once as the catalogue loads. It is parsed through the release contract and deep-frozen.
  */
 const release = (definition: {
   catalogueThemeId: string;
@@ -36,10 +34,7 @@ const release = (definition: {
     platformThemeReleaseSchema.parse({
       catalogueThemeId: definition.catalogueThemeId,
       releaseVersion: definition.releaseVersion,
-      ...generatedReleaseFingerprints(
-        "platformThemes",
-        `${definition.catalogueThemeId}:${definition.releaseVersion}`,
-      ),
+      ...platformThemeReleaseContentHash(definition),
       tokens: definition.tokens,
     }),
   );

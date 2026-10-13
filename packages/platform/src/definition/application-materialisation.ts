@@ -7,7 +7,6 @@ import {
   guidedFormPageCompositionSchema,
   isRepeatableSlotIdentity,
   findFieldInputBinding,
-  FIELD_INPUT_CONTROL_RELEASES,
   pageCompositionSchema,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
@@ -29,6 +28,7 @@ import {
   type ProtectedReadModelKey,
   type SourceBlockPropertyValueContract,
 } from "../schema";
+import { FIELD_INPUT_CONTROL_RELEASES } from "./application-composition-catalogue";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   DefinitionCompilationError,
@@ -97,16 +97,12 @@ const canonicalDependency = (
   kind: "platform_block" as const,
   blockId: dependency.block_id,
   releaseVersion: dependency.release_version,
-  contentFingerprint: dependency.content_fingerprint,
-  catalogueFingerprint: dependency.catalogue_fingerprint,
 });
 
 const canonicalThemeDependency = (base: ApplicationSourceDocument["body"]["theme"]["base"]) => ({
   kind: "platform_theme" as const,
   catalogueThemeId: base.catalogue_theme_id,
   releaseVersion: base.release_version,
-  contentFingerprint: base.content_fingerprint,
-  catalogueFingerprint: base.catalogue_fingerprint,
 });
 
 const canonicalThemeValue = (value: Record<string, unknown>): unknown => {
@@ -208,8 +204,6 @@ export const materialiseApplicationTheme = (
       kind: "platform_theme",
       catalogueThemeId: release.catalogueThemeId,
       releaseVersion: release.releaseVersion,
-      contentFingerprint: release.contentFingerprint,
-      catalogueFingerprint: release.catalogueFingerprint,
     })
   )
     reject("vortex.definition.application_dependency_manifest");
@@ -702,9 +696,13 @@ export const materialiseApplicationComposition = (
     blockId: release.blockId,
     releaseVersion: release.releaseVersion,
     contentFingerprint: release.contentFingerprint,
-    catalogueFingerprint: release.catalogueFingerprint,
   }));
-  if (canonicalJson(dependencies) !== canonicalJson(selectedDependencies))
+  const selectedIdentities = selectedDependencies.map(({ kind, blockId, releaseVersion }) => ({
+    kind,
+    blockId,
+    releaseVersion,
+  }));
+  if (canonicalJson(dependencies) !== canonicalJson(selectedIdentities))
     reject("vortex.definition.application_dependency_manifest");
   if (
     canonicalJson(canonicalThemeDependency(source.body.theme.base)) !==
@@ -712,8 +710,6 @@ export const materialiseApplicationComposition = (
       kind: "platform_theme",
       catalogueThemeId: snapshot.platformTheme.catalogueThemeId,
       releaseVersion: snapshot.platformTheme.releaseVersion,
-      contentFingerprint: snapshot.platformTheme.contentFingerprint,
-      catalogueFingerprint: snapshot.platformTheme.catalogueFingerprint,
     })
   )
     reject("vortex.definition.application_dependency_manifest");
@@ -1129,5 +1125,5 @@ export const materialiseApplicationComposition = (
     pages.push({ pageId, composition: canonical as CanonicalComposition });
   }
 
-  return { platformBlockDependencies: dependencies, shells, pages, theme };
+  return { platformBlockDependencies: selectedDependencies, shells, pages, theme };
 };

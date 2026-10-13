@@ -1,6 +1,6 @@
 import {
   applicationSourceDocumentSchema,
-  DEFAULT_PLATFORM_THEME_RELEASE,
+  DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
@@ -26,7 +26,6 @@ export const minimumApplicationSource = (
 ): MinimumApplicationSourceResult => {
   const applicationKey = inputs.key.trim();
   const permissionKey = `${applicationKey}.home.view`;
-  const theme = DEFAULT_PLATFORM_THEME_RELEASE;
   const parsed = applicationSourceDocumentSchema.safeParse({
     source_contract_version: "2.0.0",
     root_alias: "application_root",
@@ -86,10 +85,8 @@ export const minimumApplicationSource = (
       theme: {
         base: {
           kind: "platform_theme",
-          catalogue_theme_id: theme.catalogueThemeId,
-          release_version: theme.releaseVersion,
-          content_fingerprint: theme.contentFingerprint,
-          catalogue_fingerprint: theme.catalogueFingerprint,
+          catalogue_theme_id: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.catalogueThemeId,
+          release_version: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.releaseVersion,
         },
         token_overrides: {},
       },

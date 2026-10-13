@@ -1,18 +1,22 @@
 import {
+  DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  defaultSaveFlowSource,
+  type ApplicationSourceDocument,
+  type PlatformBlockReleaseIdentity,
+  type SourceBlockPropertyValueContract,
+} from "@vortex/platform/schema";
+import { loadApplicationSource } from "../application-source-loader";
+
+const {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE_1_2_0,
-  DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   FORM_CONTAINER_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE_1_3_0,
   TEXT_INPUT_BLOCK_RELEASE,
-  defaultSaveFlowSource,
-  type ApplicationSourceDocument,
-  type PlatformBlockRelease,
-  type SourceBlockPropertyValueContract,
-} from "@vortex/platform/schema";
-import { loadApplicationSource } from "../application-source-loader";
+} = PLATFORM_BLOCK_RELEASE_IDENTITIES;
 
 const recordType = "vortex.tasks:task";
 const query = "vortex.tasks:tasks";
@@ -24,7 +28,7 @@ const layout = {
   height: { kind: "content" as const },
 };
 const placement = (
-  release: PlatformBlockRelease,
+  release: PlatformBlockReleaseIdentity,
   settings: Record<string, SourceBlockPropertyValueContract> = {},
   slots: Record<string, unknown> = {},
 ) => ({

@@ -6,12 +6,11 @@ import {
   canonicalJson,
   sameId,
   saveDefinitionDraftCommandSchema,
-  PLATFORM_THEME_RELEASE_2_0_0,
-  PLATFORM_THEME_RELEASE_3_0_0,
   sourceThemeTokenValueSchema,
   translateDefinitionRuleFailures,
   type ApplicationContent,
 } from "@vortex/platform/schema";
+import { PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0 } from "@vortex/platform/server";
 import { fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@web/platform-server";
 import {
   parseStudioAppearanceRequest,
@@ -129,8 +128,7 @@ export async function validateStudioApplicationAppearance(
     const authored = draft.source.body.theme;
     const pin = authored.base;
     const release = [PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0].find((item) =>
-      item.catalogueThemeId === pin.catalogue_theme_id && item.releaseVersion === pin.release_version &&
-      item.contentFingerprint === pin.content_fingerprint && item.catalogueFingerprint === pin.catalogue_fingerprint);
+      item.catalogueThemeId === pin.catalogue_theme_id && item.releaseVersion === pin.release_version);
     if (release === undefined) return { kind: "refused" };
     const inherited = materialiseApplicationTheme({ ...authored, token_overrides: {} }, draft.key, release);
     if (!inherited.valid) return { kind: "refused" };

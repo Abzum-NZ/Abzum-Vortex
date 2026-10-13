@@ -1,5 +1,4 @@
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   isRepeatableSlotIdentity,
   platformBlockReleaseIdentity,
   projectPlatformCatalogueDiscovery,
@@ -160,12 +159,12 @@ const option = (id: string, key: string, name: string): StudioReferenceOption =>
 /** Creates discovery over the server-owned catalogue for one page surface and draft context. */
 export function createStudioDiscoveryAdapter(
   options: Readonly<{
-    catalogue?: ImmutablePlatformBlockCatalogue;
+    catalogue: ImmutablePlatformBlockCatalogue;
     surface?: StudioPageSurface;
     context?: StudioDiscoveryContext;
-  }> = {},
+  }>,
 ): StudioDiscoveryAdapter {
-  const catalogue = options.catalogue ?? IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
+  const { catalogue } = options;
   const surface: StudioPageSurface = options.surface ?? Object.freeze({ kind: "authenticated" });
   const context: StudioDiscoveryContext = Object.freeze({ ...options.context });
   const isPublic = surface.kind === "public";

@@ -1,5 +1,4 @@
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   builderKeySchema,
   readRecordDetailContract,
   readRecordsTableContract,
@@ -14,6 +13,7 @@ import {
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
 } from "../schema";
+import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";
 
 /**
  * Located catalogue validation for authored Application documents.
@@ -123,11 +123,6 @@ export function validateApplicationSourceCatalogue(
     );
     if (release === undefined)
       report("vortex.definition.application_dependency_manifest", "broken_reference");
-    else if (
-      release.contentFingerprint !== dependency.content_fingerprint ||
-      release.catalogueFingerprint !== dependency.catalogue_fingerprint
-    )
-      report("vortex.definition.application_dependency_manifest", "incompatible_version");
   }
 
   // The data source of a Records table or Record detail is its placement's bound query. A

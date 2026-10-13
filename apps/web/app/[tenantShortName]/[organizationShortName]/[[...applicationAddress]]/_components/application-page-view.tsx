@@ -18,10 +18,9 @@ import {
   createFullPlatformComponentRegistry,
   equalFormValue,
   getAccessibleName,
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
   parseBoardPayload,
   parseTablePayload,
-  FORM_CONTAINER_BLOCK_RELEASE,
+  type FieldInputControlReleaseMap,
   PagePuckRenderer,
   type PagePuckRendererProps,
   UnsavedWorkProvider,
@@ -42,6 +41,7 @@ import {
   type LinkNavigationEnvironment,
   type ProjectedPageCapability,
   type ServerFlowResponse,
+  type PlatformThemeTokens,
   parseChoiceInputPayload,
 } from "@vortex/ui";
 import {
@@ -51,15 +51,12 @@ import {
   mountedRecordPinFrameSchema,
   responsivePlacementSchema,
   type BoardColumnSelector,
-  CHOICE_INPUT_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
-  FIELD_INPUT_BLOCK_RELEASE,
-  FIELD_INPUT_CONTROL_RELEASES,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   formContinuationAnswerSchema,
   type ReferenceChoiceSelectionEvidenceMap,
   type ReferenceChoiceSelectionEvidence,
 } from "@vortex/platform/schema";
+import type { PlatformBlockRelease } from "@vortex/platform/schema";
 
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -132,9 +129,6 @@ const asComponentBinding = (
     event: binding.event,
     flow: { flowId: binding.flowId, inputs: {} },
   }) as ComponentFlowBinding;
-
-/** One registry shared by every rendered application page. */
-const platformComponentRegistry = createFullPlatformComponentRegistry();
 
 /**
  * A placement's event callbacks. Display events and control events (the form's ready, reset and
@@ -296,8 +290,20 @@ function ChoiceFormLifetime({ children, mount, unmount, context, baseline }: Rea
 }
 
 /** Finds the form ancestor that owns each placement in the rendered page tree. */
+const isPlatformRelease = (
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  block: unknown,
+  identity: Readonly<{ key: string; releaseVersion: string }>,
+): boolean => {
+  if (!isRecord(block) || typeof block.blockId !== "string" || typeof block.releaseVersion !== "string")
+    return false;
+  const release = registry.get(block.blockId, block.releaseVersion)?.metadata;
+  return release?.key === identity.key && release.releaseVersion === identity.releaseVersion;
+};
+
 const formOwnersByPlacement = (
   page: Readonly<Record<string, unknown>>,
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Readonly<Record<string, string>> => {
   const owners: Record<string, string> = {};
   const visit = (slot: unknown, formOwner?: string): void => {
@@ -309,12 +315,11 @@ const formOwnersByPlacement = (
     for (const [placementId, candidate] of Object.entries(slot.placements)) {
       if (!isRecord(candidate)) continue;
       const block = candidate.block;
-      const owner =
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        block.blockId.toLowerCase() === FORM_CONTAINER_BLOCK_RELEASE.blockId.toLowerCase()
-          ? placementId
-          : formOwner;
+      const owner = isPlatformRelease(
+        registry,
+        block,
+        PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
+      ) ? placementId : formOwner;
       if (owner !== undefined) owners[placementId] = owner;
       if (isRecord(candidate.slots))
         for (const child of Object.values(candidate.slots)) visit(child, owner);
@@ -333,6 +338,7 @@ const formSurfaceComposition = (
   page: Readonly<Record<string, unknown>>,
   pageId: string,
   formId: string,
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Readonly<{
   composition: ProjectedPageCapability;
   placementIds: readonly string[];
@@ -367,9 +373,7 @@ const formSurfaceComposition = (
     matchId === undefined ||
     matches !== 1 ||
     !matchUsable ||
-    !isRecord(match.block) ||
-    typeof match.block.blockId !== "string" ||
-    match.block.blockId.toLowerCase() !== FORM_CONTAINER_BLOCK_RELEASE.blockId.toLowerCase()
+    !isPlatformRelease(registry, match.block, PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE)
   )
     return undefined;
 
@@ -445,17 +449,15 @@ const visibleOwningFormFieldLabel = (
   pageId: string,
   formId: string,
   fieldKey: string,
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): string | undefined => {
   if (typeof document === "undefined") return undefined;
-  const surface = formSurfaceComposition(page, pageId, formId);
+  const surface = formSurfaceComposition(page, pageId, formId, registry);
   if (surface === undefined) return undefined;
   const ownerForm = surface.placements[formId];
   const ownerBlock = ownerForm?.block;
   if (
-    !isRecord(ownerBlock) ||
-    typeof ownerBlock.blockId !== "string" ||
-    ownerBlock.blockId.toLowerCase() !== FORM_CONTAINER_BLOCK_RELEASE.blockId.toLowerCase() ||
-    ownerBlock.releaseVersion !== FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
+    !isPlatformRelease(registry, ownerBlock, PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE)
   )
     return undefined;
   const matchingPlacements = surface.placementIds.flatMap((placementId) => {
@@ -472,7 +474,7 @@ const visibleOwningFormFieldLabel = (
       settings.name.value !== fieldKey
     )
       return [];
-    const registration = platformComponentRegistry.get(block.blockId, block.releaseVersion);
+    const registration = registry.get(block.blockId, block.releaseVersion);
     if (
       registration === undefined ||
       !registration.metadata.supportedEvents.includes("field_changed")
@@ -506,23 +508,22 @@ const runtimeInputWithFormDefault = (
   input: Record<string, unknown>,
   placement: Record<string, unknown>,
   value: unknown,
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  fieldInputControlReleases: FieldInputControlReleaseMap,
 ): Record<string, unknown> => {
   if (!isRecord(placement.block) || typeof placement.block.blockId !== "string") return input;
   const blockId = placement.block.blockId.toLowerCase();
   const settings = isRecord(placement.settings) ? placement.settings : {};
-  let control = Object.entries(FIELD_INPUT_CONTROL_RELEASES).find(
+  let control = Object.entries(fieldInputControlReleases).find(
     ([, release]) => release.blockId.toLowerCase() === blockId,
   )?.[0];
-  if (blockId === FIELD_INPUT_BLOCK_RELEASE.blockId.toLowerCase()) {
+  const releaseKey = registry.get(blockId, String(placement.block.releaseVersion))?.metadata.key;
+  if (releaseKey === PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE.key) {
     const selected = settings.control;
     control = isRecord(selected) && selected.kind === "choice" && typeof selected.value === "string"
       ? selected.value
       : undefined;
-  } else if (
-    blockId === CHOICE_INPUT_BLOCK_RELEASE.blockId.toLowerCase() ||
-    blockId === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId.toLowerCase() ||
-    blockId === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.blockId.toLowerCase()
-  ) {
+  } else if (releaseKey === PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE.key) {
     control = "choice";
   }
   const payloadKind: Readonly<Record<string, string>> = {
@@ -583,6 +584,7 @@ const runtimeInputWithFormDefault = (
 /** Finds the semantic events each registered placement declares in the rendered page tree. */
 const placementEventNamesByPage = (
   page: Readonly<Record<string, unknown>>,
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Readonly<Record<string, ReadonlySet<string>>> => {
   const eventNames: Record<string, ReadonlySet<string>> = {};
   const visit = (slot: unknown): void => {
@@ -599,7 +601,7 @@ const placementEventNamesByPage = (
         typeof block.blockId === "string" &&
         typeof block.releaseVersion === "string"
       ) {
-        const registration = platformComponentRegistry.get(block.blockId, block.releaseVersion);
+        const registration = registry.get(block.blockId, block.releaseVersion);
         if (registration !== undefined)
           eventNames[placementId] = new Set(registration.metadata.supportedEvents);
       }
@@ -616,7 +618,10 @@ const placementEventNamesByPage = (
 };
 
 /** Finds launcher placements whose row actions open through the addressed server action. */
-const applicationLauncherPlacementIds = (page: Readonly<Record<string, unknown>>): Set<string> => {
+const applicationLauncherPlacementIds = (
+  page: Readonly<Record<string, unknown>>,
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+): Set<string> => {
   const placementIds = new Set<string>();
   const visit = (slot: unknown): void => {
     if (!isRecord(slot)) return;
@@ -627,11 +632,7 @@ const applicationLauncherPlacementIds = (page: Readonly<Record<string, unknown>>
     for (const [placementId, candidate] of Object.entries(slot.placements)) {
       if (!isRecord(candidate)) continue;
       const block = candidate.block;
-      if (
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        block.blockId.toLowerCase() === APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId.toLowerCase()
-      )
+      if (isPlatformRelease(registry, block, PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_LAUNCHER_BLOCK_RELEASE))
         placementIds.add(placementId);
       if (isRecord(candidate.slots))
         for (const child of Object.values(candidate.slots)) visit(child);
@@ -793,6 +794,9 @@ export function ApplicationPageView({
   applicationSearch,
   applicationSearchPageSubject,
   pageFeedback,
+  platformBlockReleases,
+  fieldInputControlReleases,
+  platformThemeTokens,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
@@ -803,7 +807,14 @@ export function ApplicationPageView({
   applicationSearch?: PagePuckRendererProps["applicationSearch"];
   applicationSearchPageSubject?: string | undefined;
   pageFeedback?: ReactNode;
+  platformBlockReleases: readonly PlatformBlockRelease[];
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
+  const platformComponentRegistry = useMemo(
+    () => createFullPlatformComponentRegistry(platformBlockReleases),
+    [platformBlockReleases],
+  );
   return (
     <UnsavedWorkProvider>
       <ApplicationPageViewContent
@@ -816,6 +827,9 @@ export function ApplicationPageView({
         applicationSearch={applicationSearch}
         applicationSearchPageSubject={applicationSearchPageSubject}
         pageFeedback={pageFeedback}
+        platformComponentRegistry={platformComponentRegistry}
+        fieldInputControlReleases={fieldInputControlReleases}
+        platformThemeTokens={platformThemeTokens}
       />
     </UnsavedWorkProvider>
   );
@@ -831,6 +845,9 @@ function ApplicationPageViewContent({
   applicationSearch,
   applicationSearchPageSubject,
   pageFeedback,
+  platformComponentRegistry,
+  fieldInputControlReleases,
+  platformThemeTokens,
 }: Readonly<{
   model: ApplicationPageModel;
   guidedFormActions: GuidedFormActions;
@@ -841,6 +858,9 @@ function ApplicationPageViewContent({
   applicationSearch?: PagePuckRendererProps["applicationSearch"];
   applicationSearchPageSubject?: string | undefined;
   pageFeedback?: ReactNode;
+  platformComponentRegistry: ReturnType<typeof createFullPlatformComponentRegistry>;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
@@ -930,14 +950,17 @@ function ApplicationPageViewContent({
   const { hasUnsavedWork, guard: unsavedWork } = useUnsavedWorkGuard(confirmDiscardUnsavedWork);
 
   const application = model.invocation;
-  const formOwners = useMemo(() => formOwnersByPlacement(model.page), [model.page]);
+  const formOwners = useMemo(
+    () => formOwnersByPlacement(model.page, platformComponentRegistry),
+    [model.page, platformComponentRegistry],
+  );
   const placementEventNames = useMemo(
-    () => placementEventNamesByPage(model.page),
-    [model.page],
+    () => placementEventNamesByPage(model.page, platformComponentRegistry),
+    [model.page, platformComponentRegistry],
   );
   const launcherPlacements = useMemo(
-    () => applicationLauncherPlacementIds(model.page),
-    [model.page],
+    () => applicationLauncherPlacementIds(model.page, platformComponentRegistry),
+    [model.page, platformComponentRegistry],
   );
   const serverDataRef = useRef(model.data);
   const serverModelRef = useRef(model);
@@ -1704,7 +1727,12 @@ function ApplicationPageViewContent({
         cancel: () => void;
       }>,
     ) => {
-      const surface = formSurfaceComposition(model.page, model.pageId, form.formId);
+      const surface = formSurfaceComposition(
+        model.page,
+        model.pageId,
+        form.formId,
+        platformComponentRegistry,
+      );
       if (surface === undefined)
         return (
           <div className="flex flex-col gap-4">
@@ -1752,7 +1780,13 @@ function ApplicationPageViewContent({
           name !== undefined &&
           Object.hasOwn(form.inputs, name) && dependentDefaultOffered
         ) {
-          input = runtimeInputWithFormDefault(input, placement, form.inputs[name]);
+          input = runtimeInputWithFormDefault(
+            input,
+            placement,
+            form.inputs[name],
+            platformComponentRegistry,
+            fieldInputControlReleases,
+          );
           if (choiceField?.dependency !== undefined && typeof defaultValue === "string" &&
               defaultEvidence !== undefined) {
             choiceSelectionsRef.current[choiceScopeKey(placementId, form.formId)] = {
@@ -1810,6 +1844,8 @@ function ApplicationPageViewContent({
               themeMode="system"
               composition={surface.composition}
               registry={platformComponentRegistry}
+              fieldInputControlReleases={fieldInputControlReleases}
+              platformThemeTokens={platformThemeTokens}
               pageId={model.pageId}
               theme={model.theme}
               projectedNavigation={model.navigation}
@@ -1930,6 +1966,7 @@ function ApplicationPageViewContent({
                   model.pageId,
                   formPlacementId,
                   diagnostic.submittedField,
+                  platformComponentRegistry,
                 );
           const recovery =
             server.descriptor.outcome === "partial" || server.descriptor.outcome === "uncertain"
@@ -2953,6 +2990,8 @@ function ApplicationPageViewContent({
         )}
         composition={model.page as unknown as ProjectedPageCapability}
         registry={platformComponentRegistry}
+        fieldInputControlReleases={fieldInputControlReleases}
+        platformThemeTokens={platformThemeTokens}
         shells={model.shells}
         {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
         applicationShellRuntime={applicationShellRuntime}

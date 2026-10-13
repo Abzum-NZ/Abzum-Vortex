@@ -5,9 +5,6 @@ import {
   type InstalledRuntimeContext,
 } from "../definition/app-index";
 import {
-  LINK_TILES_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   applicationPageLinkResultSchema,
   applicationPageLinkSelectorSchema,
   projectedApplicationPageLinkTilesSchema,
@@ -31,6 +28,11 @@ import {
   type ViewerSafeRecordLinkIdentity,
   type ViewerSafeRecordLinkResult,
 } from "../schema";
+import {
+  LINK_TILES_BLOCK_RELEASE,
+  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
+  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+} from "../definition/application-composition-catalogue";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,

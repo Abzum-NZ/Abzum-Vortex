@@ -291,8 +291,7 @@ const placementOperationBindings = (
           sameId(entry.operation.owner.serviceId, platform.release.serviceId) &&
           sameId(entry.operation.operationId, platform.release.operationId) &&
           entry.releaseVersion === platform.release.releaseVersion &&
-          entry.contentFingerprint === platform.release.contentFingerprint &&
-          entry.catalogueFingerprint === platform.release.catalogueFingerprint,
+          entry.contentFingerprint === platform.release.contentFingerprint,
       )
     );
   };

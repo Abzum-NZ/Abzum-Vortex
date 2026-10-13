@@ -1,5 +1,10 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
 import { ApplicationDraftWorkspace } from "../../_components/application-draft-workspace";
+import {
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
+} from "@vortex/platform/server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,5 +18,8 @@ export default async function StudioApplicationPage({ params }: {
       <p role="status">This draft is unavailable. Sign in with an account permitted to manage drafts and try again.</p></main>;
   return <ApplicationDraftWorkspace key={`${result.organizationId}:${result.draft.rootId}`}
     mode="existing" organizationId={result.organizationId} draft={result.draft}
-    searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots} />;
+    searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots}
+    platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
+    fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+    platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens} />;
 }
