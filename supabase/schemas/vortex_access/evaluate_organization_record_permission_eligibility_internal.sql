@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $_$
@@ -105,7 +105,7 @@ begin
     )
     or pg_catalog.jsonb_typeof(declaration_target -> 'kind') <> 'string'
     or declaration_target ->> 'kind' <> 'application'
-    or not vortex_context.is_non_nil_uuid(
+    or not vortex_platform.is_non_nil_uuid(
       declaration_target ->> 'applicationRootId'
     ) then
     raise exception using errcode = '22023',
@@ -123,9 +123,9 @@ begin
         'moduleRootId', 'recordTypeId', 'storageContractId', 'storageScope'
       ])
     )
-    or not vortex_context.is_non_nil_uuid(declaration_binding ->> 'moduleRootId')
-    or not vortex_context.is_non_nil_uuid(declaration_binding ->> 'recordTypeId')
-    or not vortex_context.is_non_nil_uuid(
+    or not vortex_platform.is_non_nil_uuid(declaration_binding ->> 'moduleRootId')
+    or not vortex_platform.is_non_nil_uuid(declaration_binding ->> 'recordTypeId')
+    or not vortex_platform.is_non_nil_uuid(
       declaration_binding ->> 'storageContractId'
     )
     or pg_catalog.jsonb_typeof(declaration_binding -> 'storageScope') <> 'string'
@@ -219,11 +219,11 @@ begin
       )
       or pg_catalog.jsonb_typeof(permission_candidate -> 'ownerKind') <> 'string'
       or permission_candidate ->> 'ownerKind' not in ('application', 'module')
-      or not vortex_context.is_non_nil_uuid(
+      or not vortex_platform.is_non_nil_uuid(
         permission_candidate ->> 'applicationRootId'
       )
-      or not vortex_context.is_non_nil_uuid(permission_candidate ->> 'ownerId')
-      or not vortex_context.is_non_nil_uuid(permission_candidate ->> 'permissionId')
+      or not vortex_platform.is_non_nil_uuid(permission_candidate ->> 'ownerId')
+      or not vortex_platform.is_non_nil_uuid(permission_candidate ->> 'permissionId')
       or pg_catalog.lower(permission_candidate ->> 'applicationRootId') <>
         pg_catalog.lower(declaration_target ->> 'applicationRootId')
       or (
@@ -411,10 +411,9 @@ begin
 end
 $_$;
 
-
 ALTER FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) IS 'Private record-permission eligibility evidence per declared alternative; carries the declared record binding as context and is never a record allow result. The caller supplies one Access-bound context and checked time.';
 
 REVOKE ALL ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) TO vortex_access_owner;
+GRANT ALL ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) TO vortex_owner;

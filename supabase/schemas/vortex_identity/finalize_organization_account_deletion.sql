@@ -47,12 +47,12 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) to vortex_record_adapter;
 
 comment on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) is
   'Private closing-to-deleted transition, reachable only through the Record deletion fence after its inventory proves nothing is owned.';
 
-alter function vortex_identity.finalize_organization_account_deletion(uuid, bigint) owner to vortex_identity_owner;
+alter function vortex_identity.finalize_organization_account_deletion(uuid, bigint) owner to vortex_owner;
 grant execute on function vortex_identity.finalize_organization_account_deletion(uuid, bigint) to postgres;

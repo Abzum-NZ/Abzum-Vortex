@@ -27,6 +27,8 @@ begin
   return pg_catalog.jsonb_build_object('outcome', 'renewed');
 end
 $$;
+alter function vortex_record.renew_record_index_build_lease(uuid,uuid,uuid,integer) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.renew_record_index_build_lease(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_lease_seconds integer) IS 'Confirms the caller still holds one index build claim and extends its lease before the next statement.';
 

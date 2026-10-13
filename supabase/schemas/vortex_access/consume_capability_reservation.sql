@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) RETURNS TABLE(result jsonb)
+CREATE OR REPLACE FUNCTION vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) RETURNS TABLE(result jsonb)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -19,14 +19,14 @@ declare
 begin
   if not vortex_access.capability_policy_key_is_valid(p_capability_key)
     or not vortex_access.capability_policy_unit_is_valid(p_unit)
-    or p_policy_id is null or not vortex_context.is_non_nil_uuid(p_policy_id::text)
+    or p_policy_id is null or not vortex_platform.is_non_nil_uuid(p_policy_id::text)
     or p_policy_revision not between 1 and 9007199254740991
-    or p_assignment_id is null or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
+    or p_assignment_id is null or not vortex_platform.is_non_nil_uuid(p_assignment_id::text)
     or p_assignment_revision not between 1 and 9007199254740991
-    or p_reservation_id is null or not vortex_context.is_non_nil_uuid(p_reservation_id::text)
+    or p_reservation_id is null or not vortex_platform.is_non_nil_uuid(p_reservation_id::text)
     or not vortex_access.capability_policy_quantity_is_valid(p_quantity)
     or p_duplicate_key is null
-    or not vortex_context.is_non_nil_uuid(p_duplicate_key::text) then
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text) then
     raise exception using errcode = '22023', message = 'Capability consumption command is invalid';
   end if;
   select locked.* into effective
@@ -172,7 +172,6 @@ begin
   return query select safe_result;
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) OWNER TO postgres;
 

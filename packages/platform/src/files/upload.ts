@@ -140,7 +140,7 @@ export type ClaimedUploadGrant = Readonly<{
  * as the capability reservation ports and the Storage credential bridge's
  * resolver. Every write is a compare-and-set against the upload's revision, runs
  * inside the request's own organisation and verifies that the request actor is
- * the uploader. The `vortex_file` upload functions are the canonical
+ * the uploader. The `vortex_platform` upload functions are the canonical
  * implementation.
  */
 export type FileUploadRepository = Readonly<{

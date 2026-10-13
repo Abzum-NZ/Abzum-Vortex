@@ -17,6 +17,8 @@ CREATE FUNCTION vortex_record.relationship_declares_target_internal(p_relationsh
       pg_catalog.lower(p_record_type_id::text)
   )
 $$;
+alter function vortex_record.relationship_declares_target_internal(jsonb,uuid) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.relationship_declares_target_internal(p_relationship jsonb, p_record_type_id uuid) IS 'True only when a concrete record type is one of a relationship''s declared targets: its single toRecordType or a member of its toRecordTypes list.';
 

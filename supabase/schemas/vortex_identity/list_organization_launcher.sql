@@ -17,7 +17,7 @@ declare
   is_super_administrator boolean;
 begin
   if p_identity_id is null
-    or not vortex_context.is_non_nil_uuid(p_identity_id::text) then
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text) then
     raise exception using errcode = '22023',
       message = 'Launcher identity is invalid';
   end if;

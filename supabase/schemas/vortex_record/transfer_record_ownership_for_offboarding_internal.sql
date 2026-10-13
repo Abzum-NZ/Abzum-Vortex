@@ -43,7 +43,7 @@ begin
   application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
   actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
   correlation_id_value := (context_value ->> 'correlationId')::uuid;
-  if correlation_id_value is null or not vortex_context.is_non_nil_uuid(correlation_id_value::text) then
+  if correlation_id_value is null or not vortex_platform.is_non_nil_uuid(correlation_id_value::text) then
     raise exception using errcode='42501',message='Offboarding ownership transfer authority is unavailable';
   end if;
   fingerprint := vortex_record.ownership_transfer_command_fingerprint_internal(
@@ -96,7 +96,7 @@ begin
     or (record_fact #>> '{recordScope,recordTypeId}')::uuid is distinct from p_record_type_id
     or (record_fact #>> '{recordScope,storageContractId}')::uuid is distinct from (type_fact ->> 'storageContractId')::uuid
     or type_fact ->> 'storageContractId' is null
-    or not vortex_context.is_non_nil_uuid(type_fact ->> 'storageContractId')
+    or not vortex_platform.is_non_nil_uuid(type_fact ->> 'storageContractId')
     or (storage_scope_value = 'application_contained'
       and (record_fact #>> '{recordScope,applicationRootId}')::uuid is distinct from application_root_id_value)
     or (record_fact ->> 'ownerOrganizationAccountId')::uuid is distinct from p_source_organization_account_id then
@@ -151,7 +151,7 @@ begin
   get diagnostics changed_rows = row_count;
   if changed_rows <> 1 then raise exception using errcode='40001',message='Offboarding ownership transfer revision changed'; end if;
   if updated_record_id is distinct from p_record_id
-    or not vortex_context.is_non_nil_uuid(updated_record_id::text)
+    or not vortex_platform.is_non_nil_uuid(updated_record_id::text)
     or updated_organization_id is distinct from organization_id_value
     or updated_concurrency is null
     or updated_concurrency not between 1 and 9007199254740991
@@ -178,11 +178,11 @@ begin
   end if;
   perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id,p_record_id,'completed');
   if loaded ->> 'installationState' = 'detached' then
-    event_result := vortex_event.append_detached_offboarding_reassignment_internal(
+    event_result := vortex_platform.append_detached_offboarding_reassignment_internal(
       (type_fact ->> 'storageContractId')::uuid, p_record_id, p_record_type_id, p_occurrence_id
     );
   else
-    event_result := vortex_event.append_record_occurrences(
+    event_result := vortex_platform.append_record_occurrences(
       (type_fact ->> 'storageContractId')::uuid, p_record_id,
       pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'occurrenceId',p_occurrence_id,
@@ -209,7 +209,7 @@ begin
       if notice_sequence is null or notice_sequence not between 1 and 9007199254740991 then
         raise exception using errcode='22023',message='Invalidation notice command is invalid';
       end if;
-      perform vortex_invalidation.publish_change_notice(
+      perform vortex_platform.publish_change_notice(
         updated_organization_id, updated_application_root_id, p_record_type_id,
         updated_record_id, updated_concurrency, 'changed',
         notice_sequence, notice_sequence, correlation_id_value
@@ -228,8 +228,7 @@ alter function vortex_record.transfer_record_ownership_for_offboarding_internal(
 
 revoke all on function vortex_record.transfer_record_ownership_for_offboarding_internal(
   uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.transfer_record_ownership_for_offboarding_internal(
   uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, uuid
 ) is

@@ -77,6 +77,8 @@ begin
   );
 end
 $$;
+alter function vortex_record.finalize_account_deletion_fence(uuid) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.finalize_account_deletion_fence(p_organization_account_id uuid) IS 'Protected final account-deletion fence: accounts.manage, exclusive account lock, private all-scope inventory, then closing-to-deleted only when nothing is owned.';
 

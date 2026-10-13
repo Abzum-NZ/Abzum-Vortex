@@ -23,6 +23,8 @@ CREATE FUNCTION vortex_record.storage_conversion_contract_identity(p_source_stor
     ) as digest_hex
   ) as source
 $$;
+alter function vortex_record.storage_conversion_contract_identity(uuid,uuid,uuid) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.storage_conversion_contract_identity(p_source_storage_contract_id uuid, p_source_field_id uuid, p_target_field_id uuid) IS 'Stable derived RFC 9562 version-8 conversion identity for one exact storage contract and source/target field pair.';
 

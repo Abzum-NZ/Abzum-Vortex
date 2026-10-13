@@ -24,9 +24,9 @@ declare
   computed_fingerprint text;
 begin
   if p_duplicate_key is null
-    or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or p_identity_id is null
-    or not vortex_context.is_non_nil_uuid(p_identity_id::text) then
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text) then
     raise exception using errcode = '22023',
       message = 'Super-administrator bootstrap command is invalid';
   end if;
@@ -102,8 +102,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.bootstrap_vortex_super_administrator(uuid, uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.bootstrap_vortex_super_administrator(uuid, uuid, uuid)
   to vortex_runtime;

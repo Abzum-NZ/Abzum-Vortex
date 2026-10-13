@@ -17,14 +17,16 @@ as $function$
       and tenant.state = 'active'
   );
 $function$;
+alter function vortex_identity.organization_and_tenant_are_active_internal(uuid) owner to vortex_owner;
+
 
 revoke all on function vortex_identity.organization_and_tenant_are_active_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.organization_and_tenant_are_active_internal(uuid)
-  to vortex_invalidation_owner;
+  to vortex_owner;
 
 comment on function vortex_identity.organization_and_tenant_are_active_internal(uuid) is
   'Private exact active organisation and tenant liveness predicate; exposes no account, actor or tenant data.';
 
 alter function vortex_identity.organization_and_tenant_are_active_internal(uuid)
-  owner to vortex_identity_owner;
+  owner to vortex_owner;

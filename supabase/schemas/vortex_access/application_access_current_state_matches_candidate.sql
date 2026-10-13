@@ -151,7 +151,6 @@ exception
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) FROM PUBLIC;

@@ -26,9 +26,9 @@ declare
   computed_fingerprint text;
 begin
   if p_duplicate_key is null
-    or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or p_identity_id is null
-    or not vortex_context.is_non_nil_uuid(p_identity_id::text) then
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text) then
     raise exception using errcode = '22023',
       message = 'Super-administrator grant command is invalid';
   end if;
@@ -129,7 +129,7 @@ begin
     computed_fingerprint, new_assignment_id, 1, new_correlation_id, evaluated_at
   );
 
-  perform vortex_activity.append_organization_activity_entry(
+  perform vortex_record.append_organization_activity_entry(
     (context_value ->> 'organizationId')::uuid, pg_catalog.gen_random_uuid(),
     evaluated_at, 'organization_account',
     (context_value ->> 'organizationAccountId')::uuid,
@@ -148,8 +148,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.grant_vortex_super_administrator(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.grant_vortex_super_administrator(uuid, uuid)
   to vortex_runtime;

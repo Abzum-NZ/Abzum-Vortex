@@ -53,6 +53,7 @@ const baselineMigrationFiles = new Map([
   ["supabase/migrations/20261014000200_baseline_schema_and_functions.sql", 105368],
   ["supabase/migrations/20261014000300_baseline_constraints_grants_and_policies.sql", 5241],
   ["supabase/migrations/20261014000400_baseline_system_data_and_storage.sql", 705],
+  ["supabase/migrations/20261014001100_collapse_schemas_and_owner_roles.sql", 53870],
 ]);
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const renamedFromMain = new Map<string, string>();
@@ -473,7 +474,8 @@ function normalizedType(value: string): string {
     .replaceAll('"', "")
     .replace(/\s+/g, " ")
     .replace(/\s*([(),.]|\[|\])\s*/g, "$1")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\btimestamptz\b/g, "timestamp with time zone");
 }
 function argumentType(argument: string): string | undefined {
   const mode = /^(inout|in|out|variadic)\b\s*/i.exec(argument.trim())?.[1]?.toLowerCase();
@@ -604,9 +606,15 @@ for (const file of migrationFiles) {
       .exec(statement)?.[1]
       ?.replaceAll('"', "")
       .toLowerCase();
-    if (!renamedTo) continue;
+    const movedTo = /\bset\s+schema\s+("?\w+"?)/i
+      .exec(statement)?.[1]
+      ?.replaceAll('"', "")
+      .toLowerCase();
+    if (!renamedTo && !movedTo) continue;
     const schema = oldName.includes(".") ? `${oldName.slice(0, oldName.lastIndexOf("."))}.` : "";
-    const newName = `${schema}${renamedTo}`;
+    const newName = movedTo
+      ? `${movedTo}.${oldName.slice(oldName.lastIndexOf(".") + 1)}`
+      : `${schema}${renamedTo}`;
     const argumentTypes = splitArguments(content.slice(open + 1, close)).map(normalizedType);
     events.push({
       kind: "rename",

@@ -44,8 +44,7 @@ alter function vortex_record.list_offboarding_owned_records(uuid, text, uuid, te
 
 revoke all on function vortex_record.list_offboarding_owned_records(
   uuid, text, uuid, text, uuid, uuid, integer
-) from public, anon, authenticated, service_role, vortex_runtime,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
 
 grant execute on function vortex_record.list_offboarding_owned_records(
   uuid, text, uuid, text, uuid, uuid, integer

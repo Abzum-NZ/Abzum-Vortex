@@ -25,7 +25,7 @@ declare
   hold_values jsonb;
 begin
   begin
-    context_value := vortex_context.validated_service_context();
+    context_value := vortex_platform.validated_service_context();
   exception
     when insufficient_privilege
       or foreign_key_violation
@@ -38,8 +38,8 @@ begin
     or pg_catalog.jsonb_typeof(context_value) is distinct from 'object'
     or context_value ->> 'callerKind' is null
     or context_value ->> 'callerKind' not in ('human', 'system')
-    or not vortex_context.is_non_nil_uuid(context_value ->> 'tenantId')
-    or not vortex_context.is_non_nil_uuid(context_value ->> 'organizationId') then
+    or not vortex_platform.is_non_nil_uuid(context_value ->> 'tenantId')
+    or not vortex_platform.is_non_nil_uuid(context_value ->> 'organizationId') then
     return pg_catalog.jsonb_build_object('outcome', 'unavailable');
   end if;
 
@@ -74,8 +74,8 @@ begin
       from pg_catalog.jsonb_object_keys(p_candidate) as candidate_key(key)
       where not (candidate_key.key = any (allowed_keys))
     )
-    or not vortex_context.is_non_nil_uuid(p_candidate ->> 'tenantId')
-    or not vortex_context.is_non_nil_uuid(p_candidate ->> 'organizationId') then
+    or not vortex_platform.is_non_nil_uuid(p_candidate ->> 'tenantId')
+    or not vortex_platform.is_non_nil_uuid(p_candidate ->> 'organizationId') then
     return pg_catalog.jsonb_build_object('outcome', 'unavailable');
   end if;
 
@@ -90,10 +90,10 @@ begin
     if pg_catalog.jsonb_typeof(p_candidate -> 'applicationRootId') = 'null'
       and candidate_kind = 'record' then
       candidate_application_known := true;
-    elsif vortex_context.is_non_nil_uuid(p_candidate ->> 'applicationRootId') then
+    elsif vortex_platform.is_non_nil_uuid(p_candidate ->> 'applicationRootId') then
       candidate_application_root_id := (p_candidate ->> 'applicationRootId')::uuid;
       candidate_application_known := true;
-      if not vortex_context.is_non_nil_uuid(context_value ->> 'applicationRootId') then
+      if not vortex_platform.is_non_nil_uuid(context_value ->> 'applicationRootId') then
         return pg_catalog.jsonb_build_object('outcome', 'unavailable');
       end if;
       context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
@@ -106,22 +106,22 @@ begin
   end if;
 
   if candidate_kind = 'record' then
-    if not vortex_context.is_non_nil_uuid(p_candidate ->> 'recordTypeId')
-      or not vortex_context.is_non_nil_uuid(p_candidate ->> 'recordId') then
+    if not vortex_platform.is_non_nil_uuid(p_candidate ->> 'recordTypeId')
+      or not vortex_platform.is_non_nil_uuid(p_candidate ->> 'recordId') then
       return pg_catalog.jsonb_build_object('outcome', 'unavailable');
     end if;
     candidate_record_type_id := (p_candidate ->> 'recordTypeId')::uuid;
     candidate_record_id := (p_candidate ->> 'recordId')::uuid;
   else
-    if not vortex_context.is_non_nil_uuid(p_candidate ->> 'fileId') then
+    if not vortex_platform.is_non_nil_uuid(p_candidate ->> 'fileId') then
       return pg_catalog.jsonb_build_object('outcome', 'unavailable');
     end if;
     candidate_file_id := (p_candidate ->> 'fileId')::uuid;
 
     if p_candidate ? 'ownerRecordTypeId' or p_candidate ? 'ownerRecordId' then
       if not (p_candidate ?& array['ownerRecordTypeId', 'ownerRecordId'])
-        or not vortex_context.is_non_nil_uuid(p_candidate ->> 'ownerRecordTypeId')
-        or not vortex_context.is_non_nil_uuid(p_candidate ->> 'ownerRecordId') then
+        or not vortex_platform.is_non_nil_uuid(p_candidate ->> 'ownerRecordTypeId')
+        or not vortex_platform.is_non_nil_uuid(p_candidate ->> 'ownerRecordId') then
         return pg_catalog.jsonb_build_object('outcome', 'unavailable');
       end if;
       candidate_owner_record_type_id := (p_candidate ->> 'ownerRecordTypeId')::uuid;
@@ -337,10 +337,9 @@ end
 $function$;
 
 revoke all on function vortex_record.read_current_legal_holds(jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter, vortex_file_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.read_current_legal_holds(jsonb)
-  to vortex_record_adapter, vortex_file_owner, vortex_runtime;
+  to vortex_record_adapter, vortex_owner, vortex_runtime;
 comment on function vortex_record.read_current_legal_holds(jsonb) is
   'Returns only current versioned legal-hold references relevant to one candidate in validated protected scope.';
-alter function vortex_record.read_current_legal_holds(jsonb) owner to vortex_record_owner;
+alter function vortex_record.read_current_legal_holds(jsonb) owner to vortex_owner;

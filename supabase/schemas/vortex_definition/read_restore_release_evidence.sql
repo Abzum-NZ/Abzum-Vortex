@@ -22,7 +22,7 @@ declare
   completion_at timestamptz;
   human_restore boolean := false;
 begin
-  raw_context := vortex_context.current_context();
+  raw_context := vortex_platform.current_context();
   human_restore := raw_context ->> 'callerKind' = 'human';
   if human_restore then
     if p_kind is null

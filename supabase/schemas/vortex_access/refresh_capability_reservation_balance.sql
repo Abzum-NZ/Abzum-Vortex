@@ -107,8 +107,7 @@ $function$;
 
 revoke execute on function vortex_access.refresh_capability_reservation_balance(
   uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.refresh_capability_reservation_balance(
   uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz
@@ -116,4 +115,4 @@ comment on function vortex_access.refresh_capability_reservation_balance(
   'Rebuilds tenant-aggregate or organisation-local balance evidence using one scope rule for active, consumed and released totals; an organisation is also bounded by the tenant-wide balance under the lower of the platform ceiling and the tenant allocation.';
 
 alter function vortex_access.refresh_capability_reservation_balance(uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz) owner to postgres;
-grant execute on function vortex_access.refresh_capability_reservation_balance(uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz) to vortex_access_owner;
+grant execute on function vortex_access.refresh_capability_reservation_balance(uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz) to vortex_owner;

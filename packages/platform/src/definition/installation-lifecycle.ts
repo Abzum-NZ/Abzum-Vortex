@@ -78,7 +78,7 @@ const activatedBindings = (activated: ApplicationInstallationLifecycleResult) =>
  * Refuses the activation unless every record type the installation owns has a
  * current, executable stored lifecycle policy.
  *
- * It runs immediately after `vortex_module.activate_application_installation`
+ * It runs immediately after `vortex_definition.activate_application_installation`
  * and inside the same request transaction, so the binding rows are already
  * held exclusively by this transaction under that operation's canonical
  * advisory-lock order and the human authority behind the activation has
@@ -227,7 +227,7 @@ export const createApplicationInstallationLifecycleRepository = (
       try {
         const activated = parseResult(
           await transaction.query<LifecycleRow>`
-            select vortex_module.activate_application_installation(
+            select vortex_definition.activate_application_installation(
               ${command.data.applicationRootId}::uuid,
               ${command.data.applicationReleaseRevision}::bigint,
               ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
@@ -249,7 +249,7 @@ export const createApplicationInstallationLifecycleRepository = (
       try {
         return parseResult(
           await transaction.query<LifecycleRow>`
-            select vortex_module.detach_application_installation(
+            select vortex_definition.detach_application_installation(
               ${command.data.applicationRootId}::uuid,
               ${command.data.applicationReleaseRevision}::bigint,
               ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb

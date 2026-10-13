@@ -52,5 +52,7 @@ exception
     return pg_catalog.jsonb_build_object('outcome', 'refused');
 end
 $$;
+alter function vortex_record.project_named_action_record_internal(text,uuid,bigint,uuid,uuid,uuid) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.project_named_action_record_internal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid) FROM PUBLIC;

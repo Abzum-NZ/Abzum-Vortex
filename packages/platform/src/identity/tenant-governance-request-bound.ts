@@ -170,8 +170,8 @@ export const createRequestBoundTenantGovernanceService = (
         current_user::text as current_role,
         session_user::text as session_role,
         pg_catalog.pg_has_role(session_user, 'vortex_runtime', 'SET') as can_set_runtime,
-        vortex_context.current_context() - 'channel' as request_context,
-        vortex_context.channel() as request_channel
+        vortex_platform.current_context() - 'channel' as request_context,
+        vortex_platform.channel() as request_channel
     `;
     const row = rows.length === 1 ? rows[0] : undefined;
     if (row === undefined) throw failure("TENANT_GOVERNANCE_REQUEST_CONTEXT_UNAVAILABLE");

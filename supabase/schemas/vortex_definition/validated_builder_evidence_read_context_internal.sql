@@ -10,7 +10,7 @@ declare
   checked_context jsonb;
   permission_decision record;
 begin
-  caller_context := vortex_context.current_context();
+  caller_context := vortex_platform.current_context();
   if caller_context ->> 'callerKind' = 'system' then
     return vortex_definition.validated_system_context();
   end if;

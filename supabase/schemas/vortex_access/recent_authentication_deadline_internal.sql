@@ -54,5 +54,4 @@ comment on function
   'Private recent-authentication deadline evidence; null means the requirement is unsatisfied. No row or record authority.';
 
 revoke execute on function
-  vortex_access.recent_authentication_deadline_internal(jsonb, timestamptz, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
+  vortex_access.recent_authentication_deadline_internal(jsonb, timestamptz, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;

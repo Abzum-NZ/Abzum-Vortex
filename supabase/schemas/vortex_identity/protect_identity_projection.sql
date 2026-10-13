@@ -27,7 +27,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_identity.protect_identity_projection() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_identity.protect_identity_projection() FROM PUBLIC;

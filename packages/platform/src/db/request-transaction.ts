@@ -68,7 +68,7 @@ export type ResolvedRequestContext<Scope> = Readonly<{
   context: SessionContext;
   /**
    * The channel the trusted entry point reached this request through. It is installed in the
-   * request context, never read from client input; when absent `vortex_context.channel()` reads
+   * request context, never read from client input; when absent `vortex_platform.channel()` reads
    * it as `web`.
    */
   channel?: ProtectedOperationChannel;
@@ -181,7 +181,7 @@ const createResolvedRequestTransactionRunner =
         ...(parsedChannel === undefined ? {} : { channel: parsedChannel.data }),
       });
 
-      await transaction.query`select vortex_context.initialize(${serialized}::text::jsonb)`;
+      await transaction.query`select vortex_platform.initialize(${serialized}::text::jsonb)`;
       await transaction.query`set local role vortex_request`;
 
       return invokeRequestDatabaseCallback(() =>

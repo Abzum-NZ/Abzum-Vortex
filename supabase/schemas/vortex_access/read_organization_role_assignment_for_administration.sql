@@ -79,7 +79,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_role_assignment_for_administration(p_role_assignment_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_role_assignment_for_administration(p_role_assignment_id uuid) IS 'Returns one safe exact role-assignment detail without grant audit or effective-access evidence.';

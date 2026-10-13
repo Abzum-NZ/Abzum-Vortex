@@ -21,6 +21,8 @@ begin
   );
 end
 $_$;
+alter function vortex_record.ensure_offboarding_owner_index_internal(text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.ensure_offboarding_owner_index_internal(p_physical_table_token text) IS 'Private provisioner helper for the partial account-owner inventory index.';
 

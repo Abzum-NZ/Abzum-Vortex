@@ -31,7 +31,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.organization_roles_administration_scope() OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.organization_roles_administration_scope() IS 'Private fixed roles-read authorization for current local roles and registered templates.';

@@ -338,7 +338,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.coordinate_organization_group_membership_change(p_operation text, p_organization_id uuid, p_membership_id uuid, p_expected_membership_revision bigint, p_group_id uuid, p_organization_account_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_replacement_membership_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.coordinate_organization_group_membership_change(p_operation text, p_organization_id uuid, p_membership_id uuid, p_expected_membership_revision bigint, p_group_id uuid, p_organization_account_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_replacement_membership_id uuid, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only atomic Group membership add, remove, restore or renewal. It changes Access once but grants no caller authority.';

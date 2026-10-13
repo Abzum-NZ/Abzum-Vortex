@@ -31,6 +31,8 @@ begin
   return null;
 end;
 $function$;
+alter function vortex_access.validate_permission_continuity_evidence() owner to vortex_owner;
+
 
 revoke execute on function vortex_access.validate_permission_continuity_evidence()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
@@ -39,4 +41,4 @@ comment on function vortex_access.validate_permission_continuity_evidence() is
   'Deferred evidence check that a permission continuity names an exact registered catalogue entry. Definer, because it fires at commit under the request role, which has no table access.';
 
 alter function vortex_access.validate_permission_continuity_evidence()
-  owner to vortex_access_owner;
+  owner to vortex_owner;

@@ -90,11 +90,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.list_organization_account_choices_internal(
   uuid, uuid, text, integer, text, uuid
 ) is 'Identity-owned bounded picker projection of active accounts in one active organisation: account id and display name only, keyset-paged, no counts.';
 
-alter function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) owner to vortex_identity_owner;
+alter function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) owner to vortex_owner;
 grant execute on function vortex_identity.list_organization_account_choices_internal(uuid, uuid, text, integer, text, uuid) to postgres;

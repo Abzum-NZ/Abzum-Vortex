@@ -399,7 +399,7 @@ begin
       message = 'Record-share consent decision is already recorded or unavailable';
   end if;
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id,
     p_activity_id,
     checked_at,
@@ -408,7 +408,7 @@ begin
     'record_share_consent_decision',
     array[stored_grant.grant_id, stored_request.request_id]::uuid[],
     array[]::uuid[],
-    vortex_context.channel(),
+    vortex_platform.channel(),
     context_correlation_id,
     'completed'
   );
@@ -453,8 +453,7 @@ $function$;
 
 revoke all on function vortex_access.record_share_grant_consent_decision_for_administration(
   uuid, uuid, bigint, text, text, text, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.record_share_grant_consent_decision_for_administration(
   uuid, uuid, bigint, text, text, text, uuid
 ) to vortex_request;

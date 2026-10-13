@@ -39,7 +39,7 @@ export const createSqlVersionedFileMetadataRepository = (
       if (!parsedFileId.success) throw invalidSnapshot();
 
       const rows = await transaction.query<SqlRow>`
-        select vortex_file.read_versioned_file_metadata(${parsedFileId.data}::uuid) as result
+        select vortex_platform.read_versioned_file_metadata(${parsedFileId.data}::uuid) as result
       `;
       const row = rows[0];
       if (

@@ -36,15 +36,16 @@ begin
   );
 end
 $function$;
+alter function vortex_definition.application_role_identity_is_exact_for_human_request_internal(uuid,uuid) owner to vortex_owner;
+
 
 alter function vortex_definition.application_role_identity_is_exact_for_human_request_internal(
   uuid, uuid
-) owner to vortex_definition_owner;
+) owner to vortex_owner;
 
 revoke all on function vortex_definition.application_role_identity_is_exact_for_human_request_internal(
   uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_definition.application_role_identity_is_exact_for_human_request_internal(
   uuid, uuid

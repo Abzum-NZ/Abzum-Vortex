@@ -28,6 +28,8 @@ begin
   );
 end
 $$;
+alter function vortex_record.before_save_rules_for_record_type_internal(uuid,bigint,uuid) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.before_save_rules_for_record_type_internal(p_module_root_id uuid, p_module_release_revision bigint, p_record_type_id uuid) IS 'Private save step: returns the exact Module release identity and every rule of that release whose subject is the given record type, read from the immutable release row the save already resolved.';
 

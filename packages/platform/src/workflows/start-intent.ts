@@ -112,7 +112,7 @@ export const acceptFlowStartIntent = async (
     throw new Error("START_INTENT_VALUES_TOO_LARGE");
 
   const rows = await transaction.query<{ result: unknown }>`
-    select vortex_workflow.accept_flow_start_intent(
+    select vortex_platform.accept_flow_start_intent(
       ${command.organizationId}::uuid,
       ${command.applicationRootId}::uuid,
       ${command.applicationReleaseRevision}::bigint,
@@ -214,7 +214,7 @@ export const readCommittedFlowStartIntent = async (
   if (!intentId.success) return undefined;
   try {
     const rows = await withRuntimeTransaction((transaction) => transaction.query<{ result: unknown }>`
-      select vortex_workflow.read_committed_flow_start_intent(${intentId.data}::uuid) as result
+      select vortex_platform.read_committed_flow_start_intent(${intentId.data}::uuid) as result
     `);
     if (rows.length !== 1) return undefined;
     const result = committedFlowStartIntentResultSchema.safeParse(rows[0]?.result);

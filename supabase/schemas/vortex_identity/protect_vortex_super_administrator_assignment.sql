@@ -40,8 +40,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.protect_vortex_super_administrator_assignment()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.protect_vortex_super_administrator_assignment() is
   'Keeps super-administrator grants immutable and permits only one attributed, revisioned revocation.';

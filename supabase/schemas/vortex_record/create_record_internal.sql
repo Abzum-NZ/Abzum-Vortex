@@ -289,7 +289,7 @@ begin
 
     if exact_create_notice then
       begin
-        perform vortex_invalidation.publish_change_notice(
+        perform vortex_platform.publish_change_notice(
           (context_value ->> 'organizationId')::uuid, app_scope, p_record_type_id,
           saved_record_id, saved_concurrency_number, 'created',
           notice_sequence, notice_sequence,
@@ -323,8 +323,7 @@ $function$;
 alter function vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.create_record_internal(uuid, jsonb, uuid[], uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.create_record_internal(uuid, jsonb, uuid[], uuid) is
   'Private fixed create primitive: derives scope, definition and human ownership, generates references, writes typed values and relationships, and decides create authority over the proposed record in one rollback-safe transaction.';

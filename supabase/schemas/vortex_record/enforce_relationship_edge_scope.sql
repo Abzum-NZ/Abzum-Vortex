@@ -32,5 +32,7 @@ exception when no_data_found or too_many_rows then
   raise exception using errcode = '23514', message = 'Relationship edge mapping is unavailable';
 end
 $$;
+alter function vortex_record.enforce_relationship_edge_scope() owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.enforce_relationship_edge_scope() FROM PUBLIC;

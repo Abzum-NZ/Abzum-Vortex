@@ -221,7 +221,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) FROM PUBLIC;

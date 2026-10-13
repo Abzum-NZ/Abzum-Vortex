@@ -239,8 +239,7 @@ $function$;
 
 revoke all on function vortex_access.record_share_grant_consent_role_path_internal(
   uuid, uuid, uuid, uuid[], timestamptz, timestamptz
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.record_share_grant_consent_role_path_internal(
   uuid, uuid, uuid, uuid[], timestamptz, timestamptz
 ) to postgres;

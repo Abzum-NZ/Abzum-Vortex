@@ -18,7 +18,7 @@ begin
     (context_value ->> 'organizationId')::uuid
   );
   return pg_catalog.jsonb_build_object(
-    'instant', vortex_context.format_timestamp_utc(instant_value),
+    'instant', vortex_platform.format_timestamp_utc(instant_value),
     'organizationLocalDate', case when zone_value is null then null else pg_catalog.to_char(
       pg_catalog.timezone(zone_value, instant_value), 'YYYY-MM-DD'
     ) end,
@@ -30,8 +30,7 @@ $function$;
 alter function vortex_record.read_time_clock_internal() owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_time_clock_internal()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.read_time_clock_internal() is
   'The one statement timestamp and the current date in the organisation time zone of the validated request context (null when the organisation has no time zone), which every read-time calculation in a statement uses; owner-only.';

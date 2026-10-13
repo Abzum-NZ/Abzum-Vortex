@@ -29,14 +29,14 @@ declare
   next_revision bigint;
   activity_result text;
 begin
-  if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
+  if p_actor_identity_id is null or not vortex_platform.is_non_nil_uuid(p_actor_identity_id::text)
     or p_actor_organization_account_id is null
-    or not vortex_context.is_non_nil_uuid(p_actor_organization_account_id::text)
-    or p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or p_execution_binding_id is null or not vortex_context.is_non_nil_uuid(p_execution_binding_id::text)
-    or p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_actor_organization_account_id::text)
+    or p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_execution_binding_id is null or not vortex_platform.is_non_nil_uuid(p_execution_binding_id::text)
+    or p_organization_id is null or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
-    or p_activity_id is null or not vortex_context.is_non_nil_uuid(p_activity_id::text) then
+    or p_activity_id is null or not vortex_platform.is_non_nil_uuid(p_activity_id::text) then
     raise exception using errcode = '22023', message = 'Flow run-as principal revoke command is invalid';
   end if;
 
@@ -127,7 +127,7 @@ begin
     'access_grant_changed'
   );
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     p_organization_id,
     p_activity_id,
     operation_at,
@@ -136,7 +136,7 @@ begin
     'revoke_flow_run_as_principal',
     array[p_execution_binding_id]::uuid[],
     array[]::uuid[],
-    vortex_context.channel(),
+    vortex_platform.channel(),
     authority.correlation_id,
     'completed'
   );
@@ -162,8 +162,7 @@ $function$;
 
 revoke all on function vortex_access.revoke_flow_run_as_principal(
   uuid, uuid, uuid, uuid, uuid, bigint, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_access.revoke_flow_run_as_principal(
   uuid, uuid, uuid, uuid, uuid, bigint, uuid

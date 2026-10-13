@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.permission_field_policy_is_valid(p_policy jsonb) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.permission_field_policy_is_valid(p_policy jsonb) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
     AS $$
@@ -24,7 +24,7 @@ begin
   loop
     if pg_catalog.jsonb_typeof(field_value) <> 'string' then return false; end if;
     field_id := field_value #>> '{}';
-    if not vortex_context.is_non_nil_uuid(field_id)
+    if not vortex_platform.is_non_nil_uuid(field_id)
       or (
         previous_field_id is not null
         and previous_field_id >= pg_catalog.lower(field_id)
@@ -42,7 +42,7 @@ begin
   loop
     if pg_catalog.jsonb_typeof(field_value) <> 'string' then return false; end if;
     field_id := field_value #>> '{}';
-    if not vortex_context.is_non_nil_uuid(field_id)
+    if not vortex_platform.is_non_nil_uuid(field_id)
       or (
         previous_field_id is not null
         and previous_field_id >= pg_catalog.lower(field_id)
@@ -61,7 +61,6 @@ begin
   return true;
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.permission_field_policy_is_valid(p_policy jsonb) OWNER TO postgres;
 

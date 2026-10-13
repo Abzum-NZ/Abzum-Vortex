@@ -41,8 +41,8 @@ begin
   end;
   visible_organization_id := (context_value ->> 'organizationId')::uuid;
   actor_identity_id := (context_value ->> 'identityId')::uuid;
-  if not vortex_context.is_non_nil_uuid(visible_organization_id::text)
-    or not vortex_context.is_non_nil_uuid(actor_identity_id::text) then
+  if not vortex_platform.is_non_nil_uuid(visible_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(actor_identity_id::text) then
     return;
   end if;
   begin
@@ -84,7 +84,7 @@ begin
       and registration.source_resolution_fingerprint = release.resolution_fingerprint
       and exists (
         select 1
-        from vortex_module.installation_bindings as binding
+        from vortex_definition.installation_bindings as binding
         where binding.organization_id = visible_organization_id
           and binding.application_root_id = root.root_id
           and binding.application_release_revision = registration.source_revision
@@ -95,12 +95,11 @@ end
 $function$;
 
 revoke all on function vortex_access.list_installed_applications_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_installed_applications_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_installed_applications_projection(uuid, integer) is
   'Registered installed-application projection: returns every application the current viewer may reach that is installed in the viewer''s organisation, being an active application registration whose published release still matches every fingerprint and whose installation binding is active, with the organisation, the application identity, the registration revision and the safe projected attribute values keyed by lowercase field key, or no row when the application scope refuses the viewer. Compilation output, fingerprints, release evidence and binding evidence are never projected.';

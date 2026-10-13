@@ -26,8 +26,7 @@ alter function vortex_record.assert_record_lifecycle_receipt_completed_internal(
 
 revoke all on function vortex_record.assert_record_lifecycle_receipt_completed_internal(
   
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.assert_record_lifecycle_receipt_completed_internal(
   
 ) is

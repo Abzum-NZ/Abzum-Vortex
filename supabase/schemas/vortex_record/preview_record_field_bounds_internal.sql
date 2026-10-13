@@ -16,8 +16,8 @@ begin
   if preview_value is null or preview_value ->> 'outcome' = 'refused'
     or pg_catalog.jsonb_typeof(p_record_type) is distinct from 'object'
     or pg_catalog.jsonb_typeof(p_record_type -> 'fields') is distinct from 'array'
-    or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_storage_contract_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_storage_contract_id::text)
     or (p_record_type ->> 'recordTypeId')::uuid is distinct from p_record_type_id
     or p_record_type ? 'systemProjection' then
     return null;
@@ -55,13 +55,14 @@ begin
   );
 end
 $function$;
+alter function vortex_record.preview_record_field_bounds_internal(uuid,uuid,jsonb) owner to vortex_record_adapter;
+
 
 alter function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb)
   to vortex_record_adapter;
 comment on function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb) is

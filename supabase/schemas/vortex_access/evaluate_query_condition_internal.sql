@@ -56,7 +56,6 @@ exception
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) IS 'Private bridge from the Query reader to the typed condition engine; checks bound values against their declared semantic types and never widens a condition.';

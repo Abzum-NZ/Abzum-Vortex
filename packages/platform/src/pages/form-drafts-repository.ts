@@ -121,7 +121,7 @@ export const createPrivateFormDraft = async (
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
-        from vortex_page.create_private_form_draft(
+        from vortex_definition.create_private_form_draft(
           ${command.formId}::uuid,
           ${flowId}::uuid,
           ${nodeId}::uuid,
@@ -150,7 +150,7 @@ export const readPrivateFormDraft = async (
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
-        from vortex_page.read_private_form_draft(
+        from vortex_definition.read_private_form_draft(
           ${command.formId}::uuid,
           ${flowId}::uuid,
           ${nodeId}::uuid,
@@ -185,7 +185,7 @@ export const updatePrivateFormDraft = async (
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
-        from vortex_page.update_private_form_draft(
+        from vortex_definition.update_private_form_draft(
           ${command.draftId}::uuid,
           ${command.expectedRevision}::bigint,
           ${command.formId}::uuid,
@@ -216,7 +216,7 @@ export const abandonPrivateFormDraft = async (
     const row = requireOne(
       await transaction.query<DraftResultRow>`
         select outcome, result
-        from vortex_page.abandon_private_form_draft(
+        from vortex_definition.abandon_private_form_draft(
           ${command.draftId}::uuid,
           ${command.expectedRevision}::bigint
         )
@@ -239,7 +239,7 @@ export const expirePrivateFormDrafts = async (
     throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND");
   return runStorage(async () => {
     const rows = await transaction.query<DatabaseRow & { expired: unknown }>`
-      select vortex_page.expire_private_form_drafts(${limit}::integer) as expired
+      select vortex_definition.expire_private_form_drafts(${limit}::integer) as expired
     `;
     const expired = requireOne(rows).expired;
     if (typeof expired === "number") return expired;

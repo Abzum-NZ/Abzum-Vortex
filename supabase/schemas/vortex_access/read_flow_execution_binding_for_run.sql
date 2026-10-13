@@ -27,23 +27,23 @@ declare
   current_binding vortex_access.flow_execution_bindings%rowtype;
   account_state text;
 begin
-  if p_execution_binding_id is null or not vortex_context.is_non_nil_uuid(p_execution_binding_id::text)
-    or p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text)
-    or p_application_root_id is null or not vortex_context.is_non_nil_uuid(p_application_root_id::text)
+  if p_execution_binding_id is null or not vortex_platform.is_non_nil_uuid(p_execution_binding_id::text)
+    or p_organization_id is null or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_application_root_id is null or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_release_version is null
     or p_release_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-    or p_flow_id is null or not vortex_context.is_non_nil_uuid(p_flow_id::text)
-    or p_node_id is null or not vortex_context.is_non_nil_uuid(p_node_id::text)
+    or p_flow_id is null or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
+    or p_node_id is null or not vortex_platform.is_non_nil_uuid(p_node_id::text)
     or p_operation_owner_kind is null
     or p_operation_owner_kind not in ('application', 'module', 'platform_service')
-    or p_operation_owner_id is null or not vortex_context.is_non_nil_uuid(p_operation_owner_id::text)
-    or p_operation_id is null or not vortex_context.is_non_nil_uuid(p_operation_id::text)
+    or p_operation_owner_id is null or not vortex_platform.is_non_nil_uuid(p_operation_owner_id::text)
+    or p_operation_id is null or not vortex_platform.is_non_nil_uuid(p_operation_id::text)
     or p_actor_kind is null or p_actor_kind not in ('specified_user', 'system')
     or (p_actor_kind = 'specified_user' and (
-      p_actor_account_id is null or not vortex_context.is_non_nil_uuid(p_actor_account_id::text)
+      p_actor_account_id is null or not vortex_platform.is_non_nil_uuid(p_actor_account_id::text)
       or p_actor_system_actor_id is not null))
     or (p_actor_kind = 'system' and (
-      p_actor_system_actor_id is null or not vortex_context.is_non_nil_uuid(p_actor_system_actor_id::text)
+      p_actor_system_actor_id is null or not vortex_platform.is_non_nil_uuid(p_actor_system_actor_id::text)
       or p_actor_account_id is not null)) then
     raise exception using errcode = '22023', message = 'Flow execution binding run read command is invalid';
   end if;
@@ -140,8 +140,7 @@ $function$;
 
 revoke all on function vortex_access.read_flow_execution_binding_for_run(
   uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.read_flow_execution_binding_for_run(
   uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
 ) to vortex_runtime;

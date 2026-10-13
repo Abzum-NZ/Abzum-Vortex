@@ -85,5 +85,7 @@ begin
   ), '[]'::jsonb);
 end
 $$;
+alter function vortex_record.filter_calculated_readable_field_ids(jsonb,uuid,jsonb) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.filter_calculated_readable_field_ids(p_record_types jsonb, p_record_type_id uuid, p_readable_field_ids jsonb) FROM PUBLIC;

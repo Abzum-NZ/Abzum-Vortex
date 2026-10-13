@@ -36,7 +36,7 @@ declare
   root_key text;
   root_kind text;
 begin
-  human_write := vortex_context.current_context() ->> 'callerKind' = 'human';
+  human_write := vortex_platform.current_context() ->> 'callerKind' = 'human';
   if human_write then
     checked_context := vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
     actor_id := (checked_context ->> 'organizationAccountId')::uuid;

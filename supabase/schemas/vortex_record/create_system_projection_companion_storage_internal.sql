@@ -26,7 +26,7 @@ declare
   view_oid oid;
   reader_function_oid oid;
   relation_oid oid;
-  owner_role_oid oid := 'vortex_record_owner'::regrole::oid;
+  owner_role_oid oid := 'vortex_owner'::regrole::oid;
   adapter_role_oid oid := 'vortex_record_adapter'::regrole::oid;
   has_mapping boolean;
   expected_columns text[];
@@ -36,10 +36,10 @@ declare
   acl_other_count integer;
   policy_expression text;
 begin
-  if not vortex_context.is_non_nil_uuid(p_storage_contract_id::text)
-    or not vortex_context.is_non_nil_uuid(p_target_module_root_id::text)
-    or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_contributor_module_root_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_storage_contract_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_target_module_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_contributor_module_root_id::text)
     or p_target_module_root_id = p_contributor_module_root_id
     or pg_catalog.jsonb_typeof(p_field_definition) is distinct from 'object'
     or p_validate_only is null then
@@ -53,7 +53,7 @@ begin
     raise exception using errcode = '22023',
       message = 'Projection companion field identity is invalid';
   end;
-  if not vortex_context.is_non_nil_uuid(field_id_value::text)
+  if not vortex_platform.is_non_nil_uuid(field_id_value::text)
     or p_field_definition -> 'required' is distinct from 'false'::jsonb
     or p_field_definition -> 'unique' is distinct from 'false'::jsonb
     or p_field_definition -> 'filterable' is distinct from 'false'::jsonb
@@ -219,12 +219,12 @@ begin
     execute pg_catalog.format(
       'create policy projection_companion_record_access on record_data.%I
         for all to vortex_record_adapter
-        using (organisation_id = vortex_context.organization_id())
-        with check (organisation_id = vortex_context.organization_id())', table_token
+        using (organisation_id = vortex_platform.organization_id())
+        with check (organisation_id = vortex_platform.organization_id())', table_token
     );
     execute pg_catalog.format(
       'revoke all on record_data.%I from public, anon, authenticated, service_role,
-        vortex_runtime, vortex_request, vortex_module_owner', table_token
+        vortex_runtime, vortex_request, vortex_owner', table_token
     );
     execute pg_catalog.format(
       'grant select, insert, update on record_data.%I to vortex_record_adapter', table_token
@@ -399,7 +399,7 @@ begin
     from pg_catalog.pg_policy as policy
     where policy.polrelid = relation_oid
       and policy.polname = 'projection_companion_record_access';
-    if policy_expression is distinct from '(organisation_id=vortex_context.organization_id())'
+    if policy_expression is distinct from '(organisation_id=vortex_platform.organization_id())'
       or not exists (
         select 1 from pg_catalog.pg_policy as policy
         where policy.polrelid = relation_oid
@@ -410,7 +410,7 @@ begin
           and pg_catalog.regexp_replace(pg_catalog.lower(
             pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid)
           ), '\s+', '', 'g')
-            = '(organisation_id=vortex_context.organization_id())'
+            = '(organisation_id=vortex_platform.organization_id())'
       )
       or (
         select pg_catalog.count(*) from pg_catalog.pg_policy as policy
@@ -469,14 +469,15 @@ begin
   end if;
 end
 $function$;
+alter function vortex_record.create_system_projection_companion_storage_internal(uuid,uuid,uuid,uuid,jsonb,boolean) owner to vortex_owner;
+
 
 alter function vortex_record.create_system_projection_companion_storage_internal(uuid,uuid,uuid,uuid,jsonb,boolean)
-  owner to vortex_record_owner;
+  owner to vortex_owner;
 
 revoke all on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, jsonb, boolean)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, jsonb, boolean)
-  to vortex_record_owner;
+  to vortex_owner;
 comment on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, jsonb, boolean) is
   'Privately preflights or provisions one optional unindexed companion field for an exact system-projection storage contract. Companion rows are organisation-scoped and are never written by a separate Record command.';

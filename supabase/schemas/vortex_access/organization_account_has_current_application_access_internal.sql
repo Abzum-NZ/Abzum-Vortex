@@ -163,10 +163,11 @@ begin
   );
 end
 $function$;
+alter function vortex_access.organization_account_has_current_application_access_internal(uuid,uuid,uuid) owner to vortex_owner;
+
 
 revoke all on function vortex_access.organization_account_has_current_application_access_internal(uuid, uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.organization_account_has_current_application_access_internal(uuid, uuid, uuid)
   to vortex_record_adapter;
@@ -175,4 +176,4 @@ comment on function vortex_access.organization_account_has_current_application_a
   'Private Record-link authorization for a previously locked active organisation account: returns only whether that linked account has a current direct or Group application role under the validated human application context, including current assignment, membership and activation continuity.';
 
 alter function vortex_access.organization_account_has_current_application_access_internal(uuid, uuid, uuid)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

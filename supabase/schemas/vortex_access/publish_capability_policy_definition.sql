@@ -26,9 +26,9 @@ declare
   receipt vortex_identity.accepted_administration_receipts%rowtype;
   command_fingerprint text;
 begin
-  if p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or p_policy_id is null or not vortex_context.is_non_nil_uuid(p_policy_id::text)
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_policy_id is null or not vortex_platform.is_non_nil_uuid(p_policy_id::text)
     or not vortex_access.capability_policy_key_is_valid(p_capability_key)
     or not vortex_access.capability_policy_unit_is_valid(p_unit)
     or not vortex_access.capability_policy_quantity_is_valid(p_quantity_limit)
@@ -126,8 +126,7 @@ $function$;
 
 revoke execute on function vortex_access.publish_capability_policy_definition(
   uuid, uuid, uuid, uuid, text, text, numeric, bigint
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.publish_capability_policy_definition(
   uuid, uuid, uuid, uuid, text, text, numeric, bigint
 ) to vortex_runtime;

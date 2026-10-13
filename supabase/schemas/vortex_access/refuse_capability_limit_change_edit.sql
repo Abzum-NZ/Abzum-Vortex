@@ -11,8 +11,7 @@ end
 $function$;
 
 revoke all on function vortex_access.refuse_capability_limit_change_edit()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.refuse_capability_limit_change_edit() is
   'Refuses every update, delete or truncate of capability limit change evidence.';

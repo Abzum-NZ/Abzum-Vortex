@@ -68,4 +68,4 @@ grant execute on function vortex_definition.read_application_release_adoption_re
 
 comment on function vortex_definition.read_application_release_adoption_release_set(uuid, bigint) is
   'Returns the exact bound Application and Module release set for one root and revision to a caller holding platform.organization.applications.manage in the validated human application context.';
-alter function vortex_definition.read_application_release_adoption_release_set(uuid, bigint) owner to vortex_definition_owner;
+alter function vortex_definition.read_application_release_adoption_release_set(uuid, bigint) owner to vortex_owner;

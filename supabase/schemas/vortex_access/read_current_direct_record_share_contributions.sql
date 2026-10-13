@@ -1,17 +1,17 @@
-CREATE FUNCTION vortex_access.read_current_direct_record_share_contributions(p_binding_organization_id uuid, p_binding_application_root_id uuid, p_binding_module_root_id uuid, p_binding_record_type_id uuid, p_binding_storage_contract_id uuid, p_binding_storage_scope text, p_record_id uuid, p_current_organization_id uuid, p_current_application_root_id uuid, p_current_organization_account_id uuid, p_checked_at timestamp with time zone) RETURNS TABLE(direct_share_id uuid, direct_share_revision bigint, recipient_kind text, organization_account_id uuid, group_id uuid, readable_field_ids uuid[], changeable_field_ids uuid[], valid_until timestamp with time zone)
+CREATE OR REPLACE FUNCTION vortex_access.read_current_direct_record_share_contributions(p_binding_organization_id uuid, p_binding_application_root_id uuid, p_binding_module_root_id uuid, p_binding_record_type_id uuid, p_binding_storage_contract_id uuid, p_binding_storage_scope text, p_record_id uuid, p_current_organization_id uuid, p_current_application_root_id uuid, p_current_organization_account_id uuid, p_checked_at timestamp with time zone) RETURNS TABLE(direct_share_id uuid, direct_share_revision bigint, recipient_kind text, organization_account_id uuid, group_id uuid, readable_field_ids uuid[], changeable_field_ids uuid[], valid_until timestamp with time zone)
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 begin
-  if not vortex_context.is_non_nil_uuid(p_binding_organization_id::text)
-    or not vortex_context.is_non_nil_uuid(p_binding_application_root_id::text)
-    or not vortex_context.is_non_nil_uuid(p_binding_module_root_id::text)
-    or not vortex_context.is_non_nil_uuid(p_binding_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_binding_storage_contract_id::text)
-    or not vortex_context.is_non_nil_uuid(p_record_id::text)
-    or not vortex_context.is_non_nil_uuid(p_current_organization_id::text)
-    or not vortex_context.is_non_nil_uuid(p_current_application_root_id::text)
-    or not vortex_context.is_non_nil_uuid(p_current_organization_account_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_binding_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_binding_application_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_binding_module_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_binding_record_type_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_binding_storage_contract_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_record_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_current_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_current_application_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_current_organization_account_id::text)
     or p_binding_storage_scope is null
     or p_binding_storage_scope not in ('organization_shared', 'application_contained')
     or p_checked_at is null
@@ -77,7 +77,6 @@ begin
   order by share.direct_share_id;
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.read_current_direct_record_share_contributions(p_binding_organization_id uuid, p_binding_application_root_id uuid, p_binding_module_root_id uuid, p_binding_record_type_id uuid, p_binding_storage_contract_id uuid, p_binding_storage_scope text, p_record_id uuid, p_current_organization_id uuid, p_current_application_root_id uuid, p_current_organization_account_id uuid, p_checked_at timestamp with time zone) OWNER TO postgres;
 

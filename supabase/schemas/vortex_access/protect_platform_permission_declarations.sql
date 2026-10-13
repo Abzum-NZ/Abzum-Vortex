@@ -58,6 +58,8 @@ begin
   return new;
 end
 $function$;
+alter function vortex_access.protect_platform_permission_declarations() owner to vortex_owner;
+
 
 revoke all on function
   vortex_access.protect_platform_permission_declarations()
@@ -67,4 +69,4 @@ comment on function vortex_access.protect_platform_permission_declarations() is
   'Rejects removal or silent substitution of a guarded platform permission declaration.';
 
 alter function vortex_access.protect_platform_permission_declarations()
-  owner to vortex_access_owner;
+  owner to vortex_owner;

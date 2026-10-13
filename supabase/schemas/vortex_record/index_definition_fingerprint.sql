@@ -15,6 +15,8 @@ CREATE FUNCTION vortex_record.index_definition_fingerprint(p_purpose text, p_tab
     'hex'
   )
 $$;
+alter function vortex_record.index_definition_fingerprint(text,text,text,text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.index_definition_fingerprint(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) IS 'Canonical sha256 fingerprint of one exact desired field-index definition, using the same convention as record storage content fingerprints.';
 

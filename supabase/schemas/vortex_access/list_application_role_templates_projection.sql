@@ -75,7 +75,7 @@ begin
     loop
       if pg_catalog.jsonb_typeof(template_value) is distinct from 'object'
         or pg_catalog.jsonb_typeof(template_value -> 'roleId') is distinct from 'string'
-        or not vortex_context.is_non_nil_uuid(template_value ->> 'roleId')
+        or not vortex_platform.is_non_nil_uuid(template_value ->> 'roleId')
         or pg_catalog.jsonb_typeof(template_value -> 'key') is distinct from 'string'
         or pg_catalog.char_length(template_value ->> 'key') not between 1 and 40
         or (template_value ->> 'key') !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
@@ -130,12 +130,11 @@ alter function vortex_access.list_application_role_templates_projection(uuid, in
   owner to postgres;
 
 revoke all on function vortex_access.list_application_role_templates_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_application_role_templates_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_application_role_templates_projection(uuid, integer) is
   'Registered application-role-template projection for the current human organization: fixed role-catalogue read authority, reachable active installation, exact registered application release, permanent Definition role identity and available continuity processed at the current registration are all required. Record identity is the source role UUID and row revision is the registration revision; only application root, source role, key, label and continuity revision are projected. Missing, refused, foreign or malformed candidates produce no revealing rows.';

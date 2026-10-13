@@ -210,8 +210,7 @@ alter function vortex_record.prepare_named_action_set_announce_internal(boolean,
 
 revoke all on function vortex_record.prepare_named_action_set_announce_internal(
   boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_named_action_set_announce_internal(
   boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid
 ) is

@@ -126,8 +126,7 @@ alter function vortex_record.prepare_protected_record_delete(uuid,uuid,uuid,bigi
 
 revoke all on function vortex_record.prepare_protected_record_delete(
   uuid, uuid, uuid, bigint, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.prepare_protected_record_delete(
   uuid, uuid, uuid, bigint, uuid, uuid
 ) to vortex_runtime;

@@ -102,10 +102,10 @@ begin
       'permission_unavailable', 'permission_not_effective',
       'authentication_unsatisfied', 'delegation_insufficient'
     ) then
-    activity_result := vortex_activity.append_organization_activity_entry(
+    activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
       'organization_account', context_account_id, 'create_group',
-      array[context_organization_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+      array[context_organization_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
       context_correlation_id, 'refused'
     );
     if activity_result is distinct from 'inserted' then
@@ -136,10 +136,10 @@ begin
     p_group_key, p_label, context_account_id, context_correlation_id
   ) as group_change;
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id, p_activity_id, changed.changed_at,
     'organization_account', context_account_id, 'create_group',
-    array[p_group_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+    array[p_group_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
     context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then

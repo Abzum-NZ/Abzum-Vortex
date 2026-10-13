@@ -142,7 +142,6 @@ $function$;
 alter function vortex_record.discover_relationship_total_closure_internal(jsonb,text,uuid,uuid,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.discover_relationship_total_closure_internal(jsonb,text,uuid,uuid,jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.discover_relationship_total_closure_internal(jsonb,text,uuid,uuid,jsonb) to vortex_record_adapter;
 comment on function vortex_record.discover_relationship_total_closure_internal(jsonb,text,uuid,uuid,jsonb) is null;

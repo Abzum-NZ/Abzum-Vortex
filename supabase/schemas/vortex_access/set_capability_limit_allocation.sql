@@ -34,11 +34,11 @@ declare
   activity_subjects uuid[];
   activity_result text;
 begin
-  if p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
     or (p_organization_id is not null
-      and not vortex_context.is_non_nil_uuid(p_organization_id::text))
-    or p_assignment_id is null or not vortex_context.is_non_nil_uuid(p_assignment_id::text)
+      and not vortex_platform.is_non_nil_uuid(p_organization_id::text))
+    or p_assignment_id is null or not vortex_platform.is_non_nil_uuid(p_assignment_id::text)
     or not vortex_access.capability_policy_key_is_valid(p_capability_key)
     or not vortex_access.capability_policy_unit_is_valid(p_unit)
     or not vortex_access.capability_policy_quantity_is_valid(p_quantity_limit)
@@ -49,14 +49,14 @@ begin
     -- An organisation allocation is also recorded in that organisation's
     -- Activity history; a tenant-wide allocation has no organisation ledger.
     or (p_organization_id is null) <> (p_activity_id is null)
-    or (p_activity_id is not null and not vortex_context.is_non_nil_uuid(p_activity_id::text)) then
+    or (p_activity_id is not null and not vortex_platform.is_non_nil_uuid(p_activity_id::text)) then
     raise exception using errcode = '22023', message = 'Capability allocation is invalid';
   end if;
   -- The acting person comes only from the bound request context, and the
   -- Authority is the dedicated tenant allocation permission. An organisation
   -- role, delegation or organisation administrator cannot supply it.
   actor_identity_id := vortex_identity.tenant_request_actor_id();
-  request_correlation_id := (vortex_context.current_context() ->> 'correlationId')::uuid;
+  request_correlation_id := (vortex_platform.current_context() ->> 'correlationId')::uuid;
   perform 1 from vortex_identity.tenants tenant where tenant.tenant_id = p_tenant_id for no key update;
   if not found then
     raise exception using errcode = 'V3101', message = 'Capability policy tenant is unavailable';
@@ -183,16 +183,16 @@ begin
     case when resulting_revision = 1 then 'allocation_set' else 'allocation_revised' end,
     'tenant_administrator', actor_identity_id, live_ceiling.policy_id, live_ceiling.policy_revision,
     p_assignment_id, resulting_revision, p_capability_key, p_unit, p_quantity_limit,
-    p_expires_at, vortex_context.channel(), request_correlation_id, evaluated_at
+    p_expires_at, vortex_platform.channel(), request_correlation_id, evaluated_at
   );
   if p_organization_id is not null then
     select pg_catalog.array_agg(distinct subject.subject_id order by subject.subject_id)
     into activity_subjects
     from pg_catalog.unnest(array[p_assignment_id, live_ceiling.policy_id]) as subject(subject_id);
-    activity_result := vortex_activity.append_organization_activity_entry(
+    activity_result := vortex_record.append_organization_activity_entry(
       p_organization_id, p_activity_id, evaluated_at, 'identity', actor_identity_id,
       'set_capability_limit_allocation', activity_subjects, array[]::uuid[],
-      vortex_context.channel(), request_correlation_id, 'completed'
+      vortex_platform.channel(), request_correlation_id, 'completed'
     );
     if activity_result is distinct from 'inserted' then
       raise exception using errcode = '40001',
@@ -207,8 +207,7 @@ $function$;
 
 revoke execute on function vortex_access.set_capability_limit_allocation(
   uuid, uuid, uuid, uuid, text, text, numeric, timestamptz, bigint, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.set_capability_limit_allocation(
   uuid, uuid, uuid, uuid, text, text, numeric, timestamptz, bigint, uuid
 ) to vortex_request;

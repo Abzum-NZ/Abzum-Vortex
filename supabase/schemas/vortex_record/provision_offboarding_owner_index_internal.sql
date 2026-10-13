@@ -11,5 +11,7 @@ begin
   return new;
 end
 $$;
+alter function vortex_record.provision_offboarding_owner_index_internal() owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.provision_offboarding_owner_index_internal() FROM PUBLIC;

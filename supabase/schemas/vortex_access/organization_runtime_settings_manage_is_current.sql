@@ -40,8 +40,7 @@ end
 $function$;
 
 revoke all on function vortex_access.organization_runtime_settings_manage_is_current()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.organization_runtime_settings_manage_is_current()
   to vortex_record_adapter;
 

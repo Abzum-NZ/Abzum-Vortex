@@ -162,7 +162,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.validate_organization_role_activation_insert() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.validate_organization_role_activation_insert() FROM PUBLIC;

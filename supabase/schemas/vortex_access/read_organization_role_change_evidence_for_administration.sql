@@ -60,7 +60,7 @@ begin
         'operation', 'roleId', 'expectedRoleRevision', 'acceptBroadenedAuthority'
       ])
       or pg_catalog.jsonb_typeof(p_preparation -> 'roleId') is distinct from 'string'
-      or vortex_context.is_non_nil_uuid(p_preparation ->> 'roleId') is not true
+      or vortex_platform.is_non_nil_uuid(p_preparation ->> 'roleId') is not true
       or (p_preparation ->> 'roleId') <> (p_preparation ->> 'roleId')::uuid::text
       or pg_catalog.jsonb_typeof(p_preparation -> 'expectedRoleRevision')
         is distinct from 'number'
@@ -189,15 +189,15 @@ begin
         or pg_catalog.jsonb_typeof(item.value -> 'ownerKind') is distinct from 'string'
         or item.value ->> 'ownerKind' not in ('platform', 'application', 'module')
         or pg_catalog.jsonb_typeof(item.value -> 'ownerId') is distinct from 'string'
-        or vortex_context.is_non_nil_uuid(item.value ->> 'ownerId') is not true
+        or vortex_platform.is_non_nil_uuid(item.value ->> 'ownerId') is not true
         or pg_catalog.jsonb_typeof(item.value -> 'permissionId') is distinct from 'string'
-        or vortex_context.is_non_nil_uuid(item.value ->> 'permissionId') is not true
+        or vortex_platform.is_non_nil_uuid(item.value ->> 'permissionId') is not true
         or ((item.value ->> 'ownerKind' = 'platform') = (item.value ? 'applicationRootId'))
         or (
           item.value ->> 'ownerKind' <> 'platform'
           and (
             pg_catalog.jsonb_typeof(item.value -> 'applicationRootId') is distinct from 'string'
-            or vortex_context.is_non_nil_uuid(item.value ->> 'applicationRootId') is not true
+            or vortex_platform.is_non_nil_uuid(item.value ->> 'applicationRootId') is not true
             or (item.value ->> 'ownerKind' = 'application'
               and (item.value ->> 'ownerId')::uuid
                 <> (item.value ->> 'applicationRootId')::uuid)
@@ -226,9 +226,9 @@ begin
   else
     if operation_name <> 'accept_application_role_revision' then
       if pg_catalog.jsonb_typeof(p_preparation -> 'applicationRootId') is distinct from 'string'
-        or vortex_context.is_non_nil_uuid(p_preparation ->> 'applicationRootId') is not true
+        or vortex_platform.is_non_nil_uuid(p_preparation ->> 'applicationRootId') is not true
         or pg_catalog.jsonb_typeof(p_preparation -> 'sourceRoleId') is distinct from 'string'
-        or vortex_context.is_non_nil_uuid(p_preparation ->> 'sourceRoleId') is not true then
+        or vortex_platform.is_non_nil_uuid(p_preparation ->> 'sourceRoleId') is not true then
         raise exception using errcode = '22023',
           message = 'Organization role-change preparation input is invalid';
       end if;

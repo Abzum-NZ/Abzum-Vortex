@@ -56,8 +56,7 @@ alter function vortex_record.append_record_lifecycle_effect_internal(text,uuid,u
 
 revoke all on function vortex_record.append_record_lifecycle_effect_internal(
   text, uuid, uuid, uuid, bigint, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.append_record_lifecycle_effect_internal(
   text, uuid, uuid, uuid, bigint, uuid
 ) is

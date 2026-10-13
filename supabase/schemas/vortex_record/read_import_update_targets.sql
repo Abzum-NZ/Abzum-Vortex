@@ -110,7 +110,7 @@ begin
     raise exception using errcode = '22023', message = 'Import update target request has expired';
   end if;
 
-  installation_initial := vortex_module.read_current_active_installation();
+  installation_initial := vortex_definition.read_current_active_installation();
   if pg_catalog.jsonb_typeof(installation_initial) is distinct from 'object'
     or (installation_initial ->> 'organizationId')::uuid
       is distinct from (context_initial ->> 'organizationId')::uuid
@@ -495,7 +495,7 @@ begin
   end loop;
 
   context_final := vortex_access.validated_human_request_context();
-  installation_final := vortex_module.read_current_active_installation();
+  installation_final := vortex_definition.read_current_active_installation();
   meta_final := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
   if context_final is distinct from context_initial
     or installation_final is distinct from installation_initial
@@ -537,13 +537,14 @@ begin
   return result_value;
 end
 $function$;
+alter function vortex_record.read_import_update_targets(uuid,jsonb,jsonb) owner to vortex_record_adapter;
+
 
 alter function vortex_record.read_import_update_targets(uuid,jsonb,jsonb)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_import_update_targets(uuid,jsonb,jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_record.read_import_update_targets(uuid,jsonb,jsonb)
   to vortex_request;
 

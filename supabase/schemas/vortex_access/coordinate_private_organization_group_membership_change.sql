@@ -151,11 +151,11 @@ begin
   subject_ids := case when p_operation = 'renew_membership'
     then array[p_membership_id, p_replacement_membership_id]::uuid[]
     else array[p_membership_id]::uuid[] end;
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id, p_activity_id,
     (changed.membership ->> 'changedAt')::timestamptz,
     'organization_account', context_account_id, p_operation,
-    subject_ids, array[]::uuid[], vortex_context.channel(),
+    subject_ids, array[]::uuid[], vortex_platform.channel(),
     context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then

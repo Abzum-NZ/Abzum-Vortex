@@ -45,6 +45,8 @@ begin
   end loop;
 end
 $$;
+alter function vortex_record.acquire_relationship_edge_locks_internal(text[]) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.acquire_relationship_edge_locks_internal(p_identities text[]) IS 'Acquires relationship edge participant identities as transaction advisory locks in one ascending collate "C" order per transaction; an out-of-order identity that is held elsewhere is a bounded 40001 conflict, never a wait.';
 

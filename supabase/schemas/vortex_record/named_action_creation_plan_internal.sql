@@ -244,8 +244,7 @@ alter function vortex_record.named_action_creation_plan_internal(text,uuid,bigin
 
 revoke all on function vortex_record.named_action_creation_plan_internal(
   text, uuid, bigint, uuid, uuid, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.named_action_creation_plan_internal(
   text, uuid, bigint, uuid, uuid, jsonb
 ) to vortex_record_adapter;

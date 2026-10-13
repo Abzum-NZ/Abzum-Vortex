@@ -88,7 +88,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) IS 'Returns one safe exact delegation detail without inferring holder authority.';

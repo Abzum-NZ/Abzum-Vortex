@@ -351,7 +351,7 @@ begin
             and (
               pg_catalog.jsonb_typeof(policy_value -> 'requiredCallerExecutionBindingId') <>
                 'string'
-              or not vortex_context.is_non_nil_uuid(
+              or not vortex_platform.is_non_nil_uuid(
                 policy_value ->> 'requiredCallerExecutionBindingId'
               )
             )

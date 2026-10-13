@@ -25,5 +25,7 @@ CREATE FUNCTION vortex_record.storage_meaning(p_record_type jsonb) RETURNS jsonb
     ), '[]'::jsonb)
   )
 $$;
+alter function vortex_record.storage_meaning(jsonb) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.storage_meaning(p_record_type jsonb) FROM PUBLIC;

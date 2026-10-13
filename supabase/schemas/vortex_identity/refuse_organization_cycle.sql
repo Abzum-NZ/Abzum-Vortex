@@ -41,7 +41,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_identity.refuse_organization_cycle() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_identity.refuse_organization_cycle() FROM PUBLIC;

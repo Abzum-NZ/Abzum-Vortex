@@ -102,6 +102,8 @@ exception
       message = 'Storage conversion correction evidence is unavailable';
 end
 $_$;
+alter function vortex_record.read_storage_conversion_corrections(uuid,integer) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.read_storage_conversion_corrections(p_conversion_contract_id uuid, p_limit integer) IS 'Authorised correction facts for the caller''s scope: converted record ids whose live concurrency revision differs from the recorded source revision, with no field values or physical names.';
 

@@ -30,7 +30,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.initialize_organization_access_version(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.initialize_organization_access_version(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;

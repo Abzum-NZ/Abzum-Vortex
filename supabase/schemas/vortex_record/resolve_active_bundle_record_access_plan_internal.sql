@@ -39,7 +39,7 @@ declare
   mapping_fingerprint_value text;
   pin_fingerprint_value text;
 begin
-  active_mapping:=vortex_module.lock_active_installation_runtime_mapping_internal(p_expected_identity);
+  active_mapping:=vortex_definition.lock_active_installation_runtime_mapping_internal(p_expected_identity);
   p_installation:=active_mapping -> 'installation';
   organization_id_value:=(p_installation ->> 'organizationId')::uuid;
   application_root_id_value:=(p_installation ->> 'applicationRootId')::uuid;
@@ -57,7 +57,7 @@ begin
   loop
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
       'vortex_record.storage:' || storage_item.storage_id::text,0));
-    final_mapping:=vortex_module.lock_active_installation_runtime_mapping_internal(p_expected_identity);
+    final_mapping:=vortex_definition.lock_active_installation_runtime_mapping_internal(p_expected_identity);
     if final_mapping is distinct from active_mapping then
       raise exception using errcode='40001', message='Active Record mapping changed while waiting';
     end if;
@@ -166,7 +166,7 @@ begin
                   pg_catalog.format('pg_catalog.to_jsonb(%I::text)', ordered_fields.value ->> 'token')
                 when 'timestamp_with_time_zone' then
                   pg_catalog.format(
-                    'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(%I))',
+                    'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(%I))',
                     ordered_fields.value ->> 'token'
                   )
                 when 'date' then
@@ -361,7 +361,7 @@ begin
       raise exception using errcode='23505', message='Active Record plan immutable identity differs';
     end if;
   end if;
-  final_mapping:=vortex_module.lock_active_installation_runtime_mapping_internal(p_expected_identity);
+  final_mapping:=vortex_definition.lock_active_installation_runtime_mapping_internal(p_expected_identity);
   if final_mapping is distinct from active_mapping then
     raise exception using errcode='40001', message='Active Record mapping changed';
   end if;
@@ -372,7 +372,6 @@ end
 $function$;
 alter function vortex_record.resolve_active_bundle_record_access_plan_internal(jsonb) owner to vortex_record_adapter;
 revoke all on function vortex_record.resolve_active_bundle_record_access_plan_internal(jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner, vortex_definition_owner;
-grant execute on function vortex_record.resolve_active_bundle_record_access_plan_internal(jsonb) to vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_record.resolve_active_bundle_record_access_plan_internal(jsonb) to vortex_record_adapter, vortex_owner;
 comment on function vortex_record.resolve_active_bundle_record_access_plan_internal(jsonb) is 'Derives the full active declared Record plan under current binding and storage locks, using the same immutable format2 plan identity as first preparation.';

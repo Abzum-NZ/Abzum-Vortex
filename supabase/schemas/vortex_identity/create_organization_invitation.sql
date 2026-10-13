@@ -63,9 +63,9 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.create_organization_invitation(text, text, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.create_organization_invitation(text, text, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.create_organization_invitation(text, text, timestamptz) is null;
 
-alter function vortex_identity.create_organization_invitation(text, text, timestamptz) owner to vortex_identity_owner;
+alter function vortex_identity.create_organization_invitation(text, text, timestamptz) owner to vortex_owner;
 grant execute on function vortex_identity.create_organization_invitation(text, text, timestamptz) to postgres;

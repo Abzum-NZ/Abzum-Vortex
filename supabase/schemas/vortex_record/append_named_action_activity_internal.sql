@@ -30,12 +30,12 @@ begin
     raise exception using errcode = '22023', message = 'Named action Activity input is invalid';
   end if;
   context_value := vortex_access.validated_human_request_context();
-  append_result := vortex_activity.append_organization_activity_entry(
+  append_result := vortex_record.append_organization_activity_entry(
     (context_value ->> 'organizationId')::uuid, p_activity_id,
     occurred_at_value, 'organization_account',
     (context_value ->> 'organizationAccountId')::uuid,
     'execute_named_action', array[p_subject_id]::uuid[], p_changed_field_ids,
-    vortex_context.channel(), (context_value ->> 'correlationId')::uuid, p_outcome
+    vortex_platform.channel(), (context_value ->> 'correlationId')::uuid, p_outcome
   );
   if append_result is distinct from 'inserted' then
     raise exception using errcode = '40001', message = 'Named action Activity is stale';
@@ -48,8 +48,7 @@ alter function vortex_record.append_named_action_activity_internal(uuid, uuid, u
   owner to postgres;
 
 revoke all on function vortex_record.append_named_action_activity_internal(uuid,uuid,uuid[],text)
-from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner, vortex_record_adapter;
+from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.append_named_action_activity_internal(uuid,uuid,uuid[],text)
 to vortex_record_adapter;
 

@@ -230,7 +230,7 @@ begin
       notice_sequence := pg_catalog.nextval(
         'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
       );
-      perform vortex_invalidation.publish_change_notice(
+      perform vortex_platform.publish_change_notice(
         (context_value ->> 'organizationId')::uuid,
         application_scope, p_record_type_id,
         saved_record_id, saved_concurrency_number, 'deleted',
@@ -253,7 +253,6 @@ $function$;
 alter function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[]) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[])
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[]) is null;

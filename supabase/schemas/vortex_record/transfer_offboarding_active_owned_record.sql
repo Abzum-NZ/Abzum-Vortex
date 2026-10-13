@@ -54,8 +54,7 @@ alter function vortex_record.transfer_offboarding_active_owned_record(uuid,uuid,
 
 revoke all on function vortex_record.transfer_offboarding_active_owned_record(
   uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, bigint
-) from public, anon, authenticated, service_role, vortex_runtime,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
 grant execute on function vortex_record.transfer_offboarding_active_owned_record(
   uuid, uuid, uuid, bigint, text, uuid, uuid, uuid, bigint
 ) to vortex_request;

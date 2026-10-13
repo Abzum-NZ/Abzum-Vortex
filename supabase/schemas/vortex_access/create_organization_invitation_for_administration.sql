@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -9,7 +9,7 @@ declare
   subject_ids uuid[]; subject_revisions bigint[];
   operation_at timestamptz;
 begin
-  if p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or p_invited_email is null
     or p_invited_email <> pg_catalog.lower(pg_catalog.btrim(p_invited_email))
     or pg_catalog.char_length(p_invited_email) not between 3 and 320
@@ -84,7 +84,6 @@ begin
     receipt.receipt_id, receipt.accepted_at, scope.access_version;
 end
 $_$;
-
 
 ALTER FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) OWNER TO postgres;
 

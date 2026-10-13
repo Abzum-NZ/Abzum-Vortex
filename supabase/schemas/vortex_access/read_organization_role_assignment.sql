@@ -26,7 +26,6 @@ CREATE FUNCTION vortex_access.read_organization_role_assignment(p_organization_i
     and assignment.role_assignment_id = p_role_assignment_id
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_role_assignment(p_organization_id uuid, p_role_assignment_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_role_assignment(p_organization_id uuid, p_role_assignment_id uuid) IS 'Owner-only exact assignment fact read with database-time temporal status, not an access decision.';

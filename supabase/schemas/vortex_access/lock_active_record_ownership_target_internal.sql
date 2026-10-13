@@ -50,7 +50,6 @@ $function$;
 comment on function vortex_access.lock_active_record_ownership_target_internal(text, uuid) is
   'Private exact active same-organisation account or Group target check for the fixed Record ownership-transfer operation.';
 
-revoke all on function vortex_access.lock_active_record_ownership_target_internal(text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+revoke all on function vortex_access.lock_active_record_ownership_target_internal(text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.lock_active_record_ownership_target_internal(text, uuid) to vortex_record_adapter;

@@ -266,8 +266,7 @@ alter function vortex_record.prepare_named_action_relationship_copies_internal(t
 
 revoke all on function vortex_record.prepare_named_action_relationship_copies_internal(
   text, uuid, bigint, uuid, uuid, uuid, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.prepare_named_action_relationship_copies_internal(
   text, uuid, bigint, uuid, uuid, uuid, jsonb
 ) to vortex_record_adapter;

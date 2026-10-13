@@ -107,7 +107,7 @@ begin
       and registration.state = 'active'
       and exists (
         select 1
-        from vortex_module.installation_bindings as binding
+        from vortex_definition.installation_bindings as binding
         where binding.organization_id = addressed_organization.organization_id
           and binding.application_root_id = root.root_id
           and binding.application_release_revision = registration.source_revision

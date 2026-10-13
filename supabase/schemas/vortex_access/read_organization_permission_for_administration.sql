@@ -86,6 +86,8 @@ begin
     permission_value, scope.access_version;
 end
 $function$;
+alter function vortex_access.read_organization_permission_for_administration(uuid,text,uuid,uuid) owner to vortex_owner;
+
 
 revoke execute on function
   vortex_access.read_organization_permission_for_administration(uuid, text, uuid, uuid)
@@ -101,4 +103,4 @@ comment on function
 
 alter function vortex_access.read_organization_permission_for_administration(
   uuid, text, uuid, uuid
-) owner to vortex_access_owner;
+) owner to vortex_owner;

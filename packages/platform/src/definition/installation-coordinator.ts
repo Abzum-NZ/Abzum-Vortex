@@ -439,7 +439,7 @@ const readInstallationBindings = async (
   applicationRootId: ApplicationRootId,
 ): Promise<InstallationBindings> => {
   const rows = await transaction.query<BindingRow>`
-    select vortex_module.read_application_installation_bindings(
+    select vortex_definition.read_application_installation_bindings(
       ${applicationRootId}::uuid
     ) as bindings
   `;
@@ -537,7 +537,7 @@ const recordOutcome = async (
   state: "active" | "detached",
 ): Promise<void> => {
   await transaction.query`
-    select vortex_module.record_application_installation_outcome(
+    select vortex_definition.record_application_installation_outcome(
       ${activityId}::uuid,
       ${applicationRootId}::uuid,
       ${applicationReleaseRevision}::bigint,
@@ -557,7 +557,7 @@ const drainInstallation = async (
   expectedModuleBindings: readonly ExpectedModuleBinding[],
 ): Promise<z.infer<typeof installationDrainResultSchema>> => {
   const rows = await transaction.query<DrainRow>`
-    select vortex_module.drain_installation(
+    select vortex_definition.drain_installation(
       ${activityId}::uuid,
       ${applicationRootId}::uuid,
       ${applicationReleaseRevision}::bigint,

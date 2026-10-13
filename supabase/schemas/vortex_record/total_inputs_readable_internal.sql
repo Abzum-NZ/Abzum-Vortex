@@ -77,8 +77,7 @@ $function$;
 
 alter function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+revoke all on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_record.total_inputs_readable_internal(jsonb, uuid, uuid, jsonb, jsonb) to vortex_record_adapter;
 

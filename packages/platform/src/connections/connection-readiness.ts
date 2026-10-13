@@ -157,7 +157,7 @@ export async function resolveConnectionInstanceReadiness(
     parametersValidated = true;
 
     const rows = await transaction.query<SqlReadinessRow>`
-      select vortex_connection.resolve_connection_instance_readiness(
+      select vortex_platform.resolve_connection_instance_readiness(
         ${validatedOrganizationId},
         ${validatedAppId},
         ${validatedConnId},
@@ -314,7 +314,7 @@ export async function readActiveConnectionEvidence(
         state,
         revision,
         last_health_outcome
-      from vortex_connection.read_active_connection_evidence(${validatedConnId})
+      from vortex_platform.read_active_connection_evidence(${validatedConnId})
     `;
     const row = rows.length === 1 ? rows[0] : undefined;
     if (row === undefined) {

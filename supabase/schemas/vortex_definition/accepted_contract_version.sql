@@ -24,9 +24,8 @@ end
 $function$;
 
 revoke all on function vortex_definition.accepted_contract_version(text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_definition.accepted_contract_version(text)
-  to vortex_module_owner, vortex_record_owner;
+  to vortex_owner;
 comment on function vortex_definition.accepted_contract_version(text) is
-  'One accepted definition contract-version set per contract kind. application: vortex_module.provision_module_installation_storage and vortex_module.activate/detach_application_installation. module: vortex_record.provision_exact_module_storage. module_storage_conversion: vortex_record.register_storage_conversion_plan. record_type: vortex_access.evaluate_organization_record_access_internal.';
+  'One accepted definition contract-version set per contract kind. application: vortex_definition.provision_module_installation_storage and vortex_definition.activate/detach_application_installation. module: vortex_record.provision_exact_module_storage. module_storage_conversion: vortex_record.register_storage_conversion_plan. record_type: vortex_access.evaluate_organization_record_access_internal.';

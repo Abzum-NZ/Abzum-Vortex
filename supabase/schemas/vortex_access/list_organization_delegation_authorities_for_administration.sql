@@ -119,7 +119,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.list_organization_delegation_authorities_for_administration(p_after_delegation_authority_id uuid, p_page_size integer) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.list_organization_delegation_authorities_for_administration(p_after_delegation_authority_id uuid, p_page_size integer) IS 'Returns one bounded delegation page with internal scope evidence removed.';

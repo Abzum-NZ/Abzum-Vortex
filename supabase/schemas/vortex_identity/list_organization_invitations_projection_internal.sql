@@ -30,11 +30,10 @@ as $function$
 $function$;
 
 revoke all on function vortex_identity.list_organization_invitations_projection_internal(uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_identity.list_organization_invitations_projection_internal(uuid) is
   'Identity-owned set-returning safe organisation-invitation projection bounded to the given organisation: the raw invitation secret and its stored fingerprint are never exposed, and the already-decided request scope is the only visibility.';
 
-alter function vortex_identity.list_organization_invitations_projection_internal(uuid) owner to vortex_identity_owner;
+alter function vortex_identity.list_organization_invitations_projection_internal(uuid) owner to vortex_owner;
 grant execute on function vortex_identity.list_organization_invitations_projection_internal(uuid) to postgres;

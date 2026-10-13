@@ -101,7 +101,7 @@ begin
       else
         event_kind := 'unlinked';
       end if;
-      event_result := vortex_event.append_record_occurrences(
+      event_result := vortex_platform.append_record_occurrences(
         effect_row.storage_contract_id, effect_row.record_id,
         pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
           'occurrenceId', case
@@ -282,7 +282,7 @@ begin
     -- the retained/detached reader, so a detached record cannot leak its current
     -- revision through the ordinary conflict response.
     begin
-      installation := vortex_module.read_current_active_installation();
+      installation := vortex_definition.read_current_active_installation();
     exception
       when no_data_found then
         perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
@@ -380,7 +380,7 @@ begin
       raise exception using errcode = '55000', message = 'Record ownership transfer saved identity is unavailable';
     end if;
     perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id, p_record_id, 'completed');
-    event_result := vortex_event.append_record_occurrences(
+    event_result := vortex_platform.append_record_occurrences(
       (record_type_fact ->> 'storageContractId')::uuid,
       p_record_id, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'occurrenceId', p_occurrence_id,
@@ -402,7 +402,7 @@ begin
     if record_fact #>> '{recordScope,storageScope}' = 'application_contained' then
       begin
         notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::regclass);
-        perform vortex_invalidation.publish_change_notice(
+        perform vortex_platform.publish_change_notice(
           organization_id_value, application_root_id_value, p_record_type_id,
           updated_record_id, updated_concurrency_number, 'changed',
           notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
@@ -423,13 +423,13 @@ begin
             is distinct from record_type_fact ->> 'moduleRootId'
           or record_fact -> 'recordScope' ->> 'storageContractId'
             is distinct from record_type_fact ->> 'storageContractId'
-          or not vortex_context.is_non_nil_uuid(record_fact -> 'recordScope' ->> 'moduleRootId')
-          or not vortex_context.is_non_nil_uuid(record_type_fact ->> 'storageContractId') then
+          or not vortex_platform.is_non_nil_uuid(record_fact -> 'recordScope' ->> 'moduleRootId')
+          or not vortex_platform.is_non_nil_uuid(record_type_fact ->> 'storageContractId') then
           raise exception using errcode = '55000',
             message = 'Shared ownership transfer record lineage is unavailable';
         end if;
 
-        shared_consumers_initial := vortex_module.read_active_shared_record_consumers_internal(
+        shared_consumers_initial := vortex_definition.read_active_shared_record_consumers_internal(
           (record_fact -> 'recordScope' ->> 'moduleRootId')::uuid,
           p_record_type_id,
           (record_type_fact ->> 'storageContractId')::uuid
@@ -463,9 +463,9 @@ begin
               'resolutionFingerprint', 'catalogueFingerprint', 'moduleBindings'
             ])
             or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(target_item)) <> 15
-            or not vortex_context.is_non_nil_uuid(target_item ->> 'applicationRootId')
-            or not vortex_context.is_non_nil_uuid(target_item ->> 'moduleRootId')
-            or not vortex_context.is_non_nil_uuid(target_item ->> 'storageContractId')
+            or not vortex_platform.is_non_nil_uuid(target_item ->> 'applicationRootId')
+            or not vortex_platform.is_non_nil_uuid(target_item ->> 'moduleRootId')
+            or not vortex_platform.is_non_nil_uuid(target_item ->> 'storageContractId')
             or not pg_catalog.pg_input_is_valid(target_item ->> 'applicationReleaseRevision', 'bigint')
             or (target_item ->> 'applicationReleaseRevision')::bigint not between 1 and 9007199254740991
             or target_item ->> 'moduleRootId' is distinct from record_fact -> 'recordScope' ->> 'moduleRootId'
@@ -519,7 +519,7 @@ begin
                 'resolutionFingerprint', 'generatorContractVersion', 'storageContractIds'
               ])
               or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(module_item)) <> 9
-              or not vortex_context.is_non_nil_uuid(module_item ->> 'moduleRootId')
+              or not vortex_platform.is_non_nil_uuid(module_item ->> 'moduleRootId')
               or not pg_catalog.pg_input_is_valid(module_item ->> 'bindingRevision', 'bigint')
               or (module_item ->> 'bindingRevision')::bigint not between 1 and 9007199254740991
               or not pg_catalog.pg_input_is_valid(module_item ->> 'applicationReleaseRevision', 'bigint')
@@ -539,7 +539,7 @@ begin
                 select 1
                 from pg_catalog.jsonb_array_elements(module_item -> 'storageContractIds') as contract(value)
                 where pg_catalog.jsonb_typeof(contract.value) is distinct from 'string'
-                  or not vortex_context.is_non_nil_uuid(contract.value #>> '{}')
+                  or not vortex_platform.is_non_nil_uuid(contract.value #>> '{}')
               )
               or exists (
                 select contract.value
@@ -588,7 +588,7 @@ begin
             message = 'Origin Application is not a proved shared record consumer';
         end if;
 
-        shared_consumers_final := vortex_module.read_active_shared_record_consumers_internal(
+        shared_consumers_final := vortex_definition.read_active_shared_record_consumers_internal(
           (record_fact -> 'recordScope' ->> 'moduleRootId')::uuid,
           p_record_type_id,
           (record_type_fact ->> 'storageContractId')::uuid
@@ -608,7 +608,7 @@ begin
           from pg_catalog.jsonb_array_elements(shared_consumers_initial -> 'targets') as item(value)
           order by (item.value ->> 'applicationRootId')::uuid
         loop
-          perform vortex_invalidation.publish_change_notice(
+          perform vortex_platform.publish_change_notice(
             organization_id_value, (target_item ->> 'applicationRootId')::uuid,
             p_record_type_id, updated_record_id, updated_concurrency_number, 'changed',
             notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
@@ -642,8 +642,7 @@ alter function vortex_record.apply_lifecycle_record_changes_internal(text,uuid,u
 
 revoke all on function vortex_record.apply_lifecycle_record_changes_internal(
   text, uuid, uuid, uuid, bigint, jsonb, uuid, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_lifecycle_record_changes_internal(
   text, uuid, uuid, uuid, bigint, jsonb, uuid, uuid
 ) to vortex_record_adapter;

@@ -56,7 +56,7 @@ begin
     preview_installation_id_value :=
       (preview_installation ->> 'previewInstallationId')::uuid;
   else
-    installation := vortex_module.read_current_active_installation();
+    installation := vortex_definition.read_current_active_installation();
   end if;
 
   for binding_item in
@@ -268,12 +268,13 @@ exception
       message = 'Installed definition evidence is ambiguous';
 end
 $function$;
+alter function vortex_record.resolve_record_action_context_internal(uuid,text) owner to vortex_record_adapter;
+
 
 alter function vortex_record.resolve_record_action_context_internal(uuid, text)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.resolve_record_action_context_internal(uuid, text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.resolve_record_action_context_internal(uuid, text) is
   'Private Record metadata resolver over one exact live installation or an owner-validated, unexpired preview storage binding; preview contexts support only reads and base record changes.';

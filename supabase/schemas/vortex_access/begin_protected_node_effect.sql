@@ -16,7 +16,7 @@ declare
   checked jsonb;
   retained record;
 begin
-  checked := vortex_context.current_context();
+  checked := vortex_platform.current_context();
   if checked ->> 'callerKind' is distinct from 'human'
     or checked ->> 'channel' is distinct from 'durable_workflow'
     or pg_catalog.lower(checked ->> 'organizationId') is distinct from p_organization_id::text
@@ -27,7 +27,7 @@ begin
   end if;
 
   select stored.identity_id, stored.run_record into retained
-  from vortex_workflow.protected_workflow_runs as stored
+  from vortex_platform.protected_workflow_runs as stored
   where stored.run_id = p_run_id
     and stored.organization_id = p_organization_id
   for update;
@@ -45,7 +45,7 @@ begin
     return pg_catalog.jsonb_build_object('kind', 'unavailable');
   end if;
 
-  return vortex_workflow.begin_flow_effect(
+  return vortex_platform.begin_flow_effect(
     p_run_id, p_organization_id, p_identity_id, p_task_path, p_iteration
   );
 end

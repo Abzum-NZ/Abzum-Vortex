@@ -33,8 +33,7 @@ as $function$
 $function$;
 
 revoke all on function vortex_access.metering_event_dimensions_are_valid(jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.metering_event_dimensions_are_valid(jsonb) is
   'Storage check for safe metering dimensions: a small flat map of bounded scalars whose keys name no word in the metering_forbidden_dimension_word reference list.';

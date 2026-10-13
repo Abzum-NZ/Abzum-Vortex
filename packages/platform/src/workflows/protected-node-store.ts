@@ -50,7 +50,7 @@ export const createDatabaseProtectedNodeRunStore = (): ProtectedNodeRunStore =>
           : null;
       const rows = await withRuntimeTransaction((transaction) =>
         transaction.query<RunWriteRow>`
-          select vortex_workflow.write_protected_workflow_run(
+          select vortex_platform.write_protected_workflow_run(
             ${record.authority.runId}::uuid,
             ${record.authority.organizationId}::uuid,
             ${identityId}::uuid,
@@ -67,7 +67,7 @@ export const createDatabaseProtectedNodeRunStore = (): ProtectedNodeRunStore =>
       if (!parsedRunId.success) return undefined;
       const rows = await withRuntimeTransaction((transaction) =>
         transaction.query<RunRecordRow>`
-          select vortex_workflow.read_protected_workflow_run_registration(
+          select vortex_platform.read_protected_workflow_run_registration(
             ${parsedRunId.data}::uuid
           ) as run_record
         `,
@@ -107,7 +107,7 @@ export const createDatabaseProtectedNodeRunStore = (): ProtectedNodeRunStore =>
       if (!parsedRunId.success || !parsedState.success || !parsedAt.success) return;
       const rows = await withRuntimeTransaction((transaction) =>
         transaction.query<RunRefreshRow>`
-          select vortex_workflow.refresh_protected_workflow_run_state(
+          select vortex_platform.refresh_protected_workflow_run_state(
             ${parsedRunId.data}::uuid,
             ${parsedState.data}::text,
             ${parsedAt.data}::timestamptz
@@ -133,7 +133,7 @@ export const createDatabaseProtectedNodeEffectLedger = (): ProtectedNodeEffectLe
     async replay(key, operationKey) {
       const rows = await withRuntimeTransaction((transaction) =>
         transaction.query<DatabaseRow & { result: unknown }>`
-          select vortex_workflow.read_protected_node_effect(
+          select vortex_platform.read_protected_node_effect(
             ${key.runId}::uuid,
             ${key.organizationId}::uuid,
             ${key.identityId}::uuid,

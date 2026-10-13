@@ -45,7 +45,7 @@ begin
     return version_value;
   end if;
   begin
-    perform vortex_invalidation.publish_change_notice(
+    perform vortex_platform.publish_change_notice(
       p_organization_id,
       p_application_root_id,
       record_type_id,
@@ -69,8 +69,7 @@ $function$;
 alter function vortex_record.bump_record_data_version_internal(uuid,uuid,uuid) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.bump_record_data_version_internal(uuid, uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.bump_record_data_version_internal(uuid, uuid, uuid)
   to vortex_record_adapter;
 

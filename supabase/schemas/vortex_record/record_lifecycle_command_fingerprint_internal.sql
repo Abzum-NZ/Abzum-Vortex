@@ -15,5 +15,7 @@ CREATE FUNCTION vortex_record.record_lifecycle_command_fingerprint_internal(p_co
     )), 'hex'
   )
 $$;
+alter function vortex_record.record_lifecycle_command_fingerprint_internal(uuid,text,uuid,uuid,bigint) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.record_lifecycle_command_fingerprint_internal(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint) FROM PUBLIC;

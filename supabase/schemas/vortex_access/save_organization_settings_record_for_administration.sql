@@ -86,7 +86,7 @@ begin
           )
           and exists (
             select 1
-            from vortex_module.installation_bindings as binding
+            from vortex_definition.installation_bindings as binding
             where binding.organization_id = context_organization_id
               and binding.application_root_id = default_application_root_id_value
               and binding.application_release_revision = registration.source_revision
@@ -130,8 +130,7 @@ $function$;
 
 revoke all on function vortex_access.save_organization_settings_record_for_administration(
   uuid, bigint, jsonb, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.save_organization_settings_record_for_administration(
   uuid, bigint, jsonb, jsonb
 ) to vortex_record_adapter;

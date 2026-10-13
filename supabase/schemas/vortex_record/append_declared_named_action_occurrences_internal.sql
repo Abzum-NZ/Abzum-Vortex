@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) RETURNS jsonb
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -49,10 +49,12 @@ begin
       )
     );
   end loop;
-  return vortex_event.append_record_occurrences(
+  return vortex_platform.append_record_occurrences(
     p_storage_contract_id, p_record_id, occurrence_values
   );
 end
 $$;
+alter function vortex_record.append_declared_named_action_occurrences_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) FROM PUBLIC;

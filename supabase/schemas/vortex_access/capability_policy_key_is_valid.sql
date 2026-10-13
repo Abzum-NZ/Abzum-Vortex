@@ -11,7 +11,6 @@ CREATE FUNCTION vortex_access.capability_policy_key_is_valid(p_key text) RETURNS
     );
 $_$;
 
-
 ALTER FUNCTION vortex_access.capability_policy_key_is_valid(p_key text) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.capability_policy_key_is_valid(p_key text) FROM PUBLIC;

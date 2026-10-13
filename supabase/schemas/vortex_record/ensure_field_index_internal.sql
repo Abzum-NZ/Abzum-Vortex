@@ -71,6 +71,8 @@ begin
     or vortex_record.index_catalogue.observed_state is distinct from excluded.observed_state;
 end
 $_$;
+alter function vortex_record.ensure_field_index_internal(uuid,uuid,text,text,text,text,text) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.ensure_field_index_internal(p_storage_contract_id uuid, p_field_id uuid, p_purpose text, p_storage_scope text, p_table_token text, p_scope_index_columns text, p_column_token text) IS 'Private provisioner helper: creates one exact field index and records its desired definition and observed readiness for one storage contract and field.';
 

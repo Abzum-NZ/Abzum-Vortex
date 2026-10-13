@@ -496,8 +496,7 @@ $function$;
 
 revoke execute on function vortex_access.evaluate_record_permission_row_scope_internal(
   jsonb, timestamptz, timestamptz, uuid, jsonb, jsonb, uuid, jsonb, uuid[]
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.evaluate_record_permission_row_scope_internal(
   jsonb, timestamptz, timestamptz, uuid, jsonb, jsonb, uuid, jsonb, uuid[]

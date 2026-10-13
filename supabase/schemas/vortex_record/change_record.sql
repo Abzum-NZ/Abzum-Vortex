@@ -229,12 +229,13 @@ begin
   );
 end
 $function$;
+alter function vortex_record.change_record(uuid,uuid,bigint,jsonb,uuid[]) owner to vortex_record_adapter;
+
 
 alter function vortex_record.change_record(uuid, uuid, bigint, jsonb, uuid[])
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.change_record(uuid, uuid, bigint, jsonb, uuid[])
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.change_record(uuid, uuid, bigint, jsonb, uuid[]) is
   'Fixed owner-only record update primitive. It checks one live record decision or the exact owner preview address, validates values and field bounds before writing, enforces concurrency, and returns only its permitted field projection.';

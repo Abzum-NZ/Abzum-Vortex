@@ -220,6 +220,8 @@ exception
       message = 'Storage conversion batch evidence is unavailable';
 end
 $_$;
+alter function vortex_record.convert_record_storage_batch(uuid,integer,bigint) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.convert_record_storage_batch(p_conversion_contract_id uuid, p_batch_size integer, p_expected_plan_revision bigint) IS 'Converts a bounded batch of the caller''s records into the planned target column under the adapter row-level security scope, recording each source concurrency revision; never bumps concurrency, writes the source column or activates the target.';
 

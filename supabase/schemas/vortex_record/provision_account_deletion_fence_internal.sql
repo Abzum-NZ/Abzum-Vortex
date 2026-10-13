@@ -9,5 +9,7 @@ begin
   return new;
 end
 $$;
+alter function vortex_record.provision_account_deletion_fence_internal() owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.provision_account_deletion_fence_internal() FROM PUBLIC;

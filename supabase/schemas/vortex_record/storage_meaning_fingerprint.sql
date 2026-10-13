@@ -7,5 +7,7 @@ CREATE FUNCTION vortex_record.storage_meaning_fingerprint(p_record_type jsonb) R
     'hex'
   )
 $$;
+alter function vortex_record.storage_meaning_fingerprint(jsonb) owner to vortex_owner;
+
 
 REVOKE ALL ON FUNCTION vortex_record.storage_meaning_fingerprint(p_record_type jsonb) FROM PUBLIC;

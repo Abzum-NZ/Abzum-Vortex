@@ -30,7 +30,6 @@ CREATE FUNCTION vortex_access.read_organization_role_activation(p_organization_i
     and activation.role_activation_id = p_role_activation_id
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_role_activation(p_organization_id uuid, p_role_activation_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_role_activation(p_organization_id uuid, p_role_activation_id uuid) IS 'Owner-only exact activation fact read with database-time temporal status, not an access decision.';

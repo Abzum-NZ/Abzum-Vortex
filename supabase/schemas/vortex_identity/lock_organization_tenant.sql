@@ -15,7 +15,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_identity.lock_organization_tenant() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_identity.lock_organization_tenant() FROM PUBLIC;

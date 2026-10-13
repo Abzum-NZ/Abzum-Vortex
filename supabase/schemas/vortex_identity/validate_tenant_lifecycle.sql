@@ -32,8 +32,8 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.validate_tenant_lifecycle() from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke execute on function vortex_identity.validate_tenant_lifecycle() from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.validate_tenant_lifecycle() is null;
 
-alter function vortex_identity.validate_tenant_lifecycle() owner to vortex_identity_owner;
+alter function vortex_identity.validate_tenant_lifecycle() owner to vortex_owner;

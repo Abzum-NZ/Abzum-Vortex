@@ -14,7 +14,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.validate_organization_direct_record_share_insert() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.validate_organization_direct_record_share_insert() FROM PUBLIC;

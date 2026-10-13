@@ -33,7 +33,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) IS 'Returns one safe Group administration detail without exposing current-fact audit evidence.';

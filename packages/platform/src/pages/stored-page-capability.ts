@@ -536,7 +536,7 @@ export const createStoredPageCapabilityService = (
             const bundleRows = await transaction.query<{
               readonly bundle_state: unknown;
             }>`
-              select vortex_module.read_active_installation_bundle_identity() as bundle_state
+              select vortex_definition.read_active_installation_bundle_identity() as bundle_state
             `;
             const bundleState = activeInstallationBundleStateSchema.safeParse(
               bundleRows[0]?.bundle_state,

@@ -79,6 +79,8 @@ exception
       message = 'Index status authority is unavailable';
 end
 $$;
+alter function vortex_record.authorize_index_status_internal(uuid,uuid) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.authorize_index_status_internal(p_organization_id uuid, p_application_root_id uuid) IS 'Private authority for the index-status read: Application-management permission, validated organisation context and the exact owned Application.';
 

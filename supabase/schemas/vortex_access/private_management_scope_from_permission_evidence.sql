@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
@@ -23,9 +23,9 @@ begin
       and pg_catalog.jsonb_typeof(item.value -> 'ownerKind') = 'string'
       and item.value ->> 'ownerKind' in ('platform', 'application', 'module')
       and pg_catalog.jsonb_typeof(item.value -> 'ownerId') = 'string'
-      and vortex_context.is_non_nil_uuid(item.value ->> 'ownerId')
+      and vortex_platform.is_non_nil_uuid(item.value ->> 'ownerId')
       and pg_catalog.jsonb_typeof(item.value -> 'permissionId') = 'string'
-      and vortex_context.is_non_nil_uuid(item.value ->> 'permissionId')
+      and vortex_platform.is_non_nil_uuid(item.value ->> 'permissionId')
       and (
         (
           item.value ->> 'ownerKind' = 'platform'
@@ -33,7 +33,7 @@ begin
         ) or (
           item.value ->> 'ownerKind' in ('application', 'module')
           and pg_catalog.jsonb_typeof(item.value -> 'applicationRootId') = 'string'
-          and vortex_context.is_non_nil_uuid(item.value ->> 'applicationRootId')
+          and vortex_platform.is_non_nil_uuid(item.value ->> 'applicationRootId')
           and (
             item.value ->> 'ownerKind' <> 'application'
             or (item.value ->> 'ownerId')::uuid =
@@ -72,7 +72,6 @@ begin
   );
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) OWNER TO postgres;
 

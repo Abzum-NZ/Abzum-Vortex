@@ -29,7 +29,7 @@ declare
   actor_identity_id uuid;
 begin
   if p_limit is null or p_limit not between 1 and 101
-    or (p_after is not null and not vortex_context.is_non_nil_uuid(p_after::text)) then
+    or (p_after is not null and not vortex_platform.is_non_nil_uuid(p_after::text)) then
     raise exception using errcode = '22023',
       message = 'Super-administrator assignment read is invalid';
   end if;
@@ -59,8 +59,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.list_vortex_super_administrator_assignments(integer, uuid)
-  from public, anon, authenticated, service_role, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_identity.list_vortex_super_administrator_assignments(integer, uuid)
   to vortex_runtime;

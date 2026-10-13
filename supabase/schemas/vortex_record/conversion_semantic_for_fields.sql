@@ -12,6 +12,8 @@ CREATE FUNCTION vortex_record.conversion_semantic_for_fields(p_source_field json
     else null
   end
 $$;
+alter function vortex_record.conversion_semantic_for_fields(jsonb,jsonb) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.conversion_semantic_for_fields(p_source_field jsonb, p_target_field jsonb) IS 'Closed, lossless conversion semantic for exact plain stored source/target field definitions, or null when the pair is unsupported.';
 

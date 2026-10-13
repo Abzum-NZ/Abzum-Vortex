@@ -144,7 +144,7 @@ const readProtectedRecord = (
   applicationReleaseRevision: number,
 ) => transaction.query<RecordLinkReadRow>`
   with active_installation as materialized (
-    select vortex_module.read_current_active_installation() as value
+    select vortex_definition.read_current_active_installation() as value
   ), verified_installation as materialized (
     select value
     from active_installation

@@ -58,7 +58,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_definition.validate_draft_write() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_definition.validate_draft_write() FROM PUBLIC;

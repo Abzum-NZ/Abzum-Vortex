@@ -49,7 +49,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.record_share_grantor_authority_until_internal(p_declaration jsonb, p_record_id uuid, p_facts jsonb, p_context jsonb) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.record_share_grantor_authority_until_internal(p_declaration jsonb, p_record_id uuid, p_facts jsonb, p_context jsonb) IS 'Private: when an already-admitted grantor''s exact-record authority for the declaration ends, excluding the request context''s own expiry; null when it does not expire. Never admits.';

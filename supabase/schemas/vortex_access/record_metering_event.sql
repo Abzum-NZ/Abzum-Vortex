@@ -28,12 +28,12 @@ declare
   command_fingerprint text;
   safe_event jsonb;
 begin
-  if p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
+  if p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
     or (p_organization_id is not null
-      and not vortex_context.is_non_nil_uuid(p_organization_id::text))
+      and not vortex_platform.is_non_nil_uuid(p_organization_id::text))
     or p_allocation_owner is null
     or p_allocation_owner not in ('local', 'federated_source', 'federated_recipient')
-    or p_operation_id is null or not vortex_context.is_non_nil_uuid(p_operation_id::text)
+    or p_operation_id is null or not vortex_platform.is_non_nil_uuid(p_operation_id::text)
     or not vortex_access.capability_policy_key_is_valid(p_capability_key)
     or not vortex_access.capability_policy_unit_is_valid(p_unit)
     or not vortex_access.capability_policy_quantity_is_valid(p_quantity)
@@ -43,14 +43,14 @@ begin
     or p_occurred_at is null
     or p_occurred_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_source_event_id is not null
-      and not vortex_context.is_non_nil_uuid(p_source_event_id::text))
+      and not vortex_platform.is_non_nil_uuid(p_source_event_id::text))
     or p_duplicate_protection_key is null
     or p_duplicate_protection_key <> pg_catalog.btrim(p_duplicate_protection_key)
     or pg_catalog.length(p_duplicate_protection_key) not between 16 and 200
     or p_correlation_id is null
-    or not vortex_context.is_non_nil_uuid(p_correlation_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_correlation_id::text)
     or (p_corrects_metering_event_id is not null
-      and not vortex_context.is_non_nil_uuid(p_corrects_metering_event_id::text))
+      and not vortex_platform.is_non_nil_uuid(p_corrects_metering_event_id::text))
     or ((p_corrects_metering_event_id is null) <> (p_correction_direction is null))
     or (p_correction_direction is not null
       and p_correction_direction not in ('increase', 'decrease')) then
@@ -61,7 +61,7 @@ begin
     or (p_source <> 'federation' and p_allocation_owner <> 'local') then
     raise exception using errcode = '22023', message = 'Metering event allocation is invalid';
   end if;
-  established := vortex_context.current_context();
+  established := vortex_platform.current_context();
   if (established ->> 'tenantId')::uuid is distinct from p_tenant_id
     or (established ->> 'organizationId')::uuid is distinct from p_organization_id
     or (established ->> 'correlationId')::uuid is distinct from p_correlation_id then
@@ -236,8 +236,7 @@ revoke execute on function
   vortex_access.record_metering_event(
     uuid, uuid, text, uuid, text, numeric, text, text, jsonb, timestamptz,
     uuid, text, uuid, uuid, text
-  ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_access.record_metering_event(
   uuid, uuid, text, uuid, text, numeric, text, text, jsonb, timestamptz,

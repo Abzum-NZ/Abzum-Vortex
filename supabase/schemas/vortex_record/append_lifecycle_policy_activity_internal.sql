@@ -21,7 +21,7 @@ begin
   end if;
 
   context_value := vortex_access.validated_human_request_context();
-  append_result := vortex_activity.append_organization_activity_entry(
+  append_result := vortex_record.append_organization_activity_entry(
     (context_value ->> 'organizationId')::uuid,
     p_activity_id,
     pg_catalog.statement_timestamp(),
@@ -30,7 +30,7 @@ begin
     'manage_record_lifecycle_policy',
     array[p_policy_id]::uuid[],
     array[]::uuid[],
-    vortex_context.channel(),
+    vortex_platform.channel(),
     (context_value ->> 'correlationId')::uuid,
     'completed'
   );
@@ -45,10 +45,9 @@ alter function vortex_record.append_lifecycle_policy_activity_internal(uuid, uui
   owner to postgres;
 
 revoke all on function vortex_record.append_lifecycle_policy_activity_internal(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.append_lifecycle_policy_activity_internal(uuid, uuid)
-  to vortex_record_owner;
+  to vortex_owner;
 
 comment on function vortex_record.append_lifecycle_policy_activity_internal(uuid, uuid) is
   'Private Record lifecycle-policy Activity composer: derives the organisation, account and correlation from the validated request context and records the channel from that context.';

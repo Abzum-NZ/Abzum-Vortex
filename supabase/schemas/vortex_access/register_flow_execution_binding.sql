@@ -44,28 +44,28 @@ declare
   activity_result text;
   permits_system boolean;
 begin
-  if p_actor_identity_id is null or not vortex_context.is_non_nil_uuid(p_actor_identity_id::text)
+  if p_actor_identity_id is null or not vortex_platform.is_non_nil_uuid(p_actor_identity_id::text)
     or p_actor_organization_account_id is null
-    or not vortex_context.is_non_nil_uuid(p_actor_organization_account_id::text)
-    or p_duplicate_key is null or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
-    or p_execution_binding_id is null or not vortex_context.is_non_nil_uuid(p_execution_binding_id::text)
-    or p_organization_id is null or not vortex_context.is_non_nil_uuid(p_organization_id::text)
-    or p_application_root_id is null or not vortex_context.is_non_nil_uuid(p_application_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_actor_organization_account_id::text)
+    or p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_execution_binding_id is null or not vortex_platform.is_non_nil_uuid(p_execution_binding_id::text)
+    or p_organization_id is null or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_application_root_id is null or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_release_version is null
     or p_release_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-    or p_flow_id is null or not vortex_context.is_non_nil_uuid(p_flow_id::text)
-    or p_node_id is null or not vortex_context.is_non_nil_uuid(p_node_id::text)
+    or p_flow_id is null or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
+    or p_node_id is null or not vortex_platform.is_non_nil_uuid(p_node_id::text)
     or p_operation_owner_kind is null
     or p_operation_owner_kind not in ('application', 'module', 'platform_service')
-    or p_operation_owner_id is null or not vortex_context.is_non_nil_uuid(p_operation_owner_id::text)
+    or p_operation_owner_id is null or not vortex_platform.is_non_nil_uuid(p_operation_owner_id::text)
     or (p_operation_owner_kind = 'application' and p_operation_owner_id <> p_application_root_id)
-    or p_operation_id is null or not vortex_context.is_non_nil_uuid(p_operation_id::text)
+    or p_operation_id is null or not vortex_platform.is_non_nil_uuid(p_operation_id::text)
     or p_actor_kind is null or p_actor_kind not in ('specified_user', 'system')
     or (p_actor_kind = 'specified_user' and (
-      p_actor_account_id is null or not vortex_context.is_non_nil_uuid(p_actor_account_id::text)
+      p_actor_account_id is null or not vortex_platform.is_non_nil_uuid(p_actor_account_id::text)
       or p_actor_system_actor_id is not null))
     or (p_actor_kind = 'system' and (
-      p_actor_system_actor_id is null or not vortex_context.is_non_nil_uuid(p_actor_system_actor_id::text)
+      p_actor_system_actor_id is null or not vortex_platform.is_non_nil_uuid(p_actor_system_actor_id::text)
       or p_actor_account_id is not null))
     or p_permitted_invokers is null or pg_catalog.jsonb_typeof(p_permitted_invokers) <> 'array'
     or pg_catalog.jsonb_array_length(p_permitted_invokers) not between 1 and 20
@@ -75,7 +75,7 @@ begin
     or pg_catalog.jsonb_array_length(p_permitted_inputs) > 20
     or (p_expected_revision is not null and p_expected_revision not between 1 and 9007199254740991)
     or (p_expires_at is not null and p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz))
-    or p_activity_id is null or not vortex_context.is_non_nil_uuid(p_activity_id::text) then
+    or p_activity_id is null or not vortex_platform.is_non_nil_uuid(p_activity_id::text) then
     raise exception using errcode = '22023', message = 'Flow execution binding command is invalid';
   end if;
 
@@ -90,7 +90,7 @@ begin
             invoker.value ->> 'kind' = 'organization_account'
             and (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(invoker.value)) = 2
             and pg_catalog.jsonb_typeof(invoker.value -> 'organizationAccountId') = 'string'
-            and vortex_context.is_non_nil_uuid(invoker.value ->> 'organizationAccountId')
+            and vortex_platform.is_non_nil_uuid(invoker.value ->> 'organizationAccountId')
           )
         )
     )
@@ -156,7 +156,7 @@ begin
       p_permitted_invokers::text,
       p_permitted_surfaces::text,
       p_permitted_inputs::text,
-      coalesce(vortex_context.format_timestamp_utc(p_expires_at), ''),
+      coalesce(vortex_platform.format_timestamp_utc(p_expires_at), ''),
       coalesce(p_expected_revision::text, '')
     ), 'UTF8'),
     'sha256'), 'hex');
@@ -284,7 +284,7 @@ begin
     'access_grant_changed'
   );
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     p_organization_id,
     p_activity_id,
     operation_at,
@@ -296,7 +296,7 @@ begin
     end,
     array[p_execution_binding_id]::uuid[],
     array[]::uuid[],
-    vortex_context.channel(),
+    vortex_platform.channel(),
     authority.correlation_id,
     'completed'
   );
@@ -323,8 +323,7 @@ $function$;
 revoke all on function vortex_access.register_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid,
   jsonb, jsonb, jsonb, timestamptz, bigint, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_access.register_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid,

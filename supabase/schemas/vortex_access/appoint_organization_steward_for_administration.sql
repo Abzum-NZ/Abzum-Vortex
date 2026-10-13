@@ -48,7 +48,7 @@ declare
 begin
   if p_organization_account_id is null
     or p_organization_account_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or not vortex_context.is_non_nil_uuid(p_organization_account_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
     or p_expected_account_revision is null
     or p_expected_account_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023',
@@ -60,7 +60,7 @@ begin
   context_account_id := (context_value ->> 'organizationAccountId')::uuid;
   context_access_version := (context_value ->> 'accessVersion')::bigint;
   context_correlation_id := (context_value ->> 'correlationId')::uuid;
-  context_channel := vortex_context.channel();
+  context_channel := vortex_platform.channel();
 
   select version.current_version into locked_access_version
   from vortex_access.organization_access_versions as version
@@ -119,7 +119,7 @@ begin
       'authentication_unsatisfied', 'delegation_insufficient'
     ) then
     activity_id := pg_catalog.gen_random_uuid();
-    activity_result := vortex_activity.append_organization_activity_entry(
+    activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, activity_id, decision.checked_at,
       'organization_account', context_account_id, 'grant_role_assignment',
       array[context_organization_id]::uuid[], array[]::uuid[],
@@ -163,7 +163,7 @@ begin
   for update of account, identity;
   if not found or p_organization_account_id = context_account_id then
     activity_id := pg_catalog.gen_random_uuid();
-    activity_result := vortex_activity.append_organization_activity_entry(
+    activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, activity_id, appointment_starts_at,
       'organization_account', context_account_id, 'grant_role_assignment',
       array[context_organization_id]::uuid[], array[]::uuid[],
@@ -471,7 +471,7 @@ begin
   end if;
 
   activity_id := pg_catalog.gen_random_uuid();
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id, activity_id, assignment_fact.changed_at,
     'organization_account', context_account_id, 'grant_role_assignment',
     array[assignment_fact.role_assignment_id]::uuid[], array[]::uuid[],
@@ -482,7 +482,7 @@ begin
       message = 'Organization steward role Activity is stale';
   end if;
   activity_id := pg_catalog.gen_random_uuid();
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id, activity_id, delegation_fact.changed_at,
     'organization_account', context_account_id, 'grant_delegation',
     array[delegation_fact.delegation_authority_id]::uuid[], array[]::uuid[],

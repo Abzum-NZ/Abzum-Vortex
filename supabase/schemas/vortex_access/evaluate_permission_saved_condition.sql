@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
     AS $_$
@@ -55,7 +55,7 @@ begin
   select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(scope_condition);
   if key_count <> 4
     or pg_catalog.jsonb_typeof(scope_condition -> 'conditionId') is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(scope_condition ->> 'conditionId')
+    or not vortex_platform.is_non_nil_uuid(scope_condition ->> 'conditionId')
     or pg_catalog.jsonb_typeof(scope_condition -> 'publishedRevision') is distinct from 'number'
     or (scope_condition ->> 'publishedRevision') !~ '^[1-9][0-9]*$'
     or (scope_condition ->> 'publishedRevision')::numeric > 9007199254740991
@@ -66,9 +66,9 @@ begin
   end if;
 
   if pg_catalog.jsonb_typeof(p_saved_condition -> 'conditionId') is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(p_saved_condition ->> 'conditionId')
+    or not vortex_platform.is_non_nil_uuid(p_saved_condition ->> 'conditionId')
     or pg_catalog.jsonb_typeof(p_saved_condition -> 'sourceRecordTypeId') is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(p_saved_condition ->> 'sourceRecordTypeId')
+    or not vortex_platform.is_non_nil_uuid(p_saved_condition ->> 'sourceRecordTypeId')
     or pg_catalog.jsonb_typeof(p_saved_condition -> 'publishedRevision') is distinct from 'number'
     or (p_saved_condition ->> 'publishedRevision') !~ '^[1-9][0-9]*$'
     or (p_saved_condition ->> 'publishedRevision')::numeric > 9007199254740991
@@ -78,7 +78,7 @@ begin
     or pg_catalog.jsonb_typeof(p_saved_condition -> 'condition') is distinct from 'object'
     or pg_catalog.jsonb_typeof(p_saved_condition -> 'declaredFieldIds') is distinct from 'array'
     or pg_catalog.jsonb_typeof(p_source_record_type -> 'recordTypeId') is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(p_source_record_type ->> 'recordTypeId')
+    or not vortex_platform.is_non_nil_uuid(p_source_record_type ->> 'recordTypeId')
     or pg_catalog.jsonb_typeof(p_source_record_type -> 'fields') is distinct from 'array'
     or scope_condition ->> 'conditionId' <> p_saved_condition ->> 'conditionId'
     or (scope_condition ->> 'publishedRevision')::numeric <> (p_saved_condition ->> 'publishedRevision')::numeric
@@ -90,7 +90,7 @@ begin
   for field_entry in select value from pg_catalog.jsonb_array_elements(p_source_record_type -> 'fields') loop
     if pg_catalog.jsonb_typeof(field_entry) is distinct from 'object'
       or pg_catalog.jsonb_typeof(field_entry -> 'fieldId') is distinct from 'string'
-      or not vortex_context.is_non_nil_uuid(field_entry ->> 'fieldId')
+      or not vortex_platform.is_non_nil_uuid(field_entry ->> 'fieldId')
       or pg_catalog.jsonb_typeof(field_entry -> 'type') is distinct from 'string' then
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
@@ -264,7 +264,6 @@ exception
     raise exception using errcode = '22023', message = 'Typed record condition is invalid';
 end
 $_$;
-
 
 ALTER FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) OWNER TO postgres;
 

@@ -67,10 +67,10 @@ begin
       'permission_unavailable', 'permission_not_effective',
       'authentication_unsatisfied', 'delegation_insufficient'
     ) then
-    activity_result := vortex_activity.append_organization_activity_entry(
+    activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
       'organization_account', context_account_id, 'revoke_delegation',
-      array[context_organization_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+      array[context_organization_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
       context_correlation_id, 'refused'
     );
     if activity_result is distinct from 'inserted' then
@@ -99,9 +99,9 @@ begin
     context_account_id, context_correlation_id) as result;
   summary := vortex_access.project_organization_delegation_summary(context_organization_id, p_delegation_authority_id);
   if summary is null then raise exception using errcode = '40001', message = 'Changed delegation projection is unavailable'; end if;
-  activity_result := vortex_activity.append_organization_activity_entry(context_organization_id,
+  activity_result := vortex_record.append_organization_activity_entry(context_organization_id,
     p_activity_id, (changed.delegation ->> 'changedAt')::timestamptz, 'organization_account', context_account_id,
-    'revoke_delegation', array[p_delegation_authority_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+    'revoke_delegation', array[p_delegation_authority_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
     context_correlation_id, 'completed');
   if activity_result is distinct from 'inserted' then raise exception using errcode = '40001', message = 'Delegation Activity is stale'; end if;
   return query select 'completed'::text, context_organization_id, summary, changed.access_version;

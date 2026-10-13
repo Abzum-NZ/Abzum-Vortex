@@ -43,9 +43,9 @@ begin
   visible_tenant_id := (context_value ->> 'tenantId')::uuid;
   visible_organization_id := (context_value ->> 'organizationId')::uuid;
   actor_identity_id := (context_value ->> 'identityId')::uuid;
-  if not vortex_context.is_non_nil_uuid(visible_tenant_id::text)
-    or not vortex_context.is_non_nil_uuid(visible_organization_id::text)
-    or not vortex_context.is_non_nil_uuid(actor_identity_id::text) then
+  if not vortex_platform.is_non_nil_uuid(visible_tenant_id::text)
+    or not vortex_platform.is_non_nil_uuid(visible_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(actor_identity_id::text) then
     return;
   end if;
   begin
@@ -81,12 +81,11 @@ end
 $function$;
 
 revoke all on function vortex_identity.list_organizations_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_identity.list_organizations_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_identity.list_organizations_projection(uuid, integer) is
   'Registered organisation projection: returns every organisation of the current viewer''s own tenant under the fixed platform.tenant.hierarchy.read capability, the exact rule the tenant-structure reader applies, with the organisation the record is read in, the organisation identity, the organisation revision and the safe projected attribute values keyed by lowercase field key, or no row when the capability refuses the viewer. Creation and state-change evidence are never projected.';

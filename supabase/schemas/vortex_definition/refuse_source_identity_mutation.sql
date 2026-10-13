@@ -9,7 +9,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_definition.refuse_source_identity_mutation() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_definition.refuse_source_identity_mutation() FROM PUBLIC;

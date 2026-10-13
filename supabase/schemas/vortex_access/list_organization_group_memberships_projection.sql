@@ -67,12 +67,11 @@ end
 $function$;
 
 revoke all on function vortex_access.list_organization_group_memberships_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_organization_group_memberships_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_group_memberships_projection(uuid, integer) is
   'Registered group-membership projection: returns every membership of the current viewer''s organisation under the fixed platform.organization.groups.read decision, with the organisation, the membership identity, the membership revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Grant and revocation evidence is never projected.';

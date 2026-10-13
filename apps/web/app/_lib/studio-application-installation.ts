@@ -441,7 +441,7 @@ const readInstallationBindings = async (
   rootId: string,
 ): Promise<InstallationBindings> => {
   const rows = await transaction.query<DatabaseRow>`
-    select vortex_module.read_application_installation_bindings(${rootId}::uuid) as bindings
+    select vortex_definition.read_application_installation_bindings(${rootId}::uuid) as bindings
   `;
   if (rows.length !== 1) problem("refused", "installation_incomplete");
   const parsed = installationBindingsSchema.safeParse(rows[0]?.bindings);

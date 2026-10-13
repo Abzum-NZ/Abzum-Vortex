@@ -115,7 +115,7 @@ begin
       pg_catalog.gen_random_uuid(), target_row.record_id, target_row.changed_field_ids,
       'completed'
     );
-    event_result := vortex_event.append_record_occurrences(
+    event_result := vortex_platform.append_record_occurrences(
       (meta ->> 'storageContractId')::uuid, target_row.record_id,
       pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'occurrenceId', pg_catalog.gen_random_uuid(),
@@ -137,7 +137,7 @@ begin
         notice_sequence := pg_catalog.nextval(
           'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
         );
-        perform vortex_invalidation.publish_change_notice(
+        perform vortex_platform.publish_change_notice(
           (meta -> 'context' ->> 'organizationId')::uuid,
           (meta -> 'context' ->> 'applicationRootId')::uuid,
           target_row.record_type_id, saved_record_id, saved_concurrency, 'changed',
@@ -153,13 +153,14 @@ begin
   end loop;
 end
 $function$;
+alter function vortex_record.apply_named_action_relationship_copies_internal(jsonb) owner to vortex_record_adapter;
+
 
 alter function vortex_record.apply_named_action_relationship_copies_internal(jsonb)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.apply_named_action_relationship_copies_internal(jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_named_action_relationship_copies_internal(jsonb)
   to vortex_record_adapter;
 

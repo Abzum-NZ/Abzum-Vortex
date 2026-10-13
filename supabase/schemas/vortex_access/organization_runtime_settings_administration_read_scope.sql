@@ -35,7 +35,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.organization_runtime_settings_administration_read_scope() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.organization_runtime_settings_administration_read_scope() FROM PUBLIC;

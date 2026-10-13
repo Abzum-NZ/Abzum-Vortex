@@ -55,7 +55,7 @@ declare
   existing_columns text[];
   expected_columns text[];
 begin
-  if not vortex_context.is_non_nil_uuid(p_module_root_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023', message = 'Record storage release selector is invalid';
   end if;
@@ -142,8 +142,8 @@ begin
     end;
     storage_scope_value := record_type ->> 'storageScope';
     ownership_mode_value := record_type ->> 'ownershipMode';
-    if not vortex_context.is_non_nil_uuid(storage_id::text)
-      or not vortex_context.is_non_nil_uuid(record_type_id_value::text)
+    if not vortex_platform.is_non_nil_uuid(storage_id::text)
+      or not vortex_platform.is_non_nil_uuid(record_type_id_value::text)
       or storage_scope_value not in ('organization_shared', 'application_contained')
       or ownership_mode_value not in ('none', 'organization_account', 'group', 'inherited')
       or pg_catalog.jsonb_typeof(record_type -> 'fields') <> 'array'
@@ -455,7 +455,7 @@ begin
       exception when invalid_text_representation then
         raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
       end;
-      if not vortex_context.is_non_nil_uuid(field_id_value::text)
+      if not vortex_platform.is_non_nil_uuid(field_id_value::text)
         or field_value ->> 'type' is null
         or pg_catalog.jsonb_typeof(field_value -> 'required') <> 'boolean'
         or pg_catalog.jsonb_typeof(field_value -> 'unique') <> 'boolean'
@@ -656,12 +656,11 @@ exception
 end
 $function$;
 
-alter function vortex_record.provision_exact_module_storage(uuid,bigint) owner to vortex_record_owner;
+alter function vortex_record.provision_exact_module_storage(uuid,bigint) owner to vortex_owner;
 
 revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
-  to vortex_module_owner;
+  to vortex_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
   'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';

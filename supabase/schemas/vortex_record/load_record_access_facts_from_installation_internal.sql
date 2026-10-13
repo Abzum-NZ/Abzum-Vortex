@@ -478,8 +478,7 @@ alter function vortex_record.load_record_access_facts_from_installation_internal
 
 revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
   uuid, text, uuid, bigint, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.load_record_access_facts_from_installation_internal(
   uuid, text, uuid, bigint, jsonb
 ) to vortex_record_adapter;

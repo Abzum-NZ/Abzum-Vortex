@@ -173,7 +173,9 @@ begin
   );
 end
 $$;
+alter function vortex_record.index_build_statements_internal(uuid,uuid) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) IS 'Private derivation of the ordered drop/create statements one catalogue row needs; never granted above vortex_record_owner.';
+
+COMMENT ON FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) IS 'Private derivation of the ordered drop/create statements one catalogue row needs; never granted above vortex_owner.';
 
 REVOKE ALL ON FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) FROM PUBLIC;

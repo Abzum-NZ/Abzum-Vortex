@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text DEFAULT NULL::text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text DEFAULT NULL::text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -21,7 +21,7 @@ begin
     or p_grouping is null or p_grouping not in ('day', 'week', 'month')
     or p_page_size is null or p_page_size not between 1 and 100
     or (p_cursor is not null and pg_catalog.length(p_cursor) > 2048)
-    or (p_organization_id is not null and not vortex_context.is_non_nil_uuid(p_organization_id::text)) then
+    or (p_organization_id is not null and not vortex_platform.is_non_nil_uuid(p_organization_id::text)) then
     raise exception using errcode = '22023', message = 'Usage projection request is invalid';
   end if;
   if p_cursor is not null then
@@ -104,7 +104,6 @@ begin
   ));
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text) OWNER TO postgres;
 

@@ -26,13 +26,14 @@ begin
   return null;
 end
 $function$;
+alter function vortex_record.preview_scoped_command_id_internal(uuid) owner to vortex_record_adapter;
+
 
 alter function vortex_record.preview_scoped_command_id_internal(uuid)
   owner to vortex_record_adapter;
 
 revoke all on function vortex_record.preview_scoped_command_id_internal(uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.preview_scoped_command_id_internal(uuid)
   to vortex_record_adapter;
 comment on function vortex_record.preview_scoped_command_id_internal(uuid) is

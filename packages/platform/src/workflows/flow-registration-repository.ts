@@ -328,7 +328,7 @@ export const registerKestraFlowCandidate = async (
   try {
     const rows = await transaction.query<RegistrationRow>`
       select outcome, result
-      from vortex_workflow.register_workflow_flow_candidate(
+      from vortex_platform.register_workflow_flow_candidate(
         ${command.identity.environment}::text,
         ${command.identity.organizationId}::uuid,
         ${command.identity.applicationRootId}::uuid,

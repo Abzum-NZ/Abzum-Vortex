@@ -35,6 +35,8 @@ begin
   end;
 end
 $$;
+alter function vortex_record.transfer_offboarding_owned_record(uuid,uuid,uuid,bigint,text,uuid,uuid,uuid,uuid,bigint) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.transfer_offboarding_owned_record(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_target_kind text, p_target_id uuid, p_activity_id uuid, p_occurrence_id uuid, p_source_organization_account_id uuid, p_expected_access_version bigint) IS 'Protected request entry for one disclosed account-offboarding retained or disabled-installation transfer; it rechecks accounts.manage scope and delegates all target, owner, lifecycle and revision checks to the fixed adapter-only operation.';
 

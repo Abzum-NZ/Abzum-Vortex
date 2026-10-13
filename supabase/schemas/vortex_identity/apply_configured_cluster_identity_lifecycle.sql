@@ -42,13 +42,13 @@ begin
       'close_cluster_identity'
     )
     or p_cluster_id is null
-    or not vortex_context.is_non_nil_uuid(p_cluster_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_cluster_id::text)
     or p_operator_actor_id is null
-    or not vortex_context.is_non_nil_uuid(p_operator_actor_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_operator_actor_id::text)
     or p_duplicate_key is null
-    or not vortex_context.is_non_nil_uuid(p_duplicate_key::text)
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or p_identity_id is null
-    or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or p_command_fingerprint is null
     or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
     or p_expected_revision is null
@@ -249,9 +249,9 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.apply_configured_cluster_identity_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke execute on function vortex_identity.apply_configured_cluster_identity_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
-grant execute on function vortex_identity.apply_configured_cluster_identity_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) to vortex_identity_owner;
+grant execute on function vortex_identity.apply_configured_cluster_identity_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) to vortex_owner;
 
 comment on function vortex_identity.apply_configured_cluster_identity_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) is 'Private exact composition for the three configured-system cluster-local identity lifecycle commands.';
 

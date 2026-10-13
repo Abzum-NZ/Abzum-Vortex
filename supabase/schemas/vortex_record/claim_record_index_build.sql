@@ -73,6 +73,8 @@ begin
   return pg_catalog.jsonb_build_object('outcome', 'none');
 end
 $$;
+alter function vortex_record.claim_record_index_build(integer) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.claim_record_index_build(p_lease_seconds integer) IS 'Operational claim leasing one non-present, buildable index catalogue row for a bounded concurrent build.';
 

@@ -35,7 +35,6 @@ CREATE FUNCTION vortex_access.read_organization_delegation_authority(p_organizat
     and delegation.delegation_authority_id = p_delegation_authority_id
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_delegation_authority(p_organization_id uuid, p_delegation_authority_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_delegation_authority(p_organization_id uuid, p_delegation_authority_id uuid) IS 'Owner-only exact delegation fact read with database-time temporal status, not an access decision.';

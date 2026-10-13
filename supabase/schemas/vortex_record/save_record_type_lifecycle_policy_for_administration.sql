@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -65,7 +65,7 @@ begin
 
   -- A platform storage contract is not a target for every organisation: the
   -- record type must belong to a currently active installation here.
-  if not vortex_module.record_lifecycle_target_is_installed_internal(
+  if not vortex_definition.record_lifecycle_target_is_installed_internal(
     authority.organization_id, p_application_root_id, p_storage_contract_id
   ) then
     raise exception using errcode = '42501',
@@ -177,7 +177,7 @@ begin
     -- Runtime workflows and Connection grants require one permanent
     -- Application scope. An organisation-shared policy cannot invent one.
     if p_application_root_id is null
-      or not vortex_module.record_lifecycle_workflow_is_installed_internal(
+      or not vortex_definition.record_lifecycle_workflow_is_installed_internal(
         authority.organization_id,
         p_application_root_id,
         p_storage_contract_id,
@@ -188,7 +188,7 @@ begin
         message = 'Record-type lifecycle policy archive workflow is unavailable';
     end if;
 
-    connection_readiness := vortex_connection.resolve_connection_instance_readiness(
+    connection_readiness := vortex_platform.resolve_connection_instance_readiness(
       authority.organization_id,
       p_application_root_id,
       (full_policy ->> 'archiveConnectionInstanceId')::uuid,
@@ -245,6 +245,8 @@ begin
   return full_policy;
 end
 $$;
+alter function vortex_record.save_record_type_lifecycle_policy_for_administration(uuid,uuid,bigint,bigint,uuid,jsonb) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) IS 'Protected administrator save (create or update) of one record type''s current lifecycle policy within current organisation limits; stale organisation-limits/policy revisions, uninstalled or unknown targets, unready archive bindings and disallowed actions/destinations are refused. policyId is server-assigned and immutable; successful Activity commits atomically.';
 

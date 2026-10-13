@@ -646,8 +646,7 @@ alter function vortex_record.compile_query_filter_internal(jsonb,jsonb,jsonb,jso
 
 revoke all on function vortex_record.compile_query_filter_internal(
   jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, integer, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.compile_query_filter_internal(
   jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb, integer, integer

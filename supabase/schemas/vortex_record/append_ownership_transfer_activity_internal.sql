@@ -25,12 +25,12 @@ begin
   if not context_value ? 'applicationRootId' then
     raise exception using errcode = '42501', message = 'Record ownership transfer requires an Application context';
   end if;
-  append_result := vortex_activity.append_organization_activity_entry(
+  append_result := vortex_record.append_organization_activity_entry(
     (context_value ->> 'organizationId')::uuid,
     p_activity_id, occurred_at_value, 'organization_account',
     (context_value ->> 'organizationAccountId')::uuid,
     'transfer_record_ownership', array[p_subject_id]::uuid[], array[]::uuid[],
-    vortex_context.channel(), (context_value ->> 'correlationId')::uuid, p_outcome
+    vortex_platform.channel(), (context_value ->> 'correlationId')::uuid, p_outcome
   );
   if append_result is distinct from 'inserted' then
     raise exception using errcode = '40001', message = 'Record ownership transfer Activity is stale';
@@ -43,7 +43,7 @@ alter function vortex_record.append_ownership_transfer_activity_internal(uuid, u
   owner to postgres;
 
 revoke all on function vortex_record.append_ownership_transfer_activity_internal(uuid, uuid, text)
-  from public, anon, authenticated, service_role, vortex_request, vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_request;
 grant execute on function vortex_record.append_ownership_transfer_activity_internal(uuid, uuid, text)
   to vortex_record_adapter;
 

@@ -22,9 +22,9 @@ declare
   inserted_account_id uuid;
 begin
   if p_identity_id is null
-    or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or p_organization_id is null
-    or not vortex_context.is_non_nil_uuid(p_organization_id::text) then
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text) then
     raise exception using errcode = '22023',
       message = 'Organisation selection is invalid';
   end if;
@@ -115,7 +115,7 @@ begin
       message = 'Organisation selection is unavailable';
   end if;
 
-  perform vortex_activity.append_organization_activity_entry(
+  perform vortex_record.append_organization_activity_entry(
     p_organization_id, pg_catalog.gen_random_uuid(), evaluated_at,
     'identity', p_identity_id, 'super_administrator_account_provisioned',
     array(

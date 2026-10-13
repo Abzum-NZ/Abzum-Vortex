@@ -46,7 +46,7 @@ export const createActiveApplicationInstallationRepository = (
     async readCurrent() {
       try {
         const rows = await transaction.query<ActiveInstallationRow>`
-          select vortex_module.read_current_active_installation() as active_installation
+          select vortex_definition.read_current_active_installation() as active_installation
         `;
         if (rows.length !== 1 || rows[0] === undefined || rows[0].active_installation === null)
           throw new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE");

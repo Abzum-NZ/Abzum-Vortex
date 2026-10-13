@@ -202,7 +202,7 @@ type PublishedTopicRow = Readonly<{ topic: unknown }>;
 
 /**
  * The database transport for one open transaction. It calls the protected
- * `vortex_invalidation.publish_change_notice`, which rechecks the organisation
+ * `vortex_platform.publish_change_notice`, which rechecks the organisation
  * and current installation, refuses another organisation's notice when the
  * transaction carries a request context, stamps the contract version and time,
  * and queues the private Broadcast. Realtime delivers it only after that transaction commits, so the
@@ -214,7 +214,7 @@ export const createTransactionPrivateInvalidationEmit = (
 ): PrivateInvalidationEmit =>
   async (channel, notice) => {
     const rows = await transaction.query<PublishedTopicRow>`
-      select vortex_invalidation.publish_change_notice(
+      select vortex_platform.publish_change_notice(
         ${notice.organizationId}::uuid,
         ${notice.applicationRootId}::uuid,
         ${notice.recordTypeId}::uuid,

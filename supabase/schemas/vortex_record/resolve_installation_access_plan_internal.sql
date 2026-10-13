@@ -243,7 +243,7 @@ begin
                   pg_catalog.format('pg_catalog.to_jsonb(%I::text)', ordered_fields.value ->> 'token')
                 when 'timestamp_with_time_zone' then
                   pg_catalog.format(
-                    'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(%I))',
+                    'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(%I))',
                     ordered_fields.value ->> 'token'
                   )
                 when 'date' then
@@ -457,8 +457,7 @@ $function$;
 alter function vortex_record.resolve_installation_access_plan_internal(jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb)
   to vortex_record_adapter;
 

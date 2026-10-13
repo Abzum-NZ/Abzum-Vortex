@@ -18,7 +18,7 @@ import { assertDestinationFingerprint, assertSafeIntegerRevision } from "./conne
 
 /**
  * Typed administration commands over the request-callable
- * `vortex_connection.*_for_administration` writers. Each writer accepts only a human request
+ * `vortex_platform.*_for_administration` writers. Each writer accepts only a human request
  * context, and the `*_internal` writer it delegates to re-checks the organisation, the
  * `platform.organization.connections.manage` authority, the expected revision and every
  * application grant from that context on every direct call. Nothing in a command is accepted as
@@ -259,7 +259,7 @@ async function applyCommand(
     case "configure": {
       const rows = await transaction.query<WriteRow>`
         select
-          vortex_connection.register_connection_instance_for_administration(
+          vortex_platform.register_connection_instance_for_administration(
             ${input.connectionInstanceId}::uuid,
             ${input.connectionTypeId}::uuid,
             ${input.connectionTypeVersion}::text,
@@ -268,7 +268,7 @@ async function applyCommand(
             ${input.administratorActivityId}::uuid,
             ${input.tokenExpiresAt ?? null}::timestamptz
           ) as revision,
-          vortex_context.organization_id() as organization_id
+          vortex_platform.organization_id() as organization_id
       `;
       const { revision, organizationId } = readWrite(rows);
       await writeSecret(secretStore, organizationId, input.connectionInstanceId, input.secret);
@@ -282,19 +282,19 @@ async function applyCommand(
     case "disable": {
       const rows = await transaction.query<WriteRow>`
         select
-          vortex_connection.revoke_connection_instance_for_administration(
+          vortex_platform.revoke_connection_instance_for_administration(
             ${input.connectionInstanceId}::uuid,
             ${input.expectedRevision}::bigint,
             ${input.administratorActivityId}::uuid
           ) as revision,
-          vortex_context.organization_id() as organization_id
+          vortex_platform.organization_id() as organization_id
       `;
       return applied(input.command, input.connectionInstanceId, readWrite(rows).revision);
     }
     case "application_grant": {
       if (input.change === "grant") {
         await transaction.query`
-          select vortex_connection.grant_connection_application_for_administration(
+          select vortex_platform.grant_connection_application_for_administration(
             ${input.connectionInstanceId}::uuid,
             ${input.applicationRootId}::uuid,
             ${input.administratorActivityId}::uuid
@@ -302,7 +302,7 @@ async function applyCommand(
         `;
       } else {
         await transaction.query`
-          select vortex_connection.revoke_connection_application_for_administration(
+          select vortex_platform.revoke_connection_application_for_administration(
             ${input.connectionInstanceId}::uuid,
             ${input.applicationRootId}::uuid,
             ${input.administratorActivityId}::uuid
@@ -317,14 +317,14 @@ async function applyCommand(
       // secret is stored only after that check succeeds, under the context's organisation.
       const rows = await transaction.query<WriteRow>`
         select
-          vortex_connection.reauthorize_connection_instance_for_administration(
+          vortex_platform.reauthorize_connection_instance_for_administration(
             ${input.connectionInstanceId}::uuid,
             ${input.expectedRevision}::bigint,
             ${input.administratorActivityId}::uuid,
             ${input.destinationFingerprint ?? null}::text,
             ${input.tokenExpiresAt ?? null}::timestamptz
           ) as revision,
-          vortex_context.organization_id() as organization_id
+          vortex_platform.organization_id() as organization_id
       `;
       const { revision, organizationId } = readWrite(rows);
       await writeSecret(secretStore, organizationId, input.connectionInstanceId, input.secret);

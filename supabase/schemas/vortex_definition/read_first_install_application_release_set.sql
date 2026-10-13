@@ -155,9 +155,7 @@ $function$;
 alter function vortex_definition.read_first_install_application_release_set(uuid, bigint)
   owner to postgres;
 revoke all on function vortex_definition.read_first_install_application_release_set(uuid, bigint)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_definition_owner, vortex_module_owner, vortex_record_owner, vortex_record_adapter,
-    vortex_connection_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_definition.read_first_install_application_release_set(uuid, bigint)
   to vortex_request;
 comment on function vortex_definition.read_first_install_application_release_set(uuid, bigint) is

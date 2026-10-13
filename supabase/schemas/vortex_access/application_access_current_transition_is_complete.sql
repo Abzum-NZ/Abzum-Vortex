@@ -113,7 +113,6 @@ CREATE FUNCTION vortex_access.application_access_current_transition_is_complete(
     );
 $$;
 
-
 ALTER FUNCTION vortex_access.application_access_current_transition_is_complete(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_registration_state text) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.application_access_current_transition_is_complete(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_registration_state text) FROM PUBLIC;

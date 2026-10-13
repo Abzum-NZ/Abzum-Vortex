@@ -22,5 +22,7 @@ CREATE FUNCTION vortex_record.base_save_command_fingerprint_internal(p_command_i
     )::text, 'UTF8')), 'hex'
   )
 $$;
+alter function vortex_record.base_save_command_fingerprint_internal(uuid,text,uuid,uuid,bigint,jsonb,uuid) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.base_save_command_fingerprint_internal(p_command_id uuid, p_operation text, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_submitted_values jsonb, p_selected_group_id uuid) FROM PUBLIC;

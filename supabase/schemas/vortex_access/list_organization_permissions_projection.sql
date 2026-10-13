@@ -97,17 +97,18 @@ begin
   order by projected.record_id;
 end
 $function$;
+alter function vortex_access.list_organization_permissions_projection(uuid,integer) owner to vortex_owner;
+
 
 revoke all on function vortex_access.list_organization_permissions_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_organization_permissions_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_organization_permissions_projection(uuid, integer) is
   'Registered permission projection: returns every current registered permission catalogue entry the fixed platform.organization.permissions.read decision admits, with the organisation, a stable record identity derived from the exact owner-qualified permission, the active registration revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Registration provenance, fingerprints, record-scope evidence and audit columns are never projected.';
 
 alter function vortex_access.list_organization_permissions_projection(uuid, integer)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

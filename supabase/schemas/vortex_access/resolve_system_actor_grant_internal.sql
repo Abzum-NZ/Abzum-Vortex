@@ -14,12 +14,12 @@ as $function$
 declare
   grant_state text;
 begin
-  if p_system_actor_id is null or not vortex_context.is_non_nil_uuid(p_system_actor_id::text)
+  if p_system_actor_id is null or not vortex_platform.is_non_nil_uuid(p_system_actor_id::text)
     or p_operation_key is null
     or pg_catalog.octet_length(p_operation_key) not between 1 and 128
     or p_operation_key !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
-    or (p_organization_id is not null and not vortex_context.is_non_nil_uuid(p_organization_id::text))
-    or (p_flow_id is not null and not vortex_context.is_non_nil_uuid(p_flow_id::text))
+    or (p_organization_id is not null and not vortex_platform.is_non_nil_uuid(p_organization_id::text))
+    or (p_flow_id is not null and not vortex_platform.is_non_nil_uuid(p_flow_id::text))
     or (p_scope_key is not null and (
       pg_catalog.octet_length(p_scope_key) not between 1 and 128
       or p_scope_key !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -44,11 +44,10 @@ $function$;
 
 revoke all on function vortex_access.resolve_system_actor_grant_internal(
   uuid, text, uuid, uuid, text
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.resolve_system_actor_grant_internal(
   uuid, text, uuid, uuid, text
-) to vortex_event_owner;
+) to vortex_owner;
 
 comment on function vortex_access.resolve_system_actor_grant_internal(
   uuid, text, uuid, uuid, text

@@ -54,7 +54,7 @@ begin
       message = 'Offboarding inventory requires an application context';
   end if;
   organization_id_value := (context_value ->> 'organizationId')::uuid;
-  installation := vortex_module.read_current_offboarding_inventory_installation_internal();
+  installation := vortex_definition.read_current_offboarding_inventory_installation_internal();
 
   for catalogue_row in
     select catalogue.*
@@ -81,7 +81,7 @@ begin
     -- The affected applications of a contract are a property of the contract,
     -- not of the page: every record disclosed from it carries the complete set.
     contract_affected_applications :=
-      vortex_module.read_offboarding_inventory_contract_applications_internal(
+      vortex_definition.read_offboarding_inventory_contract_applications_internal(
         catalogue_row.storage_contract_id
       );
 
@@ -232,8 +232,7 @@ alter function vortex_record.list_offboarding_owned_shared_records_internal(uuid
 
 revoke all on function vortex_record.list_offboarding_owned_shared_records_internal(
   uuid, text, uuid, uuid, uuid, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.list_offboarding_owned_shared_records_internal(
   uuid, text, uuid, uuid, uuid, integer

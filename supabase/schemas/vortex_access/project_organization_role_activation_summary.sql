@@ -32,7 +32,6 @@ CREATE FUNCTION vortex_access.project_organization_role_activation_summary(p_org
     and activation.role_activation_id = p_role_activation_id
 $$;
 
-
 ALTER FUNCTION vortex_access.project_organization_role_activation_summary(p_organization_id uuid, p_role_activation_id uuid) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.project_organization_role_activation_summary(p_organization_id uuid, p_role_activation_id uuid) FROM PUBLIC;

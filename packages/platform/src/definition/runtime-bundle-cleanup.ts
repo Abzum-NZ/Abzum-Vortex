@@ -156,7 +156,7 @@ export const runScheduledRuntimeBundleCleanup = async (): Promise<RuntimeBundleC
   try {
     const rows = await withRuntimeTransaction((transaction) =>
       transaction.query<CleanupRow>`
-        select vortex_module.remove_abandoned_runtime_bundles_internal(
+        select vortex_definition.remove_abandoned_runtime_bundles_internal(
           ${runtimeBundleCleanupLimits.batchSize}::integer
         ) as cleanup_result
       `,
@@ -181,7 +181,7 @@ export const createInstallationRuntimeBundleCleanupRepository = (
       if (!parsedRootId.success) throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
       try {
         const rows = await transaction.query<CleanupRow>`
-          select vortex_module.remove_installation_runtime_bundles_internal(
+          select vortex_definition.remove_installation_runtime_bundles_internal(
             ${parsedRootId.data}::uuid
           ) as cleanup_result
         `;

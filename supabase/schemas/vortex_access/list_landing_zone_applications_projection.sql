@@ -37,8 +37,8 @@ begin
   end;
   visible_organization_id := (context_value ->> 'organizationId')::uuid;
   actor_identity_id := (context_value ->> 'identityId')::uuid;
-  if not vortex_context.is_non_nil_uuid(visible_organization_id::text)
-    or not vortex_context.is_non_nil_uuid(actor_identity_id::text) then
+  if not vortex_platform.is_non_nil_uuid(visible_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(actor_identity_id::text) then
     return;
   end if;
   begin
@@ -77,7 +77,7 @@ begin
       and registration.source_resolution_fingerprint = release.resolution_fingerprint
       and exists (
         select 1
-        from vortex_module.installation_bindings as binding
+        from vortex_definition.installation_bindings as binding
         where binding.organization_id = visible_organization_id
           and binding.application_root_id = root.root_id
           and binding.application_release_revision = registration.source_revision
@@ -88,12 +88,11 @@ end
 $function$;
 
 revoke all on function vortex_access.list_landing_zone_applications_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.list_landing_zone_applications_projection(
   uuid, integer
-) to vortex_record_owner, vortex_record_adapter;
+) to vortex_owner, vortex_record_adapter;
 
 comment on function vortex_access.list_landing_zone_applications_projection(uuid, integer) is
   'Registered Landing Zone application projection: returns each installed application the current viewer may reach in the viewer''s organisation, with the application identity, registration revision and only its key, name and icon, or no row when the application scope refuses the viewer. Pages, roles, compilation output, fingerprints and installation evidence are never projected.';

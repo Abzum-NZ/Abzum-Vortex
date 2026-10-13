@@ -37,7 +37,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
  *
  * A connection administration page must show the organisation's instances and their safe status
  * without ever receiving a secret. This module reads through the request-callable
- * `vortex_connection.*_for_administration` readers, which are SECURITY DEFINER functions that
+ * `vortex_platform.*_for_administration` readers, which are SECURITY DEFINER functions that
  * require the validated connection-administration context: the caller must hold
  * `platform.organization.connections.manage` in the request-context organisation, and every row is
  * filtered to that organisation, so another organisation's instance is never returned. The reader
@@ -407,7 +407,7 @@ const readArchiveConnectionOptionCandidates = async (
       select requested.ordinality, requested.connection_instance_id,
         status.organization_id, status.connection_instance
       from requested
-      left join lateral vortex_connection.read_connection_instance_for_administration(
+      left join lateral vortex_platform.read_connection_instance_for_administration(
         ${organization}::uuid, requested.connection_instance_id
       ) as status on true
     ), active_evidence as materialized (
@@ -416,7 +416,7 @@ const readArchiveConnectionOptionCandidates = async (
         evidence.authorized_application_ids, evidence.state, evidence.revision,
         evidence.last_health_outcome
       from current_status
-      cross join lateral vortex_connection.read_active_connection_evidence(
+      cross join lateral vortex_platform.read_active_connection_evidence(
         current_status.connection_instance_id
       ) as evidence
       where current_status.connection_instance is not null
@@ -618,7 +618,7 @@ export async function readConnectionInstanceForAdministration(
   try {
     const rows = await transaction.query<ReadConnectionInstanceRow>`
       select organization_id, connection_instance
-      from vortex_connection.read_connection_instance_for_administration(
+      from vortex_platform.read_connection_instance_for_administration(
         ${organization}::uuid,
         ${connectionInstance}::uuid
       )
@@ -663,7 +663,7 @@ export async function listConnectionInstancesForAdministration(
   try {
     const rows = await transaction.query<ListConnectionInstancesRow>`
       select organization_id, connection_instances, next_after_connection_instance_id
-      from vortex_connection.list_connection_instances_for_administration(
+      from vortex_platform.list_connection_instances_for_administration(
         ${organization}::uuid,
         ${afterConnectionInstanceId}::uuid,
         ${pageSize}::integer

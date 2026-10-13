@@ -38,7 +38,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.change_account_state_without_stewardship_v1_internal(p_organization_account_id uuid, p_expected_revision bigint, p_state text) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.change_account_state_without_stewardship_v1_internal(p_organization_account_id uuid, p_expected_revision bigint, p_state text) IS 'Owner-only account lifecycle and Access-version composition reserved for permission-checked administration.';

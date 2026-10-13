@@ -73,7 +73,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.protect_organization_delegation_authority() OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_organization_delegation_authority() FROM PUBLIC;

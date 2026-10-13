@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.record_relationship_witness_matches(p_declared_relationship_id uuid, p_declared_from_module_root_id uuid, p_declared_from_record_type_id uuid, p_declared_to_module_root_id uuid, p_declared_to_record_type_id uuid, p_edge_relationship_id uuid, p_edge_from_record_id uuid, p_edge_to_record_id uuid, p_from_record_scope jsonb, p_to_record_scope jsonb, p_current_organization_id uuid, p_current_application_root_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.record_relationship_witness_matches(p_declared_relationship_id uuid, p_declared_from_module_root_id uuid, p_declared_from_record_type_id uuid, p_declared_to_module_root_id uuid, p_declared_to_record_type_id uuid, p_edge_relationship_id uuid, p_edge_from_record_id uuid, p_edge_to_record_id uuid, p_from_record_scope jsonb, p_to_record_scope jsonb, p_current_organization_id uuid, p_current_application_root_id uuid) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO ''
     AS $$
@@ -18,16 +18,16 @@ declare
   to_record_type_id uuid;
   to_record_id uuid;
 begin
-  if not vortex_context.is_non_nil_uuid(p_declared_relationship_id::text)
-    or not vortex_context.is_non_nil_uuid(p_declared_from_module_root_id::text)
-    or not vortex_context.is_non_nil_uuid(p_declared_from_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_declared_to_module_root_id::text)
-    or not vortex_context.is_non_nil_uuid(p_declared_to_record_type_id::text)
-    or not vortex_context.is_non_nil_uuid(p_edge_relationship_id::text)
-    or not vortex_context.is_non_nil_uuid(p_edge_from_record_id::text)
-    or not vortex_context.is_non_nil_uuid(p_edge_to_record_id::text)
-    or not vortex_context.is_non_nil_uuid(p_current_organization_id::text)
-    or not vortex_context.is_non_nil_uuid(p_current_application_root_id::text) then
+  if not vortex_platform.is_non_nil_uuid(p_declared_relationship_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_declared_from_module_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_declared_from_record_type_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_declared_to_module_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_declared_to_record_type_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_edge_relationship_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_edge_from_record_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_edge_to_record_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_current_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_current_application_root_id::text) then
     raise exception using errcode = '22023',
       message = 'Record relationship witness context is invalid';
   end if;
@@ -56,18 +56,18 @@ begin
       is distinct from 'string'
     or pg_catalog.jsonb_typeof(p_from_record_scope -> 'recordId')
       is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(p_from_record_scope ->> 'organizationId')
-    or not vortex_context.is_non_nil_uuid(p_from_record_scope ->> 'moduleRootId')
-    or not vortex_context.is_non_nil_uuid(p_from_record_scope ->> 'recordTypeId')
-    or not vortex_context.is_non_nil_uuid(p_from_record_scope ->> 'storageContractId')
-    or not vortex_context.is_non_nil_uuid(p_from_record_scope ->> 'recordId')
+    or not vortex_platform.is_non_nil_uuid(p_from_record_scope ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(p_from_record_scope ->> 'moduleRootId')
+    or not vortex_platform.is_non_nil_uuid(p_from_record_scope ->> 'recordTypeId')
+    or not vortex_platform.is_non_nil_uuid(p_from_record_scope ->> 'storageContractId')
+    or not vortex_platform.is_non_nil_uuid(p_from_record_scope ->> 'recordId')
     or (from_storage_scope = 'organization_shared'
       and (from_key_count <> 6 or p_from_record_scope ? 'applicationRootId'))
     or (from_storage_scope = 'application_contained'
       and (from_key_count <> 7
         or pg_catalog.jsonb_typeof(p_from_record_scope -> 'applicationRootId')
           is distinct from 'string'
-        or not vortex_context.is_non_nil_uuid(
+        or not vortex_platform.is_non_nil_uuid(
           p_from_record_scope ->> 'applicationRootId'
         )))
     or from_storage_scope not in ('organization_shared', 'application_contained') then
@@ -99,18 +99,18 @@ begin
       is distinct from 'string'
     or pg_catalog.jsonb_typeof(p_to_record_scope -> 'recordId')
       is distinct from 'string'
-    or not vortex_context.is_non_nil_uuid(p_to_record_scope ->> 'organizationId')
-    or not vortex_context.is_non_nil_uuid(p_to_record_scope ->> 'moduleRootId')
-    or not vortex_context.is_non_nil_uuid(p_to_record_scope ->> 'recordTypeId')
-    or not vortex_context.is_non_nil_uuid(p_to_record_scope ->> 'storageContractId')
-    or not vortex_context.is_non_nil_uuid(p_to_record_scope ->> 'recordId')
+    or not vortex_platform.is_non_nil_uuid(p_to_record_scope ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(p_to_record_scope ->> 'moduleRootId')
+    or not vortex_platform.is_non_nil_uuid(p_to_record_scope ->> 'recordTypeId')
+    or not vortex_platform.is_non_nil_uuid(p_to_record_scope ->> 'storageContractId')
+    or not vortex_platform.is_non_nil_uuid(p_to_record_scope ->> 'recordId')
     or (to_storage_scope = 'organization_shared'
       and (to_key_count <> 6 or p_to_record_scope ? 'applicationRootId'))
     or (to_storage_scope = 'application_contained'
       and (to_key_count <> 7
         or pg_catalog.jsonb_typeof(p_to_record_scope -> 'applicationRootId')
           is distinct from 'string'
-        or not vortex_context.is_non_nil_uuid(
+        or not vortex_platform.is_non_nil_uuid(
           p_to_record_scope ->> 'applicationRootId'
         )))
     or to_storage_scope not in ('organization_shared', 'application_contained') then
@@ -155,7 +155,6 @@ begin
       or to_application_root_id = p_current_application_root_id);
 end
 $$;
-
 
 ALTER FUNCTION vortex_access.record_relationship_witness_matches(p_declared_relationship_id uuid, p_declared_from_module_root_id uuid, p_declared_from_record_type_id uuid, p_declared_to_module_root_id uuid, p_declared_to_record_type_id uuid, p_edge_relationship_id uuid, p_edge_from_record_id uuid, p_edge_to_record_id uuid, p_from_record_scope jsonb, p_to_record_scope jsonb, p_current_organization_id uuid, p_current_application_root_id uuid) OWNER TO postgres;
 

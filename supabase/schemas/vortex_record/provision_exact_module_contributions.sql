@@ -50,7 +50,7 @@ declare
   contribution_ids uuid[] := array[]::uuid[];
   any_change boolean := false;
 begin
-  if not vortex_context.is_non_nil_uuid(p_module_root_id::text)
+  if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991
     or pg_catalog.jsonb_typeof(p_contributions) is distinct from 'array'
     or pg_catalog.jsonb_array_length(p_contributions) < 1
@@ -101,9 +101,9 @@ begin
     exception when invalid_text_representation then
       raise exception using errcode = '22023', message = 'Module contribution identity is invalid';
     end;
-    if not vortex_context.is_non_nil_uuid(contributor_root_id::text)
-      or not vortex_context.is_non_nil_uuid(target_module_root_id::text)
-      or not vortex_context.is_non_nil_uuid(target_record_type_id::text)
+    if not vortex_platform.is_non_nil_uuid(contributor_root_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_module_root_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_record_type_id::text)
       or contributor_root_id <> p_module_root_id
       or target_module_root_id = p_module_root_id then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
@@ -155,12 +155,12 @@ begin
     end;
     target_module_version := contribution ->> 'targetModuleReleaseVersion';
     if target_module_version is null
-      or not vortex_context.is_non_nil_uuid(target_module_root_id::text)
-      or not vortex_context.is_non_nil_uuid(target_extension_point_id::text)
-      or not vortex_context.is_non_nil_uuid(target_record_type_id::text)
-      or not vortex_context.is_non_nil_uuid(source_record_type_id::text)
-      or not vortex_context.is_non_nil_uuid(field_id_value::text)
-      or not vortex_context.is_non_nil_uuid(contribution_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_module_root_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_extension_point_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_record_type_id::text)
+      or not vortex_platform.is_non_nil_uuid(source_record_type_id::text)
+      or not vortex_platform.is_non_nil_uuid(field_id_value::text)
+      or not vortex_platform.is_non_nil_uuid(contribution_id::text)
       or field_id_value <> contribution_id then
       raise exception using errcode = '22023', message = 'Contributed field identity is invalid';
     end if;
@@ -275,7 +275,7 @@ begin
     where catalogue.module_root_id = target_module_root_id
       and catalogue.record_type_id = target_record_type_id
       and catalogue.state = 'active';
-    if not vortex_context.is_non_nil_uuid(storage_id::text)
+    if not vortex_platform.is_non_nil_uuid(storage_id::text)
       or not (storage_id = any (storage_ids))
       or storage_id <> stored_catalogue.storage_contract_id
       or not exists (
@@ -316,7 +316,7 @@ begin
         from pg_catalog.pg_class as relation
         where relation.oid = view_oid
           and relation.relkind = 'v'
-          and relation.relowner = 'vortex_record_owner'::regrole
+          and relation.relowner = 'vortex_owner'::regrole
       )
       or exists (
         select 1 from pg_catalog.pg_trigger as trigger
@@ -379,7 +379,7 @@ begin
         )) as privilege
         where relation.oid = view_oid
           and (privilege.grantee not in (
-              'vortex_record_owner'::regrole::oid,
+              'vortex_owner'::regrole::oid,
               'vortex_record_adapter'::regrole::oid
             )
             or (privilege.grantee = 'vortex_record_adapter'::regrole::oid
@@ -421,8 +421,8 @@ begin
     if contribution_id is null
       or contribution_kind is null
       or target_module_version is null
-      or not vortex_context.is_non_nil_uuid(contribution_id::text)
-      or not vortex_context.is_non_nil_uuid(target_extension_point_id::text)
+      or not vortex_platform.is_non_nil_uuid(contribution_id::text)
+      or not vortex_platform.is_non_nil_uuid(target_extension_point_id::text)
       or contribution_kind not in ('field', 'action') then
       raise exception using errcode = '22023', message = 'Module contribution binding is invalid';
     end if;
@@ -506,8 +506,8 @@ begin
     exception when invalid_text_representation then
       raise exception using errcode = '22023', message = 'Contributed field identity is invalid';
     end;
-    if not vortex_context.is_non_nil_uuid(source_record_type_id::text)
-      or not vortex_context.is_non_nil_uuid(field_id_value::text)
+    if not vortex_platform.is_non_nil_uuid(source_record_type_id::text)
+      or not vortex_platform.is_non_nil_uuid(field_id_value::text)
       or field_id_value <> contribution_id then
       raise exception using errcode = '22023', message = 'Contributed field identity is invalid';
     end if;
@@ -716,12 +716,11 @@ exception
 end
 $function$;
 
-alter function vortex_record.provision_exact_module_contributions(uuid,bigint,jsonb) owner to vortex_record_owner;
+alter function vortex_record.provision_exact_module_contributions(uuid,bigint,jsonb) owner to vortex_owner;
 
 revoke all on function vortex_record.provision_exact_module_contributions(uuid, bigint, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.provision_exact_module_contributions(uuid, bigint, jsonb)
-  to vortex_module_owner;
+  to vortex_owner;
 comment on function vortex_record.provision_exact_module_contributions(uuid, bigint, jsonb) is
   'Private exact-release contributor storage provisioner: adds generated-table fields or optional unindexed system-projection companion fields and records their retained lineage. It never drops a column, changes projection identity, or overwrites a value.';

@@ -37,45 +37,45 @@ declare
   activity_result text;
 begin
   if p_organization_id is null
-    or not vortex_context.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_direct_share_id is null
-    or not vortex_context.is_non_nil_uuid(p_direct_share_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_direct_share_id::text)
     or p_module_root_id is null
-    or not vortex_context.is_non_nil_uuid(p_module_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_record_type_id is null
-    or not vortex_context.is_non_nil_uuid(p_record_type_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
     or p_storage_contract_id is null
-    or not vortex_context.is_non_nil_uuid(p_storage_contract_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_storage_contract_id::text)
     or p_record_id is null
-    or not vortex_context.is_non_nil_uuid(p_record_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_record_id::text)
     or p_changed_by is null
-    or not vortex_context.is_non_nil_uuid(p_changed_by::text)
+    or not vortex_platform.is_non_nil_uuid(p_changed_by::text)
     or p_correlation_id is null
-    or not vortex_context.is_non_nil_uuid(p_correlation_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_correlation_id::text)
     or p_activity_id is null
-    or not vortex_context.is_non_nil_uuid(p_activity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_activity_id::text)
     or p_storage_scope not in ('organization_shared', 'application_contained')
     or (p_storage_scope = 'organization_shared' and p_application_root_id is not null)
     or (p_storage_scope = 'application_contained' and (
       p_application_root_id is null
-      or not vortex_context.is_non_nil_uuid(p_application_root_id::text)
+      or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     ))
     or p_recipient_kind not in ('organization_account', 'group')
     or (p_recipient_kind = 'organization_account' and (
       p_organization_account_id is null
-      or not vortex_context.is_non_nil_uuid(p_organization_account_id::text)
+      or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
       or p_group_id is not null
     ))
     or (p_recipient_kind = 'group' and (
       p_group_id is null
-      or not vortex_context.is_non_nil_uuid(p_group_id::text)
+      or not vortex_platform.is_non_nil_uuid(p_group_id::text)
       or p_organization_account_id is not null
     ))
     or p_readable_field_ids is null
     or pg_catalog.cardinality(p_readable_field_ids) = 0
-    or not vortex_context.uuid_array_is_canonical(p_readable_field_ids)
+    or not vortex_platform.uuid_array_is_canonical(p_readable_field_ids)
     or p_changeable_field_ids is null
-    or not vortex_context.uuid_array_is_canonical(p_changeable_field_ids)
+    or not vortex_platform.uuid_array_is_canonical(p_changeable_field_ids)
     or not (p_changeable_field_ids <@ p_readable_field_ids)
     or p_starts_at is null
     or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
@@ -155,10 +155,10 @@ begin
     p_organization_id, p_changed_by, p_correlation_id, 'direct_share_changed'
   ) as version;
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     p_organization_id, p_activity_id, operation_at, 'organization_account',
     p_changed_by, 'grant_direct_record_share', array[p_direct_share_id]::uuid[],
-    array[]::uuid[], vortex_context.channel(), p_correlation_id, 'completed'
+    array[]::uuid[], vortex_platform.channel(), p_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then
     raise exception using errcode = '40001',

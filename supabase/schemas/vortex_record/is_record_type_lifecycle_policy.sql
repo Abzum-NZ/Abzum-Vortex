@@ -13,12 +13,12 @@ as $function$
       'policyRevision', 'action', 'maxAgeDays', 'maxCount',
       'allowUnlimitedAge', 'allowUnlimitedCount'
     ]
-    and vortex_context.is_non_nil_uuid(p_policy ->> 'policyId')
-    and vortex_context.is_non_nil_uuid(p_policy ->> 'organizationId')
-    and vortex_context.is_non_nil_uuid(p_policy ->> 'storageContractId')
+    and vortex_platform.is_non_nil_uuid(p_policy ->> 'policyId')
+    and vortex_platform.is_non_nil_uuid(p_policy ->> 'organizationId')
+    and vortex_platform.is_non_nil_uuid(p_policy ->> 'storageContractId')
     and (
       pg_catalog.jsonb_typeof(p_policy -> 'applicationRootId') = 'null'
-      or vortex_context.is_non_nil_uuid(p_policy ->> 'applicationRootId')
+      or vortex_platform.is_non_nil_uuid(p_policy ->> 'applicationRootId')
     )
     and vortex_record.is_lifecycle_revision_value(p_policy -> 'policyRevision')
     and p_policy ->> 'action' in ('delete', 'archive_workflow')
@@ -61,8 +61,8 @@ as $function$
           'archiveDestination', 'expectedConnectionRevision',
           'expectedDestinationFingerprint', 'expectedConnectionHealthOutcome'
         ] = '{}'::jsonb
-        and vortex_context.is_non_nil_uuid(p_policy ->> 'archiveWorkflowId')
-        and vortex_context.is_non_nil_uuid(p_policy ->> 'archiveConnectionInstanceId')
+        and vortex_platform.is_non_nil_uuid(p_policy ->> 'archiveWorkflowId')
+        and vortex_platform.is_non_nil_uuid(p_policy ->> 'archiveConnectionInstanceId')
         and vortex_record.is_lifecycle_revision_value(p_policy -> 'expectedWorkflowRevision')
         and vortex_record.is_lifecycle_revision_value(p_policy -> 'expectedConnectionRevision')
         and pg_catalog.jsonb_typeof(p_policy -> 'archiveDestination') = 'string'
@@ -75,12 +75,11 @@ as $function$
   );
 $function$;
 
-alter function vortex_record.is_record_type_lifecycle_policy(jsonb) owner to vortex_record_owner;
+alter function vortex_record.is_record_type_lifecycle_policy(jsonb) owner to vortex_owner;
 
-revoke all on function vortex_record.is_record_type_lifecycle_policy(jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_record.is_record_type_lifecycle_policy(jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_record.is_record_type_lifecycle_policy(jsonb)
-  to vortex_record_owner;
+  to vortex_owner;
 
 comment on function vortex_record.is_record_type_lifecycle_policy(jsonb) is
   'Closed shape check for one complete stored record-type lifecycle policy; guards both the protected save and the stored row.';

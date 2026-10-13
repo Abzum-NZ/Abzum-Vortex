@@ -195,7 +195,7 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
         commandCandidate.moduleBindings,
       );
       const rows = await transaction.query<PreparedSourceRow>`
-        select vortex_module.read_prepared_installation_runtime_source(
+        select vortex_definition.read_prepared_installation_runtime_source(
           ${applicationRootId}::uuid,
           ${applicationReleaseRevision}::bigint,
           ${JSON.stringify(expectedBindings)}::text::jsonb

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
@@ -21,7 +21,7 @@ begin
     return null;
   end if;
 
-  installation := vortex_module.read_current_active_installation();
+  installation := vortex_definition.read_current_active_installation();
 
   select (item.value ->> 'moduleReleaseRevision')::bigint
   into query_release_revision
@@ -99,6 +99,8 @@ begin
   );
 end
 $$;
+alter function vortex_record.resolve_installed_module_query_internal(uuid,uuid) owner to vortex_record_adapter;
+
 
 COMMENT ON FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) IS 'Private: the exact installed Module query and its record type, or null when either is unavailable to the current installation.';
 

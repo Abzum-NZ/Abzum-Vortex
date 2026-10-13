@@ -62,9 +62,9 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.change_organization_account_state(uuid, bigint, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+revoke all on function vortex_identity.change_organization_account_state(uuid, bigint, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.change_organization_account_state(uuid, bigint, text) is null;
 
-alter function vortex_identity.change_organization_account_state(uuid, bigint, text) owner to vortex_identity_owner;
+alter function vortex_identity.change_organization_account_state(uuid, bigint, text) owner to vortex_owner;
 grant execute on function vortex_identity.change_organization_account_state(uuid, bigint, text) to postgres;

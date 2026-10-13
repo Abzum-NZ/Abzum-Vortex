@@ -42,10 +42,9 @@ alter function vortex_access.lock_organization_runtime_settings_record_for_event
   owner to postgres;
 
 revoke all on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid)
-  to vortex_event_owner;
+  to vortex_owner;
 
 comment on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid) is
   'Validates and locks the organisation runtime-settings row for the private Event append of its protected system projection.';

@@ -395,9 +395,9 @@ begin
     system_expressions := pg_catalog.array_append(system_expressions, pg_catalog.format('%L, %s', system_key,
       case system_key
         when 'created_at' then
-          'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.created_at))'
+          'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(stored.created_at))'
         when 'updated_at' then
-          'pg_catalog.to_jsonb(vortex_context.format_timestamp_utc(stored.updated_at))'
+          'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(stored.updated_at))'
         when 'created_by' then 'pg_catalog.to_jsonb(stored.created_by)'
         when 'updated_by' then 'pg_catalog.to_jsonb(stored.updated_by)'
         else
@@ -764,7 +764,7 @@ begin
       else ' desc nulls last' end);
     sort_key_terms := pg_catalog.array_append(sort_key_terms, case sort_sql_types[sort_index]
       when 'timestamp with time zone' then pg_catalog.format(
-        'vortex_context.format_timestamp_utc(%s)',
+        'vortex_platform.format_timestamp_utc(%s)',
         sort_value_sql[sort_index])
       when 'date' then pg_catalog.format(
         'pg_catalog.to_char(%s, ''YYYY-MM-DD'')', sort_value_sql[sort_index])
@@ -1036,8 +1036,7 @@ $function$;
 alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb)
   to vortex_request;
 

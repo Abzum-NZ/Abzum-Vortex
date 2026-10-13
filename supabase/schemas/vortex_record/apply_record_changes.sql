@@ -1354,7 +1354,7 @@ begin
         'kind', 'changed',
         'changedFieldIds', pg_catalog.to_jsonb(changed_field_ids)
       ) end;
-    event_result := vortex_event.append_record_occurrences(
+    event_result := vortex_platform.append_record_occurrences(
       (meta ->> 'storageContractId')::uuid,
       saved_record_id,
       pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
@@ -1425,7 +1425,7 @@ begin
         notice_sequence := pg_catalog.nextval(
           'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
         );
-        perform vortex_invalidation.publish_change_notice(
+        perform vortex_platform.publish_change_notice(
           organization_id_value, application_root_id_value, p_record_type_id,
           saved_record_id, saved_concurrency_number, 'changed',
           notice_sequence, notice_sequence, correlation_id_value
@@ -1604,7 +1604,7 @@ begin
         raise exception using errcode = '22023',
           message = 'Named action creation occurrence is invalid';
       end if;
-      event_result := vortex_event.append_record_occurrences(
+      event_result := vortex_platform.append_record_occurrences(
         (inserted_value ->> 'storageContractId')::uuid, created_record_id,
         pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
           'occurrenceId', occurrence_id_value,
@@ -1809,7 +1809,7 @@ begin
           raise exception using errcode = '22003',
             message = 'Created Record notice sequence is unavailable';
         end if;
-        perform vortex_invalidation.publish_change_notice(
+        perform vortex_platform.publish_change_notice(
           organization_id_value, application_root_id_value,
           (final_created_tuple ->> 'recordTypeId')::uuid,
           created_record_id, created_concurrency_number, 'created',
@@ -1825,7 +1825,7 @@ begin
       notice_sequence := pg_catalog.nextval(
         'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
       );
-      perform vortex_invalidation.publish_change_notice(
+      perform vortex_platform.publish_change_notice(
         organization_id_value, application_root_id_value, p_record_type_id,
         saved_record_id, saved_concurrency_number, 'changed',
         notice_sequence, notice_sequence, correlation_id_value
@@ -1843,8 +1843,7 @@ alter function vortex_record.apply_record_changes(uuid,text,uuid,uuid,bigint,jso
 
 revoke all on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) to vortex_record_adapter;

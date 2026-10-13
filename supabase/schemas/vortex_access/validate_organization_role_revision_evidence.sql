@@ -261,6 +261,8 @@ begin
   return null;
 end
 $function$;
+alter function vortex_access.validate_organization_role_revision_evidence() owner to vortex_owner;
+
 
 revoke execute on function vortex_access.validate_organization_role_revision_evidence()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
@@ -269,4 +271,4 @@ comment on function vortex_access.validate_organization_role_revision_evidence()
   'Deferred evidence check of one organisation role revision and its accepted permission entries. Definer, because it fires at commit under the request role, which has no table access.';
 
 alter function vortex_access.validate_organization_role_revision_evidence()
-  owner to vortex_access_owner;
+  owner to vortex_owner;

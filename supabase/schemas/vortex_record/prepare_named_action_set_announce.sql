@@ -8,6 +8,8 @@ CREATE FUNCTION vortex_record.prepare_named_action_set_announce(p_command_id uui
     p_expected_concurrency_number, p_inputs, p_activity_id
   )
 $$;
+alter function vortex_record.prepare_named_action_set_announce(uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.prepare_named_action_set_announce(p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_inputs jsonb, p_activity_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_record.prepare_named_action_set_announce(p_command_id uuid, p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_inputs jsonb, p_activity_id uuid) TO vortex_runtime;

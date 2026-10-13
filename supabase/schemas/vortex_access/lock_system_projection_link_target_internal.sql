@@ -76,11 +76,10 @@ end
 $function$;
 
 revoke all on function vortex_access.lock_system_projection_link_target_internal(text, uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.lock_system_projection_link_target_internal(text, uuid, uuid)
-  to vortex_record_adapter, vortex_record_owner;
+  to vortex_record_adapter, vortex_owner;
 
 comment on function vortex_access.lock_system_projection_link_target_internal(text, uuid, uuid) is
   'Private protected system-projection link lock: share-locks only an active same-organisation People account and its active identity projection, or an active Group, after confirming the registered reader and current organisation; read authority remains with the Record access decision.';

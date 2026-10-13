@@ -44,4 +44,4 @@ from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_access.organization_permissions_administration_scope() is
   'Private fixed permissions-read authorization for the current registered permission catalogue.';
 
-alter function vortex_access.organization_permissions_administration_scope() owner to vortex_access_owner;
+alter function vortex_access.organization_permissions_administration_scope() owner to vortex_owner;

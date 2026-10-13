@@ -17,7 +17,6 @@ begin
 end
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) IS 'Protected exact invitation detail under the fixed invitations.read decision.';

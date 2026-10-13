@@ -28,13 +28,13 @@ declare
   revoked record;
 begin
   if p_direct_share_id is null
-    or not vortex_context.is_non_nil_uuid(p_direct_share_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_direct_share_id::text)
     or p_expected_revision is null
     or p_expected_revision not between 1 and 9007199254740991
     or p_reason is null
     or pg_catalog.char_length(p_reason) not between 1 and 500
     or p_activity_id is null
-    or not vortex_context.is_non_nil_uuid(p_activity_id::text) then
+    or not vortex_platform.is_non_nil_uuid(p_activity_id::text) then
     raise exception using errcode = '22023',
       message = 'Protected record-share revocation input is invalid';
   end if;
@@ -248,8 +248,7 @@ $function$;
 
 revoke execute on function vortex_access.revoke_record_share_for_administration(
   uuid, bigint, text, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.revoke_record_share_for_administration(
   uuid, bigint, text, uuid

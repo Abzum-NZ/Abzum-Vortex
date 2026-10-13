@@ -180,10 +180,10 @@ begin
       'permission_unavailable', 'permission_not_effective',
       'authentication_unsatisfied', 'delegation_insufficient'
     ) then
-    activity_result := vortex_activity.append_organization_activity_entry(
+    activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
       'organization_account', context_account_id, 'grant_role_assignment',
-      array[context_organization_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+      array[context_organization_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
       context_correlation_id, 'refused'
     );
     if activity_result is distinct from 'inserted' then
@@ -261,10 +261,10 @@ begin
   where assignment.organization_id = context_organization_id
     and assignment.role_assignment_id = p_role_assignment_id;
 
-  activity_result := vortex_activity.append_organization_activity_entry(
+  activity_result := vortex_record.append_organization_activity_entry(
     context_organization_id, p_activity_id, changed.changed_at,
     'organization_account', context_account_id, 'grant_role_assignment',
-    array[p_role_assignment_id]::uuid[], array[]::uuid[], vortex_context.channel(),
+    array[p_role_assignment_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
     context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then

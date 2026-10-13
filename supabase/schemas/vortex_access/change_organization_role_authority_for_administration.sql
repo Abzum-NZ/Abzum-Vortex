@@ -28,7 +28,7 @@ begin
     or pg_catalog.jsonb_typeof(p_prepared_evidence -> 'roleCandidateFingerprint')
       is distinct from 'string'
     or p_activity_id is null
-    or vortex_context.is_non_nil_uuid(p_activity_id::text) is not true then
+    or vortex_platform.is_non_nil_uuid(p_activity_id::text) is not true then
     raise exception using errcode = '22023',
       message = 'Organization role-authority change input is invalid';
   end if;
@@ -40,11 +40,11 @@ begin
   )
     or pg_catalog.jsonb_typeof(p_prepared_evidence #> '{candidate,organizationId}')
       is distinct from 'string'
-    or vortex_context.is_non_nil_uuid(
+    or vortex_platform.is_non_nil_uuid(
       p_prepared_evidence #>> '{candidate,organizationId}'
     ) is not true
     or pg_catalog.jsonb_typeof(p_prepared_evidence #> '{candidate,roleId}') is distinct from 'string'
-    or vortex_context.is_non_nil_uuid(
+    or vortex_platform.is_non_nil_uuid(
       p_prepared_evidence #>> '{candidate,roleId}'
     ) is not true then
     raise exception using errcode = '22023',

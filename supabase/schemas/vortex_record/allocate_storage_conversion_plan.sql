@@ -174,6 +174,8 @@ exception
       message = 'Storage conversion plan evidence is unavailable';
 end
 $$;
+alter function vortex_record.allocate_storage_conversion_plan(uuid,bigint) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.allocate_storage_conversion_plan(p_conversion_contract_id uuid, p_expected_plan_revision bigint) IS 'Opens one tenant-scoped plan, staging the planned target field mapping and column on first use without touching the active source mapping, so the installed release remains usable.';
 

@@ -23,9 +23,9 @@ declare
   resolved_account_id uuid;
 begin
   if p_identity_id is null
-    or not vortex_context.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or p_organization_id is null
-    or not vortex_context.is_non_nil_uuid(p_organization_id::text) then
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text) then
     raise exception using errcode = '22023',
       message = 'Organisation change selection is invalid';
   end if;

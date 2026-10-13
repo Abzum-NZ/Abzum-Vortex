@@ -122,7 +122,7 @@ begin
       declaration_target ->> 'kind' = 'application'
       and (
         not declaration_target ? 'applicationRootId'
-        or not vortex_context.is_non_nil_uuid(
+        or not vortex_platform.is_non_nil_uuid(
           declaration_target ->> 'applicationRootId'
         )
         or exists (
@@ -279,8 +279,8 @@ begin
       or not permission_candidate ?& array['ownerKind', 'ownerId', 'permissionId']
       or pg_catalog.jsonb_typeof(permission_candidate -> 'ownerKind') <> 'string'
       or permission_candidate ->> 'ownerKind' not in ('platform', 'application', 'module')
-      or not vortex_context.is_non_nil_uuid(permission_candidate ->> 'ownerId')
-      or not vortex_context.is_non_nil_uuid(permission_candidate ->> 'permissionId')
+      or not vortex_platform.is_non_nil_uuid(permission_candidate ->> 'ownerId')
+      or not vortex_platform.is_non_nil_uuid(permission_candidate ->> 'permissionId')
       or exists (
         select 1
         from pg_catalog.jsonb_object_keys(permission_candidate) as supplied(key)
@@ -296,7 +296,7 @@ begin
         permission_candidate ->> 'ownerKind' in ('application', 'module')
         and (
           not permission_candidate ? 'applicationRootId'
-          or not vortex_context.is_non_nil_uuid(
+          or not vortex_platform.is_non_nil_uuid(
             permission_candidate ->> 'applicationRootId'
           )
         )
@@ -637,15 +637,17 @@ begin
   from decision;
 end
 $function$;
+alter function vortex_access.evaluate_organization_permission_eligibility(jsonb) owner to vortex_owner;
+
 revoke execute on function vortex_access.evaluate_organization_permission_eligibility(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.evaluate_organization_permission_eligibility(jsonb)
-  to vortex_request, vortex_module_owner, vortex_record_owner, postgres;
+  to vortex_request, vortex_owner, postgres;
 grant execute on function vortex_access.evaluate_organization_permission_eligibility(jsonb)
-  to vortex_connection_owner, vortex_definition_owner;
+  to vortex_owner;
 grant execute on function vortex_access.evaluate_organization_permission_eligibility(jsonb)
-  to vortex_activity_owner;
+  to vortex_owner;
 comment on function vortex_access.evaluate_organization_permission_eligibility(jsonb) is
   'Returns transaction-bound permission and current delegation eligibility from one trusted operation declaration; it is not a final protected-operation decision.';
 alter function vortex_access.evaluate_organization_permission_eligibility(jsonb)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

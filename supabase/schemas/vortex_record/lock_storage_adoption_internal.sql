@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.lock_storage_adoption_internal(p_conversion_contract_id uuid, p_organization_id uuid, p_application_root_id uuid) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_record.lock_storage_adoption_internal(p_conversion_contract_id uuid, p_organization_id uuid, p_application_root_id uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -17,7 +17,7 @@ begin
   from vortex_record.storage_catalogue as catalogue
   where catalogue.storage_contract_id = conversion.source_storage_contract_id;
 
-  perform vortex_module.lock_storage_adoption_binding_internal(
+  perform vortex_definition.lock_storage_adoption_binding_internal(
     p_organization_id, p_application_root_id, catalogue_row.module_root_id,
     conversion.source_storage_contract_id, conversion.source_release_revision
   );
@@ -57,6 +57,8 @@ exception
       message = 'Storage adoption evidence is unavailable';
 end
 $$;
+alter function vortex_record.lock_storage_adoption_internal(uuid,uuid,uuid) owner to vortex_owner;
+
 
 COMMENT ON FUNCTION vortex_record.lock_storage_adoption_internal(p_conversion_contract_id uuid, p_organization_id uuid, p_application_root_id uuid) IS 'Private helper: locks the caller''s own binding for one conversion, requires it detached at the exact source release, then takes the target release''s storage-lineage locks in the provisioner''s canonical order up to the converted lineage.';
 

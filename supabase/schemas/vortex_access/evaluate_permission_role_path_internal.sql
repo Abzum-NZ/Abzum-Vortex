@@ -279,13 +279,12 @@ revoke execute on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
   )
-from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_module_owner, vortex_record_owner, vortex_record_adapter;
+from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function
   vortex_access.evaluate_permission_role_path_internal(
     jsonb, timestamptz, jsonb, jsonb, uuid
-  ) to vortex_access_owner;
+  ) to vortex_owner;
 
 comment on function
   vortex_access.evaluate_permission_role_path_internal(

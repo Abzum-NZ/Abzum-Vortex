@@ -142,8 +142,7 @@ $function$;
 alter function vortex_record.read_record_projection_internal(uuid,uuid) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.read_record_projection_internal(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.read_record_projection_internal(uuid, uuid) is
   'Private record read: returns the readable field projection of one record together with the read facts and field bounds it was decided over, so the capabilities of the same row reuse them.';

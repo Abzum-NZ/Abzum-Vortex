@@ -16,8 +16,7 @@ end
 $function$;
 
 revoke all on function vortex_identity.protect_super_administrator_account_provenance()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.protect_super_administrator_account_provenance() is
   'Keeps the assignment evidence for super-administrator-provisioned accounts immutable.';

@@ -126,10 +126,10 @@ begin
   end if;
 
 
-  append_result := vortex_activity.append_organization_activity_entry(
+  append_result := vortex_record.append_organization_activity_entry(
     context_organization_id, p_activity_id, now_value, 'organization_account',
     context_account_id, 'propose_record_share_grant', array[p_grant_id]::uuid[],
-    array[]::uuid[], vortex_context.channel(), context_correlation_id, 'completed'
+    array[]::uuid[], vortex_platform.channel(), context_correlation_id, 'completed'
   );
   if append_result is distinct from 'inserted' then
     raise exception using errcode = '40001',
@@ -142,8 +142,7 @@ $function$;
 
 revoke all on function vortex_access.propose_record_share_grant_for_administration(
   uuid, uuid, jsonb, text, uuid
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner;
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.propose_record_share_grant_for_administration(
   uuid, uuid, jsonb, text, uuid
 ) to vortex_request;

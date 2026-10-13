@@ -95,7 +95,7 @@ begin
 
   -- Step 2: the exact active installation. Its reader owns the pin-set and
   -- active-binding rules; this adapter consumes them and adds none.
-  installation := vortex_module.read_current_active_installation();
+  installation := vortex_definition.read_current_active_installation();
 
   -- Step 3: the pinned definitions. Record types, relationships and saved
   -- conditions of every bound Module, plus the declared permissions of the
@@ -646,8 +646,7 @@ $function$;
 
 alter function vortex_record.load_named_action_facts_internal(text,uuid,bigint,uuid,uuid,uuid,bigint) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.load_named_action_facts_internal(text,uuid,bigint,uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-  vortex_record_owner, vortex_module_owner;
+revoke all on function vortex_record.load_named_action_facts_internal(text,uuid,bigint,uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_record.load_named_action_facts_internal(text,uuid,bigint,uuid,uuid,uuid,bigint) to vortex_record_adapter;
 

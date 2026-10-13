@@ -180,10 +180,11 @@ begin
     alternatives;
 end
 $function$;
+alter function vortex_access.resolve_record_read_scan_routes_internal(jsonb,text) owner to vortex_owner;
+
 
 revoke all on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
   to vortex_record_adapter;
 
@@ -191,4 +192,4 @@ comment on function vortex_access.resolve_record_read_scan_routes_internal(jsonb
   'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account, owner groups and directly shared record identifiers, the eligible alternatives reduced to their route lists and saved-condition envelopes, and whether every route has an exact stored predicate; it only narrows candidates and never replaces the exact-record decision.';
 
 alter function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
-  owner to vortex_access_owner;
+  owner to vortex_owner;

@@ -28,14 +28,14 @@ set search_path = ''
 as $function$
 declare
   evaluated_at timestamptz := pg_catalog.clock_timestamp();
-  context jsonb := vortex_context.current_context();
+  context jsonb := vortex_platform.current_context();
   context_organization_id uuid;
   effective_organization_id uuid;
   actor_identity_id uuid;
   selected record;
 begin
-  if p_tenant_id is null or not vortex_context.is_non_nil_uuid(p_tenant_id::text)
-    or (p_organization_id is not null and not vortex_context.is_non_nil_uuid(p_organization_id::text))
+  if p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or (p_organization_id is not null and not vortex_platform.is_non_nil_uuid(p_organization_id::text))
     or not vortex_access.capability_policy_key_is_valid(p_capability_key)
     or not vortex_access.capability_policy_unit_is_valid(p_unit) then
     raise exception using errcode = '22023', message = 'Capability policy resolution is invalid';
@@ -66,7 +66,7 @@ begin
       'platform.tenant.capability_limits.read', evaluated_at
     );
   elsif (context ->> 'callerKind') in ('human', 'federated')
-    and vortex_context.is_non_nil_uuid(context ->> 'identityId')
+    and vortex_platform.is_non_nil_uuid(context ->> 'identityId')
     and exists (
       select 1
       from vortex_identity.tenant_administrator_assignments as assignment
@@ -109,8 +109,7 @@ end
 $function$;
 
 revoke execute on function vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request,
-    vortex_record_owner, vortex_record_adapter, vortex_module_owner;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text)
   to vortex_request;
 

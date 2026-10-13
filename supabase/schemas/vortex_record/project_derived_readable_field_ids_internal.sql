@@ -80,5 +80,7 @@ begin
   );
 end
 $$;
+alter function vortex_record.project_derived_readable_field_ids_internal(jsonb,uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+
 
 REVOKE ALL ON FUNCTION vortex_record.project_derived_readable_field_ids_internal(p_loaded jsonb, p_record_type_id uuid, p_record_id uuid, p_readable_field_ids jsonb, p_required_field_ids jsonb, p_seen_derived_field_keys jsonb) FROM PUBLIC;

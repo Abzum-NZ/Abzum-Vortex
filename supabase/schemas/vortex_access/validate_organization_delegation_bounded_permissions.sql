@@ -242,7 +242,6 @@ begin
 end
 $_$;
 
-
 ALTER FUNCTION vortex_access.validate_organization_delegation_bounded_permissions(p_organization_id uuid, p_permissions jsonb) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.validate_organization_delegation_bounded_permissions(p_organization_id uuid, p_permissions jsonb) FROM PUBLIC;

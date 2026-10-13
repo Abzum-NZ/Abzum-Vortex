@@ -13,7 +13,6 @@ CREATE FUNCTION vortex_access.read_organization_group(p_organization_id uuid, p_
     and organization_group.group_id = p_group_id
 $$;
 
-
 ALTER FUNCTION vortex_access.read_organization_group(p_organization_id uuid, p_group_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.read_organization_group(p_organization_id uuid, p_group_id uuid) IS 'Owner-only exact Group fact read; foreign and unknown identities both return no row.';
