@@ -159,3 +159,14 @@ export {
   type LinkTilesQueryResolution,
   type ProjectedLinkTilesValues,
 } from "./link-tiles-query";
+export {
+  projectCalendarPlacement,
+  readCalendarPlacementContract,
+  type CalendarPlacementContract,
+  type CalendarPlacementFailureCause,
+  type CalendarPlacementProjection,
+  type CalendarPlacementProjectionInput,
+  type CalendarPlacementValues,
+  type CalendarQueryRunner,
+  type CalendarView,
+} from "./calendar-query";
