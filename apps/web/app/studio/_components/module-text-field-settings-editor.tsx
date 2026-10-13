@@ -60,14 +60,14 @@ const responseDraft = (
 };
 
 /** A single semantic settings buffer; only a verified response replaces the saved baseline. */
-export function ModuleTextFieldSettingsEditor({ draft, fields }: {
+export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
   draft: StoredModuleDefinitionDraft;
-  fields: readonly StudioModuleTextFieldDescriptor[];
+  onDraftChange: (draft: StoredModuleDefinitionDraft) => void;
 }) {
   const [baseline, setBaseline] = useState(draft);
-  const [choices, setChoices] = useState(fields);
-  const [selectedKey, setSelectedKey] = useState(() => fields[0] === undefined ? "" : selectionKey(fields[0]));
-  const [maxLength, setMaxLength] = useState(fields[0] === undefined ? "" : String(fields[0].maxLength));
+  const [choices, setChoices] = useState(() => descriptorsFor(draft));
+  const [selectedKey, setSelectedKey] = useState(() => choices[0] === undefined ? "" : selectionKey(choices[0]));
+  const [maxLength, setMaxLength] = useState(choices[0] === undefined ? "" : String(choices[0].maxLength));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [validation, setValidation] = useState<DefinitionValidationResult | null>(null);
@@ -85,6 +85,12 @@ export function ModuleTextFieldSettingsEditor({ draft, fields }: {
     return () => { active.current = false; lifetime.current += 1; generation.current += 1; };
   }, []);
 
+  // The draft is shared with the other fields editor: adopt a newer saved revision it reports.
+  useEffect(() => {
+    if (draft === buffer.current.baseline || draft.draftRevision <= buffer.current.baseline.draftRevision || pending.current) return;
+    replaceBuffer(draft, descriptorsFor(draft), buffer.current.selectedKey);
+  }, [draft]);
+
   const replaceBuffer = (next: StoredModuleDefinitionDraft, nextChoices: readonly StudioModuleTextFieldDescriptor[], key: string) => {
     const choice = nextChoices.find((field) => selectionKey(field) === key) ?? nextChoices[0];
     const nextKey = choice === undefined ? "" : selectionKey(choice);
@@ -92,6 +98,7 @@ export function ModuleTextFieldSettingsEditor({ draft, fields }: {
     buffer.current = { baseline: next, selectedKey: nextKey, maxLength: nextValue };
     generation.current += 1;
     setBaseline(next);
+    onDraftChange(next);
     setChoices(nextChoices);
     setSelectedKey(nextKey);
     setMaxLength(nextValue);
