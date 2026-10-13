@@ -82,6 +82,7 @@ import type {
   FlowEffectLedger,
   FlowEffectPrincipal,
 } from "./flow-continuation-store";
+import { recordRichTextDocumentSchema } from "../records/module-field-values";
 import { reportUnexpectedFailure } from "./definition-error";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
 
@@ -670,8 +671,9 @@ const readFieldValueMatchesType = (
     case "date_time":
       return typeof candidate === "string" && Number.isFinite(Date.parse(candidate));
     case "text":
-    case "formatted_text":
       return typeof candidate === "string";
+    case "formatted_text":
+      return recordRichTextDocumentSchema.safeParse(candidate).success;
     case "choice":
       return typeof candidate === "string" && candidate.length > 0;
   }

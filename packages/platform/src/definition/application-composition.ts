@@ -10,7 +10,6 @@ import {
   sourceQualifiedConditionSchema,
   sourceQualifiedFieldSchema,
   sourceQualifiedQueryReferenceSchema,
-  sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,
@@ -35,6 +34,7 @@ import {
   recordIdSchema,
   semanticVersionSchema,
   shellIdSchema,
+  sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
 import {
   richTextDocumentSchema,

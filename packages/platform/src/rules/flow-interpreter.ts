@@ -523,8 +523,8 @@ const buildInputs = (
   taskId?: string,
 ): FlowRuntimeValues => {
   const invalid = (reason: string) => failed("inputs_invalid", "validation", taskId, reason);
-  const undeclared = Object.keys(supplied).find((name) => !Object.hasOwn(flow.inputs, name));
-  if (undeclared !== undefined) invalid(`input "${undeclared}" is not declared by the flow`);
+  if (Object.keys(supplied).some((name) => !Object.hasOwn(flow.inputs, name)))
+    invalid("an undeclared input was supplied");
   const inputs: Record<string, FlowRuntimeValue> = {};
   for (const [name, declaration] of Object.entries(flow.inputs)) {
     const candidate = Object.hasOwn(supplied, name) ? supplied[name] : undefined;

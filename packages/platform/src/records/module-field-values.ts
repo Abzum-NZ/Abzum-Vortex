@@ -14,8 +14,8 @@ import {
   organizationAccountIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
+  sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
-import { sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
 import { richTextBlockSchema, richTextInlineSchema, type RichTextInline } from "./rich-text";
 
 const exactDecimalMessage = "Use exact base-10 text without exponent notation";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { builderKeySchema, namespacedKeySchema } from "../catalogue/identifiers";
+import { builderKeySchema, namespacedKeySchema, sourceQualifiedRecordTypeSchema } from "../catalogue/identifiers";
 import {
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
@@ -97,11 +97,6 @@ export const sourceAliasSchema = z
   .min(1)
   .max(160)
   .regex(/^[a-z][a-z0-9_]*$/);
-export const sourceQualifiedRecordTypeSchema = z
-  .string()
-  .min(3)
-  .max(200)
-  .regex(/^[a-z][a-z0-9_.]*:[a-z][a-z0-9_]*$/);
 /**
  * A query an application binds is always one a bound Module exposes, named by that Module's key
  * and the query's own key ("vortex.crm.organisations:crm_companies"). An application never owns a
