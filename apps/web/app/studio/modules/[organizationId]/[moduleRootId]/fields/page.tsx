@@ -2,6 +2,7 @@ import {
   loadStudioModuleFieldLabel,
   loadStudioModuleTextFieldSettings,
 } from "../../../../../_lib/studio-module-field-edits";
+import { StudioUnavailable } from "../../../../_components/studio-unavailable";
 import { ModuleFieldsWorkspace } from "../../../../_components/module-fields-workspace";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +15,7 @@ export default async function StudioModuleFieldsPage({ params }: {
     loadStudioModuleFieldLabel(organizationId, moduleRootId),
     loadStudioModuleTextFieldSettings(organizationId, moduleRootId),
   ]);
-  if (fieldsResult.kind !== "available" || textResult.kind !== "available") return <main className="mx-auto max-w-3xl space-y-3 p-6">
-    <h1>Module fields unavailable</h1>
-    <p role="status">{fieldsResult.kind === "temporarily_unavailable" || textResult.kind === "temporarily_unavailable"
-      ? "The Module draft could not be read because of a platform problem. Try again in a moment."
-      : "This Module draft is unavailable. Sign in with an account permitted to manage drafts and try again."}</p>
-  </main>;
+  if (fieldsResult.kind !== "available") return <StudioUnavailable subject="Module fields" result={fieldsResult} />;
+  if (textResult.kind !== "available") return <StudioUnavailable subject="Module fields" result={textResult} />;
   return <ModuleFieldsWorkspace key={`${fieldsResult.draft.organizationId}:${fieldsResult.draft.rootId}`} draft={fieldsResult.draft} />;
 }

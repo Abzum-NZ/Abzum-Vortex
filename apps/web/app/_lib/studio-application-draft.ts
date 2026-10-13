@@ -6,6 +6,7 @@ import {
   organizationIdSchema,
   sameId,
   canonicalJson,
+  describeFailure,
   placementSlotSchema,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
@@ -17,6 +18,7 @@ import {
 import type { DatabaseRow } from "@web/platform-server";
 import {
   BuilderAuthorityError,
+  DefinitionError,
   readApplicationDefinitionDraft,
   readLiveHumanContext,
   requireBuilderAuthority,
@@ -37,17 +39,39 @@ type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "
 
 type StudioAuthorityResult<Value> =
   | Readonly<{ kind: "available"; value: Value }>
-  | Readonly<{ kind: "refused" }>;
+  | Readonly<{ kind: "refused"; reason: string }>;
 
-const isExpectedBuilderRefusal = (error: unknown): boolean =>
-  error instanceof BuilderAuthorityError &&
-  (error.code === "BUILDER_PERMISSION_REFUSED" ||
-    error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED");
+const builderRefusalReason = (error: unknown): string | undefined =>
+  !(error instanceof BuilderAuthorityError) ? undefined
+    : error.code === "BUILDER_PERMISSION_REFUSED" ? "permission_missing"
+      : error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED" ? "recent_authentication_required" : undefined;
+
+/** `reason` is the stable code logged on the server and mapped to a message for the person. */
+type StudioApplicationFailure =
+  | Readonly<{ kind: "refused"; reason: string }>
+  | Readonly<{ kind: "temporarily_unavailable"; reason: string }>;
+
+/** One log line with the stable reason code and, when there is one, the cause. */
+const declined = (operation: string, failure: StudioApplicationFailure, error?: unknown): StudioApplicationFailure => {
+  console.error(`[studio] ${operation} ${failure.kind} reason=${failure.reason}` +
+    (error === undefined ? "" : ` cause=${describeFailure(error)}`));
+  return failure;
+};
+
+/** Expected builder refusals keep their own reason; anything else is a platform failure, never a permission message. */
+const loadFailure = (operation: string, error: unknown): StudioApplicationFailure => {
+  const reason = builderRefusalReason(error);
+  if (reason !== undefined) return declined(operation, { kind: "refused", reason }, error);
+  if (error instanceof DefinitionError && error.code === "DEFINITION_ROOT_MISSING")
+    return declined(operation, { kind: "refused", reason: "draft_missing" }, error);
+  if (error instanceof Error && error.message === "STUDIO_DRAFT_UNAVAILABLE")
+    return declined(operation, { kind: "refused", reason: "draft_missing" }, error);
+  return declined(operation, { kind: "temporarily_unavailable", reason: "request_failed" }, error);
+};
 
 type StudioApplicationLoadResult =
   | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; compileFailure: StudioCompileFailure | null }>
-  | Readonly<{ kind: "refused" }>
-  | Readonly<{ kind: "temporarily_unavailable" }>;
+  | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
@@ -187,8 +211,7 @@ export type StudioApplicationSearchMetadata = Readonly<{
 
 type StudioApplicationCreateAccessResult =
   | Readonly<{ kind: "available"; organizationId: OrganizationId }>
-  | Readonly<{ kind: "refused" }>
-  | Readonly<{ kind: "temporarily_unavailable" }>;
+  | StudioApplicationFailure;
 
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 
@@ -213,12 +236,13 @@ export const loadStudioCreateAccess = async (
   candidateOrganizationId: string,
 ): Promise<StudioApplicationCreateAccessResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
-  if (!organization.success) return { kind: "refused" };
+  if (!organization.success) return declined("create-access", { kind: "refused", reason: "request_invalid" });
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+      return declined("create-access", resolved.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable", reason: "session_unavailable" }
+        : { kind: "refused", reason: "session_ended" });
     const result = await humanOrganizationRequests().run(
       resolved.session, { organizationId: organization.data }, async (
         transaction,
@@ -228,20 +252,22 @@ export const loadStudioCreateAccess = async (
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change" });
         } catch (error) {
-          if (isExpectedBuilderRefusal(error)) return { kind: "refused" };
+          const reason = builderRefusalReason(error);
+          if (reason !== undefined) return { kind: "refused", reason };
           throw error;
         }
         return { kind: "available", value: scope.organizationId };
       },
     );
-    return result.kind === "available"
-      ? result.value.kind === "available"
+    if (result.kind === "available")
+      return result.value.kind === "available"
         ? { kind: "available", organizationId: result.value.value }
-        : { kind: "refused" }
-      : result.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-  } catch {
-    return { kind: "refused" };
+        : declined("create-access", result.value);
+    return declined("create-access", result.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable", reason: "request_failed" }
+      : { kind: "refused", reason: "organization_unavailable" });
+  } catch (error) {
+    return loadFailure("create-access", error);
   }
 };
 
@@ -269,12 +295,14 @@ export const loadStudioApplicationDraft = async (
 ): Promise<StudioApplicationLoadResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = applicationRootIdSchema.safeParse(candidateRootId);
-  if (!organization.success || !root.success) return { kind: "refused" };
+  if (!organization.success || !root.success)
+    return declined("application-draft", { kind: "refused", reason: "request_invalid" });
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active")
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+      return declined("application-draft", resolved.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable", reason: "session_unavailable" }
+        : { kind: "refused", reason: "session_ended" });
     const result = await humanOrganizationRequests().run(
       resolved.session, { organizationId: organization.data }, async (
         transaction,
@@ -291,7 +319,8 @@ export const loadStudioApplicationDraft = async (
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
         } catch (error) {
-          if (isExpectedBuilderRefusal(error)) return { kind: "refused" };
+          const reason = builderRefusalReason(error);
+          if (reason !== undefined) return { kind: "refused", reason };
           throw error;
         }
         const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
@@ -394,13 +423,14 @@ export const loadStudioApplicationDraft = async (
         return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, pageCompiledSlots, compileFailure } };
       },
     );
-    return result.kind === "available"
-      ? result.value.kind === "available"
+    if (result.kind === "available")
+      return result.value.kind === "available"
         ? { kind: "available", ...result.value.value }
-        : { kind: "refused" }
-      : result.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" } : { kind: "refused" };
-  } catch {
-    return { kind: "refused" };
+        : declined("application-draft", result.value);
+    return declined("application-draft", result.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable", reason: "request_failed" }
+      : { kind: "refused", reason: "organization_unavailable" });
+  } catch (error) {
+    return loadFailure("application-draft", error);
   }
 };

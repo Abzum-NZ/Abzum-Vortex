@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
-  applicationRootIdSchema, canonicalJson, correlationIdSchema, definitionReleaseMetadataSchema, fingerprintSchema, namespacedKeySchema,
+  applicationRootIdSchema, canonicalJson, correlationIdSchema, definitionReleaseMetadataSchema, describeFailure, fingerprintSchema, namespacedKeySchema,
   organizationIdSchema,
   publishedApplicationReferenceSchema, revisionSchema, sameId,
   type DefinitionReleaseMetadata,
@@ -53,6 +53,8 @@ const pageSchema = z.object({
 export type StudioApplicationHistorySnapshot = z.infer<typeof snapshotSchema>;
 export type StudioApplicationHistoryFailure = Readonly<{
   kind: "refused" | "conflict" | "temporarily_unavailable";
+  /** The stable code logged on the server and mapped to a message for the person. */
+  reason: string;
 }>;
 export type StudioApplicationHistoryPage = Readonly<{
   snapshot: StudioApplicationHistorySnapshot;
@@ -97,16 +99,29 @@ const assertLiveCompletion = async (
     throw new HistoryStorageUnavailable();
 };
 
+/** One log line with the stable reason code and, when there is one, the cause. */
+const declined = (failure: StudioApplicationHistoryFailure, error?: unknown): StudioApplicationHistoryFailure => {
+  console.error(`[studio] application history ${failure.kind} reason=${failure.reason}` +
+    (error === undefined ? "" : ` cause=${describeFailure(error)}`));
+  return failure;
+};
+
 const safeFailure = (error: unknown): StudioApplicationHistoryFailure => {
   if (error instanceof HistoryConflict ||
-    classifyDatabaseError(error) === "conflict" ||
-    (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING"))
-    return { kind: "conflict" };
-  if (error instanceof HistoryRefused || error instanceof BuilderAuthorityError ||
+    classifyDatabaseError(error) === "conflict")
+    return declined({ kind: "conflict", reason: "draft_changed" }, error);
+  if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+    return declined({ kind: "conflict", reason: "draft_changed" }, error);
+  if (error instanceof BuilderAuthorityError)
+    return declined({ kind: "refused", reason: error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+      ? "recent_authentication_required" : "permission_missing" }, error);
+  if (error instanceof DefinitionError && error.code === "DEFINITION_ROOT_MISSING")
+    return declined({ kind: "refused", reason: "draft_missing" }, error);
+  if (error instanceof HistoryRefused ||
     classifyDatabaseError(error) === "refused" ||
-    (error instanceof DefinitionError && ["DEFINITION_CONTEXT_REFUSED", "DEFINITION_ROOT_MISSING",
-      "INVALID_DEFINITION_COMMAND"].includes(error.code))) return { kind: "refused" };
-  return { kind: "temporarily_unavailable" };
+    (error instanceof DefinitionError && ["DEFINITION_CONTEXT_REFUSED", "INVALID_DEFINITION_COMMAND"].includes(error.code)))
+    return declined({ kind: "refused", reason: "context_changed" }, error);
+  return declined({ kind: "temporarily_unavailable", reason: "request_failed" }, error);
 };
 
 /** Returning available waits for the original transaction to complete normally. */
@@ -119,12 +134,13 @@ const executeRead = async <Value>(
 ): Promise<StudioApplicationHistoryFailure | Readonly<{ kind: "available"; value: Value }>> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = applicationRootIdSchema.safeParse(candidateRootId);
-  if (!organization.success || !root.success) return { kind: "refused" };
+  if (!organization.success || !root.success) return declined({ kind: "refused", reason: "request_invalid" });
   let failure: StudioApplicationHistoryFailure | undefined;
   try {
     const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    if (resolved.kind !== "active") return declined(resolved.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable", reason: "session_unavailable" }
+      : { kind: "refused", reason: "session_ended" });
     const result = await humanOrganizationRequests().run(resolved.session,
       { organizationId: organization.data }, async (transaction, scope, issuedAt): Promise<Value> => {
         try {
@@ -159,8 +175,9 @@ const executeRead = async <Value>(
         }
       });
     if (result.kind === "available") return { kind: "available", value: result.value };
-    return failure ?? (result.kind === "unavailable" ? { kind: "refused" }
-      : { kind: "temporarily_unavailable" });
+    return failure ?? declined(result.kind === "unavailable"
+      ? { kind: "refused", reason: "organization_unavailable" }
+      : { kind: "temporarily_unavailable", reason: "request_failed" });
   } catch (error) { return failure ?? safeFailure(error); }
 };
 
@@ -218,10 +235,11 @@ export const listStudioApplicationReleaseHistory = async (
   organizationId: string, candidate: unknown,
 ): Promise<StudioApplicationHistoryListResult> => {
   const request = listRequestSchema.safeParse(candidate);
-  if (!request.success) return { kind: "refused" };
+  if (!request.success) return declined({ kind: "refused", reason: "request_invalid" });
   const command = request.data;
   if (command.kind === "next" && (command.expected.anchorReleaseRevision === null ||
-    command.afterReleaseRevision >= command.expected.anchorReleaseRevision)) return { kind: "refused" };
+    command.afterReleaseRevision >= command.expected.anchorReleaseRevision))
+    return declined({ kind: "refused", reason: "request_invalid" });
   const result = await executeRead(organizationId, command.rootId,
     command.kind === "next" ? command.expected : undefined, async (transaction, _draft, snapshot) => {
       const page = snapshot.anchorReleaseRevision === null
@@ -238,7 +256,8 @@ export const inspectStudioApplicationReleaseHistory = async (
 ): Promise<StudioApplicationHistoryInspectResult> => {
   const request = inspectRequestSchema.safeParse(candidate);
   if (!request.success || request.data.expected.anchorReleaseRevision === null ||
-    request.data.releaseRevision > request.data.expected.anchorReleaseRevision) return { kind: "refused" };
+    request.data.releaseRevision > request.data.expected.anchorReleaseRevision)
+    return declined({ kind: "refused", reason: "request_invalid" });
   const command = request.data;
   const result = await executeRead(organizationId, command.rootId, command.expected,
     async (transaction, _draft, snapshot) => {
