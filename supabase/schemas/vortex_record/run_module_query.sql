@@ -840,6 +840,11 @@ begin
     order_by_sql
   );
 
+  -- The access evaluator validates this query's installed record-type set on
+  -- its first row. Later decisions reuse that exact set while still checking
+  -- every row's own facts, permissions and field bounds.
+  perform pg_catalog.set_config('vortex_access.validated_record_types', '', true);
+  perform pg_catalog.set_config('vortex_access.record_types_validation_cache_enabled', 'true', true);
   for scan_record in execute scan_sql
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
@@ -885,6 +890,8 @@ begin
           where not (readable_values ? referenced.id)
         ) then
           if needs_refusal_check then
+            perform pg_catalog.set_config('vortex_access.record_types_validation_cache_enabled', '', true);
+            perform pg_catalog.set_config('vortex_access.validated_record_types', '', true);
             return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
           end if;
           -- A search term matches only through a searchable field this row exposes
@@ -998,6 +1005,8 @@ begin
     last_examined_sort_key := scan_record.sort_key;
     last_examined_record_id := scan_record.record_id;
   end loop;
+  perform pg_catalog.set_config('vortex_access.record_types_validation_cache_enabled', '', true);
+  perform pg_catalog.set_config('vortex_access.validated_record_types', '', true);
 
   if more_rows then
     next_value := pg_catalog.jsonb_build_object(
