@@ -15,12 +15,13 @@ import {
   createFlowInvokeClient,
   createFlowRuntime,
   createFormBlockRuntime,
-  createFullPlatformComponentRegistry,
+  createPlatformComponentRegistryForReleases,
   equalFormValue,
   getAccessibleName,
   parseBoardPayload,
   parseTablePayload,
   type FieldInputControlReleaseMap,
+  type createFullPlatformComponentRegistry,
   PagePuckRenderer,
   type PagePuckRendererProps,
   UnsavedWorkProvider,
@@ -812,7 +813,7 @@ export function ApplicationPageView({
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
   const platformComponentRegistry = useMemo(
-    () => createFullPlatformComponentRegistry(platformBlockReleases),
+    () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
   return (

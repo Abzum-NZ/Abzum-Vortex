@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ApplicationShell, PageDefinition, PlatformBlockRelease } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
-  createFullPlatformComponentRegistry,
+  createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FieldInputControlReleaseMap,
   type PlatformThemeTokens,
@@ -44,7 +44,7 @@ export function OrganizationLauncherPage({
 }>): ReactElement {
   const router = useRouter();
   const registry = useMemo(
-    () => createFullPlatformComponentRegistry(platformBlockReleases),
+    () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
   return (

@@ -330,6 +330,7 @@ export {
 export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
   createFullPlatformComponentRegistry,
+  createPlatformComponentRegistryForReleases,
 } from "./combined-registry";
 
 // Generic Connection Administration Page Contracts (#693)

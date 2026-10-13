@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ApplicationShell, PageDefinition } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
-  createFullPlatformComponentRegistry,
+  createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FieldInputControlReleaseMap,
   type PlatformThemeTokens,
@@ -40,7 +40,7 @@ export function ApplicationExperiencePage({
 }>): ReactElement {
   const router = useRouter();
   const platformComponentRegistry = useMemo(
-    () => createFullPlatformComponentRegistry(platformBlockReleases),
+    () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
   return (
