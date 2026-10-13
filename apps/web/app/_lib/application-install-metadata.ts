@@ -3,17 +3,18 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
-  databaseTimestamp, fingerprintSchema, organizationAccessDeclarationSchema, revisionSchema,
-  sameId, sessionContextSchema, timestampSchema,
+  fingerprintSchema, organizationAccessDeclarationSchema, revisionSchema,
   type IdentitySession, type OrganizationAccessDeclaration, type SelectedOrganizationScope,
 } from "@vortex/platform/schema";
-import { runOrganizationAccessOperation } from "@web/platform-server";
+import {
+  assertBeforeLiveDeadline, LiveContextRefused, readLiveHumanContext, runOrganizationAccessOperation,
+} from "@web/platform-server";
 import {
   applicationInstallAddressSchema, createApplicationInstallManifest,
   createHumanInstalledRuntimeContextLoader,
   type ApplicationInstallAddress, type ApplicationInstallManifest, type InstalledRuntimeContext,
 } from "@web/platform-server";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import type { RequestDatabaseTransaction } from "@web/platform-server";
 import { withPooledRequestLifetime } from "@web/platform-server";
 import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createActiveApplicationInstallationRepository } from "@web/platform-server";
@@ -75,39 +76,17 @@ const homeDeclaration = (context: InstalledRuntimeContext, homeKey: string): Org
   });
 };
 
-/** Current protected transport and DB clock, never caller-owned identity or scope. */
+/** Current protected context of this request's session and application scope, before the deadline. */
 const readHuman = async (transaction: RequestDatabaseTransaction, scope: SelectedOrganizationScope,
   session: IdentitySession, issuedAt: string, deadline: number) => {
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_access.validated_human_request_context() as request_context,
-      pg_catalog.clock_timestamp() as checked_at
-  `;
-  const row = rows[0];
-  const transport = z.record(z.string(), z.unknown()).safeParse(row?.request_context);
-  if (rows.length !== 1 || !transport.success || transport.data.channel !== "web") return refused();
-  const parsed = sessionContextSchema.safeParse(Object.fromEntries(
-    Object.entries(transport.data).filter(([key]) => key !== "channel"),
-  ));
-  const checked = timestampSchema.safeParse(databaseTimestamp(row?.checked_at));
-  if (!parsed.success || parsed.data.callerKind !== "human" || !checked.success) return refused();
-  const context = parsed.data;
-  const now = Date.parse(checked.data);
-  if (context.delegatedContext !== undefined || context.supportContext !== undefined ||
-      scope.applicationRootId === undefined || context.applicationRootId === undefined ||
-      !sameId(context.tenantId, scope.tenantId) || !sameId(context.organizationId, scope.organizationId) ||
-      !sameId(context.organizationAccountId, scope.organizationAccountId) ||
-      !sameId(context.applicationRootId, scope.applicationRootId) || context.accessVersion !== scope.accessVersion ||
-      !sameId(context.identityId, session.identityId) || !sameId(context.sessionId, session.sessionId) ||
-      context.authenticationStrength !== session.authenticationStrength || context.issuedAt !== issuedAt ||
-      context.expiresAt !== session.accessTokenExpiresAt ||
-      context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-      context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
-      context.accessTokenIssuedAt !== (session.primaryAuthenticatedAt !== undefined ||
-        session.multiFactorAuthenticatedAt !== undefined ? session.accessTokenIssuedAt : undefined) ||
-      Date.parse(context.issuedAt) > now || Date.parse(context.expiresAt) <= now ||
-      Date.parse(context.issuedAt) >= Date.parse(context.expiresAt) || now >= deadline) return refused();
+  if (scope.applicationRootId === undefined) return refused();
+  const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+  await assertBeforeLiveDeadline(transaction, deadline);
   return context;
 };
+
+const isRefusal = (error: unknown): boolean =>
+  error instanceof InstallRefused || error instanceof LiveContextRefused;
 
 /**
  * The request's own abort signal and deadline: checked between every step of the one read, and
@@ -168,14 +147,12 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Install
           homeDeclaration(initial, resolved.application.homePageKey), async (finalDecision) => {
             if (!await installationStillCurrent()) return deny();
             const finalHuman = await readHuman(transaction, scope, identity.session, issuedAt, lifetime.deadline)
-              .catch((error: unknown) => { if (error instanceof InstallRefused) explicitRefusal = true; throw error; });
+              .catch((error: unknown) => { if (isRefusal(error)) explicitRefusal = true; throw error; });
             if (JSON.stringify(finalHuman) !== JSON.stringify(human)) return deny();
-            const clocks = await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as completed_at`;
-            const completed = timestampSchema.safeParse(databaseTimestamp(clocks[0]?.completed_at));
             const expiry = Math.min(Date.parse(identity.session.accessTokenExpiresAt),
               Date.parse(decision.validUntil), Date.parse(finalDecision.validUntil), lifetime.deadline);
-            if (clocks.length !== 1 || !completed.success || !Number.isFinite(expiry) ||
-                Date.parse(completed.data) >= expiry) return deny();
+            if (!Number.isFinite(expiry)) return deny();
+            await assertBeforeLiveDeadline(transaction, expiry);
             lifetime.checkpoint();
             return { manifest, snapshot: initialRelease, applicationReleaseRevision: initial.applicationReleaseRevision,
               validUntil: new Date(expiry).toISOString() };
@@ -186,7 +163,7 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Install
       if (access.outcome !== "completed") return deny();
       return access.value;
     } catch (error) {
-      if (error instanceof InstallRefused) explicitRefusal = true;
+      if (isRefusal(error)) explicitRefusal = true;
       throw error;
     }
   }));
@@ -222,6 +199,6 @@ export const loadApplicationInstallMetadata = async (
       applicationReleaseRevision: current.applicationReleaseRevision, validUntil: current.validUntil,
       manifestUrl: `/api/application-install/manifest?${query.toString()}` };
   } catch (error) {
-    return { kind: error instanceof InstallRefused ? "unavailable" : "temporarily_unavailable" };
+    return { kind: isRefusal(error) ? "unavailable" : "temporarily_unavailable" };
   }
 };
