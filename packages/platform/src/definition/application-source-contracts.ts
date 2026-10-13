@@ -2,7 +2,12 @@ import { z } from "zod";
 import { applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
-import { builderKeySchema, namespacedKeySchema, semanticVersionSchema } from "../catalogue/identifiers";
+import {
+  builderKeySchema,
+  namespacedKeySchema,
+  semanticVersionSchema,
+  sourceQualifiedRecordTypeSchema,
+} from "../catalogue/identifiers";
 import { jsonValueSchema, labelSchema } from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
@@ -12,7 +17,6 @@ import {
   sourceConditionSchema,
   sourceQualifiedFieldSchema,
   sourceQualifiedQueryReferenceSchema,
-  sourceQualifiedRecordTypeSchema,
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,
 } from "./definition-source-common";

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { jsonValueSchema, safeHttpsUrlSchema } from "../catalogue/common";
-import { sourceQualifiedRecordTypeSchema } from "../definition/definition-source-common";
 import {
   applicationRootIdSchema,
   builderKeySchema,
@@ -12,6 +11,7 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
+  sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
 
 /** The exact installed record identity a viewer-safe link read selects. */

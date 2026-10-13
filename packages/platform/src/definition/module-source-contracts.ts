@@ -7,6 +7,7 @@ import {
   organizationAccountIdSchema,
   permissionIdSchema,
   recordTypeIdSchema,
+  sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
 import {
   calculationMaximumNestingDepth,
@@ -23,7 +24,6 @@ import {
   sourceActionTaskSchema,
   sourceAliasSchema,
   sourceConditionSchema,
-  sourceQualifiedRecordTypeSchema,
   sourceQualifiedRelationshipSchema,
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,

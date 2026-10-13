@@ -10,6 +10,7 @@ import {
 } from "../catalogue/common";
 import type { JsonValue } from "../catalogue/common";
 import { parseExactDecimal } from "../records/exact-decimal";
+import { recordRichTextDocumentSchema } from "../records/module-field-values";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -239,8 +240,9 @@ const literalMatchesType = (type: string, value: JsonValue): boolean => {
     case "date_time":
       return isoDateTimeSchema.safeParse(value).success;
     case "text":
-    case "formatted_text":
       return typeof value === "string";
+    case "formatted_text":
+      return recordRichTextDocumentSchema.safeParse(value).success;
     case "choice":
     case "record_reference":
     case "organization_account_reference":

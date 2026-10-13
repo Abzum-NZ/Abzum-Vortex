@@ -82,6 +82,7 @@ import type {
   FlowEffectLedger,
   FlowEffectPrincipal,
 } from "./flow-continuation-store";
+import { recordRichTextDocumentSchema } from "../records/module-field-values";
 import { reportUnexpectedFailure } from "./definition-error";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
 
@@ -670,8 +671,9 @@ const readFieldValueMatchesType = (
     case "date_time":
       return typeof candidate === "string" && Number.isFinite(Date.parse(candidate));
     case "text":
-    case "formatted_text":
       return typeof candidate === "string";
+    case "formatted_text":
+      return recordRichTextDocumentSchema.safeParse(candidate).success;
     case "choice":
       return typeof candidate === "string" && candidate.length > 0;
   }
@@ -848,7 +850,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         failedTaskId !== undefined && run.unavailable.some((notice) => notice.taskId === failedTaskId);
       if (failedTaskId === undefined || !run.refusalLoggedTaskIds.includes(failedTaskId))
         console.error(
-          `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}`,
+          `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}${step.result.failure.reason === undefined ? "" : `: ${step.result.failure.reason}`}`,
         );
       return {
         kind: "finished",

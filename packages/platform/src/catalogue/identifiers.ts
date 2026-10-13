@@ -75,6 +75,12 @@ export const builderKeySchema = z
   .max(40)
   .regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/, "Use lowercase words separated by underscores");
 
+export const sourceQualifiedRecordTypeSchema = z
+  .string()
+  .min(3)
+  .max(200)
+  .regex(/^[a-z][a-z0-9_.]*:[a-z][a-z0-9_]*$/);
+
 export const namespacedKeySchema = z
   .string()
   .min(3)
