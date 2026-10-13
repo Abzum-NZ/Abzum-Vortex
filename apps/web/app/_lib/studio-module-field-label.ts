@@ -2,7 +2,7 @@ import "server-only";
 
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
-  canonicalJson, databaseRevision, databaseTimestamp, fingerprintSchema, labelSchema,
+  canonicalJson, databaseRevision, describeFailure, databaseTimestamp, fingerprintSchema, labelSchema,
   moduleRootIdSchema, moduleSourceDocumentSchema, organizationAccessDeclarationSchema,
   organizationIdSchema, organizationPermissionEligibilitySchema, platformIdSchema, revisionSchema, sameId,
   sessionContextSchema, storedModuleDefinitionDraftSchema, timestampSchema,
@@ -30,8 +30,8 @@ export type StudioModuleFieldDescriptor = Readonly<{
 export type StudioModuleFieldLabelResult =
   | Readonly<{ kind: "available"; draft: StoredModuleDefinitionDraft; fields: readonly StudioModuleFieldDescriptor[] }>
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
-  | Readonly<{ kind: "conflict" }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "conflict"; reason?: "draft_changed" | "draft_missing" | "key_exists" }>
+  | Readonly<{ kind: "refused"; reason?: "permission_missing" | "source_invalid" | "context_changed" | "session_ended" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 // Aliases only select a member of the protected authored source; they convey no identity or grant.
@@ -54,17 +54,32 @@ function invalidResult(): never {
   throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
 }
 
+/** A refusal decided before or after the database transaction: one log line with a stable code. */
+const declined = (code: string, reason: "permission_missing" | "source_invalid" | "context_changed" | "session_ended"): StudioModuleFieldLabelResult => {
+  console.error(`[studio] field label refused STUDIO_FIELD_LABEL_${code}`);
+  return { kind: "refused", reason };
+};
+
 const safeFailure = (error: unknown): StudioModuleFieldLabelResult => {
+  const refuse = (reason: "permission_missing" | "source_invalid" | "context_changed"): StudioModuleFieldLabelResult => {
+    console.error(`[studio] field label refused STUDIO_FIELD_LABEL_REFUSED_${reason.toUpperCase()}: ${describeFailure(error)}`);
+    return { kind: "refused", reason };
+  };
+  const conflict = (reason: "draft_changed" | "draft_missing" | "key_exists"): StudioModuleFieldLabelResult => {
+    console.error(`[studio] field label conflict STUDIO_FIELD_LABEL_CONFLICT_${reason.toUpperCase()}: ${describeFailure(error)}`);
+    return { kind: "conflict", reason };
+  };
   if (error instanceof LocatedValidationFailure) return { kind: "validation_failed", validation: error.validation };
-  if (error instanceof BuilderAuthorityError) return { kind: "refused" };
+  if (error instanceof BuilderAuthorityError) return refuse("permission_missing");
   if (error instanceof DefinitionError) {
-    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || error.code === "DEFINITION_ROOT_MISSING" ||
-        error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT") return { kind: "conflict" };
-    if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE" ||
-        error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_STORAGE_VALIDATION_FAILED")
-      return { kind: "refused" };
+    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return conflict("draft_changed");
+    if (error.code === "DEFINITION_ROOT_MISSING") return conflict("draft_missing");
+    if (error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT") return conflict("key_exists");
+    if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE") return refuse("source_invalid");
+    if (error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_STORAGE_VALIDATION_FAILED")
+      return refuse("context_changed");
   }
-  console.error("[studio] field label failed unexpectedly", error);
+  console.error(`[studio] field label failed unexpectedly STUDIO_FIELD_LABEL_FAILED: ${describeFailure(error)}`);
   return { kind: "temporarily_unavailable" };
 };
 
@@ -183,11 +198,11 @@ export const loadStudioModuleFieldLabel = async (
 ): Promise<StudioModuleFieldLabelResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = moduleRootIdSchema.safeParse(candidateRootId);
-  if (!organization.success || !root.success) return { kind: "refused" };
+  if (!organization.success || !root.success) return declined("REQUEST_INVALID", "source_invalid");
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+      ? { kind: "temporarily_unavailable" } : declined("SESSION_NOT_ACTIVE", "session_ended");
     let failure: StudioModuleFieldLabelResult | undefined;
     const result = await humanOrganizationRequests().run(resolved.session, { organizationId: organization.data },
       async (transaction, scope, issuedAt) => {
@@ -206,8 +221,8 @@ export const loadStudioModuleFieldLabel = async (
         } catch (error) { failure = safeFailure(error); throw error; }
       });
     return result.kind === "available" ? result.value : failure ?? (result.kind === "unavailable"
-      ? { kind: "refused" } : { kind: "temporarily_unavailable" });
-  } catch (error) { console.error("[studio] field label failed unexpectedly", error); return { kind: "temporarily_unavailable" }; }
+      ? declined("REFUSED_BY_REQUEST_SERVICE", "context_changed") : { kind: "temporarily_unavailable" });
+  } catch (error) { console.error(`[studio] field label failed unexpectedly STUDIO_FIELD_LABEL_FAILED: ${describeFailure(error)}`); return { kind: "temporarily_unavailable" }; }
 };
 
 /** Patch exactly one semantic field on server-read source in the initiating HUMAN transaction. */
@@ -216,11 +231,11 @@ export const saveStudioModuleFieldLabel = async (
 ): Promise<StudioModuleFieldLabelResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const request = requestSchema.safeParse(candidate);
-  if (!organization.success || !request.success) return { kind: "refused" };
+  if (!organization.success || !request.success) return declined("REQUEST_INVALID", "source_invalid");
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+      ? { kind: "temporarily_unavailable" } : declined("SESSION_NOT_ACTIVE", "session_ended");
     let failure: StudioModuleFieldLabelResult | undefined;
     const result = await humanOrganizationRequests().runChange(resolved.session, { organizationId: organization.data },
       async (transaction, scope, issuedAt) => {
@@ -277,6 +292,6 @@ export const saveStudioModuleFieldLabel = async (
         }
       });
     return result.kind === "available" ? result.value : failure ?? (result.kind === "unavailable"
-      ? { kind: "refused" } : { kind: "temporarily_unavailable" });
-  } catch (error) { console.error("[studio] field label failed unexpectedly", error); return { kind: "temporarily_unavailable" }; }
+      ? declined("REFUSED_BY_REQUEST_SERVICE", "context_changed") : { kind: "temporarily_unavailable" });
+  } catch (error) { console.error(`[studio] field label failed unexpectedly STUDIO_FIELD_LABEL_FAILED: ${describeFailure(error)}`); return { kind: "temporarily_unavailable" }; }
 };

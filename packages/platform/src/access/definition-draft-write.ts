@@ -47,7 +47,8 @@ import { DefinitionError } from "../definition/definition-index";
 export type HumanApplicationDraftRefusalReason =
   | "permission_missing"
   | "source_invalid"
-  | "context_changed";
+  | "context_changed"
+  | "session_ended";
 
 /** Why a draft write conflicted, in terms the person can act on. */
 export type HumanApplicationDraftConflictReason = "draft_changed" | "key_exists" | "draft_missing";

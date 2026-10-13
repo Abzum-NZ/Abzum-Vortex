@@ -15,10 +15,12 @@ const writeApplicationDraft = async (
 ): Promise<HumanApplicationDraftWriteResult> => {
   try {
     const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active")
+    if (resolved.kind !== "active") {
+      console.error(`[studio] application draft ${mode} refused STUDIO_DRAFT_${mode.toUpperCase()}_SESSION_NOT_ACTIVE: ${resolved.kind}`);
       return resolved.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" }
-        : { kind: "refused" };
+        : { kind: "refused", reason: "session_ended" };
+    }
     const writer = createHumanApplicationDraftWriter({ requests: humanOrganizationRequests() });
     return mode === "create"
       ? await writer.createRoot(resolved.session, organizationId, candidate)
