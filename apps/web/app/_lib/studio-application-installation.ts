@@ -15,13 +15,12 @@ import {
   type ApplicationInstallationActivationResult,
   type HumanInstallationDefinitionAccess,
 } from "@web/platform-server";
-import type {
-  connectionInstanceIdSchema} from "@vortex/platform/schema";
 import {
   activityIdSchema,
   applicationRootIdSchema,
   canonicalJson,
   databaseTimestamp,
+  describeFailure,
   moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
   organizationLifecycleLimitsSchema,
@@ -53,7 +52,11 @@ import {
   type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
-import { listEligibleArchiveConnectionsForApplication } from "@web/platform-server";
+import {
+  InstallationArchiveConnectionError,
+  readInstallationArchiveConnectionOptions,
+  readSelectedInstallationArchiveConnection,
+} from "@web/platform-server";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   builderRecentAuthentication,
@@ -158,7 +161,9 @@ function problem(kind: Problem["kind"], unavailableReason?: Problem["unavailable
 }
 
 const safeFailure = (error: unknown): Problem => {
+  console.error(`[studio] application installation failed: ${describeFailure(error)}`);
   if (error instanceof InstallationProblem) return error.problem;
+  if (error instanceof InstallationArchiveConnectionError) return { kind: error.reason };
   if (error instanceof DefinitionError) {
     switch (error.code) {
       case "APPLICATION_INSTALLATION_STALE":
@@ -2127,24 +2132,13 @@ export const loadStudioApplicationArchiveOptions = async (
           transaction, _scope, current.session, _issuedAt, query.data.selector,
           query.data.expected.history, currentRelease, initial.context,
         );
-        const page = await listEligibleArchiveConnectionsForApplication(
+        const page = await readInstallationArchiveConnectionOptions(
           transaction,
           query.data.selector.organizationId,
           query.data.selector.rootId,
           initial.setup.organizationLimits.allowedArchiveDestinations,
-          {
-            pageSize: 100,
-            ...(query.data.afterConnectionInstanceId === undefined
-              ? {}
-              : { afterConnectionInstanceId: query.data.afterConnectionInstanceId }),
-          },
+          query.data.afterConnectionInstanceId,
         );
-        if (page.outcome !== "available") {
-          if (page.reasonCode === "not_authorized" || page.reasonCode === "invalid_parameters")
-            problem("refused");
-          if (page.reasonCode === "stale_page") problem("conflict");
-          problem("temporarily_unavailable");
-        }
         await completeFirstInstallConnectionRead(
           transaction,
           _scope,
@@ -2207,7 +2201,7 @@ const writeInitialArchivePolicy = async (
   expectedBindingRevision: number,
   expectedSettingsRevision: number,
   actionInput: Extract<z.infer<typeof studioApplicationFirstInstallPolicyInputSchema>, { action: "archive_workflow" }>,
-  option: Awaited<ReturnType<typeof readSelectedEligibleArchiveConnection>>,
+  option: Awaited<ReturnType<typeof readSelectedInstallationArchiveConnection>>,
 ): Promise<RecordTypeLifecyclePolicy> => {
   if (target.applicationRootId === null ||
     !workflowIsInExactRelease(candidate.releaseSet, candidate.selector.rootId, actionInput.archiveWorkflowId))
@@ -2510,48 +2504,6 @@ const initialPolicyMatches = (
   return stored.data;
 };
 
-const readSelectedEligibleArchiveConnection = async (
-  transaction: RequestDatabaseTransaction,
-  selector: StudioApplicationFirstInstallSelector,
-  limits: OrganizationLifecycleLimits,
-  candidate: Extract<z.infer<typeof studioApplicationFirstInstallPolicyInputSchema>, { action: "archive_workflow" }>,
-) => {
-  if (candidate === undefined) problem("refused");
-  let after: ReturnType<typeof connectionInstanceIdSchema.parse> | undefined;
-  const seen = new Set<string>();
-  let scannedPageCount = 0;
-  while (scannedPageCount < 100) {
-    const page = await listEligibleArchiveConnectionsForApplication(
-      transaction,
-      selector.organizationId,
-      selector.rootId,
-      limits.allowedArchiveDestinations,
-      { pageSize: 100, ...(after === undefined ? {} : { afterConnectionInstanceId: after }) },
-    );
-    if (page.outcome !== "available") {
-      if (page.reasonCode === "not_authorized" || page.reasonCode === "invalid_parameters") problem("refused");
-      if (page.reasonCode === "stale_page") problem("conflict");
-      problem("temporarily_unavailable");
-    }
-    const option = page.options.find((entry) =>
-      sameUuid(entry.connectionInstanceId, candidate.archiveConnectionInstanceId));
-    if (option !== undefined) {
-      if (option.expectedRevision !== candidate.expectedConnectionRevision ||
-        option.destinationKey !== candidate.archiveDestination)
-        problem("conflict");
-      return option;
-    }
-    if (page.nextAfterConnectionInstanceId === undefined) problem("refused");
-    const next = page.nextAfterConnectionInstanceId;
-    const nextKey = next.toLowerCase();
-    if (seen.has(nextKey) || (after !== undefined && nextKey <= after.toLowerCase())) problem("conflict");
-    seen.add(nextKey);
-    after = next;
-    scannedPageCount += 1;
-  }
-  problem("temporarily_unavailable");
-};
-
 const firstInstallCommandMatches = (
   organizationId: string,
   selector: StudioApplicationFirstInstallSelector,
@@ -2665,8 +2617,16 @@ export const saveStudioApplicationFirstInstallPolicy = async (
             transaction, scope, candidate.session, issuedAt, command.data.selector,
             command.data.expected.history, currentRelease, initial.context,
           );
-          const option = await readSelectedEligibleArchiveConnection(
-            transaction, command.data.selector, initial.setup.organizationLimits, archivePolicy,
+          const option = await readSelectedInstallationArchiveConnection(
+            transaction,
+            command.data.selector.organizationId,
+            command.data.selector.rootId,
+            initial.setup.organizationLimits.allowedArchiveDestinations,
+            {
+              connectionInstanceId: archivePolicy.archiveConnectionInstanceId,
+              destinationKey: archivePolicy.archiveDestination,
+              expectedRevision: archivePolicy.expectedConnectionRevision,
+            },
           );
           await completeFirstInstallConnectionRead(
             transaction,
