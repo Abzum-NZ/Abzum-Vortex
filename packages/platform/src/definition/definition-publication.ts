@@ -105,6 +105,11 @@ import {
   type SavedConditionLike,
 } from "./saved-condition-revisions";
 import { DefinitionError } from "./definition-error";
+import {
+  applicationDraftCompilationKey,
+  readCachedApplicationDraftCompilation,
+  retainApplicationDraftCompilation,
+} from "./application-draft-compilation-cache";
 
 type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
 type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
@@ -3085,13 +3090,35 @@ export const createDefinitionPublicationService = (
       const currentVersion =
         candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
       const resolution = buildResolution(candidate, dependencies, currentVersion);
+      // The compile is a pure function of exactly what this key names, so the same draft revision
+      // under the same resolved dependencies is compiled once. Authorisation, the candidate
+      // validation and the dependency resolution above run on every call.
+      const cacheKey = applicationDraftCompilationKey([
+        candidate.draft.organizationId.toLowerCase(),
+        candidate.draft.rootId.toLowerCase(),
+        candidate.draft.draftRevision,
+        candidate.draft.sourceFingerprint,
+        candidate.draft.publishedRevision ?? null,
+        currentVersion,
+        resolution.fingerprint,
+        dependencies.composition?.fingerprint ?? null,
+        dependencies.modules.map((release) => [
+          release.rootId,
+          release.releaseRevision,
+          release.contentFingerprint,
+          release.resolutionFingerprint,
+        ]),
+        dependencies.connections.map((release) => [release.rootId, release.contentFingerprint]),
+      ]);
+      const cached = readCachedApplicationDraftCompilation(cacheKey);
+      if (cached !== undefined) return cached;
       const compilation = compileCandidate(candidate, dependencies, resolution, false, catalogue.permissions);
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
       )
         return refuse("DEFINITION_COMPILATION_REFUSED");
-      return {
+      return retainApplicationDraftCompilation(cacheKey, {
         compilation,
         conditionContexts: projectDraftConditionContexts(
           candidate.draft.source,
@@ -3100,7 +3127,7 @@ export const createDefinitionPublicationService = (
           resolution,
         ),
         currentReleaseRevision: candidate.draft.publishedRevision ?? null,
-      };
+      });
     });
   },
 
