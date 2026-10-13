@@ -15,6 +15,7 @@ import {
   FIELD_INPUT_CONTROL_RELEASES,
   PLATFORM_BLOCK_RELEASES,
 } from "@vortex/platform/server";
+import type { InstalledRuntimeContext } from "@web/platform-server";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import { ApplicationPageView } from "./_components/application-page-view";
@@ -116,6 +117,22 @@ const platformBlockReleasesFor = (...compositions: readonly unknown[]) => {
   return PLATFORM_BLOCK_RELEASES.filter((release) =>
     referencedIdentities.has(`${release.blockId}:${release.releaseVersion}`),
   );
+};
+
+/** Whether the addressed page's own shell in this installed release shows the application switcher. */
+const switcherShownFor = (
+  context: InstalledRuntimeContext | undefined,
+  pageKey: string,
+): boolean => {
+  if (context === undefined) return false;
+  const content = context.releaseSet.application.content;
+  const composition = content.pages.find((candidate) => candidate.key === pageKey)?.composition;
+  const shellId = composition !== undefined && "shellId" in composition ? composition.shellId : undefined;
+  if (shellId === undefined) return false;
+  const shell = content.shells.find(
+    (candidate) => String(candidate.shellId).toLowerCase() === String(shellId).toLowerCase(),
+  );
+  return shell?.presentation.topBar.applicationSwitcher === true;
 };
 
 type ApplicationAddressPageProps = Readonly<{
@@ -394,7 +411,14 @@ export default async function ApplicationAddressPage({
   // The addressed page: the permission-filtered page, the viewer's menu, the theme and the
   // persisted data are all composed on the server from this person's own request.
   const parameters = await searchParams;
-  const page = await loadApplicationPage(
+  // When the addressed page's shell shows the application switcher, its permitted-applications
+  // read starts now, beside the page load, instead of after it. The read is cached for this
+  // request, so the switcher below awaits this same read.
+  const switcherPrefetch = switcherShownFor(resolved.installedContext, resolved.pageKey)
+    ? loadPermittedApplicationsAtAddress(identity.session, tenantShortName, organizationShortName)
+    : undefined;
+  void switcherPrefetch?.catch(() => undefined);
+  const loadedPage = await loadApplicationPage(
     identity.session,
     {
       tenantShortName,
@@ -402,9 +426,19 @@ export default async function ApplicationAddressPage({
       read: resolved.read,
       application: resolved.application,
       pageKey: resolved.pageKey,
+      ...(resolved.installedContext === undefined
+        ? {}
+        : { installedContext: resolved.installedContext }),
     },
     parameters,
-  );
+  ).catch(async (error: unknown) => {
+    await switcherPrefetch?.catch(() => undefined);
+    throw error;
+  });
+  // A page that does not render joins the switcher read before returning, so it never outlives
+  // this request's render.
+  if (loadedPage.kind !== "available") await switcherPrefetch?.catch(() => undefined);
+  const page = loadedPage;
   if (page.kind === "temporarily_unavailable")
     return (
       <AuthShell

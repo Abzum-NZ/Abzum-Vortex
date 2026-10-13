@@ -1,11 +1,13 @@
 import "server-only";
 
+import { cache } from "react";
 import {
   isReservedTenantSegment,
   readAddressedApplicationFromInstalledBundleAtAddress,
   resolvePermittedApplicationAddress,
-  type AddressedApplicationRead,
+  type AddressedApplicationBundleRead,
   type ApplicationExperience,
+  type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "@web/platform-server";
@@ -34,68 +36,84 @@ type ApplicationAddressResult =
       read: Extract<PermittedApplicationsRead, { kind: "available" }>;
       application: PermittedApplication;
       pageKey: string;
+      /**
+       * The exact installed bundle context this request's own HUMAN read authorized the
+       * application against. The page loader reuses it instead of reading the bundle again.
+       */
+      installedContext?: InstalledRuntimeContext;
     }>;
 
-const loadAddressedApplicationAtAddress = async (
-  session: IdentitySession,
-  tenantShortName: string,
-  organizationShortName: string,
-  applicationKey: string,
-): Promise<AddressedApplicationRead> => {
-  let authorityId;
-  try {
-    authorityId = getIdentityAuthorityConfiguration().authorityId;
-  } catch {
-    return { read: { kind: "temporarily_unavailable" }, experiences: [] };
-  }
-  const addressed = await readAddressedApplicationFromInstalledBundleAtAddress(
-    session,
-    tenantShortName,
-    organizationShortName,
-    authorityId,
-    applicationKey,
-  );
-  return { read: addressed.read, experiences: addressed.experiences };
-};
+// One addressed read per server render: the layout and the page of one request share it.
+const loadAddressedApplicationAtAddress = cache(
+  async (
+    session: IdentitySession,
+    tenantShortName: string,
+    organizationShortName: string,
+    applicationKey: string,
+  ): Promise<AddressedApplicationBundleRead> => {
+    let authorityId;
+    try {
+      authorityId = getIdentityAuthorityConfiguration().authorityId;
+    } catch {
+      return { read: { kind: "temporarily_unavailable" }, experiences: [] };
+    }
+    return readAddressedApplicationFromInstalledBundleAtAddress(
+      session,
+      tenantShortName,
+      organizationShortName,
+      authorityId,
+      applicationKey,
+    );
+  },
+);
 
-export const resolveApplicationAddress = async (
-  session: IdentitySession,
-  tenantShortName: string,
-  organizationShortName: string,
-  applicationKey?: string,
-  pageKey?: string,
-): Promise<ApplicationAddressResult> => {
-  if (isReservedTenantSegment(tenantShortName)) return { kind: "unavailable" };
+export const resolveApplicationAddress = cache(
+  async (
+    session: IdentitySession,
+    tenantShortName: string,
+    organizationShortName: string,
+    applicationKey?: string,
+    pageKey?: string,
+  ): Promise<ApplicationAddressResult> => {
+    if (isReservedTenantSegment(tenantShortName)) return { kind: "unavailable" };
 
-  // An addressed page request resolves only the named application. The launcher
-  // keeps the full permitted list so it can still show every application.
-  const addressed: AddressedApplicationRead = applicationKey === undefined
-    ? {
-        read: await loadPermittedApplicationsAtAddress(
-          session, tenantShortName, organizationShortName,
-        ),
-        experiences: [],
-      }
-    : await loadAddressedApplicationAtAddress(
-        session, tenantShortName, organizationShortName, applicationKey,
-      );
-  const read = addressed.read;
-  if (read.kind !== "available") return read;
+    // An addressed page request resolves only the named application. The launcher
+    // keeps the full permitted list so it can still show every application.
+    const addressed: AddressedApplicationBundleRead =
+      applicationKey === undefined
+        ? {
+            read: await loadPermittedApplicationsAtAddress(
+              session,
+              tenantShortName,
+              organizationShortName,
+            ),
+            experiences: [],
+          }
+        : await loadAddressedApplicationAtAddress(
+            session,
+            tenantShortName,
+            organizationShortName,
+            applicationKey,
+          );
+    const read = addressed.read;
+    if (read.kind !== "available") return read;
 
-  const resolved = resolvePermittedApplicationAddress(read, applicationKey, pageKey);
-  if (resolved.kind !== "available") {
-    // Experiences are carried only for an application the viewer may open, so an unknown or
-    // refused application falls back to the neutral page and discloses nothing about itself.
-    const experience = addressed.experiences.find((entry) => entry.state === "not_found");
-    return experience === undefined
-      ? { kind: "unavailable" }
-      : { kind: "unavailable", experience };
-  }
-  if (resolved.application === null) return { kind: "organization_launcher", read };
-  return {
-    kind: "application_page",
-    read,
-    application: resolved.application,
-    pageKey: resolved.pageKey,
-  };
-};
+    const resolved = resolvePermittedApplicationAddress(read, applicationKey, pageKey);
+    if (resolved.kind !== "available") {
+      // Experiences are carried only for an application the viewer may open, so an unknown or
+      // refused application falls back to the neutral page and discloses nothing about itself.
+      const experience = addressed.experiences.find((entry) => entry.state === "not_found");
+      return experience === undefined
+        ? { kind: "unavailable" }
+        : { kind: "unavailable", experience };
+    }
+    if (resolved.application === null) return { kind: "organization_launcher", read };
+    return {
+      kind: "application_page",
+      read,
+      application: resolved.application,
+      pageKey: resolved.pageKey,
+      ...(addressed.context === undefined ? {} : { installedContext: addressed.context }),
+    };
+  },
+);

@@ -215,6 +215,36 @@ export type AddressedApplicationBundleRead = Readonly<{
   identity?: AddressedActiveApplicationIdentity;
 }>;
 
+/**
+ * Concurrent permitted-application reads per launcher request. With the organisation default read
+ * beside them this stays below the default runtime pool of five connections.
+ */
+const permittedReadConcurrency = 3;
+
+/** Maps in input order with at most `limit` reads in flight; the first failure rejects. */
+const mapWithConcurrency = async <Input, Output>(
+  inputs: readonly Input[],
+  limit: number,
+  read: (input: Input) => Promise<Output>,
+): Promise<readonly Output[]> => {
+  const results = new Array<Output>(inputs.length);
+  let next = 0;
+  let failed = false;
+  const worker = async (): Promise<void> => {
+    while (!failed && next < inputs.length) {
+      const index = next++;
+      try {
+        results[index] = await read(inputs[index] as Input);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, inputs.length) }, worker));
+  return results;
+};
+
 const describeApplicationAddressFailure = (error: unknown): string => {
   const parts: string[] = [];
   let current: unknown = error;
@@ -830,21 +860,22 @@ const readPermittedApplications = async (
       });
     }
 
-    const defaultRead = await requests.run(
+    // The default and each candidate are independent HUMAN requests. They run together, bounded
+    // below the runtime pool size, and their outcomes are consulted in the original order.
+    const defaultReadRequest = requests.run(
       parsedSession.data,
       { organizationId: read.organizationId },
       (transaction) => readCurrentOrganizationDefaultApplicationAfterAuthorization(transaction),
     );
+    void defaultReadRequest.catch(() => undefined);
+    const candidateReads = mapWithConcurrency(read.applications, permittedReadConcurrency,
+      (candidate) => permittedApplication(requests, parsedSession.data, read.organizationId, candidate));
+    void candidateReads.catch(() => undefined);
+    const defaultRead = await defaultReadRequest;
     if (defaultRead.kind !== "available") return defaultRead;
 
     const applications: PermittedApplication[] = [];
-    for (const candidate of read.applications) {
-      const permitted = await permittedApplication(
-        requests,
-        parsedSession.data,
-        read.organizationId,
-        candidate,
-      );
+    for (const permitted of await candidateReads) {
       if (isTemporarilyUnavailableApplicationRead(permitted))
         return permittedApplicationsReadSchema.parse(permitted);
       if (permitted !== null) applications.push(permitted.application);

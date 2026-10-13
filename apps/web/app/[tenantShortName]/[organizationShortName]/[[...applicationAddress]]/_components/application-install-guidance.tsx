@@ -4,7 +4,9 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Button } from "@vortex/ui/components/button";
 
-type Props = Readonly<{ applicationPath: string; manifestUrl: string; snapshot: string; validUntil: string }>;
+type Props = Readonly<{ applicationPath: string; manifestUrl: string; snapshot: string; validUntil: string;
+  /** The manifest the server render already derived for this snapshot, used for the first check. */
+  initialManifest?: string }>;
 type State = "loading" | "available" | "unavailable" | "temporarily_unavailable";
 const exactKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
   Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
@@ -53,18 +55,29 @@ export function ApplicationInstallGuidance(props: Props) {
     }, 15_000);
     void (async () => {
       try {
-        const response = await fetch(props.manifestUrl, { credentials: "same-origin", cache: "no-store",
-          signal: controller.signal, redirect: "error" });
-        if (!active()) return;
-        if (!response.ok) { setState(response.status === 503 ? "temporarily_unavailable" : "unavailable"); return; }
-        const validUntil = Date.parse(response.headers.get("X-Vortex-Install-Valid-Until") ?? "");
-        const text = await response.text();
-        if (!active()) return;
+        let validUntil: number;
+        let text: string;
+        let headersMatch = true;
+        if (props.initialManifest !== undefined && reload === 0 && Date.parse(props.validUntil) > Date.now()) {
+          // The first check of a server render uses the manifest that render already derived under
+          // the same access decisions, while its validity lasts; every re-check (visibility,
+          // opening the guide, trying again) asks the server again.
+          validUntil = Date.parse(props.validUntil);
+          text = props.initialManifest;
+        } else {
+          const response = await fetch(props.manifestUrl, { credentials: "same-origin", cache: "no-store",
+            signal: controller.signal, redirect: "error" });
+          if (!active()) return;
+          if (!response.ok) { setState(response.status === 503 ? "temporarily_unavailable" : "unavailable"); return; }
+          validUntil = Date.parse(response.headers.get("X-Vortex-Install-Valid-Until") ?? "");
+          headersMatch = response.headers.get("X-Vortex-Install-Snapshot") === props.snapshot &&
+            response.headers.get("Content-Type")?.startsWith("application/manifest+json") === true;
+          text = await response.text();
+          if (!active()) return;
+        }
         const remaining = validUntil - Date.now();
         if (!Number.isFinite(validUntil) || remaining <= 0 || remaining > 15_000 || text.length > 200_000 ||
-            response.headers.get("X-Vortex-Install-Snapshot") !== props.snapshot ||
-            !response.headers.get("Content-Type")?.startsWith("application/manifest+json") ||
-            !validManifest(JSON.parse(text), props.applicationPath)) { setState("unavailable"); return; }
+            !headersMatch || !validManifest(JSON.parse(text), props.applicationPath)) { setState("unavailable"); return; }
         if (!active() || Date.now() >= validUntil) { setState("unavailable"); return; }
         // A document has one manifest owner; never mutate a different component's link.
         if (document.head.querySelector('link[rel="manifest"]') !== null) { setState("unavailable"); return; }
@@ -93,7 +106,7 @@ export function ApplicationInstallGuidance(props: Props) {
       removeOwnLink();
     };
   }, [pathname, pathMatches, props.applicationPath, props.manifestUrl, props.snapshot, props.validUntil,
-    reload, removeOwnLink]);
+    props.initialManifest, reload, removeOwnLink]);
 
   return <aside aria-label="Application installation" className="flex flex-col items-start gap-2 border-b bg-muted/40 px-4 py-1.5 text-sm">
     <Button type="button" variant="outline" size="sm" aria-expanded={open} aria-controls={id} onClick={() => {
