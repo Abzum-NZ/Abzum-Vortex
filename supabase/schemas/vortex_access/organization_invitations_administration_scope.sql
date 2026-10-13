@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.organization_invitations_administration_scope() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint)
+create or replace function vortex_access.organization_invitations_administration_scope() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -11,11 +11,7 @@ begin
       'operationKey', 'platform.organization.invitations.read',
       'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', pg_catalog.jsonb_build_object(
-        'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '9300e501-6d56-41b1-b203-3361dbace9bc'
-      ),
+      'requiredPermission', vortex_access.required_platform_permission('platform.organization.invitations.read'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )
