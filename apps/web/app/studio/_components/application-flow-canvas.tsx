@@ -33,6 +33,12 @@ const withoutBranchTasks = (key: string, value: unknown): unknown =>
     })
     : value;
 
+// Errors and Finally are distinct transitions out of the main tasks; each names its own trigger.
+const groupTransitions: Readonly<Record<string, Readonly<{ caption: string; edge: string }>>> = {
+  Errors: { caption: "Runs when a task fails", edge: "on failure" },
+  Finally: { caption: "Runs after the flow ends, however it ended", edge: "always" },
+};
+
 const pathKey = (path: readonly (string | number)[]) => JSON.stringify(path);
 
 function CanvasNode({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
@@ -133,17 +139,20 @@ function buildGraph(flow: SourceFlow, lists: readonly StudioFlowTaskListOutline[
         });
       });
     } else {
+      const transition = groupTransitions[list.label];
+      if (transition === undefined) console.error("Flow canvas has no transition for a task group", { group: list.label });
       const id = `group:${list.label}`;
       headerIds.push(id);
       nodes.push({
         id, type: "canvas", draggable: false, connectable: false, position: { x: left, y: 0 },
-        data: { title: list.label, caption: "Runs after the main tasks", kind: "group" },
+        data: { title: list.label, caption: transition?.caption ?? list.label, kind: "group" },
       });
     }
     if (hasHeader) top = nodeHeight + rowGap;
     const layout = layoutList(flow, list, left, top, nodes, edges);
     for (const header of headerIds) for (const first of layout.firstIds)
-      edges.push({ id: `${header}>${first}`, source: header, target: first });
+      edges.push({ id: `${header}>${first}`, source: header, target: first,
+        ...(index === 0 ? {} : { label: groupTransitions[list.label]?.edge }) });
     left += Math.max(layout.width, headerIds.length * (nodeWidth + columnGap) - columnGap) + columnGap * 2;
   });
   return { nodes, edges };
