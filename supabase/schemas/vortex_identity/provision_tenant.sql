@@ -238,11 +238,9 @@ begin
   -- #33 queues this evidence trigger. Validate it while the privileged boundary
   -- is still active so a runtime-role commit cannot bypass or fail its reads.
   set constraints
-    vortex_access.permission_continuities_evidence,
     vortex_access.organization_role_revisions_evidence
     immediate;
   set constraints
-    vortex_access.permission_continuities_evidence,
     vortex_access.organization_role_revisions_evidence
     deferred;
 

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -218,10 +218,7 @@ begin
         permission_candidate
       )
       and not first_observation then
-      if not vortex_access.application_access_current_transition_is_complete(
-          p_organization_id, p_application_root_id, current_registration.revision,
-          current_registration.state
-        ) or not vortex_access.application_access_current_state_matches_candidate(
+      if not vortex_access.application_access_current_state_matches_candidate(
           p_organization_id, p_application_root_id, current_registration.revision,
           p_prepared_templates
       ) then
@@ -241,15 +238,6 @@ begin
     if current_registration.revision = 9007199254740991 then
       raise exception using errcode = '22003',
         message = 'Application permission registration revision is exhausted';
-    end if;
-
-    if not first_observation
-      and not vortex_access.application_access_current_transition_is_complete(
-        p_organization_id, p_application_root_id, current_registration.revision,
-        current_registration.state
-      ) then
-      raise exception using errcode = '55000',
-        message = 'Coordinated application access state is incomplete';
     end if;
   end if;
 
