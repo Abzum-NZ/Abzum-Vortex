@@ -145,6 +145,7 @@ const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarge
       ordinal: value.ordinal,
       recordTypeId: recordType.data.recordTypeId,
       recordType: recordType.data,
+      beforeSaveRules: value.beforeSaveRules,
     });
   }
   return targets.every(
@@ -244,8 +245,11 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
 const pendingCheckIsAuthorized = (
   check: RecordFieldValuePendingCheck,
   singleRequiredPermissionId: string | undefined,
+  actorOrganizationAccountId: string,
 ): boolean =>
   check.kind === "record_reference" ||
+  (check.kind === "person_reference" &&
+    check.organizationAccountId.toLowerCase() === actorOrganizationAccountId.toLowerCase()) ||
   (check.kind === "choice_permission" &&
     singleRequiredPermissionId !== undefined &&
     check.permissionId.toLowerCase() === singleRequiredPermissionId.toLowerCase());
@@ -291,6 +295,7 @@ const creationFinalValues = (
   issuedAt: string,
   organizationCurrency: string | undefined,
   timeZone: string | undefined,
+  ruleExecutions: BeforeSaveRuleExecution[],
 ): Readonly<{ values: Record<number, Record<string, JsonValue | null>> } | { reason: string }> => {
   const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
   const values: Record<number, Record<string, JsonValue | null>> = {};
@@ -311,6 +316,10 @@ const creationFinalValues = (
       return {
         reason: `the created record ${creation.ordinal} is not a valid save command: ${describeIssues(command.error.issues.map((value) => ({ code: value.code, path: value.path.map(String) })))}`,
       };
+    const ruleSet = parseBeforeSaveRuleSet(target.beforeSaveRules, target.recordTypeId);
+    if (ruleSet === undefined)
+      return { reason: `the created record ${creation.ordinal} has unavailable before-save rules` };
+    const execution = beginBeforeSaveRuleExecution(ruleSet);
     const calculated = calculateAndFinalize({
       operation: command.data.operation,
       submittedValues: command.data.submittedValues,
@@ -318,6 +327,7 @@ const creationFinalValues = (
       issuedAt,
       organizationCurrency,
       timeZone,
+      rules: execution,
     });
     if (!calculated.success)
       return {
@@ -325,7 +335,12 @@ const creationFinalValues = (
       };
     if (
       calculated.pendingChecks.some(
-        (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+        (check) =>
+          !pendingCheckIsAuthorized(
+            check,
+            prepared.singleRequiredPermissionId,
+            prepared.actorOrganizationAccountId,
+          ),
       )
     )
       return {
@@ -333,7 +348,19 @@ const creationFinalValues = (
       };
     const created: Record<string, JsonValue | null> = { ...calculated.setValues };
     for (const fieldId of calculated.clearFieldIds) created[fieldId] = null;
+    if (
+      target.recordType.fields.some(
+        (field) =>
+          (field.type === "link" || field.type === "link_to_one_of_several") &&
+          JSON.stringify(created[field.fieldId] ?? null) !==
+            JSON.stringify(creation.values[field.fieldId] ?? null),
+      )
+    )
+      return {
+        reason: `the created record ${creation.ordinal}'s before-save rules changed a relationship after its targets were locked`,
+      };
     values[creation.ordinal] = created;
+    ruleExecutions.push(execution);
   }
   return { values };
 };
@@ -553,7 +580,9 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
     ): Promise<NamedActionServiceResult> {
       const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
       if (!command.success) {
-        console.error(`[named-action] refused NAMED_ACTION_COMMAND_INVALID: ${describeFailure(command.error)}`);
+        console.error(
+          `[named-action] refused NAMED_ACTION_COMMAND_INVALID: ${describeFailure(command.error)}`,
+        );
         return { kind: "unavailable" };
       }
       if (selection.applicationRootId === undefined) {
@@ -575,7 +604,12 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       for (let attempt = 0; attempt < 3; attempt += 1) {
         // A failed subject delete discards the whole command, receipt included.
         let deleteSettlement: Settled<unknown> | undefined;
-        const attempted: { rules?: BeforeSaveRuleExecution } = {};
+        const attempted: {
+          rules?: BeforeSaveRuleExecution;
+          executions: BeforeSaveRuleExecution[];
+        } = {
+          executions: [],
+        };
         const result = await requests.runChange(
           session,
           selection,
@@ -702,29 +736,53 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             )
               return restart;
 
-            // A save that writes subject fields runs the exact release's compiled
-            // before-save rules once. A totals-prepared closure is only reached
-            // when no rule is installed anywhere. Other records the action writes
-            // are not evaluated here: a relationship copy changes another record
-            // of the subject's own type, so a subject rule refuses it rather than
-            // skip it (creations already refuse under any installed rule).
-            if (totalPreparation.outcome !== "prepared") {
-              const ruleSet = parseBeforeSaveRuleSet(
-                prepared.beforeSaveRules,
-                prepared.recordType.recordTypeId,
+            const subjectRuleSet = parseBeforeSaveRuleSet(
+              prepared.beforeSaveRules,
+              prepared.recordType.recordTypeId,
+            );
+            if (subjectRuleSet === undefined)
+              return safeRefusal(
+                prepared.correlationId,
+                "operation_refused",
+                "the subject's before-save rules are unavailable",
               );
-              if (
-                ruleSet === undefined ||
-                (ruleSet.rules.length > 0 &&
-                  (composition.creations.length > 0 || composition.relationshipCopies.length > 0))
-              )
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  "the before-save rules cannot cover the relationship copies or creations this action writes",
+            // A copy writes another subject-type record. Until the copy target
+            // joins the locked evaluator inputs, refuse a copy that has rules.
+            if (subjectRuleSet.rules.length > 0 && composition.relationshipCopies.length > 0)
+              return safeRefusal(
+                prepared.correlationId,
+                "operation_refused",
+                "the relationship copy target has before-save rules",
+              );
+            let closureRules: Map<string, BeforeSaveRuleExecution> | undefined;
+            if (totalPreparation.outcome === "prepared") {
+              closureRules = new Map();
+              for (const record of totalPreparation.records) {
+                const ruleSet = parseBeforeSaveRuleSet(
+                  record.beforeSaveRules,
+                  record.recordType.recordTypeId,
                 );
-              if (Object.keys(composition.submittedValues).length > 0)
-                attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
+                if (ruleSet === undefined)
+                  return safeRefusal(
+                    prepared.correlationId,
+                    "operation_refused",
+                    `the before-save rules for ${record.recordKey} are unavailable`,
+                  );
+                // A create-only action must not acquire a subject write solely
+                // from a subject rule effect. Derived subject changes are checked
+                // below and refused until their rule evaluation can be ordered.
+                if (
+                  record.recordKey !== "root" ||
+                  Object.keys(composition.submittedValues).length > 0
+                ) {
+                  const execution = beginBeforeSaveRuleExecution(ruleSet);
+                  closureRules.set(record.recordKey, execution);
+                  attempted.executions.push(execution);
+                }
+              }
+            } else if (Object.keys(composition.submittedValues).length > 0) {
+              attempted.rules = beginBeforeSaveRuleExecution(subjectRuleSet);
+              attempted.executions.push(attempted.rules);
             }
 
             let finalValues: Record<string, unknown> = {};
@@ -773,6 +831,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       creations: composition.creations,
                       ...(settings?.currency ? { organizationCurrency: settings.currency } : {}),
                       clock,
+                      ...(closureRules === undefined ? {} : { rules: closureRules }),
                     })
                   : totalPreparation.outcome === "prepared"
                     ? { success: false as const, issues: [] }
@@ -802,7 +861,12 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 );
               if (
                 calculated.pendingChecks.some(
-                  (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+                  (check) =>
+                    !pendingCheckIsAuthorized(
+                      check,
+                      prepared.singleRequiredPermissionId,
+                      prepared.actorOrganizationAccountId,
+                    ),
                 )
               )
                 return safeRefusal(
@@ -815,15 +879,20 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 Object.values(calculated.creationPendingChecks).some((checks) =>
                   checks.some(
                     (check) =>
-                      !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+                      !pendingCheckIsAuthorized(
+                        check,
+                        prepared.singleRequiredPermissionId,
+                        prepared.actorOrganizationAccountId,
+                      ),
                   ),
                 )
-              )
+              ) {
                 return safeRefusal(
                   prepared.correlationId,
                   "operation_refused",
                   "a pending check on a created record is not authorised",
                 );
+              }
               finalValues =
                 "sourceFinalValues" in calculated
                   ? { ...calculated.sourceFinalValues }
@@ -843,6 +912,17 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       JSON.stringify(prepared.existingValues[fieldId] ?? null),
                   ),
                 );
+              if (
+                totalPreparation.outcome === "prepared" &&
+                Object.keys(composition.submittedValues).length === 0 &&
+                Object.keys(finalValues).length > 0 &&
+                subjectRuleSet.rules.length > 0
+              )
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "the created records changed derived subject values that require its before-save rules",
+                );
               const createdFinalValues =
                 "creationFinalValues" in calculated
                   ? { values: calculated.creationFinalValues }
@@ -852,6 +932,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       issuedAt,
                       settings?.currency,
                       settings?.timeZone,
+                      attempted.executions,
                     );
               if ("reason" in createdFinalValues)
                 return safeRefusal(
@@ -979,9 +1060,12 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         }
         const value = result.value as ExecuteNamedActionResult;
         return value.outcome === "completed" &&
-          attempted.rules !== undefined &&
-          attempted.rules.warnings.length > 0
-          ? { kind: "available", value, warnings: [...attempted.rules.warnings] }
+          attempted.executions.some((execution) => execution.warnings.length > 0)
+          ? {
+              kind: "available",
+              value,
+              warnings: attempted.executions.flatMap((execution) => execution.warnings),
+            }
           : { kind: "available", value };
       }
       return { kind: "temporarily_unavailable" };

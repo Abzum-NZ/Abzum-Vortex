@@ -164,7 +164,8 @@ begin
         pg_catalog.jsonb_build_object(
           'ordinal', item.value -> 'ordinal',
           'recordTypeId', item.value -> 'recordTypeId',
-          'recordType', item.value -> 'recordType'
+          'recordType', item.value -> 'recordType',
+          'beforeSaveRules', item.value -> 'beforeSaveRules'
         ) order by (item.value ->> 'ordinal')::integer
       )
       from pg_catalog.jsonb_array_elements(creation_plan -> 'createTargets') item(value)
