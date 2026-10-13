@@ -39,7 +39,7 @@ begin
   end if;
   correlation_value := context_value -> 'correlationId';
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, false
+    'record_delete', p_command_id, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then

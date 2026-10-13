@@ -73,7 +73,7 @@ begin
       p_expected_concurrency_number;
   end if;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, false
+    'record_restore', p_command_id, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then

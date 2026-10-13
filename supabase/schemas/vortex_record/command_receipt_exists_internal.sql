@@ -17,6 +17,7 @@ begin
     where receipt.command_id = p_command_id
       and receipt.organization_id = (context_value ->> 'organizationId')::uuid
       and receipt.tenant_id = (context_value ->> 'tenantId')::uuid
+      and receipt.actor_id = (context_value ->> 'organizationAccountId')::uuid
       and receipt.command_kind = p_command_kind
   );
 end
@@ -33,4 +34,4 @@ grant execute on function vortex_record.command_receipt_exists_internal(
 comment on function vortex_record.command_receipt_exists_internal(
   text, uuid
 ) is
-  'True when the request scope already holds a receipt for this command id and kind, whatever its state or content. Preparation reads use it to leave replay and identity-conflict classification to the receipt owner.';
+  'True when the request scope (organisation, tenant and actor) already holds a receipt for this command id and kind, whatever its state or content. Preparation reads use it to leave replay and identity-conflict classification to the receipt owner.';

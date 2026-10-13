@@ -18,6 +18,7 @@ begin
   where stored.command_id = p_command_id
     and stored.organization_id = (context_value ->> 'organizationId')::uuid
     and stored.tenant_id = (context_value ->> 'tenantId')::uuid
+    and stored.actor_id = (context_value ->> 'organizationAccountId')::uuid
     and stored.command_kind = p_command_kind
   for update;
   return receipt;

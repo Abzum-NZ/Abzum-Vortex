@@ -25,7 +25,10 @@ begin
     return;
   end if;
   context_value := vortex_access.validated_human_request_context();
-  receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', bound_command_id);
+  receipt := vortex_record.lock_command_receipt_internal(
+    case when p_effect_kind = 'restored' then 'record_restore' else 'record_delete' end,
+    bound_command_id
+  );
   if receipt.command_id is null
     or receipt.result is not null
     or p_effect_kind not in ('soft_deleted', 'optional_cleared', 'restored') then

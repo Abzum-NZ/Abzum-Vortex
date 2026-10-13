@@ -62,7 +62,7 @@ begin
   -- branch owns and claims its own record_save receipt as before.
   if p_operation = 'delete' then
     context_value := vortex_access.validated_human_request_context();
-    receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
+    receipt := vortex_record.lock_command_receipt_internal('record_delete', p_command_id);
     if receipt.command_id is null
       or receipt.result is not null then
       raise exception using errcode = '55000',
@@ -153,7 +153,7 @@ begin
     );
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_lifecycle', p_command_id, p_record_id, p_expected_concurrency_number + 1,
+      'record_delete', p_command_id, p_record_id, p_expected_concurrency_number + 1,
       'Protected record delete receipt is stale'
     );
 
@@ -166,7 +166,7 @@ begin
     );
   elsif p_operation = 'restore' then
     context_value := vortex_access.validated_human_request_context();
-    receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
+    receipt := vortex_record.lock_command_receipt_internal('record_restore', p_command_id);
     if receipt.command_id is null
       or receipt.result is not null then
       raise exception using errcode = '55000',
@@ -216,7 +216,7 @@ begin
     );
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_lifecycle', p_command_id, p_record_id, restored_revision,
+      'record_restore', p_command_id, p_record_id, restored_revision,
       'Protected record restore receipt is stale'
     );
 

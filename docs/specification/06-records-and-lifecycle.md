@@ -258,7 +258,7 @@ Lifecycle and ownership entry points:
 
 Receipt ledgers and helpers:
 
-- `vortex_record.command_receipts(command_id, organization_id, tenant_id, command_kind, result, created_at)`, the one receipt table for record saves and ownership transfers, named actions and lifecycle commands, keyed by the client-generated command id and replaying its stored result only inside the organisation, tenant and command kind that stored it, with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
+- `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, the one receipt table for record saves and ownership transfers, named actions, deletes and restores (command kinds `record_save`, `named_action`, `record_delete`, `record_restore`), keyed by the client-generated command id and replaying its stored result only for the organisation, tenant, actor and command kind that stored it (any other combination is an identity conflict), with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
 - `append_base_save_activity_internal`, `append_named_action_activity_internal`, `append_record_lifecycle_activity_internal`, `append_ownership_transfer_activity_internal`.
 
 The engine keeps and builds on the private primitives `create_record_internal`,

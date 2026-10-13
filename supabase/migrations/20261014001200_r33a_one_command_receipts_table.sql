@@ -1,11 +1,14 @@
 -- R3.3a (#2238): one idempotency table for record-save, named-action and lifecycle commands.
 --
 -- vortex_record.command_receipts becomes command_id (primary key), organization_id, tenant_id, command_kind,
--- result and created_at. preview_command_receipts is folded into it (a preview command already carries its own
--- preview-scoped command id). A receipt replays only inside the organisation, tenant and command kind that
+-- actor_id, result and created_at. preview_command_receipts is folded into it (a preview command already carries its own
+-- preview-scoped command id). A receipt replays only inside the organisation, tenant, actor and command kind that
 -- stored it; any other scope is classified as an identity conflict. The command fingerprint, operation,
 -- record type, identity and lifecycle columns are gone, so the four command-fingerprint functions are dropped.
 -- Completed receipts are carried over with their stored record id and concurrency number.
+-- The receipt stores its acting account (actor_id, null only for commands that have no organisation actor); delete
+-- and restore use the distinct kinds record_delete and record_restore, so one command id cannot be replayed as the
+-- other. Completed receipts keep their actor, and lifecycle receipts take their kind from their stored operation.
 
 -- The Record adapter owns the receipt objects and runs this migration; it reads each organisation's tenant for
 -- the carry-over from a temporary copy made while the migration still holds the organisations' owner role.
@@ -15,7 +18,9 @@ grant select on organisation_tenants to vortex_record_adapter;
 set local role vortex_record_adapter;
 
 create temporary table command_receipt_carry on commit drop as
-select stored.command_id, stored.organization_id, organization.tenant_id, stored.command_kind,
+select stored.command_id, stored.organization_id, organization.tenant_id,
+  stored.actor_organization_account_id as actor_id,
+  case when stored.command_kind = 'record_lifecycle' then 'record_' || stored.operation else stored.command_kind end as command_kind,
   pg_catalog.jsonb_build_object(
     'recordId', stored.record_id, 'concurrencyNumber', stored.concurrency_number
   ) as result,
@@ -25,7 +30,8 @@ join organisation_tenants as organization
   on organization.organization_id = stored.organization_id
 where stored.state = 'completed'
 union all
-select stored.command_id, stored.organization_id, organization.tenant_id, stored.command_kind,
+select stored.command_id, stored.organization_id, organization.tenant_id,
+  stored.actor_organization_account_id as actor_id, stored.command_kind,
   pg_catalog.jsonb_build_object(
     'recordId', stored.record_id, 'concurrencyNumber', stored.concurrency_number
   ) as result,
@@ -52,13 +58,15 @@ create table vortex_record.command_receipts (
   command_id uuid not null,
   organization_id uuid,
   tenant_id uuid,
+  actor_id uuid,
   command_kind text not null,
   result jsonb,
   created_at timestamp with time zone not null default statement_timestamp(),
   constraint command_receipts_pk primary key (command_id),
   constraint command_receipts_command_id_valid check (command_id <> '00000000-0000-0000-0000-000000000000'::uuid),
-  constraint command_receipts_kind_valid check (command_kind in ('record_save', 'named_action', 'record_lifecycle')),
+  constraint command_receipts_kind_valid check (command_kind in ('record_save', 'named_action', 'record_delete', 'record_restore')),
   constraint command_receipts_scope_valid check (organization_id is null or tenant_id is not null),
+  constraint command_receipts_actor_valid check (organization_id is null or actor_id is not null),
   constraint command_receipts_result_valid check (result is null or pg_catalog.jsonb_typeof(result) = 'object')
 );
 alter table vortex_record.command_receipts owner to vortex_record_adapter;
@@ -67,12 +75,12 @@ alter table vortex_record.command_receipts force row level security;
 create policy command_receipts_adapter on vortex_record.command_receipts
   to vortex_record_adapter using (true) with check (true);
 comment on table vortex_record.command_receipts is
-  'The one idempotency table: a command id (client-generated UUID) maps to the organisation, tenant and command kind that stored it and, once the command completes, its result. Organisation commands set organization_id and tenant_id, tenant commands only tenant_id, platform commands neither. A replay returns the stored result only inside the stored scope; there is no direct grant, only the Record receipt functions.';
+  'The one idempotency table: a command id (client-generated UUID) maps to the organisation, tenant, actor and command kind that stored it and, once the command completes, its result. Organisation commands set organization_id, tenant_id and the acting account (actor_id), tenant commands only tenant_id, platform commands neither. A replay returns the stored result only inside the stored scope; there is no direct grant, only the Record receipt functions.';
 
 insert into vortex_record.command_receipts (
-  command_id, organization_id, tenant_id, command_kind, result, created_at
+  command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at
 )
-select carried.command_id, carried.organization_id, carried.tenant_id, carried.command_kind,
+select carried.command_id, carried.organization_id, carried.tenant_id, carried.actor_id, carried.command_kind,
   carried.result, carried.created_at
 from command_receipt_carry as carried
 on conflict (command_id) do nothing;
@@ -98,21 +106,23 @@ declare
   context_value jsonb;
   organization_id_value uuid;
   tenant_id_value uuid;
+  actor_id_value uuid;
   inserted_command_id uuid;
   receipt vortex_record.command_receipts%rowtype;
 begin
   context_value := vortex_access.validated_human_request_context();
   organization_id_value := (context_value ->> 'organizationId')::uuid;
   tenant_id_value := (context_value ->> 'tenantId')::uuid;
+  actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
 
   -- The command id is claimed as pending (no result yet). A claim that finds an
   -- existing receipt locks it and classifies it; a replay-only read classifies
   -- without inserting or locking.
   if not p_replay_only then
     insert into vortex_record.command_receipts (
-      command_id, organization_id, tenant_id, command_kind
+      command_id, organization_id, tenant_id, actor_id, command_kind
     ) values (
-      p_command_id, organization_id_value, tenant_id_value, p_command_kind
+      p_command_id, organization_id_value, tenant_id_value, actor_id_value, p_command_kind
     )
     on conflict (command_id) do nothing
     returning command_id into inserted_command_id;
@@ -139,6 +149,7 @@ begin
   -- A command id replays only inside the scope that stored it.
   if receipt.organization_id is distinct from organization_id_value
     or receipt.tenant_id is distinct from tenant_id_value
+    or receipt.actor_id is distinct from actor_id_value
     or receipt.command_kind is distinct from p_command_kind then
     return pg_catalog.jsonb_build_object('status', 'identity_conflict');
   end if;
@@ -164,7 +175,7 @@ grant execute on function vortex_record.claim_command_receipt_internal(
 comment on function vortex_record.claim_command_receipt_internal(
   text, uuid, boolean
 ) is
-  'The one command-receipt claim and replay classifier. Claims the command id as pending, or classifies its receipt as identity_conflict (stored under another organisation, tenant or command kind), pending or completed with its stored result; with p_replay_only it only reads, returning none when there is no receipt.';
+  'The one command-receipt claim and replay classifier. Claims the command id as pending, or classifies its receipt as identity_conflict (stored under another organisation, tenant, actor or command kind), pending or completed with its stored result; with p_replay_only it only reads, returning none when there is no receipt.';
 
 create or replace function vortex_record.command_receipt_exists_internal(
   p_command_kind text,
@@ -185,6 +196,7 @@ begin
     where receipt.command_id = p_command_id
       and receipt.organization_id = (context_value ->> 'organizationId')::uuid
       and receipt.tenant_id = (context_value ->> 'tenantId')::uuid
+      and receipt.actor_id = (context_value ->> 'organizationAccountId')::uuid
       and receipt.command_kind = p_command_kind
   );
 end
@@ -201,7 +213,7 @@ grant execute on function vortex_record.command_receipt_exists_internal(
 comment on function vortex_record.command_receipt_exists_internal(
   text, uuid
 ) is
-  'True when the request scope already holds a receipt for this command id and kind, whatever its state or content. Preparation reads use it to leave replay and identity-conflict classification to the receipt owner.';
+  'True when the request scope (organisation, tenant and actor) already holds a receipt for this command id and kind, whatever its state or content. Preparation reads use it to leave replay and identity-conflict classification to the receipt owner.';
 
 create or replace function vortex_record.complete_command_receipt_internal(
   p_command_kind text,
@@ -228,6 +240,7 @@ begin
   where stored.command_id = p_command_id
     and stored.organization_id = (context_value ->> 'organizationId')::uuid
     and stored.tenant_id = (context_value ->> 'tenantId')::uuid
+    and stored.actor_id = (context_value ->> 'organizationAccountId')::uuid
     and stored.command_kind = p_command_kind
     and stored.result is null;
   if not found then
@@ -267,6 +280,7 @@ begin
   where stored.command_id = p_command_id
     and stored.organization_id = (context_value ->> 'organizationId')::uuid
     and stored.tenant_id = (context_value ->> 'tenantId')::uuid
+    and stored.actor_id = (context_value ->> 'organizationAccountId')::uuid
     and stored.command_kind = p_command_kind
     and stored.result is null;
 end
@@ -305,6 +319,7 @@ begin
   where stored.command_id = p_command_id
     and stored.organization_id = (context_value ->> 'organizationId')::uuid
     and stored.tenant_id = (context_value ->> 'tenantId')::uuid
+    and stored.actor_id = (context_value ->> 'organizationAccountId')::uuid
     and stored.command_kind = p_command_kind
   for update;
   return receipt;
@@ -381,7 +396,10 @@ begin
     return;
   end if;
   context_value := vortex_access.validated_human_request_context();
-  receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', bound_command_id);
+  receipt := vortex_record.lock_command_receipt_internal(
+    case when p_effect_kind = 'restored' then 'record_restore' else 'record_delete' end,
+    bound_command_id
+  );
   if receipt.command_id is null
     or receipt.result is not null
     or p_effect_kind not in ('soft_deleted', 'optional_cleared', 'restored') then
@@ -461,7 +479,7 @@ begin
     ), 8, (pg_catalog.get_byte(digest_value, 8) & 63) | 128), 'hex'
   )::uuid;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', lifecycle_command_id, true
+    'record_delete', lifecycle_command_id, true
   );
   if receipt_claim ->> 'status' is distinct from 'completed' then
     return null;
@@ -1076,7 +1094,7 @@ begin
   end if;
   correlation_value := context_value -> 'correlationId';
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, false
+    'record_delete', p_command_id, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then
@@ -1235,7 +1253,7 @@ begin
       p_expected_concurrency_number;
   end if;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, false
+    'record_restore', p_command_id, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then
@@ -2039,7 +2057,7 @@ begin
   -- branch owns and claims its own record_save receipt as before.
   if p_operation = 'delete' then
     context_value := vortex_access.validated_human_request_context();
-    receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
+    receipt := vortex_record.lock_command_receipt_internal('record_delete', p_command_id);
     if receipt.command_id is null
       or receipt.result is not null then
       raise exception using errcode = '55000',
@@ -2130,7 +2148,7 @@ begin
     );
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_lifecycle', p_command_id, p_record_id, p_expected_concurrency_number + 1,
+      'record_delete', p_command_id, p_record_id, p_expected_concurrency_number + 1,
       'Protected record delete receipt is stale'
     );
 
@@ -2143,7 +2161,7 @@ begin
     );
   elsif p_operation = 'restore' then
     context_value := vortex_access.validated_human_request_context();
-    receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
+    receipt := vortex_record.lock_command_receipt_internal('record_restore', p_command_id);
     if receipt.command_id is null
       or receipt.result is not null then
       raise exception using errcode = '55000',
@@ -2193,7 +2211,7 @@ begin
     );
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_lifecycle', p_command_id, p_record_id, restored_revision,
+      'record_restore', p_command_id, p_record_id, restored_revision,
       'Protected record restore receipt is stale'
     );
 
@@ -4483,7 +4501,7 @@ create constraint trigger command_receipts_lifecycle_completed_at_commit
   after insert or update on vortex_record.command_receipts
   deferrable initially deferred
   for each row
-  when (new.command_kind = 'record_lifecycle')
+  when (new.command_kind in ('record_delete', 'record_restore'))
   execute function vortex_record.assert_record_lifecycle_receipt_completed_internal();
 
 reset role;

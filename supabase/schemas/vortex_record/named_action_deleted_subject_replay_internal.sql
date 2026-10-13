@@ -41,7 +41,7 @@ begin
     ), 8, (pg_catalog.get_byte(digest_value, 8) & 63) | 128), 'hex'
   )::uuid;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', lifecycle_command_id, true
+    'record_delete', lifecycle_command_id, true
   );
   if receipt_claim ->> 'status' is distinct from 'completed' then
     return null;
