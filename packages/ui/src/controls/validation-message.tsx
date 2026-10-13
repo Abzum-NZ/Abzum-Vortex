@@ -13,11 +13,11 @@ import {
 
 export type ValidationMessageProps = ControlRenderProps<ValidationPayload>;
 
-const VALIDATION_SEVERITY_COLORS: Readonly<Record<"error" | "warning" | "info", string>> = {
-  error: "var(--vortex-danger-text)",
-  warning: "var(--vortex-warning-text)",
-  info: "var(--vortex-info-text)",
-};
+const VALIDATION_ALERT_VARIANTS = {
+  error: "critical",
+  warning: "warning",
+  info: "info",
+} as const;
 
 /**
  * Form-wide or field-targeted validation summary. The live region is always present so a later
@@ -41,7 +41,6 @@ export function ValidationMessage(props: ValidationMessageProps): ReactElement {
   const messages: readonly string[] =
     projected !== undefined ? projected : message === undefined ? [] : [message];
   const title = context.accessibleName;
-  const severityColor = VALIDATION_SEVERITY_COLORS[severity];
 
   return (
     <Alert
@@ -50,18 +49,16 @@ export function ValidationMessage(props: ValidationMessageProps): ReactElement {
       data-vortex-placement-id={props.placementId}
       data-vortex-severity={severity}
       {...(forField === undefined ? {} : { "data-vortex-for-field": forField })}
-      variant={severity === "error" ? "destructive" : "default"}
-      className="border-l-4"
-      style={{ backgroundColor: "var(--vortex-surface)", borderLeftColor: severityColor }}
+      variant={VALIDATION_ALERT_VARIANTS[severity]}
     >
       {messages.length === 0 ? null : (
         <>
           {title === undefined ? null : (
-            <AlertTitle className="mb-1 font-bold" style={{ color: severityColor }}>
+            <AlertTitle className="mb-1">
               {title}
             </AlertTitle>
           )}
-          <AlertDescription style={{ color: "var(--vortex-text)" }}>
+          <AlertDescription>
             {messages.length === 1 ? (
               <p className="m-0">{messages[0]}</p>
             ) : (
