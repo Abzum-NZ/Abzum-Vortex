@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { sourcePlacementSlotSchema } from "./application-composition";
+import type { sourcePlacementSlotSchema } from "./application-composition/page-composition";
 import type { ApplicationSourceDocument } from "./application-source-contracts";
 
 type SourcePage = ApplicationSourceDocument["body"]["pages"][number];

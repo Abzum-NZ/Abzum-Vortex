@@ -1,0 +1,336 @@
+import { z } from "zod";
+import { safeHttpsUrlSchema } from "../../catalogue/common";
+import {
+  sourceQualifiedFieldSchema,
+  sourceQualifiedQueryReferenceSchema,
+  sourceQualifiedRelationshipSchema,
+  sourceProvenanceTarget,
+  sourceProvenanceUnchanged,
+} from "../definition-source-common";
+import { recordTypeReferenceSchema } from "../definitions";
+import {
+  builderKeySchema,
+  containedComponentIdSchema,
+  fieldIdSchema,
+  namespacedKeySchema,
+  pageIdSchema,
+  pipelineIdSchema,
+  platformIdSchema,
+  queryIdSchema,
+  recordIdSchema,
+  sourceQualifiedRecordTypeSchema,
+} from "../../catalogue/identifiers";
+import { richTextDocumentSchema } from "../../records/rich-text";
+
+export { richTextDocumentSchema, richTextElementKindSchema } from "../../records/rich-text";
+
+export const iconKeySchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+export const nonNegativeFiniteSchema = z.number().finite().nonnegative();
+export const positiveFiniteSchema = z.number().finite().positive();
+
+export type BlockPropertyValueContract =
+  | { kind: "text"; value: string }
+  | { kind: "number"; value: number }
+  | { kind: "boolean"; value: boolean }
+  | { kind: "choice"; value: string }
+  | { kind: "rich_text"; value: z.infer<typeof richTextDocumentSchema> }
+  | { kind: "url"; value: string }
+  | { kind: "asset_reference"; assetId: z.infer<typeof platformIdSchema> }
+  | { kind: "icon"; iconKey: string }
+  | { kind: "theme_token"; tokenKey: string }
+  | { kind: "field_reference"; fieldId: z.infer<typeof fieldIdSchema> }
+  | {
+      kind: "relationship_reference";
+      relationshipId: z.infer<typeof containedComponentIdSchema>;
+    }
+  | { kind: "action_reference"; actionKey: z.infer<typeof namespacedKeySchema> }
+  | { kind: "page_reference"; pageId: z.infer<typeof pageIdSchema> }
+  | { kind: "query_reference"; queryId: z.infer<typeof queryIdSchema> }
+  | { kind: "pipeline_reference"; pipelineId: z.infer<typeof pipelineIdSchema> }
+  | { kind: "record_type_reference"; recordType: z.infer<typeof recordTypeReferenceSchema> }
+  | {
+      kind: "record_reference";
+      recordType: z.infer<typeof recordTypeReferenceSchema>;
+      recordId: z.infer<typeof recordIdSchema>;
+    }
+  | { kind: "group"; properties: Record<string, BlockPropertyValueContract> }
+  | { kind: "list"; items: BlockPropertyValueContract[] };
+
+/** Canonical  values are closed and kind-discriminated; there is no arbitrary JSON branch. */
+export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z.lazy(() =>
+  z.discriminatedUnion("kind", [
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("text")),
+        value: sourceProvenanceUnchanged(z.string()),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("number")),
+        value: sourceProvenanceUnchanged(z.number().finite()),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("boolean")),
+        value: sourceProvenanceUnchanged(z.boolean()),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("choice")),
+        value: sourceProvenanceUnchanged(builderKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("rich_text")),
+        value: sourceProvenanceUnchanged(richTextDocumentSchema, true),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("url")),
+        value: sourceProvenanceUnchanged(safeHttpsUrlSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("asset_reference")),
+        assetId: sourceProvenanceUnchanged(platformIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("icon")),
+        iconKey: sourceProvenanceUnchanged(builderKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("theme_token")),
+        tokenKey: sourceProvenanceUnchanged(builderKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("field_reference")),
+        fieldId: sourceProvenanceUnchanged(fieldIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("relationship_reference")),
+        relationshipId: sourceProvenanceUnchanged(containedComponentIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("action_reference")),
+        actionKey: sourceProvenanceUnchanged(namespacedKeySchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("page_reference")),
+        pageId: sourceProvenanceUnchanged(pageIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("query_reference")),
+        queryId: sourceProvenanceUnchanged(queryIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("pipeline_reference")),
+        pipelineId: sourceProvenanceUnchanged(pipelineIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("record_type_reference")),
+        recordType: sourceProvenanceUnchanged(recordTypeReferenceSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("record_reference")),
+        recordType: sourceProvenanceUnchanged(recordTypeReferenceSchema),
+        recordId: sourceProvenanceUnchanged(recordIdSchema),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("group")),
+        properties: sourceProvenanceUnchanged(z.record(builderKeySchema, blockPropertyValueSchema)),
+      })
+      .strict(),
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("list")),
+        items: sourceProvenanceUnchanged(z.array(blockPropertyValueSchema)),
+      })
+      .strict(),
+  ]),
+);
+
+export type SourceBlockPropertyValueContract =
+  | { kind: "text"; value: string }
+  | { kind: "number"; value: number }
+  | { kind: "boolean"; value: boolean }
+  | { kind: "choice"; value: string }
+  | { kind: "rich_text"; value: z.infer<typeof richTextDocumentSchema> }
+  | { kind: "url"; value: string }
+  | { kind: "asset_reference"; asset_id: z.infer<typeof platformIdSchema> }
+  | { kind: "icon"; icon_key: string }
+  | { kind: "theme_token"; token: string }
+  | { kind: "field_reference"; field: z.infer<typeof sourceQualifiedFieldSchema> }
+  | {
+      kind: "relationship_reference";
+      relationship: z.infer<typeof sourceQualifiedRelationshipSchema>;
+    }
+  | { kind: "action_reference"; action: z.infer<typeof namespacedKeySchema> }
+  | { kind: "page_reference"; page: z.infer<typeof builderKeySchema> }
+  | { kind: "query_reference"; query: z.infer<typeof sourceQualifiedQueryReferenceSchema> }
+  | { kind: "pipeline_reference"; pipeline: z.infer<typeof builderKeySchema> }
+  | {
+      kind: "record_type_reference";
+      record_type: z.infer<typeof sourceQualifiedRecordTypeSchema>;
+    }
+  | { kind: "record_reference"; record_type: string; record_id: string }
+  | { kind: "group"; properties: Record<string, SourceBlockPropertyValueContract> }
+  | { kind: "list"; items: SourceBlockPropertyValueContract[] };
+
+/** Authored  values retain portable aliases while preserving the same closed value kinds. */
+export const sourceBlockPropertyValueSchema: z.ZodType<SourceBlockPropertyValueContract> = z.lazy(
+  () =>
+    z.discriminatedUnion("kind", [
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("text")),
+          value: sourceProvenanceUnchanged(z.string()),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("number")),
+          value: sourceProvenanceUnchanged(z.number().finite()),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("boolean")),
+          value: sourceProvenanceUnchanged(z.boolean()),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("choice")),
+          value: sourceProvenanceUnchanged(builderKeySchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("rich_text")),
+          value: sourceProvenanceUnchanged(richTextDocumentSchema, true),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("url")),
+          value: sourceProvenanceUnchanged(safeHttpsUrlSchema),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("asset_reference")),
+          asset_id: sourceProvenanceTarget(platformIdSchema, ["assetId"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("icon")),
+          icon_key: sourceProvenanceTarget(builderKeySchema, ["iconKey"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("theme_token")),
+          token: sourceProvenanceTarget(builderKeySchema, ["tokenKey"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("field_reference")),
+          field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["fieldId"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("relationship_reference")),
+          relationship: sourceProvenanceTarget(sourceQualifiedRelationshipSchema, [
+            "relationshipId",
+          ]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("action_reference")),
+          action: sourceProvenanceTarget(namespacedKeySchema, ["actionKey"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("page_reference")),
+          page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("query_reference")),
+          query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema, ["queryId"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("pipeline_reference")),
+          pipeline: sourceProvenanceTarget(builderKeySchema, ["pipelineId"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("record_type_reference")),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("record_reference")),
+          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
+          record_id: sourceProvenanceTarget(z.uuid(), ["recordId"]),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("group")),
+          properties: sourceProvenanceUnchanged(
+            z.record(builderKeySchema, sourceBlockPropertyValueSchema),
+          ),
+        })
+        .strict(),
+      z
+        .object({
+          kind: sourceProvenanceUnchanged(z.literal("list")),
+          items: sourceProvenanceUnchanged(z.array(sourceBlockPropertyValueSchema)),
+        })
+        .strict(),
+    ]),
+);

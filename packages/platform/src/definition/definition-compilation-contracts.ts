@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { applicationDraftSchema } from "./application-contracts";
-import { applicationCompositionCatalogueSnapshotSchema } from "./application-composition";
+import { applicationCompositionCatalogueSnapshotSchema } from "./application-composition/catalogue-snapshot";
 import { applicationSourceDocumentSchema } from "./application-source-contracts";
 import {
   applicationActionInputDefinitionSchema,

@@ -36,15 +36,10 @@ import {
 import { labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import { actionInputValueTypes, applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { permissionDeclarationSchema } from "../access/permissions";
-import {
-  applicationShellSchema,
-  applicationThemeSchema,
-  canonicalPlacementEntries,
-  guidedFormPageCompositionSchema,
-  pageCompositionSchema,
-  platformBlockDependenciesSchema,
-  type ComponentSettingValue,
-} from "./application-composition";
+import { applicationShellSchema, canonicalPlacementEntries, guidedFormPageCompositionSchema, pageCompositionSchema } from "./application-composition/page-composition";
+import { applicationThemeSchema } from "./application-composition/theme";
+import { platformBlockDependenciesSchema } from "./application-composition/platform-block-release";
+import type { ComponentSettingValue } from "./application-composition/block-property-schema";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
 import { flowSchema } from "../workflows/flow-contracts";
 import { vortexIconNameSchema } from "../catalogue/icon-names";

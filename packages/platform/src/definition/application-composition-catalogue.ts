@@ -1,11 +1,5 @@
-import {
-  type BlockPropertySchemaContract,
-  type FieldInputControlKey,
-  type PlatformBlockRelease,
-  platformBlockReleaseSchema,
-  type ImmutablePlatformBlockCatalogue,
-  immutablePlatformBlockCatalogueSchema,
-} from "./application-composition";
+import type { BlockPropertySchemaContract, FieldInputControlKey } from "./application-composition/block-property-schema";
+import { type PlatformBlockRelease, platformBlockReleaseSchema, type ImmutablePlatformBlockCatalogue, immutablePlatformBlockCatalogueSchema } from "./application-composition/platform-block-release";
 import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "./application-composition-release-identities";
 import { platformBlockReleaseContentHash } from "./catalogue-release-content-hashes";
 import sources from "../catalogue/catalogue/application-composition-catalogue.source.json";

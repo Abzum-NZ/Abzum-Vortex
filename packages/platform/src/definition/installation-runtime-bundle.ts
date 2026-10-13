@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { applicationContentSchema } from "./application-contracts";
-import { placementSlotSchema } from "./application-composition";
+import { placementSlotSchema } from "./application-composition/page-composition";
 import { jsonValueSchema } from "../catalogue/common";
 import {
   applicationDefinitionConsumerReadResultSchema,
