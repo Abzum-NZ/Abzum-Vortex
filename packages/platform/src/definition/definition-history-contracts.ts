@@ -85,7 +85,6 @@ export const definitionReleaseMetadataSchema = z
     releaseRevision: revisionSchema,
     releaseVersion: stableDefinitionReleaseVersionSchema,
     sourceFingerprint: fingerprintSchema,
-    contentFingerprint: fingerprintSchema,
     releaseNote: z
       .string()
       .min(1)

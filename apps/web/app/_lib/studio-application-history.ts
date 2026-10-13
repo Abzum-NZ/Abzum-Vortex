@@ -265,7 +265,7 @@ const readPage = async (
     const metadata = definitionReleaseMetadataSchema.safeParse({
       releaseRevision: publication.revision, releaseVersion: publication.releaseVersion,
       sourceFingerprint: entry.release.evidence.authoredSourceFingerprint,
-      contentFingerprint: publication.contentFingerprint, releaseNote: entry.release.releaseNote,
+      releaseNote: entry.release.releaseNote,
       publishedAt: publication.publishedAt, publishedBy: publication.publishedBy,
       isCurrent: publication.revision === anchor,
     });
