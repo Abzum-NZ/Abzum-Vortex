@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   createBuilderAuthority,
   prepareApplicationRoleTemplatesForHumanRequest,
@@ -16,7 +16,6 @@ import {
   type HumanInstallationDefinitionAccess,
 } from "@web/platform-server";
 import {
-  activityIdSchema,
   applicationRootIdSchema,
   canonicalJson,
   databaseTimestamp,
@@ -54,6 +53,10 @@ import {
 } from "@vortex/platform/schema";
 import {
   InstallationArchiveConnectionError,
+  initialLifecyclePolicyMatches,
+  saveInitialArchiveWorkflowPolicy,
+  workflowIsInExactRelease,
+  type InitialLifecyclePolicyTarget,
   readInstallationArchiveConnectionOptions,
   readSelectedInstallationArchiveConnection,
 } from "@web/platform-server";
@@ -2165,6 +2168,17 @@ export const loadStudioApplicationArchiveOptions = async (
   }
 };
 
+const initialPolicyTarget = (
+  candidate: FirstInstallCandidate,
+  target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
+): InitialLifecyclePolicyTarget => ({
+  organizationId: candidate.selector.organizationId,
+  installationRootId: candidate.selector.rootId,
+  releaseRevision: candidate.selector.releaseRevision,
+  storageContractId: target.storageContractId,
+  applicationRootId: target.applicationRootId,
+});
+
 const saveDeleteInitialPolicy = async (
   candidate: FirstInstallCandidate,
   target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
@@ -2182,61 +2196,7 @@ const saveDeleteInitialPolicy = async (
     if (result.kind === "unavailable") problem("refused");
     problem("temporarily_unavailable");
   }
-  return initialPolicyMatches(result.value, candidate, target, policy);
-};
-
-const workflowIsInExactRelease = (
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-  applicationRootId: string,
-  workflowId: string,
-): boolean => releaseSet.application.dependencyManifest.some((dependency) =>
-  dependency.kind === "application_workflow" &&
-  sameUuid(dependency.applicationRootId, applicationRootId) &&
-  sameUuid(dependency.workflowId, workflowId));
-
-const writeInitialArchivePolicy = async (
-  transaction: RequestDatabaseTransaction,
-  candidate: FirstInstallCandidate,
-  target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
-  expectedBindingRevision: number,
-  expectedSettingsRevision: number,
-  actionInput: Extract<z.infer<typeof studioApplicationFirstInstallPolicyInputSchema>, { action: "archive_workflow" }>,
-  option: Awaited<ReturnType<typeof readSelectedInstallationArchiveConnection>>,
-): Promise<RecordTypeLifecyclePolicy> => {
-  if (target.applicationRootId === null ||
-    !workflowIsInExactRelease(candidate.releaseSet, candidate.selector.rootId, actionInput.archiveWorkflowId))
-    problem("refused");
-  const bindings = target.sourceBindings.filter((binding) => binding.bindingRevision === expectedBindingRevision);
-  if (bindings.length !== 1) problem("conflict");
-  const policy = {
-    action: "archive_workflow" as const,
-    maxAgeDays: actionInput.maxAgeDays,
-    maxCount: actionInput.maxCount,
-    allowUnlimitedAge: actionInput.allowUnlimitedAge,
-    allowUnlimitedCount: actionInput.allowUnlimitedCount,
-    archiveWorkflowId: actionInput.archiveWorkflowId,
-    expectedWorkflowRevision: candidate.selector.releaseRevision,
-    archiveConnectionInstanceId: option.connectionInstanceId,
-    archiveDestination: option.destinationKey,
-    expectedConnectionRevision: option.expectedRevision,
-    expectedDestinationFingerprint: option.destinationFingerprint,
-    expectedConnectionHealthOutcome: "healthy" as const,
-  };
-  const activityId = activityIdSchema.parse(randomUUID());
-  await transaction.query`set local role vortex_runtime`;
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_record.save_initial_record_type_lifecycle_policy_for_provisioned_setup(
-      ${candidate.selector.rootId}::uuid,
-      ${expectedBindingRevision}::bigint,
-      ${target.storageContractId}::uuid,
-      ${target.applicationRootId}::uuid,
-      ${expectedSettingsRevision}::bigint,
-      ${activityId}::uuid,
-      ${JSON.stringify(policy)}::text::jsonb
-    ) as policy
-  `;
-  if (rows.length !== 1) problem("temporarily_unavailable");
-  return initialPolicyMatches(rows[0]?.policy, candidate, target, actionInput, option.destinationFingerprint);
+  return initialLifecyclePolicyMatches(result.value, initialPolicyTarget(candidate, target), policy);
 };
 
 const readAppScopedFirstInstallReleaseSet = async (
@@ -2468,42 +2428,6 @@ const initialPolicyCommand = (
   policy,
 });
 
-const initialPolicyMatches = (
-  storedCandidate: unknown,
-  candidate: FirstInstallCandidate,
-  target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
-  actionInput: z.infer<typeof studioApplicationFirstInstallPolicyInputSchema>,
-  expectedConnectionFingerprint?: string,
-): RecordTypeLifecyclePolicy => {
-  const stored = recordTypeLifecyclePolicySchema.safeParse(storedCandidate);
-  if (!stored.success || !sameUuid(stored.data.organizationId, candidate.selector.organizationId) ||
-    !sameUuid(stored.data.storageContractId, target.storageContractId) ||
-    (stored.data.applicationRootId === null) !== (target.applicationRootId === null) ||
-    (stored.data.applicationRootId !== null && target.applicationRootId !== null &&
-      !sameUuid(stored.data.applicationRootId, target.applicationRootId)) ||
-    stored.data.policyRevision !== 1 || stored.data.action !== actionInput.action ||
-    stored.data.maxAgeDays !== actionInput.maxAgeDays || stored.data.maxCount !== actionInput.maxCount ||
-    stored.data.allowUnlimitedAge !== actionInput.allowUnlimitedAge ||
-    stored.data.allowUnlimitedCount !== actionInput.allowUnlimitedCount)
-    problem("temporarily_unavailable");
-  if (stored.data.action === "delete") {
-    if (actionInput.action !== "delete" ||
-      stored.data.recoveryWindowDays !== actionInput.recoveryWindowDays)
-      problem("temporarily_unavailable");
-  } else {
-    if (actionInput.action !== "archive_workflow" || expectedConnectionFingerprint === undefined ||
-      !sameUuid(stored.data.archiveWorkflowId, actionInput.archiveWorkflowId) ||
-      stored.data.expectedWorkflowRevision !== candidate.selector.releaseRevision ||
-      !sameUuid(stored.data.archiveConnectionInstanceId, actionInput.archiveConnectionInstanceId) ||
-      stored.data.archiveDestination !== actionInput.archiveDestination ||
-      stored.data.expectedConnectionRevision !== actionInput.expectedConnectionRevision ||
-      stored.data.expectedDestinationFingerprint !== expectedConnectionFingerprint ||
-      stored.data.expectedConnectionHealthOutcome !== "healthy")
-      problem("temporarily_unavailable");
-  }
-  return stored.data;
-};
-
 const firstInstallCommandMatches = (
   organizationId: string,
   selector: StudioApplicationFirstInstallSelector,
@@ -2639,10 +2563,15 @@ export const saveStudioApplicationFirstInstallPolicy = async (
             retainedFence,
           );
           invocationStarted = true;
-          return writeInitialArchivePolicy(
-            transaction, candidate, currentTargetValue,
-            command.data.expectedBindingRevision, command.data.expectedSettingsRevision,
-            archivePolicy, option,
+          return saveInitialArchiveWorkflowPolicy(
+            transaction,
+            initialPolicyTarget(candidate, currentTargetValue),
+            candidate.releaseSet,
+            currentTargetValue.sourceBindings.map((binding) => binding.bindingRevision),
+            command.data.expectedBindingRevision,
+            command.data.expectedSettingsRevision,
+            archivePolicy,
+            option,
           );
         }, true);
     }
