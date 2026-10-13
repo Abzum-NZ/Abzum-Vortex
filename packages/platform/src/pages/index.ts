@@ -119,18 +119,11 @@ export {
   type PrivateFormDraftUpdateResult,
   type ReadPrivateFormDraftCommand,
   type UpdatePrivateFormDraftCommand,
-} from "./form-drafts";
-export {
-  abandonPrivateFormDraft,
-  createPrivateFormDraft,
   createPrivateFormDraftService,
-  expirePrivateFormDrafts,
-  readPrivateFormDraft,
-  updatePrivateFormDraft,
   type PrivateFormDraftAuthority,
   type PrivateFormDraftAuthorityAdapter,
   type PrivateFormDraftServiceDependencies,
-} from "./form-drafts-repository";
+} from "./form-drafts";
 export {
   createPrivateFormContinuationAdapter,
   type PrivateFormContinuationAdapter,
