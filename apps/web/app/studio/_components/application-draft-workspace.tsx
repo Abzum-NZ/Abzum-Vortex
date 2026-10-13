@@ -38,6 +38,7 @@ import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
+import { ApplicationFlowCanvas } from "./application-flow-canvas";
 import { ApplicationFlowEditor } from "./application-flow-editor";
 import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./application-draft-preview";
 import { ApplicationSourceImport } from "./application-source-import";
@@ -898,6 +899,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
               setMessage("Visibility condition applied to local history. Save to persist it.");
               return result;
             }} />}
+        {selected?.kind === "flow" && inspector.status === "resolved" &&
+          <ApplicationFlowCanvas context={compositionContext} selection={selected} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
           <ApplicationFlowEditor key={flowEpoch} context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}

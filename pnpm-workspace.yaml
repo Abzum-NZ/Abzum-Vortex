@@ -24,6 +24,7 @@ catalog:
   sonner: 2.0.8
   knip: 5.63.0
   re2js: 2.8.6
+  '@xyflow/react': 12.12.0
 
 catalogMode: strict
 
