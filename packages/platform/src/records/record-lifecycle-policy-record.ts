@@ -8,7 +8,6 @@ import {
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
-  isRecord,
   maximumRecoveryWindowDays,
   moduleRootIdSchema,
   organizationIdSchema,
@@ -18,12 +17,8 @@ import {
   recordLifecycleActionSchema,
   recordTypeLifecyclePolicySchema,
   revisionSchema,
-  protectedOperationChannelSchema,
-  sessionContextSchema,
   storageContractIdSchema,
-  timestampSchema,
   workflowIdSchema,
-  databaseTimestamp,
   type ApplicationRootId,
   type IdentitySession,
   type ModuleRootId,
@@ -37,9 +32,12 @@ import {
 } from "../schema";
 import {
   createHumanOrganizationRequestService,
+  readDatabaseClock,
+  readLiveHumanContext,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
+  type LiveHumanContext,
 } from "../access/index";
 import {
   withRuntimeTransaction,
@@ -693,11 +691,6 @@ type ProvisionedSetupReaderRow = DatabaseRow & {
   snapshot: unknown;
 };
 
-type ProvisionedSetupCompletionRow = DatabaseRow & {
-  request_context: unknown;
-  completed_at: unknown;
-};
-
 const provisionedSetupReadDeclaration = organizationAccessDeclarationSchema.parse({
   operationKey: "platform.organization.record_lifecycle.manage_policy",
   action: { actionKind: "manage" },
@@ -758,70 +751,40 @@ const isCurrentProvisionedSetupDecision = (
   Date.parse(decision.checkedAt) <= completedAt &&
   Date.parse(decision.validUntil) > completedAt;
 
+/** The three access decisions and the snapshot must still hold for the live context at `completedMs`. */
 const isCurrentProvisionedSetupRead = (
   snapshot: ProvisionedLifecyclePolicySetupSnapshot,
   scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
+  current: LiveHumanContext,
+  completedMs: number,
   managePolicyDecision: OrganizationAccessDecision,
   installDecision: OrganizationAccessDecision,
   installScopeDecision: OrganizationAccessDecision,
-  row: ProvisionedSetupCompletionRow | undefined,
-): boolean => {
-  if (row === undefined) return false;
-  if (!isRecord(row.request_context)) return false;
-  const { channel: rawChannel, ...sessionContextCandidate } = row.request_context;
-  const channel = protectedOperationChannelSchema.safeParse(rawChannel);
-  if (!channel.success || channel.data !== "web") return false;
-  const context = sessionContextSchema.safeParse(sessionContextCandidate);
-  const completedAt = timestampSchema.safeParse(databaseTimestamp(row.completed_at));
-  if (!context.success || !completedAt.success) return false;
-  const current = context.data;
-  const completedMs = Date.parse(completedAt.data);
-  return (
-    current.callerKind === "human" &&
-    sameId(current.tenantId, scope.tenantId) &&
-    sameId(current.organizationId, scope.organizationId) &&
-    sameId(current.organizationAccountId, scope.organizationAccountId) &&
-    current.applicationRootId !== undefined &&
-    scope.applicationRootId !== undefined &&
-    sameId(current.applicationRootId, scope.applicationRootId) &&
-    sameId(current.applicationRootId, snapshot.applicationRootId) &&
-    sameId(current.identityId, session.identityId) &&
-    sameId(current.sessionId, session.sessionId) &&
-    current.authenticationStrength === session.authenticationStrength &&
-    current.accessTokenIssuedAt === session.accessTokenIssuedAt &&
-    current.primaryAuthenticatedAt === session.primaryAuthenticatedAt &&
-    current.multiFactorAuthenticatedAt === session.multiFactorAuthenticatedAt &&
-    current.issuedAt === issuedAt &&
-    current.expiresAt === session.accessTokenExpiresAt &&
-    current.accessVersion === scope.accessVersion &&
-    isCurrentProvisionedSetupDecision(
-      installDecision,
-      provisionedSetupInstallDeclaration.operationKey,
-      scope,
-      current.correlationId,
-      completedMs,
-    ) &&
-    isCurrentProvisionedSetupDecision(
-      installScopeDecision,
-      provisionedSetupInstallScopeDeclaration.operationKey,
-      scope,
-      current.correlationId,
-      completedMs,
-    ) &&
-    isCurrentProvisionedSetupDecision(
-      managePolicyDecision,
-      provisionedSetupReadDeclaration.operationKey,
-      scope,
-      current.correlationId,
-      completedMs,
-    ) &&
-    Date.parse(current.issuedAt) <= completedMs &&
-    Date.parse(current.expiresAt) > completedMs &&
-    sameId(snapshot.organizationId, current.organizationId)
+): boolean =>
+  current.applicationRootId !== undefined &&
+  sameId(current.applicationRootId, snapshot.applicationRootId) &&
+  sameId(snapshot.organizationId, current.organizationId) &&
+  isCurrentProvisionedSetupDecision(
+    installDecision,
+    provisionedSetupInstallDeclaration.operationKey,
+    scope,
+    current.correlationId,
+    completedMs,
+  ) &&
+  isCurrentProvisionedSetupDecision(
+    installScopeDecision,
+    provisionedSetupInstallScopeDeclaration.operationKey,
+    scope,
+    current.correlationId,
+    completedMs,
+  ) &&
+  isCurrentProvisionedSetupDecision(
+    managePolicyDecision,
+    provisionedSetupReadDeclaration.operationKey,
+    scope,
+    current.correlationId,
+    completedMs,
   );
-};
 
 export type RecordTypeLifecyclePolicyServiceDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ activityId?: () => string }>;
@@ -929,22 +892,19 @@ export const createRecordTypeLifecyclePolicyService = (
             );
             return { kind: "unavailable" } as const;
           }
-          const completionRows = await transaction.query<ProvisionedSetupCompletionRow>`
-            select vortex_access.validated_human_request_context() as request_context,
-              pg_catalog.clock_timestamp() as completed_at
-          `;
+          const current = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+          const completedMs = await readDatabaseClock(transaction);
           if (
-            completionRows.length !== 1 ||
             !isCurrentProvisionedSetupRead(
               snapshot,
               scope,
-              session,
-              issuedAt,
+              current,
+              completedMs,
               accessResult.value,
               installResult.value,
               installScopeResult.value,
-              completionRows[0],
-            )
+            ) ||
+            Date.parse(current.expiresAt) <= completedMs
           )
             throw new Error("RECORD_LIFECYCLE_POLICY_SETUP_UNAVAILABLE");
           return { kind: "snapshot", value: snapshot } as const;
