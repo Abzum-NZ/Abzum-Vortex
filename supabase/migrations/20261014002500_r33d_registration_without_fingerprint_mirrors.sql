@@ -52,11 +52,27 @@ alter function vortex_access.save_organization_settings_record_for_administratio
 -- guard-allow: migration-owner-role Transfer this legacy postgres-owned function before replacing its definition.
 alter function vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
 
--- The consolidated owner role executes these existing security-definer functions
--- against baseline tables that still belong to postgres.
--- guard-allow: migration-owner-role The baseline tables still belong to postgres during the owner-role migration.
-grant all on all tables in schema vortex_identity, vortex_access, vortex_definition, vortex_record, vortex_platform to vortex_owner;
+-- These are the postgres-owned baseline tables directly used by the transferred functions.
+-- guard-allow: migration-owner-role Grant the owner role access to legacy tables directly used by these functions.
+grant select, insert, update, delete on table vortex_access.application_role_template_continuities to vortex_owner;
+grant select, insert, update, delete on table vortex_access.flow_execution_bindings to vortex_owner;
+grant select, insert, update, delete on table vortex_access.organization_access_versions to vortex_owner;
+grant select, insert, update, delete on table vortex_access.organization_role_activation_policy_revisions to vortex_owner;
+grant select, insert, update, delete on table vortex_access.organization_role_assignments to vortex_owner;
+grant select, insert, update, delete on table vortex_access.organization_role_permission_entries to vortex_owner;
+grant select, insert, update, delete on table vortex_access.organization_roles to vortex_owner;
+grant select, insert, update, delete on table vortex_access.permission_catalogue_entries to vortex_owner;
+grant select, insert, update, delete on table vortex_access.permission_continuities to vortex_owner;
+grant select, insert, update, delete on table vortex_definition.releases to vortex_owner;
+grant select, insert, update, delete on table vortex_definition.roots to vortex_owner;
+grant select, insert, update, delete on table vortex_identity.organization_runtime_settings to vortex_owner;
+grant select, insert, update, delete on table vortex_identity.organizations to vortex_owner;
+grant select, insert, update, delete on table vortex_identity.tenants to vortex_owner;
 set local role vortex_owner;
+
+-- Other baseline functions still owned by postgres read or write the two transferred tables.
+grant all on table vortex_access.permission_registrations,
+  vortex_access.permission_registration_revisions to postgres;
 
 alter table vortex_access.permission_registration_revisions
   drop constraint permission_registration_revisions_fingerprints_valid,
