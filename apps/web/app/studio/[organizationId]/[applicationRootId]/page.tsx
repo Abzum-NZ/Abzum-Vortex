@@ -1,4 +1,5 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
+import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { ApplicationDraftWorkspace } from "../../_components/application-draft-workspace";
 import { findPinnedPlatformThemeRelease } from "../../_lib/pinned-platform-theme-release";
 import {
@@ -14,8 +15,7 @@ export default async function StudioApplicationPage({ params }: {
   const { organizationId, applicationRootId } = await params;
   const result = await loadStudioApplicationDraft(organizationId, applicationRootId);
   if (result.kind !== "available")
-    return <main className="mx-auto max-w-3xl p-6"><h1>Studio unavailable</h1>
-      <p role="status">This draft is unavailable. Sign in with an account permitted to manage drafts and try again.</p></main>;
+    return <StudioUnavailable subject="Application draft" result={result} />;
   const pin = result.draft.source.body.theme.base;
   const themeRelease = findPinnedPlatformThemeRelease(pin);
   if (themeRelease === undefined)

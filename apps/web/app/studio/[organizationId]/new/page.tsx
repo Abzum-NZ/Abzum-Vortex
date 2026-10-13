@@ -1,4 +1,5 @@
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
+import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { ApplicationDraftWorkspace } from "../../_components/application-draft-workspace";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE,
@@ -14,8 +15,7 @@ export default async function NewStudioApplicationPage({ params }: {
   const { organizationId } = await params;
   const result = await loadStudioCreateAccess(organizationId);
   if (result.kind !== "available")
-    return <main className="mx-auto max-w-3xl p-6"><h1>Studio unavailable</h1>
-      <p role="status">This workspace is unavailable. Sign in with an account permitted to manage drafts and try again.</p></main>;
+    return <StudioUnavailable subject="New application" result={result} />;
   return <ApplicationDraftWorkspace mode="new" organizationId={result.organizationId}
     platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
     fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}

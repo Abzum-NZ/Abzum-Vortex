@@ -1,4 +1,5 @@
 import { loadHumanDefinitionPublicationDraft } from "../../../../../_lib/definition-publication";
+import { StudioUnavailable } from "../../../../_components/studio-unavailable";
 import { ModulePublicationEditor } from "../../../../_components/module-publication-editor";
 import { prepareStudioModulePublication, publishStudioModule } from "./actions";
 
@@ -11,17 +12,9 @@ export default async function StudioModulePublicationPage({
 }) {
   const { organizationId, moduleRootId } = await params;
   const result = await loadHumanDefinitionPublicationDraft(organizationId, moduleRootId, "module");
-  if (result.kind !== "available" || result.draft.kind !== "module")
-    return (
-      <main className="mx-auto max-w-3xl space-y-3 p-6">
-        <h1>Module publication unavailable</h1>
-        <p role="status">
-          This Module draft is unavailable. Sign in with an account permitted to manage releases and
-          try again.
-          {result.kind === "available" ? "" : ` (reason: ${result.reason ?? result.kind})`}
-        </p>
-      </main>
-    );
+  if (result.kind !== "available") return <StudioUnavailable subject="Module publication" result={result} />;
+  if (result.draft.kind !== "module")
+    return <StudioUnavailable subject="Module publication" result={{ kind: "refused", reason: "draft_kind_mismatch" }} />;
 
   return (
     <ModulePublicationEditor
