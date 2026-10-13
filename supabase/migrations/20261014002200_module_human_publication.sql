@@ -3,7 +3,10 @@
 -- append_release refused every human publication unless the root was an ordinary Application, so a Module draft could
 -- never be released from Studio. A human may now also publish a root of kind module; an Application root still needs
 -- an ordinary origin, any other kind is still refused, and the organisation and release-permission checks are
--- unchanged. The function keeps its result shape, grants and owner.
+-- unchanged. The function keeps its result shape and grants; the schema create privilege the owner does not hold is
+-- granted for the replacement only and revoked again.
+
+grant create on schema vortex_definition to postgres;
 
 create or replace function vortex_definition.append_release(
   p_root_id uuid,
@@ -1101,3 +1104,5 @@ grant execute on function vortex_definition.append_release(uuid, bigint, text, j
   to vortex_request;
 comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) is
   'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits ordinary human Application and Module publication only under locked current draft/release permissions and original account attribution, then advances only its root pointer.';
+
+revoke create on schema vortex_definition from postgres;
