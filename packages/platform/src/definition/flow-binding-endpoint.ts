@@ -390,9 +390,20 @@ const surfaceDiagnostic = (
     binding,
     installation,
   );
+  // A located correction is kept only for a field this exact form submit binding visibly owns.
+  const corrections =
+    parsed.data.corrections === undefined ||
+    binding === undefined ||
+    binding.event !== "form_submit" ||
+    taskId === undefined
+      ? []
+      : parsed.data.corrections.filter((correction) =>
+          hasVisibleOwningFormField(installation, binding.controlId, correction.field),
+        );
   return flowRefusalFeedbackSchema.parse({
     code: parsed.data.code,
     ...(submittedField === undefined ? {} : { submittedField }),
+    ...(corrections.length === 0 ? {} : { corrections }),
   });
 };
 

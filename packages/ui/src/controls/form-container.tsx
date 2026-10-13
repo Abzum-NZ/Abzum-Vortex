@@ -11,7 +11,7 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from "react";
-import type { FlowRefusalFeedback } from "@vortex/platform/schema";
+import type { FlowFieldCorrection, FlowRefusalFeedback } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
 import {
@@ -59,8 +59,15 @@ export type FormFlowFeedback =
       kind: "refusal";
       code: FlowRefusalFeedback["code"];
       fieldLabel?: string;
+      corrections?: readonly FlowFieldCorrection[];
       recovery?: "partial" | "uncertain";
     }>;
+
+const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>> = {
+  required_value: "This field is required.",
+  invalid_value: "This value is not valid.",
+  field_refused: "This value was not accepted.",
+};
 
 const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusal" }>): string => {
   switch (feedback.code) {
@@ -178,8 +185,17 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     [feedback],
   );
   const fieldErrorFor = useCallback(
-    (fieldKey: string) => validationErrors[fieldKey],
-    [validationErrors],
+    (fieldKey: string) => {
+      if (Object.hasOwn(validationErrors, fieldKey)) return validationErrors[fieldKey];
+      // A refusal from the server locates its corrections by the same field keys.
+      const refused = props.flowFeedback;
+      const correction =
+        refused?.kind === "refusal"
+          ? refused.corrections?.find((candidate) => candidate.field === fieldKey)
+          : undefined;
+      return correction === undefined ? undefined : fieldCorrectionText[correction.code];
+    },
+    [validationErrors, props.flowFeedback],
   );
 
   const scope: FormScope = useMemo(
