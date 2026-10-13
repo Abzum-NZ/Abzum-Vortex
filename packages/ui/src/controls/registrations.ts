@@ -3,6 +3,7 @@ import {
   labelSchema,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type PlatformBlockRelease,
+  isRecord,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
@@ -66,9 +67,6 @@ const controlPayloadParser = <Payload>(
 function fail(message: string, location: DefinitionRenderErrorLocation): never {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const requireRecord = (
   value: unknown,

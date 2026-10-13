@@ -7,9 +7,11 @@ import {
 import {
   type BoardColumnSelector,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  isRecord,
+  walkPageComposition,
+  walkPlacements,
 } from "@vortex/platform/schema";
 import type { PlacementFlowBinding } from "../../../../../_lib/application-page";
-import { isRecord } from "./event-values";
 import { isPlatformRelease } from "./form-surface";
 
 /** Finds the semantic events each registered placement declares in the rendered page tree. */
@@ -18,33 +20,19 @@ export const placementEventNamesByPage = (
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Readonly<Record<string, ReadonlySet<string>>> => {
   const eventNames: Record<string, ReadonlySet<string>> = {};
-  const visit = (slot: unknown): void => {
-    if (!isRecord(slot)) return;
-    if (!isRecord(slot.placements)) {
-      for (const child of Object.values(slot)) visit(child);
-      return;
+  walkPageComposition(page.composition, ({ placementId, placement }) => {
+    const block = placement.block;
+    if (
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      typeof block.releaseVersion === "string"
+    ) {
+      const registration = registry.get(block.blockId, block.releaseVersion);
+      if (registration !== undefined)
+        eventNames[placementId] = new Set(registration.metadata.supportedEvents);
     }
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      const block = candidate.block;
-      if (
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        typeof block.releaseVersion === "string"
-      ) {
-        const registration = registry.get(block.blockId, block.releaseVersion);
-        if (registration !== undefined)
-          eventNames[placementId] = new Set(registration.metadata.supportedEvents);
-      }
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child);
-    }
-  };
-  const composition = page.composition;
-  if (!isRecord(composition)) return eventNames;
-  if ("main" in composition) visit(composition.main);
-  else if (isRecord(composition.stepContent))
-    for (const child of Object.values(composition.stepContent)) visit(child);
+    return undefined;
+  });
   return eventNames;
 };
 
@@ -54,44 +42,26 @@ export const applicationLauncherPlacementIds = (
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Set<string> => {
   const placementIds = new Set<string>();
-  const visit = (slot: unknown): void => {
-    if (!isRecord(slot)) return;
-    if (!isRecord(slot.placements)) {
-      for (const child of Object.values(slot)) visit(child);
-      return;
-    }
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      const block = candidate.block;
-      if (isPlatformRelease(registry, block, PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_LAUNCHER_BLOCK_RELEASE))
-        placementIds.add(placementId);
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child);
-    }
-  };
-  const composition = page.composition;
-  if (!isRecord(composition)) return placementIds;
-  if ("main" in composition) visit(composition.main);
-  else if (isRecord(composition.stepContent))
-    for (const child of Object.values(composition.stepContent)) visit(child);
+  walkPageComposition(page.composition, ({ placementId, placement }) => {
+    if (
+      isPlatformRelease(
+        registry,
+        placement.block,
+        PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_LAUNCHER_BLOCK_RELEASE,
+      )
+    )
+      placementIds.add(placementId);
+    return undefined;
+  });
   return placementIds;
 };
 
 export const placementIdsInSlot = (candidate: unknown): ReadonlySet<string> => {
   const result = new Set<string>();
-  const visit = (slot: unknown): void => {
-    if (!isRecord(slot)) return;
-    if (!isRecord(slot.placements)) {
-      for (const child of Object.values(slot)) visit(child);
-      return;
-    }
-    for (const [placementId, placement] of Object.entries(slot.placements)) {
-      result.add(placementId);
-      if (isRecord(placement) && isRecord(placement.slots))
-        for (const child of Object.values(placement.slots)) visit(child);
-    }
-  };
-  visit(candidate);
+  walkPlacements(candidate, ({ placementId }) => {
+    result.add(placementId);
+    return undefined;
+  });
   return result;
 };
 

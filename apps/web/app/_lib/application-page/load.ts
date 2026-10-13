@@ -29,6 +29,8 @@ import {
   flowTaskChildLists,
   type JsonValue,
   fieldIdSchema,
+  sameId,
+  isRecord,
 } from "@vortex/platform/schema";
 import { createApplicationPageLinkReader } from "../application-page-link";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
@@ -69,13 +71,11 @@ import {
   pageSubjectParameter,
   projectedBodyContentAvailable,
   collectPlacements,
-  sameId,
   isBoardPlacement,
   projectedUseAvailability,
   isTablePlacement,
   fieldControl,
   fieldForPlacement,
-  isRecord,
   isEditFieldPlacement,
   isUnboundReferenceChoicePlacement,
 } from "./placement-helpers";

@@ -24,6 +24,7 @@ import {
   type PreviewInstallationExpiryResult,
   type SelectedOrganizationScope,
   type SessionContext,
+  sameId,
 } from "../schema";
 import { readLiveHumanContext } from "../access/live-context";
 import { createPreviewInstallationRepository } from "./module-index";
@@ -74,9 +75,6 @@ export type PreviewInstallationCoordinatorDependencies = Readonly<{
     authority: BuilderAuthority,
   ): PreviewInstallationDraftCompiler;
 }>;
-
-const sameId = (left: unknown, right: string): boolean =>
-  typeof left === "string" && left.toLowerCase() === right.toLowerCase();
 
 const errorCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error

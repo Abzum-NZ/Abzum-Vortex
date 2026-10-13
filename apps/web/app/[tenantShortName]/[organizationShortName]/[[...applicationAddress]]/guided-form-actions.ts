@@ -8,6 +8,7 @@ import {
   platformIdSchema,
   recordIdSchema,
   revisionSchema,
+  sameId,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
@@ -315,5 +316,3 @@ export async function abandonGuidedFormDraftAction(
   if (result.kind !== "available") return result;
   return result.value.outcome === "abandoned" ? { kind: "abandoned" } : { kind: "conflict" };
 }
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();

@@ -5,6 +5,7 @@ import {
   organizationIdSchema,
   safeHttpsUrlSchema,
   type ApplicationModuleQueryBinding,
+  isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { DisplayCellValue, DisplayRow, ListPayload } from "../display/projected-data";
@@ -16,9 +17,6 @@ const MAXIMUM_APPLICATION_TEXT = 120;
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const requireRecord = (
   value: unknown,

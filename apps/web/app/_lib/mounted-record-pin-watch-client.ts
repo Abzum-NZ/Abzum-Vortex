@@ -10,6 +10,7 @@ import {
   revisionSchema,
   type MountedRecordPinFrame,
   type MountedRecordPinMembership,
+  sameId,
 } from "@vortex/platform/schema";
 import {
   createPrivateInvalidationSubscriber,
@@ -27,7 +28,6 @@ const membershipSchema = mountedRecordPinAssociationSchema.extend({
   frame: mountedRecordPinFrameSchema,
 }).strict();
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 const sameAssociation = (left: MountedRecordPinMembership, right: MountedRecordPinMembership): boolean =>
   sameId(left.organizationId, right.organizationId) &&
   sameId(left.applicationRootId, right.applicationRootId) && left.applicationKey === right.applicationKey &&

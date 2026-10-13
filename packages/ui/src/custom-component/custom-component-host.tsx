@@ -6,6 +6,7 @@ import {
   flowLiteralSchema,
   jsonValueSchema,
   type CustomComponentRelease,
+  isRecord,
 } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
@@ -86,9 +87,6 @@ const EMPTY_BINDINGS: CustomComponentEventBindings = Object.freeze({});
 
 /** Confirmation width, the same 36rem the theme's medium dialog scale used. */
 const CONFIRMATION_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * Validates one untrusted event payload against its declared event. An undeclared field, a missing

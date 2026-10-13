@@ -5,18 +5,7 @@ import { Temporal } from "@js-temporal/polyfill";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
-import {
-  applicationRootIdSchema,
-  builderKeySchema,
-  flowIdSchema,
-  flowScheduleRecurrenceSchema,
-  flowSchema,
-  organizationIdSchema,
-  revisionSchema,
-  stableDefinitionReleaseVersionSchema,
-  type FlowDefinition,
-  type FlowTrigger,
-} from "../schema";
+import { applicationRootIdSchema, builderKeySchema, flowIdSchema, flowScheduleRecurrenceSchema, flowSchema, organizationIdSchema, revisionSchema, stableDefinitionReleaseVersionSchema, type FlowDefinition, type FlowTrigger, isRecord } from "../schema";
 
 import type { KestraFlowCompilerEnvironment, KestraFlowIdentity } from "./kestra-compiler";
 
@@ -68,9 +57,6 @@ const identityKeys = [
   "installationRevision",
   "workflowRevision",
 ];
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const hasOnlyKeys = (
   value: Readonly<Record<string, unknown>>,

@@ -30,6 +30,10 @@ import {
   type JsonValue,
   type OrganizationSelectionCandidate,
   type SafeFlowResultDescriptor,
+  isRecord,
+  sameId,
+  walkPlacements,
+  type PlacementVisitor,
 } from "../schema";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -198,11 +202,6 @@ const refuse = (code: string, cause?: unknown): FlowBindingEndpointResult => {
   return refused;
 };
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
-
 const isPlacementProvenVisible = (placement: Record<string, unknown>): boolean => {
   if (
     placement.visibilityCondition !== undefined ||
@@ -232,64 +231,53 @@ const hasVisibleOwningFormField = (
   const inputReleases = PLATFORM_BLOCK_RELEASES.filter((release) =>
     release.supportedEvents.includes("field_changed"),
   );
-  const visitSlotTree = (
-    candidate: unknown,
-    currentFormId?: string,
-    ancestorsVisible = true,
-  ): void => {
-    if (!isRecord(candidate)) return;
-    if (!isRecord(candidate.placements)) {
-      for (const child of Object.values(candidate))
-        visitSlotTree(child, currentFormId, ancestorsVisible);
-      return;
-    }
-    for (const [placementId, value] of Object.entries(candidate.placements)) {
-      if (!isRecord(value)) continue;
-      const block = value.block;
-      const blockIsForm =
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        typeof block.releaseVersion === "string" &&
-        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
-        block.releaseVersion === FORM_CONTAINER_BLOCK_RELEASE.releaseVersion;
-      const formId = blockIsForm ? placementId : currentFormId;
-      const visible = ancestorsVisible && isPlacementProvenVisible(value);
-      if (sameId(placementId, controlId)) controls.push({ formId, visible });
+  type Ancestry = Readonly<{ currentFormId: string | undefined; ancestorsVisible: boolean }>;
+  const visitPlacement: PlacementVisitor<Ancestry> = (
+    { placementId, placement: value },
+    { currentFormId, ancestorsVisible },
+  ) => {
+    const block = value.block;
+    const blockIsForm =
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      typeof block.releaseVersion === "string" &&
+      sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
+      block.releaseVersion === FORM_CONTAINER_BLOCK_RELEASE.releaseVersion;
+    const formId = blockIsForm ? placementId : currentFormId;
+    const visible = ancestorsVisible && isPlacementProvenVisible(value);
+    if (sameId(placementId, controlId)) controls.push({ formId, visible });
 
+    if (
+      formId !== undefined &&
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      typeof block.releaseVersion === "string" &&
+      isRecord(value.settings)
+    ) {
+      const blockId = block.blockId;
+      const releaseVersion = block.releaseVersion;
+      const registeredInput = inputReleases.some(
+        (release) => sameId(release.blockId, blockId) && release.releaseVersion === releaseVersion,
+      );
+      const name = value.settings.name;
       if (
-        formId !== undefined &&
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        typeof block.releaseVersion === "string" &&
-        isRecord(value.settings)
-      ) {
-        const blockId = block.blockId;
-        const releaseVersion = block.releaseVersion;
-        const registeredInput = inputReleases.some(
-          (release) =>
-            sameId(release.blockId, blockId) && release.releaseVersion === releaseVersion,
-        );
-        const name = value.settings.name;
-        if (
-          registeredInput &&
-          isRecord(name) &&
-          name.kind === "text" &&
-          name.value === callerInputName
-        )
-          fields.push({ formId, visible });
-      }
-
-      if (isRecord(value.slots))
-        for (const child of Object.values(value.slots)) visitSlotTree(child, formId, visible);
+        registeredInput &&
+        isRecord(name) &&
+        name.kind === "text" &&
+        name.value === callerInputName
+      )
+        fields.push({ formId, visible });
     }
+    return { currentFormId: formId, ancestorsVisible: visible };
   };
+  const root: Ancestry = { currentFormId: undefined, ancestorsVisible: true };
 
   for (const page of pages) {
     if (!isRecord(page) || !isRecord(page.composition)) continue;
     const composition = page.composition;
-    if ("main" in composition) visitSlotTree(composition.main);
-    if ("content" in composition) visitSlotTree(composition.content);
-    if ("stepContent" in composition) visitSlotTree(composition.stepContent);
+    if ("main" in composition) walkPlacements(composition.main, visitPlacement, root);
+    if ("content" in composition) walkPlacements(composition.content, visitPlacement, root);
+    if ("stepContent" in composition) walkPlacements(composition.stepContent, visitPlacement, root);
   }
 
   if (

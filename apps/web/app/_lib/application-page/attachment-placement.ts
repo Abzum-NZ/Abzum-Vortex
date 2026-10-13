@@ -16,16 +16,13 @@ import {
   type BlockPropertyValueContract,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  isRecord,
+  sameId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../server-composition";
 import type {
   collectPlacements} from "./placement-helpers";
-import {
-  isRecord,
-  sameId,
-  first,
-  pageSubjectParameter
-} from "./placement-helpers";
+import { first, pageSubjectParameter } from "./placement-helpers";
 import type { PageSubjectType, PageDataState, SearchParameters } from "./types";
 
 const logRefusal = (placementId: string, reason: string, cause?: unknown): void => {

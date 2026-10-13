@@ -22,6 +22,7 @@ import {
   type ConditionNode,
   type JsonValue,
   type ModuleField,
+  isRecord,
 } from "@vortex/platform/schema";
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
@@ -722,9 +723,6 @@ export function createInitialStudioCondition(
   }
   return undefined;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const addContractLimitIssues = (
   value: unknown,

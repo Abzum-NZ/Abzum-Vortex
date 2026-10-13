@@ -10,6 +10,7 @@ import {
   type FormContinuationReceipt,
   type FormContinuationTarget,
   type JsonValue,
+  isRecord,
 } from "@vortex/platform/schema";
 import { isFlowIntent, type FlowIntent } from "./intents";
 
@@ -98,9 +99,6 @@ const invalidServerResponse = (cause: unknown = new TypeError("FLOW_SERVER_RESPO
   console.error(`[flow] server response invalid: ${describeFailure(cause)}`);
   return unavailable;
 };
-
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
 const parseIntents = (candidate: unknown): readonly FlowIntent[] | undefined =>
   Array.isArray(candidate) && candidate.every(isFlowIntent) ? candidate : undefined;

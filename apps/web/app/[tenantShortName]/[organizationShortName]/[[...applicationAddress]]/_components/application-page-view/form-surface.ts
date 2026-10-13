@@ -7,8 +7,11 @@ import {
 import {
   responsivePlacementSchema,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  isRecord,
+  walkPageComposition,
+  walkPlacements,
+  type VisitedPlacement,
 } from "@vortex/platform/schema";
-import { isRecord } from "./event-values";
 
 /** Finds the form ancestor that owns each placement in the rendered page tree. */
 export const isPlatformRelease = (
@@ -27,30 +30,18 @@ export const formOwnersByPlacement = (
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Readonly<Record<string, string>> => {
   const owners: Record<string, string> = {};
-  const visit = (slot: unknown, formOwner?: string): void => {
-    if (!isRecord(slot)) return;
-    if (!isRecord(slot.placements)) {
-      for (const child of Object.values(slot)) visit(child, formOwner);
-      return;
-    }
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      const block = candidate.block;
+  walkPageComposition(
+    page.composition,
+    ({ placementId, placement }, formOwner: string | undefined) => {
       const owner = isPlatformRelease(
         registry,
-        block,
+        placement.block,
         PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
       ) ? placementId : formOwner;
       if (owner !== undefined) owners[placementId] = owner;
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child, owner);
-    }
-  };
-  const composition = page.composition;
-  if (!isRecord(composition)) return owners;
-  if ("main" in composition) visit(composition.main);
-  else if (isRecord(composition.stepContent))
-    for (const child of Object.values(composition.stepContent)) visit(child);
+      return owner;
+    },
+  );
   return owners;
 };
 
@@ -69,26 +60,20 @@ export const formSurfaceComposition = (
   let matchId: string | undefined;
   let matchUsable = false;
   let matches = 0;
-  const visit = (slot: unknown, usable: boolean): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      const currentlyUsable = usable && candidate.availability === undefined;
+  walkPageComposition(
+    page.composition,
+    ({ placementId, placement }, usable: boolean) => {
+      const currentlyUsable = usable && placement.availability === undefined;
       if (placementId.toLowerCase() === formId.toLowerCase()) {
-        match = candidate;
+        match = placement;
         matchId = placementId;
         matchUsable = currentlyUsable;
         matches += 1;
       }
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child, currentlyUsable);
-    }
-  };
-  const composition = page.composition;
-  if (!isRecord(composition)) return undefined;
-  if ("main" in composition) visit(composition.main, true);
-  else if (isRecord(composition.stepContent))
-    for (const root of Object.values(composition.stepContent)) visit(root, true);
+      return currentlyUsable;
+    },
+    true,
+  );
   if (
     match === undefined ||
     matchId === undefined ||
@@ -122,17 +107,13 @@ export const formSurfaceComposition = (
 
   const placementIds = new Set<string>();
   const placements: Record<string, Record<string, unknown>> = {};
-  const collect = (placementId: string, placement: Record<string, unknown>): void => {
+  const collect = ({ placementId, placement }: VisitedPlacement): undefined => {
     placementIds.add(placementId);
     placements[placementId] = placement;
-    if (!isRecord(placement.slots)) return;
-    for (const slot of Object.values(placement.slots)) {
-      if (!isRecord(slot) || !isRecord(slot.placements)) continue;
-      for (const [childId, child] of Object.entries(slot.placements))
-        if (isRecord(child)) collect(childId, child);
-    }
   };
-  collect(matchId, modalRoot);
+  collect({ placementId: matchId, placement: modalRoot });
+  if (isRecord(modalRoot.slots))
+    for (const slot of Object.values(modalRoot.slots)) walkPlacements(slot, collect);
   const rootSlot = {
     placements: { [matchId]: modalRoot },
     order: { desktop: [matchId], tablet: [matchId], phone: [matchId] },

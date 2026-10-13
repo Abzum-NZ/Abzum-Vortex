@@ -11,9 +11,11 @@ import {
   exactDecimalTextSchema,
   moneyValueSchema,
   type BlockPropertyValueContract,
+  sameId,
+  isRecord,
 } from "@vortex/platform/schema";
 import type { ModuleRelease, ModuleField, SearchParameters } from "./types";
-import { sameId, isRecord, first } from "./placement-helpers";
+import { first } from "./placement-helpers";
 
 /**
  * A query-string value typed to the declared input it fills. A value the type cannot hold is

@@ -11,6 +11,7 @@ import {
   type BoardColumnSelector,
   type BlockPropertyValueContract,
   type ComponentSemanticEventKind,
+  isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
@@ -364,9 +365,6 @@ function fail(
     propertyPath === undefined ? location : { ...location, propertyPath },
   );
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const requireRecord = (
   value: unknown,

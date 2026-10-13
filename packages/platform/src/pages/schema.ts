@@ -4,3 +4,4 @@ export { inspectApplicationPageReplacements } from "./application-page-replaceme
 export * from "./projected-navigation";
 export * from "./shadcn-icon-libraries";
 export * from "./text-input-pattern";
+export * from "./placement-walk";

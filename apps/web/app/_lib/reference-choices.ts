@@ -12,6 +12,12 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  isRecord,
+  sameId,
+  walkPageComposition,
+  walkPlacements,
+  type PlacementVisitor,
+  type VisitedPlacement,
 } from "@vortex/platform/schema";
 import {
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
@@ -26,11 +32,6 @@ import {
   type RecordReferenceChoiceCommand,
   type ReferenceChoiceOption,
 } from "@web/platform-server";
-
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 type ChoicePlacementSettings = Readonly<{
   fieldKey: string;
@@ -194,6 +195,17 @@ export const bindReferenceChoiceField = (
   };
 };
 
+/** Walks every slot root of an authored composition: main, shell content and step content. */
+const walkAuthoredComposition = <Inherited = undefined>(
+  composition: unknown,
+  visit: PlacementVisitor<Inherited>,
+): void => {
+  if (!isRecord(composition)) return;
+  if ("main" in composition) walkPlacements(composition.main, visit);
+  for (const roots of [composition.content, composition.stepContent])
+    if (isRecord(roots)) for (const root of Object.values(roots)) walkPlacements(root, visit);
+};
+
 const formPlacementsOnPage = (
   page: unknown,
   targetFormId: string,
@@ -201,9 +213,9 @@ const formPlacementsOnPage = (
 ): Readonly<{ fields: readonly ReferenceChoiceFormField[]; invalid: boolean }> => {
   const found: ReferenceChoiceFormField[] = [];
   let invalid = false;
-  const visitSlot = (slot: unknown, formId?: string): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, placement] of Object.entries(slot.placements)) {
+  walkAuthoredComposition(
+    isRecord(page) ? page.composition : undefined,
+    ({ placementId, placement }, formId: string | undefined) => {
       const block = blockOf(placement);
       const isForm =
         typeof block?.blockId === "string" &&
@@ -214,18 +226,9 @@ const formPlacementsOnPage = (
         if (field === undefined) invalid = true;
         else found.push(field);
       }
-      if (isRecord(placement) && isRecord(placement.slots))
-        for (const child of Object.values(placement.slots)) visitSlot(child, owner);
-    }
-  };
-
-  if (!isRecord(page) || !isRecord(page.composition)) return { fields: found, invalid };
-  const composition = page.composition;
-  if ("main" in composition) visitSlot(composition.main);
-  if (isRecord(composition.content))
-    for (const slot of Object.values(composition.content)) visitSlot(slot);
-  if (isRecord(composition.stepContent))
-    for (const slot of Object.values(composition.stepContent)) visitSlot(slot);
+      return owner;
+    },
+  );
   return { fields: found, invalid };
 };
 
@@ -235,31 +238,18 @@ export const applicationHasAuthoredForm = (
   formId: string,
 ): boolean => {
   let matches = 0;
-  const visitSlot = (slot: unknown): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, placement] of Object.entries(slot.placements)) {
-      const block = blockOf(placement);
-      if (
-        sameId(placementId, formId) &&
-        typeof block?.blockId === "string" &&
-        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-      )
-        matches += 1;
-      if (isRecord(placement) && isRecord(placement.slots))
-        for (const child of Object.values(placement.slots)) visitSlot(child);
-    }
+  const countForm = ({ placementId, placement }: VisitedPlacement): undefined => {
+    const block = blockOf(placement);
+    if (
+      sameId(placementId, formId) &&
+      typeof block?.blockId === "string" &&
+      sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+    )
+      matches += 1;
   };
 
-  for (const page of application.pages) {
-    const composition = page.composition;
-    if (!isRecord(composition)) continue;
-    if ("main" in composition) visitSlot(composition.main);
-    if ("content" in composition && isRecord(composition.content))
-      for (const slot of Object.values(composition.content)) visitSlot(slot);
-    if ("stepContent" in composition && isRecord(composition.stepContent))
-      for (const slot of Object.values(composition.stepContent)) visitSlot(slot);
-  }
-  for (const shell of application.shells) visitSlot(shell.layout);
+  for (const page of application.pages) walkAuthoredComposition(page.composition, countForm);
+  for (const shell of application.shells) walkPlacements(shell.layout, countForm);
   return matches === 1;
 };
 
@@ -298,54 +288,44 @@ export const projectedReferenceChoiceForm = (
   if (!isRecord(page) || !isRecord(page.composition)) return undefined;
   let matches = 0;
   let target: Record<string, unknown> | undefined;
-  const find = (slot: unknown, usable: boolean): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, placement] of Object.entries(slot.placements)) {
-      if (!isRecord(placement)) continue;
+  walkPageComposition(
+    page.composition,
+    ({ placementId, placement }, inherited: Readonly<{ usable: boolean }>) => {
       const block = blockOf(placement);
       const isForm = typeof block?.blockId === "string" &&
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
-      const currentlyUsable = usable && placement.availability === undefined;
+      const currentlyUsable = inherited.usable && placement.availability === undefined;
       if (isForm && sameId(placementId, formId)) {
         matches += 1;
         if (currentlyUsable) target = placement;
       }
-      if (isRecord(placement.slots))
-        for (const child of Object.values(placement.slots)) find(child, currentlyUsable);
-    }
-  };
-  const composition = page.composition;
-  if ("main" in composition) find(composition.main, true);
-  if (isRecord(composition.stepContent))
-    for (const slot of Object.values(composition.stepContent)) find(slot, true);
+      return { usable: currentlyUsable };
+    },
+    { usable: true },
+  );
   if (matches !== 1 || target === undefined) return undefined;
 
   const fields = new Map<string, ReferenceChoiceFormField>();
   const placements = new Map<string, ReferenceChoiceFormField>();
   let invalid = false;
-  const collect = (slot: unknown, usable: boolean): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, placement] of Object.entries(slot.placements)) {
-      if (!isRecord(placement)) continue;
-      const block = blockOf(placement);
-      if (typeof block?.blockId === "string" &&
-          sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) continue;
-      const currentlyUsable = usable && placement.availability === undefined;
-      if (!currentlyUsable) continue;
-      if (hasReferenceChoiceSource(placement)) {
-        const field = referenceChoiceFieldForPlacement(placement, modules);
-        if (field === undefined || fields.has(field.fieldKey)) invalid = true;
-        else {
-          fields.set(field.fieldKey, field);
-          placements.set(placementId, field);
-        }
+  const collect: PlacementVisitor<boolean> = ({ placementId, placement }, usable) => {
+    const block = blockOf(placement);
+    if (typeof block?.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) return false;
+    const currentlyUsable = usable && placement.availability === undefined;
+    if (!currentlyUsable) return false;
+    if (hasReferenceChoiceSource(placement)) {
+      const field = referenceChoiceFieldForPlacement(placement, modules);
+      if (field === undefined || fields.has(field.fieldKey)) invalid = true;
+      else {
+        fields.set(field.fieldKey, field);
+        placements.set(placementId, field);
       }
-      if (isRecord(placement.slots))
-        for (const child of Object.values(placement.slots)) collect(child, currentlyUsable);
     }
+    return currentlyUsable;
   };
   if (isRecord(target.slots))
-    for (const child of Object.values(target.slots)) collect(child, true);
+    for (const child of Object.values(target.slots)) walkPlacements(child, collect, true);
   return invalid || !validDependencies(fields) ? undefined : { fields, placements };
 };
 
