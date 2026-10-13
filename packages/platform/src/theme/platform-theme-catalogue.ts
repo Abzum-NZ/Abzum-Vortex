@@ -1,8 +1,4 @@
-import {
-  platformThemeReleaseSchema,
-  type PlatformThemeRelease,
-  type PlatformThemeTokenRoleKey,
-} from "../definition/application-composition";
+import { platformThemeReleaseSchema, type PlatformThemeRelease, type PlatformThemeTokenRoleKey } from "../definition/application-composition/theme";
 import { platformThemeReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import source from "../catalogue/catalogue/platform-theme-catalogue.source.json";
 

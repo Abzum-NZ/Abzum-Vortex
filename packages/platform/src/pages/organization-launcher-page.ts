@@ -4,7 +4,7 @@ import {
   HEADING_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
 } from "../definition/application-composition-catalogue";
-import { applicationShellSchema } from "../definition/application-composition";
+import { applicationShellSchema } from "../definition/application-composition/page-composition";
 import { pageDefinitionSchema } from "../definition/application-contracts";
 import { containedComponentIdSchema } from "../catalogue/identifiers";
 

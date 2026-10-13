@@ -12,8 +12,6 @@ begin
       return array['2.0.0'];
     when 'module' then
       return array['2.0.0', '3.0.0'];
-    when 'module_storage_conversion' then
-      return array['2.0.0'];
     when 'record_type' then
       return array['1.0.0', '2.0.0', '3.0.0'];
     else
@@ -28,7 +26,7 @@ revoke all on function vortex_definition.accepted_contract_version(text)
 grant execute on function vortex_definition.accepted_contract_version(text)
   to vortex_owner;
 comment on function vortex_definition.accepted_contract_version(text) is
-  'One accepted definition contract-version set per contract kind. application: vortex_definition.provision_module_installation_storage and vortex_definition.activate/detach_application_installation. module: vortex_record.provision_exact_module_storage. module_storage_conversion: vortex_record.register_storage_conversion_plan. record_type: vortex_access.evaluate_organization_record_access_internal.';
+  'One accepted definition contract-version set per contract kind. application: vortex_definition.provision_module_installation_storage and vortex_definition.activate/detach_application_installation. module: vortex_record.provision_exact_module_storage. record_type: vortex_access.evaluate_organization_record_access_internal.';
 
 alter function vortex_definition.accepted_contract_version(p_kind text) owner to vortex_owner;
 

@@ -1,4 +1,4 @@
-import type { ApplicationShell } from "../definition/application-composition";
+import type { ApplicationShell } from "../definition/application-composition/page-composition";
 import type { PageDefinition } from "../definition/application-contracts";
 
 export type PlacementSlot = ApplicationShell["layout"];
