@@ -228,7 +228,11 @@ export const calculateLockedRelationshipTotalSave = (
     initialByRecord.set(record.recordKey, initial.candidate);
     let candidateValues = initial.candidate.candidateValues;
     const execution = input.rules?.get(record.recordKey);
-    if (input.rules !== undefined && execution === undefined)
+    if (
+      input.rules !== undefined &&
+      execution === undefined &&
+      (record.recordKey !== "root" || Object.keys(input.command.submittedValues).length > 0)
+    )
       return {
         success: false,
         issues: [

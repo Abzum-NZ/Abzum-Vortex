@@ -768,9 +768,17 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                     "operation_refused",
                     `the before-save rules for ${record.recordKey} are unavailable`,
                   );
-                const execution = beginBeforeSaveRuleExecution(ruleSet);
-                closureRules.set(record.recordKey, execution);
-                attempted.executions.push(execution);
+                // A create-only action must not acquire a subject write solely
+                // from a subject rule effect. Derived subject changes are checked
+                // below and refused until their rule evaluation can be ordered.
+                if (
+                  record.recordKey !== "root" ||
+                  Object.keys(composition.submittedValues).length > 0
+                ) {
+                  const execution = beginBeforeSaveRuleExecution(ruleSet);
+                  closureRules.set(record.recordKey, execution);
+                  attempted.executions.push(execution);
+                }
               }
             } else if (Object.keys(composition.submittedValues).length > 0) {
               attempted.rules = beginBeforeSaveRuleExecution(subjectRuleSet);
@@ -903,6 +911,17 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       JSON.stringify(value ?? null) !==
                       JSON.stringify(prepared.existingValues[fieldId] ?? null),
                   ),
+                );
+              if (
+                totalPreparation.outcome === "prepared" &&
+                Object.keys(composition.submittedValues).length === 0 &&
+                Object.keys(finalValues).length > 0 &&
+                subjectRuleSet.rules.length > 0
+              )
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "the created records changed derived subject values that require its before-save rules",
                 );
               const createdFinalValues =
                 "creationFinalValues" in calculated
