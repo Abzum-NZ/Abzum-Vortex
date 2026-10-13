@@ -35,9 +35,9 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
 ## Local database lanes
 
 The main Local Supabase stack (`supabase/config.toml`, ports 543xx) is the owner's demo and the
-lead's walks: workers never reset or stop it. Workers use lanes db2 and db3, lighter stacks
+lead's walks: workers never reset or stop it. Workers use lanes db2 to db5, lighter stacks
 (no Studio, logs or edge runtime) under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`) with
-every port shifted by 1000 per lane (db2 API 55321, database 55322; db3 56321, 56322). Each lane is
+every port shifted by 1000 per lane (db2 API 55321, database 55322; db3 56321; db4 57321; db5 58321). Each lane is
 guarded by `.claude/orchestrator/db<n>.lock`: hold the lock before using a lane.
 
 ```
