@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import {
   addOrganizationAdministrationMembershipCommandSchema,
+  logRefusal,
   applicationRootIdSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
@@ -369,7 +370,9 @@ const parsedJsonInput = (value: ProtectedOperationValue): unknown => {
   if (typeof value !== "string") return value;
   try {
     return JSON.parse(value);
-  } catch {
+  } catch (error) {
+    // The unparsed text goes on to validation, which reports the located error to the person.
+    logRefusal("protected-operation", "json input parse", "json_input_not_parsable", error);
     return value;
   }
 };
@@ -1032,7 +1035,10 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       );
       if (result.kind !== "available") return result;
       if (result.value === "conflict") return "conflict";
-      if (result.value.outcome === "refused") return { kind: "unavailable" };
+      if (result.value.outcome === "refused") {
+        logRefusal("protected-operation", "update own profile", "profile_update_refused");
+        return { kind: "unavailable" };
+      }
       return {
         kind: "available",
         value: {
@@ -1184,28 +1190,36 @@ export const createProtectedOperationExecutor = (
     services: ProtectedOperationServices,
     request: ProtectedOperationExecutionRequest,
   ): Promise<ProtectedOperationExecution> => {
+    const operationName = (): string =>
+      protectedOperationIdentitySchema.safeParse(request.operation).data?.operationId ??
+      "unidentified";
+    const refuse = (code: string, cause?: unknown): ProtectedOperationExecution => {
+      logRefusal("protected-operation", operationName(), code, cause);
+      return { outcome: "refused" };
+    };
     try {
       const identity = protectedOperationIdentitySchema.safeParse(request.operation);
       if (request.executionAuthorityContext !== undefined) {
         // The person-session executor must never downgrade a non-person authority.
-        return { outcome: "refused" };
+        return refuse("non_person_authority_context");
       }
       const session = identitySessionSchema.safeParse(request.session);
       const selection = organizationSelectionCandidateSchema.safeParse(request.selection);
-      if (!identity.success || !session.success || !selection.success)
-        return { outcome: "refused" };
+      if (!identity.success) return refuse("operation_identity_invalid", identity.error);
+      if (!session.success) return refuse("session_invalid", session.error);
+      if (!selection.success) return refuse("organization_selection_invalid", selection.error);
       const registered = findPlatformServiceOperation(
         identity.data.serviceId,
         identity.data.operationId,
         identity.data.releaseVersion,
       );
-      if (registered === undefined) return { outcome: "refused" };
+      if (registered === undefined) return refuse("operation_not_registered");
       const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
       if (
         registeredOperation === undefined ||
         registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
       )
-        return { outcome: "refused" };
+        return refuse("operation_authority_mismatch");
       if (
         typeof request.inputs !== "object" ||
         request.inputs === null ||
@@ -1229,16 +1243,23 @@ export const createProtectedOperationExecutor = (
       if (result === "conflict") return { outcome: "conflict" };
       if (result.kind === "confirmed_failure")
         return { outcome: result.outcome, diagnostic: result.diagnostic };
-      if (result.kind === "unavailable") return { outcome: "refused" };
-      if (result.kind === "temporarily_unavailable") return { outcome: "failed" };
+      if (result.kind === "unavailable") return refuse("operation_unavailable");
+      if (result.kind === "temporarily_unavailable") {
+        logRefusal("protected-operation", operationName(), "operation_temporarily_unavailable");
+        return { outcome: "failed" };
+      }
       const outputs = declaredOutputs(registered.descriptor, result.value);
-      if (outputs === undefined) return { outcome: "failed" };
+      if (outputs === undefined) {
+        logRefusal("protected-operation", operationName(), "declared_outputs_missing");
+        return { outcome: "failed" };
+      }
       // A successful read supplies data to later tasks without counting as a saved effect.
       return {
         outcome: registered.descriptor.effect === "read" ? "completed" : "committed",
         outputs,
       };
-    } catch {
+    } catch (error) {
+      logRefusal("protected-operation", operationName(), "execution_failed", error);
       return { outcome: "failed" };
     }
   };
@@ -1266,31 +1287,37 @@ export const createProtectedOperationExecutor = (
         ) => Promise<Result>;
       }>,
     ): Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>> {
+      const refuse = (code: string, cause?: unknown): Readonly<{ kind: "refused" }> => {
+        logRefusal("protected-operation", "durable actor execution", code, cause);
+        return { kind: "refused" };
+      };
       try {
         const durableActorRequest = dependencies.durableActorRequest;
         const durableOperations = dependencies.durableOperations;
         const context = durableActorOperationContextSchema.safeParse(request.actorContext);
         const identity = protectedOperationIdentitySchema.safeParse(request.operation);
-        if (!durableActorRequest || !durableOperations || !context.success || !identity.success)
-          return { kind: "refused" };
+        if (!durableActorRequest || !durableOperations)
+          return refuse("durable_execution_not_configured");
+        if (!context.success) return refuse("actor_context_invalid", context.error);
+        if (!identity.success) return refuse("operation_identity_invalid", identity.error);
         const operationCallKey =
           flowTaskRegistry["operation.call"].protectedOperationKey ??
           "workflow.task.operation.call";
         if (context.data.purpose.operationKey !== operationCallKey)
-          return { kind: "refused" };
+          return refuse("actor_purpose_not_operation_call");
 
         const registered = findPlatformServiceOperation(
           identity.data.serviceId,
           identity.data.operationId,
           identity.data.releaseVersion,
         );
-        if (registered === undefined) return { kind: "refused" };
+        if (registered === undefined) return refuse("operation_not_registered");
         const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
         if (
           registeredOperation === undefined ||
           registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
         )
-          return { kind: "refused" };
+          return refuse("operation_authority_mismatch");
 
         const actorResolution = await durableActorRequest.run(
           context.data,
@@ -1333,10 +1360,23 @@ export const createProtectedOperationExecutor = (
             });
           },
         );
-        if (actorResolution.kind === "unavailable") return { kind: "refused" };
-        if (actorResolution.kind === "temporarily_unavailable") return { kind: "failed" };
+        if (actorResolution.kind === "unavailable") return refuse("actor_resolution_unavailable");
+        if (actorResolution.kind === "temporarily_unavailable") {
+          logRefusal(
+            "protected-operation",
+            "durable actor execution",
+            "actor_resolution_temporarily_unavailable",
+          );
+          return { kind: "failed" };
+        }
         return { kind: "available", value: actorResolution.value };
-      } catch {
+      } catch (error) {
+        logRefusal(
+          "protected-operation",
+          "durable actor execution",
+          "durable_execution_failed",
+          error,
+        );
         return { kind: "failed" };
       }
     },

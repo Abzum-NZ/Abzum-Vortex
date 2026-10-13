@@ -5,6 +5,7 @@ import {
   sameId,
   applicationRootIdSchema,
   identitySessionSchema,
+  logRefusal,
   moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
   organizationIdSchema,
@@ -1177,7 +1178,14 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             samePermissionAuthority(prepared.sourcePermissions, next.sourcePermissions) &&
             samePermissionAuthority(prepared.livePermissions, next.livePermissions);
         });
-    } catch {
+    } catch (error) {
+      // Falls back to the normal template-acceptance decision, never to a silent upgrade.
+      logRefusal(
+        "installation",
+        `authority preservation check (application ${request.applicationRootId})`,
+        "prior_release_evidence_unavailable",
+        error,
+      );
       return false;
     }
   };
@@ -1269,7 +1277,13 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         kind: "available",
         value: dependencies.projectInstalledEvents({ definitions: releaseSet, installation }),
       };
-    } catch {
+    } catch (error) {
+      logRefusal(
+        "installation",
+        `installed events projection (application ${installation.applicationRootId})`,
+        "installed_events_projection_failed",
+        error,
+      );
       return { kind: "unavailable" };
     }
   };

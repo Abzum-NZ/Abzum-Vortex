@@ -9,6 +9,7 @@ import {
   fieldIdSchema,
   fileIdSchema,
   fileRecordSchema,
+  logRefusal,
   organizationAccountIdSchema,
   organizationIdSchema,
   platformIdSchema,
@@ -627,15 +628,19 @@ const DEFAULT_MAXIMUM_PREVIEW_OUTPUT_BYTES = 10 * 1024 * 1024;
 
 const refusal = (
   reason: FileReadRefusalReason,
+  code: string,
+  cause?: unknown,
   extraHeaders?: Readonly<Record<string, string>>,
-): FileReadRefusal =>
-  Object.freeze({
+): FileReadRefusal => {
+  logRefusal("files", "read", code, cause);
+  return Object.freeze({
     outcome: "refused",
     reason,
     message: REFUSAL_MESSAGES[reason],
     statusCode: fileReadRefusalHttpStatus[reason],
     headers: Object.freeze({ ...privateFileResponseHeaders(), ...(extraHeaders ?? {}) }),
   });
+};
 
 const positiveLimit = (value: number | undefined, fallback: number): number =>
   value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : fallback;
@@ -667,6 +672,20 @@ const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority |
     readableFieldIds.some((value) => !value.success) ||
     !validUntil.success
   ) {
+    const invalid = Object.entries({
+      organizationId,
+      actor,
+      applicationRootId,
+      recordTypeId,
+      recordId,
+      fieldId,
+      validUntil,
+    })
+      .filter(([, parsed]) => parsed !== undefined && !parsed.success)
+      .map(([name]) => name);
+    if (readableFieldIds === undefined || readableFieldIds.some((value) => !value.success))
+      invalid.push("readableFieldIds");
+    logRefusal("files", `read (invalid: ${invalid.join(",")})`, "authority_fields_invalid");
     return null;
   }
 
@@ -703,6 +722,7 @@ const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority |
       !expiresAt.success ||
       typeof grant.revoked !== "boolean"
     ) {
+      logRefusal("files", "read", "shared_grant_fields_invalid");
       return null;
     }
     sharedRecordGrant = Object.freeze({
@@ -841,16 +861,17 @@ export const createFileReadCoordinator = (
   ): Promise<FileReadResult> => {
     const now = clock();
     const nowMilliseconds = now.getTime();
-    if (!Number.isFinite(nowMilliseconds)) return refusal("authority_unavailable");
+    if (!Number.isFinite(nowMilliseconds)) return refusal("authority_unavailable", "clock_invalid");
 
     const fileId = fileIdSchema.safeParse(request?.fileId);
     if (!fileId.success || (request.purpose !== "download" && request.purpose !== "preview")) {
-      return refusal("malformed_request");
+      return refusal("malformed_request", "request_malformed");
     }
 
     const authority = parseAuthority(authorityCandidate);
-    if (authority === null || !(nowMilliseconds < Date.parse(authority.validUntil))) {
-      return refusal("authority_unavailable");
+    if (authority === null) return refusal("authority_unavailable", "authority_malformed");
+    if (!(nowMilliseconds < Date.parse(authority.validUntil))) {
+      return refusal("authority_unavailable", "authority_expired");
     }
 
     if (
@@ -861,18 +882,26 @@ export const createFileReadCoordinator = (
         operation: "read",
       }).authorized
     ) {
-      return refusal("field_not_readable");
+      return refusal("field_not_readable", "field_not_readable");
     }
 
     let loaded: FileRecord | null;
     try {
       loaded = await dependencies.repository.readFile(fileId.data);
-    } catch {
-      return refusal("storage_unavailable");
+    } catch (error) {
+      return refusal("storage_unavailable", "file_record_read_failed", error);
     }
     const parsedFile = loaded === null ? null : fileRecordSchema.safeParse(loaded);
     if (parsedFile === null || !parsedFile.success || parsedFile.data.fileId !== fileId.data) {
-      return refusal("file_not_found");
+      return refusal(
+        "file_not_found",
+        parsedFile === null
+          ? "file_record_missing"
+          : parsedFile.success
+            ? "file_record_id_mismatch"
+            : "file_record_malformed",
+        parsedFile?.success === false ? parsedFile.error : undefined,
+      );
     }
     const fileRecord = parsedFile.data;
 
@@ -884,11 +913,11 @@ export const createFileReadCoordinator = (
       fileRecord.ownerFieldId !== authority.fieldId ||
       !organisationMayRead(authority, fileRecord, nowMilliseconds)
     ) {
-      return refusal("file_not_found");
+      return refusal("file_not_found", "file_not_attached_to_authorised_field");
     }
 
     if (fileRecord.lifecycleState !== "active" || fileRecord.scannerResult !== "clean") {
-      return refusal("file_not_available");
+      return refusal("file_not_available", "file_not_active_or_not_clean");
     }
 
     const representation = chooseRepresentation(
@@ -896,9 +925,10 @@ export const createFileReadCoordinator = (
       request.purpose,
       dependencies.previewRenderer !== undefined,
     );
-    if (representation === null) return refusal("preview_not_supported");
+    if (representation === null)
+      return refusal("preview_not_supported", "representation_unsupported");
     if (representation.kind === "rendition" && fileRecord.sizeBytes > maximumPreviewSourceBytes) {
-      return refusal("preview_not_supported");
+      return refusal("preview_not_supported", "preview_source_too_large");
     }
 
     // Ranges apply only to the original bytes, and only while the client's
@@ -911,7 +941,7 @@ export const createFileReadCoordinator = (
       ? parseRangeHeader(request.rangeHeader, fileRecord.sizeBytes)
       : ({ kind: "none" } as const);
     if (range.kind === "unsatisfiable") {
-      return refusal("range_not_satisfiable", {
+      return refusal("range_not_satisfiable", "range_not_satisfiable", undefined, {
         "Content-Range": `bytes */${fileRecord.sizeBytes}`,
         "Accept-Ranges": "bytes",
       });
@@ -948,15 +978,15 @@ export const createFileReadCoordinator = (
         request: { operation: "read", grant },
         ttlSeconds: MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
       });
-    } catch {
-      return refusal("storage_unavailable");
+    } catch (error) {
+      return refusal("storage_unavailable", "credential_mint_failed", error);
     }
     if (
       credential.operation !== "read" ||
       credential.organizationId !== fileRecord.organizationId ||
       credential.objectPath !== fileRecord.storageKey
     ) {
-      return refusal("storage_unavailable");
+      return refusal("storage_unavailable", "credential_does_not_match_file");
     }
 
     const selectedRange = range.kind === "satisfiable" ? range.range : undefined;
@@ -966,8 +996,8 @@ export const createFileReadCoordinator = (
         credential,
         ...(selectedRange === undefined ? {} : { range: selectedRange }),
       });
-    } catch {
-      return refusal("storage_unavailable");
+    } catch (error) {
+      return refusal("storage_unavailable", "upstream_read_failed", error);
     }
 
     const expectedBytes =
@@ -985,7 +1015,7 @@ export const createFileReadCoordinator = (
         upstream.contentRange.trim() !== expectedContentRange)
     ) {
       await upstream.stream.cancel().catch(() => undefined);
-      return refusal("storage_unavailable");
+      return refusal("storage_unavailable", "upstream_length_or_range_mismatch");
     }
     const original = boundedByteStream(upstream.stream, {
       expectedBytes,
@@ -1001,9 +1031,9 @@ export const createFileReadCoordinator = (
           source: original,
           maximumOutputBytes: maximumPreviewOutputBytes,
         });
-      } catch {
+      } catch (error) {
         await original.cancel().catch(() => undefined);
-        return refusal("preview_unavailable");
+        return refusal("preview_unavailable", "preview_render_failed", error);
       }
       const renditionType = normalizeMediaType(rendition.mediaType ?? "");
       if (
@@ -1014,7 +1044,7 @@ export const createFileReadCoordinator = (
             rendition.sizeBytes > maximumPreviewOutputBytes))
       ) {
         await rendition.stream?.cancel().catch(() => undefined);
-        return refusal("preview_unavailable");
+        return refusal("preview_unavailable", "preview_rendition_invalid");
       }
       return Object.freeze({
         outcome: "success",

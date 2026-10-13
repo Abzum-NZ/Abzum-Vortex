@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   fileIdSchema,
+  logRefusal,
   organizationIdSchema,
   type FileId,
   type IdentitySession,
@@ -67,8 +68,11 @@ const upstreamStorageReader = createDefaultUpstreamStorageReader();
 
 const refusalResponse = (
   reason: FileReadRefusalReason | "unauthenticated",
+  code: string,
+  cause?: unknown,
   headers?: Readonly<Record<string, string>>,
 ): Response => {
+  logRefusal("files", "read", code, cause);
   const status = reason === "unauthenticated" ? 401 : fileReadRefusalHttpStatus[reason];
   const response = Response.json({ outcome: "refused", reason }, { status });
   for (const [name, value] of Object.entries({ ...privateFileResponseHeaders(), ...headers })) {
@@ -109,20 +113,22 @@ export const handleFileReadRequest = async (
 ): Promise<Response> => {
   const organizationId = organizationIdSchema.safeParse(parameters.organizationId);
   const fileId = fileIdSchema.safeParse(parameters.fileId);
-  if (!organizationId.success || !fileId.success) return refusalResponse("malformed_request");
+  if (!organizationId.success || !fileId.success)
+    return refusalResponse("malformed_request", "route_identifiers_malformed");
   const targetOrganizationId = organizationId.data;
   const targetFileId: FileId = fileId.data;
 
   const identity = await resolveIdentitySession();
-  if (identity.kind === "temporarily_unavailable") return refusalResponse("storage_unavailable");
-  if (identity.kind !== "active") return refusalResponse("unauthenticated");
+  if (identity.kind === "temporarily_unavailable")
+    return refusalResponse("storage_unavailable", "identity_unavailable");
+  if (identity.kind !== "active") return refusalResponse("unauthenticated", "identity_not_active");
   const session: IdentitySession = identity.session;
 
   let identityAuthorityId;
   try {
     identityAuthorityId = getIdentityAuthorityConfiguration().authorityId;
-  } catch {
-    return refusalResponse("storage_unavailable");
+  } catch (error) {
+    return refusalResponse("storage_unavailable", "identity_authority_unconfigured", error);
   }
   const protectedRequests = humanOrganizationRequests(identityAuthorityId);
 
@@ -131,9 +137,13 @@ export const handleFileReadRequest = async (
     { organizationId: targetOrganizationId },
     (transaction) => locateFileApplication(transaction, targetFileId),
   );
-  if (located.kind === "temporarily_unavailable") return refusalResponse("storage_unavailable");
+  if (located.kind === "temporarily_unavailable")
+    return refusalResponse("storage_unavailable", "locate_unavailable");
   if (located.kind !== "available" || located.value.outcome !== "located") {
-    return refusalResponse("file_not_found");
+    return refusalResponse(
+      "file_not_found",
+      `locate_${located.kind === "available" ? located.value.outcome : located.kind}`,
+    );
   }
   const applicationRootId = located.value.applicationRootId;
 
@@ -160,7 +170,8 @@ export const handleFileReadRequest = async (
       let signing: StorageSigningConfiguration;
       try {
         signing = storageSigningConfiguration();
-      } catch {
+      } catch (error) {
+        logRefusal("files", "read", "storage_signing_unconfigured_cause", error);
         return { outcome: "storage_unavailable" };
       }
 
@@ -215,15 +226,22 @@ export const handleFileReadRequest = async (
 
   if (protectedRead.kind !== "available") {
     await opened.stream?.cancel().catch(() => undefined);
-    return refusalResponse(
-      protectedRead.kind === "temporarily_unavailable" ? "storage_unavailable" : "file_not_found",
-    );
+    return protectedRead.kind === "temporarily_unavailable"
+      ? refusalResponse("storage_unavailable", "protected_read_unavailable")
+      : refusalResponse("file_not_found", `protected_read_${protectedRead.kind}`);
   }
-  if (protectedRead.value.outcome === "not_found") return refusalResponse("file_not_found");
+  if (protectedRead.value.outcome === "not_found")
+    return refusalResponse("file_not_found", "read_not_allowed");
   if (protectedRead.value.outcome === "storage_unavailable")
-    return refusalResponse("storage_unavailable");
+    return refusalResponse("storage_unavailable", "storage_signing_unconfigured");
   const result = protectedRead.value.result;
-  if (result.outcome === "refused") return refusalResponse(result.reason, result.headers);
+  if (result.outcome === "refused")
+    return refusalResponse(
+      result.reason,
+      `coordinator_${result.reason}`,
+      undefined,
+      result.headers,
+    );
   return new Response(result.stream, {
     status: result.statusCode,
     headers: { ...result.headers },
