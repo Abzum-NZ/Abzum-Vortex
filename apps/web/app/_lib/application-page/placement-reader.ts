@@ -28,6 +28,7 @@ import {
   SUMMARY_VALUES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+  readCalendarPlacementContract,
 } from "@vortex/platform/server";
 import type {
   recordIdSchema} from "@vortex/platform/schema";
@@ -51,7 +52,7 @@ import {
   isBoardPlacement,
   first
 } from "./placement-helpers";
-import { readCalendarPlacementContract, readCalendarPlacement } from "./calendar";
+import { readCalendarPlacement } from "./calendar";
 import {
   logPlacementFailure,
   isApplicationLauncherPlacement,
