@@ -2,7 +2,7 @@ import "server-only";
 
 import { storedDefinitionCompilationOutputSchema, definitionConsumerReadDependencyManifestSchema, definitionConsumerReadResultSchema, definitionResolutionSnapshotSchema, fingerprintSchema, moduleRootIdSchema, organizationIdSchema, platformIdSchema, revisionSchema, assertModuleContractPair, selectApplicationContractPair, semanticVersionSchema, stableDefinitionReleaseVersionSchema, type DefinitionConsumerReadResult, type ExactDefinitionDependency, type SessionContext } from "../schema";
 import { z } from "zod";
-import type { DefinitionPublicationCatalogue } from "./definition-publication";
+import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import {
   applicationDraftFromStoredRelease,
   hasAuthenticStoredCustomerDefinitionRelease,

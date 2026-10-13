@@ -10,11 +10,7 @@ import {
 } from "./definition-draft-read";
 import { DefinitionError } from "./definition-error";
 import { createDatabaseDefinitionPublicationService } from "./publication/publish";
-import {
-  fingerprintModuleQueryFilterOperandBinding,
-  type ModuleQueryFilterDraftContext,
-  type ModuleQueryFilterQueryChoice,
-} from "./definition-publication";
+import { fingerprintModuleQueryFilterOperandBinding, type ModuleQueryFilterDraftContext, type ModuleQueryFilterQueryChoice } from "./module-query-filter-draft";
 import {
   canonicalJson,
   conditionNodeSchema,

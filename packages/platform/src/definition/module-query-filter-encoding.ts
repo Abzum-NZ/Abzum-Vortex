@@ -5,7 +5,7 @@ import {
   type JsonValue,
   type ModuleSourceDocument,
 } from "../schema";
-import type { ModuleQueryFilterDraftContext } from "./definition-publication";
+import type { ModuleQueryFilterDraftContext } from "./module-query-filter-draft";
 
 type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
 type SourceCondition = NonNullable<ModuleSourceQuery["filter"]>;

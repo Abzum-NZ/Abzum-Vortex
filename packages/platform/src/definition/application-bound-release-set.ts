@@ -32,7 +32,7 @@ import {
   createImmutableDefinitionPublicationCatalogue,
   type ImmutableDefinitionPublicationCatalogueDefinition,
 } from "./publication/read";
-import type { DefinitionPublicationCatalogue } from "./definition-publication";
+import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import { DefinitionError } from "./definition-error";
 
 const storedSetSchema = z
