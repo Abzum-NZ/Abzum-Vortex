@@ -1,0 +1,55 @@
+import { useRef } from "react";
+import type { ApplicationPageModel } from "../../../../../_lib/application-page";
+import type { ComponentRequestGeneration } from "@vortex/platform/schema";
+
+export function useNavigationScope({
+  model,
+  pathname,
+  currentSearch,
+  application,
+}: Readonly<{
+  model: ApplicationPageModel;
+  pathname: string;
+  currentSearch: string;
+  application: ApplicationPageModel["invocation"];
+}>) {
+  const serverDataRef = useRef(model.data);
+  const serverModelRef = useRef(model);
+  const serverDataGenerationRef = useRef(0);
+  if (serverDataRef.current !== model.data || serverModelRef.current !== model) {
+    serverDataRef.current = model.data;
+    serverModelRef.current = model;
+    serverDataGenerationRef.current += 1;
+  }
+  const navigationBase = JSON.stringify([
+    pathname,
+    currentSearch,
+    model.pageId,
+    application.installationRevision,
+    application.releaseKey,
+    serverDataGenerationRef.current,
+  ]);
+  const navigationSequenceRef = useRef(0);
+  const placementRequestsRef = useRef<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>({ base: "", key: "", generations: new Map<string, ComponentRequestGeneration>() });
+  const boardContinuationInFlightRef = useRef(new Set<string>());
+  const tableContinuationHistoryRef = useRef<{
+    scopeKey: string;
+    cursors: Map<string, Map<number, string>>;
+    inFlight: Set<string>;
+  }>({ scopeKey: "", cursors: new Map(), inFlight: new Set() });
+  if (placementRequestsRef.current.base !== navigationBase) {
+    navigationSequenceRef.current += 1;
+    placementRequestsRef.current = {
+      base: navigationBase,
+      key: `${navigationBase}:${navigationSequenceRef.current}`,
+      generations: new Map(),
+    };
+  }
+  const navigationKey = placementRequestsRef.current.key;
+
+  return { navigationKey, placementRequestsRef, boardContinuationInFlightRef, tableContinuationHistoryRef };
+}
