@@ -263,6 +263,7 @@ for (const file of codeFiles) {
       add("process-artifact", file, lineAt(content, node.getStart(source)), node.text);
     }
     if (fileArea === "platform" || fileArea === "schema") checkSilentParse(node);
+    if (fileArea === "platform" || fileArea === "web") checkSilentFailure(node);
     ts.forEachChild(node, visit);
   }
   function checkImport(specifier: string, offset: number): void {
@@ -326,6 +327,70 @@ for (const file of codeFiles) {
         return failureCondition(node.left, variable) ?? failureCondition(node.right, variable);
     }
     return undefined;
+  }
+  const refusalStatuses = new Set([
+    "refused",
+    "unavailable",
+    "temporarily_unavailable",
+    "task_refused",
+  ]);
+  function logsOrRethrows(node: ts.Node): boolean {
+    let found = false;
+    function scan(value: ts.Node): void {
+      if (ts.isThrowStatement(value)) found = true;
+      if (
+        ts.isCallExpression(value) &&
+        /(?:^(?:console|logger)\.|log|refus|fail|report|captureException|mapWebError|describe)/i.test(
+          value.expression.getText(source),
+        )
+      )
+        found = true;
+      ts.forEachChild(value, scan);
+    }
+    scan(node);
+    return found;
+  }
+  function refusalReturn(node: ts.Node): boolean {
+    let found = false;
+    function scan(value: ts.Node): void {
+      if (
+        ts.isReturnStatement(value) &&
+        value.expression &&
+        ts.isObjectLiteralExpression(value.expression) &&
+        value.expression.properties.some(
+          (property) =>
+            ts.isPropertyAssignment(property) &&
+            property.name.getText(source) === "status" &&
+            ts.isStringLiteralLike(property.initializer) &&
+            refusalStatuses.has(property.initializer.text),
+        )
+      )
+        found = true;
+      if (!ts.isFunctionLike(value)) ts.forEachChild(value, scan);
+    }
+    scan(node);
+    return found;
+  }
+  /** A catch clause or refusal branch must log its cause or rethrow it. */
+  function checkSilentFailure(node: ts.Node): void {
+    if (ts.isCatchClause(node) && !logsOrRethrows(node.block))
+      silentFindings.push({
+        file,
+        line: lineAt(content, node.getStart(source)),
+        variable: "catch",
+        branch: "catch",
+      });
+    if (
+      ts.isIfStatement(node) &&
+      refusalReturn(node.thenStatement) &&
+      !logsOrRethrows(node.thenStatement)
+    )
+      silentFindings.push({
+        file,
+        line: lineAt(content, node.getStart(source)),
+        variable: "refusal",
+        branch: "refusal",
+      });
   }
   function silentReturn(node: ts.Node): boolean {
     let hasReturn = false;
@@ -662,8 +727,7 @@ for (const file of files.filter(
     const migration = latest.get(key);
     const matchesMigration =
       migration !== undefined &&
-      migration.definition.replace(/\s+/g, " ") ===
-        value.definition.replace(/\s+/g, " ");
+      migration.definition.replace(/\s+/g, " ") === value.definition.replace(/\s+/g, " ");
     if (!matchesMigration) {
       add(
         "migration-mismatch",
