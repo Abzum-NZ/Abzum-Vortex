@@ -70,6 +70,9 @@ function RootTable({
                       <Link className="underline underline-offset-4" href={`${base}/queries`}>
                         Queries
                       </Link>
+                      <Link className="underline underline-offset-4" href={`${base}/publish`}>
+                        Publish
+                      </Link>
                     </>
                   )}
                 </div>
@@ -138,7 +141,7 @@ export default async function StudioOrganizationPage({
       <Card>
         <CardHeader>
           <CardTitle>Modules</CardTitle>
-          <CardDescription>Open a draft, fields, or queries.</CardDescription>
+          <CardDescription>Open a draft, fields, queries, or publication.</CardDescription>
         </CardHeader>
         <CardContent>
           {modules.length === 0 ? (

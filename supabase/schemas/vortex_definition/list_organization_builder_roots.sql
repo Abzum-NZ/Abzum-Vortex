@@ -61,4 +61,4 @@ grant execute on function vortex_definition.list_organization_builder_roots()
 comment on function vortex_definition.list_organization_builder_roots() is
   'Lists at most 200 application and module drafts in the validated human request organization for a permitted builder.';
 
-alter function vortex_definition.list_organization_builder_roots() owner to postgres;
+alter function vortex_definition.list_organization_builder_roots() owner to vortex_owner;
