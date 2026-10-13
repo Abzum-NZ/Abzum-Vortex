@@ -36,6 +36,7 @@ import {
   type ApplicationPuckRootShell,
   type PlatformBlockRelease,
   type ProjectedNavigation,
+  themeColorSchema,
 } from "@vortex/platform/schema";
 import { Checkbox } from "./components/checkbox";
 import { Input } from "./components/input";
@@ -786,6 +787,49 @@ const widthField = (release: PlatformBlockRelease): Field => {
 
 type OverrideValue = Record<string, unknown> & { kind: string };
 
+/**
+ * A colour text input that keeps its own draft while typing and reaches the page only once the
+ * draft is a colour the source accepts (committed as it becomes valid and again on blur).
+ */
+function ColorTextInput({
+  id,
+  name,
+  disabled,
+  value,
+  onCommit,
+}: {
+  id: string;
+  name: string;
+  disabled: boolean | undefined;
+  value: string;
+  onCommit: (value: string) => void;
+}): ReactElement {
+  const [draft, setDraft] = useState(value);
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(value);
+  }
+  const valid = themeColorSchema.safeParse(draft).success;
+  const commit = (next: string): void => {
+    if (themeColorSchema.safeParse(next).success && next !== value) onCommit(next);
+  };
+  return (
+    <Input
+      id={id}
+      name={name}
+      disabled={disabled}
+      value={draft}
+      aria-invalid={!valid}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        commit(event.target.value);
+      }}
+      onBlur={() => commit(draft)}
+    />
+  );
+}
+
 /** The platform token kinds a placement can override from the inspector, each with its editor. */
 const THEME_OVERRIDE_FIELDS: Readonly<
   Record<
@@ -864,12 +908,12 @@ const themeOverrideField = (tokenKey: string, platformToken: Record<string, unkn
                         <NativeSelectOption value="comfortable">comfortable</NativeSelectOption>
                       </NativeSelect>
                     ) : input.input === "text" ? (
-                      <Input
+                      <ColorTextInput
                         id={inputId}
                         name={`${name}.${input.key}`}
                         disabled={readOnly}
                         value={String(current ?? "")}
-                        onChange={(event) => edit(event.target.value)}
+                        onCommit={edit}
                       />
                     ) : (
                       <Input

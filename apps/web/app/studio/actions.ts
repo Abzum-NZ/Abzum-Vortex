@@ -10,7 +10,7 @@ import {
   translateDefinitionRuleFailures,
   type ApplicationContent,
 } from "@vortex/platform/schema";
-import { PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0 } from "@vortex/platform/server";
+import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
 import { fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@web/platform-server";
 import {
   parseStudioAppearanceRequest,
@@ -162,8 +162,7 @@ export async function validateStudioApplicationAppearance(
   try {
     const authored = draft.source.body.theme;
     const pin = authored.base;
-    const release = [PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0].find((item) =>
-      item.catalogueThemeId === pin.catalogue_theme_id && item.releaseVersion === pin.release_version);
+    const release = findPinnedPlatformThemeRelease(pin);
     if (release === undefined)
       return refuse("validate-appearance", "STUDIO_APPEARANCE_RELEASE_UNKNOWN", { kind: "refused" } as const);
     const inherited = materialiseApplicationTheme({ ...authored, token_overrides: {} }, draft.key, release);
