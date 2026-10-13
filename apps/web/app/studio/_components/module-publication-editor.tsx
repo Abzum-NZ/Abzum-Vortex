@@ -144,7 +144,6 @@ export function ModulePublicationEditor({
         parsed.data.releaseVersion === prepared.assignedVersion &&
         parsed.data.contentFingerprint === prepared.contentFingerprint &&
         parsed.data.resolutionFingerprint === prepared.resolutionFingerprint &&
-        parsed.data.comparisonFingerprint === prepared.comparisonFingerprint &&
         canonicalJson(parsed.data.dependencyManifest) === canonicalJson(prepared.dependencyManifest)
       ) {
         setRelease(parsed.data);
