@@ -232,6 +232,11 @@ export type FlowNamedAction = Readonly<{
   action: InstalledNamedActionReference;
   /** The record type the action runs on. */
   subjectRecordTypeId: string;
+  /**
+   * The one record type of each record reference input that names exactly one. A flow holds a
+   * record reference as the record's ID; the action takes it as a typed link.
+   */
+  referenceInputTypes: Readonly<Record<string, string>>;
 }>;
 
 /**
@@ -815,6 +820,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     carriedMilliseconds: number;
     segmentStart: number;
     unavailable: FlowUnavailableNotice[];
+    /** Tasks whose refusal the named-action port already logged with its reason. */
+    refusalLoggedTaskIds: string[];
     /**
      * The raw values of declared sensitive outputs this segment received, held in memory only, so
      * nothing that carries one is stored or handed to another protected operation.
@@ -839,6 +846,10 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       // A task the platform could not run ends the run as not available, never as a refusal.
       const notAvailable =
         failedTaskId !== undefined && run.unavailable.some((notice) => notice.taskId === failedTaskId);
+      if (failedTaskId === undefined || !run.refusalLoggedTaskIds.includes(failedTaskId))
+        console.error(
+          `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}`,
+        );
       return {
         kind: "finished",
         runId: step.state.runId,
@@ -1051,11 +1062,24 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       recordTypeId: named.subjectRecordTypeId,
       recordId: state.subject.recordId,
       expectedConcurrencyNumber: state.subject.revision,
-      inputs,
+      inputs: Object.fromEntries(
+        Object.entries(inputs).map(([name, value]) => [
+          name,
+          typeof value === "string" && Object.hasOwn(named.referenceInputTypes, name)
+            ? { recordTypeId: named.referenceInputTypes[name], recordId: value }
+            : value,
+        ]),
+      ),
     });
-    return command.success
-      ? { plan: { kind: "action", command: command.data } }
-      : { outcome: "validation" };
+    if (!command.success) {
+      console.error(
+        `[flows] named action ${String(operationKey)} command invalid at task ${call.taskId}: ${command.error.issues
+          .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+          .join("; ")}`,
+      );
+      return { outcome: "validation" };
+    }
+    return { plan: { kind: "action", command: command.data } };
   };
 
   /** Reads the active task's selected fields without using the replayable effect ledger. */
@@ -1168,6 +1192,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         };
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
+      // The action port logged this refusal with its reason; the run-ended line must not repeat it.
+      run.refusalLoggedTaskIds.push(call.taskId);
       return { result: { outcome: refusalOutcome(value.error.code) }, stored: {} };
     }
 
@@ -1578,6 +1604,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
+          refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
         };
@@ -1703,6 +1730,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
+          refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
         };
@@ -1784,6 +1812,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: stored.elapsedMilliseconds,
           segmentStart: clock(),
           unavailable: [],
+          refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
         };

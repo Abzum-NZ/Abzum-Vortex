@@ -64,7 +64,7 @@ export type ActionFlowOutcome =
   /** The flow refused the record, as its precondition's otherwise branch does. */
   | Readonly<{ kind: "refused" }>
   /** The run could not be started or finished: an unresolved value, an unavailable flow or task. */
-  | Readonly<{ kind: "invalid" }>;
+  | Readonly<{ kind: "invalid"; reason: string }>;
 
 /** Runs the action's flow once, on behalf of a host that owns the transaction. */
 export type ActionFlowRunner = (seed: ActionFlowSeed) => ActionFlowOutcome;
@@ -279,7 +279,7 @@ const retypeTasks = (tasks: readonly FlowTask[], seed: ActionFlowSeed): FlowTask
 
 // ─── The run ─────────────────────────────────────────────────────────────────────────────────
 
-const invalid: ActionFlowOutcome = Object.freeze({ kind: "invalid" });
+const invalid = (reason: string): ActionFlowOutcome => Object.freeze({ kind: "invalid", reason });
 const refused: ActionFlowOutcome = Object.freeze({ kind: "refused" });
 
 /**
@@ -299,9 +299,11 @@ export const collectActionFlowTasks = (
   seed: ActionFlowSeed,
 ): ActionFlowOutcome => {
   const installed = library(flowId);
-  if (installed === undefined || installed.execution !== "transaction") return invalid;
+  if (installed === undefined || installed.execution !== "transaction")
+    return invalid(`flow ${flowId} is not an installed transaction flow`);
   const subjectInput = subjectInputOf(installed, seed.declaredInputKeys);
-  if (subjectInput === undefined) return invalid;
+  if (subjectInput === undefined)
+    return invalid(`flow ${flowId} does not declare exactly one input for its subject record`);
   const flow: FlowDefinition = { ...installed, tasks: retypeTasks(installed.tasks, seed) };
   const runnable: FlowLibrary = (requested) => (requested === flowId ? flow : library(requested));
   const subject: FlowRuntimeValue = { type: "record_reference", value: seed.subjectRecordId };
@@ -322,11 +324,16 @@ export const collectActionFlowTasks = (
   for (;;) {
     if (step.kind === "finished") {
       if (step.result.status === "completed") return { kind: "collected", subjectInput, calls };
-      return step.result.failure.code === "task_refused" ? refused : invalid;
+      const failure = step.result.failure;
+      return failure.code === "task_refused"
+        ? refused
+        : invalid(`flow ${flowId} failed (${failure.code}) at task ${failure.taskId ?? "(none)"}`);
     }
     // A form or confirmation has no person to answer it inside a transaction.
-    if (step.kind !== "protected_task" || !actionFlowTaskTypes.has(step.call.taskType))
-      return invalid;
+    if (step.kind !== "protected_task")
+      return invalid(`flow ${flowId} asked for a person (${step.kind}) inside a transaction`);
+    if (!actionFlowTaskTypes.has(step.call.taskType))
+      return invalid(`flow ${flowId} holds task ${step.call.taskId} of type ${step.call.taskType}, which a named action cannot run`);
     calls.push(step.call);
     step = resumeFlowRun(step.state, { kind: "task_result", outcome: "committed" }, runnable);
   }

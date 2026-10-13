@@ -54,6 +54,7 @@ import { createFormContinuationService } from "./form-continuation";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createActiveApplicationInstallationRepository } from "./installation-binding-reader";
 import { createHumanInstalledRuntimeContextLoader } from "./installed-runtime-context";
+import type { ActionInputDefinition } from "./module-contracts";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
@@ -962,6 +963,7 @@ export async function invokeInstalledFlow(
           actionId: string;
           key: string;
           subjectRecordTypeId: string;
+          inputs: readonly ActionInputDefinition[];
         }>[],
       ) => {
         for (const action of actions) {
@@ -979,6 +981,16 @@ export async function invokeInstalledFlow(
           namedActions.set(key, {
             action: reference.data,
             subjectRecordTypeId: String(action.subjectRecordTypeId),
+            referenceInputTypes: Object.fromEntries(
+              action.inputs.flatMap((input) => {
+                if (input.type !== "record_reference") return [];
+                const resolved = input.recordTypes.flatMap((target) =>
+                  target.state === "resolved" ? [String(target.recordTypeId)] : [],
+                );
+                // An input that names several record types cannot be typed from the id alone.
+                return resolved.length === 1 ? [[input.key, resolved[0]!]] : [];
+              }),
+            ),
           });
         }
       };
