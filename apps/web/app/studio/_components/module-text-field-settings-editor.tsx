@@ -60,9 +60,11 @@ const responseDraft = (
 };
 
 /** A single semantic settings buffer; only a verified response replaces the saved baseline. */
-export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
+export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: {
   draft: StoredModuleDefinitionDraft;
   onDraftChange: (draft: StoredModuleDefinitionDraft) => void;
+  /** An agent call is changing the shared draft, so this editor takes no edit until it finishes. */
+  locked: boolean;
 }) {
   const [baseline, setBaseline] = useState(draft);
   const [choices, setChoices] = useState(() => descriptorsFor(draft));
@@ -128,7 +130,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!active.current || pending.current || selected === undefined || !dirty) return;
+    if (locked || !active.current || pending.current || selected === undefined || !dirty) return;
     const captured = buffer.current;
     const capturedField = selected;
     const wholeNumberText = captured.maxLength.trim();
@@ -216,7 +218,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
   };
 
   const reopen = async () => {
-    if (!active.current || pending.current) return;
+    if (locked || !active.current || pending.current) return;
     if (dirty && !window.confirm("Discard the pending text setting and reopen this Module's saved draft?")) return;
     const captured = buffer.current;
     const epoch = ++generation.current;
@@ -249,7 +251,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
     }
   };
 
-  return <main className="mx-auto max-w-3xl space-y-6 p-6" aria-busy={busy}>
+  return <main className="mx-auto max-w-3xl space-y-6 p-6" aria-busy={busy || locked}>
     <header className="space-y-2">
       <h1 className="text-2xl font-semibold">Module draft: {baseline.source.body.name}</h1>
       <dl className="break-all text-sm">
@@ -263,7 +265,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
     </header>
     <form className="space-y-4" onSubmit={save}>
       <label className="block space-y-1"><span>Module text field</span>
-        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || choices.length === 0} onChange={(event) => {
+        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || locked || choices.length === 0} onChange={(event) => {
           if (pending.current) return;
           const next = choices.find((field) => selectionKey(field) === event.target.value);
           if (next === undefined || (dirty && !window.confirm("Discard the pending setting and select another field?"))) return;
@@ -284,7 +286,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
         <p className="break-all text-sm">Type: text. Current format: {selected.format ?? "none"}. Authored path: body.record_types[{selected.recordAlias}].fields[{selected.fieldAlias}].settings.max_length</p>
         <label className="block space-y-1"><span>Maximum length</span>
           <Input className={inputClass} type="text" inputMode="numeric" value={maxLength}
-            disabled={busy} aria-describedby="module-text-max-length-help" onChange={(event) => {
+            disabled={busy || locked} aria-describedby="module-text-max-length-help" onChange={(event) => {
               if (pending.current) return;
               buffer.current = { ...buffer.current, maxLength: event.target.value };
               generation.current += 1;
@@ -296,8 +298,8 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange }: {
         <p id="module-text-max-length-help" className="text-sm">Use a whole number supported by the current Module schema. The saved default and format are preserved and validated with this setting.</p>
       </> : <p role="status">No authored text field is available.</p>}
       <div className="flex flex-wrap gap-2">
-        <Button className={buttonClass} type="submit" disabled={busy || !dirty || selected === undefined}>Save text setting</Button>
-        <Button className={buttonClass} type="button" disabled={busy} onClick={reopen}>Reopen saved Module draft</Button>
+        <Button className={buttonClass} type="submit" disabled={busy || locked || !dirty || selected === undefined}>Save text setting</Button>
+        <Button className={buttonClass} type="button" disabled={busy || locked} onClick={reopen}>Reopen saved Module draft</Button>
       </div>
       <p role="status" aria-live="polite">{dirty ? "Pending text setting changes. " : "The setting matches the saved Module draft. "}{message}</p>
       {validation !== null ? <ul className="space-y-2" aria-label="Module validation feedback" role="alert">
