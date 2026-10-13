@@ -3,9 +3,13 @@ CREATE OR REPLACE FUNCTION vortex_access.adopt_connection_administration_permiss
     SET search_path TO ''
     AS $$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   connection_permission_id constant uuid := 'ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   settings_permission_id constant uuid := 'c658c254-2884-414a-9012-512c0cfe4b34';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   assignments_permission_id constant uuid := '156d01f3-8f80-45fb-8fc8-b31c47dbb1df';
   catalogue_fingerprint constant text :=
     'sha256:2fe313d69f53d7ce9247aa0ae05b5cc837872f49285e577f9dc9e1f21f3c842e';
