@@ -1,10 +1,7 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import {
-  applicationRootIdSchema,
-  type ApplicationRootId,
-} from "../schema";
+import { applicationRootIdSchema, type ApplicationRootId } from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
@@ -131,12 +128,10 @@ export const authenticateRuntimeBundleCleanup = (
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): RuntimeBundleCleanupAuthentication => {
   const expectedDigest = cleanupCredential(environment);
-  if (expectedDigest === undefined)
-    return { outcome: "refused", reason: "cleanup_not_configured" };
+  if (expectedDigest === undefined) return { outcome: "refused", reason: "cleanup_not_configured" };
 
-  const match = typeof authorization === "string"
-    ? /^Bearer ([\x21-\x7e]+)$/.exec(authorization)
-    : undefined;
+  const match =
+    typeof authorization === "string" ? /^Bearer ([\x21-\x7e]+)$/.exec(authorization) : undefined;
   const credential = match?.[1];
   if (
     credential === undefined ||
@@ -152,10 +147,12 @@ export const authenticateRuntimeBundleCleanup = (
 };
 
 /** Runs one fixed-size maintenance batch without accepting database credentials or tuning input. */
-export const runScheduledRuntimeBundleCleanup = async (): Promise<RuntimeBundleCleanupBatchResult> => {
-  try {
-    const rows = await withRuntimeTransaction((transaction) =>
-      transaction.query<CleanupRow>`
+export const runScheduledRuntimeBundleCleanup =
+  async (): Promise<RuntimeBundleCleanupBatchResult> => {
+    try {
+      const rows = await withRuntimeTransaction(
+        (transaction) =>
+          transaction.query<CleanupRow>`
         select vortex_definition.remove_abandoned_runtime_bundles_internal(
           ${runtimeBundleCleanupLimits.batchSize}::integer
         ) as cleanup_result
@@ -164,8 +161,8 @@ export const runScheduledRuntimeBundleCleanup = async (): Promise<RuntimeBundleC
       if (rows.length !== 1 || rows[0] === undefined)
         throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
       return parseBatchResult(rows[0].cleanup_result);
-    } catch {
-      throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
+    } catch (error) {
+      throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE", { cause: error });
     }
   };
 
