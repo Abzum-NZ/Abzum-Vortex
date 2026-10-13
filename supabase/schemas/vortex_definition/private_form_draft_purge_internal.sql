@@ -37,3 +37,7 @@ comment on function vortex_definition.private_form_draft_purge_internal(uuid, in
 
 grant execute on function vortex_definition.private_form_draft_purge_internal(uuid, integer)
   to vortex_owner;
+
+alter function vortex_definition.private_form_draft_purge_internal(p_organization_id uuid, p_limit integer) owner to vortex_owner;
+
+grant execute on function vortex_definition.private_form_draft_purge_internal(p_organization_id uuid, p_limit integer) to postgres;

@@ -32,3 +32,7 @@ revoke all on function vortex_access.require_platform_operator_internal(uuid)
 
 comment on function vortex_access.require_platform_operator_internal(uuid) is
   'Private: refuses unless the caller is the configured platform operator in a transaction that carries no request context, so no customer role or request can act as the operator.';
+
+alter function vortex_access.require_platform_operator_internal(p_operator_actor_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.require_platform_operator_internal(p_operator_actor_id uuid) to postgres;

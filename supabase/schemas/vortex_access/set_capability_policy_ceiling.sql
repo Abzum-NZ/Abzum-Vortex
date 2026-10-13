@@ -226,3 +226,7 @@ comment on function vortex_access.set_capability_policy_ceiling(
   uuid, uuid, uuid, uuid, uuid, bigint, timestamptz, timestamptz, bigint
 ) is
   'Sets or re-pins a tenant capability ceiling to an exact policy revision. The configured system operator retains its context-free bootstrap path; an active named Vortex super administrator may act as a verified person with recent primary authentication, using the selected organisation only as an account-bound request anchor and independently checking an active target tenant. Both paths write an accepted receipt and append-only change evidence.';
+
+alter function vortex_access.set_capability_policy_ceiling(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_assignment_id uuid, p_policy_id uuid, p_policy_revision bigint, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.set_capability_policy_ceiling(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_assignment_id uuid, p_policy_id uuid, p_policy_revision bigint, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_expected_revision bigint) to postgres;

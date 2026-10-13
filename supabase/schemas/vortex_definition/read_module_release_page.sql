@@ -146,3 +146,7 @@ grant execute on function vortex_definition.read_module_release_page(text, bigin
 
 comment on function vortex_definition.read_module_release_page(text, bigint, bigint, integer) is
   'Returns one anchored bounded oldest-first page of same-organisation immutable Module release evidence.';
+
+alter function vortex_definition.read_module_release_page(p_key text, p_anchor_release_revision bigint, p_after_release_revision bigint, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_module_release_page(p_key text, p_anchor_release_revision bigint, p_after_release_revision bigint, p_page_size integer) to postgres;

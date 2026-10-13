@@ -20,7 +20,7 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.validated_human_request_context() OWNER TO postgres;
+alter function vortex_access.validated_human_request_context() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.validated_human_request_context() IS 'Fails closed unless the current human account and Access version are still live.';
 
@@ -33,3 +33,5 @@ GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_
 GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
 GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
 GRANT ALL ON FUNCTION vortex_access.validated_human_request_context() TO vortex_owner;
+
+grant execute on function vortex_access.validated_human_request_context() to postgres;

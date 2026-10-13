@@ -168,3 +168,7 @@ from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_access.coordinate_private_organization_role_assignment_grant(uuid, uuid, bigint, text, uuid, uuid, text, timestamptz, timestamptz, uuid) is
   'Owner-only governed role-assignment grant composition for the later verified IAM action; it has no request-role grant.';
+
+alter function vortex_access.coordinate_private_organization_role_assignment_grant(p_role_assignment_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.coordinate_private_organization_role_assignment_grant(p_role_assignment_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) to postgres;

@@ -136,3 +136,5 @@ grant execute on function vortex_access.list_application_role_templates_projecti
 
 comment on function vortex_access.list_application_role_templates_projection(uuid, integer) is
   'Registered application-role-template projection for the current human organization: fixed role-catalogue read authority, reachable active installation, exact registered application release, permanent Definition role identity and available continuity processed at the current registration are all required. Record identity is the source role UUID and row revision is the registration revision; only application root, source role, key, label and continuity revision are projected. Missing, refused, foreign or malformed candidates produce no revealing rows.';
+
+alter function vortex_access.list_application_role_templates_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;

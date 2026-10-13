@@ -26,8 +26,10 @@ CREATE FUNCTION vortex_access.read_organization_role_assignment(p_organization_i
     and assignment.role_assignment_id = p_role_assignment_id
 $$;
 
-ALTER FUNCTION vortex_access.read_organization_role_assignment(p_organization_id uuid, p_role_assignment_id uuid) OWNER TO postgres;
+alter function vortex_access.read_organization_role_assignment(p_organization_id uuid, p_role_assignment_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_organization_role_assignment(p_organization_id uuid, p_role_assignment_id uuid) IS 'Owner-only exact assignment fact read with database-time temporal status, not an access decision.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_organization_role_assignment(p_organization_id uuid, p_role_assignment_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.read_organization_role_assignment(p_organization_id uuid, p_role_assignment_id uuid) to postgres;

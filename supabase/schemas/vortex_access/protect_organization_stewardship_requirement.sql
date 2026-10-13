@@ -42,3 +42,7 @@ revoke execute on function vortex_access.protect_organization_stewardship_requir
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_access.protect_organization_stewardship_requirement() is
   'Protects immutable original stewardship evidence and requires each attributed change to advance its revision.';
+
+alter function vortex_access.protect_organization_stewardship_requirement() owner to vortex_owner;
+
+grant execute on function vortex_access.protect_organization_stewardship_requirement() to postgres;

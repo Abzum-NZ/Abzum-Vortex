@@ -134,3 +134,7 @@ comment on function vortex_access.revoke_capability_limit_allocation(
   uuid, uuid, uuid, uuid, bigint, uuid
 ) is
   'Tenant capability-limits allocation permission command that revokes a tenant-wide or organisation allocation, leaving the platform ceiling as the bound; it writes an accepted receipt, append-only change evidence and, for an organisation, content-free Activity.';
+
+alter function vortex_access.revoke_capability_limit_allocation(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_assignment_id uuid, p_expected_revision bigint, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revoke_capability_limit_allocation(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_assignment_id uuid, p_expected_revision bigint, p_activity_id uuid) to postgres;

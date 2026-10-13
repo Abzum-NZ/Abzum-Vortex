@@ -151,3 +151,7 @@ comment on function vortex_access.propose_record_share_grant_for_administration(
   uuid, uuid, jsonb, text, uuid
 ) is
   'Fixed protected proposer: stores one exact record-share grant proposal for the context organisation after re-checking its current share authority; cross-organisation proposals stop at pending_consent with a consent request bound to the proposal fingerprint.';
+
+alter function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) to postgres;

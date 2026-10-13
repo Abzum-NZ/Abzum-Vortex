@@ -212,8 +212,10 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
+alter function vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only exact historical 1.0.0 platform catalogue initializer retained for compatibility.';
 
 REVOKE ALL ON FUNCTION vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

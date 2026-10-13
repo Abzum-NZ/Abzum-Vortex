@@ -82,3 +82,7 @@ grant execute on function vortex_access.validated_durable_system_request_context
 
 comment on function vortex_access.validated_durable_system_request_context(text, uuid) is
   'Fails closed unless the request context is a system actor context on the durable_workflow channel for an application, its Access version is current, its organisation, tenant and application registration are active and the system actor grant registry still holds an active grant for exactly this actor, operation, organisation, flow and application source.';
+
+alter function vortex_access.validated_durable_system_request_context(p_operation_key text, p_flow_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.validated_durable_system_request_context(p_operation_key text, p_flow_id uuid) to postgres;

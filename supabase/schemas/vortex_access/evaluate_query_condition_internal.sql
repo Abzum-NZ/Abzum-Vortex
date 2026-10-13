@@ -56,9 +56,11 @@ exception
 end
 $$;
 
-ALTER FUNCTION vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) OWNER TO postgres;
+alter function vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) IS 'Private bridge from the Query reader to the typed condition engine; checks bound values against their declared semantic types and never widens a condition.';
 
 REVOKE ALL ON FUNCTION vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) TO vortex_record_adapter;
+
+grant execute on function vortex_access.evaluate_query_condition_internal(p_condition jsonb, p_field_types jsonb, p_field_values jsonb, p_parameter_types jsonb, p_parameter_values jsonb, p_validate_only boolean) to postgres;

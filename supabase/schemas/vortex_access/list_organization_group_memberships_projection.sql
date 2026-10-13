@@ -75,3 +75,7 @@ grant execute on function vortex_access.list_organization_group_memberships_proj
 
 comment on function vortex_access.list_organization_group_memberships_projection(uuid, integer) is
   'Registered group-membership projection: returns every membership of the current viewer''s organisation under the fixed platform.organization.groups.read decision, with the organisation, the membership identity, the membership revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Grant and revocation evidence is never projected.';
+
+alter function vortex_access.list_organization_group_memberships_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_group_memberships_projection(p_record_id uuid, p_page_size integer) to postgres;

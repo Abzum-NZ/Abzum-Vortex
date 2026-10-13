@@ -23,8 +23,10 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.coordinate_application_access_change(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
+alter function vortex_access.coordinate_application_access_change(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.coordinate_application_access_change(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only atomic application-access composition guarded by the adopted organisation stewardship invariant.';
 
 REVOKE ALL ON FUNCTION vortex_access.coordinate_application_access_change(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.coordinate_application_access_change(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

@@ -30,3 +30,7 @@ grant execute on function
 comment on function
   vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(uuid, timestamptz) is
   'Private live assignment lookup for the named Vortex super-administrator authority; tenant and organisation roles never participate.';
+
+alter function vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(p_identity_id uuid, p_checked_at timestamp with time zone) owner to vortex_owner;
+
+grant execute on function vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(p_identity_id uuid, p_checked_at timestamp with time zone) to postgres;

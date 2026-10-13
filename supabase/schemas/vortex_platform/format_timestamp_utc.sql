@@ -19,3 +19,7 @@ grant execute on function vortex_platform.format_timestamp_utc(timestamptz)
 
 comment on function vortex_platform.format_timestamp_utc(timestamptz) is
   'Formats one timestamp as a UTC ISO-8601 text value with six fractional digits.';
+
+alter function vortex_platform.format_timestamp_utc(p_value timestamp with time zone) owner to vortex_owner;
+
+grant execute on function vortex_platform.format_timestamp_utc(p_value timestamp with time zone) to postgres;

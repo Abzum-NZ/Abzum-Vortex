@@ -263,3 +263,7 @@ from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_access.coordinate_private_organization_role_authority_change(jsonb, uuid) is
   'Owner-only authority-establishing role composition. It checks exact current/candidate permission scope, then reuses canonical role evidence, manifests, stewardship and Activity without exposing a grant endpoint.';
+
+alter function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) to postgres;

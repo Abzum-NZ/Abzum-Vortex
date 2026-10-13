@@ -37,6 +37,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_definition.validate_release_insert() OWNER TO postgres;
+alter function vortex_definition.validate_release_insert() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_definition.validate_release_insert() FROM PUBLIC;
+
+grant execute on function vortex_definition.validate_release_insert() to postgres;

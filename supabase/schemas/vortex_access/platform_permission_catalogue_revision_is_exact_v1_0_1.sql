@@ -244,8 +244,10 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_0_1(p_organization_id uuid, p_registration_revision bigint) OWNER TO postgres;
+alter function vortex_access.platform_permission_catalogue_revision_is_exact_v1_0_1(p_organization_id uuid, p_registration_revision bigint) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_0_1(p_organization_id uuid, p_registration_revision bigint) IS 'Owner-only fixed evidence assertion for exact platform catalogue revisions 1 and 2.';
 
 REVOKE ALL ON FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_0_1(p_organization_id uuid, p_registration_revision bigint) FROM PUBLIC;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact_v1_0_1(p_organization_id uuid, p_registration_revision bigint) to postgres;

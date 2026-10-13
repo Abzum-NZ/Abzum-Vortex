@@ -42,8 +42,10 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) OWNER TO postgres;
+alter function vortex_access.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) IS 'Owner-only account lifecycle mutation guarded by the adopted organisation stewardship invariant.';
 
 REVOKE ALL ON FUNCTION vortex_access.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) FROM PUBLIC;
+
+grant execute on function vortex_access.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) to postgres;

@@ -49,3 +49,5 @@ grant execute on function vortex_record.append_ownership_transfer_activity_inter
 
 comment on function vortex_record.append_ownership_transfer_activity_internal(uuid, uuid, text) is
   'Private Record ownership-transfer Activity composer: derives the organisation, account and correlation from the validated request context and records the channel from that context.';
+
+alter function vortex_record.append_ownership_transfer_activity_internal(p_activity_id uuid, p_subject_id uuid, p_outcome text) owner to vortex_owner;

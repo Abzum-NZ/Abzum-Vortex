@@ -484,3 +484,7 @@ revoke all on function
 
 comment on function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint) is
   'Owner-only fixed evidence assertion for the exact current platform catalogue, its immutable historical predecessors, and required available continuities.';
+
+alter function vortex_access.platform_permission_catalogue_revision_is_exact(p_organization_id uuid, p_registration_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact(p_organization_id uuid, p_registration_revision bigint) to postgres;

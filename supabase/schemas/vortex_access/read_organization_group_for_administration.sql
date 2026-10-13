@@ -33,9 +33,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) OWNER TO postgres;
+alter function vortex_access.read_organization_group_for_administration(p_group_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) IS 'Returns one safe Group administration detail without exposing current-fact audit evidence.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) TO vortex_request;
+
+grant execute on function vortex_access.read_organization_group_for_administration(p_group_id uuid) to postgres;

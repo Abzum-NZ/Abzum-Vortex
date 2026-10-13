@@ -462,3 +462,7 @@ comment on function vortex_access.record_share_grant_consent_decision_for_admini
   uuid, uuid, bigint, text, text, text, uuid
 ) is
   'Fixed protected same-cluster consent writer: records one immutable side decision for the locked current proposal, requiring current named role-path evidence, source share and field authority where applicable and MFA no older than 300 seconds; it never activates a grant.';
+
+alter function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_expected_proposal_fingerprint text, p_decision text, p_note text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_expected_proposal_fingerprint text, p_decision text, p_note text, p_activity_id uuid) to postgres;

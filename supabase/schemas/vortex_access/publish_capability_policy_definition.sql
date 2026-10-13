@@ -135,3 +135,7 @@ comment on function vortex_access.publish_capability_policy_definition(
   uuid, uuid, uuid, uuid, text, text, numeric, bigint
 ) is
   'Platform-operator-only capability policy publication for one tenant: an immutable revision with an accepted receipt and append-only change evidence.';
+
+alter function vortex_access.publish_capability_policy_definition(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_policy_id uuid, p_capability_key text, p_unit text, p_quantity_limit numeric, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.publish_capability_policy_definition(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_policy_id uuid, p_capability_key text, p_unit text, p_quantity_limit numeric, p_expected_revision bigint) to postgres;

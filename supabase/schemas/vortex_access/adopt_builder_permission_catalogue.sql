@@ -276,3 +276,7 @@ revoke all on function
 
 comment on function vortex_access.adopt_builder_permission_catalogue(uuid, uuid, uuid) is
   'Owner-only additive adoption of platform catalogue revision 6 (1.4.0): registers the four builder permissions without changing any earlier permission or granting any role authority.';
+
+alter function vortex_access.adopt_builder_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.adopt_builder_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

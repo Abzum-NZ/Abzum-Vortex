@@ -51,3 +51,5 @@ grant execute on function vortex_record.append_lifecycle_policy_activity_interna
 
 comment on function vortex_record.append_lifecycle_policy_activity_internal(uuid, uuid) is
   'Private Record lifecycle-policy Activity composer: derives the organisation, account and correlation from the validated request context and records the channel from that context.';
+
+alter function vortex_record.append_lifecycle_policy_activity_internal(p_activity_id uuid, p_policy_id uuid) owner to vortex_owner;

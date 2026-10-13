@@ -20,3 +20,7 @@ revoke all on function vortex_identity.protect_super_administrator_account_prove
 
 comment on function vortex_identity.protect_super_administrator_account_provenance() is
   'Keeps the assignment evidence for super-administrator-provisioned accounts immutable.';
+
+alter function vortex_identity.protect_super_administrator_account_provenance() owner to vortex_owner;
+
+grant execute on function vortex_identity.protect_super_administrator_account_provenance() to postgres;

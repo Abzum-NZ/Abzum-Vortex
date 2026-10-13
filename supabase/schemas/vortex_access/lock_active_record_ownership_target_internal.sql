@@ -53,3 +53,7 @@ comment on function vortex_access.lock_active_record_ownership_target_internal(t
 revoke all on function vortex_access.lock_active_record_ownership_target_internal(text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.lock_active_record_ownership_target_internal(text, uuid) to vortex_record_adapter;
+
+alter function vortex_access.lock_active_record_ownership_target_internal(p_kind text, p_target_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.lock_active_record_ownership_target_internal(p_kind text, p_target_id uuid) to postgres;

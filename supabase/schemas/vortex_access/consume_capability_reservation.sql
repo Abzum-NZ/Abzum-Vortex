@@ -164,9 +164,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) OWNER TO postgres;
+alter function vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) IS 'Consumes only a current exact unexpired reservation and records immutable duplicate-protected outcomes.';
 
 REVOKE ALL ON FUNCTION vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) TO vortex_request;
+
+grant execute on function vortex_access.consume_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_quantity numeric, p_duplicate_key uuid) to postgres;

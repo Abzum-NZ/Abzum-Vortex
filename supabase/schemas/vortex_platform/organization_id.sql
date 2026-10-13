@@ -15,4 +15,6 @@ grant execute on function vortex_platform.organization_id()
 comment on function vortex_platform.organization_id() is
   'Returns the organisation identifier from the validated request context.';
 
-alter function vortex_platform.organization_id() owner to postgres;
+alter function vortex_platform.organization_id() owner to vortex_owner;
+
+grant execute on function vortex_platform.organization_id() to postgres;

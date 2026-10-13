@@ -17,8 +17,10 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_identity.start_disabled_identity_projection_suspended() OWNER TO postgres;
+alter function vortex_identity.start_disabled_identity_projection_suspended() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_identity.start_disabled_identity_projection_suspended() IS 'Private insert trigger: a new cluster-local projection of a disabled identity starts suspended.';
 
 REVOKE ALL ON FUNCTION vortex_identity.start_disabled_identity_projection_suspended() FROM PUBLIC;
+
+grant execute on function vortex_identity.start_disabled_identity_projection_suspended() to postgres;

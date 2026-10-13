@@ -173,3 +173,7 @@ from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_access.coordinate_private_organization_group_membership_change(text, uuid, bigint, uuid, uuid, timestamptz, timestamptz, uuid, uuid) is
   'Owner-only governed add, restore or renew Group membership composition for the later verified IAM action; it has no request-role grant.';
+
+alter function vortex_access.coordinate_private_organization_group_membership_change(p_operation text, p_membership_id uuid, p_expected_membership_revision bigint, p_group_id uuid, p_organization_account_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_replacement_membership_id uuid, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.coordinate_private_organization_group_membership_change(p_operation text, p_membership_id uuid, p_expected_membership_revision bigint, p_group_id uuid, p_organization_account_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_replacement_membership_id uuid, p_activity_id uuid) to postgres;

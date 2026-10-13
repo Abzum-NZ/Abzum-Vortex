@@ -9,6 +9,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_definition.refuse_source_identity_mutation() OWNER TO postgres;
+alter function vortex_definition.refuse_source_identity_mutation() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_definition.refuse_source_identity_mutation() FROM PUBLIC;
+
+grant execute on function vortex_definition.refuse_source_identity_mutation() to postgres;

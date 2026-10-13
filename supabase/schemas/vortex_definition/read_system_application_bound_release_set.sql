@@ -66,3 +66,7 @@ grant execute on function vortex_definition.read_system_application_bound_releas
 
 comment on function vortex_definition.read_system_application_bound_release_set(uuid, bigint) is
   'Returns one exact organisation-owned Application and its database-resolved Module dependency pin set to a validated system context; a valid zero-Module Application returns an empty Module array.';
+
+alter function vortex_definition.read_system_application_bound_release_set(p_application_root_id uuid, p_application_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_system_application_bound_release_set(p_application_root_id uuid, p_application_release_revision bigint) to postgres;

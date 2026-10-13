@@ -82,3 +82,7 @@ grant execute on function vortex_definition.read_publication_history_page(uuid, 
 
 comment on function vortex_definition.read_publication_history_page(uuid, bigint, bigint, integer) is
   'Returns one anchored, bounded oldest-first keyset page of full immutable publication evidence for internal publication preparation.';
+
+alter function vortex_definition.read_publication_history_page(p_root_id uuid, p_anchor_release_revision bigint, p_after_release_revision bigint, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_publication_history_page(p_root_id uuid, p_anchor_release_revision bigint, p_after_release_revision bigint, p_page_size integer) to postgres;

@@ -19,9 +19,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_identity.require_request_identity_not_disabled() OWNER TO postgres;
+alter function vortex_identity.require_request_identity_not_disabled() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_identity.require_request_identity_not_disabled() IS 'Request live check: refuses (42501) unless the current context names a human or federated person whose disablement has not completed.';
 
 REVOKE ALL ON FUNCTION vortex_identity.require_request_identity_not_disabled() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_identity.require_request_identity_not_disabled() TO vortex_request;
+
+grant execute on function vortex_identity.require_request_identity_not_disabled() to postgres;

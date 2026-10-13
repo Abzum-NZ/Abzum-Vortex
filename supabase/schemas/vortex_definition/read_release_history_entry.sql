@@ -62,3 +62,7 @@ grant execute on function vortex_definition.read_release_history_entry(text, uui
 
 comment on function vortex_definition.read_release_history_entry(text, uuid, bigint) is
   'Returns one exact same-organization immutable Definition release metadata entry.';
+
+alter function vortex_definition.read_release_history_entry(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_release_history_entry(p_kind text, p_root_id uuid, p_release_revision bigint) to postgres;

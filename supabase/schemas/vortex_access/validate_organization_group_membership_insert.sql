@@ -32,6 +32,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.validate_organization_group_membership_insert() OWNER TO postgres;
+alter function vortex_access.validate_organization_group_membership_insert() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.validate_organization_group_membership_insert() FROM PUBLIC;
+
+grant execute on function vortex_access.validate_organization_group_membership_insert() to postgres;

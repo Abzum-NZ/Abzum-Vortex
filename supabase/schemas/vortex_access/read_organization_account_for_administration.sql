@@ -17,9 +17,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) OWNER TO postgres;
+alter function vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) IS 'Protected exact account detail under the fixed accounts.read decision.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) TO vortex_request;
+
+grant execute on function vortex_access.read_organization_account_for_administration(p_organization_account_id uuid) to postgres;

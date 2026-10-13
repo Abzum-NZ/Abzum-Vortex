@@ -48,3 +48,5 @@ grant execute on function vortex_access.lock_organization_runtime_settings_recor
 
 comment on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid) is
   'Validates and locks the organisation runtime-settings row for the private Event append of its protected system projection.';
+
+alter function vortex_access.lock_organization_runtime_settings_record_for_event_internal(p_record_id uuid) owner to vortex_owner;

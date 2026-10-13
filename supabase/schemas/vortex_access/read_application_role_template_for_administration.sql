@@ -59,9 +59,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_application_role_template_for_administration(p_application_root_id uuid, p_source_role_id uuid) OWNER TO postgres;
+alter function vortex_access.read_application_role_template_for_administration(p_application_root_id uuid, p_source_role_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_application_role_template_for_administration(p_application_root_id uuid, p_source_role_id uuid) IS 'Returns one exact template from an active current application registration.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_application_role_template_for_administration(p_application_root_id uuid, p_source_role_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_application_role_template_for_administration(p_application_root_id uuid, p_source_role_id uuid) TO vortex_request;
+
+grant execute on function vortex_access.read_application_role_template_for_administration(p_application_root_id uuid, p_source_role_id uuid) to postgres;
