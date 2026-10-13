@@ -50,7 +50,6 @@ begin
             'releaseRevision', candidate.release_revision,
             'releaseVersion', candidate.release_version,
             'sourceFingerprint', candidate.authored_source_fingerprint,
-            'contentFingerprint', candidate.content_fingerprint,
             'releaseNote', candidate.release_note,
             'publishedAt', candidate.published_at,
             'publishedBy', candidate.published_by,

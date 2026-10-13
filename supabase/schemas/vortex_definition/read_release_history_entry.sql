@@ -36,7 +36,6 @@ begin
       'releaseRevision', release.release_revision,
       'releaseVersion', release.release_version,
       'sourceFingerprint', release.authored_source_fingerprint,
-      'contentFingerprint', release.content_fingerprint,
       'releaseNote', release.release_note,
       'publishedAt', release.published_at,
       'publishedBy', release.published_by,
