@@ -1,6 +1,6 @@
 "use server";
 
-import { loadStudioModuleFieldLabel, saveStudioModuleFieldLabel } from "../_lib/studio-module-field-label";
+import { loadStudioModuleFieldLabel, saveStudioModuleFieldLabel } from "../_lib/studio-module-field-edits";
 
 export async function saveModuleFieldLabel(organizationId: string, candidate: unknown) {
   return saveStudioModuleFieldLabel(organizationId, candidate);

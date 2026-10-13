@@ -1,4 +1,4 @@
-import { loadStudioModuleFieldLabel } from "../../../../_lib/studio-module-field-label";
+import { loadStudioModuleFieldLabel } from "../../../../_lib/studio-module-field-edits";
 import { ModuleFieldLabelEditor } from "../../../_components/module-field-label-editor";
 
 export const dynamic = "force-dynamic";
