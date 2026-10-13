@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type MouseEvent, type ReactElement } from "react";
+import { useEffect, useId, useState, type MouseEvent, type ReactElement } from "react";
 import { Icon } from "../icons/icon";
 import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/platform/schema";
 import { Button } from "../components/button";
@@ -228,6 +228,18 @@ export function ApplicationNavigation({
     if (event.defaultPrevented && !(currentPageId !== undefined && samePage(pageId, currentPageId)))
       setPending({ pageId, from: currentPageId });
   };
+  // A transition ends when the shown page changes (including Back/Forward), so the pending choice
+  // is cleared then rather than only hidden; a transition that never lands is dropped after 10 s.
+  const [shownPageId, setShownPageId] = useState(currentPageId);
+  if (shownPageId !== currentPageId) {
+    setShownPageId(currentPageId);
+    setPending(undefined);
+  }
+  useEffect(() => {
+    if (pending === undefined) return;
+    const timer = setTimeout(() => setPending(undefined), 10_000);
+    return () => clearTimeout(timer);
+  }, [pending]);
   const pendingPageId = pending !== undefined && pending.from === currentPageId
     ? pending.pageId
     : undefined;
