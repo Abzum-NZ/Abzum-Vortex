@@ -52,10 +52,21 @@ export type ReadOnlyAttachmentFileEvidence =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>;
 
+/** Why a projection was refused; the page reader logs it so a refusal always has a cause. */
+export type ReadOnlyAttachmentRefusalReason =
+  | "owner_tuple_invalid"
+  | "field_value_absent"
+  | "field_value_invalid"
+  | "file_count_exceeds_maximum"
+  | "file_id_invalid_or_duplicate"
+  | "file_read_refused"
+  | "file_evidence_mismatch"
+  | "payload_invalid";
+
 export type ReadOnlyAttachmentListProjection =
   | Readonly<{ kind: "ready"; values: AttachmentListPayload }>
   | Readonly<{ kind: "empty" }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "refused"; reason: ReadOnlyAttachmentRefusalReason }>
   | Readonly<{ kind: "unavailable" }>;
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
@@ -87,14 +98,17 @@ export const projectReadOnlyAttachmentList = async (input: Readonly<{
     !Number.isSafeInteger(input.maximumFiles) ||
     input.maximumFiles < 1
   )
-    return { kind: "refused" };
+    return { kind: "refused", reason: "owner_tuple_invalid" };
 
   if (!isRecord(input.subjectValues) || !Object.hasOwn(input.subjectValues, fieldId.data))
-    return { kind: "refused" };
+    return { kind: "refused", reason: "field_value_absent" };
+  // A readable attachment field that was never set is stored as null: it holds no files.
+  if (input.subjectValues[fieldId.data] === null) return { kind: "empty" };
   const attachmentIds = attachmentValueSchema.safeParse(input.subjectValues[fieldId.data]);
-  if (!attachmentIds.success) return { kind: "refused" };
+  if (!attachmentIds.success) return { kind: "refused", reason: "field_value_invalid" };
   const maximumFiles = Math.min(100, input.maximumFiles);
-  if (attachmentIds.data.length > maximumFiles) return { kind: "refused" };
+  if (attachmentIds.data.length > maximumFiles)
+    return { kind: "refused", reason: "file_count_exceeds_maximum" };
   if (attachmentIds.data.length === 0) return { kind: "empty" };
 
   const seen = new Set<string>();
@@ -102,12 +116,13 @@ export const projectReadOnlyAttachmentList = async (input: Readonly<{
   try {
     for (const candidate of attachmentIds.data) {
       const parsedId = fileIdSchema.safeParse(candidate);
-      if (!parsedId.success || seen.has(parsedId.data.toLowerCase())) return { kind: "refused" };
+      if (!parsedId.success || seen.has(parsedId.data.toLowerCase()))
+        return { kind: "refused", reason: "file_id_invalid_or_duplicate" };
       seen.add(parsedId.data.toLowerCase());
       const evidence = await input.readFile(parsedId.data);
       if (evidence.kind === "unavailable") return { kind: "unavailable" };
       if (evidence.kind !== "read" || evidence.decision.outcome !== "allowed")
-        return { kind: "refused" };
+        return { kind: "refused", reason: "file_read_refused" };
       const decision = evidence.decision;
       const metadata = evidence.metadata;
       if (
@@ -129,7 +144,7 @@ export const projectReadOnlyAttachmentList = async (input: Readonly<{
         metadata.lifecycleState !== "active" ||
         metadata.scannerResult !== "clean"
       )
-        return { kind: "refused" };
+        return { kind: "refused", reason: "file_evidence_mismatch" };
       files.push({
         displayName: metadata.originalSafeDisplayName,
         mediaType: metadata.detectedMediaType,
@@ -142,6 +157,6 @@ export const projectReadOnlyAttachmentList = async (input: Readonly<{
   }
 
   const payload = attachmentListPayloadSchema.safeParse({ kind: "attachment_list", files });
-  if (!payload.success) return { kind: "refused" };
+  if (!payload.success) return { kind: "refused", reason: "payload_invalid" };
   return { kind: "ready", values: payload.data };
 };
