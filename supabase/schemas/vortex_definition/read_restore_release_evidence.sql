@@ -255,7 +255,9 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'permissionId', '0548c061-b1a9-48e5-a04a-eb1d0dae0644'
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),

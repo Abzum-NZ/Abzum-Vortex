@@ -99,7 +99,9 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -109,6 +111,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
+            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),
@@ -918,6 +921,9 @@ begin
     supplied_version := supplied_dependency ->> 'releaseVersion';
     supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
     supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
+    if supplied_kind in ('connection_type', 'platform_block', 'platform_theme') then
+      supplied_evidence_fingerprint := supplied_content_fingerprint;
+    end if;
     supplied_target_root_id := case when supplied_kind = 'module'
       then (supplied_dependency ->> 'rootId')::uuid else null end;
     supplied_target_release_revision := case when supplied_kind = 'module'
@@ -984,7 +990,9 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -994,6 +1002,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
+            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),

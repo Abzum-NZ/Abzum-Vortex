@@ -237,7 +237,10 @@ export const materialiseApplicationTheme = (
     };
   }
   const theme = applicationThemeSchema.parse({
-    base: canonicalThemeDependency(authored.base),
+    base: {
+      ...canonicalThemeDependency(authored.base),
+      contentFingerprint: release.contentFingerprint,
+    },
     ...(selection.resolved.selection === undefined
       ? {}
       : { selection: selection.resolved.selection }),

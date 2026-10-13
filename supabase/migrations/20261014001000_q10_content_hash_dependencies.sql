@@ -1,4 +1,8 @@
 -- Replace catalogue-wide release evidence with the exact content hash for catalogue-backed dependencies.
+-- This forward migration changes only the stored evidence representation; runtime releases remain append-only.
+alter table vortex_definition.release_dependencies
+  disable trigger release_dependencies_append_only;
+
 update vortex_definition.release_dependencies
 set evidence_fingerprint = dependency_content_fingerprint
 where dependency_kind in ('connection_type', 'platform_block', 'platform_theme')
@@ -9,6 +13,12 @@ set dependency_entry = dependency_entry - 'catalogueFingerprint'
 where dependency_kind = 'protected_operation'
   and dependency_entry #>> '{operation,owner,kind}' = 'platform_service'
   and dependency_entry ? 'catalogueFingerprint';
+
+alter table vortex_definition.release_dependencies
+  enable trigger release_dependencies_append_only;
+
+grant create on schema vortex_definition to postgres;
+
 create or replace function vortex_definition.append_release(
   p_root_id uuid,
   p_expected_draft_revision bigint,
@@ -110,7 +120,9 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -120,6 +132,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
+            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),
@@ -929,6 +942,9 @@ begin
     supplied_version := supplied_dependency ->> 'releaseVersion';
     supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
     supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
+    if supplied_kind in ('connection_type', 'platform_block', 'platform_theme') then
+      supplied_evidence_fingerprint := supplied_content_fingerprint;
+    end if;
     supplied_target_root_id := case when supplied_kind = 'module'
       then (supplied_dependency ->> 'rootId')::uuid else null end;
     supplied_target_release_revision := case when supplied_kind = 'module'
@@ -995,7 +1011,9 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -1005,6 +1023,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
+            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),
@@ -1586,7 +1605,9 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'permissionId', '0548c061-b1a9-48e5-a04a-eb1d0dae0644'
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -1672,3 +1693,5 @@ ALTER FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency j
 COMMENT ON FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency jsonb) IS 'Owner-private canonical subject reference of one flow-target dependency manifest entry.';
 
 REVOKE ALL ON FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency jsonb) FROM PUBLIC;
+
+REVOKE CREATE ON SCHEMA vortex_definition FROM postgres;
