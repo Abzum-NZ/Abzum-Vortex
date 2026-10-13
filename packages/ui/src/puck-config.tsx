@@ -23,6 +23,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -136,6 +137,8 @@ export type VortexPuckMetadata = Readonly<{
   projectedNavigation?: ProjectedNavigation | undefined;
   /** Page-address resolver supplied by the shell. */
   resolvePageHref?: ((pageId: string) => string) | undefined;
+  /** Internal page activation supplied by the shell for client-side page transitions. */
+  onNavigatePage?: ((pageId: string, event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
   /** Internal page identity currently shown. */
   currentPageId?: string | undefined;
   /** Configured dedicated component origin, for the sandboxed custom-component host. */
@@ -668,6 +671,9 @@ function PlacementBlock(props: {
             {...(metadataIn.resolvePageHref === undefined
               ? {}
               : { resolvePageHref: metadataIn.resolvePageHref })}
+            {...(metadataIn.onNavigatePage === undefined
+              ? {}
+              : { onNavigatePage: metadataIn.onNavigatePage })}
             {...(metadataIn.currentPageId === undefined
               ? {}
               : { currentPageId: metadataIn.currentPageId })}
