@@ -25,6 +25,7 @@ import {
   type JsonValue,
   type ModuleDefinitionConsumerReadResult,
   type OrganizationSelectionCandidate,
+  type ProtectedOperationChannel,
 } from "../schema";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-address";
@@ -101,6 +102,7 @@ type GuidedInvocationPage = Readonly<{
 
 type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
+  channel: ProtectedOperationChannel;
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
   continuationKey: QueryContinuationKey;
@@ -493,17 +495,21 @@ export async function invokeInstalledFlow(
   const identity = { session };
   const telemetry = dependencies.telemetry;
   const authorityId = dependencies.authorityId;
-  const requests = createHumanOrganizationRequestService({
+  const requestDependencies = {
     identityAuthorityId: authorityId,
     telemetry,
+    channel: dependencies.channel,
+  };
+  const requests = createHumanOrganizationRequestService({
+    ...requestDependencies,
   });
   const referenceChoices = createReferenceChoiceService({
-    ...{ identityAuthorityId: authorityId, telemetry },
+    ...requestDependencies,
     continuationKey: dependencies.continuationKey,
   });
   const selectedRecordReader = createViewerSafeRecordLinkReadService();
   const recordPinService = createViewerSafeRecordLinkService({
-    ...{ identityAuthorityId: authorityId, telemetry },
+    ...requestDependencies,
     createInstalledContextLoader: (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
       return createHumanInstalledRuntimeContextLoader({
@@ -543,10 +549,7 @@ export async function invokeInstalledFlow(
     },
   });
   const executor = createProtectedOperationExecutor({
-    accessAdministration: createOrganizationAccessAdministrationService({
-      identityAuthorityId: authorityId,
-      telemetry,
-    }),
+    accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
     tenantGovernance: {
       run: (session, selection, operation) =>
         requests.runChange(session, selection, (transaction, scope) =>
@@ -560,12 +563,9 @@ export async function invokeInstalledFlow(
   const stores = createDatabaseFlowStores();
   // #1369, #1370: Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
-  const records = createRecordSaveService({ identityAuthorityId: authorityId, telemetry });
-  const subjectReader = createPageSubjectReader({ identityAuthorityId: authorityId, telemetry });
-  const actionRecords = createNamedActionRecordPort({
-    identityAuthorityId: authorityId,
-    telemetry,
-  });
+  const records = createRecordSaveService(requestDependencies);
+  const subjectReader = createPageSubjectReader(requestDependencies);
+  const actionRecords = createNamedActionRecordPort(requestDependencies);
   const selectedRecordReadsFor = (installation: InstalledFlowBindings) => ({
     readFields: async (
       session: IdentitySession,

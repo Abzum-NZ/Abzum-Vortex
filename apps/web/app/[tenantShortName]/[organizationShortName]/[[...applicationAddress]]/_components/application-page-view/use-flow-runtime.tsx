@@ -10,9 +10,7 @@ import {
   type RefObject,
 } from "react";
 import type { useRouter } from "next/navigation";
-import type {
-  useUnsavedWorkGuard,
-  useUnsavedWorkRegistry} from "@vortex/ui";
+import type { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
 import {
   createFlowInvokeClient,
   createFlowRuntime,
@@ -45,7 +43,13 @@ import { isRecord, choiceScopeKey } from "./event-values";
 import { unavailableNotice } from "./notices";
 
 /** The keyed Show Form body owns its choice request lifetime, including Escape dismissal. */
-function ChoiceFormLifetime({ children, mount, unmount, context, baseline }: Readonly<{
+function ChoiceFormLifetime({
+  children,
+  mount,
+  unmount,
+  context,
+  baseline,
+}: Readonly<{
   children: ReactNode;
   mount: () => void;
   unmount: () => void;
@@ -104,12 +108,32 @@ export function useFlowRuntime({
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   choiceDefaultContextsRef: RefObject<Record<string, boolean>>;
   fieldInputControlReleases: FieldInputControlReleaseMap;
-  choiceSelectionsRef: RefObject<Record<string, Readonly<{ key: string; evidence: ReferenceChoiceSelectionEvidence }>>>;
+  choiceSelectionsRef: RefObject<
+    Record<string, Readonly<{ key: string; evidence: ReferenceChoiceSelectionEvidence }>>
+  >;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
-  choiceEvidenceFor: (formId: string, values: Readonly<Record<string, unknown>>, surface?: "page" | "dialog") => ReferenceChoiceSelectionEvidenceMap | undefined;
-  requestChoicePageRef: RefObject<(placementId: string, event: Extract<ControlSemanticEvent, { event: "choices_requested" }>, formId?: string) => Promise<void>>;
-  changeChoiceField: (placementId: string, event: ControlSemanticEvent, dialogFormId?: string) => void;
-  initializeChoiceForm: (formId: string, dialogFormId?: string, defaults?: Readonly<Record<string, unknown>>) => void;
+  choiceEvidenceFor: (
+    formId: string,
+    values: Readonly<Record<string, unknown>>,
+    surface?: "page" | "dialog",
+  ) => ReferenceChoiceSelectionEvidenceMap | undefined;
+  requestChoicePageRef: RefObject<
+    (
+      placementId: string,
+      event: Extract<ControlSemanticEvent, { event: "choices_requested" }>,
+      formId?: string,
+    ) => Promise<void>
+  >;
+  changeChoiceField: (
+    placementId: string,
+    event: ControlSemanticEvent,
+    dialogFormId?: string,
+  ) => void;
+  initializeChoiceForm: (
+    formId: string,
+    dialogFormId?: string,
+    defaults?: Readonly<Record<string, unknown>>,
+  ) => void;
   currentData: ApplicationPageModel["data"];
   clearChoiceForm: (formId: string, dialogFormId?: string) => void;
   dialogFormRef: RefObject<HTMLDivElement | null>;
@@ -171,6 +195,24 @@ export function useFlowRuntime({
       },
     };
   }, [application, subject, unsavedWorkRegistry]);
+  const webMcpClient = useMemo(
+    () =>
+      createFlowInvokeClient({
+        address: {
+          tenantShortName: application.tenantShortName,
+          organizationShortName: application.organizationShortName,
+          applicationKey: application.applicationKey,
+          pageKey: application.pageKey,
+        },
+        installation: {
+          installationRevision: application.installationRevision,
+          releaseKey: application.releaseKey,
+        },
+        ...(subject === undefined ? {} : { subject }),
+        endpoint: "/api/flows/invoke/mcp",
+      }),
+    [application, subject],
+  );
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
       unsavedWork,
@@ -222,17 +264,18 @@ export function useFlowRuntime({
         const current = runtimeInputsRef.current[placementId];
         let input: Record<string, unknown> = isRecord(current) ? current : {};
         const isReferenceChoice = model.referenceChoiceInputs.some(
-          (field) => field.placementId === placementId &&
+          (field) =>
+            field.placementId === placementId &&
             field.formId.toLowerCase() === form.formId.toLowerCase(),
         );
-        const dialogChoicePage =
-          isReferenceChoice ? choicePayloadFor(placementId, form.formId) : undefined;
+        const dialogChoicePage = isReferenceChoice
+          ? choicePayloadFor(placementId, form.formId)
+          : undefined;
         if (dialogChoicePage !== undefined)
           input = { ...input, data: { status: "ready", values: dialogChoicePage } };
         const placement = surface.placements[placementId];
-        const settings = placement !== undefined && isRecord(placement.settings)
-          ? placement.settings
-          : undefined;
+        const settings =
+          placement !== undefined && isRecord(placement.settings) ? placement.settings : undefined;
         const name =
           settings !== undefined &&
           isRecord(settings.name) &&
@@ -240,18 +283,24 @@ export function useFlowRuntime({
           typeof settings.name.value === "string"
             ? settings.name.value
             : undefined;
-        const choiceField = model.referenceChoiceInputs.find((field) => field.placementId === placementId);
+        const choiceField = model.referenceChoiceInputs.find(
+          (field) => field.placementId === placementId,
+        );
         const defaultValue = name === undefined ? undefined : form.inputs[name];
-        const defaultEvidence = typeof defaultValue === "string"
-          ? dialogChoicePage?.optionEvidence?.[defaultValue] : undefined;
-        const dependentDefaultOffered = choiceField?.dependency === undefined ||
+        const defaultEvidence =
+          typeof defaultValue === "string"
+            ? dialogChoicePage?.optionEvidence?.[defaultValue]
+            : undefined;
+        const dependentDefaultOffered =
+          choiceField?.dependency === undefined ||
           (choiceDefaultContextsRef.current[choiceScopeKey(placementId, form.formId)] === true &&
             defaultEvidence !== undefined &&
             dialogChoicePage?.options?.some((option) => option.key === defaultValue) === true);
         if (
           placement !== undefined &&
           name !== undefined &&
-          Object.hasOwn(form.inputs, name) && dependentDefaultOffered
+          Object.hasOwn(form.inputs, name) &&
+          dependentDefaultOffered
         ) {
           input = runtimeInputWithFormDefault(
             input,
@@ -260,8 +309,11 @@ export function useFlowRuntime({
             platformComponentRegistry,
             fieldInputControlReleases,
           );
-          if (choiceField?.dependency !== undefined && typeof defaultValue === "string" &&
-              defaultEvidence !== undefined) {
+          if (
+            choiceField?.dependency !== undefined &&
+            typeof defaultValue === "string" &&
+            defaultEvidence !== undefined
+          ) {
             choiceSelectionsRef.current[choiceScopeKey(placementId, form.formId)] = {
               key: defaultValue,
               evidence: defaultEvidence,
@@ -311,39 +363,47 @@ export function useFlowRuntime({
           mount={() => initializeChoiceForm(form.formId, form.formId, form.inputs)}
           unmount={() => clearChoiceForm(form.formId, form.formId)}
         >
-        <div ref={dialogFormRef} className="flex flex-col gap-4">
-          <UnsavedWorkProvider>
-            <PagePuckRenderer
-              themeMode="system"
-              composition={surface.composition}
-              registry={platformComponentRegistry}
-              fieldInputControlReleases={fieldInputControlReleases}
-              platformThemeTokens={platformThemeTokens}
-              pageId={model.pageId}
-              theme={model.theme}
-              projectedNavigation={model.navigation}
-              resolvePageHref={resolvePageHref}
-              currentPageId={model.pageId}
-              runtimeInputs={scopedInputs}
-            />
-          </UnsavedWorkProvider>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={controls.cancel}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => dialogFormRef.current?.querySelector("form")?.requestSubmit()}
-            >
-              Continue
-            </Button>
-          </DialogFooter>
-        </div>
+          <div ref={dialogFormRef} className="flex flex-col gap-4">
+            <UnsavedWorkProvider>
+              <PagePuckRenderer
+                themeMode="system"
+                composition={surface.composition}
+                registry={platformComponentRegistry}
+                fieldInputControlReleases={fieldInputControlReleases}
+                platformThemeTokens={platformThemeTokens}
+                pageId={model.pageId}
+                theme={model.theme}
+                projectedNavigation={model.navigation}
+                resolvePageHref={resolvePageHref}
+                currentPageId={model.pageId}
+                runtimeInputs={scopedInputs}
+              />
+            </UnsavedWorkProvider>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={controls.cancel}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => dialogFormRef.current?.querySelector("form")?.requestSubmit()}
+              >
+                Continue
+              </Button>
+            </DialogFooter>
+          </div>
         </ChoiceFormLifetime>
       );
     },
-    [choiceEvidenceFor, choicePayloadFor, changeChoiceField, clearChoiceForm,
-      currentData, initializeChoiceForm, model, resolvePageHref],
+    [
+      choiceEvidenceFor,
+      choicePayloadFor,
+      changeChoiceField,
+      clearChoiceForm,
+      currentData,
+      initializeChoiceForm,
+      model,
+      resolvePageHref,
+    ],
   );
   const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,
@@ -356,7 +416,11 @@ export function useFlowRuntime({
     () => createFlowRuntime({ client: flowClient, host }),
     [flowClient, host],
   );
+  const webMcpRuntime = useMemo(
+    () => createFlowRuntime({ client: webMcpClient, host }),
+    [webMcpClient, host],
+  );
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, intentHostElement };
+  return { formBlock, flowRuntime, webMcpRuntime, intentHostElement };
 }

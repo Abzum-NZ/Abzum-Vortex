@@ -46,6 +46,7 @@ export type {
   PlacementFlowBinding,
   ApplicationPageModel,
   ApplicationPagePlacementReadResult,
+  PageWebMcpTool,
 } from "./application-page/types";
 
 /** The form submission's fields come only from its current actor-permitted page. */
@@ -91,8 +92,7 @@ export const loadReferenceChoicePage = async (
     const placement = collectPlacements(projected.page).find(
       (entry) => entry.placementId === request.placementId && entry.formId !== undefined,
     );
-    if (placement === undefined || placement.formId === undefined)
-      return { kind: "refused" };
+    if (placement === undefined || placement.formId === undefined) return { kind: "refused" };
     const form = projectedReferenceChoiceForm(
       projected.page,
       context.releaseSet.modules,
@@ -113,7 +113,10 @@ export const loadReferenceChoicePage = async (
       const parent = form.fields.get(field.dependency.fromField);
       if (parent === undefined) return { kind: "refused" };
       const selected = await resolveReferenceChoiceOption({
-        service, session, selection, field: parent,
+        service,
+        session,
+        selection,
+        field: parent,
         key: request.dependencyChoice.key,
         evidence: request.dependencyChoice.evidence,
       });
@@ -132,15 +135,15 @@ export const loadReferenceChoicePage = async (
         ? {}
         : { continuationToken: request.continuationToken }),
     });
-    if (result.kind === "temporarily_unavailable")
-      return { kind: "temporarily_unavailable" };
+    if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
     if (result.kind !== "available" || result.value.outcome !== "completed")
       return { kind: "refused" };
 
     const pageChoices = result.value.choices;
-    let selectedChoice = request.selectedKey === undefined
-      ? undefined
-      : pageChoices.find((choice) => choice.key === request.selectedKey);
+    let selectedChoice =
+      request.selectedKey === undefined
+        ? undefined
+        : pageChoices.find((choice) => choice.key === request.selectedKey);
     let selectedEvidenceOverride: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> = {};
     if (
       selectedChoice === undefined &&
@@ -159,29 +162,25 @@ export const loadReferenceChoicePage = async (
         selectedEvidenceOverride = { [selectedChoice.key]: request.selectedEvidence };
     }
     const choices =
-      selectedChoice === undefined || pageChoices.some((choice) => choice.key === selectedChoice?.key)
+      selectedChoice === undefined ||
+      pageChoices.some((choice) => choice.key === selectedChoice?.key)
         ? pageChoices
         : [selectedChoice, ...pageChoices];
     return {
       kind: "completed",
-      values: projectReferenceChoiceInputValues(
-        choices,
-        selectedChoice?.key ?? null,
-        undefined,
-        {
-          ...(dependencyKey === undefined ? {} : { dependencyKey }),
-          ...(request.search === undefined ? {} : { search: request.search }),
-          ...(request.continuationToken === undefined
-            ? {}
-            : { continuationToken: request.continuationToken }),
-          ...(result.value.nextContinuationToken === undefined
-            ? {}
-            : { nextContinuationToken: result.value.nextContinuationToken }),
-          ...(Object.keys(selectedEvidenceOverride).length === 0
-            ? {}
-            : { optionEvidenceOverrides: selectedEvidenceOverride }),
-        },
-      ),
+      values: projectReferenceChoiceInputValues(choices, selectedChoice?.key ?? null, undefined, {
+        ...(dependencyKey === undefined ? {} : { dependencyKey }),
+        ...(request.search === undefined ? {} : { search: request.search }),
+        ...(request.continuationToken === undefined
+          ? {}
+          : { continuationToken: request.continuationToken }),
+        ...(result.value.nextContinuationToken === undefined
+          ? {}
+          : { nextContinuationToken: result.value.nextContinuationToken }),
+        ...(Object.keys(selectedEvidenceOverride).length === 0
+          ? {}
+          : { optionEvidenceOverrides: selectedEvidenceOverride }),
+      }),
     };
   } catch {
     return { kind: "temporarily_unavailable" };
