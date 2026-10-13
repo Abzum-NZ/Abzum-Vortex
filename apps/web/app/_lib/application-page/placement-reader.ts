@@ -614,7 +614,8 @@ export const readPlacement = async (
       summaryResult = await queries.summarise(session, selection, command.data);
     } catch (error) {
       logPlacementFailure(address, placementId, "summary_query_threw", describeFailure(error));
-      summaryResult = { kind: "temporarily_unavailable" };
+      data[placementId] = { status: "error" };
+      return;
     }
     if (summaryResult.kind === "temporarily_unavailable") {
       logPlacementFailure(address, placementId, "summary_query_unavailable");
