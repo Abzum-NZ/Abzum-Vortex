@@ -35,9 +35,11 @@ const reasonText = (kind: "conflict" | "refused", reason: string) => {
   }
 };
 
-export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline }: {
+export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline, locked }: {
   draft: StoredModuleDefinitionDraft;
   onDraftChange: (draft: StoredModuleDefinitionDraft) => void;
+  /** An agent call is changing the shared draft, so this editor takes no edit until it finishes. */
+  locked: boolean;
 }) {
   const first = baseline.source.body.record_types[0];
   const [selected, setSelected] = useState(first === undefined ? "" : selectionValue(first.id, ""));
@@ -77,7 +79,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (busy || record === undefined || !dirty) return;
+    if (busy || locked || record === undefined || !dirty) return;
     if (needsMaxLength && !/^\d+$/.test(maxLength.trim())) {
       setMessage("Enter the longest value this field may hold, as a whole number.");
       return;
@@ -122,7 +124,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
   };
 
   const reload = async () => {
-    if (busy) return;
+    if (busy || locked) return;
     if (dirty && !window.confirm("Discard your unsaved field changes and reload the saved draft?")) return;
     setBusy(true);
     try {
@@ -140,7 +142,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
     } finally { setBusy(false); }
   };
 
-  return <section className="mx-auto max-w-3xl space-y-4 p-6" aria-busy={busy} aria-labelledby="module-fields-heading">
+  return <section className="mx-auto max-w-3xl space-y-4 p-6" aria-busy={busy || locked} aria-labelledby="module-fields-heading">
     <header className="space-y-1">
       <h1 id="module-fields-heading" className="text-2xl font-semibold">Fields of {baseline.source.body.name}</h1>
       <p className="text-sm text-muted-foreground">Draft revision {baseline.draftRevision}. Changes are saved into the draft; publish the Module to release them.</p>
@@ -149,7 +151,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
       <form className="space-y-4" onSubmit={save}>
         <div className="space-y-1">
           <Label htmlFor="module-field-selection">Field</Label>
-          <NativeSelect id="module-field-selection" className="w-full" value={selected} disabled={busy} onChange={(event) => choose(event.target.value)}>
+          <NativeSelect id="module-field-selection" className="w-full" value={selected} disabled={busy || locked} onChange={(event) => choose(event.target.value)}>
             {baseline.source.body.record_types.map((item) => <optgroup key={item.id} label={item.name}>
               <option value={selectionValue(item.id, "")}>Add a new field to {item.name}</option>
               {item.fields.map((field) => <option key={field.id} value={selectionValue(item.id, field.id)}>{field.label} ({typeLabel(field.type)})</option>)}
@@ -158,7 +160,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
         </div>
         <div className="space-y-1">
           <Label htmlFor="module-field-label">Label</Label>
-          <Input id="module-field-label" className="w-full" value={label} disabled={busy} onChange={(event) => { setLabel(event.target.value); setValidation(null); setMessage(""); }} />
+          <Input id="module-field-label" className="w-full" value={label} disabled={busy || locked} onChange={(event) => { setLabel(event.target.value); setValidation(null); setMessage(""); }} />
           <p className="text-sm text-muted-foreground">{adding
             ? nextKey === undefined ? "The label is shown to people filling in the form. A short key is made from it when you save."
               : `Its stable key will be "${nextKey}" and cannot be changed later.`
@@ -166,7 +168,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
         </div>
         <div className="space-y-1">
           <Label htmlFor="module-field-type">Type</Label>
-          <NativeSelect id="module-field-type" className="w-full" value={effectiveType} disabled={busy} onChange={(event) => { setType(event.target.value); setValidation(null); setMessage(""); }}>
+          <NativeSelect id="module-field-type" className="w-full" value={effectiveType} disabled={busy || locked} onChange={(event) => { setType(event.target.value); setValidation(null); setMessage(""); }}>
             {typeChoices.map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
           </NativeSelect>
           {existing !== undefined && existing.type !== effectiveType ? <p className="text-sm text-muted-foreground">
@@ -174,16 +176,16 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
         </div>
         {needsMaxLength ? <div className="space-y-1">
           <Label htmlFor="module-field-max-length">Longest value allowed</Label>
-          <Input id="module-field-max-length" className="w-full" inputMode="numeric" value={maxLength} disabled={busy} onChange={(event) => setMaxLength(event.target.value)} />
+          <Input id="module-field-max-length" className="w-full" inputMode="numeric" value={maxLength} disabled={busy || locked} onChange={(event) => setMaxLength(event.target.value)} />
           <p className="text-sm text-muted-foreground">The number of characters a person may enter.</p>
         </div> : null}
         <div className="flex items-center gap-2">
-          <Checkbox id="module-field-required" checked={required} disabled={busy} onCheckedChange={(checked) => setRequired(checked === true)} />
+          <Checkbox id="module-field-required" checked={required} disabled={busy || locked} onCheckedChange={(checked) => setRequired(checked === true)} />
           <Label htmlFor="module-field-required">A value is required</Label>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy || !dirty}>{adding ? "Add field" : "Save field"}</Button>
-          <Button type="button" variant="outline" disabled={busy} onClick={reload}>Reload saved draft</Button>
+          <Button type="submit" disabled={busy || locked || !dirty}>{adding ? "Add field" : "Save field"}</Button>
+          <Button type="button" variant="outline" disabled={busy || locked} onClick={reload}>Reload saved draft</Button>
         </div>
         <p role="status" aria-live="polite">{message}</p>
         {validation !== null ? <ul className="space-y-2" aria-label="Why the Module refused this change" role="alert">

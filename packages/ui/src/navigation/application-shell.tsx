@@ -28,6 +28,8 @@ export type ApplicationWebMcpRuntime = Readonly<{
   turnOff: () => void;
   turnOn: () => void;
   retry: () => void;
+  /** The tool of an agent call that is changing something right now; absent while none is. */
+  working?: string;
 }>;
 
 export type ApplicationShellRuntime = Readonly<{
@@ -78,7 +80,9 @@ function SwitcherButton({
 /** The visible indicator and per-session switch for browser agent tools, shared by every surface that registers them. */
 export function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
   const label =
-    runtime.status === "active"
+    runtime.working !== undefined
+      ? `An agent is making a change (${runtime.working})...`
+      : runtime.status === "active"
       ? "Browser agent tools are active on this page."
       : runtime.status === "off"
         ? "Browser agent tools are off for this session."
@@ -90,7 +94,7 @@ export function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpR
       className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 text-xs"
       role="status"
       aria-live="polite"
-      data-vortex-webmcp={runtime.status}
+      data-vortex-webmcp={runtime.working === undefined ? runtime.status : "working"}
     >
       <span>{label}</span>
       {runtime.status === "off" ? (

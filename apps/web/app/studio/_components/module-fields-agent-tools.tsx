@@ -55,9 +55,11 @@ const describeDraft = (draft: StoredModuleDefinitionDraft) => ({
 });
 
 /** Registers the Studio field tools in the browser agent interface; each one calls the action its editor control calls. */
-export function ModuleFieldsAgentTools({ draft, onDraftChange }: {
+export function ModuleFieldsAgentTools({ draft, onDraftChange, onWorkingChange }: {
   draft: StoredModuleDefinitionDraft;
   onDraftChange: (draft: StoredModuleDefinitionDraft) => void;
+  /** Reports whether an agent call is changing the draft, so the human editors can wait for it. */
+  onWorkingChange: (working: boolean) => void;
 }) {
   const draftRef = useRef(draft);
   useEffect(() => { draftRef.current = draft; }, [draft]);
@@ -65,9 +67,13 @@ export function ModuleFieldsAgentTools({ draft, onDraftChange }: {
   const offered = useMemo(() => offeredFieldTypes(draft.source), [draft.source]);
   const tools = useMemo(() => studioFieldTools(offered).map(({ name, description, inputSchema, readOnly }) => ({ name, description, inputSchema, readOnly })), [offered]);
 
+  const working = runtime?.working !== undefined;
+  useEffect(() => { onWorkingChange(working); }, [onWorkingChange, working]);
+
   const adopt = useCallback((next: StoredModuleDefinitionDraft) => { draftRef.current = next; onDraftChange(next); }, [onDraftChange]);
 
-  const invoke = useCallback(async (descriptor: WebMcpToolDescriptor, candidate: unknown): Promise<unknown> => {
+  const invoke = useCallback(async (descriptor: WebMcpToolDescriptor, candidate: unknown, signal?: AbortSignal): Promise<unknown> => {
+    if (signal?.aborted) return { outcome: "cancelled", message: "The call was cancelled before anything was saved." };
     const current = draftRef.current;
     const tool = studioFieldTools(offeredFieldTypes(current.source)).find((item) => item.name === descriptor.name);
     if (tool === undefined) return { outcome: "refused", reason: "UNKNOWN_TOOL" };
@@ -104,14 +110,21 @@ export function ModuleFieldsAgentTools({ draft, onDraftChange }: {
         required: input.required ?? existing?.required ?? false,
         ...(input.maxLength === undefined || existing?.type === type ? {} : { maxLength: input.maxLength }),
       });
+      // A server action cannot be aborted once sent: a cancel that arrives now cannot undo the write.
+      const cancelledAfterSave = signal?.aborted === true;
       if (result.kind === "available") {
         const saved = storedModuleDefinitionDraftSchema.safeParse(result.draft);
         if (!saved.success || !sameId(saved.data.rootId, current.rootId) || saved.data.draftRevision !== current.draftRevision + 1) {
-          console.error("[studio] agent field change answer did not match the draft");
+          if (!saved.success) console.error(`[studio] agent field change answer is not a Module draft: ${describeFailure(saved.error)}`);
+          else console.error("[studio] agent field change answer did not match the draft identity or revision");
           return { outcome: "unavailable", message: "The server's answer could not be matched to this draft. Call list_module_fields before continuing." };
         }
         adopt(saved.data);
-        return { outcome: "saved", ...describeDraft(saved.data) };
+        if (cancelledAfterSave) console.error("[studio] agent field change was cancelled after the server saved it; the saved draft was adopted");
+        return {
+          outcome: "saved", ...describeDraft(saved.data),
+          ...(cancelledAfterSave ? { message: "The call was cancelled while the change was being saved, but the change WAS saved into the draft." } : {}),
+        };
       }
       if (result.kind === "validation_failed") return { outcome: "validation_failed", errors: locatedErrors(result.validation) };
       if (result.kind === "temporarily_unavailable")

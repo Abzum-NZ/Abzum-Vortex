@@ -61,6 +61,7 @@ export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, t
   const [disabled, setDisabled] = useState(false);
   const [status, setStatus] = useState<"checking" | ApplicationWebMcpRuntime["status"]>("checking");
   const [retry, setRetry] = useState(0);
+  const [working, setWorking] = useState<readonly string[]>([]);
 
   const turnOff = useCallback((): void => {
     try {
@@ -131,15 +132,26 @@ export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, t
                 signal.addEventListener("abort", abortExecution, { once: true }),
               );
               abortExecution();
+              let changing = false;
               try {
                 if (executionController.signal.aborted) return { outcome: "cancelled" };
                 if (disabled || !matchesToolInputKeys(tool, input)) return { outcome: "refused" };
+                if (tool.readOnly !== true) {
+                  changing = true;
+                  setWorking((current) => [...current, tool.name]);
+                }
                 return await onInvoke(tool, input, executionController.signal);
               } catch (error) {
                 if (executionController.signal.aborted) return { outcome: "cancelled" };
                 console.error(`[webmcp] tool invocation failed: ${describeFailure(error)}`);
                 return { outcome: "unavailable" };
               } finally {
+                if (changing) {
+                  setWorking((current) => {
+                    const index = current.indexOf(tool.name);
+                    return index < 0 ? current : current.filter((_, position) => position !== index);
+                  });
+                }
                 signals.forEach((signal) => signal.removeEventListener("abort", abortExecution));
               }
             },
@@ -166,8 +178,8 @@ export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, t
       onStatusChange(undefined);
       return;
     }
-    onStatusChange({ status, turnOff, turnOn, retry: retryRegistration });
-  }, [modelContext, onStatusChange, retryRegistration, status, tools.length, turnOff, turnOn]);
+    onStatusChange({ status, turnOff, turnOn, retry: retryRegistration, ...(working[0] === undefined ? {} : { working: working[0] }) });
+  }, [modelContext, onStatusChange, retryRegistration, status, tools.length, turnOff, turnOn, working]);
 
   return null;
 }
