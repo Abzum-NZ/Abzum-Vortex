@@ -9,6 +9,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_record.refuse_activity_entry_change() OWNER TO postgres;
+alter function vortex_record.refuse_activity_entry_change() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_record.refuse_activity_entry_change() FROM PUBLIC;
+
+grant execute on function vortex_record.refuse_activity_entry_change() to postgres;

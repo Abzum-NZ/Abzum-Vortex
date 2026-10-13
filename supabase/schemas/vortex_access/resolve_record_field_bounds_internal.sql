@@ -57,22 +57,17 @@ begin
         message = 'Record field bounds found no catalogue entry';
     end if;
 
-    -- A superseded release would otherwise silently supply the policy. Eight
-    -- fields are compared: the five identity/release fields plus
-    -- validationContractVersion, contentFingerprint and
-    -- resolutionFingerprint, so a release that changed only its content or
-    -- resolution evidence (revision and version unchanged) is caught too.
-    if catalogue_entry.source_kind is distinct from (contribution_source ->> 'kind')
+    -- The active registration revision and the source release identity must
+    -- still match the contribution before its field policy can be used.
+    if catalogue_entry.registration_revision is distinct from
+        (contribution ->> 'registrationRevision')::bigint
+      or catalogue_entry.source_kind is distinct from (contribution_source ->> 'kind')
       or catalogue_entry.source_definition_key is distinct from (contribution_source ->> 'definitionKey')
       or catalogue_entry.source_root_id is distinct from (contribution_source ->> 'rootId')::uuid
       or catalogue_entry.source_version is distinct from (contribution_source ->> 'releaseVersion')
       or catalogue_entry.source_revision is distinct from (contribution_source ->> 'releaseRevision')::bigint
       or catalogue_entry.source_validation_contract_version
-        is distinct from (contribution_source ->> 'validationContractVersion')
-      or catalogue_entry.source_content_fingerprint
-        is distinct from (contribution_source ->> 'contentFingerprint')
-      or catalogue_entry.source_resolution_fingerprint
-        is distinct from (contribution_source ->> 'resolutionFingerprint') then
+        is distinct from (contribution_source ->> 'validationContractVersion') then
       raise exception using errcode = '22023',
         message = 'Record field bounds found a superseded permission source';
     end if;

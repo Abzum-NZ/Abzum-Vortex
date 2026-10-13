@@ -36,7 +36,9 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_identity.validated_human_account_context() OWNER TO postgres;
+alter function vortex_identity.validated_human_account_context() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_identity.validated_human_account_context() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_identity.validated_human_account_context() TO vortex_owner;
+
+grant execute on function vortex_identity.validated_human_account_context() to postgres;

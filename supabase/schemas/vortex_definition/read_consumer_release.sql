@@ -126,3 +126,7 @@ grant execute on function vortex_definition.read_consumer_release(text, uuid, bi
   to vortex_request;
 comment on function vortex_definition.read_consumer_release(text, uuid, bigint) is
   'Returns one same-organization immutable Module or Application release as private integrity evidence for the Definition consumer-read service.';
+
+alter function vortex_definition.read_consumer_release(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_consumer_release(p_kind text, p_root_id uuid, p_release_revision bigint) to postgres;

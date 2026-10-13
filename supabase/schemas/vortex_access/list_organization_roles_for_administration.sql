@@ -124,3 +124,7 @@ to vortex_request;
 comment on function
   vortex_access.list_organization_roles_for_administration(uuid, integer) is
   'Returns one bounded page of current local role configuration without effective-access evidence.';
+
+alter function vortex_access.list_organization_roles_for_administration(p_after_role_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_roles_for_administration(p_after_role_id uuid, p_page_size integer) to postgres;

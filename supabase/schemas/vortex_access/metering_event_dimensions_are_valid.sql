@@ -37,3 +37,7 @@ revoke all on function vortex_access.metering_event_dimensions_are_valid(jsonb)
 
 comment on function vortex_access.metering_event_dimensions_are_valid(jsonb) is
   'Storage check for safe metering dimensions: a small flat map of bounded scalars whose keys name no word in the metering_forbidden_dimension_word reference list.';
+
+alter function vortex_access.metering_event_dimensions_are_valid(p_dimensions jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.metering_event_dimensions_are_valid(p_dimensions jsonb) to postgres;

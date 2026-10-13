@@ -242,3 +242,7 @@ grant execute on function vortex_access.record_metering_event(
   uuid, uuid, text, uuid, text, numeric, text, text, jsonb, timestamptz,
   uuid, text, uuid, uuid, text
 ) to vortex_request;
+
+alter function vortex_access.record_metering_event(p_tenant_id uuid, p_organization_id uuid, p_allocation_owner text, p_operation_id uuid, p_capability_key text, p_quantity numeric, p_unit text, p_source text, p_dimensions jsonb, p_occurred_at timestamp with time zone, p_source_event_id uuid, p_duplicate_protection_key text, p_correlation_id uuid, p_corrects_metering_event_id uuid, p_correction_direction text) owner to vortex_owner;
+
+grant execute on function vortex_access.record_metering_event(p_tenant_id uuid, p_organization_id uuid, p_allocation_owner text, p_operation_id uuid, p_capability_key text, p_quantity numeric, p_unit text, p_source text, p_dimensions jsonb, p_occurred_at timestamp with time zone, p_source_event_id uuid, p_duplicate_protection_key text, p_correlation_id uuid, p_corrects_metering_event_id uuid, p_correction_direction text) to postgres;

@@ -106,8 +106,8 @@ begin
           'releaseRevision', entry.source_revision,
           'releaseVersion', entry.source_version,
           'validationContractVersion', entry.source_validation_contract_version,
-          'contentFingerprint', entry.source_content_fingerprint,
-          'resolutionFingerprint', entry.source_resolution_fingerprint
+          'contentFingerprint', source_release.content_fingerprint,
+          'resolutionFingerprint', source_release.resolution_fingerprint
         ),
         'meaningFingerprint', entry.meaning_fingerprint
       ) order by
@@ -117,6 +117,12 @@ begin
     '[]'::jsonb
   ) into actual_entries
   from vortex_access.permission_catalogue_entries as entry
+  left join vortex_definition.releases as source_release
+    on source_release.root_id = entry.source_root_id
+    and source_release.release_revision = entry.source_revision
+    and source_release.release_version = entry.source_version
+    and source_release.validation_contract_version =
+      entry.source_validation_contract_version
   where entry.organization_id = p_organization_id
     and entry.registration_kind = 'application'
     and entry.registration_owner_id = p_application_root_id
@@ -143,6 +149,8 @@ exception
 end
 $$;
 
-ALTER FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) OWNER TO postgres;
+ALTER FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) OWNER TO vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) FROM PUBLIC;
+
+grant execute on function vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) to postgres;

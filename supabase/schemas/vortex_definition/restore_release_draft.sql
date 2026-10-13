@@ -439,3 +439,5 @@ grant execute on function vortex_definition.restore_release_draft(text, uuid, bi
 
 comment on function vortex_definition.restore_release_draft(text, uuid, bigint, bigint, text, jsonb) is
   'Conditionally restores one verified immutable authored source into the expected draft revision without allocating identities or moving a release pointer.';
+
+alter function vortex_definition.restore_release_draft(p_kind text, p_root_id uuid, p_target_release_revision bigint, p_expected_draft_revision bigint, p_expected_source_fingerprint text, p_identity_requirements jsonb) owner to vortex_owner;

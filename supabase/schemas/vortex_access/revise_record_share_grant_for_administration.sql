@@ -167,3 +167,7 @@ comment on function vortex_access.revise_record_share_grant_for_administration(
   uuid, bigint, jsonb, text, uuid
 ) is
   'Fixed protected reviser: replaces the terms and fingerprints of a draft or pending_consent proposal under an exact expected revision, re-checking current share authority and resetting its consent request.';
+
+alter function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) to postgres;

@@ -102,8 +102,7 @@ begin
     permission_id, permission_key, label, description, record_type_id,
     action_kind, named_action, administrative, source_kind,
     source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     meaning_fingerprint, record_scope, field_policy
   )
   select entry.organization_id, entry.registration_kind,
@@ -114,7 +113,6 @@ begin
     entry.administrative, entry.source_kind, entry.source_definition_key,
     entry.source_root_id, '1.3.0', entry.source_revision,
     entry.source_validation_contract_version,
-    entry.source_content_fingerprint, entry.source_resolution_fingerprint,
     catalogue_fingerprint, entry.meaning_fingerprint,
     entry.record_scope, entry.field_policy
   from vortex_access.permission_catalogue_entries as entry
@@ -134,8 +132,7 @@ begin
     permission_id, permission_key, label, description, record_type_id,
     action_kind, named_action, administrative, source_kind,
     source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     meaning_fingerprint
   ) values
     (
@@ -144,7 +141,7 @@ begin
       'platform.security.identities.disable', 'Disable identities',
       'Disable an identity and revoke its active sessions through the identity owner''s protected operation without receiving general identity-administration or business-record authority.',
       null, 'manage', null, true, 'platform_catalogue', null, null,
-      '1.3.0', null, null, null, null, catalogue_fingerprint,
+      '1.3.0', null, null, catalogue_fingerprint,
       security_meaning_fingerprint
     ),
     (
@@ -153,7 +150,7 @@ begin
       'platform.support.access.request', 'Request support access',
       'Request time-bounded support access to another organisation for a named operator and exact scope without receiving standing access to that organisation.',
       null, 'manage', null, true, 'platform_catalogue', null, null,
-      '1.3.0', null, null, null, null, catalogue_fingerprint,
+      '1.3.0', null, null, catalogue_fingerprint,
       support_request_meaning_fingerprint
     ),
     (
@@ -162,7 +159,7 @@ begin
       'platform.organization.support.approve', 'Approve support access',
       'Approve or refuse a time-bounded support-access request for one''s own organisation without granting the requester standing authority.',
       null, 'manage', null, true, 'platform_catalogue', null, null,
-      '1.3.0', null, null, null, null, catalogue_fingerprint,
+      '1.3.0', null, null, catalogue_fingerprint,
       support_approve_meaning_fingerprint
     );
 
@@ -245,6 +242,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.adopt_security_and_support_operator_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
+ALTER FUNCTION vortex_access.adopt_security_and_support_operator_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.adopt_security_and_support_operator_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.adopt_security_and_support_operator_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

@@ -140,3 +140,7 @@ comment on function vortex_access.save_organization_settings_record_for_administ
   uuid, bigint, jsonb, jsonb
 ) is
   'Protected organisation settings record writer requiring runtime-settings.manage and an exact current revision; the request organisation supplies the singleton identity and extensions are merged with the invariant settings in one transaction.';
+
+alter function vortex_access.save_organization_settings_record_for_administration(p_record_id uuid, p_expected_revision bigint, p_core_values jsonb, p_extension_values jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.save_organization_settings_record_for_administration(p_record_id uuid, p_expected_revision bigint, p_core_values jsonb, p_extension_values jsonb) to postgres;

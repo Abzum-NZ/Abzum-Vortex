@@ -45,3 +45,7 @@ revoke all on function vortex_record.record_super_administrator_authority_intern
 
 comment on function vortex_record.record_super_administrator_authority_internal() is
   'Attributes each organisation activity by an assigned Vortex super administrator to the exact active assignment without changing activity writers.';
+
+alter function vortex_record.record_super_administrator_authority_internal() owner to vortex_owner;
+
+grant execute on function vortex_record.record_super_administrator_authority_internal() to postgres;

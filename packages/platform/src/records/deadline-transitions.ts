@@ -5,7 +5,6 @@ import {
   type RecordTypeDefinition,
 } from "../schema";
 import { compareInstants, exactInstant, type ExactInstant } from "./exact-instant";
-import type { RelationshipTotalParentMutation } from "./relationship-total-save";
 
 export type DeriveEarliestPendingDeadlineTransitionInput = Readonly<{
   recordType: RecordTypeDefinition;
@@ -169,55 +168,3 @@ export const deriveEarliestPendingDeadlineTransition = (
   }
   return earliest?.transition;
 };
-
-/** The minimal locked-record shape needed to re-derive a parent's due transition. */
-export type DeadlineDueParentRecordLookup = Readonly<{
-  recordKey: string;
-  recordId?: string;
-  recordType: RecordTypeDefinition;
-  existingValues: Readonly<Record<string, unknown>>;
-}>;
-
-/**
- * The next due transition of one submitted relationship-total parent, keyed by
- * the revision the parent writer expects. `null` cancels the parent's due row.
- */
-export type ParentDeadlineDueTransition = Readonly<{
-  storageContractId: string;
-  recordTypeId: string;
-  recordId: string;
-  expectedConcurrencyNumber: number;
-  dueTransition: PendingDeadlineTransition | null;
-}>;
-
-/**
- * Derives the next due transition for every submitted parent mutation. The
- * SQL composer applies it only to a parent whose revision the shared parent
- * writer actually advanced, so this never predicts which values change.
- */
-export const deriveParentDeadlineDueTransitions = (
-  parentMutations: readonly RelationshipTotalParentMutation[],
-  records: readonly DeadlineDueParentRecordLookup[],
-  organizationTimeZone: string,
-): readonly ParentDeadlineDueTransition[] =>
-  parentMutations.map((mutation) => {
-    const record = records.find(
-      (candidate) =>
-        candidate.recordKey !== "root" &&
-        candidate.recordId === mutation.recordId &&
-        candidate.recordType.recordTypeId === mutation.recordTypeId,
-    );
-    if (record === undefined) throw new Error("RECORD_DEADLINE_PARENT_UNAVAILABLE");
-    return {
-      storageContractId: record.recordType.storageContractId,
-      recordTypeId: mutation.recordTypeId,
-      recordId: mutation.recordId,
-      expectedConcurrencyNumber: mutation.expectedConcurrencyNumber,
-      dueTransition:
-        deriveEarliestPendingDeadlineTransition({
-          recordType: record.recordType,
-          finalAuthoritativeFieldValues: { ...record.existingValues, ...mutation.finalValues },
-          organizationTimeZone,
-        }) ?? null,
-    };
-  });

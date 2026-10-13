@@ -13,9 +13,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_current_organization_runtime_settings_for_application() OWNER TO postgres;
+alter function vortex_access.read_current_organization_runtime_settings_for_application() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_current_organization_runtime_settings_for_application() IS 'Narrow request-role reader for an already-authorised application transaction; it reads only its established organisation and returns absence when setup is incomplete.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_current_organization_runtime_settings_for_application() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_current_organization_runtime_settings_for_application() TO vortex_request;
+
+grant execute on function vortex_access.read_current_organization_runtime_settings_for_application() to postgres;

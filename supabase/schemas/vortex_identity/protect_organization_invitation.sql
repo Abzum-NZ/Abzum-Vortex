@@ -28,6 +28,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_identity.protect_organization_invitation() OWNER TO postgres;
+alter function vortex_identity.protect_organization_invitation() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_identity.protect_organization_invitation() FROM PUBLIC;
+
+grant execute on function vortex_identity.protect_organization_invitation() to postgres;

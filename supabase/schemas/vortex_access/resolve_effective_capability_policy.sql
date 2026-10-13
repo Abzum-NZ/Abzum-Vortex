@@ -115,3 +115,7 @@ grant execute on function vortex_access.resolve_effective_capability_policy(uuid
 
 comment on function vortex_access.resolve_effective_capability_policy(uuid, uuid, text, text) is
   'Returns the lowest of the live platform ceiling and the tenant and organisation allocations for the established request scope, the ceiling itself, and which limit applied; tenant administrators require the capability-limits read permission, and an allocation can only narrow the ceiling.';
+
+alter function vortex_access.resolve_effective_capability_policy(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text) owner to vortex_owner;
+
+grant execute on function vortex_access.resolve_effective_capability_policy(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text) to postgres;

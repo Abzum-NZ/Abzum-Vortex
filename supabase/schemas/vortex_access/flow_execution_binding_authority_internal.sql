@@ -78,6 +78,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.flow_execution_binding_authority_internal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_organization_id uuid, p_mode text) OWNER TO postgres;
+alter function vortex_access.flow_execution_binding_authority_internal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_organization_id uuid, p_mode text) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.flow_execution_binding_authority_internal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_organization_id uuid, p_mode text) FROM PUBLIC;
+
+grant execute on function vortex_access.flow_execution_binding_authority_internal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_organization_id uuid, p_mode text) to postgres;

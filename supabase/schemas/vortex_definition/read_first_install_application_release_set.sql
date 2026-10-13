@@ -160,3 +160,5 @@ grant execute on function vortex_definition.read_first_install_application_relea
   to vortex_request;
 comment on function vortex_definition.read_first_install_application_release_set(uuid, bigint) is
   'Returns the exact same-organization ordinary published Application and complete immutable Module pin closure to an org-only HUMAN draft manager before Application permission registration; grants no installation or mutation authority.';
+
+alter function vortex_definition.read_first_install_application_release_set(p_application_root_id uuid, p_application_release_revision bigint) owner to vortex_owner;

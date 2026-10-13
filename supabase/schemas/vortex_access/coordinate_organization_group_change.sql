@@ -207,3 +207,7 @@ comment on function vortex_access.coordinate_organization_group_change(
   text, uuid, uuid, bigint, text, text, uuid, uuid
 ) is
   'Owner-only atomic Group creation, label revision or terminal retirement. Only retirement changes Access, once; creation and label revision leave the Access version unchanged. It grants no caller authority.';
+
+alter function vortex_access.coordinate_organization_group_change(p_operation text, p_organization_id uuid, p_group_id uuid, p_expected_group_revision bigint, p_group_key text, p_label text, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.coordinate_organization_group_change(p_operation text, p_organization_id uuid, p_group_id uuid, p_expected_group_revision bigint, p_group_key text, p_label text, p_changed_by uuid, p_correlation_id uuid) to postgres;

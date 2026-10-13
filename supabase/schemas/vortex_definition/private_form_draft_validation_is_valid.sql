@@ -39,3 +39,7 @@ comment on function vortex_definition.private_form_draft_validation_is_valid(jso
 
 grant execute on function vortex_definition.private_form_draft_validation_is_valid(jsonb)
   to vortex_owner;
+
+alter function vortex_definition.private_form_draft_validation_is_valid(p_validation jsonb) owner to vortex_owner;
+
+grant execute on function vortex_definition.private_form_draft_validation_is_valid(p_validation jsonb) to postgres;

@@ -26,9 +26,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.get_record_share_grant_for_administration(p_grant_id uuid) OWNER TO postgres;
+alter function vortex_access.get_record_share_grant_for_administration(p_grant_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.get_record_share_grant_for_administration(p_grant_id uuid) IS 'Fixed protected read of one record-share grant proposal for its source or recipient organisation.';
 
 REVOKE ALL ON FUNCTION vortex_access.get_record_share_grant_for_administration(p_grant_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.get_record_share_grant_for_administration(p_grant_id uuid) TO vortex_request;
+
+grant execute on function vortex_access.get_record_share_grant_for_administration(p_grant_id uuid) to postgres;

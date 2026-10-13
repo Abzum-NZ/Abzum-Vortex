@@ -304,3 +304,5 @@ grant execute on function vortex_definition.read_restore_release_evidence(text, 
   to vortex_request;
 comment on function vortex_definition.read_restore_release_evidence(text, uuid, bigint) is
   'Returns narrow private evidence needed to verify one immutable source before restoring its draft.';
+
+alter function vortex_definition.read_restore_release_evidence(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;

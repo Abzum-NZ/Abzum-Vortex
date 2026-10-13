@@ -641,7 +641,8 @@ const parseRuntimeDatabaseConfiguration = (
     environmentName === "local" &&
     address.protocol === "postgresql:" &&
     isLoopbackHostname(address.hostname) &&
-    address.port === "54322" &&
+    // The main Local Supabase stack listens on 54322; a worker's database lane on its own port.
+    /^[0-9]+$/.test(address.port) &&
     address.pathname === "/postgres" &&
     username === "vortex_runtime" &&
     address.password.length > 0;

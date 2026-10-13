@@ -93,9 +93,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.list_organization_group_memberships_for_administration(p_group_id uuid, p_after_membership_id uuid, p_page_size integer) OWNER TO postgres;
+alter function vortex_access.list_organization_group_memberships_for_administration(p_group_id uuid, p_after_membership_id uuid, p_page_size integer) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.list_organization_group_memberships_for_administration(p_group_id uuid, p_after_membership_id uuid, p_page_size integer) IS 'Returns one bounded selected-Group membership page after fixed teams-read authorization; temporal state is descriptive and grants no permission.';
 
 REVOKE ALL ON FUNCTION vortex_access.list_organization_group_memberships_for_administration(p_group_id uuid, p_after_membership_id uuid, p_page_size integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.list_organization_group_memberships_for_administration(p_group_id uuid, p_after_membership_id uuid, p_page_size integer) TO vortex_request;
+
+grant execute on function vortex_access.list_organization_group_memberships_for_administration(p_group_id uuid, p_after_membership_id uuid, p_page_size integer) to postgres;

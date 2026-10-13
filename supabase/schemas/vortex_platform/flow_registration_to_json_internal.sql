@@ -18,8 +18,10 @@ CREATE OR REPLACE FUNCTION vortex_platform.flow_registration_to_json_internal(r 
   )
 $$;
 
-ALTER FUNCTION vortex_platform.flow_registration_to_json_internal(r vortex_platform.flow_registrations) OWNER TO postgres;
+alter function vortex_platform.flow_registration_to_json_internal(r vortex_platform.flow_registrations) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_platform.flow_registration_to_json_internal(r vortex_platform.flow_registrations) IS 'Canonical private projection of one inactive flow registration; never granted above the owning runtime.';
 
 REVOKE ALL ON FUNCTION vortex_platform.flow_registration_to_json_internal(r vortex_platform.flow_registrations) FROM PUBLIC;
+
+grant execute on function vortex_platform.flow_registration_to_json_internal(r vortex_platform.flow_registrations) to postgres;

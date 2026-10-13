@@ -294,4 +294,6 @@ grant execute on function vortex_identity.read_organization_setup_receipt(uuid, 
 comment on function vortex_identity.read_organization_setup_receipt(uuid, text, uuid) is
   'Attests one accepted original tenant or child-organisation creation receipt and its immutable Identity subjects without granting setup authority.';
 
-alter function vortex_identity.read_organization_setup_receipt(uuid,text,uuid) owner to postgres;
+alter function vortex_identity.read_organization_setup_receipt(p_receipt_id uuid, p_expected_operation text, p_expected_organization_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.read_organization_setup_receipt(p_receipt_id uuid, p_expected_operation text, p_expected_organization_id uuid) to postgres;

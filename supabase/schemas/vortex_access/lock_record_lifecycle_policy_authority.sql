@@ -66,9 +66,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.lock_record_lifecycle_policy_authority() OWNER TO postgres;
+alter function vortex_access.lock_record_lifecycle_policy_authority() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.lock_record_lifecycle_policy_authority() IS 'Access-owned lock and current authority decision for one protected record-type lifecycle policy transaction.';
 
 REVOKE ALL ON FUNCTION vortex_access.lock_record_lifecycle_policy_authority() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.lock_record_lifecycle_policy_authority() TO vortex_owner;
+
+grant execute on function vortex_access.lock_record_lifecycle_policy_authority() to postgres;

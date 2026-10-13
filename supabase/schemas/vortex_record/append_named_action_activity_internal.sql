@@ -54,3 +54,5 @@ to vortex_record_adapter;
 
 comment on function vortex_record.append_named_action_activity_internal(uuid,uuid,uuid[],text) is
   'Private named-action Activity composer: derives the organisation, account and correlation from the validated request context and records the channel from that context.';
+
+alter function vortex_record.append_named_action_activity_internal(p_activity_id uuid, p_subject_id uuid, p_changed_field_ids uuid[], p_outcome text) owner to vortex_owner;

@@ -19,6 +19,7 @@ import {
   applyStudioFlowPresentationMoveCommand,
   applyStudioFlowInsertCommand,
   applyStudioFlowRemoveCommand,
+  applyStudioFlowSettingCommand,
   applyStudioFlowCalculateCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
@@ -35,6 +36,7 @@ import {
   type StudioFlowEditResult,
   type StudioFlowInsertCommand,
   type StudioFlowRemoveCommand,
+  type StudioFlowSettingCommand,
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication,
@@ -292,13 +294,31 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     setPendingCondition(pending);
   }, []);
   // Text and Calculate share this synchronous guard; either blocks other workspace edits.
+  // An unapplied canvas task-setting edit joins the same guard, so Save, Reopen, undo and selection changes see it too.
   const [pendingFlowText, setPendingFlowText] = useState(false);
+  const [pendingFlowTextEditor, setPendingFlowTextEditor] = useState(false);
   const flowTextPending = useRef(false);
-  const reportFlowTextPending = useCallback((pending: boolean) => {
+  const flowTextEditorPending = useRef(false);
+  const flowSettingPending = useRef(false);
+  const syncFlowTextPending = useCallback(() => {
+    const pending = flowTextEditorPending.current || flowSettingPending.current;
     if (flowTextPending.current !== pending) previewGeneration.current += 1;
     flowTextPending.current = pending;
     setPendingFlowText(pending);
+    setPendingFlowTextEditor(flowTextEditorPending.current);
   }, []);
+  const reportFlowTextPending = useCallback((pending: boolean) => {
+    flowTextEditorPending.current = pending;
+    syncFlowTextPending();
+  }, [syncFlowTextPending]);
+  const reportFlowSettingPending = useCallback((pending: boolean) => {
+    flowSettingPending.current = pending;
+    syncFlowTextPending();
+  }, [syncFlowTextPending]);
+  const resetFlowPending = () => {
+    flowSettingPending.current = false;
+    reportFlowTextPending(false);
+  };
   const [flowEpoch, setFlowEpoch] = useState(0);
   const [pendingFlowAppend, setPendingFlowAppend] = useState(false);
   const flowAppendPending = useRef(false);
@@ -417,7 +437,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     command: Command): StudioFlowEditResult => {
     const busy = (): boolean => !active.current || publicationPending.current || sourceImportPending.current || searchPending.current ||
       reopening.current || history.getState().isSaving || conditionPending.current || labelsPending.current ||
-      appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current;
+      appearancePending.current || compositionPending.current || flowTextEditorPending.current || flowAppendPending.current;
     const refuse = (reason: string): StudioFlowEditResult => ({ kind: "stale", reason });
     if (busy()) return refuse("Another change is being applied or is waiting for you. Apply or discard it, then retry.");
     const current = history.getState();
@@ -704,7 +724,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       setCompositionEpoch((value) => value + 1);
       reportCompositionPending(false);
       setFlowEpoch((value) => value + 1);
-      reportFlowTextPending(false);
+      resetFlowPending();
       reportFlowAppendPending(false);
       setMessage(`Reopened saved revision ${result.draft.draftRevision}.`);
     } catch {
@@ -739,7 +759,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         ? "Apply or discard Search edits before saving or changing other editor content." : pendingSourceImport
         ? "Apply or discard source import inputs before saving or changing other editor content." : pendingCondition
         ? "Apply or discard visibility edits before saving or undoing." : pendingFlowText
-        ? "Apply or discard Flow text or Calculate inputs before saving or undoing." : pendingFlowAppend
+        ? "Apply or discard Flow text, Calculate inputs or a task setting edit before saving or undoing." : pendingFlowAppend
         ? "Apply or discard Flow insertion inputs before saving or undoing." : pendingComposition
         ? "Apply or discard composition inputs before saving or undoing." : pendingAppearance
         ? "Apply or discard appearance edits before saving or undoing." : pendingLabels
@@ -807,7 +827,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         setCompositionEpoch((value) => value + 1);
         reportCompositionPending(false);
         setFlowEpoch((value) => value + 1);
-        reportFlowTextPending(false);
+        resetFlowPending();
         reportFlowAppendPending(false);
         const currentSelection = selection.getSelection();
         setLabel(currentSelection?.kind === "application" ? parsed.data.body.name
@@ -851,7 +871,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       <nav aria-label="Application outline" className="space-y-3"><h2 className="font-semibold">Outline</h2>
         <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={(node) => {
           if (publicationPending.current || reopening.current || history.getState().isSaving || (((sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
-            !window.confirm("Discard unapplied source import, inspector, appearance, composition, visibility and Flow edits and change selection?"))) return;
+            !window.confirm("Discard unapplied source import, inspector, appearance, composition, visibility, Flow and task setting edits and change selection?"))) return;
           if (!selection.select(node.selection)) return;
           discardSourceImport();
           setConditionEpoch((value) => value + 1);
@@ -861,7 +881,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
           setCompositionEpoch((value) => value + 1);
           reportCompositionPending(false);
           setFlowEpoch((value) => value + 1);
-          reportFlowTextPending(false);
+          resetFlowPending();
           reportFlowAppendPending(false);
           setLabel(currentLabel);
           setDescription(source.body.description);
@@ -945,14 +965,17 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
               return result;
             }} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
-          <ApplicationFlowCanvas context={compositionContext} selection={selected}
-            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
+          <ApplicationFlowCanvas key={`canvas-${flowEpoch}`} context={compositionContext} selection={selected}
+            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowTextEditor || pendingFlowAppend || workspaceLifetime === 0}
+            onSettingPendingChange={reportFlowSettingPending}
             onInsert={(expected, expectedSelection, command: StudioFlowInsertCommand) =>
               editFlowFromCanvas(applyStudioFlowInsertCommand, "Task added to local history. Save draft to persist it.", expected, expectedSelection, command)}
             onRemove={(expected, expectedSelection, command: StudioFlowRemoveCommand) =>
-              editFlowFromCanvas(applyStudioFlowRemoveCommand, "Task removed from local history. Save draft to persist it.", expected, expectedSelection, command)} />}
+              editFlowFromCanvas(applyStudioFlowRemoveCommand, "Task removed from local history. Save draft to persist it.", expected, expectedSelection, command)}
+            onSetting={(expected, expectedSelection, command: StudioFlowSettingCommand) =>
+              editFlowFromCanvas(applyStudioFlowSettingCommand, "Task setting applied to local history. Save draft to persist it.", expected, expectedSelection, command)} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
-          <ApplicationFlowEditor key={flowEpoch} context={compositionContext} selection={selected}
+          <ApplicationFlowEditor key={`editor-${flowEpoch}`} context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}
             onPendingChange={reportFlowTextPending} onAppendPendingChange={reportFlowAppendPending}
             onCommand={(expected, expectedSelection, command) => {

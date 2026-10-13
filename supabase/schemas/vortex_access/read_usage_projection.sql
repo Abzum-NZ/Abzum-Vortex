@@ -105,9 +105,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text) OWNER TO postgres;
+alter function vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text) IS 'Rebuilds accepted-event usage projections after current tenant-administrator authorization and returns one bounded tenant or organisation aggregate page.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text) TO vortex_runtime;
+
+grant execute on function vortex_access.read_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_scope text, p_organization_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone, p_grouping text, p_page_size integer, p_cursor text) to postgres;

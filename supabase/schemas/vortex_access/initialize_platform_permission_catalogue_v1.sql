@@ -184,8 +184,7 @@ begin
     application_root_id, owner_kind, owner_id, permission_id, permission_key,
     label, description, record_type_id, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint, meaning_fingerprint
+    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint
   )
   -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   select p_organization_id, 'platform', 'cabe121e-0baf-4084-9471-cce915d460a8', 1,
@@ -193,7 +192,7 @@ begin
     null, 'platform', 'cabe121e-0baf-4084-9471-cce915d460a8',
     (entry ->> 'permissionId')::uuid, entry ->> 'key', entry ->> 'label',
     entry ->> 'description', null, entry ->> 'actionKind', null, true,
-    'platform_catalogue', null, null, '1.0.0', null, null, null, null,
+    'platform_catalogue', null, null, '1.0.0', null, null,
     catalogue_fingerprint, entry ->> 'meaningFingerprint'
   from pg_catalog.jsonb_array_elements(catalogue_entries) as item(entry);
 
@@ -212,8 +211,10 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
+ALTER FUNCTION vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only exact historical 1.0.0 platform catalogue initializer retained for compatibility.';
 
 REVOKE ALL ON FUNCTION vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

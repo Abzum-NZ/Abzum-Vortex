@@ -1,9 +1,14 @@
 "use client";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@vortex/ui/components/alert-dialog";
+import { ApplicationFlowTaskSettings } from "./application-flow-task-settings";
 import { describeFailure, type SourceFlow, type SourceFlowTask } from "@vortex/platform/schema";
 import {
   projectStudioFlowInsertOptions,
@@ -11,6 +16,7 @@ import {
   type StudioFlowEditResult,
   type StudioFlowInsertCommand,
   type StudioFlowRemoveCommand,
+  type StudioFlowSettingCommand,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
   type StudioFlowTextContext,
@@ -24,18 +30,6 @@ const nodeWidth = 220;
 const nodeHeight = 56;
 const columnGap = 32;
 const rowGap = 40;
-
-// Structure keys hold child task lists; they are drawn as branches, not as settings.
-const structureKeys = new Set(["id", "type", "description", "then", "else", "tasks", "default", "branches"]);
-
-// Switch cases keep their `when` predicate visible; only the nested task lists are drawn as branches.
-const withoutBranchTasks = (key: string, value: unknown): unknown =>
-  key === "cases" && Array.isArray(value)
-    ? value.map((entry) => {
-      if (typeof entry !== "object" || entry === null) return entry;
-      return Object.fromEntries(Object.entries(entry).filter(([name]) => name !== "tasks"));
-    })
-    : value;
 
 // Errors and Finally are distinct transitions out of the main tasks; each names its own trigger.
 const groupTransitions: Readonly<Record<string, Readonly<{ caption: string; edge: string }>>> = {
@@ -180,34 +174,6 @@ const findOutline = (lists: readonly StudioFlowTaskListOutline[], key: string): 
   return undefined;
 };
 
-const describeValue = (value: unknown): string => {
-  try { return JSON.stringify(value, null, 2) ?? String(value); }
-  catch (cause) {
-    console.error("Flow canvas could not render a task setting", cause);
-    return "This setting cannot be shown.";
-  }
-};
-
-function TaskSettings({ flow, outline }: Readonly<{ flow: SourceFlow; outline: StudioFlowTaskOutline }>) {
-  const task = taskAt(flow, outline.path);
-  useEffect(() => {
-    if (task === undefined || task.id !== outline.id)
-      console.error("Flow canvas could not find the selected task", { flow: flow.id, path: outline.path });
-  }, [flow.id, outline.id, outline.path, task]);
-  if (task === undefined || task.id !== outline.id)
-    return <p role="status" className="text-sm text-muted-foreground">
-      This task has an unsupported shape. Its settings cannot be shown.</p>;
-  const settings = Object.entries(task).filter(([key]) => !structureKeys.has(key));
-  return <dl className="space-y-2 text-sm">
-    {task.description !== undefined && <div><dt className="text-muted-foreground">Description</dt><dd>{task.description}</dd></div>}
-    {settings.length === 0 ? <p className="text-muted-foreground">This task has no settings.</p>
-      : settings.map(([key, value]) => <div key={key}>
-        <dt className="text-muted-foreground">{key}</dt>
-        <dd><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 text-xs">{describeValue(withoutBranchTasks(key, value))}</pre></dd>
-      </div>)}
-  </dl>;
-}
-
 type FlowListChoice = Readonly<{ key: string; label: string; path: readonly (string | number)[]; length: number }>;
 
 /** Every authored task list, including empty ones, named by the task that owns it. */
@@ -229,12 +195,14 @@ type Adding = Readonly<{
 }>;
 
 /** The draft flow's task list as a canvas; every edit goes through the draft's revision-checked history. */
-export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, onRemove }: Readonly<{
+export function ApplicationFlowCanvas({ context, selection, disabled, onSettingPendingChange, onInsert, onRemove, onSetting }: Readonly<{
   context: StudioFlowTextContext;
   selection: FlowSelection;
   disabled: boolean;
+  onSettingPendingChange: (pending: boolean) => void;
   onInsert: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowInsertCommand) => StudioFlowEditResult;
   onRemove: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowRemoveCommand) => StudioFlowEditResult;
+  onSetting: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowSettingCommand) => StudioFlowEditResult;
 }>) {
   const projection = useMemo(() => projectStudioFlowTextEditor(context, selection), [context, selection]);
   const flow = useMemo(() => context.source.body.flows.find((entry) => entry.id === selection.flowAlias), [context, selection]);
@@ -243,6 +211,16 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
   // A selection belongs to one flow and one task id, so it cannot leak across flow switches or edits.
   const [selected, setSelected] = useState<Readonly<{ flowAlias: string; key: string; id: string }> | null>(null);
   const [adding, setAdding] = useState<Adding | null>(null);
+  // An unapplied setting edit is bound to its task and flow; nothing on the canvas may replace it silently.
+  const [settingPending, setSettingPending] = useState(false);
+  const reportSettingPending = useCallback((pending: boolean) => {
+    setSettingPending(pending);
+    onSettingPendingChange(pending);
+  }, [onSettingPendingChange]);
+  const holdMessage = "Apply or discard the unapplied setting edit first. It belongs to the selected task.";
+  // A removal asks first, bound to the task and draft snapshot it was opened for.
+  const [removing, setRemoving] = useState<Readonly<{ expected: StudioFlowTextContext; expectedSelection: FlowSelection;
+    taskId: string; taskPath: readonly (string | number)[]; nested: number }> | null>(null);
   const insertOptions = useMemo(() => projectStudioFlowInsertOptions(context, selection), [context, selection]);
   const options = insertOptions.kind === "available" ? insertOptions.options : [];
   const [taskType, setTaskType] = useState("");
@@ -280,6 +258,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
     ? findOutline(projection.lists, selected.key) : undefined;
   const selectedOutline = candidate !== undefined && candidate.id === selected?.id ? candidate : undefined;
   const selectedKey = selectedOutline === undefined ? null : selected?.key ?? null;
+  const flowTask = selectedOutline === undefined ? undefined : taskAt(flow, selectedOutline.path);
   const listChoices = flattenLists(projection.lists);
   const themed = {
     "--xy-edge-stroke-default": "var(--border)",
@@ -292,6 +271,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
   } as CSSProperties;
 
   const beginAdding = (next: Omit<Adding, "expected" | "expectedSelection">) => {
+    if (settingPending) { setStatus(holdMessage); return; }
     setAdding({ ...next, expected: context, expectedSelection: selection });
     setTaskType("");
     setStatus("");
@@ -311,16 +291,21 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
       setAdding(null);
     } else setStatus(result.reason);
   };
-  const remove = () => {
+  const askRemove = () => {
     if (selectedOutline === undefined) return;
-    const nested = countNested(selectedOutline);
-    const inside = nested > 0 ? ` and the ${nested} task${nested === 1 ? "" : "s"} inside it` : "";
-    if (!window.confirm(`Remove task ${selectedOutline.id}${inside} from the draft?`)) return;
-    const result = onRemove(context, selection, { kind: "remove_task", taskId: selectedOutline.id, taskPath: selectedOutline.path });
+    if (settingPending) { setStatus(holdMessage); return; }
+    setRemoving({ expected: context, expectedSelection: selection, taskId: selectedOutline.id,
+      taskPath: selectedOutline.path, nested: countNested(selectedOutline) });
+  };
+  const remove = () => {
+    if (removing === null) return;
+    const result = onRemove(removing.expected, removing.expectedSelection,
+      { kind: "remove_task", taskId: removing.taskId, taskPath: removing.taskPath });
     if (result.kind === "applied") {
-      setStatus(`Task ${selectedOutline.id} removed. Save draft to persist it.`);
+      setStatus(`Task ${removing.taskId} removed. Save draft to persist it.`);
       setSelected(null);
     } else setStatus(result.reason);
+    setRemoving(null);
   };
 
   return <section className="space-y-3" aria-label="Flow canvas">
@@ -330,11 +315,18 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
         nodeTypes={nodeTypes} fitView nodesDraggable={false} nodesConnectable={false} edgesFocusable={false}
         elementsSelectable proOptions={{ hideAttribution: true }}
         onNodeClick={(_, node) => {
+          if (settingPending) {
+            if (node.id !== selectedKey) setStatus(holdMessage);
+            return;
+          }
           const outline = node.id.startsWith("[") ? findOutline(projection.lists, node.id) : undefined;
           setSelected(outline === undefined ? null : { flowAlias: selection.flowAlias, key: node.id, id: outline.id });
           setAdding(null);
         }}
-        onPaneClick={() => setSelected(null)}>
+        onPaneClick={() => {
+          if (settingPending) setStatus(holdMessage);
+          else setSelected(null);
+        }}>
         <Background />
         <Controls showInteractive={false} />
       </ReactFlow>
@@ -347,9 +339,11 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
           {" "}<span className="text-muted-foreground">Type:</span> {selectedOutline.type}</p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" disabled={disabled || options.length === 0} onClick={addAfter}>Add task after</Button>
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={remove}>Remove task</Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={askRemove}>Remove task</Button>
         </div>
-        <TaskSettings flow={flow} outline={selectedOutline} />
+        {flowTask?.description !== undefined && <p className="text-sm"><span className="text-muted-foreground">Description:</span> {flowTask.description}</p>}
+        <ApplicationFlowTaskSettings key={`${selection.flowAlias}:${selectedOutline.id}:${selectedKey}`} context={context}
+          selection={selection} outline={selectedOutline} disabled={disabled} onPendingChange={reportSettingPending} onSetting={onSetting} />
       </div>}
     <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-card-foreground">
       <h4 className="font-medium">Add a task to a list or branch</h4>
@@ -381,6 +375,22 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
         <Button type="button" variant="outline" size="sm" onClick={() => setAdding(null)}>Cancel</Button>
       </div>
     </form>}
+    <AlertDialog open={removing !== null} onOpenChange={(open) => { if (!open) setRemoving(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove task {removing?.taskId}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {removing === null ? "" : removing.nested === 0 ? `Task ${removing.taskId} will be removed from the draft.`
+              : `Task ${removing.taskId} and the ${removing.nested} task${removing.nested === 1 ? "" : "s"} inside it will be removed from the draft.`}
+            {" "}You can undo this before you save.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep task</AlertDialogCancel>
+          <AlertDialogAction onClick={remove}>Remove task</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <p role="status" aria-live="polite" className="text-sm">{status}</p>
   </section>;
 }

@@ -49,9 +49,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_organization_group_membership_for_administration(p_membership_id uuid) OWNER TO postgres;
+alter function vortex_access.read_organization_group_membership_for_administration(p_membership_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_organization_group_membership_for_administration(p_membership_id uuid) IS 'Returns one safe exact membership detail after fixed teams-read authorization; temporal state is descriptive and grants no permission.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_organization_group_membership_for_administration(p_membership_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_organization_group_membership_for_administration(p_membership_id uuid) TO vortex_request;
+
+grant execute on function vortex_access.read_organization_group_membership_for_administration(p_membership_id uuid) to postgres;

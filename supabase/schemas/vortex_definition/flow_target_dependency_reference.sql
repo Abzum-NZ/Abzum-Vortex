@@ -30,8 +30,10 @@ CREATE OR REPLACE FUNCTION vortex_definition.flow_target_dependency_reference(p_
   end
 $$;
 
-ALTER FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency jsonb) OWNER TO postgres;
+alter function vortex_definition.flow_target_dependency_reference(p_dependency jsonb) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency jsonb) IS 'Owner-private canonical subject reference of one flow-target dependency manifest entry.';
 
 REVOKE ALL ON FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency jsonb) FROM PUBLIC;
+
+grant execute on function vortex_definition.flow_target_dependency_reference(p_dependency jsonb) to postgres;

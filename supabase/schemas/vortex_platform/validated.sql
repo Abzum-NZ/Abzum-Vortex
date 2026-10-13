@@ -273,3 +273,7 @@ grant execute on function vortex_platform.validated(jsonb)
 
 comment on function vortex_platform.validated(jsonb) is
   'Validates one trusted request context, including its optional trusted channel, or fails closed.';
+
+alter function vortex_platform.validated(candidate jsonb) owner to vortex_owner;
+
+grant execute on function vortex_platform.validated(candidate jsonb) to postgres;

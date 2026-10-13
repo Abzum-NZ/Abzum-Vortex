@@ -21,7 +21,7 @@ import {
   roleRecentAuthenticationRequirementSchema,
 } from "./organization-access-catalogue";
 import { permissionDeclarationSchema, permissionRecordScopeSchema } from "./permissions";
-import { permissionRegistryDefinitionReleaseSchema } from "./permission-registry";
+import { permissionRegistrySourceRevisionSchema } from "./permission-registry";
 
 const representsSameUuid = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -296,8 +296,9 @@ export const organizationAccessRefusalReasonSchema = z.enum([
 const organizationRecordEligiblePermissionSchema = z
   .object({
     permission: organizationAccessExactPermissionSchema,
+    registrationRevision: revisionSchema,
     recordScope: permissionRecordScopeSchema,
-    source: permissionRegistryDefinitionReleaseSchema,
+    source: permissionRegistrySourceRevisionSchema,
     validUntil: timestampSchema,
   })
   .strict()

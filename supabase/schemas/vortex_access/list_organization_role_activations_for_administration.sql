@@ -93,9 +93,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) OWNER TO postgres;
+alter function vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) IS 'Returns one bounded retained activation page with descriptive window state, not effective permission.';
 
 REVOKE ALL ON FUNCTION vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) TO vortex_request;
+
+grant execute on function vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) to postgres;

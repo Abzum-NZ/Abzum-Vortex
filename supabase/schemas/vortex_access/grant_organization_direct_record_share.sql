@@ -180,3 +180,7 @@ comment on function vortex_access.grant_organization_direct_record_share(
   uuid[], timestamptz, timestamptz, text, uuid, uuid, uuid
 ) is
   'Owner-only structural direct-share grant writer. It changes Access and appends Activity but makes no grantor authorization or field-ceiling decision.';
+
+alter function vortex_access.grant_organization_direct_record_share(p_organization_id uuid, p_direct_share_id uuid, p_storage_scope text, p_application_root_id uuid, p_module_root_id uuid, p_record_type_id uuid, p_storage_contract_id uuid, p_record_id uuid, p_recipient_kind text, p_organization_account_id uuid, p_group_id uuid, p_readable_field_ids uuid[], p_changeable_field_ids uuid[], p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_reason text, p_changed_by uuid, p_correlation_id uuid, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.grant_organization_direct_record_share(p_organization_id uuid, p_direct_share_id uuid, p_storage_scope text, p_application_root_id uuid, p_module_root_id uuid, p_record_type_id uuid, p_storage_contract_id uuid, p_record_id uuid, p_recipient_kind text, p_organization_account_id uuid, p_group_id uuid, p_readable_field_ids uuid[], p_changeable_field_ids uuid[], p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_reason text, p_changed_by uuid, p_correlation_id uuid, p_activity_id uuid) to postgres;

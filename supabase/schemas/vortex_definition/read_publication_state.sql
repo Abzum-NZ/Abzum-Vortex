@@ -80,3 +80,7 @@ grant execute on function vortex_definition.read_publication_state(uuid) to vort
 
 comment on function vortex_definition.read_publication_state(uuid) is
   'Returns one organisation-scoped Definition draft, permanent identity aliases and immutable publication evidence for server-side compilation.';
+
+alter function vortex_definition.read_publication_state(p_root_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_publication_state(p_root_id uuid) to postgres;

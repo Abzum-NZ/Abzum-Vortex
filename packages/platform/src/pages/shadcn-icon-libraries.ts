@@ -15,15 +15,6 @@ export const SHADCN_ICON_LIBRARIES = [
 
 export type ShadcnIconLibrary = (typeof SHADCN_ICON_LIBRARIES)[number];
 
-/** Each library's display name, as shadcn/create labels it. */
-export const SHADCN_ICON_LIBRARY_LABELS: Readonly<Record<ShadcnIconLibrary, string>> = {
-  lucide: "Lucide",
-  hugeicons: "HugeIcons",
-  tabler: "Tabler Icons",
-  phosphor: "Phosphor Icons",
-  remixicon: "Remix Icon",
-};
-
 /** The pinned preset's default icon library: the platform default selection names it, and a screen outside any application renders with it. */
 export const DEFAULT_SHADCN_ICON_LIBRARY: ShadcnIconLibrary = "lucide";
 

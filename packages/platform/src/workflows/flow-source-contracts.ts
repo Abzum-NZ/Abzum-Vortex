@@ -41,7 +41,6 @@ import {
  * source flow carries release evidence. Exact releases of the definitions a flow depends on are
  * recorded once, in the compilation's dependency manifest.
  */
-export const flowSourceContractVersion = "1.0.0" as const;
 
 /** A readable alias or owner id. It can never carry template delimiters. */
 export const flowAliasSchema = z

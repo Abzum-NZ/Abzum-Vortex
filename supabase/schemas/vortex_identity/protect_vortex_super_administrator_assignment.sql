@@ -44,3 +44,7 @@ revoke all on function vortex_identity.protect_vortex_super_administrator_assign
 
 comment on function vortex_identity.protect_vortex_super_administrator_assignment() is
   'Keeps super-administrator grants immutable and permits only one attributed, revisioned revocation.';
+
+alter function vortex_identity.protect_vortex_super_administrator_assignment() owner to vortex_owner;
+
+grant execute on function vortex_identity.protect_vortex_super_administrator_assignment() to postgres;

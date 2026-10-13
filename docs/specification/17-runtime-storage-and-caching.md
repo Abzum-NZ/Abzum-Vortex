@@ -266,10 +266,11 @@ journey succeeded through `vortex_runtime`. Production provisioning and proof re
 gated from Testing.
 
 The Supabase CLI development database is the only exception to the hosted transport profile. Local
-uses its exact loopback endpoint on port 54322 and the same restricted `vortex_runtime` role, with a
+uses a loopback endpoint (port 54322 for the main stack, its own port for a worker's database lane)
+and the same restricted `vortex_runtime` role, with a
 fixed disposable Local-only password assigned by the Local seed. The adapter permits this without
-TLS only when the declared environment is Local and refuses owner roles, non-loopback hosts, other
-ports and other databases. Testing and Production always require the Supavisor transaction pooler
+TLS only when the declared environment is Local and refuses owner roles, non-loopback hosts and
+other databases. Testing and Production always require the Supavisor transaction pooler
 and verified TLS; a Local setting can never relax their address checks.
 
 Database functions use `SECURITY INVOKER` unless a documented invariant requires otherwise. A rare

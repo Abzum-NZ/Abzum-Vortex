@@ -16,6 +16,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.lock_role_before_revision_seal() OWNER TO postgres;
+alter function vortex_access.lock_role_before_revision_seal() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.lock_role_before_revision_seal() FROM PUBLIC;
+
+grant execute on function vortex_access.lock_role_before_revision_seal() to postgres;

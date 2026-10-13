@@ -61,3 +61,7 @@ grant execute on function vortex_definition.read_application_bound_release_set(b
 
 comment on function vortex_definition.read_application_bound_release_set(bigint) is
   'Returns the exact local Application and complete exact Module dependency closure selected by validated human application context.';
+
+alter function vortex_definition.read_application_bound_release_set(p_application_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_application_bound_release_set(p_application_release_revision bigint) to postgres;

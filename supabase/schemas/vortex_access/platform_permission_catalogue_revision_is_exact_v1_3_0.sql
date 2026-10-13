@@ -128,8 +128,6 @@ begin
            and entry.source_version = '1.3.0'
            and entry.source_revision is null
            and entry.source_validation_contract_version is null
-           and entry.source_content_fingerprint is null
-           and entry.source_resolution_fingerprint is null
            and entry.source_catalogue_fingerprint = catalogue_fingerprint
            and entry.meaning_fingerprint = security_meaning_fingerprint)
     and (select pg_catalog.count(*) = 1
@@ -157,8 +155,6 @@ begin
            and entry.source_version = '1.3.0'
            and entry.source_revision is null
            and entry.source_validation_contract_version is null
-           and entry.source_content_fingerprint is null
-           and entry.source_resolution_fingerprint is null
            and entry.source_catalogue_fingerprint = catalogue_fingerprint
            and entry.meaning_fingerprint = support_request_meaning_fingerprint)
     and (select pg_catalog.count(*) = 1
@@ -186,8 +182,6 @@ begin
            and entry.source_version = '1.3.0'
            and entry.source_revision is null
            and entry.source_validation_contract_version is null
-           and entry.source_content_fingerprint is null
-           and entry.source_resolution_fingerprint is null
            and entry.source_catalogue_fingerprint = catalogue_fingerprint
            and entry.meaning_fingerprint = support_approve_meaning_fingerprint)
     and (select pg_catalog.count(*) = 18
@@ -221,6 +215,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) OWNER TO postgres;
+ALTER FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) OWNER TO vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) FROM PUBLIC;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) to postgres;

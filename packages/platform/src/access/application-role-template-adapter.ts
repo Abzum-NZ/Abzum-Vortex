@@ -121,8 +121,27 @@ const mapPermissionPreparationError = (error: unknown): never => {
   }
 };
 
-const candidateEvidenceKey = (candidate: PermissionRegistryEntryCandidate): string =>
-  canonicalJson(candidate);
+const candidateEvidenceKey = (
+  candidate: Omit<PermissionRegistryEntryCandidate, "sourceRelease"> & {
+    sourceRelease: Omit<
+      PermissionRegistryEntryCandidate["sourceRelease"],
+      "contentFingerprint" | "resolutionFingerprint"
+    >;
+  },
+): string =>
+  // The stored entry identifies its immutable release by revision; release hashes
+  // are checked against that release when the registration snapshot is read.
+  canonicalJson({
+    ...candidate,
+    sourceRelease: {
+      kind: candidate.sourceRelease.kind,
+      definitionKey: candidate.sourceRelease.definitionKey,
+      rootId: candidate.sourceRelease.rootId,
+      releaseRevision: candidate.sourceRelease.releaseRevision,
+      releaseVersion: candidate.sourceRelease.releaseVersion,
+      validationContractVersion: candidate.sourceRelease.validationContractVersion,
+    },
+  });
 
 const resolveTemplate = (
   template: ApplicationRole,
