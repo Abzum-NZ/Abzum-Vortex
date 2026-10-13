@@ -139,7 +139,6 @@ const storedReleaseEvidenceSchema = z
     compilationOutput: storedDefinitionCompilationOutputSchema,
     resolutionSnapshot: definitionResolutionSnapshotSchema,
     resolutionFingerprint: fingerprintSchema,
-    comparisonFingerprint: fingerprintSchema,
     impactReasons: z.array(versionImpactReasonSchema),
   })
   .strict();
@@ -238,7 +237,6 @@ const appendReleaseRowSchema = z
     release_version: stableDefinitionReleaseVersionSchema,
     content_fingerprint: fingerprintSchema,
     resolution_fingerprint: fingerprintSchema,
-    comparison_fingerprint: fingerprintSchema,
     dependency_manifest: exactManifestSchema,
     published_at: databaseTimestampSchema,
     published_by: actorIdSchema,
@@ -268,7 +266,6 @@ export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
   compilationOutput: ProjectedApplicationCompilationOutput;
   resolutionSnapshot: DefinitionResolutionSnapshot;
   identities: readonly SourceIdentityAssignment[];
-  comparisonFingerprint: string;
   impactReasons: readonly VersionImpactReason[];
 }>;
 
@@ -638,7 +635,6 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       },
       resolutionSnapshot: evidence.resolutionSnapshot,
       identities: evidence.resolutionSnapshot.identities,
-      comparisonFingerprint: evidence.comparisonFingerprint,
       impactReasons: evidence.impactReasons,
     });
   }
@@ -877,7 +873,6 @@ class DatabasePublicationTransaction
       contentFingerprint: release.compilationOutput.artifact.contentFingerprint,
       resolutionFingerprint: release.resolutionSnapshot.fingerprint,
       validationContractVersion: release.validationContractVersion,
-      comparisonFingerprint: release.comparisonFingerprint,
       impactReasons: release.reasons,
       releaseNote: release.releaseNote,
       dependencies: release.dependencyManifest,
@@ -900,7 +895,6 @@ class DatabasePublicationTransaction
       releaseVersion: parsed.data.release_version,
       contentFingerprint: parsed.data.content_fingerprint,
       resolutionFingerprint: parsed.data.resolution_fingerprint,
-      comparisonFingerprint: parsed.data.comparison_fingerprint,
       dependencyManifest: parsed.data.dependency_manifest,
       publishedAt: parsed.data.published_at,
       publishedBy: parsed.data.published_by,

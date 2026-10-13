@@ -241,7 +241,6 @@ const publicationConfirmationCommon = {
   assignedVersion: stableDefinitionReleaseVersionSchema,
   contentFingerprint: fingerprintSchema,
   resolutionFingerprint: fingerprintSchema,
-  comparisonFingerprint: fingerprintSchema,
   dependencyManifest: dependencyManifestSchema,
 };
 
@@ -285,7 +284,6 @@ export const publishDefinitionResultSchema = z
     releaseVersion: stableDefinitionReleaseVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
-    comparisonFingerprint: fingerprintSchema,
     dependencyManifest: dependencyManifestSchema,
     publishedAt: timestampSchema,
     publishedBy: actorIdSchema,

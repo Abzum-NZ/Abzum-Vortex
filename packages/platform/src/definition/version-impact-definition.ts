@@ -1,4 +1,4 @@
-import { applicationContentSchema, applicationVersionImpactPolicyVersion, applicationVersionImpactRequestSchema, moduleContentSchema, moduleVersionImpactPolicyVersion, moduleVersionImpactRequestSchema, unresolvedRecordTypeReferencePaths, definitionVersionImpactRequestSchema, definitionVersionImpactResultSchema, stableDefinitionReleaseVersionSchema, type DefinitionPublicationHistoryEvidence, type DefinitionVersionImpactRequest, type DefinitionVersionImpactResult, type DefinitionVersionSubject, type ApplicationVersionImpactRequest, type ModuleVersionImpactRequest, type PublishedApplicationDefinition, type VersionImpact } from "../schema";
+import { applicationContentSchema, applicationVersionImpactRequestSchema, moduleContentSchema, moduleVersionImpactRequestSchema, unresolvedRecordTypeReferencePaths, definitionVersionImpactRequestSchema, definitionVersionImpactResultSchema, stableDefinitionReleaseVersionSchema, type DefinitionPublicationHistoryEvidence, type DefinitionVersionImpactRequest, type DefinitionVersionImpactResult, type DefinitionVersionSubject, type ApplicationVersionImpactRequest, type ModuleVersionImpactRequest, type PublishedApplicationDefinition, type VersionImpact } from "../schema";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertUnambiguousApplicationContent,
@@ -94,30 +94,6 @@ const assertHistory = (request: SupportedVersionImpactRequest): void => {
   assertCandidateHistoryBinding(request, history.at(-1));
 };
 
-const comparisonFingerprint = (
-  subject: DefinitionVersionSubject,
-  latest: SupportedVersionImpactRequest["history"][number] | undefined,
-  exactCandidateContentFingerprint: `sha256:${string}`,
-  resultWithoutFingerprint: unknown,
-  policyVersion:
-    | typeof applicationVersionImpactPolicyVersion
-    | typeof moduleVersionImpactPolicyVersion,
-): `sha256:${string}` =>
-  fingerprintCanonicalValue({
-    policyVersion,
-    subject,
-    previousRelease:
-      latest === undefined
-        ? null
-        : {
-            revision: latest.publication.revision,
-            releaseVersion: latest.publication.releaseVersion,
-            contentFingerprint: latest.publication.contentFingerprint,
-          },
-    candidateContentFingerprint: exactCandidateContentFingerprint,
-    result: resultWithoutFingerprint,
-  });
-
 const parseVersionImpactRequest = (input: unknown): SupportedVersionImpactRequest => {
   const explicitKind =
     typeof input === "object" &&
@@ -174,7 +150,6 @@ const compareParsedDefinitionVersionImpact = (
   }
 
   const subject = subjectOf(request);
-  const exactCandidateContentFingerprint = fingerprintCanonicalValue(request.candidate.content);
   if (request.kind === "module") assertUnambiguousModuleContent(request.candidate.content);
   else assertUnambiguousApplicationContent(request.candidate.content);
 
@@ -182,28 +157,14 @@ const compareParsedDefinitionVersionImpact = (
     request.kind === "module"
       ? normaliseModuleContent(request.candidate.content)
       : normaliseApplicationContent(request.candidate.content);
-  const policyVersion =
-    request.kind === "module"
-      ? moduleVersionImpactPolicyVersion
-      : applicationVersionImpactPolicyVersion;
-
   if (latest === undefined) {
-    const resultWithoutFingerprint = {
+    const result = {
       subject,
       outcome: "initial_release" as const,
       assignedVersion: "1.0.0" as const,
       reasons: [],
     };
-    return definitionVersionImpactResultSchema.parse({
-      ...resultWithoutFingerprint,
-      comparisonFingerprint: comparisonFingerprint(
-        subject,
-        latest,
-        exactCandidateContentFingerprint,
-        resultWithoutFingerprint,
-        policyVersion,
-      ),
-    });
+    return definitionVersionImpactResultSchema.parse(result);
   }
 
   let normalisedPrevious: unknown;
@@ -229,27 +190,18 @@ const compareParsedDefinitionVersionImpact = (
     );
   }
   if (canonicalJson(normalisedPrevious) === canonicalJson(normalisedCandidate)) {
-    const resultWithoutFingerprint = {
+    const result = {
       subject,
       outcome: "no_change" as const,
       currentVersion: latest.publication.releaseVersion,
       reasons: [],
     };
-    return definitionVersionImpactResultSchema.parse({
-      ...resultWithoutFingerprint,
-      comparisonFingerprint: comparisonFingerprint(
-        subject,
-        latest,
-        exactCandidateContentFingerprint,
-        resultWithoutFingerprint,
-        policyVersion,
-      ),
-    });
+    return definitionVersionImpactResultSchema.parse(result);
   }
 
   if (reasons.length === 0) refuseVersionImpact("invalid_request");
   const impact = highestImpact(reasons);
-  const resultWithoutFingerprint = {
+  const result = {
     subject,
     outcome: "release_required" as const,
     currentVersion: latest.publication.releaseVersion,
@@ -257,16 +209,7 @@ const compareParsedDefinitionVersionImpact = (
     assignedVersion: assignNextDefinitionVersion(latest.publication.releaseVersion, impact),
     reasons,
   };
-  return definitionVersionImpactResultSchema.parse({
-    ...resultWithoutFingerprint,
-    comparisonFingerprint: comparisonFingerprint(
-      subject,
-      latest,
-      exactCandidateContentFingerprint,
-      resultWithoutFingerprint,
-      policyVersion,
-    ),
-  });
+  return definitionVersionImpactResultSchema.parse(result);
 };
 
 /**

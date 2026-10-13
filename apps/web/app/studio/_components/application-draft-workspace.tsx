@@ -500,7 +500,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
           parsed.data.releaseVersion === confirmation.assignedVersion &&
           parsed.data.contentFingerprint === confirmation.contentFingerprint &&
           parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
-          parsed.data.comparisonFingerprint === confirmation.comparisonFingerprint &&
           canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
           previewGeneration.current += 1;
           setPublishedPublication(parsed.data);

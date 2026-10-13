@@ -359,7 +359,6 @@ const sameRelease = (
   left.publication.releaseVersion === right.publication.releaseVersion &&
   left.publication.contentFingerprint === right.publication.contentFingerprint &&
   left.compilationOutput.resolutionFingerprint === right.compilationOutput.resolutionFingerprint &&
-  left.comparisonFingerprint === right.comparisonFingerprint &&
   left.authoredSourceFingerprint === right.authoredSourceFingerprint;
 
 export const saveStudioStandardPageAdoption = async (

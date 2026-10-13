@@ -214,7 +214,6 @@ export const createHumanApplicationPublisher = (dependencies: HumanApplicationPu
             publication.releaseVersion !== expected.assignedVersion ||
             publication.contentFingerprint !== expected.contentFingerprint ||
             publication.resolutionFingerprint !== expected.resolutionFingerprint ||
-            publication.comparisonFingerprint !== expected.comparisonFingerprint ||
             canonicalJson(publication.dependencyManifest) !== canonicalJson(expected.dependencyManifest) ||
             !sameId(publication.publishedBy, scope.organizationAccountId) ||
             Date.parse(publication.publishedAt) < Date.parse(started.data))
