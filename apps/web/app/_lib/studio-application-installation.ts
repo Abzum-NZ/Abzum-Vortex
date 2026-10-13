@@ -106,7 +106,7 @@ import {
   type StudioApplicationInstallationSelector,
   type StudioApplicationInstallationSnapshot,
 } from "./studio-application-installation-contracts";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError, classifyDatabaseError } from "@web/platform-server";
 
 type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
 type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRoleTemplatesForHumanRequest>;
@@ -174,12 +174,10 @@ const safeFailure = (error: unknown): Problem => {
         return { kind: "failed" };
     }
   }
-  if (typeof error === "object" && error !== null && "code" in error) {
-    const code = String((error as { readonly code?: unknown }).code);
-    if (code === "42501") return { kind: "refused" };
-    if (code === "40001" || code === "23514" || code === "55000")
-      return { kind: "conflict" };
-  }
+  const kind = classifyDatabaseError(error);
+  if (kind === "refused") return { kind: "refused" };
+  if (kind === "conflict" || kind === "constraint_failed" || kind === "wrong_state")
+    return { kind: "conflict" };
   return { kind: "temporarily_unavailable" };
 };
 

@@ -7,6 +7,7 @@ import { NativeSelect } from "@vortex/ui/components/native-select";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
@@ -30,6 +31,8 @@ import {
   type StudioSemanticOutlineNode,
   type StudioStoredApplicationDraft,
   type StudioCompileFailure,
+  type StudioCompositionCommand,
+  type StudioCompositionCommandResult,
   type StudioCompositionContext,
   type StudioFlowTextContext,
   type StudioSemanticSelection,
@@ -41,7 +44,9 @@ import {
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
+import { applyStudioItemLabels } from "../_lib/application-item-labels";
 import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";
+import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
@@ -224,6 +229,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const active = useRef(false);
   const lifetime = useRef(0);
   const reopening = useRef(false);
@@ -628,17 +634,10 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   const applyLabels = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editable || conditionPending.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current) return;
-    const candidate = applicationSourceDocumentSchema.parse(structuredClone(state.source));
-    if (selected?.kind === "application") {
-      candidate.body.name = label.trim();
-      candidate.body.description = description.trim();
-    } else if (selected?.kind === "page") {
-      const page = candidate.body.pages.find((item) => item.id === selected.pageAlias);
-      if (page === undefined) return;
-      page.name = label.trim();
-    } else return;
-    const parsed = applicationSourceDocumentSchema.safeParse(candidate);
-    if (!parsed.success) { setMessage("Enter a valid non-empty label and description within their limits."); return; }
+    const applied = applyStudioItemLabels(state.source, selected, label, description);
+    if (applied.kind === "not_found") return;
+    if (applied.kind === "invalid") { setMessage("Enter a valid non-empty label and description within their limits."); return; }
+    const parsed = { data: applied.source };
     if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
     history.edit(parsed.data);
     setLabel(selected?.kind === "application" ? parsed.data.body.name
@@ -691,12 +690,17 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         : result.kind === "refused" ? refusalMessage(result.reason, "Local edits are preserved.")
           : result.kind === "busy" ? "A save is already in progress."
             : "The save could not be verified. Local edits are preserved; reopen or try again.");
+    return result;
   };
 
   const reopen = async () => {
     if (publicationPending.current || reopening.current || history.getState().isSaving) return;
     if ((history.getState().isDirty || (sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
-      !window.confirm("Discard unsaved changes and reopen the saved draft?")) return;
+      !await confirm({
+        title: "Reopen the saved draft?",
+        description: "Discard unsaved changes and reopen the saved draft?",
+        confirmLabel: "Reopen saved draft",
+      })) return;
     publicationEpoch.current += 1;
     setPreparedPublication(null);
     const requestLifetime = lifetime.current;
@@ -744,9 +748,67 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     }
   };
 
+  // The one composition edit: the placement editor's controls and the agent tools both come through here.
+  const commandComposition = (expected: StudioCompositionContext, expectedSelection: StudioSemanticSelection,
+    command: StudioCompositionCommand): StudioCompositionCommandResult["kind"] => {
+    const current = history.getState();
+    const currentSelection = selection.getSelection();
+    if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || pendingLabels || appearancePending.current || flowTextPending.current || flowAppendPending.current ||
+      (command.kind === "remove" && compositionPending.current) ||
+      currentSelection === null || studioSemanticSelectionKey(currentSelection) !== studioSemanticSelectionKey(expectedSelection))
+      return "stale";
+    const currentContext: StudioCompositionContext = {
+      organizationId, rootId: current.rootId, key: draft.key,
+      draftRevision: current.draftRevision, localLifetime: lifetime.current,
+      catalogue: platformBlockCatalogue, source: current.source,
+    };
+    const result = applyStudioCompositionCommand(currentContext, expected, currentSelection, command);
+    if (result.kind !== "applied") return result.kind;
+    // No async boundary: still require the same history source and lifetime at the edit.
+    const latest = history.getState();
+    const latestSelection = selection.getSelection();
+    if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || flowTextPending.current || flowAppendPending.current || latest.source !== current.source ||
+      (command.kind === "remove" && (pendingLabels || appearancePending.current || compositionPending.current)) ||
+      latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
+      latestSelection === null ||
+      studioSemanticSelectionKey(latestSelection) !== studioSemanticSelectionKey(expectedSelection) ||
+      lifetime.current !== currentContext.localLifetime) return "stale";
+    if (!history.edit(result.source)) return "invalid";
+    setMessage("Composition applied to local history. Save to persist it.");
+    return "applied";
+  };
+
+  // The outline's selection change, minus its confirmation: the agent tools refuse instead of discarding input.
+  const changeSelection = (next: StudioSemanticSelection | null): boolean => {
+    if (!selection.select(next)) return false;
+    discardSourceImport();
+    setConditionEpoch((value) => value + 1);
+    reportConditionPending(false);
+    setAppearanceEpoch((value) => value + 1);
+    reportAppearancePending(false);
+    setCompositionEpoch((value) => value + 1);
+    reportCompositionPending(false);
+    setFlowEpoch((value) => value + 1);
+    resetFlowPending();
+    reportFlowAppendPending(false);
+    return true;
+  };
+  const anyEditPending = () => sourceImportPending.current || searchPending.current || labelsPending.current ||
+    appearancePending.current || compositionPending.current || conditionPending.current || flowTextPending.current ||
+    flowAppendPending.current;
+  const agentBlockedReason = (): string | undefined => {
+    if (!active.current || reopening.current || publicationPending.current) return "The workspace is busy opening or publishing. Try again in a moment.";
+    if (history.getState().isSaving) return "A save is in progress. Try again in a moment.";
+    if (anyEditPending()) return "A person has an unapplied edit in the workspace. Nothing was changed; ask them to apply or discard it.";
+    return undefined;
+  };
+
   const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source }),
     [state.rootId, source]);
   return <main className="space-y-6 p-6" aria-busy={isPublishing || state.isSaving || isReopening}>
+    <ApplicationDraftAgentTools organizationId={organizationId} history={history}
+      catalogue={platformBlockCatalogue} readLifetime={() => lifetime.current} blockedReason={agentBlockedReason}
+      select={changeSelection} command={commandComposition} save={save} />
     <header className="space-y-2"><h1 className="text-2xl font-semibold">Application draft: {source.body.name}</h1>
       <dl className="grid gap-1 break-all text-sm"><div><dt className="inline font-medium">Organization: </dt><dd className="inline">{draft.organizationId}</dd></div>
         <div><dt className="inline font-medium">Root: </dt><dd className="inline">{state.rootId}</dd></div>
@@ -877,20 +939,14 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       ? "grid gap-6"
       : "grid gap-6 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_minmax(16rem,1fr)]"}>
       <nav aria-label="Application outline" className="space-y-3"><h2 className="font-semibold">Outline</h2>
-        <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={(node) => {
+        <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={async (node) => {
           if (publicationPending.current || reopening.current || history.getState().isSaving || (((sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
-            !window.confirm("Discard unapplied source import, inspector, appearance, composition, visibility, Flow and task setting edits and change selection?"))) return;
-          if (!selection.select(node.selection)) return;
-          discardSourceImport();
-          setConditionEpoch((value) => value + 1);
-          reportConditionPending(false);
-          setAppearanceEpoch((value) => value + 1);
-          reportAppearancePending(false);
-          setCompositionEpoch((value) => value + 1);
-          reportCompositionPending(false);
-          setFlowEpoch((value) => value + 1);
-          resetFlowPending();
-          reportFlowAppendPending(false);
+            !await confirm({
+              title: "Change the selection?",
+              description: "Discard unapplied source import, inspector, appearance, composition, visibility, Flow and task setting edits and change selection?",
+              confirmLabel: "Discard and change selection",
+            }))) return;
+          if (!changeSelection(node.selection)) return;
           setLabel(currentLabel);
           setDescription(source.body.description);
         }} /></ul></nav>
@@ -918,33 +974,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         {selected?.kind === "placement" && inspector.status === "resolved" &&
           <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
             selection={selected} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingFlowText || pendingFlowAppend || pendingCondition || workspaceLifetime === 0}
-            onPendingChange={reportCompositionPending} onCommand={(expected, expectedSelection, command) => {
-              const current = history.getState();
-              const currentSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || pendingLabels || appearancePending.current || flowTextPending.current || flowAppendPending.current ||
-                (command.kind === "remove" && compositionPending.current) ||
-                currentSelection === null || studioSemanticSelectionKey(currentSelection) !== studioSemanticSelectionKey(expectedSelection))
-                return "stale";
-              const currentContext: StudioCompositionContext = {
-                organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current,
-                catalogue: platformBlockCatalogue, source: current.source,
-              };
-              const result = applyStudioCompositionCommand(currentContext, expected, currentSelection, command);
-              if (result.kind !== "applied") return result.kind;
-              // No async boundary: still require the same history source and lifetime at the edit.
-              const latest = history.getState();
-              const latestSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || flowTextPending.current || flowAppendPending.current || latest.source !== current.source ||
-                (command.kind === "remove" && (pendingLabels || appearancePending.current || compositionPending.current)) ||
-                latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
-                latestSelection === null ||
-                studioSemanticSelectionKey(latestSelection) !== studioSemanticSelectionKey(expectedSelection) ||
-                lifetime.current !== currentContext.localLifetime) return "stale";
-              if (!history.edit(result.source)) return "invalid";
-              setMessage("Composition applied to local history. Save to persist it.");
-              return "applied";
-            }} />}
+            onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
         {selected?.kind === "placement" && inspector.status === "resolved" &&
           <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
             selection={selected} saved={savedPreviewDraft.current}
@@ -1134,5 +1164,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       platformBlockCatalogue={platformBlockCatalogue}
       fieldInputControlReleases={fieldInputControlReleases}
       platformThemeTokens={platformThemeTokens} />
+    {confirmDialog}
   </main>;
 }

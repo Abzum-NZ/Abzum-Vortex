@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -69,6 +70,7 @@ const sameSelection = (
 
 /** One local query buffer. Only an explicit Save reaches the protected Module draft writer. */
 export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial }: Props) {
+  const [confirm, confirmDialog] = useConfirm();
   const [queryChoices, setQueryChoices] = useState(choiceList(initial));
   const [selectedAlias, setSelectedAlias] = useState(initialAlias(initial));
   const [context, setContext] = useState(initialContext(initial));
@@ -200,9 +202,11 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
 
   const chooseQuery = async (nextAlias: string) => {
     if (busy || nextAlias === selectedAlias) return;
-    if ((dirty || staged) && !window.confirm(
-      "Discard the pending filter changes and switch Query? Choose OK to discard or Cancel to keep editing this Query.",
-    )) {
+    if ((dirty || staged) && !await confirm({
+      title: "Switch to another Query?",
+      description: "Discard the pending filter changes and switch Query? Choose Cancel to keep editing this Query.",
+      confirmLabel: "Discard and switch",
+    })) {
       pendingValidationFocus.current = null;
       return;
     }
@@ -417,9 +421,11 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
 
   const reopen = async () => {
     if (busy) return;
-    if ((dirty || staged) && !window.confirm(
-      "Discard the pending filter changes and reopen the saved Module draft? Choose OK to discard or Cancel to keep editing.",
-    )) return;
+    if ((dirty || staged) && !await confirm({
+      title: "Reopen the saved Module draft?",
+      description: "Discard the pending filter changes and reopen the saved Module draft? Choose Cancel to keep editing.",
+      confirmLabel: "Discard and reopen",
+    })) return;
     const selectedEpoch = ++selectionEpoch.current;
     const requestId = ++requestEpoch.current;
     const requestedAlias = selectedAliasRef.current;
@@ -611,6 +617,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
           <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</Button>
         </section>
       )}
+      {confirmDialog}
     </main>
   );
 }

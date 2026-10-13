@@ -6,6 +6,7 @@ import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
   describeStudioCompositionDestinations,
   describeStudioCompositionEdit,
@@ -238,6 +239,7 @@ function ApplicationCompositionPalette(props: Props) {
 }
 
 function PlacementCompositionEditor(props: Props) {
+  const [confirm, confirmDialog] = useConfirm();
   const [breakpoint, setBreakpoint] = useState<StudioCompositionBreakpoint>("desktop");
   const model = useMemo(() => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint]);
@@ -329,7 +331,7 @@ function PlacementCompositionEditor(props: Props) {
     setInputs(next);
     setMessage("");
   };
-  const run = (command: StudioCompositionCommand) => {
+  const run = async (command: StudioCompositionCommand) => {
     if (props.disabled || settingsPending.current || scalarPending.current) return;
     if (command.kind === "remove" && (pending.current || movePending.current)) return;
     if (command.kind === "move" ? pending.current : movePending.current) return;
@@ -345,9 +347,15 @@ function PlacementCompositionEditor(props: Props) {
         setMessage("This placement cannot be removed. Its source and your inputs are preserved.");
         return;
       }
-      const confirmed = window.confirm(removal.willRemoveUnusedRelease
-        ? "Remove this presentation placement and its now-unused exact release dependency from local history? Save remains separate."
-        : "Remove this presentation placement from local history? Its release dependency is still used elsewhere. Save remains separate.");
+      const confirmed = await confirm({
+        title: "Remove this presentation placement?",
+        description: removal.willRemoveUnusedRelease
+          ? "Remove this presentation placement and its now-unused exact release dependency from local history? Save remains separate."
+          : "Remove this presentation placement from local history? Its release dependency is still used elsewhere. Save remains separate.",
+        confirmLabel: "Remove placement",
+        cancelLabel: "Keep placement",
+        destructive: true,
+      });
       if (!confirmed) return;
       if (props.disabled || pending.current || movePending.current || settingsPending.current || scalarPending.current || formContext.current !== expected ||
         formBreakpoint.current !== breakpoint) {
@@ -375,12 +383,12 @@ function PlacementCompositionEditor(props: Props) {
     const moved = next.splice(selectedIndex, 1)[0];
     if (moved === undefined) return;
     next.splice(nextIndex, 0, moved);
-    run({ kind: "order", breakpoint, order: next });
+    void run({ kind: "order", breakpoint, order: next });
   };
   const applySize = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!pending.current) return;
-    run({ kind: "resize", breakpoint, layout: {
+    void run({ kind: "resize", breakpoint, layout: {
       visible: inputs.visible,
       width: inputs.width === "grid"
         ? { kind: "grid", start_column: Number(inputs.startColumn), span: Number(inputs.span) }
@@ -399,7 +407,7 @@ function PlacementCompositionEditor(props: Props) {
       setMessage("This destination is no longer available. Your inputs are preserved.");
       return;
     }
-    run({ kind: "move", destination: chosen.destination });
+    void run({ kind: "move", destination: chosen.destination });
   };
 
   const updateSettings = (next: StudioCompositionTextSettings) => {
@@ -488,7 +496,7 @@ function PlacementCompositionEditor(props: Props) {
         <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={selectedIndex < 0 || selectedIndex >= model.order.length - 1}
           onClick={() => move(1)}>Move later</Button>
         {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!model.explicitOrder}
-          onClick={() => { if (!pending.current) run({ kind: "order", breakpoint, order: null }); }}>Inherit wider order</Button>}
+          onClick={() => { if (!pending.current) void run({ kind: "order", breakpoint, order: null }); }}>Inherit wider order</Button>}
       </div>
     </fieldset>
     <p id={hintId} className="text-sm">Focus an order button and use Alt+Up or Alt+Down, or activate its button. {breakpoint !== "desktop" && !model.responsiveOrder
@@ -526,7 +534,7 @@ function PlacementCompositionEditor(props: Props) {
         <Button type="submit" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply size</Button>
         <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard size inputs</Button>
         {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !model.explicitLayout}
-          onClick={() => { if (!pending.current) run({ kind: "resize", breakpoint, layout: null }); }}>Inherit wider size</Button>}
+          onClick={() => { if (!pending.current) void run({ kind: "resize", breakpoint, layout: null }); }}>Inherit wider size</Button>}
       </div>
     </form>
     <form className="space-y-3" onSubmit={applyDestination}>
@@ -564,7 +572,7 @@ function PlacementCompositionEditor(props: Props) {
       <p className="text-sm">Remove only an unreferenced released presentation placement. Flows and other source fields are retained. Save remains separate.</p>
       <Button type="button" variant="outline" size="sm" className={buttonClass}
         disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || removalModel.kind !== "available"}
-        onClick={() => run({ kind: "remove" })}>Remove placement</Button>
+        onClick={() => { void run({ kind: "remove" }); }}>Remove placement</Button>
       {removalModel.kind === "blocked" && <p role="status">{removalModel.reason === "required_slot"
         ? "This slot requires its remaining placement."
         : removalModel.reason === "unresolved_target"
@@ -668,5 +676,6 @@ function PlacementCompositionEditor(props: Props) {
       {scalarDirty && <p role="status">Apply or discard scalar inputs before changing text, layout, destination, order, breakpoint or removing this placement.</p>}
     </form>}
     <p role="status" aria-live="polite">{message}</p>
+    {confirmDialog}
   </section>;
 }

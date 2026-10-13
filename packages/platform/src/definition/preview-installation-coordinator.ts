@@ -28,7 +28,11 @@ import {
 import { readLiveHumanContext } from "../access/live-context";
 import { createPreviewInstallationRepository } from "./module-index";
 import type { RequestDatabaseTransaction } from "../db/index";
-import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
+import {
+  DefinitionError,
+  classifyDatabaseError,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 
 type InstallerRequests = Pick<
   ReturnType<typeof createHumanOrganizationRequestService>,
@@ -120,13 +124,21 @@ const toCoordinatorError = (
   switch (errorCode(error)) {
     case "DEFINITION_DRAFT_STALE_OR_MISSING":
     case "DEFINITION_SOURCE_EVIDENCE_MISMATCH":
-    case "40001":
-    case "23514":
       return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
         cause: error,
       });
     case "BUILDER_PERMISSION_REFUSED":
-    case "42501":
+      return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
+        cause: error,
+      });
+  }
+  switch (classifyDatabaseError(error)) {
+    case "conflict":
+    case "constraint_failed":
+      return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
+        cause: error,
+      });
+    case "refused":
       return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
         cause: error,
       });

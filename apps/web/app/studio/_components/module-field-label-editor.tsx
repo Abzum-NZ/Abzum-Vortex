@@ -2,6 +2,7 @@
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { canonicalJson, labelSchema, sameId, storedModuleDefinitionDraftSchema } from "@vortex/platform/schema";
@@ -26,6 +27,7 @@ const descriptorsFor = (draft: StoredModuleDefinitionDraft): readonly StudioModu
 export function ModuleFieldLabelEditor({ draft, fields }: {
   draft: StoredModuleDefinitionDraft; fields: readonly StudioModuleFieldDescriptor[];
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const [baseline, setBaseline] = useState(draft);
   const [choices, setChoices] = useState(fields);
   const [selectedKey, setSelectedKey] = useState(() => fields[0] === undefined ? "" : selectionKey(fields[0]));
@@ -117,7 +119,11 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
 
   const reopen = async () => {
     if (!active.current || pending.current) return;
-    if (dirty && !window.confirm("Discard the pending label and reopen this Module's saved draft?")) return;
+    if (dirty && !await confirm({
+      title: "Reopen the saved Module draft?",
+      description: "Discard the pending label and reopen this Module's saved draft?",
+      confirmLabel: "Discard label",
+    })) return;
     const captured = buffer.current;
     const epoch = ++generation.current;
     const mounted = lifetime.current;
@@ -156,10 +162,14 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
     </header>
     <form className="space-y-4" onSubmit={save}>
       <label className="block space-y-1"><span>Module field</span>
-        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || choices.length === 0} onChange={(event) => {
+        <NativeSelect className={inputClass} value={selectedKey} disabled={busy || choices.length === 0} onChange={async (event) => {
           if (pending.current) return;
           const next = choices.find((field) => selectionKey(field) === event.target.value);
-          if (next === undefined || (dirty && !window.confirm("Discard the pending label and select another field?"))) return;
+          if (next === undefined || (dirty && !await confirm({
+            title: "Select another field?",
+            description: "Discard the pending label and select another field?",
+            confirmLabel: "Discard label",
+          }))) return;
           buffer.current = { baseline, selectedKey: selectionKey(next), label: next.label };
           generation.current += 1; setSelectedKey(selectionKey(next)); setLabel(next.label); setValidation(null); setMessage("");
         }}>
@@ -188,5 +198,6 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
         </li>)}
       </ul>}
     </form>
+    {confirmDialog}
   </main>;
 }

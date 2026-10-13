@@ -16,7 +16,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -46,21 +46,21 @@ export type PreviewInstallationRepository = Readonly<{
 
 const mapFailure = (error: unknown): DefinitionError<PreviewInstallationRepositoryErrorCode> => {
   if (error instanceof DefinitionError) return error;
-  switch (databaseErrorCode(error)) {
-    case "22023":
+  switch (classifyDatabaseError(error)) {
+    case "invalid":
       return new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND", {
         cause: error,
       });
-    case "42501":
+    case "refused":
       return new DefinitionError("PREVIEW_INSTALLATION_AUTHORITY_REFUSED", {
         cause: error,
       });
-    case "P0002":
+    case "not_found":
       return new DefinitionError("PREVIEW_INSTALLATION_NOT_FOUND", {
         cause: error,
       });
-    case "40001":
-    case "23514":
+    case "conflict":
+    case "constraint_failed":
       return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
         cause: error,
       });

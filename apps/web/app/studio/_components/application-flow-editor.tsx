@@ -4,6 +4,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flowRoundingModeSchema } from "@vortex/platform/schema";
@@ -196,6 +197,7 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
   const [calculateBuffer, setCalculateBuffer] = useState<CalculateBuffer | null>(null);
   const currentCalculate = useRef<CalculateBuffer | null>(null);
   const active = useRef(false);
+  const [confirm, confirmDialog] = useConfirm();
   const [message, setMessage] = useState("");
   useEffect(() => {
     active.current = true;
@@ -230,11 +232,15 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     onPendingChange(currentBuffer.current !== null);
     setMessage("");
   };
-  const canChangeTarget = (): boolean => active.current && !disabled &&
+  const canChangeTarget = async (): Promise<boolean> => active.current && !disabled &&
     ((currentBuffer.current === null && currentInsert.current === null && currentCalculate.current === null) ||
-      window.confirm("Discard unapplied Flow text, Calculate and insertion inputs and change the selected task or property?"));
-  const chooseTask = (next: StudioFlowTaskOutline) => {
-    if (!canChangeTarget()) return;
+      await confirm({
+        title: "Change the selected task or property?",
+        description: "Discard unapplied Flow text, Calculate and insertion inputs and change the selected task or property?",
+        confirmLabel: "Discard and change",
+      }));
+  const chooseTask = async (next: StudioFlowTaskOutline) => {
+    if (!await canChangeTarget()) return;
     discard();
     discardInsert();
     discardCalculate();
@@ -303,9 +309,9 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
         : "Use a unique lowercase task key of at most 40 characters and non-empty text of at most 2000 characters without template delimiters. The Flow must remain within its task limits. Your inputs are preserved.");
   };
   const submitAppend = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); append(); };
-  const beginCalculate = (editing: boolean) => {
+  const beginCalculate = async (editing: boolean) => {
     if (calculate.kind !== "available" || (editing ? calculate.selected === null : !calculate.canAppend) ||
-      !canChangeTarget() || !active.current || disabled) return;
+      !await canChangeTarget() || !active.current || disabled) return;
     const selected = editing ? calculate.selected : null;
     if (editing && (selected === null || target === null)) return;
     discard();
@@ -489,9 +495,9 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
         : <form onSubmit={submit} className="space-y-3">
           <label className="block space-y-1"><span>Presentation property</span>
             <NativeSelect className={inputClass} value={target?.property ?? ""} disabled={disabled}
-              onChange={(event) => {
+              onChange={async (event) => {
                 const next = task.properties.find((item) => item.key === event.target.value);
-                if (next === undefined || !canChangeTarget()) return;
+                if (next === undefined || !await canChangeTarget()) return;
                 discard();
                 discardInsert();
                 discardCalculate();
@@ -521,5 +527,6 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
         disabled={disabled} onClick={discard}>Discard preserved text</Button>}
     </div>}
     <p role="status" aria-live="polite">{message}</p>
+    {confirmDialog}
   </section>;
 }

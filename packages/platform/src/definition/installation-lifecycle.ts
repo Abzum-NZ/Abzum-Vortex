@@ -16,7 +16,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -26,17 +26,17 @@ type IndexReadinessRow = DatabaseRow & { readonly index_readiness: unknown };
 
 const mapFailure = (error: unknown): DefinitionError<ApplicationInstallationLifecycleErrorCode> => {
   if (error instanceof DefinitionError) return error;
-  switch (databaseErrorCode(error)) {
-    case "22023":
+  switch (classifyDatabaseError(error)) {
+    case "invalid":
       return new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
-    case "42501":
+    case "refused":
       return new DefinitionError("APPLICATION_INSTALLATION_AUTHORITY_REFUSED");
-    case "P0002":
+    case "not_found":
       return new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
-    case "40001":
+    case "conflict":
       return new DefinitionError("APPLICATION_INSTALLATION_BINDING_CONFLICT");
-    case "23514":
-    case "55000":
+    case "constraint_failed":
+    case "wrong_state":
       return new DefinitionError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
     default:
       return unexpectedDefinitionFailure(

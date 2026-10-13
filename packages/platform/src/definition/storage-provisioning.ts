@@ -11,7 +11,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -60,18 +60,18 @@ const parseResult = (row: ProvisionRow): ModuleInstallationStorageResult => {
 
 const mapFailure = (error: unknown): DefinitionError<ModuleInstallationStorageErrorCode> => {
   if (error instanceof DefinitionError) return error;
-  switch (databaseErrorCode(error)) {
-    case "22023":
+  switch (classifyDatabaseError(error)) {
+    case "invalid":
       return new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
-    case "42501":
+    case "refused":
       return new DefinitionError("MODULE_INSTALLATION_AUTHORITY_REFUSED");
-    case "P0002":
+    case "not_found":
       return new DefinitionError("MODULE_INSTALLATION_RELEASE_UNAVAILABLE");
-    case "23514":
+    case "constraint_failed":
       return new DefinitionError("MODULE_INSTALLATION_RELEASE_MISMATCH");
-    case "40001":
+    case "conflict":
       return new DefinitionError("MODULE_INSTALLATION_BINDING_CONFLICT");
-    case "55000":
+    case "wrong_state":
       return new DefinitionError("RECORD_STORAGE_INCOMPATIBLE");
     default:
       return unexpectedDefinitionFailure(

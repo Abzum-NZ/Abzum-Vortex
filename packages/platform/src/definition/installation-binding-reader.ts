@@ -8,7 +8,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -16,14 +16,14 @@ type ActiveInstallationRow = DatabaseRow & { readonly active_installation: unkno
 
 const mapFailure = (error: unknown): DefinitionError<ActiveApplicationInstallationErrorCode> => {
   if (error instanceof DefinitionError) return error;
-  switch (databaseErrorCode(error)) {
-    case "42501":
-    case "22023":
+  switch (classifyDatabaseError(error)) {
+    case "refused":
+    case "invalid":
       return new DefinitionError("ACTIVE_APPLICATION_CONTEXT_REFUSED", { cause: error });
-    case "P0002":
+    case "not_found":
       return new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE", { cause: error });
-    case "23514":
-    case "55000":
+    case "constraint_failed":
+    case "wrong_state":
       return new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE", { cause: error });
     default:
       return unexpectedDefinitionFailure(

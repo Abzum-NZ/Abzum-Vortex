@@ -11,7 +11,7 @@ import {
 } from "../schema";
 import { canonicalJson } from "./canonical-json-definition";
 import type { DefinitionHistoryRepository } from "./definition-history";
-import { DefinitionError } from "./definition-error";
+import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
 type HistoryRow = DatabaseRow & { release_history: unknown };
 type MetadataRow = DatabaseRow & { release_history_entry: unknown };
@@ -97,7 +97,12 @@ const humanContextBindings = (
 
 const parseHumanCurrentDraft = (candidate: unknown): StoredDefinitionDraft => {
   const parsed = storedDefinitionDraftSchema.safeParse(candidate);
-  if (!parsed.success) throw new DefinitionError("40001");
+  if (!parsed.success)
+    throw unexpectedDefinitionFailure(
+      "DEFINITION_STORED_DATA_INVALID",
+      parsed.error,
+      "stored human current draft",
+    );
   return parsed.data;
 };
 
@@ -106,13 +111,18 @@ const assertHumanRestoreCompletion = async (
   context: Extract<SessionContext, { callerKind: "human" }>,
   restored: StoredDefinitionDraft,
 ): Promise<void> => {
-  if (restored.restoredAt === undefined) throw new DefinitionError("42501");
+  if (restored.restoredAt === undefined)
+    throw unexpectedDefinitionFailure(
+      "DEFINITION_STORED_DATA_INVALID",
+      new Error("restored draft has no restoredAt"),
+      "restored draft",
+    );
   const restoredAt = restored.restoredAt;
   const declaration = humanPermissionDeclaration();
   const decisions = await transaction.query<PermissionDecisionRow>`
     select decision.*
     from vortex_access.evaluate_organization_permission_eligibility(
-      ${JSON.stringify(declaration)}::jsonb
+      ${JSON.stringify(declaration)}::text::jsonb
     ) as decision
   `;
   const decision = one(decisions, "DEFINITION_RESTORE_AUTHORITY_UNAVAILABLE");
@@ -128,7 +138,7 @@ const assertHumanRestoreCompletion = async (
     decision.correlation_id.toLowerCase() !== context.correlationId.toLowerCase() ||
     decision.reason_code !== null
   )
-    throw new DefinitionError("42501");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 
   const expectedBindings = JSON.stringify(humanContextBindings(context));
   const completionRows = await transaction.query<HumanRestoreFenceRow>`
@@ -180,7 +190,7 @@ const assertHumanRestoreCompletion = async (
             coalesce(final_context.request_context -> 'accessTokenIssuedAt', 'null'::jsonb),
             coalesce(final_context.request_context -> 'primaryAuthenticatedAt', 'null'::jsonb),
             coalesce(final_context.request_context -> 'multiFactorAuthenticatedAt', 'null'::jsonb)
-          ) is not distinct from ${expectedBindings}::jsonb
+          ) is not distinct from ${expectedBindings}::text::jsonb
         ) as context_is_current
       from final_context
     ),
@@ -213,7 +223,7 @@ const assertHumanRestoreCompletion = async (
     completion.update_not_future !== true ||
     completion.restoration_not_future !== true
   )
-    throw new DefinitionError("42501");
+    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 };
 
 const one = <Row extends DatabaseRow>(rows: readonly Row[], message: string): Row => {
@@ -272,13 +282,13 @@ export const createDatabaseDefinitionHistoryRepository = (
         ${command.targetReleaseRevision},
         ${command.expectedDraftRevision},
         ${verified.sourceFingerprint},
-        ${JSON.stringify(verified.identityRequirements)}
+        ${JSON.stringify(verified.identityRequirements)}::text::jsonb
       ) as restored_draft
     `;
     const restored = one(restoredRows, "DEFINITION_RESTORE_STORAGE_INVALID").restored_draft;
     if (restored === null) return { outcome: "stale" } as const;
     if (verifyRestored === undefined) return { outcome: "restored", draft: restored } as const;
-    if (!isHumanOrganizationOnlyContext(context)) throw new DefinitionError("42501");
+    if (!isHumanOrganizationOnlyContext(context)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 
     const verifiedDraft = await verifyRestored(restored);
     const currentEvidenceRows = await transaction.query<RestoreEvidenceRow>`
@@ -298,13 +308,17 @@ export const createDatabaseDefinitionHistoryRepository = (
       currentEvidenceRecord.humanDraftSnapshot === undefined ||
       currentEvidenceRecord.humanCurrentDraft === undefined
     )
-      throw new DefinitionError("40001");
+      throw unexpectedDefinitionFailure(
+        "DEFINITION_STORED_DATA_INVALID",
+        new Error("restore evidence lacks the human draft snapshot or current draft"),
+        "restore release evidence",
+      );
     const currentDraft = parseHumanCurrentDraft(currentEvidenceRecord.humanCurrentDraft);
     if (
       canonicalJson(currentDraft) !== canonicalJson(verifiedDraft) ||
       currentEvidenceRecord.humanDraftSnapshot === null
     )
-      throw new DefinitionError("40001");
+      throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
     const snapshot = asCandidate(currentEvidenceRecord.humanDraftSnapshot);
     if (
       snapshot === undefined ||
@@ -312,7 +326,7 @@ export const createDatabaseDefinitionHistoryRepository = (
       snapshot.sourceFingerprint !== verifiedDraft.sourceFingerprint ||
       snapshot.anchorReleaseRevision !== verifiedDraft.publishedRevision
     )
-      throw new DefinitionError("40001");
+      throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
 
     await assertHumanRestoreCompletion(transaction, context, verifiedDraft);
     return { outcome: "restored", draft: verifiedDraft } as const;
