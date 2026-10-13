@@ -9,6 +9,20 @@ export const flowRefusalFeedbackCodeSchema = tenantOrganizationMutationRefusalCo
   "stale_revision",
 ]);
 
+/** The closed reasons a submitted form field needs correcting. */
+export const flowFieldCorrectionCodeSchema = z.enum([
+  "invalid_value",
+  "required_value",
+  "field_refused",
+]);
+
+/** One submitted form field that needs correcting: its form field key and why, never a value. */
+export const flowFieldCorrectionSchema = z
+  .object({ field: builderKeySchema, code: flowFieldCorrectionCodeSchema })
+  .strict();
+
+export type FlowFieldCorrection = z.infer<typeof flowFieldCorrectionSchema>;
+
 /**
  * Closed feedback carried by a protected flow. Producers may attach a declared operation input;
  * the installation endpoint may replace it with a submitted field only after proving the pinned
@@ -19,6 +33,7 @@ export const flowRefusalFeedbackSchema = z
     code: flowRefusalFeedbackCodeSchema,
     operationInput: builderKeySchema.optional(),
     submittedField: builderKeySchema.optional(),
+    corrections: z.array(flowFieldCorrectionSchema).min(1).max(100).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -29,13 +44,15 @@ export const flowRefusalFeedbackSchema = z
         message: "Feedback carries either an operation input or a proven submitted field",
       });
     if (
-      (value.operationInput !== undefined || value.submittedField !== undefined) &&
+      (value.operationInput !== undefined ||
+        value.submittedField !== undefined ||
+        value.corrections !== undefined) &&
       value.code !== "invalid_command"
     )
       context.addIssue({
         code: "custom",
         path: ["code"],
-        message: "Only invalid command feedback may identify an input",
+        message: "Only invalid command feedback may identify an input or a field correction",
       });
   });
 
