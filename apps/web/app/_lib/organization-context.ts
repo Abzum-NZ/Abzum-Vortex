@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import type { IdentitySession, OrganizationLauncherResolution } from "@vortex/platform/schema";
 import { readPermittedApplicationsAtAddress, type PermittedApplicationsRead } from "@web/platform-server";
 import { createOrganizationLauncherService } from "@web/platform-server";
@@ -16,25 +17,30 @@ const describeFailure = (error: unknown): string => {
   return code === undefined ? name : `${name}(${code})`;
 };
 
-export const loadOrganizationLauncher = async (
-  session: IdentitySession,
-): Promise<OrganizationLauncherResolution> => organizationLauncherService.list(session);
+// Both reads run once per server render for the same session and address. The next request reads
+// again, so no authorization outlives the request that made it.
+export const loadOrganizationLauncher = cache(
+  async (session: IdentitySession): Promise<OrganizationLauncherResolution> =>
+    organizationLauncherService.list(session),
+);
 
-export const loadPermittedApplicationsAtAddress = async (
-  session: IdentitySession,
-  tenantShortName: string,
-  organizationShortName: string,
-): Promise<PermittedApplicationsRead> => {
-  let authorityId;
-  try {
-    authorityId = getIdentityAuthorityConfiguration().authorityId;
-  } catch (error) {
-    return { kind: "temporarily_unavailable", cause: describeFailure(error) };
-  }
-  return readPermittedApplicationsAtAddress(
-    session,
-    tenantShortName,
-    organizationShortName,
-    authorityId,
-  );
-};
+export const loadPermittedApplicationsAtAddress = cache(
+  async (
+    session: IdentitySession,
+    tenantShortName: string,
+    organizationShortName: string,
+  ): Promise<PermittedApplicationsRead> => {
+    let authorityId;
+    try {
+      authorityId = getIdentityAuthorityConfiguration().authorityId;
+    } catch (error) {
+      return { kind: "temporarily_unavailable", cause: describeFailure(error) };
+    }
+    return readPermittedApplicationsAtAddress(
+      session,
+      tenantShortName,
+      organizationShortName,
+      authorityId,
+    );
+  },
+);
