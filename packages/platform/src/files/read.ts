@@ -645,8 +645,10 @@ const refusal = (
 const positiveLimit = (value: number | undefined, fallback: number): number =>
   value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : fallback;
 
-const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority | null => {
-  if (candidate === null || typeof candidate !== "object") return null;
+type AuthorityRejection = Readonly<{ rejected: string; cause?: unknown }>;
+
+const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority | AuthorityRejection => {
+  if (candidate === null || typeof candidate !== "object") return { rejected: "authority_not_an_object" };
   const viewer = candidate.viewer;
   const organizationId = organizationIdSchema.safeParse(viewer?.organizationId);
   const actor = verifiedFileActorSchema.safeParse(viewer?.actor);
@@ -672,7 +674,7 @@ const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority |
     readableFieldIds.some((value) => !value.success) ||
     !validUntil.success
   ) {
-    const invalid = Object.entries({
+    const failed: { name: string; error: unknown }[] = Object.entries({
       organizationId,
       actor,
       applicationRootId,
@@ -680,13 +682,11 @@ const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority |
       recordId,
       fieldId,
       validUntil,
-    })
-      .filter(([, parsed]) => parsed !== undefined && !parsed.success)
-      .map(([name]) => name);
-    if (readableFieldIds === undefined || readableFieldIds.some((value) => !value.success))
-      invalid.push("readableFieldIds");
-    logRefusal("files", `read (invalid: ${invalid.join(",")})`, "authority_fields_invalid");
-    return null;
+    }).flatMap(([name, parsed]) => (parsed !== undefined && !parsed.success ? [{ name, error: parsed.error }] : []));
+    const invalidField = readableFieldIds?.find((value) => !value.success);
+    if (readableFieldIds === undefined || invalidField !== undefined)
+      failed.push({ name: "readableFieldIds", error: invalidField?.success === false ? invalidField.error : undefined });
+    return { rejected: `authority_fields_invalid:${failed.map((entry) => entry.name).join(",")}`, cause: failed[0]?.error };
   }
 
   let sharedRecordGrant: SharedRecordFileGrant | undefined;
@@ -722,8 +722,21 @@ const parseAuthority = (candidate: CurrentReadAuthority): CurrentReadAuthority |
       !expiresAt.success ||
       typeof grant.revoked !== "boolean"
     ) {
-      logRefusal("files", "read", "shared_grant_fields_invalid");
-      return null;
+      const failedGrant = [
+        grantId,
+        source,
+        sourceRecordTypeId,
+        sourceRecordId,
+        recipient,
+        recipientAccount,
+        recipientApplication,
+        ...(grantFields ?? []),
+        expiresAt,
+      ].find((parsed) => parsed !== undefined && !parsed.success);
+      return {
+        rejected: "shared_grant_fields_invalid",
+        ...(failedGrant?.success === false ? { cause: failedGrant.error } : {}),
+      };
     }
     sharedRecordGrant = Object.freeze({
       grantId: grantId.data,
@@ -869,7 +882,8 @@ export const createFileReadCoordinator = (
     }
 
     const authority = parseAuthority(authorityCandidate);
-    if (authority === null) return refusal("authority_unavailable", "authority_malformed");
+    if ("rejected" in authority)
+      return refusal("authority_unavailable", authority.rejected, authority.cause);
     if (!(nowMilliseconds < Date.parse(authority.validUntil))) {
       return refusal("authority_unavailable", "authority_expired");
     }

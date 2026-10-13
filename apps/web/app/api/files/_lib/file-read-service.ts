@@ -73,6 +73,13 @@ const refusalResponse = (
   headers?: Readonly<Record<string, string>>,
 ): Response => {
   logRefusal("files", "read", code, cause);
+  return unloggedRefusalResponse(reason, headers);
+};
+
+const unloggedRefusalResponse = (
+  reason: FileReadRefusalReason | "unauthenticated",
+  headers?: Readonly<Record<string, string>>,
+): Response => {
   const status = reason === "unauthenticated" ? 401 : fileReadRefusalHttpStatus[reason];
   const response = Response.json({ outcome: "refused", reason }, { status });
   for (const [name, value] of Object.entries({ ...privateFileResponseHeaders(), ...headers })) {
@@ -171,7 +178,7 @@ export const handleFileReadRequest = async (
       try {
         signing = storageSigningConfiguration();
       } catch (error) {
-        logRefusal("files", "read", "storage_signing_unconfigured_cause", error);
+        logRefusal("files", "read", "storage_signing_unconfigured", error);
         return { outcome: "storage_unavailable" };
       }
 
@@ -232,16 +239,11 @@ export const handleFileReadRequest = async (
   }
   if (protectedRead.value.outcome === "not_found")
     return refusalResponse("file_not_found", "read_not_allowed");
+  // The signing failure and every coordinator refusal were logged where they happened.
   if (protectedRead.value.outcome === "storage_unavailable")
-    return refusalResponse("storage_unavailable", "storage_signing_unconfigured");
+    return unloggedRefusalResponse("storage_unavailable");
   const result = protectedRead.value.result;
-  if (result.outcome === "refused")
-    return refusalResponse(
-      result.reason,
-      `coordinator_${result.reason}`,
-      undefined,
-      result.headers,
-    );
+  if (result.outcome === "refused") return unloggedRefusalResponse(result.reason, result.headers);
   return new Response(result.stream, {
     status: result.statusCode,
     headers: { ...result.headers },

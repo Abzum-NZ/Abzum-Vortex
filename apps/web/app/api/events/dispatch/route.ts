@@ -22,7 +22,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type ReadBodyResult =
-  Readonly<{ ok: true; body?: unknown }> | Readonly<{ ok: false; status: number; code: string }>;
+  Readonly<{ ok: true; body?: unknown }> | Readonly<{ ok: false; status: number; code: string; cause?: unknown }>;
 
 // A rejected caller credential is 401. A missing server configuration or a
 // missing, ambiguous or unavailable system actor grant is 503: no credential
@@ -44,8 +44,7 @@ const readBody = async (request: NextRequest): Promise<ReadBodyResult> => {
   try {
     return { ok: true, body: JSON.parse(text) };
   } catch (error) {
-    logRefusal("events-dispatch", "wake-up", "body_not_json", error);
-    return { ok: false, status: 400, code: "body_not_json" };
+    return { ok: false, status: 400, code: "body_not_json", cause: error };
   }
 };
 
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const body = await readBody(request);
   if (!body.ok) {
-    logRefusal("events-dispatch", "wake-up", body.code);
+    logRefusal("events-dispatch", "wake-up", body.code, body.cause);
     return privateResponse({ outcome: "invalid_request", code: body.code }, body.status);
   }
 
