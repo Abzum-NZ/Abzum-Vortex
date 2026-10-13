@@ -12,7 +12,6 @@ import {
   type SelectedOrganizationScope,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-import { describeFailure } from "../catalogue/runtime-primitives";
 import { protectedQueryRowCapabilitiesSchema } from "../queries/index";
 import {
   searchConfiguredApplication,
@@ -66,143 +65,136 @@ export const searchInstalledApplication = async (
     modules: readonly InstalledSearchModule[];
   }>,
 ): Promise<ApplicationSearchResult> => {
-  try {
-    const { transaction, scope, configuration, expression } = input;
-    const applicationRootId = scope.applicationRootId;
-    if (applicationRootId === undefined) throw new Error("SEARCH_SCOPE_UNAVAILABLE");
-    const requiredTokens = literalSearchRequiredTokens(expression);
-    if (requiredTokens === undefined) return { kind: "refused" };
+  const { transaction, scope, configuration, expression } = input;
+  const applicationRootId = scope.applicationRootId;
+  if (applicationRootId === undefined) throw new Error("SEARCH_SCOPE_UNAVAILABLE");
+  const requiredTokens = literalSearchRequiredTokens(expression);
+  if (requiredTokens === undefined) return { kind: "refused" };
 
-    // Keyset pages cannot reveal how many hidden records the index contains. Exact
-    // current Record reads decide which matches may leave the server.
-    const candidateBatches = async function* (
-      recordTypeId: string,
-    ): AsyncGenerator<readonly SearchDocument[]> {
-      let after = firstRecordId;
-      for (;;) {
-        const rows = await transaction.query<DatabaseRow>`
-          select record_id, source_record_version, document_schema_version, entries, content_fingerprint
-          from vortex_record.read_search_document_page(
-            ${scope.organizationId}::uuid, ${applicationRootId}::uuid,
-            ${recordTypeId}::uuid, ${after}::uuid,
-            ${JSON.stringify(requiredTokens)}::text::jsonb, ${candidateBatchSize}::integer
-          )
-        `;
-        if (rows.length === 0) return;
-        const documents = rows.map((row): SearchDocument => {
-          const parsed = documentRowSchema.parse({
-            ...row,
-            document_schema_version: Number(row.document_schema_version),
-          });
-          return {
-            kind: "document",
-            schemaVersion: searchDocumentSchemaVersion,
-            organisationId: scope.organizationId,
-            applicationRootId,
-            recordTypeId,
-            recordId: parsed.record_id,
-            sourceRecordVersion: parsed.source_record_version,
-            entries: parsed.entries,
-            contentFingerprint: parsed.content_fingerprint,
-          };
+  // Keyset pages cannot reveal how many hidden records the index contains. Exact
+  // current Record reads decide which matches may leave the server.
+  const candidateBatches = async function* (
+    recordTypeId: string,
+  ): AsyncGenerator<readonly SearchDocument[]> {
+    let after = firstRecordId;
+    for (;;) {
+      const rows = await transaction.query<DatabaseRow>`
+        select record_id, source_record_version, document_schema_version, entries, content_fingerprint
+        from vortex_record.read_search_document_page(
+          ${scope.organizationId}::uuid, ${applicationRootId}::uuid,
+          ${recordTypeId}::uuid, ${after}::uuid,
+          ${JSON.stringify(requiredTokens)}::text::jsonb, ${candidateBatchSize}::integer
+        )
+      `;
+      if (rows.length === 0) return;
+      const documents = rows.map((row): SearchDocument => {
+        const parsed = documentRowSchema.parse({
+          ...row,
+          document_schema_version: Number(row.document_schema_version),
         });
-        yield documents;
-        after = documents[documents.length - 1]!.recordId;
-      }
-    };
+        return {
+          kind: "document",
+          schemaVersion: searchDocumentSchemaVersion,
+          organisationId: scope.organizationId,
+          applicationRootId,
+          recordTypeId,
+          recordId: parsed.record_id,
+          sourceRecordVersion: parsed.source_record_version,
+          entries: parsed.entries,
+          contentFingerprint: parsed.content_fingerprint,
+        };
+      });
+      yield documents;
+      after = documents[documents.length - 1]!.recordId;
+    }
+  };
 
-    return await searchConfiguredApplication({
-      scope,
-      configuration,
-      expression,
-      candidateBatches,
-      readCurrentRecords: async (
-        request,
-      ): Promise<ReadonlyMap<string, ApplicationSearchRecord>> => {
-        const current = new Map<string, ApplicationSearchRecord>();
-        const entry = configuration.recordTypes.find(
-          (candidate) =>
-            candidate.recordType.state === "resolved" &&
-            sameId(candidate.recordType.recordTypeId, request.recordTypeId),
-        );
-        const recordType = entry?.recordType;
-        if (
-          entry === undefined ||
-          recordType?.state !== "resolved" ||
-          !sameId(request.organizationId, scope.organizationId) ||
-          !sameId(request.applicationRootId, applicationRootId)
-        )
-          return current;
-        const module = input.modules.find((candidate) =>
-          sameId(candidate.rootId, recordType.moduleRootId),
-        );
-        if (
-          module === undefined ||
-          !module.recordTypeIds.some((id) => sameId(id, request.recordTypeId))
-        )
-          return current;
-
-        // The pinned installation gates all current reads in one statement.
-        const rows = await transaction.query<DatabaseRow>`
-          with active_installation as materialized (
-            select vortex_definition.read_current_active_installation() as value
-          ), verified_installation as materialized (
-            select value from active_installation
-            where pg_catalog.lower(value ->> 'organizationId') = pg_catalog.lower(${scope.organizationId}::text)
-              and pg_catalog.lower(value ->> 'applicationRootId') = pg_catalog.lower(${applicationRootId}::text)
-              and (value ->> 'applicationReleaseRevision')::bigint = ${input.applicationReleaseRevision}::bigint
-              and exists (select 1 from pg_catalog.jsonb_array_elements(value -> 'moduleBindings') as binding(value)
-                where pg_catalog.lower(binding.value ->> 'moduleRootId') = pg_catalog.lower(${module.rootId}::text)
-                  and (binding.value ->> 'moduleReleaseRevision')::bigint = ${module.releaseRevision}::bigint
-                  and binding.value ->> 'state' = 'active')
-          )
-          select active_installation.value as installation, requested.record_id,
-            (select vortex_record.read_record(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as record,
-            (select vortex_record.read_record_capabilities(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as capabilities
-          from active_installation
-          cross join pg_catalog.jsonb_array_elements_text(${JSON.stringify(request.recordIds)}::text::jsonb) as requested(record_id)
-        `;
-        const allowedFields = new Set(
-          [
-            ...entry.fields.map((field) => String(field.fieldId)),
-            String(entry.titleFieldId),
-            ...(entry.subtitleFieldId === undefined ? [] : [String(entry.subtitleFieldId)]),
-          ].map((fieldId) => fieldId.toLowerCase()),
-        );
-        for (const row of rows) {
-          const installation = activeApplicationInstallationEvidenceSchema.parse(row.installation);
-          if (
-            installation.applicationReleaseRevision !== input.applicationReleaseRevision ||
-            !sameId(installation.organizationId, scope.organizationId) ||
-            !sameId(installation.applicationRootId, applicationRootId)
-          )
-            throw new Error("SEARCH_INSTALLATION_MISMATCH");
-          if (row.record === null || row.capabilities === null) continue;
-          if (
-            typeof row.record === "object" &&
-            row.record !== null &&
-            "outcome" in row.record &&
-            row.record.outcome === "refused"
-          )
-            continue;
-          const record = recordSchema.parse(row.record);
-          protectedQueryRowCapabilitiesSchema.parse(row.capabilities);
-          if (!sameId(record.recordId, String(row.record_id)))
-            throw new Error("SEARCH_RECORD_ID_MISMATCH");
-          current.set(String(row.record_id).toLowerCase(), {
-            concurrencyNumber: record.concurrencyNumber,
-            values: Object.fromEntries(
-              Object.entries(record.values).filter(([fieldId]) =>
-                allowedFields.has(fieldId.toLowerCase()),
-              ),
-            ),
-          });
-        }
+  return await searchConfiguredApplication({
+    scope,
+    configuration,
+    expression,
+    candidateBatches,
+    readCurrentRecords: async (request): Promise<ReadonlyMap<string, ApplicationSearchRecord>> => {
+      const current = new Map<string, ApplicationSearchRecord>();
+      const entry = configuration.recordTypes.find(
+        (candidate) =>
+          candidate.recordType.state === "resolved" &&
+          sameId(candidate.recordType.recordTypeId, request.recordTypeId),
+      );
+      const recordType = entry?.recordType;
+      if (
+        entry === undefined ||
+        recordType?.state !== "resolved" ||
+        !sameId(request.organizationId, scope.organizationId) ||
+        !sameId(request.applicationRootId, applicationRootId)
+      )
         return current;
-      },
-    });
-  } catch (error) {
-    console.error(`[search] SEARCH_INSTALLED_APPLICATION_FAILED: ${describeFailure(error)}`);
-    throw error;
-  }
+      const module = input.modules.find((candidate) =>
+        sameId(candidate.rootId, recordType.moduleRootId),
+      );
+      if (
+        module === undefined ||
+        !module.recordTypeIds.some((id) => sameId(id, request.recordTypeId))
+      )
+        return current;
+
+      // The pinned installation gates all current reads in one statement.
+      const rows = await transaction.query<DatabaseRow>`
+        with active_installation as materialized (
+          select vortex_definition.read_current_active_installation() as value
+        ), verified_installation as materialized (
+          select value from active_installation
+          where pg_catalog.lower(value ->> 'organizationId') = pg_catalog.lower(${scope.organizationId}::text)
+            and pg_catalog.lower(value ->> 'applicationRootId') = pg_catalog.lower(${applicationRootId}::text)
+            and (value ->> 'applicationReleaseRevision')::bigint = ${input.applicationReleaseRevision}::bigint
+            and exists (select 1 from pg_catalog.jsonb_array_elements(value -> 'moduleBindings') as binding(value)
+              where pg_catalog.lower(binding.value ->> 'moduleRootId') = pg_catalog.lower(${module.rootId}::text)
+                and (binding.value ->> 'moduleReleaseRevision')::bigint = ${module.releaseRevision}::bigint
+                and binding.value ->> 'state' = 'active')
+        )
+        select active_installation.value as installation, requested.record_id,
+          (select vortex_record.read_record(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as record,
+          (select vortex_record.read_record_capabilities(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as capabilities
+        from active_installation
+        cross join pg_catalog.jsonb_array_elements_text(${JSON.stringify(request.recordIds)}::text::jsonb) as requested(record_id)
+      `;
+      const allowedFields = new Set(
+        [
+          ...entry.fields.map((field) => String(field.fieldId)),
+          String(entry.titleFieldId),
+          ...(entry.subtitleFieldId === undefined ? [] : [String(entry.subtitleFieldId)]),
+        ].map((fieldId) => fieldId.toLowerCase()),
+      );
+      for (const row of rows) {
+        const installation = activeApplicationInstallationEvidenceSchema.parse(row.installation);
+        if (
+          installation.applicationReleaseRevision !== input.applicationReleaseRevision ||
+          !sameId(installation.organizationId, scope.organizationId) ||
+          !sameId(installation.applicationRootId, applicationRootId)
+        )
+          throw new Error("SEARCH_INSTALLATION_MISMATCH");
+        if (row.record === null || row.capabilities === null) continue;
+        if (
+          typeof row.record === "object" &&
+          row.record !== null &&
+          "outcome" in row.record &&
+          row.record.outcome === "refused"
+        )
+          continue;
+        const record = recordSchema.parse(row.record);
+        protectedQueryRowCapabilitiesSchema.parse(row.capabilities);
+        if (!sameId(record.recordId, String(row.record_id)))
+          throw new Error("SEARCH_RECORD_ID_MISMATCH");
+        current.set(String(row.record_id).toLowerCase(), {
+          concurrencyNumber: record.concurrencyNumber,
+          values: Object.fromEntries(
+            Object.entries(record.values).filter(([fieldId]) =>
+              allowedFields.has(fieldId.toLowerCase()),
+            ),
+          ),
+        });
+      }
+      return current;
+    },
+  });
 };
