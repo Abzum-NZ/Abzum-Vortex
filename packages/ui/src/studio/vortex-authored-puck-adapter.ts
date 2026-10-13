@@ -689,6 +689,18 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
                   "theme_overrides",
                   "responsive",
                 ]);
+          // An edited Puck layout replaces only the authored responsive field; an unchanged one
+          // keeps the authored placement untouched.
+          if (
+            authored !== undefined &&
+            renderMetadata.responsive !== undefined &&
+            !sameJsonValue(
+              renderMetadata.responsive,
+              puckResponsive(sourceResponsivePlacementSchema.parse(fields.responsive)),
+            )
+          ) {
+            fields.responsive = sourceResponsive(renderMetadata.responsive);
+          }
           // First parse the source fields without accepting any private Puck properties.
           const authoredBlock = object(fields.block);
           const release = releases.get(
