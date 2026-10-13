@@ -17,7 +17,6 @@ declare
   target_activation_policy_id uuid;
   target_activation_policy_revision bigint;
   target_application_root_id uuid;
-  target_catalogue_fingerprint text;
   target_registration_revision bigint;
   previous_lifecycle text;
   previous_assignment_policy text;
@@ -40,13 +39,13 @@ begin
     revision.assignment_policy, revision.policy_continuity_revision,
     revision.authority_continuity_revision, revision.activation_policy_id,
     revision.activation_policy_revision,
-    revision.application_root_id, revision.source_catalogue_fingerprint,
+    revision.application_root_id,
     revision.accepted_registration_revision
   into target_role_kind, target_lifecycle, target_privilege_classification,
     target_assignment_policy, target_policy_continuity_revision,
     target_authority_continuity_revision, target_activation_policy_id,
     target_activation_policy_revision,
-    target_application_root_id, target_catalogue_fingerprint,
+    target_application_root_id,
     target_registration_revision
   from vortex_access.organization_role_revisions as revision
   where revision.organization_id = target_organization_id
@@ -225,11 +224,6 @@ begin
         or revision.source_release_version <> registration.source_version
         or revision.source_validation_contract_version <>
           registration.validation_contract_version
-        or revision.source_content_fingerprint <> registration.source_content_fingerprint
-        or revision.source_resolution_fingerprint <>
-          registration.source_resolution_fingerprint
-        or revision.source_catalogue_fingerprint <>
-          registration.permission_catalogue_fingerprint
       );
 
     if inconsistent_source_count <> 0 then
@@ -245,7 +239,6 @@ begin
       and (
         permission.application_root_id is distinct from target_application_root_id
         or permission.accepted_registration_revision <> target_registration_revision
-        or permission.catalogue_fingerprint <> target_catalogue_fingerprint
       );
 
     if inconsistent_permission_count <> 0 then

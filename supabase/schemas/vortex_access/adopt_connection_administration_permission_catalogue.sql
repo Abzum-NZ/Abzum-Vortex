@@ -323,9 +323,7 @@ begin
       activation_policy_id, activation_policy_revision,
       role_key, label, description,
       source_definition_key, source_release_revision, source_release_version,
-      source_validation_contract_version, source_content_fingerprint,
-      source_resolution_fingerprint,
-      source_catalogue_fingerprint, accepted_registration_revision,
+      source_validation_contract_version, accepted_registration_revision,
       template_continuity_revision,
       changed_by, changed_at, change_correlation_id
     ) values (
@@ -343,9 +341,6 @@ begin
       previous_revision.source_release_revision,
       previous_revision.source_release_version,
       previous_revision.source_validation_contract_version,
-      previous_revision.source_content_fingerprint,
-      previous_revision.source_resolution_fingerprint,
-      previous_revision.source_catalogue_fingerprint,
       previous_revision.accepted_registration_revision,
       previous_revision.template_continuity_revision,
       p_changed_by, operation_at, p_correlation_id
@@ -379,7 +374,5 @@ begin
   return resulting_version;
 end
 $$;
-
-ALTER FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
