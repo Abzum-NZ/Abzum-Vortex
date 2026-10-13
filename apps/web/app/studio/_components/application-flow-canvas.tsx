@@ -208,9 +208,11 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
   const [selected, setSelected] = useState<Readonly<{ flowAlias: string; key: string; id: string }> | null>(null);
 
   useEffect(() => {
-    if (projection.kind !== "available" || flow === undefined)
-      console.error("Flow canvas projection is unavailable", { flow: selection.flowAlias, projection: projection.kind });
-  }, [projection.kind, flow, selection.flowAlias]);
+    if (projection.kind === "invalid")
+      console.error("Flow canvas projection is unavailable", { flow: selection.flowAlias }, projection.cause);
+    else if (flow === undefined)
+      console.error("Flow canvas could not find the selected flow", { flow: selection.flowAlias });
+  }, [projection, flow, selection.flowAlias]);
 
   if (graph === null || projection.kind !== "available" || flow === undefined)
     return <p role="status">This Flow canvas is unavailable because the flow could not be read.</p>;
