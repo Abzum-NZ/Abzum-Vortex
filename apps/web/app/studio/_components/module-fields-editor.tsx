@@ -4,6 +4,7 @@ import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useMemo, useState, type FormEvent } from "react";
 import {
@@ -42,6 +43,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
   /** An agent call is changing the shared draft, so this editor takes no edit until it finishes. */
   locked: boolean;
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const first = baseline.source.body.record_types[0];
   const [selected, setSelected] = useState(first === undefined ? "" : selectionValue(first.id, ""));
   const [label, setLabel] = useState("");
@@ -65,10 +67,14 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
     ? deriveFieldKey(label, new Set(record.fields.map((item) => item.key))) : undefined;
   const dirty = existing === undefined ? label.trim() !== "" : label !== existing.label || effectiveType !== existing.type || required !== existing.required;
 
-  const choose = (value: string) => {
+  const choose = async (value: string) => {
     const [nextRecord, nextField] = JSON.parse(value) as [string, string];
     const target = baseline.source.body.record_types.find((item) => item.id === nextRecord)?.fields.find((item) => item.id === nextField);
-    if (dirty && !window.confirm("Discard your unsaved field changes?")) return;
+    if (dirty && !await confirm({
+      title: "Select another field?",
+      description: "Discard your unsaved field changes?",
+      confirmLabel: "Discard changes",
+    })) return;
     setSelected(value);
     setLabel(target?.label ?? "");
     setType(target?.type ?? offered[0]?.type ?? "");
@@ -126,7 +132,11 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
 
   const reload = async () => {
     if (busy || locked) return;
-    if (dirty && !window.confirm("Discard your unsaved field changes and reload the saved draft?")) return;
+    if (dirty && !await confirm({
+      title: "Reload the saved draft?",
+      description: "Discard your unsaved field changes and reload the saved draft?",
+      confirmLabel: "Discard and reload",
+    })) return;
     setBusy(true);
     try {
       const result = await reopenModuleFields(baseline.organizationId, baseline.rootId);
@@ -196,5 +206,6 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
           </li>)}
         </ul> : null}
       </form>}
+    {confirmDialog}
   </section>;
 }

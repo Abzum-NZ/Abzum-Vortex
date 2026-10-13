@@ -6,6 +6,7 @@ import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
   studioApplicationArchiveOptionsResultSchema,
   studioApplicationFirstInstallCommandResultSchema,
@@ -151,6 +152,7 @@ const observedLoad = async (
 };
 
 export function ApplicationFirstInstallation({ selector, initialResult }: Props) {
+  const [confirm, confirmDialog] = useConfirm();
   const [load, setLoad] = useState<StudioApplicationFirstInstallLoadResult>(initialResult);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [needsReload, setNeedsReload] = useState(false);
@@ -288,9 +290,11 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
 
   const prepare = async () => {
     if (load.kind !== "available") return;
-    if (!window.confirm(
-      `Prepare published ${load.snapshot.selected.releaseVersion}, revision ${load.snapshot.selected.releaseRevision} for first installation? This aligns registration and provisions inactive Modules; it does not activate the application.`,
-    )) return;
+    if (!await confirm({
+      title: `Prepare revision ${load.snapshot.selected.releaseRevision} for first installation?`,
+      description: `Prepare published ${load.snapshot.selected.releaseVersion}, revision ${load.snapshot.selected.releaseRevision} for first installation? This aligns registration and provisions inactive Modules; it does not activate the application.`,
+      confirmLabel: "Prepare",
+    })) return;
     await settleCommand("prepare", () => prepareFirstInstall(selector.organizationId, {
       kind: "application.first_install.prepare", selector, expected: load.snapshot,
     }));
@@ -459,9 +463,12 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
     if (load.kind !== "available" || load.snapshot.setup === null) return;
     const allConfigured = load.snapshot.setup.targets.every((target) => target.policy.state === "configured");
     if (!allConfigured || pending !== null || needsReload) return;
-    if (!window.confirm(
-      `Activate ${load.snapshot.selected.releaseVersion}, revision ${load.snapshot.selected.releaseRevision} now? This will make the exact prepared Application and Module set active.`,
-    )) return;
+    if (!await confirm({
+      title: `Activate revision ${load.snapshot.selected.releaseRevision} now?`,
+      description: `Activate ${load.snapshot.selected.releaseVersion}, revision ${load.snapshot.selected.releaseRevision} now? This will make the exact prepared Application and Module set active.`,
+      confirmLabel: "Activate",
+      destructive: true,
+    })) return;
     await settleCommand("activate", () => activateFirstInstall(selector.organizationId, {
       kind: "application.first_install.activate", selector, expected: load.snapshot,
     }));
@@ -671,5 +678,6 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
         <p>{commandMessage(commandResult)}</p>
       </section>}
     </>}
+    {confirmDialog}
   </main>;
 }
