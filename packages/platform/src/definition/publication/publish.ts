@@ -36,32 +36,38 @@ import {
   type SessionContext,
   type StoredDefinitionSource,
   type VersionImpactReason,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../../schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../../db/index";
 import { z } from "zod";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
+import { canonicalJson, fingerprintCanonicalValue } from "../canonical-json-definition";
 import {
   applicationDraftFromStoredRelease,
   hasAuthenticResolutionFingerprint,
   hasAuthenticStoredCustomerDefinitionRelease,
   sameCanonicalJson,
-} from "./definition-release-integrity";
-import type {
-  DefinitionPublicationCandidate,
-  DefinitionPublicationReader,
-  DefinitionPublicationRepository,
-  DefinitionPublicationTransaction,
-  DefinitionReleaseAppend,
-  ModuleReleasePageCursor,
-  ResolvableModuleReleasePage,
-  ResolvableModuleRelease,
-} from "./definition-publication";
-import { extractStoredSourceIdentityRequirements } from "./source-identities";
+} from "../definition-release-integrity";
+import type { BuilderAuthority } from "../builder-authority";
+import {
+  createImmutableDefinitionPublicationCatalogue,
+  type ImmutableDefinitionPublicationCatalogueDefinition,
+} from "./read";
+import {
+  createDefinitionPublicationService,
+  type DefinitionPublicationCandidate,
+  type DefinitionPublicationReader,
+  type DefinitionPublicationRepository,
+  type DefinitionPublicationTransaction,
+  type DefinitionReleaseAppend,
+  type ModuleReleasePageCursor,
+  type ResolvableModuleReleasePage,
+  type ResolvableModuleRelease,
+} from "../definition-publication";
+import { extractStoredSourceIdentityRequirements } from "../source-identities";
 import {
   DefinitionError,
   classifyDatabaseError,
   unexpectedDefinitionFailure,
-} from "./definition-error";
+} from "../definition-error";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -919,8 +925,14 @@ const safeRepositoryOperation = async <Result>(
         if (message.includes("does not belong to the context organization"))
           throw new DefinitionError("DEFINITION_ORGANIZATION_MISMATCH", { cause: error });
         if (message.includes("publication authority is unavailable"))
-          throw new DefinitionError("DEFINITION_PUBLICATION_AUTHORITY_UNAVAILABLE", { cause: error });
-        throw unexpectedDefinitionFailure("DEFINITION_PUBLICATION_FAILED", error, "publication repository");
+          throw new DefinitionError("DEFINITION_PUBLICATION_AUTHORITY_UNAVAILABLE", {
+            cause: error,
+          });
+        throw unexpectedDefinitionFailure(
+          "DEFINITION_PUBLICATION_FAILED",
+          error,
+          "publication repository",
+        );
       }
       default:
         throw unexpectedDefinitionFailure(
@@ -957,4 +969,16 @@ export const readAuthenticatedApplicationPageAdoptionRelease = (
       releaseRevision,
       expectedAnchorReleaseRevision,
     ),
+  );
+
+/** Builds the production publication service from the database repository and one platform release catalogue. */
+export const createDatabaseDefinitionPublicationService = (
+  catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
+  transaction: RequestDatabaseTransaction,
+  authority: BuilderAuthority,
+) =>
+  createDefinitionPublicationService(
+    createDatabaseDefinitionPublicationRepository(transaction),
+    createImmutableDefinitionPublicationCatalogue(catalogueDefinition),
+    authority,
   );

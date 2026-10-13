@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./definition-publication-catalogue";
-import { createImmutableDefinitionPublicationCatalogue } from "./definition-publication-catalogue";
+import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
+import { createImmutableDefinitionPublicationCatalogue } from "./publication/read";
 import type { BuilderAuthority } from "./builder-authority";
 import { createDefinitionHistoryService } from "./definition-history";
 import { createDatabaseDefinitionHistoryRepository } from "./definition-history-repository";
