@@ -16,25 +16,19 @@ import {
   type HumanInstallationDefinitionAccess,
 } from "@vortex/platform/server";
 import {
-  applicationRootIdSchema,
   canonicalJson,
   databaseTimestamp,
   describeFailure,
   moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
-  organizationLifecycleLimitsSchema,
   organizationAccessDecisionSchema,
   organizationAccessDeclarationSchema,
   projectLiveApplicationRolePermissions,
   organizationIdSchema,
   organizationPermissionEligibilitySchema,
   protectedOperationChannelSchema,
-  recordLifecyclePolicyIdSchema,
-  recordTypeLifecyclePolicySchema,
-  revisionSchema,
   sameId,
   sessionContextSchema,
-  storageContractIdSchema,
   systemApplicationBoundReleaseSetResultSchema,
   timestampSchema,
   workflowIdSchema,
@@ -53,7 +47,11 @@ import {
 } from "@vortex/platform/schema";
 import {
   InstallationArchiveConnectionError,
+  ProvisionedSetupError,
+  assertProvisionedSetupMatchesInstallation,
   initialLifecyclePolicyMatches,
+  readProvisionedLifecycleSetup,
+  type ProvisionedSetup,
   saveInitialArchiveWorkflowPolicy,
   workflowIsInExactRelease,
   type InitialLifecyclePolicyTarget,
@@ -168,6 +166,7 @@ const safeFailure = (error: unknown): Problem => {
   console.error(`[studio] application installation failed: ${describeFailure(error)}`);
   if (error instanceof InstallationProblem) return error.problem;
   if (error instanceof InstallationArchiveConnectionError) return { kind: error.reason };
+  if (error instanceof ProvisionedSetupError) return { kind: "refused" };
   if (error instanceof DefinitionError) {
     switch (error.code) {
       case "APPLICATION_INSTALLATION_STALE":
@@ -1332,6 +1331,10 @@ const firstInstallSetMatchesHistory = (
 const firstInstallLoadFailure = (error: unknown): StudioApplicationFirstInstallLoadResult => {
   if (error instanceof FirstInstallUnavailable)
     return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "unavailable", reason: error.reason });
+  if (error instanceof ProvisionedSetupError && error.reason !== "refused") {
+    console.error(`[studio] application installation failed: ${describeFailure(error)}`);
+    return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "unavailable", reason: error.reason });
+  }
   const failure = safeFailure(error);
   if (failure.kind === "conflict")
     return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "conflict" });
@@ -1490,60 +1493,6 @@ const readProvisionedSetupAccessDecision = async (
   return decision;
 };
 
-const provisionedSetupModulePins = (
-  selector: StudioApplicationFirstInstallSelector,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-  bindings: InstallationBindings,
-): readonly Readonly<{ moduleRootId: string; bindingRevision: number }>[] => {
-  if (releaseSet.modules.length === 0) firstInstallUnavailable("setup_unavailable");
-  const provisioned = bindings.moduleBindings.filter((binding) => binding.state === "provisioned");
-  if (provisioned.length !== releaseSet.modules.length ||
-    bindings.registeredReleaseRevision !== selector.releaseRevision)
-    firstInstallUnavailable("installation_incomplete");
-  const pins = provisioned.map((binding) => {
-    if (!sameUuid(binding.organizationId, selector.organizationId) ||
-      !sameUuid(binding.applicationRootId, selector.rootId) ||
-      binding.applicationReleaseRevision !== selector.releaseRevision)
-      firstInstallUnavailable("installation_incomplete");
-    return { moduleRootId: binding.moduleRootId, bindingRevision: binding.bindingRevision };
-  }).sort((left, right) => left.moduleRootId < right.moduleRootId ? -1 : left.moduleRootId > right.moduleRootId ? 1 : 0);
-  for (const module of releaseSet.modules) {
-    const matches = provisioned.filter((binding) =>
-      sameUuid(binding.moduleRootId, module.rootId) &&
-      binding.moduleReleaseRevision === module.releaseRevision &&
-      binding.applicationReleaseRevision === selector.releaseRevision);
-    if (matches.length !== 1) firstInstallUnavailable("installation_incomplete");
-  }
-  return pins;
-};
-
-const recordProvisionedSetupSchema = z.object({
-  organizationId: organizationIdSchema,
-  applicationRootId: applicationRootIdSchema,
-  applicationReleaseRevision: revisionSchema,
-  registrationRevision: revisionSchema,
-  organizationLimits: organizationLifecycleLimitsSchema,
-  targets: z.array(z.object({
-    storageContractId: storageContractIdSchema,
-    storageScope: z.enum(["application_contained", "organization_shared"]),
-    applicationRootId: applicationRootIdSchema.nullable(),
-    sourceBindings: z.array(z.object({
-      moduleRootId: moduleRootIdSchema,
-      moduleReleaseRevision: revisionSchema,
-      bindingRevision: revisionSchema,
-    }).strict()).min(1).max(10_000),
-    policy: z.discriminatedUnion("state", [
-      z.object({ state: z.literal("absent") }).strict(),
-      z.object({
-        state: z.literal("configured"),
-        policyId: recordLifecyclePolicyIdSchema,
-        policyRevision: revisionSchema,
-        policyBody: recordTypeLifecyclePolicySchema,
-      }).strict(),
-    ]),
-  }).strict()).max(10_000),
-}).strict();
-
 const visiblePolicyBody = (policy: RecordTypeLifecyclePolicy) => {
   const common = {
     maxAgeDays: policy.maxAgeDays,
@@ -1570,7 +1519,7 @@ const visiblePolicyBody = (policy: RecordTypeLifecyclePolicy) => {
 };
 
 const visibleProvisionedSetup = (
-  setup: z.infer<typeof recordProvisionedSetupSchema>,
+  setup: ProvisionedSetup,
 ): z.infer<typeof studioApplicationFirstInstallSetupSchema> =>
   studioApplicationFirstInstallSetupSchema.parse({
     ...setup,
@@ -1590,39 +1539,11 @@ const readProvisionedSetupInternalInTransaction = async (
   issuedAt: string,
   selector: StudioApplicationFirstInstallSelector,
   releaseSet: SystemApplicationBoundReleaseSetResult,
-): Promise<z.infer<typeof recordProvisionedSetupSchema>> => {
+): Promise<ProvisionedSetup> => {
   const bindings = await readInstallationBindings(transaction, selector.rootId);
-  const expectedModuleBindings = provisionedSetupModulePins(selector, releaseSet, bindings);
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_record.read_provisioned_lifecycle_policy_setup(
-      ${selector.rootId}::uuid,
-      ${selector.releaseRevision}::bigint,
-      ${JSON.stringify(expectedModuleBindings)}::text::jsonb
-    ) as snapshot
-  `;
-  const setup = recordProvisionedSetupSchema.safeParse(rows[0]?.snapshot);
-  if (rows.length === 1 && setup.success && setup.data.targets.length === 0)
-    firstInstallUnavailable("setup_unavailable");
-  if (rows.length !== 1 || !setup.success ||
-    !sameUuid(setup.data.organizationId, selector.organizationId) ||
-    !sameUuid(setup.data.applicationRootId, selector.rootId) ||
-    setup.data.applicationReleaseRevision !== selector.releaseRevision ||
-    new Set(setup.data.targets.map((target) => target.storageContractId.toLowerCase())).size !==
-      setup.data.targets.length ||
-    setup.data.targets.some((target) =>
-      target.storageScope === "organization_shared"
-        ? target.applicationRootId !== null
-        : target.applicationRootId === null || !sameUuid(target.applicationRootId, selector.rootId)) ||
-    setup.data.targets.some((target) => target.sourceBindings.some((binding) =>
-      !expectedModuleBindings.some((pin) => sameUuid(pin.moduleRootId, binding.moduleRootId) &&
-        pin.bindingRevision === binding.bindingRevision))))
-    problem("refused");
-  const exactWorkflowIds = new Set(firstInstallWorkflows(releaseSet).map((workflowId) => workflowId.toLowerCase()));
-  if (setup.data.targets.some((target) =>
-    target.policy.state === "configured" && target.policy.policyBody.action === "archive_workflow" &&
-    (target.policy.policyBody.expectedWorkflowRevision !== selector.releaseRevision ||
-      !exactWorkflowIds.has(target.policy.policyBody.archiveWorkflowId.toLowerCase()))))
-    firstInstallUnavailable("setup_unavailable");
+  const setup = await readProvisionedLifecycleSetup(
+    transaction, selector, releaseSet, bindings, firstInstallWorkflows(releaseSet),
+  );
 
   const context = await readHumanContext(transaction, scope, session, issuedAt, {
     organizationId: selector.organizationId,
@@ -1647,26 +1568,8 @@ const readProvisionedSetupInternalInTransaction = async (
     Date.parse(decision.validUntil) <= completionMs) ||
     Date.parse(context.expiresAt) <= completionMs)
     problem("refused");
-  const limits = organizationLifecycleLimitsSchema.safeParse(setup.data.organizationLimits);
-  if (!limits.success || !sameUuid(limits.data.organizationId, selector.organizationId))
-    problem("refused");
-  const exactProvisionedBindings = new Map(bindings.moduleBindings
-    .filter((binding) => binding.state === "provisioned")
-    .map((binding) => [binding.moduleRootId.toLowerCase(), binding]));
-  for (const target of setup.data.targets) {
-    const targetBindings = new Set<string>();
-    for (const sourceBinding of target.sourceBindings) {
-      const key = sourceBinding.moduleRootId.toLowerCase();
-      const expected = exactProvisionedBindings.get(key);
-      if (expected === undefined || targetBindings.has(key) ||
-        !sameUuid(expected.moduleRootId, sourceBinding.moduleRootId) ||
-        expected.moduleReleaseRevision !== sourceBinding.moduleReleaseRevision ||
-        expected.bindingRevision !== sourceBinding.bindingRevision)
-        problem("refused");
-      targetBindings.add(key);
-    }
-  }
-  return setup.data;
+  assertProvisionedSetupMatchesInstallation(setup, bindings, selector.organizationId);
+  return setup;
 };
 
 const readProvisionedSetupInTransaction = async (
@@ -2281,7 +2184,7 @@ type FirstInstallAppState = Readonly<{
   releaseSet: SystemApplicationBoundReleaseSetResult;
   bindings: InstallationBindings;
   setup: z.infer<typeof studioApplicationFirstInstallSetupSchema>;
-  internalSetup: z.infer<typeof recordProvisionedSetupSchema>;
+  internalSetup: ProvisionedSetup;
 }>;
 
 const readFirstInstallAppState = async (

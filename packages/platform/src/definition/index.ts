@@ -38,3 +38,9 @@ export {
   type InitialLifecyclePolicyInput,
   type InitialLifecyclePolicyTarget,
 } from "./installation-initial-lifecycle-policy";
+export {
+  ProvisionedSetupError,
+  assertProvisionedSetupMatchesInstallation,
+  readProvisionedLifecycleSetup,
+  type ProvisionedSetup,
+} from "./installation-provisioned-setup";
