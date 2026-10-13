@@ -281,8 +281,7 @@ begin
       or locked_binding.application_release_revision is distinct from p_application_release_revision
       or locked_binding.module_release_revision is distinct from pin.target_release_revision
       or locked_binding.state is distinct from 'provisioned'
-      or module_release.content_fingerprint is distinct from pin.dependency_content_fingerprint
-      or module_release.resolution_fingerprint is distinct from pin.evidence_fingerprint then
+      or module_release.content_fingerprint is distinct from pin.dependency_content_fingerprint then
       raise exception using errcode = '40001',
         message = 'Application installation bindings changed or are incomplete';
     end if;
@@ -350,8 +349,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba' -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
@@ -365,8 +365,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba' -- guard-allow: function-uuid fixed platform permission identity; the owner role has no read access to the declarations table
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object(

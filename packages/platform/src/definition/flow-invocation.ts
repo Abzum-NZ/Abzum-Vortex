@@ -208,8 +208,7 @@ const moduleDependencyMatches = (
   dependency.key === release.definitionKey &&
   dependency.releaseRevision === release.releaseRevision &&
   dependency.releaseVersion === release.releaseVersion &&
-  dependency.contentFingerprint === release.contentFingerprint &&
-  dependency.resolutionFingerprint === release.resolutionFingerprint;
+  dependency.contentFingerprint === release.contentFingerprint;
 
 /** Resolve only the exact Module closure reachable from the installed Application manifests. */
 const installedModuleClosure = (

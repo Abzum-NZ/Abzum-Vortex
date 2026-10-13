@@ -1045,8 +1045,7 @@ const resolveDependencies = async (
       if (
         release !== undefined &&
         (release.releaseVersion !== exact.releaseVersion ||
-          release.contentFingerprint !== exact.contentFingerprint ||
-          release.resolutionFingerprint !== exact.resolutionFingerprint)
+          release.contentFingerprint !== exact.contentFingerprint)
       )
         refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
     });
@@ -1372,7 +1371,6 @@ const manifestFor = (
       releaseRevision: release.releaseRevision,
       releaseVersion: release.releaseVersion,
       contentFingerprint: release.contentFingerprint,
-      resolutionFingerprint: release.resolutionFingerprint,
     })),
     ...dependencies.connections.map((release) => ({
       kind: "connection_type" as const,

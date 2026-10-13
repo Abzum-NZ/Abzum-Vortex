@@ -49,8 +49,7 @@ begin
             'rootId', dependency.target_root_id,
             'releaseRevision', dependency.target_release_revision,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'resolutionFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'connection_type' then pg_catalog.jsonb_build_object(
             'kind', 'connection_type',

@@ -39,7 +39,6 @@ declare
   supplied_reference text;
   supplied_version text;
   supplied_content_fingerprint text;
-  supplied_evidence_fingerprint text;
   supplied_target_root_id uuid;
   supplied_target_release_revision bigint;
   supplied_catalogue_item_id uuid;
@@ -330,9 +329,9 @@ begin
         select 1 from pg_catalog.jsonb_object_keys(supplied_dependency) as supplied(key)
         where supplied.key not in (
           'kind', 'key', 'rootId', 'releaseRevision', 'releaseVersion',
-          'contentFingerprint', 'resolutionFingerprint'
+          'contentFingerprint'
         )
-      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 7 then
+      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 6 then
         raise exception using errcode = '22023', message = 'Module dependency has an invalid shape';
       end if;
       supplied_reference := supplied_dependency ->> 'key';
@@ -340,7 +339,6 @@ begin
       supplied_target_release_revision := (supplied_dependency ->> 'releaseRevision')::bigint;
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
       supplied_catalogue_item_id := null;
       if supplied_reference !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$'
         or pg_catalog.char_length(supplied_reference) not between 3 and 120
@@ -349,7 +347,6 @@ begin
         or supplied_target_release_revision not between 1 and 9007199254740991
         or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
         or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-        or supplied_evidence_fingerprint !~ '^sha256:[a-f0-9]{64}$'
         or supplied_target_root_id = p_root_id
         or not exists (
           select 1
@@ -359,7 +356,6 @@ begin
             and target_release.release_revision = supplied_target_release_revision
             and target_release.release_version = supplied_version
             and target_release.content_fingerprint = supplied_content_fingerprint
-            and target_release.resolution_fingerprint = supplied_evidence_fingerprint
             and target_root.organization_id = context_organization_id
             and target_root.kind = 'module'
             and target_root.key = supplied_reference
@@ -379,7 +375,6 @@ begin
       supplied_catalogue_item_id := (supplied_dependency ->> 'rootId')::uuid;
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_content_fingerprint;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       if supplied_reference !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$'
@@ -407,7 +402,6 @@ begin
       end;
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_content_fingerprint;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       if supplied_catalogue_item_id is null
@@ -428,7 +422,6 @@ begin
       supplied_reference := supplied_dependency ->> 'catalogueThemeId';
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_content_fingerprint;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       supplied_catalogue_item_id := null;
@@ -673,7 +666,6 @@ begin
       supplied_reference := vortex_definition.flow_target_dependency_reference(supplied_dependency);
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       supplied_catalogue_item_id := null;
@@ -682,7 +674,6 @@ begin
         or supplied_reference ~ '[[:space:]]'
         or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
         or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-        or supplied_evidence_fingerprint !~ '^sha256:[a-f0-9]{64}$'
         or (
           supplied_dependency ? 'resolutionFingerprint'
           and supplied_dependency ->> 'resolutionFingerprint' !~ '^sha256:[a-f0-9]{64}$'
@@ -917,10 +908,6 @@ begin
     end;
     supplied_version := supplied_dependency ->> 'releaseVersion';
     supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-    supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
-    if supplied_kind in ('connection_type', 'platform_block', 'platform_theme') then
-      supplied_evidence_fingerprint := supplied_content_fingerprint;
-    end if;
     supplied_target_root_id := case when supplied_kind = 'module'
       then (supplied_dependency ->> 'rootId')::uuid else null end;
     supplied_target_release_revision := case when supplied_kind = 'module'
@@ -938,16 +925,15 @@ begin
     ) then
       supplied_entry := supplied_dependency;
       supplied_reference := vortex_definition.flow_target_dependency_reference(supplied_dependency);
-      supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
     end if;
 
     insert into vortex_definition.release_dependencies (
       root_id, release_revision, dependency_kind, dependency_reference,
-      dependency_version, dependency_content_fingerprint, evidence_fingerprint,
+      dependency_version, dependency_content_fingerprint,
       target_root_id, target_release_revision, catalogue_item_id, dependency_entry
     ) values (
       p_root_id, draft_row.draft_revision, supplied_kind, supplied_reference,
-      supplied_version, supplied_content_fingerprint, supplied_evidence_fingerprint,
+      supplied_version, supplied_content_fingerprint,
       supplied_target_root_id, supplied_target_release_revision, supplied_catalogue_item_id,
       supplied_entry
     );
@@ -1050,8 +1036,7 @@ begin
             'rootId', dependency.target_root_id,
             'releaseRevision', dependency.target_release_revision,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'resolutionFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'connection_type' then pg_catalog.jsonb_build_object(
             'kind', 'connection_type', 'key', dependency.dependency_reference,

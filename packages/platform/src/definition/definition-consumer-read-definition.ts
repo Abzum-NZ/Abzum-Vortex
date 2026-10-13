@@ -103,8 +103,7 @@ export const definitionReleaseModuleTargetsMatch = (
     return (
       target !== undefined &&
       target.releaseVersion === dependency.releaseVersion &&
-      target.contentFingerprint === dependency.contentFingerprint &&
-      target.resolutionFingerprint === dependency.resolutionFingerprint
+      target.contentFingerprint === dependency.contentFingerprint
     );
   });
 };
