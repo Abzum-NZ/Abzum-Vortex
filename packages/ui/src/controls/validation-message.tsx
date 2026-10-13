@@ -27,7 +27,7 @@ const VALIDATION_SEVERITY_COLORS: Readonly<Record<"error" | "warning" | "info", 
 export function ValidationMessage(props: ValidationMessageProps): ReactElement {
   const context = resolveControlContext<ValidationPayload>(props, []);
   const settings = readControlSettings(props, context.location);
-  const severity = settings.choice<"error" | "warning" | "info">("severity", "error");
+  const severity = settings.explicitChoice<"error" | "warning" | "info">("severity");
   const message = settings.text("message");
   const forField = settings.text("for_field");
   if (forField !== undefined && !builderKeySchema.safeParse(forField).success)

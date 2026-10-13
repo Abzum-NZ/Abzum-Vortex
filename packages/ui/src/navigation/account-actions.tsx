@@ -42,11 +42,10 @@ export function useApplicationAccountActions(): ApplicationAccountActions | null
 /** Account actions placed in the application definition's configured top bar. */
 export function ApplicationAccountMenu(): ReactElement {
   const actions = useApplicationAccountActions();
-  const organizationName = actions?.organizationName ?? "Account";
+  const organizationName = actions?.organizationName;
   const account = actions?.account;
-  const avatarInitial = (account?.displayName ?? account?.email ?? organizationName)
-    .slice(0, 1)
-    .toUpperCase();
+  const avatarSource = account?.displayName ?? account?.email ?? organizationName;
+  const avatarInitial = avatarSource?.slice(0, 1).toUpperCase();
   const releaseAdoption = actions?.releaseAdoption;
 
   return (
@@ -96,7 +95,7 @@ export function ApplicationAccountMenu(): ReactElement {
 /** The shell chooses this block's placement; the route supplies only current account data. */
 export function ApplicationAccountActionsBlock(): ReactElement {
   const actions = useApplicationAccountActions();
-  const organizationName = actions?.organizationName ?? "Organisation";
+  const organizationName = actions?.organizationName;
 
   return (
     <nav
@@ -104,9 +103,11 @@ export function ApplicationAccountActionsBlock(): ReactElement {
       data-vortex-account-actions=""
       className="flex min-w-0 items-center gap-3"
     >
-      <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">
-        {organizationName}
-      </span>
+      {organizationName === undefined ? null : (
+        <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">
+          {organizationName}
+        </span>
+      )}
       <ApplicationAccountMenu />
     </nav>
   );
