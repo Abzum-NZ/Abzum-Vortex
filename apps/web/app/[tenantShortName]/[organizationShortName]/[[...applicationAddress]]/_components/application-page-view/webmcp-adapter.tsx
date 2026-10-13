@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { describeFailure } from "@vortex/platform/schema";
-import { Button } from "@vortex/ui/components/button";
+import type { ApplicationWebMcpRuntime } from "@vortex/ui";
 import type { PageWebMcpTool } from "../../../../../_lib/application-page";
 
 type RegisteredTool = Readonly<{
@@ -23,6 +23,7 @@ type Props = Readonly<{
   contextKey: string;
   tools: readonly PageWebMcpTool[];
   onInvoke: (tool: PageWebMcpTool, input: unknown) => Promise<unknown>;
+  onStatusChange: (runtime: ApplicationWebMcpRuntime | undefined) => void;
 }>;
 
 const sessionDisabledKey = "vortex:webmcp:disabled";
@@ -46,21 +47,37 @@ const matchesToolInputKeys = (tool: PageWebMcpTool, candidate: unknown): boolean
   );
 };
 
-export function WebMcpAdapter({ contextKey, tools, onInvoke }: Props) {
+export function WebMcpAdapter({ contextKey, tools, onInvoke, onStatusChange }: Props) {
   const [modelContext, setModelContext] = useState<ModelContext>();
   const [disabled, setDisabled] = useState(false);
-  const [status, setStatus] = useState<"checking" | "registering" | "active" | "off" | "error">(
-    "checking",
-  );
+  const [status, setStatus] = useState<"checking" | ApplicationWebMcpRuntime["status"]>("checking");
   const [retry, setRetry] = useState(0);
+
+  const turnOff = useCallback((): void => {
+    try {
+      window.sessionStorage.setItem(sessionDisabledKey, "1");
+    } catch (error) {
+      console.error(`[webmcp] session preference could not be saved: ${describeFailure(error)}`);
+    }
+    setDisabled(true);
+  }, []);
+
+  const turnOn = useCallback((): void => {
+    try {
+      window.sessionStorage.removeItem(sessionDisabledKey);
+    } catch (error) {
+      console.error(`[webmcp] session preference could not be cleared: ${describeFailure(error)}`);
+    }
+    setDisabled(false);
+    setRetry((current) => current + 1);
+  }, []);
+
+  const retryRegistration = useCallback((): void => setRetry((current) => current + 1), []);
 
   useEffect(() => {
     const context = modelContextForDocument();
     setModelContext(context);
-    if (context === undefined) {
-      setStatus("checking");
-      return;
-    }
+    if (context === undefined) return;
     try {
       setDisabled(window.sessionStorage.getItem(sessionDisabledKey) === "1");
     } catch (error) {
@@ -83,24 +100,27 @@ export function WebMcpAdapter({ contextKey, tools, onInvoke }: Props) {
     const controller = new AbortController();
     setStatus("registering");
     const registrations = tools.map((tool) =>
-      modelContext.registerTool(
-        {
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-          execute: async (input) => {
-            if (controller.signal.aborted || disabled || !matchesToolInputKeys(tool, input))
-              return { outcome: "refused" };
-            try {
-              return await onInvoke(tool, input);
-            } catch (error) {
-              console.error(`[webmcp] tool invocation failed: ${describeFailure(error)}`);
-              return { outcome: "unavailable" };
-            }
+      Promise.resolve().then(() => {
+        if (controller.signal.aborted) return;
+        return modelContext.registerTool(
+          {
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+            execute: async (input) => {
+              if (controller.signal.aborted || disabled || !matchesToolInputKeys(tool, input))
+                return { outcome: "refused" };
+              try {
+                return await onInvoke(tool, input);
+              } catch (error) {
+                console.error(`[webmcp] tool invocation failed: ${describeFailure(error)}`);
+                return { outcome: "unavailable" };
+              }
+            },
           },
-        },
-        { signal: controller.signal },
-      ),
+          { signal: controller.signal },
+        );
+      }),
     );
     void Promise.all(registrations)
       .then(() => {
@@ -115,60 +135,13 @@ export function WebMcpAdapter({ contextKey, tools, onInvoke }: Props) {
     return () => controller.abort();
   }, [contextKey, disabled, modelContext, onInvoke, retry, toolSignature, tools.length]);
 
-  if (modelContext === undefined || tools.length === 0 || status === "checking") return null;
-
-  const turnOff = (): void => {
-    try {
-      window.sessionStorage.setItem(sessionDisabledKey, "1");
-    } catch (error) {
-      console.error(`[webmcp] session preference could not be saved: ${describeFailure(error)}`);
+  useEffect(() => {
+    if (modelContext === undefined || tools.length === 0 || status === "checking") {
+      onStatusChange(undefined);
+      return;
     }
-    setDisabled(true);
-  };
-  const turnOn = (): void => {
-    try {
-      window.sessionStorage.removeItem(sessionDisabledKey);
-    } catch (error) {
-      console.error(`[webmcp] session preference could not be cleared: ${describeFailure(error)}`);
-    }
-    setDisabled(false);
-    setRetry((current) => current + 1);
-  };
+    onStatusChange({ status, turnOff, turnOn, retry: retryRegistration });
+  }, [modelContext, onStatusChange, retryRegistration, status, tools.length, turnOff, turnOn]);
 
-  return (
-    <div
-      className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
-      role="status"
-      aria-live="polite"
-      data-vortex-webmcp={status}
-    >
-      <span>
-        {status === "active"
-          ? "Browser agent tools are active on this page."
-          : status === "off"
-            ? "Browser agent tools are off for this session."
-            : status === "registering"
-              ? "Enabling browser agent tools…"
-              : "Browser agent tools could not be enabled."}
-      </span>
-      {disabled ? (
-        <Button type="button" variant="outline" size="sm" onClick={turnOn}>
-          Turn on
-        </Button>
-      ) : status === "error" ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setRetry((current) => current + 1)}
-        >
-          Retry
-        </Button>
-      ) : (
-        <Button type="button" variant="outline" size="sm" onClick={turnOff}>
-          Turn off for this session
-        </Button>
-      )}
-    </div>
-  );
+  return null;
 }

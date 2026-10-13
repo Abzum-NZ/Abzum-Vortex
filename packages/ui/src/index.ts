@@ -311,6 +311,8 @@ export {
   ApplicationAccountActionsProvider,
   type ApplicationAccount,
   type ApplicationAccountActions,
+  type ApplicationShellRuntime,
+  type ApplicationWebMcpRuntime,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   createNavigationComponentRegistry,
 } from "./navigation";

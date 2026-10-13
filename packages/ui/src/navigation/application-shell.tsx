@@ -18,9 +18,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
+import { Button } from "../components/button";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { Icon } from "../icons/icon";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
+
+export type ApplicationWebMcpRuntime = Readonly<{
+  status: "registering" | "active" | "off" | "error";
+  turnOff: () => void;
+  turnOn: () => void;
+  retry: () => void;
+}>;
 
 export type ApplicationShellRuntime = Readonly<{
   applicationName: string;
@@ -29,6 +37,8 @@ export type ApplicationShellRuntime = Readonly<{
   pageName: string;
   applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
   applications: readonly Readonly<{ key: string; name: string; href: string }>[];
+  /** Page agent-tool state supplied through Puck metadata to the definition-selected shell. */
+  webMcp?: ApplicationWebMcpRuntime;
 }>;
 
 const shellFrameCss = `
@@ -62,6 +72,40 @@ function SwitcherButton({
       <span className="truncate">{label}</span>
       <Icon name="chevron-down" aria-hidden="true" className="size-3.5 text-muted-foreground" />
     </span>
+  );
+}
+
+function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
+  const label =
+    runtime.status === "active"
+      ? "Browser agent tools are active on this page."
+      : runtime.status === "off"
+        ? "Browser agent tools are off for this session."
+        : runtime.status === "registering"
+          ? "Enabling browser agent tools..."
+          : "Browser agent tools could not be enabled.";
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 text-xs"
+      role="status"
+      aria-live="polite"
+      data-vortex-webmcp={runtime.status}
+    >
+      <span>{label}</span>
+      {runtime.status === "off" ? (
+        <Button type="button" variant="outline" size="sm" onClick={runtime.turnOn}>
+          Turn on
+        </Button>
+      ) : runtime.status === "error" ? (
+        <Button type="button" variant="outline" size="sm" onClick={runtime.retry}>
+          Retry
+        </Button>
+      ) : (
+        <Button type="button" variant="outline" size="sm" onClick={runtime.turnOff}>
+          Turn off for this session
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -197,6 +241,7 @@ export function ApplicationShellRoot({
         style={contentStyle}
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
+        {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}
         {children}
       </div>
     );
@@ -226,6 +271,7 @@ export function ApplicationShellRoot({
             {presentation.topBar.applicationSwitcher ? (
               <ApplicationSwitcher shellName={shell.name} runtime={runtime} />
             ) : null}
+            {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}
             {presentation.topBar.accountMenu ? <ApplicationAccountMenu /> : null}
           </div>
         </header>

@@ -22,6 +22,7 @@ import {
   type FormFlowFeedback,
   type ProjectedPageCapability,
   type PlatformThemeTokens,
+  type ApplicationWebMcpRuntime,
 } from "@vortex/ui";
 import { describeFailure, type ReferenceChoiceSelectionEvidence } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
@@ -110,6 +111,11 @@ export function ApplicationPageViewContent({
     if (notice?.tone === "info") toast.success(notice.text);
   }, [notice]);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
+  const [webMcpShellState, setWebMcpShellState] = useState<ApplicationWebMcpRuntime>();
+  const reportWebMcpShellState = useCallback(
+    (runtime: ApplicationWebMcpRuntime | undefined) => setWebMcpShellState(runtime),
+    [],
+  );
   const [busy, setBusy] = useState(false);
   const currentBusyRef = useRef(busy);
   currentBusyRef.current = busy;
@@ -479,6 +485,7 @@ export function ApplicationPageViewContent({
       name: candidate.name,
       href: `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
     })),
+    ...(webMcpShellState === undefined ? {} : { webMcp: webMcpShellState }),
   };
 
   return (
@@ -489,6 +496,7 @@ export function ApplicationPageViewContent({
             contextKey={webMcpContextKey}
             tools={model.webMcpTools}
             onInvoke={invokeWebMcpTool}
+            onStatusChange={reportWebMcpShellState}
           />
           <PagePuckRenderer
             overlay={<Toaster position="bottom-right" />}

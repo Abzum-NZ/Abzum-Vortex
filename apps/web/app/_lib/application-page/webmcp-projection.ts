@@ -1,6 +1,6 @@
 import type { ApplicationToolBundle } from "@vortex/platform/schema";
 import type { InstalledRuntimeContext } from "@web/platform-server";
-import { collectPlacements, projectedUseAvailability } from "./placement-helpers";
+import { projectedUseAvailability } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
 
 type ApplicationFlowBinding =
@@ -48,6 +48,42 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
+const visiblePlacementIds = (page: Readonly<Record<string, unknown>>): ReadonlySet<string> => {
+  const breakpoints = ["desktop", "tablet", "phone"] as const;
+  type Visibility = Record<(typeof breakpoints)[number], boolean>;
+  const visible = new Set<string>();
+  const visit = (slot: unknown, ancestors: Visibility): void => {
+    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    for (const [placementId, candidate] of Object.entries(slot.placements)) {
+      if (!isRecord(candidate)) continue;
+      const responsive = candidate.responsive;
+      if (!isRecord(responsive)) continue;
+      const effective: Visibility = {
+        desktop:
+          ancestors.desktop && isRecord(responsive.desktop) && responsive.desktop.visible === true,
+        tablet:
+          ancestors.tablet && isRecord(responsive.tablet) && responsive.tablet.visible === true,
+        phone: ancestors.phone && isRecord(responsive.phone) && responsive.phone.visible === true,
+      };
+      if (
+        projectedUseAvailability(candidate) === "available" &&
+        breakpoints.some((breakpoint) => effective[breakpoint])
+      )
+        visible.add(placementId.toLowerCase());
+      if (isRecord(candidate.slots))
+        for (const child of Object.values(candidate.slots)) visit(child, effective);
+    }
+  };
+  const composition = page.composition;
+  const allVisible: Visibility = { desktop: true, tablet: true, phone: true };
+  if (isRecord(composition)) {
+    if ("main" in composition) visit(composition.main, allVisible);
+    else if (isRecord(composition.stepContent))
+      for (const content of Object.values(composition.stepContent)) visit(content, allVisible);
+  }
+  return visible;
+};
+
 const activeStepPage = (
   page: Readonly<Record<string, unknown>>,
   activeStepId: string | undefined,
@@ -62,16 +98,6 @@ const activeStepPage = (
   return isRecord(step)
     ? { ...page, composition: { main: step } }
     : { ...page, composition: { main: {} } };
-};
-
-const isUsablePlacement = (placement: Record<string, unknown>): boolean => {
-  if (projectedUseAvailability(placement) !== "available") return false;
-  const responsive = placement.responsive;
-  if (!isRecord(responsive)) return false;
-  return ["desktop", "tablet", "phone"].every((breakpoint) => {
-    const layout = responsive[breakpoint];
-    return isRecord(layout) && layout.visible === true;
-  });
 };
 
 const propertyForInput = (
@@ -106,7 +132,8 @@ const propertyForInput = (
       return { type: "integer" };
     case "decimal_number":
     case "money":
-      return { type: "number" };
+      // Flow decimal values use canonical decimal text to avoid JSON floating-point loss.
+      return { type: "string" };
     case "yes_no":
       return { type: "boolean" };
     case "date":
@@ -158,11 +185,7 @@ const inputContract = (
 /** Projects only current-page Flow tools that resolve to one usable control and its exact input map. */
 export const projectPageWebMcpTools = (input: ProjectionInput): readonly PageWebMcpTool[] => {
   const page = activeStepPage(input.page, input.activeStepId);
-  const usablePlacements = new Map(
-    collectPlacements(page)
-      .filter(({ placement }) => isUsablePlacement(placement))
-      .map(({ placementId }) => [placementId.toLowerCase(), placementId]),
-  );
+  const usablePlacements = visiblePlacementIds(page);
   const projectedBindingIds = new Map<string, PlacementFlowBinding>();
   for (const [placementId, entries] of Object.entries(input.bindings)) {
     if (!usablePlacements.has(placementId.toLowerCase())) continue;
@@ -202,10 +225,12 @@ export const projectPageWebMcpTools = (input: ProjectionInput): readonly PageWeb
     const { binding, pageBinding } = matches[0]!;
     const inputSchema = inputContract(tool, binding, pageBinding);
     if (inputSchema === undefined) continue;
+    const name = duplicateApplicationKey
+      ? `${input.applicationKey}.${ownerSegment}.${tool.name.slice(input.applicationKey.length + 1)}`
+      : tool.name;
+    if (name.length > 128) continue;
     tools.push({
-      name: duplicateApplicationKey
-        ? `${input.applicationKey}.${ownerSegment}.${tool.name.slice(input.applicationKey.length + 1)}`
-        : tool.name,
+      name,
       description: tool.description ?? `${input.applicationKey} ${tool.operation.key} flow`,
       inputSchema,
       binding: {
