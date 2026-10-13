@@ -1,7 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { findRepositoryRoot } from "../development-setup/state";
-import { requireLocalDevelopmentEnvironment } from "../development-setup/guards";
+import { isLoopbackHostname } from "@vortex/platform/schema";
+import {
+  isLocalSupabaseApiUrl,
+  requireLocalDevelopmentEnvironment,
+  supabaseWorkdirArguments,
+} from "../development-setup/guards";
 import { ensureLocalDemoOwner, validateDemoOwnerConfiguration } from "./local-demo-owner";
 import { loadLocalWebEnvironment } from "./local-environment";
 
@@ -48,11 +53,13 @@ const validateDemoEnvironment = (): void => {
     site.hash.length > 0
   )
     throw new Error("VORTEX_SITE_URL must use the canonical local host, 127.0.0.1.");
-  if (supabase.href !== "http://127.0.0.1:54321/")
-    throw new Error("VORTEX_SUPABASE_URL must be http://127.0.0.1:54321.");
+  if (!isLocalSupabaseApiUrl(supabase))
+    throw new Error(
+      "VORTEX_SUPABASE_URL must be a loopback HTTP origin (the main stack or a database lane).",
+    );
   const database = new URL(process.env.VORTEX_RUNTIME_DATABASE_URL!);
-  if (database.hostname !== "127.0.0.1" || database.port !== "54322")
-    throw new Error("VORTEX_RUNTIME_DATABASE_URL must use the local database on 127.0.0.1:54322.");
+  if (!isLoopbackHostname(database.hostname) || database.port.length === 0)
+    throw new Error("VORTEX_RUNTIME_DATABASE_URL must use a local database on loopback.");
   if (process.env.VERCEL !== undefined || process.env.CI === "true")
     throw new Error("Demo setup runs only on a local developer machine.");
   if (process.env.NODE_ENV === "production")
@@ -64,24 +71,37 @@ const main = async (): Promise<void> => {
   validateDemoEnvironment();
   const root = findRepositoryRoot();
   const supabaseCli = join(root, "node_modules", "supabase", "dist", "supabase.js");
-  const status = spawnSync(process.execPath, [supabaseCli, "status", "--output", "json"], {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  });
+  const workdir = supabaseWorkdirArguments();
+  const status = spawnSync(
+    process.execPath,
+    [supabaseCli, "status", "--output", "json", ...workdir],
+    { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+  );
   if (status.status !== 0 || status.error !== undefined)
     throw new Error("The local Supabase stack is not running (pnpm db:start).");
+  const configured = new URL(process.env.VORTEX_SUPABASE_URL!).origin;
   try {
     const parsed = JSON.parse(status.stdout) as Record<string, unknown>;
-    if (parsed.API_URL !== "http://127.0.0.1:54321")
-      throw new Error("The local Supabase API is not at http://127.0.0.1:54321.");
+    if (typeof parsed.API_URL !== "string" || new URL(parsed.API_URL).origin !== configured)
+      throw new Error(`The local Supabase API is not at ${configured}.`);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("The local Supabase API")) throw error;
     throw new Error("The local Supabase stack status could not be read.");
   }
 
-  log("resetting the local database");
-  runPnpm(["db:reset"]);
+  if (workdir.length === 0) {
+    log("resetting the local database");
+    runPnpm(["db:reset"]);
+  } else {
+    log(`resetting the database lane at ${workdir[1]}`);
+    const reset = spawnSync(process.execPath, [supabaseCli, "db", "reset", ...workdir], {
+      cwd: root,
+      stdio: "inherit",
+    });
+    if (reset.error !== undefined) throw reset.error;
+    if (reset.status !== 0)
+      throw new Error(`supabase db reset failed (${reset.status ?? "terminated"}).`);
+  }
   const identityId = await ensureLocalDemoOwner();
   runPnpm([
     "--filter",

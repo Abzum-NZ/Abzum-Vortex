@@ -19,7 +19,25 @@ import { findRepositoryRoot } from "./state";
 
 export const localRuntimeDatabaseUrl =
   "postgresql://vortex_runtime:vortex-runtime-local-only@127.0.0.1:54322/postgres";
-const localDatabasePort = "54322";
+
+/**
+ * The Supabase CLI arguments that select the local stack. The main stack is the repository's own
+ * `supabase` directory; a worker's database lane is selected with `VORTEX_SUPABASE_WORKDIR` (see
+ * `tooling/supabase/lane.mjs`), and every CLI call then targets that lane.
+ */
+export const supabaseWorkdirArguments = (): readonly string[] => {
+  const workdir = process.env.VORTEX_SUPABASE_WORKDIR;
+  return workdir === undefined || workdir.length === 0 ? [] : ["--workdir", workdir];
+};
+
+/** Loopback HTTP with an explicit port: the main stack's API or a database lane's. */
+export const isLocalSupabaseApiUrl = (url: URL): boolean =>
+  url.protocol === "http:" &&
+  isLoopbackHostname(url.hostname) &&
+  url.port.length > 0 &&
+  url.pathname === "/" &&
+  url.search.length === 0 &&
+  url.hash.length === 0;
 
 export class DevelopmentSetupRefusal extends Error {
   constructor(message: string) {
@@ -144,13 +162,9 @@ export const requireLocalDevelopmentEnvironment = (
   } catch {
     throw new DevelopmentSetupRefusal("VORTEX_RUNTIME_DATABASE_URL is not a valid URL.");
   }
-  if (
-    url.protocol !== "postgresql:" ||
-    !isLoopbackHostname(url.hostname) ||
-    url.port !== localDatabasePort
-  )
+  if (url.protocol !== "postgresql:" || !isLoopbackHostname(url.hostname) || url.port.length === 0)
     throw new DevelopmentSetupRefusal(
-      `The database must be the Supabase CLI database on loopback port ${localDatabasePort}.`,
+      "The database must be a Supabase CLI database on loopback with an explicit port.",
     );
 
   const authority = identityAuthorityIdSchema.safeParse(environment.VORTEX_IDENTITY_AUTHORITY_ID);
@@ -173,9 +187,9 @@ const readLocalSupabaseStatus = (): LocalSupabaseStatus => {
     } catch {
       throw new DevelopmentSetupRefusal("VORTEX_SUPABASE_URL is not a valid URL.");
     }
-    if (url.protocol !== "http:" || !isLoopbackHostname(url.hostname) || url.port !== "54321")
+    if (!isLocalSupabaseApiUrl(url))
       throw new DevelopmentSetupRefusal(
-        "The configured Supabase API must use loopback port 54321 over HTTP.",
+        "The configured Supabase API must be a loopback HTTP origin with an explicit port.",
       );
     return { API_URL: configuredUrl, SECRET_KEY: configuredSecret };
   }
@@ -187,7 +201,10 @@ const readLocalSupabaseStatus = (): LocalSupabaseStatus => {
     ".bin",
     process.platform === "win32" ? "supabase.cmd" : "supabase",
   );
-  const result = spawnSync(`"${binary}" status --output json`, {
+  const workdir = supabaseWorkdirArguments()
+    .map((argument) => ` "${argument}"`)
+    .join("");
+  const result = spawnSync(`"${binary}" status --output json${workdir}`, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     cwd: root,

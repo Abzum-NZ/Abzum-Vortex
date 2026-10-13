@@ -80,15 +80,11 @@ const generateKey = () => {
  * falls back to the worktree-local file.
  */
 const resolveSharedKeyPath = () => {
-  const result = spawnSync(
-    "git",
-    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-    {
-      cwd: workspaceRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    },
-  );
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
   if (result.status !== 0 || typeof result.stdout !== "string") return undefined;
   const commonDirectory = result.stdout.trim();
   // Only a non-bare main checkout keeps its common directory as `<checkout>/.git`; any other
@@ -126,9 +122,10 @@ const ensureSharedKeySet = async (canonicalPath, candidate) => {
  * Prepares the Local Supabase ES256 signing key so it is generated once and reused across
  * worktrees and database resets. The shared copy is resolved from the main checkout and copied into
  * this worktree's `supabase/.temp` file that `supabase/config.toml` reads, so a reset in any
- * worktree keeps the same key id. The key is never committed.
+ * worktree keeps the same key id. A local database lane passes its own `supabase/.temp` key path
+ * so it starts Auth with the same key. The key is never committed.
  */
-export const ensureLocalSigningKey = async () => {
+export const ensureLocalSigningKey = async (laneKeyPath = undefined) => {
   const sharedKeyPath = resolveSharedKeyPath();
   const localKeySet = await readValidKeySet(localKeyPath);
   const sharedKeySet =
@@ -137,14 +134,18 @@ export const ensureLocalSigningKey = async () => {
   let keySet = sharedKeySet ?? localKeySet;
   if (keySet === undefined) keySet = generateKey();
 
-  if (sharedKeyPath !== undefined)
-    keySet = await ensureSharedKeySet(sharedKeyPath, keySet);
+  if (sharedKeyPath !== undefined) keySet = await ensureSharedKeySet(sharedKeyPath, keySet);
 
   if (localKeySet !== keySet) {
     await mkdir(path.dirname(localKeyPath), { recursive: true });
     await writeFile(localKeyPath, keySet, { encoding: "utf8", mode: 0o600 });
   }
   validateKeySet(await readFile(localKeyPath, "utf8"));
+
+  if (laneKeyPath === undefined || (await readValidKeySet(laneKeyPath)) === keySet) return;
+  await mkdir(path.dirname(laneKeyPath), { recursive: true });
+  await writeFile(laneKeyPath, keySet, { encoding: "utf8", mode: 0o600 });
+  validateKeySet(await readFile(laneKeyPath, "utf8"));
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

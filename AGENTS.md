@@ -32,6 +32,28 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
 `pnpm verify` runs format check, lint, typecheck and build.
 `pnpm guard` blocks new architecture violations and reports the remaining checks as warnings.
 
+## Local database lanes
+
+The main Local Supabase stack (`supabase/config.toml`, ports 543xx) is the owner's demo and the
+lead's walks: workers never reset or stop it. Workers use lanes db2 and db3, lighter stacks
+(no Studio, logs or edge runtime) under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`) with
+every port shifted by 1000 per lane (db2 API 55321, database 55322; db3 56321, 56322). Each lane is
+guarded by `.claude/orchestrator/db<n>.lock`: hold the lock before using a lane.
+
+```
+node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
+node tooling/supabase/lane.mjs start <n>    # start the lane (stop <n> stops only that lane)
+node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.development.local
+node tooling/supabase/lane.mjs reset <n> .  # mirror this worktree's migrations and seed, then reset
+VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup
+```
+
+`env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
+`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY` and `VORTEX_SUPABASE_WORKDIR`; put them
+in the worktree's ignored `apps/web/.env.development.local`, never in a tracked file or a log. With
+`VORTEX_SUPABASE_WORKDIR` set, the demo and development setup scripts pass `--workdir` to every
+Supabase CLI call. `status <n>` shows the lane's URLs and keys.
+
 ## Rules
 
 The [target architecture](docs/build-plan/target-architecture.md) is binding: read it before changing code. In short:
