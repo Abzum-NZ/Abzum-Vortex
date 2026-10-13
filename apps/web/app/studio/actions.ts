@@ -118,11 +118,11 @@ export async function createStudioApplication(organizationId: string, candidate:
   const source = applicationSourceDocumentSchema.safeParse(candidate);
   if (!source.success)
     return refuse("create-application", "STUDIO_CREATE_SOURCE_SCHEMA_INVALID",
-      { kind: "refused" } as const, source.error);
+      { kind: "refused", reason: "source_invalid" } as const, source.error);
   const validation = validateDefinitionSource(source.data);
   if (!validation.valid)
     return refuse("create-application", `STUDIO_CREATE_SOURCE_INVALID:${failureCodes(validation)}`,
-      { kind: "refused" } as const);
+      { kind: "refused", reason: "source_invalid" } as const);
   return createHumanApplicationDraft(organizationId, { source: source.data });
 }
 
@@ -130,14 +130,14 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
   if (!command.success)
     return refuse("save-application", "STUDIO_SAVE_COMMAND_SCHEMA_INVALID",
-      { kind: "refused" } as const, command.error);
+      { kind: "refused", reason: "source_invalid" } as const, command.error);
   if (command.data.source.kind !== "application")
     return refuse("save-application", "STUDIO_SAVE_SOURCE_NOT_APPLICATION",
-      { kind: "refused" } as const);
+      { kind: "refused", reason: "source_invalid" } as const);
   const validation = validateDefinitionSource(command.data.source);
   if (!validation.valid)
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
-      { kind: "refused" } as const);
+      { kind: "refused", reason: "source_invalid" } as const);
   return saveHumanApplicationDraft(organizationId, command.data);
 }
 
