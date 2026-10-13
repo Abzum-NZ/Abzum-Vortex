@@ -129,8 +129,22 @@ export const loadApplicationPageInternal = async (
     applicationRootId: address.application.applicationRootId,
   };
 
-  // The installed context is read once, under the person's own verified request scope.
-  const loaded = await loadInstalledContext(session, dependencies, selection);
+  // The installed context is read once, under the person's own verified request scope. The address
+  // resolution of this same request already read it for exactly this organisation and application;
+  // that context is reused unless the caller expects a different installed revision.
+  const carried = address.installedContext;
+  const reusable =
+    carried !== undefined &&
+    sameId(carried.organizationId, selection.organizationId) &&
+    sameId(carried.applicationRootId, address.application.applicationRootId) &&
+    (expectedInstallationRevision === undefined ||
+      carried.applicationReleaseRevision === expectedInstallationRevision)
+      ? carried
+      : undefined;
+  const loaded =
+    reusable === undefined
+      ? await loadInstalledContext(session, dependencies, selection)
+      : ({ kind: "available", value: reusable } as const);
   if (loaded.kind !== "available") return loaded;
   const context = loaded.value;
   if (
@@ -144,16 +158,19 @@ export const loadApplicationPageInternal = async (
 
   // The offered release is read under the viewer's own application scope. A refusal or an absent
   // target reads as "nothing to adopt"; publishing a release alone never changes this page.
-  const adoptionTarget =
+  const adoptionRead =
     selectedPlacementIds === undefined
-      ? await readApplicationReleaseAdoption(session, {
+      ? readApplicationReleaseAdoption(session, {
           organizationId: context.organizationId,
           applicationRootId: context.applicationRootId,
         })
       : undefined;
 
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
-  if (pageDefinition === undefined) return { kind: "unavailable" };
+  if (pageDefinition === undefined) {
+    await adoptionRead;
+    return { kind: "unavailable" };
+  }
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
   const pageService = createStoredPageCapabilityService({
@@ -164,7 +181,19 @@ export const loadApplicationPageInternal = async (
       ...(conditionSubjectId === undefined ? {} : { subjectRecordId: conditionSubjectId }),
     },
   });
-  const projectedPage = await pageService.project(session, selection);
+  // The adoption read, the page projection and the navigation projection are independent reads of
+  // the same installed context, each under its own HUMAN request; they run together and their
+  // results are still consulted in the original order.
+  const projectedPageRead = pageService.project(session, selection);
+  const navigationRead = createStoredNavigationProjectionService({
+    ...dependencies,
+    context,
+  }).project(session, selection);
+  // A failure is rethrown where its result is consulted, never left unobserved meanwhile.
+  void projectedPageRead.catch(() => undefined);
+  void navigationRead.catch(() => undefined);
+  const adoptionTarget = await adoptionRead;
+  const projectedPage = await projectedPageRead;
   if (projectedPage.kind !== "available") return projectedPage;
   // An undefined projection is the page refused for this viewer: never an empty page.
   if (projectedPage.value === undefined) return { kind: "unavailable" };
@@ -359,10 +388,7 @@ export const loadApplicationPageInternal = async (
       return key === undefined || allowedPermissions.has(key);
     });
 
-  const navigation = await createStoredNavigationProjectionService({
-    ...dependencies,
-    context,
-  }).project(session, selection);
+  const navigation = await navigationRead;
   if (navigation.kind !== "available") return navigation;
 
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });

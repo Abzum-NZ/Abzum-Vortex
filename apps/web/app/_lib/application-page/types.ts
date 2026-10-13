@@ -129,6 +129,12 @@ export type ApplicationPageLoaderAddress = Readonly<{
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
   application: PermittedApplication;
   pageKey: string;
+  /**
+   * The installed bundle context the address resolution of this same request already read under
+   * the viewer's own HUMAN scope. When present (and of the expected revision) it is used instead
+   * of reading the bundle a second time.
+   */
+  installedContext?: InstalledRuntimeContext;
 }>;
 
 export type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
