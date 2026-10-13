@@ -5438,12 +5438,12 @@
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 @media (hover: hover) {
   :scope .cn-sidebar-menu-button-aria[aria-expanded="true"]:hover {
-    background-color: var(--sidebar-accent);
-    color: var(--sidebar-accent-foreground);
+    background-color: var(--sidebar-hover, var(--sidebar-accent));
+    color: var(--sidebar-hover-foreground, var(--sidebar-accent-foreground));
   }
   :scope .cn-sidebar-menu-button-variant-default:hover {
-    background-color: var(--sidebar-accent);
-    color: var(--sidebar-accent-foreground);
+    background-color: var(--sidebar-hover, var(--sidebar-accent));
+    color: var(--sidebar-hover-foreground, var(--sidebar-accent-foreground));
   }
 }
 }
