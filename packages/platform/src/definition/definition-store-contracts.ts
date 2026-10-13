@@ -148,7 +148,6 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
       ...exactDependencyCommon,
       rootId: moduleRootIdSchema,
       releaseRevision: revisionSchema,
-      resolutionFingerprint: fingerprintSchema,
     })
     .strict(),
   z

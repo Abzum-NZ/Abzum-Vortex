@@ -84,7 +84,7 @@ begin
     with recursive module_edges as (
       select dependency.target_root_id, dependency.target_release_revision,
         dependency.dependency_reference, dependency.dependency_version,
-        dependency.dependency_content_fingerprint, dependency.evidence_fingerprint
+        dependency.dependency_content_fingerprint
       from vortex_definition.release_dependencies as dependency
       where dependency.root_id = selected_application_root_id
         and dependency.release_revision = selected_application_release_revision
@@ -92,7 +92,7 @@ begin
       union
       select dependency.target_root_id, dependency.target_release_revision,
         dependency.dependency_reference, dependency.dependency_version,
-        dependency.dependency_content_fingerprint, dependency.evidence_fingerprint
+        dependency.dependency_content_fingerprint
       from module_edges as parent
       join vortex_definition.release_dependencies as dependency
         on dependency.root_id = parent.target_root_id
@@ -110,7 +110,6 @@ begin
       or module_root.key is distinct from edge.dependency_reference
       or module_release.release_version is distinct from edge.dependency_version
       or module_release.content_fingerprint is distinct from edge.dependency_content_fingerprint
-      or module_release.resolution_fingerprint is distinct from edge.evidence_fingerprint
   ) or exists (
     with recursive module_nodes as (
       select dependency.target_root_id, dependency.target_release_revision

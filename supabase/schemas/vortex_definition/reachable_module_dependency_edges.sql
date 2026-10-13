@@ -1,20 +1,19 @@
-CREATE FUNCTION vortex_definition.reachable_module_dependency_edges(p_root_id uuid, p_release_revision bigint) RETURNS TABLE(target_root_id uuid, target_release_revision bigint, dependency_reference text, dependency_version text, dependency_content_fingerprint text, evidence_fingerprint text)
+CREATE FUNCTION vortex_definition.reachable_module_dependency_edges(p_root_id uuid, p_release_revision bigint) RETURNS TABLE(target_root_id uuid, target_release_revision bigint, dependency_reference text, dependency_version text, dependency_content_fingerprint text)
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
 declare
   pin record;
 begin
-  -- UNION collapses edges that reach one target with identical evidence, so a
-  -- root has one tuple exactly when every edge pins it at one revision with
-  -- the same evidence. The release being resolved already pins its own root,
-  -- so reaching that root again would pin it twice; this is also how a
-  -- root-level cycle is refused.
+  -- UNION collapses edges that reach one target with an identical pin, so a
+  -- root has one tuple exactly when every edge pins it at one revision. The
+  -- release being resolved already pins its own root, so reaching that root
+  -- again would pin it twice; this is also how a root-level cycle is refused.
   for pin in
     with recursive module_edges as (
       select dependency.target_root_id, dependency.target_release_revision,
         dependency.dependency_reference, dependency.dependency_version,
-        dependency.dependency_content_fingerprint, dependency.evidence_fingerprint
+        dependency.dependency_content_fingerprint
       from vortex_definition.release_dependencies as dependency
       where dependency.root_id = p_root_id
         and dependency.release_revision = p_release_revision
@@ -22,7 +21,7 @@ begin
       union
       select dependency.target_root_id, dependency.target_release_revision,
         dependency.dependency_reference, dependency.dependency_version,
-        dependency.dependency_content_fingerprint, dependency.evidence_fingerprint
+        dependency.dependency_content_fingerprint
       from module_edges as parent
       join vortex_definition.release_dependencies as dependency
         on dependency.root_id = parent.target_root_id
@@ -31,13 +30,12 @@ begin
     )
     select edge.target_root_id, edge.target_release_revision,
       edge.dependency_reference, edge.dependency_version,
-      edge.dependency_content_fingerprint, edge.evidence_fingerprint,
+      edge.dependency_content_fingerprint,
       pg_catalog.count(*) over (partition by edge.target_root_id) as root_pin_count,
       root.kind is distinct from 'module'
         or root.key is distinct from edge.dependency_reference
         or release.release_version is distinct from edge.dependency_version
         or release.content_fingerprint is distinct from edge.dependency_content_fingerprint
-        or release.resolution_fingerprint is distinct from edge.evidence_fingerprint
         as disagrees_with_target
     from module_edges as edge
     left join vortex_definition.roots as root on root.root_id = edge.target_root_id
@@ -55,7 +53,6 @@ begin
     dependency_reference := pin.dependency_reference;
     dependency_version := pin.dependency_version;
     dependency_content_fingerprint := pin.dependency_content_fingerprint;
-    evidence_fingerprint := pin.evidence_fingerprint;
     return next;
   end loop;
 end

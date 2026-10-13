@@ -194,7 +194,6 @@ begin
         and dependency.dependency_reference = source_value ->> 'definitionKey'
         and dependency.dependency_version = source_value ->> 'releaseVersion'
         and dependency.dependency_content_fingerprint = source_value ->> 'contentFingerprint'
-        and dependency.evidence_fingerprint = source_value ->> 'resolutionFingerprint'
         and module_root.organization_id = candidate_organization_id
         and module_root.kind = 'module'
         and module_root.key = source_value ->> 'definitionKey'

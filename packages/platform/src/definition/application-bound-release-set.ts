@@ -262,8 +262,7 @@ const exactFirstInstallModuleClosure = (
       !sameId(module.organizationId, releaseSet.application.organizationId) ||
       module.definitionKey !== dependency.key ||
       module.releaseVersion !== dependency.releaseVersion ||
-      module.contentFingerprint !== dependency.contentFingerprint ||
-      module.resolutionFingerprint !== dependency.resolutionFingerprint
+      module.contentFingerprint !== dependency.contentFingerprint
     )
       return false;
     for (const nested of module.dependencyManifest)
