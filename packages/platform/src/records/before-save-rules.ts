@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  describeFailure,
   ruleGraphSchema,
   type JsonValue,
   type ModuleDefinitionConsumerReadResult,
@@ -153,8 +154,10 @@ export const applyBeforeSaveRules = (input: {
         ? evaluateBeforeSaveRuleGraphs({ ...base, operation: "create" })
         : evaluateBeforeSaveRuleGraphs({ ...base, operation: "update", previousValues });
   } catch (error) {
-    if (error instanceof BeforeSaveRuleGraphEvaluationError)
+    if (error instanceof BeforeSaveRuleGraphEvaluationError) {
+      console.error(`[before-save-rules] graph evaluation unavailable: ${describeFailure(error)}`);
       return { success: false, reason: "unavailable" };
+    }
     throw error;
   }
 
