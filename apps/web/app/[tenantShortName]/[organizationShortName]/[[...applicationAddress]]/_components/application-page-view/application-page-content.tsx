@@ -4,6 +4,8 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
+  type MouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -193,6 +195,30 @@ export function ApplicationPageViewContent({
       return key === undefined ? basePath : `${basePath}/${encodeURIComponent(key)}`;
     },
     [basePath, pageKeyOf],
+  );
+  // A plain click on a menu page link is a client-side transition: the shell and its menu stay
+  // mounted and only the next page's server render is fetched, instead of reloading the document.
+  // Modified, middle and targeted clicks keep the browser's own behaviour. The next page is still
+  // composed and authorised on the server for this request, exactly as a document load is.
+  // While the next page is fetched the current one stays in place, marked busy, so the choice is
+  // acknowledged at once instead of the page appearing frozen.
+  const [pageTransitionPending, startPageTransition] = useTransition();
+  const navigateToPage = useCallback(
+    (pageId: string, event: MouseEvent<HTMLAnchorElement>) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        (event.currentTarget.target !== "" && event.currentTarget.target !== "_self")
+      )
+        return;
+      event.preventDefault();
+      startPageTransition(() => router.push(resolvePageHref(pageId)));
+    },
+    [resolvePageHref, router],
   );
   const {
     currentData,
@@ -499,7 +525,11 @@ export function ApplicationPageViewContent({
   return (
     <>
       <ApplicationAccountActionsProvider actions={accountActions}>
-        <div ref={compositionRootRef} className="contents">
+        <div
+          ref={compositionRootRef}
+          className="contents"
+          {...(pageTransitionPending ? { "aria-busy": true, "data-vortex-page-transition": "" } : {})}
+        >
           <WebMcpAdapter
             contextKey={webMcpContextKey}
             tools={model.webMcpTools}
@@ -547,6 +577,7 @@ export function ApplicationPageViewContent({
             theme={model.theme}
             projectedNavigation={model.navigation}
             resolvePageHref={resolvePageHref}
+            onNavigatePage={navigateToPage}
             currentPageId={model.pageId}
             {...(model.guidedForm === undefined
               ? {}

@@ -11,17 +11,15 @@ import {
 } from "@vortex/platform/server";
 import {
   applicationInstallAddressSchema, createApplicationInstallManifest,
-  createHumanInstalledRuntimeContextLoader,
+  createHumanInstalledPageBundleContextLoader,
   type ApplicationInstallAddress, type ApplicationInstallManifest, type InstalledRuntimeContext,
 } from "@vortex/platform/server";
 import type { RequestDatabaseTransaction } from "@vortex/platform/server";
 import { withPooledRequestLifetime } from "@vortex/platform/server";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/platform/server";
 import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";
-import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
 import { createApplicationInstallIcon } from "./application-install-icon";
 
@@ -118,10 +116,12 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Install
       lifetime.checkpoint();
       const human = await readHuman(transaction, scope, identity.session, issuedAt, lifetime.deadline);
       const installationReader = createActiveApplicationInstallationRepository(transaction);
-      const releaseReader = createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction);
-      const load = () => createHumanInstalledRuntimeContextLoader({
-        activeInstallationReader: installationReader,
-        releaseSetReader: releaseReader,
+      // The installed context comes from the same validated, immutable installed-release bundle the
+      // page itself renders from (read and parsed once per release), not from a fresh read and
+      // re-validation of the whole release set on every page view. The active installation and
+      // every access decision below are still read under this request.
+      const load = () => createHumanInstalledPageBundleContextLoader({
+        transaction,
         scope: { organizationId: resolved.read.organizationId,
           applicationRootId: resolved.application.applicationRootId },
       }).load().catch((error: unknown) => {

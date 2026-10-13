@@ -69,6 +69,11 @@ type NavigationListProps = Readonly<{
   headingId: (itemId: string) => string;
   resolvePageHref: (pageId: string) => string;
   currentPageId: string | undefined;
+  /**
+   * The page the shell is transitioning to, shown as the selected item until the transition ends
+   * so a choice is acknowledged at once. `aria-current` stays on the page actually shown.
+   */
+  pendingPageId: string | undefined;
   onNavigate: ((pageId: string, event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
 }>;
 
@@ -89,6 +94,7 @@ function NavigationList({
   headingId,
   resolvePageHref,
   currentPageId,
+  pendingPageId,
   onNavigate,
 }: NavigationListProps): ReactElement {
   const sub = depth > 1;
@@ -126,6 +132,7 @@ function NavigationList({
                 headingId={headingId}
                 resolvePageHref={resolvePageHref}
                 currentPageId={currentPageId}
+                pendingPageId={pendingPageId}
                 onNavigate={onNavigate}
               />
             </Item>
@@ -155,6 +162,7 @@ function NavigationList({
           );
         }
         const current = currentPageId !== undefined && samePage(item.pageId, currentPageId);
+        const pending = pendingPageId !== undefined && samePage(item.pageId, pendingPageId);
         return (
           <Item
             key={item.id}
@@ -166,13 +174,14 @@ function NavigationList({
                   href={resolvePageHref(item.pageId)}
                   aria-label={item.label}
                 {...(current ? { "aria-current": "page" as const } : {})}
+                {...(pending ? { "data-vortex-navigation-pending": "" } : {})}
                 onClick={(event) => onNavigate?.(item.pageId, event)}
                 />,
               <>
                 <Icon name={item.icon} aria-hidden="true" />
                 <span data-vortex-navigation-label="">{item.label}</span>
               </>,
-              current,
+              pendingPageId === undefined ? current : pending,
             )}
           </Item>
         );
@@ -202,6 +211,9 @@ export function ApplicationNavigation({
   className,
 }: ApplicationNavigationProps): ReactElement {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<
+    Readonly<{ pageId: string; from: string | undefined }> | undefined
+  >(undefined);
   const baseId = useId();
   const listId = `${baseId}-list`;
   const headingId = (itemId: string): string => `${baseId}-heading-${itemId}`;
@@ -211,7 +223,14 @@ export function ApplicationNavigation({
   const activatePage = (pageId: string, event: MouseEvent<HTMLAnchorElement>): void => {
     setOpen(false);
     onNavigate?.(pageId, event);
+    // When the shell took over the transition, the chosen item is selected at once; it is
+    // dropped as soon as the shown page changes, so it never outlives that transition.
+    if (event.defaultPrevented && !(currentPageId !== undefined && samePage(pageId, currentPageId)))
+      setPending({ pageId, from: currentPageId });
   };
+  const pendingPageId = pending !== undefined && pending.from === currentPageId
+    ? pending.pageId
+    : undefined;
 
   // A forced phone breakpoint always uses the disclosure; otherwise a narrow viewport does through
   // the small-screen variant, so the same server HTML adapts before any script runs.
@@ -257,6 +276,7 @@ export function ApplicationNavigation({
                     headingId={headingId}
                     resolvePageHref={resolvePageHref}
                     currentPageId={currentPageId}
+                    pendingPageId={pendingPageId}
                     onNavigate={activatePage}
                   />
                 </SidebarGroupContent>
@@ -307,6 +327,7 @@ export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): Rea
       // Only reachable with an empty menu, which renders no page link.
       resolvePageHref={resolvePageHref ?? (() => "")}
       {...(props.currentPageId === undefined ? {} : { currentPageId: props.currentPageId })}
+      {...(props.onNavigatePage === undefined ? {} : { onNavigate: props.onNavigatePage })}
       breakpoint={props.breakpoint}
     />
   );
