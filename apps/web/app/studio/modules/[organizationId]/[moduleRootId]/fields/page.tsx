@@ -1,5 +1,7 @@
-import { loadStudioModuleFieldLabel } from "../../../../../_lib/studio-module-field-label";
-import { loadStudioModuleTextFieldSettings } from "../../../../../_lib/studio-module-text-field-settings";
+import {
+  loadStudioModuleFieldLabel,
+  loadStudioModuleTextFieldSettings,
+} from "../../../../../_lib/studio-module-field-edits";
 import { ModuleFieldsWorkspace } from "../../../../_components/module-fields-workspace";
 
 export const dynamic = "force-dynamic";

@@ -6,10 +6,11 @@ import { Label } from "@vortex/ui/components/label";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { sameId, storedModuleDefinitionDraftSchema, type DefinitionValidationResult } from "@vortex/platform/schema";
-import type { StoredModuleDefinitionDraft } from "@web/platform-server";
-import type { StudioModuleFieldChangeResult } from "../../_lib/studio-module-field-label";
-import { deriveFieldKey, offeredFieldTypes } from "../../_lib/studio-module-field-shape";
+import {
+  deriveFieldKey, offeredFieldTypes, sameId, storedModuleDefinitionDraftSchema,
+  type DefinitionValidationResult,
+} from "@vortex/platform/schema";
+import type { StoredModuleDefinitionDraft, StudioModuleFieldChangeResult } from "@web/platform-server";
 import { reopenModuleFields, saveModuleFieldChange } from "../modules/[organizationId]/[moduleRootId]/fields/actions";
 
 const typeLabel = (type: string) => type.replaceAll("_", " ");
