@@ -84,8 +84,15 @@ const main = async (): Promise<void> => {
     const parsed = JSON.parse(status.stdout) as Record<string, unknown>;
     if (typeof parsed.API_URL !== "string" || new URL(parsed.API_URL).origin !== configured)
       throw new Error(`The local Supabase API is not at ${configured}.`);
+    // The runtime connection must reach the same stack, or a lane reset would be followed by
+    // platform writes against another database (possibly the owner's main demo).
+    const runtimePort = new URL(process.env.VORTEX_RUNTIME_DATABASE_URL!).port;
+    if (typeof parsed.DB_URL !== "string" || new URL(parsed.DB_URL).port !== runtimePort)
+      throw new Error(
+        `The local Supabase API's database is not the one VORTEX_RUNTIME_DATABASE_URL uses (port ${runtimePort}).`,
+      );
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith("The local Supabase API")) throw error;
+    if (error instanceof Error && error.message.startsWith("The local Supabase")) throw error;
     throw new Error("The local Supabase stack status could not be read.");
   }
 

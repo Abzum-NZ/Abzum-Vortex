@@ -103,6 +103,9 @@ const init = async (lane) => {
   await mkdir(laneSupabaseDirectory(lane), { recursive: true });
   await writeFile(path.join(laneSupabaseDirectory(lane), "config.toml"), laneConfig(source, lane));
   log(`lane ${lane} config written to ${laneSupabaseDirectory(lane)}.`);
+  // The config names the seed and email templates, and start applies migrations, so a new lane
+  // starts from this checkout's database sources; reset later re-syncs from the worker's worktree.
+  await sync(lane, workspaceRoot);
 };
 
 /** Mirrors the worktree's database sources into the lane; the lane's config.toml is left alone. */
