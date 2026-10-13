@@ -75,7 +75,8 @@ function SwitcherButton({
   );
 }
 
-function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
+/** The visible indicator and per-session switch for browser agent tools, shared by every surface that registers them. */
+export function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
   const label =
     runtime.status === "active"
       ? "Browser agent tools are active on this page."

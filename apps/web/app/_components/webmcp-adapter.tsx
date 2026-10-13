@@ -3,13 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { describeFailure } from "@vortex/platform/schema";
 import type { ApplicationWebMcpRuntime } from "@vortex/ui";
-import type { PageWebMcpTool } from "../../../../../_lib/application-page";
+
+/** What the adapter needs to know about a tool; the surface that owns the tool keeps the rest. */
+export type WebMcpToolDescriptor = Readonly<{
+  name: string;
+  description: string;
+  inputSchema: Readonly<{ properties: Readonly<Record<string, unknown>>; required: readonly string[] }>;
+  /** A tool that only reads is announced as such; every other tool is announced as consequential. */
+  readOnly?: boolean | undefined;
+}>;
 
 type RegisteredTool = Readonly<{
   name: string;
   description: string;
   inputSchema: object;
-  annotations: Readonly<{ consequentialHint: true }>;
+  annotations: Readonly<{ consequentialHint: true } | { readOnlyHint: true }>;
   execute: (input: unknown, options?: Readonly<{ signal?: AbortSignal }>) => Promise<unknown>;
 }>;
 
@@ -20,10 +28,10 @@ type ModelContext = Readonly<{
   ) => Promise<void>;
 }>;
 
-type Props = Readonly<{
+type Props<Tool extends WebMcpToolDescriptor> = Readonly<{
   contextKey: string;
-  tools: readonly PageWebMcpTool[];
-  onInvoke: (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal) => Promise<unknown>;
+  tools: readonly Tool[];
+  onInvoke: (tool: Tool, input: unknown, signal?: AbortSignal) => Promise<unknown>;
   onStatusChange: (runtime: ApplicationWebMcpRuntime | undefined) => void;
 }>;
 
@@ -39,7 +47,7 @@ const modelContextForDocument = (): ModelContext | undefined => {
 const isInputObject = (candidate: unknown): candidate is Readonly<Record<string, unknown>> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
-const matchesToolInputKeys = (tool: PageWebMcpTool, candidate: unknown): boolean => {
+const matchesToolInputKeys = (tool: WebMcpToolDescriptor, candidate: unknown): boolean => {
   if (!isInputObject(candidate)) return false;
   const expected = new Set(Object.keys(tool.inputSchema.properties));
   return (
@@ -48,7 +56,7 @@ const matchesToolInputKeys = (tool: PageWebMcpTool, candidate: unknown): boolean
   );
 };
 
-export function WebMcpAdapter({ contextKey, tools, onInvoke, onStatusChange }: Props) {
+export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, tools, onInvoke, onStatusChange }: Props<Tool>) {
   const [modelContext, setModelContext] = useState<ModelContext>();
   const [disabled, setDisabled] = useState(false);
   const [status, setStatus] = useState<"checking" | ApplicationWebMcpRuntime["status"]>("checking");
@@ -108,7 +116,7 @@ export function WebMcpAdapter({ contextKey, tools, onInvoke, onStatusChange }: P
             name: tool.name,
             description: tool.description,
             inputSchema: tool.inputSchema,
-            annotations: { consequentialHint: true },
+            annotations: tool.readOnly === true ? { readOnlyHint: true } : { consequentialHint: true },
             execute: async (input, options) => {
               const signals = [
                 controller.signal,
