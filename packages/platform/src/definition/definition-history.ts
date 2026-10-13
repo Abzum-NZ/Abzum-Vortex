@@ -42,7 +42,7 @@ import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -54,6 +54,7 @@ export const definitionHistoryErrorCodes = [
   "DEFINITION_RELEASE_NOT_FOUND",
   "DEFINITION_DRAFT_STALE_OR_MISSING",
   "DEFINITION_CONTEXT_REFUSED",
+  "DEFINITION_STORED_DATA_INVALID",
   "DEFINITION_RELEASE_INTEGRITY_FAILED",
   "DEFINITION_HISTORY_FAILED",
   "DEFINITION_RESTORE_FAILED",
@@ -530,7 +531,7 @@ const mapRepositoryFailure = (
     return error;
   if (isDefinitionContextFailure(error))
     return new DefinitionError("DEFINITION_CONTEXT_REFUSED", { cause: error });
-  if (databaseErrorCode(error) === "40001")
+  if (classifyDatabaseError(error) === "conflict")
     return new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING", { cause: error });
   return unexpectedDefinitionFailure(fallback, error, "definition history");
 };

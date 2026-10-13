@@ -59,7 +59,7 @@ import {
 } from "./installation-runtime-bundle-app";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -412,18 +412,18 @@ const toCoordinatorError = (
       case "APPLICATION_INSTALLATION_CHANGE_FAILED":
         return fail("APPLICATION_INSTALLATION_FAILED", error);
     }
-  switch (databaseErrorCode(error)) {
-    case "22023":
+  switch (classifyDatabaseError(error)) {
+    case "invalid":
       return fail("INVALID_APPLICATION_INSTALLATION_COMMAND", error);
-    case "42501":
+    case "refused":
       return fail("APPLICATION_INSTALLATION_REFUSED", error);
-    case "P0002":
+    case "not_found":
       return fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
-    case "40001":
-    case "23503":
-    case "23505":
-    case "23514":
-    case "55000":
+    case "conflict":
+    case "reference_missing":
+    case "duplicate":
+    case "constraint_failed":
+    case "wrong_state":
       return fail("APPLICATION_INSTALLATION_STALE", error);
     default:
       return unexpectedDefinitionFailure(

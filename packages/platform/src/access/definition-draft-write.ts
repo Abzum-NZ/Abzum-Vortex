@@ -40,7 +40,7 @@ import {
 } from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
-import { DefinitionError } from "../definition/definition-index";
+import { DefinitionError, classifyDatabaseError } from "../definition/definition-index";
 
 /** Why a draft write was refused, in terms the person can act on. */
 export type HumanApplicationDraftRefusalReason =
@@ -237,11 +237,6 @@ const logDraftWriteFailure = (
   );
 };
 
-const databaseErrorCode = (error: unknown): string | undefined => {
-  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
-  return typeof error.code === "string" ? error.code : undefined;
-};
-
 /** SAME store operations and one resolved human change transaction, with no System identity. */
 export const createHumanApplicationDraftWriter = (
   dependencies: HumanApplicationDraftWriterDependencies,
@@ -395,10 +390,10 @@ export const createHumanApplicationDraftWriter = (
               ) as publication_state
             `;
           } catch (error) {
-            const code = databaseErrorCode(error);
-            if (code === "40001") throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-            if (code === "42501") throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-            if (code === "22023") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+            const kind = classifyDatabaseError(error);
+            if (kind === "conflict") throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+            if (kind === "refused") throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+            if (kind === "invalid") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
             throw error;
           }
           if (

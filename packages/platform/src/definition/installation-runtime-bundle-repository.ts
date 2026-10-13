@@ -21,7 +21,7 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -42,16 +42,16 @@ export type InstallationRuntimeBundleErrorCode =
 
 const mapFailure = (error: unknown): DefinitionError<InstallationRuntimeBundleErrorCode> => {
   if (error instanceof DefinitionError) return error;
-  switch (databaseErrorCode(error)) {
-    case "22023":
+  switch (classifyDatabaseError(error)) {
+    case "invalid":
       return new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
-    case "42501":
+    case "refused":
       return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_AUTHORITY_REFUSED");
-    case "P0002":
+    case "not_found":
       return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_NOT_FOUND");
-    case "23505":
+    case "duplicate":
       return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_PIN_MISMATCH");
-    case "40001":
+    case "conflict":
       return new DefinitionError("INSTALLATION_RUNTIME_BUNDLE_STORAGE_CONFLICT");
     default:
       return unexpectedDefinitionFailure(

@@ -15,7 +15,7 @@ import { assertBeforeLiveDeadline, assertLivePermission, BuilderAuthorityError,
   requireBuilderAuthority, type LiveHumanContext } from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError, classifyDatabaseError } from "@web/platform-server";
 
 const pageSize = 20;
 const snapshotFields = {
@@ -69,8 +69,8 @@ type StudioApplicationHistoryAccessResult = StudioApplicationHistoryFailure |
 
 type Draft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type ExpectedSnapshot = z.infer<typeof expectedSnapshotSchema>;
-class HistoryRefused extends Error { readonly code = "42501"; }
-class HistoryConflict extends Error { readonly code = "40001"; }
+class HistoryRefused extends Error {}
+class HistoryConflict extends Error {}
 class HistoryStorageUnavailable extends Error {}
 
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
@@ -99,11 +99,11 @@ const assertLiveCompletion = async (
 
 const safeFailure = (error: unknown): StudioApplicationHistoryFailure => {
   if (error instanceof HistoryConflict ||
-    (typeof error === "object" && error !== null && "code" in error && error.code === "40001") ||
+    classifyDatabaseError(error) === "conflict" ||
     (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING"))
     return { kind: "conflict" };
   if (error instanceof HistoryRefused || error instanceof BuilderAuthorityError ||
-    (typeof error === "object" && error !== null && "code" in error && error.code === "42501") ||
+    classifyDatabaseError(error) === "refused" ||
     (error instanceof DefinitionError && ["DEFINITION_CONTEXT_REFUSED", "DEFINITION_ROOT_MISSING",
       "INVALID_DEFINITION_COMMAND"].includes(error.code))) return { kind: "refused" };
   return { kind: "temporarily_unavailable" };
