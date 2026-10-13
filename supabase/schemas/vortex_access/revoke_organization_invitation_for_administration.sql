@@ -4,7 +4,8 @@ CREATE OR REPLACE FUNCTION vortex_access.revoke_organization_invitation_for_admi
     AS $$
 declare
   scope record;
-  receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored record; claimed jsonb;
+  new_receipt_id uuid; new_accepted_at timestamptz;
   revoked record; command_fingerprint text;
   subject_ids uuid[]; subject_revisions bigint[];
 begin
@@ -20,27 +21,26 @@ begin
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'revoke_organization_invitation',
       scope.organization_id::text, p_invitation_id::text,
       p_expected_revision::text), 'UTF8'), 'sha256'), 'hex');
-  select stored.* into receipt
-  from vortex_identity.accepted_administration_receipts as stored
-  where stored.actor_id = scope.organization_account_id
-    and stored.tenant_id = scope.tenant_id
-    and stored.operation_key = 'revoke_organization_invitation'
-    and stored.duplicate_key = p_duplicate_key
-  for update;
-  if found then
-    if receipt.command_fingerprint <> command_fingerprint then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'revoke_organization_invitation', p_duplicate_key, scope.organization_id,
+    scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid);
+    if stored."fingerprint" <> command_fingerprint then
       raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
     end if;
-    if pg_catalog.cardinality(receipt.subject_ids) <> 2
-      or not scope.organization_id = any(receipt.subject_ids)
-      or not p_invitation_id = any(receipt.subject_ids) then
+    if pg_catalog.cardinality(stored."subjectIds") <> 2
+      or not scope.organization_id = any(stored."subjectIds")
+      or not p_invitation_id = any(stored."subjectIds") then
       raise exception using errcode = '42501', message = 'Invitation revocation receipt is unavailable';
     end if;
     return query select 'replayed'::text, 'revoke_organization_invitation'::text,
       scope.organization_id, p_invitation_id,
-      receipt.subject_revisions[pg_catalog.array_position(receipt.subject_ids, p_invitation_id)],
-      receipt.receipt_id, receipt.accepted_at,
-      receipt.subject_revisions[pg_catalog.array_position(receipt.subject_ids, scope.organization_id)];
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", p_invitation_id)],
+      stored."receiptId", stored."acceptedAt",
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
     return;
   end if;
   if p_expected_revision = 9007199254740991 then
@@ -64,18 +64,17 @@ begin
     subject_ids := array[p_invitation_id, scope.organization_id];
     subject_revisions := array[revoked.revision, scope.access_version];
   end if;
-  insert into vortex_identity.accepted_administration_receipts(
-    receipt_id, actor_id, tenant_id, operation_key, duplicate_key,
-    command_fingerprint, subject_ids, subject_revisions, accepted_at
-  ) values (
-    (vortex_access.validated_human_request_context() ->> 'correlationId')::uuid,
-    scope.organization_account_id, scope.tenant_id,
-    'revoke_organization_invitation', p_duplicate_key, command_fingerprint,
-    subject_ids, subject_revisions, revoked.changed_at
-  ) returning * into receipt;
+  new_receipt_id := (vortex_access.validated_human_request_context() ->> 'correlationId')::uuid;
+  new_accepted_at := revoked.changed_at;
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', new_receipt_id,
+      'acceptedAt', new_accepted_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions),
+      'fingerprint', command_fingerprint, 'clusterId', null));
   return query select 'accepted'::text, 'revoke_organization_invitation'::text,
     scope.organization_id, p_invitation_id, revoked.revision,
-    receipt.receipt_id, receipt.accepted_at, scope.access_version;
+    new_receipt_id, new_accepted_at, scope.access_version;
 end
 $$;
 

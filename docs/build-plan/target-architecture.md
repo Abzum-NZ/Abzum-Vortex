@@ -130,7 +130,7 @@ Tables are private. The application calls `security definer` functions with `set
 
 ### Other database rules
 
-- **Idempotency.** One table: `vortex_record.command_receipts(command_id, organization_id, tenant_id, command_kind, result, created_at)`: the command id is the key, and a replay returns the stored result only when the organisation, tenant and kind match. No other receipt tables.
+- **Idempotency.** One table: `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`: the command id is the key, and a replay returns the stored result only when the organisation, tenant, actor and kind match. Record, identity and access commands each use their own `command_kind`. No other receipt tables.
 - **Identifiers are data.**
   - The platform owner and the permission catalogue are rows, read by functions.
   - Functions contain no hard-coded UUIDs except the nil sentinel.

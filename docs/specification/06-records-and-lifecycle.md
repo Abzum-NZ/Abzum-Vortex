@@ -258,7 +258,7 @@ Lifecycle and ownership entry points:
 
 Receipt ledgers and helpers:
 
-- `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, the one receipt table for record saves and ownership transfers, named actions, deletes and restores (command kinds `record_save`, `named_action`, `record_delete`, `record_restore`), keyed by the client-generated command id and replaying its stored result only for the organisation, tenant, actor and command kind that stored it (any other combination is an identity conflict), with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
+- `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, the one receipt table for record saves and ownership transfers, named actions, deletes and restores (command kinds `record_save`, `named_action`, `record_delete`, `record_restore`), keyed by the client-generated command id (identity and access administration commands, including capability reservations, share the table under their own command kinds) and replaying its stored result only for the organisation, tenant, actor and command kind that stored it (any other combination is an identity conflict), with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
 - `append_base_save_activity_internal`, `append_named_action_activity_internal`, `append_record_lifecycle_activity_internal`, `append_ownership_transfer_activity_internal`.
 
 The engine keeps and builds on the private primitives `create_record_internal`,
@@ -272,8 +272,9 @@ dropped. The generated-value writer `apply_relationship_total_parent_internal`,
 which applies derived parent values after a change, is not a command writer.
 Deadline-passed values are evaluated at read time, so no writer stores or
 refreshes deadline due metadata. The
-unrelated identity-administration receipt store is not a record-write receipt
-and remains outside this command.
+identity and access administration commands keep their own command kinds in the same
+table (claimed and completed through `claim_scoped_command_receipt_internal` and
+`complete_scoped_command_receipt_internal`) and remain outside this command.
 
 ## Concurrent changes
 

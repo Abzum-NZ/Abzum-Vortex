@@ -21,7 +21,8 @@ security definer
 set search_path = ''
 as $function$
 declare
-  receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored record;
+  claimed jsonb;
   initial_organization_ids uuid[];
   current_organization_ids uuid[];
   initial_tenant_ids uuid[];
@@ -63,24 +64,25 @@ begin
     30
   ));
 
-  select stored.* into receipt
-  from vortex_identity.accepted_administration_receipts as stored
-  where stored.actor_id = p_operator_actor_id
-    and stored.cluster_id = p_cluster_id
-    and stored.operation_key = p_operation
-    and stored.duplicate_key = p_duplicate_key
-  for update;
-
-  if found then
-    if receipt.command_fingerprint <> p_command_fingerprint
-      or not receipt.subject_ids @> array[p_identity_id] then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    p_operation, p_duplicate_key, null, null, p_operator_actor_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+    );
+    if stored."fingerprint" <> p_command_fingerprint
+      or not stored."subjectIds" @> array[p_identity_id] then
       raise exception using errcode = 'V3001',
         message = 'Administration duplicate conflicts';
     end if;
     return query select 'replayed'::text, p_operation, p_identity_id,
-      receipt.subject_revisions[
-        pg_catalog.array_position(receipt.subject_ids, p_identity_id)
-      ], receipt.receipt_id, receipt.accepted_at;
+      stored."subjectRevisions"[
+        pg_catalog.array_position(stored."subjectIds", p_identity_id)
+      ], stored."receiptId", stored."acceptedAt";
     return;
   end if;
 
@@ -213,18 +215,11 @@ begin
     select 1
     from pg_catalog.unnest(current_tenant_ids) as affected(tenant_id)
     where (
-        exists (
-          select 1
-          from vortex_identity.accepted_administration_receipts as adoption
-          where adoption.tenant_id = affected.tenant_id
-            and adoption.operation_key = 'adopt_tenant'
+        vortex_record.command_receipt_subject_exists_internal(
+          'adopt_tenant', affected.tenant_id, null, p_duplicate_key
         )
-        or exists (
-          select 1
-          from vortex_identity.accepted_administration_receipts as provisioning
-          where provisioning.cluster_id is not null
-            and provisioning.operation_key = 'provision_tenant'
-            and provisioning.subject_ids @> array[affected.tenant_id]
+        or vortex_record.command_receipt_subject_exists_internal(
+          'provision_tenant', null, affected.tenant_id, p_duplicate_key
         )
       )
       and not vortex_identity.tenant_has_permanent_manager(
@@ -235,13 +230,14 @@ begin
       message = 'Permanent tenant manager is required';
   end if;
 
-  insert into vortex_identity.accepted_administration_receipts (
-    receipt_id, actor_id, cluster_id, operation_key, duplicate_key,
-    command_fingerprint, subject_ids, subject_revisions, accepted_at
-  ) values (
-    new_correlation_id, p_operator_actor_id, p_cluster_id, p_operation,
-    p_duplicate_key, p_command_fingerprint, array[p_identity_id],
-    array[resulting_revision], evaluated_at
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[p_identity_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
+      'fingerprint', p_command_fingerprint, 'clusterId', p_cluster_id
+    )
   );
 
   return query select 'accepted'::text, p_operation, p_identity_id,
