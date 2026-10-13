@@ -1122,7 +1122,7 @@
 
                                                                                                                    }
                                                                                                      },
-        "attachments_sd_case": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Attachments"}, "field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.attachments"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
+        "attachments_sd_case": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Attachments"}, "field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.attachments"}, "empty_message": {"kind": "text", "value": "No files are attached to this case yet."}, "refused_message": {"kind": "text", "value": "Attachments on this case are not available to your account."}, "error_message": {"kind": "text", "value": "Attachments on this case could not be read."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
         "button_edit_case": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.service_desk.case.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
@@ -1431,7 +1431,7 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
-        "attachments_sd_article": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Attachments"}, "field": {"kind": "field_reference", "field": "vortex.service_desk.knowledge:article.attachments"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
+        "attachments_sd_article": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Attachments"}, "field": {"kind": "field_reference", "field": "vortex.service_desk.knowledge:article.attachments"}, "empty_message": {"kind": "text", "value": "No files are attached to this article yet."}, "refused_message": {"kind": "text", "value": "Attachments on this article are not available to your account."}, "error_message": {"kind": "text", "value": "Attachments on this article could not be read."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
         "action_sd_article_publish": {
             "block": {
                 "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
