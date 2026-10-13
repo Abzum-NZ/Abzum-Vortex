@@ -17,6 +17,7 @@ import {
 } from "@vortex/platform/server";
 import { FORM_CONTAINER_BLOCK_RELEASE } from "@vortex/platform/server";
 import {
+  describeFailure,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type BlockPropertyValueContract,
@@ -66,6 +67,7 @@ import type {
   PageDataState,
   PlacementFlowBinding,
   ApplicationPageModel,
+  PageLoadOptions,
 } from "./types";
 import {
   first,
@@ -80,14 +82,14 @@ import {
   isEditFieldPlacement,
   isUnboundReferenceChoicePlacement,
 } from "./placement-helpers";
-import { isApplicationLauncherPlacement } from "./query-helpers";
+import { isApplicationLauncherPlacement, logPlacementFailure } from "./query-helpers";
 import {
   type ReferenceChoiceFirstPage,
   projectSelectedReferenceChoiceEditField,
   projectEditField,
 } from "./reference-choice";
 import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
-import { readPlacement } from "./placement-reader";
+import { isStreamablePlacement, projectPlacementBindings, readPlacement } from "./placement-reader";
 import { projectPageWebMcpTools } from "./webmcp-projection";
 import { platformPermissionSource } from "../platform-permission-source";
 
@@ -124,11 +126,13 @@ export const loadApplicationPageInternal = async (
   boardContinuation?: BoardContinuationTarget,
   expectedInstallationRevision?: number,
   tableContinuation?: TableContinuationTarget,
+  options?: PageLoadOptions,
 ): Promise<ApplicationPageInternalResult> => {
   const startedReads: Promise<unknown>[] = [];
   try {
     return await loadApplicationPageJoined(startedReads, session, address, parameters,
-      selectedPlacementIds, boardContinuation, expectedInstallationRevision, tableContinuation);
+      selectedPlacementIds, boardContinuation, expectedInstallationRevision, tableContinuation,
+      options);
   } finally {
     await Promise.allSettled(startedReads);
   }
@@ -143,6 +147,7 @@ const loadApplicationPageJoined = async (
   boardContinuation?: BoardContinuationTarget,
   expectedInstallationRevision?: number,
   tableContinuation?: TableContinuationTarget,
+  options?: PageLoadOptions,
 ): Promise<ApplicationPageInternalResult> => {
   if (boardContinuation !== undefined && tableContinuation !== undefined)
     return { kind: "unavailable" };
@@ -670,7 +675,19 @@ const loadApplicationPageJoined = async (
     adoptSubjectRead,
     markSubjectUnreadable,
   };
-  await readConcurrently(placements, (entry) => readPlacement(placementReaderInput, entry));
+  for (const entry of placements) projectPlacementBindings(placementReaderInput, entry);
+  // A page load may stream the placements that only show their own query's rows: the frame, the
+  // title and every other placement are decided and sent first, each streamed placement shows its
+  // loading state until its own read settles. A placement reread by id is always read in full.
+  const streamed =
+    options?.streamPlacementReads === true && selectedPlacementIds === undefined
+      ? placements.filter(isStreamablePlacement)
+      : [];
+  const streamedIds = new Set(streamed.map((entry) => entry.placementId));
+  await readConcurrently(
+    placements.filter((entry) => !streamedIds.has(entry.placementId)),
+    (entry) => readPlacement(placementReaderInput, entry),
+  );
 
   // A Group-owned create form needs an explicit owner from the viewer's current
   // memberships. Every Group returned here is eligible for initial Group ownership;
@@ -926,6 +943,37 @@ const loadApplicationPageJoined = async (
   if (subjectUnreadable) return { kind: "unavailable" };
   if (typeof page.accessVersion !== "number" || !Number.isSafeInteger(page.accessVersion))
     throw new Error("APPLICATION_PAGE_ACCESS_VERSION_UNAVAILABLE");
+  // Every refusal this loader can make has been made: only now do the streamed reads start, so a
+  // page that is not shown never leaves a read running. A failed read shows its placement's error
+  // state and is logged with its cause; it never fails the page or goes unobserved.
+  const streamedData: Record<string, Promise<PageDataState>> = {};
+  const streamedSlots = new Array<() => void>();
+  let streamedRunning = 0;
+  const nextStreamedSlot = (): Promise<void> =>
+    streamedRunning < 8
+      ? ((streamedRunning += 1), Promise.resolve())
+      : new Promise<void>((resolve) => streamedSlots.push(resolve));
+  const releaseStreamedSlot = (): void => {
+    const next = streamedSlots.shift();
+    if (next === undefined) streamedRunning -= 1;
+    else next();
+  };
+  for (const entry of streamed) {
+    const own: Record<string, PageDataState> = {};
+    streamedData[entry.placementId] = nextStreamedSlot()
+      .then(() => readPlacement({ ...placementReaderInput, data: own }, entry))
+      .then(() => {
+        const state = own[entry.placementId];
+        if (state === undefined) throw new Error("PLACEMENT_DATA_NOT_PRODUCED");
+        return state;
+      })
+      .catch((error: unknown): PageDataState => {
+        logPlacementFailure(address, entry.placementId, "placement_read_failed", describeFailure(error));
+        return { status: "error" };
+      })
+      .finally(releaseStreamedSlot);
+    data[entry.placementId] = { status: "loading" };
+  }
   const permittedKeys = new Set(address.application.pageKeys);
   const applicationShellId =
     "shellId" in pageDefinition.composition ? pageDefinition.composition.shellId : undefined;
@@ -971,6 +1019,7 @@ const loadApplicationPageJoined = async (
       })),
     }),
     data,
+    ...(streamed.length === 0 ? {} : { streamedData }),
     bindings,
     refreshPlacementsByBinding,
     editFormBaselines,

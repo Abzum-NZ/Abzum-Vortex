@@ -224,6 +224,7 @@ export const logPlacementFailure = (
     | "summary_query_refused"
     | "summary_dataset_limit_exceeded"
     | "summary_result_invalid"
+    | "placement_read_failed"
     | BoardPlacementFailureCause
     | "board_payload_invalid",
   detail?: string,
