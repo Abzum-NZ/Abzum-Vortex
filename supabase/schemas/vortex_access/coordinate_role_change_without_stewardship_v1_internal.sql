@@ -1346,8 +1346,8 @@ begin
           'releaseRevision', revision.source_release_revision,
           'releaseVersion', revision.source_release_version,
           'validationContractVersion', revision.source_validation_contract_version,
-          'contentFingerprint', registration.source_content_fingerprint,
-          'resolutionFingerprint', registration.source_resolution_fingerprint
+          'contentFingerprint', source_release.content_fingerprint,
+          'resolutionFingerprint', source_release.resolution_fingerprint
         ),
         'sourceCatalogueFingerprint', registration.permission_catalogue_fingerprint,
         'acceptedRegistrationRevision', revision.accepted_registration_revision,
@@ -1383,6 +1383,11 @@ begin
     and registration.registration_kind = revision.source_registration_kind
     and registration.registration_owner_id = revision.application_root_id
     and registration.revision = revision.accepted_registration_revision
+  left join vortex_definition.releases as source_release
+    on source_release.root_id = revision.application_root_id
+    and source_release.release_revision = revision.source_release_revision
+    and source_release.release_version = revision.source_release_version
+    and source_release.validation_contract_version = revision.source_validation_contract_version
   where identity.organization_id = target_organization_id
     and identity.role_id = target_role_id;
 

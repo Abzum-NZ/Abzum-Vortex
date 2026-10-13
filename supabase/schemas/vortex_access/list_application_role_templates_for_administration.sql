@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.list_application_role_templates_for_administration(p_after_application_root_id uuid, p_after_source_role_id uuid, p_page_size integer) RETURNS TABLE(organization_id uuid, templates jsonb, next_after_application_root_id uuid, next_after_source_role_id uuid, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.list_application_role_templates_for_administration(p_after_application_root_id uuid, p_after_source_role_id uuid, p_page_size integer) RETURNS TABLE(organization_id uuid, templates jsonb, next_after_application_root_id uuid, next_after_source_role_id uuid, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -51,8 +51,6 @@ begin
       and release.release_revision = registration.source_revision
       and release.release_version = registration.source_version
       and release.validation_contract_version = registration.validation_contract_version
-      and release.content_fingerprint = registration.source_content_fingerprint
-      and release.resolution_fingerprint = registration.source_resolution_fingerprint
     cross join lateral pg_catalog.jsonb_array_elements(
       release.compilation_output #> '{canonical,content,roles}'
     ) as template(value)

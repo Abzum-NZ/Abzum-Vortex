@@ -9,10 +9,15 @@ security invoker
 set search_path = ''
 as $function$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   drafts_permission_id constant uuid := '0548c061-b1a9-48e5-a04a-eb1d0dae0644';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   releases_permission_id constant uuid := 'dfdd5aba-2b85-4169-b570-92be284e7b5c';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   custom_code_permission_id constant uuid := 'd1be247f-094d-47c1-a38d-762290868c91';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   system_applications_permission_id constant uuid := 'eaade6fd-7390-44d2-a7ef-343324c7384a';
   catalogue_fingerprint constant text :=
     'sha256:1e5cceb04465d940f163ec926af7423efc9b37788551b00766d768fe9089195b';
@@ -58,8 +63,6 @@ begin
          registration.state, registration.source_definition_key,
          registration.source_version, registration.source_revision,
          registration.validation_contract_version,
-         registration.source_content_fingerprint,
-         registration.source_resolution_fingerprint,
          registration.permission_catalogue_fingerprint,
          registration.candidate_fingerprint, registration.changed_at,
          registration.changed_by, registration.change_correlation_id
@@ -67,8 +70,6 @@ begin
          history.state, history.source_definition_key,
          history.source_version, history.source_revision,
          history.validation_contract_version,
-         history.source_content_fingerprint,
-         history.source_resolution_fingerprint,
          history.permission_catalogue_fingerprint,
          history.candidate_fingerprint, history.changed_at,
          history.changed_by, history.change_correlation_id

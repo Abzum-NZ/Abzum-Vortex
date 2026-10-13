@@ -71,6 +71,7 @@ begin
           on root.root_id = registration.registration_owner_id
           and root.organization_id = registration.organization_id
           and root.kind = 'application'
+          and root.key = registration.source_definition_key
         where registration.organization_id = context_organization_id
           and registration.registration_kind = 'application'
           and registration.registration_owner_id = default_application_root_id_value
@@ -80,8 +81,8 @@ begin
             from vortex_definition.releases as release
             where release.root_id = root.root_id
               and release.release_revision = registration.source_revision
-              and release.content_fingerprint = registration.source_content_fingerprint
-              and release.resolution_fingerprint = registration.source_resolution_fingerprint
+              and release.release_version = registration.source_version
+              and release.validation_contract_version = registration.validation_contract_version
               and release.compilation_output ->> 'kind' = 'application'
           )
           and exists (

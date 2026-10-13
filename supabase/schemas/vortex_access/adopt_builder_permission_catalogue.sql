@@ -10,10 +10,15 @@ security definer
 set search_path = ''
 as $function$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   drafts_permission_id constant uuid := '0548c061-b1a9-48e5-a04a-eb1d0dae0644';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   releases_permission_id constant uuid := 'dfdd5aba-2b85-4169-b570-92be284e7b5c';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   custom_code_permission_id constant uuid := 'd1be247f-094d-47c1-a38d-762290868c91';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   system_applications_permission_id constant uuid := 'eaade6fd-7390-44d2-a7ef-343324c7384a';
   catalogue_fingerprint constant text :=
     'sha256:1e5cceb04465d940f163ec926af7423efc9b37788551b00766d768fe9089195b';
@@ -97,17 +102,9 @@ begin
   for update;
 
   insert into vortex_access.permission_registration_revisions (
-    organization_id, registration_kind, registration_owner_id, revision,
-    state, operation, source_definition_key, source_version,
-    source_revision, validation_contract_version,
-    source_content_fingerprint, source_resolution_fingerprint,
-    permission_catalogue_fingerprint, candidate_fingerprint,
-    changed_at, changed_by, change_correlation_id
+    organization_id, registration_kind, registration_owner_id, revision, state, operation, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, candidate_fingerprint, changed_at, changed_by, change_correlation_id
   ) values (
-    p_organization_id, 'platform', platform_owner_id, 6,
-    'active', 'platform_metadata_revision', null, '1.4.0',
-    null, null, null, null, catalogue_fingerprint, catalogue_fingerprint,
-    operation_at, p_changed_by, p_correlation_id
+    p_organization_id, 'platform', platform_owner_id, 6, 'active', 'platform_metadata_revision', null, '1.4.0', null, null, catalogue_fingerprint, catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
   );
 
   insert into vortex_access.permission_catalogue_entries (

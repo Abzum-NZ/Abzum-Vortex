@@ -9,7 +9,9 @@ security invoker
 set search_path = ''
 as $function$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   connection_permission_id constant uuid := 'ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d';
   catalogue_fingerprint constant text :=
     'sha256:2fe313d69f53d7ce9247aa0ae05b5cc837872f49285e577f9dc9e1f21f3c842e';
@@ -43,8 +45,6 @@ begin
          registration.state, registration.source_definition_key,
          registration.source_version, registration.source_revision,
          registration.validation_contract_version,
-         registration.source_content_fingerprint,
-         registration.source_resolution_fingerprint,
          registration.permission_catalogue_fingerprint,
          registration.candidate_fingerprint, registration.changed_at,
          registration.changed_by, registration.change_correlation_id
@@ -52,8 +52,6 @@ begin
          history.state, history.source_definition_key,
          history.source_version, history.source_revision,
          history.validation_contract_version,
-         history.source_content_fingerprint,
-         history.source_resolution_fingerprint,
          history.permission_catalogue_fingerprint,
          history.candidate_fingerprint, history.changed_at,
          history.changed_by, history.change_correlation_id

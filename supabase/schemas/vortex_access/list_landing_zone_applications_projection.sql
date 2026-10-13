@@ -65,16 +65,17 @@ begin
       on root.root_id = registration.registration_owner_id
       and root.organization_id = registration.organization_id
       and root.kind = 'application'
+      and root.key = registration.source_definition_key
     join vortex_definition.releases as release
       on release.root_id = root.root_id
       and release.release_revision = registration.source_revision
+      and release.release_version = registration.source_version
+      and release.validation_contract_version = registration.validation_contract_version
     where registration.organization_id = visible_organization_id
       and registration.registration_kind = 'application'
       and registration.state = 'active'
       and (p_record_id is null or p_record_id = root.root_id)
       and release.compilation_output ->> 'kind' = 'application'
-      and registration.source_content_fingerprint = release.content_fingerprint
-      and registration.source_resolution_fingerprint = release.resolution_fingerprint
       and exists (
         select 1
         from vortex_definition.installation_bindings as binding

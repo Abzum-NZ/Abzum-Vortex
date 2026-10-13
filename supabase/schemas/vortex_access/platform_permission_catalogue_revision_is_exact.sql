@@ -9,6 +9,7 @@ security invoker
 set search_path = ''
 as $function$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000';
   registration_exact boolean;
@@ -155,8 +156,6 @@ begin
         and registration.source_version = expected_stats.source_version
         and registration.source_revision is null
         and registration.validation_contract_version is null
-        and registration.source_content_fingerprint is null
-        and registration.source_resolution_fingerprint is null
         and registration.permission_catalogue_fingerprint =
           expected_stats.catalogue_fingerprint
         and registration.candidate_fingerprint = expected_stats.catalogue_fingerprint
@@ -185,8 +184,6 @@ begin
         and history.source_version = expected_stats.source_version
         and history.source_revision is null
         and history.validation_contract_version is null
-        and history.source_content_fingerprint is null
-        and history.source_resolution_fingerprint is null
         and history.permission_catalogue_fingerprint =
           expected_stats.catalogue_fingerprint
         and history.candidate_fingerprint = expected_stats.catalogue_fingerprint
@@ -202,8 +199,6 @@ begin
           registration.source_version,
           registration.source_revision,
           registration.validation_contract_version,
-          registration.source_content_fingerprint,
-          registration.source_resolution_fingerprint,
           registration.permission_catalogue_fingerprint,
           registration.candidate_fingerprint,
           registration.changed_at,
@@ -215,8 +210,6 @@ begin
           history.source_version,
           history.source_revision,
           history.validation_contract_version,
-          history.source_content_fingerprint,
-          history.source_resolution_fingerprint,
           history.permission_catalogue_fingerprint,
           history.candidate_fingerprint,
           history.changed_at,

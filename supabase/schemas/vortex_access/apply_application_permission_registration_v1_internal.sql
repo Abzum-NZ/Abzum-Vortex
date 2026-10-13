@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.apply_application_permission_registration_v1_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.apply_application_permission_registration_v1_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -327,18 +327,9 @@ begin
   end if;
 
   insert into vortex_access.permission_registration_revisions (
-    organization_id, registration_kind, registration_owner_id, revision, state, operation,
-    source_definition_key, source_version, source_revision, validation_contract_version,
-    source_content_fingerprint, source_resolution_fingerprint,
-    permission_catalogue_fingerprint, candidate_fingerprint,
-    changed_at, changed_by, change_correlation_id
+    organization_id, registration_kind, registration_owner_id, revision, state, operation, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, candidate_fingerprint, changed_at, changed_by, change_correlation_id
   ) values (
-    candidate_organization_id, 'application', candidate_application_root_id,
-    next_revision, 'active', p_operation, candidate_release ->> 'definitionKey', candidate_release_version,
-    candidate_release_revision, candidate_validation_version,
-    candidate_content_fingerprint, candidate_resolution_fingerprint,
-    candidate_catalogue_fingerprint, supplied_candidate_fingerprint,
-    operation_at, p_changed_by, p_correlation_id
+    candidate_organization_id, 'application', candidate_application_root_id, next_revision, 'active', p_operation, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, supplied_candidate_fingerprint, operation_at, p_changed_by, p_correlation_id
   );
 
   insert into vortex_access.permission_catalogue_entries (
@@ -375,19 +366,10 @@ begin
 
   if p_operation = 'register' then
     insert into vortex_access.permission_registrations (
-      organization_id, registration_kind, registration_owner_id, state, revision,
-      source_definition_key, source_version, source_revision, validation_contract_version,
-      source_content_fingerprint, source_resolution_fingerprint,
-      permission_catalogue_fingerprint, candidate_fingerprint,
-      changed_at, changed_by, change_correlation_id
-    ) values (
-      candidate_organization_id, 'application', candidate_application_root_id,
-      'active', next_revision, candidate_release ->> 'definitionKey', candidate_release_version,
-      candidate_release_revision,
-      candidate_validation_version, candidate_content_fingerprint,
-      candidate_resolution_fingerprint, candidate_catalogue_fingerprint,
-      supplied_candidate_fingerprint, operation_at, p_changed_by, p_correlation_id
-    );
+    organization_id, registration_kind, registration_owner_id, state, revision, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, candidate_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    candidate_organization_id, 'application', candidate_application_root_id, 'active', next_revision, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, supplied_candidate_fingerprint, operation_at, p_changed_by, p_correlation_id
+  );
   else
     update vortex_access.permission_registrations as registration
     set state = 'active', revision = next_revision,
@@ -395,8 +377,6 @@ begin
         source_version = candidate_release_version,
         source_revision = candidate_release_revision,
         validation_contract_version = candidate_validation_version,
-        source_content_fingerprint = candidate_content_fingerprint,
-        source_resolution_fingerprint = candidate_resolution_fingerprint,
         permission_catalogue_fingerprint = candidate_catalogue_fingerprint,
         candidate_fingerprint = supplied_candidate_fingerprint,
         changed_at = operation_at, changed_by = p_changed_by,
