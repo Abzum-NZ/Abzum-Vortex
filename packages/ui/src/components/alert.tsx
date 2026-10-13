@@ -2,6 +2,12 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
+/** One severity treatment: a left rule, title and surface read from the resolved theme roles. */
+const severityVariant = (textRole: string): string =>
+  `border-l-4 bg-[var(--vortex-surface)] border-l-[var(${textRole})] ` +
+  `[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(${textRole})] ` +
+  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+
 const alertVariants = cva(
   "cn-alert group/alert relative w-full",
   {
@@ -9,6 +15,11 @@ const alertVariants = cva(
       variant: {
         default: "cn-alert-variant-default",
         destructive: "cn-alert-variant-destructive",
+        info: severityVariant("--vortex-info-text"),
+        // The theme vocabulary has no separate success text role; success reads the info role.
+        success: severityVariant("--vortex-info-text"),
+        warning: severityVariant("--vortex-warning-text"),
+        critical: `cn-alert-variant-destructive ${severityVariant("--vortex-danger-text")}`,
       },
     },
     defaultVariants: {
@@ -64,4 +75,4 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export { Alert, AlertTitle, AlertDescription, AlertAction };
+export { Alert, alertVariants, AlertTitle, AlertDescription, AlertAction };
