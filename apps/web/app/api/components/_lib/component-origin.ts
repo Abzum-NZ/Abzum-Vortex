@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logRefusal } from "@vortex/platform/schema";
 import { requestMatchesConfiguredSite } from "../../../auth/_lib/session-request-state";
 import { requiredEnvironmentValue } from "../../../_lib/server-configuration";
 
@@ -39,7 +40,8 @@ export const isComponentOriginRequest = (request: Request): boolean => {
       new URL(request.url),
       configuredComponentOrigin(),
     );
-  } catch {
+  } catch (error) {
+    logRefusal("components", "origin check", "component_origin_unconfigured", error);
     return false;
   }
 };

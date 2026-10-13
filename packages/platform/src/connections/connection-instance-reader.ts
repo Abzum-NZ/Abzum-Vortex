@@ -7,7 +7,7 @@ import {
   connectionInstanceIdSchema,
   connectionInstanceStatusSchema,
   connectionTypeIdSchema,
-  describeFailure,
+  logRefusal,
   databaseRevision,
   databaseTimestamp,
   isRecord,
@@ -166,7 +166,11 @@ const connectionManagementDeclaration = organizationAccessDeclarationSchema.pars
 
 const unavailableArchiveOptions = (
   reasonCode: EligibleArchiveConnectionUnavailableCode,
-): EligibleArchiveConnectionOptionsResult => Object.freeze({ outcome: "unavailable", reasonCode });
+  cause?: unknown,
+): EligibleArchiveConnectionOptionsResult => {
+  logRefusal("connection", "eligible archive option read", reasonCode, cause);
+  return Object.freeze({ outcome: "unavailable", reasonCode });
+};
 
 const sameHumanContext = (left: HumanRequestContext, right: HumanRequestContext): boolean =>
   sameId(left.identityAuthorityId, right.identityAuthorityId) &&
@@ -199,10 +203,19 @@ const readDatabaseClock = async (
       select pg_catalog.clock_timestamp() as completed_at
     `;
     const parsed = timestampSchema.safeParse(databaseTimestamp(rows[0]?.completed_at));
-    if (rows.length !== 1 || !parsed.success) return undefined;
+    if (rows.length !== 1 || !parsed.success) {
+      logRefusal(
+        "connection",
+        "database clock read",
+        "database_clock_malformed",
+        parsed.success ? undefined : parsed.error,
+      );
+      return undefined;
+    }
     const instant = Date.parse(parsed.data);
     return Number.isFinite(instant) ? instant : undefined;
-  } catch {
+  } catch (error) {
+    logRefusal("connection", "database clock read", "database_clock_failed", error);
     return undefined;
   }
 };
@@ -350,7 +363,8 @@ const validateArchiveOptionPageQuery = (
           : connectionInstanceIdSchema.parse(value.afterConnectionInstanceId),
       pageSize: value.pageSize,
     });
-  } catch {
+  } catch (error) {
+    logRefusal("connection", "archive option page query", "page_query_malformed", error);
     return undefined;
   }
 };
@@ -496,7 +510,10 @@ const isSelectedApplication = (
 const tokenExpiryInstant = (value: string | undefined): number | null | undefined => {
   if (value === undefined) return null;
   const parsed = timestampSchema.safeParse(value);
-  if (!parsed.success) return undefined;
+  if (!parsed.success) {
+    logRefusal("connection", "token expiry", "token_expiry_malformed", parsed.error);
+    return undefined;
+  }
   const instant = Date.parse(parsed.data);
   return Number.isFinite(instant) ? instant : undefined;
 };
@@ -509,8 +526,11 @@ type ListConnectionInstancesRow = DatabaseRow & {
 
 const unavailable = (
   reasonCode: ConnectionInstanceReaderRefusalCode,
-): Readonly<{ outcome: "unavailable"; reasonCode: ConnectionInstanceReaderRefusalCode }> =>
-  Object.freeze({ outcome: "unavailable", reasonCode });
+  cause?: unknown,
+): Readonly<{ outcome: "unavailable"; reasonCode: ConnectionInstanceReaderRefusalCode }> => {
+  logRefusal("connection", "administration instance page", reasonCode, cause);
+  return Object.freeze({ outcome: "unavailable", reasonCode });
+};
 
 /** Maps a database failure to a fixed code by SQLSTATE only; the message is never read. */
 const refusalForFailure = (error: unknown): ConnectionInstanceReaderRefusalCode => {
@@ -572,7 +592,8 @@ const validatePageQuery = (
           : connectionInstanceIdSchema.parse(candidate.afterConnectionInstanceId),
       pageSize: candidate.pageSize,
     });
-  } catch {
+  } catch (error) {
+    logRefusal("connection", "administration page query", "page_query_malformed", error);
     return undefined;
   }
 };
@@ -634,8 +655,7 @@ export async function listConnectionInstancesForAdministration(
     });
   } catch (error) {
     const failure = new ConnectionInstanceReadFailure(refusalForFailure(error), error);
-    console.error(`[connection] administration instance page failed: ${describeFailure(failure)}`);
-    return unavailable(failure.reasonCode);
+    return unavailable(failure.reasonCode, failure);
   }
 }
 
@@ -672,7 +692,8 @@ export async function listEligibleArchiveConnectionsForApplication(
       uniqueDestinations.add(destination);
     }
     destinations = uniqueDestinations;
-  } catch {
+  } catch (error) {
+    logRefusal("connection", "eligible archive option read", "invalid_parameters", error);
     return unavailableArchiveOptions("invalid_parameters");
   }
   if (query === undefined) return unavailableArchiveOptions("invalid_parameters");
@@ -861,7 +882,6 @@ export async function listEligibleArchiveConnectionsForApplication(
   } catch (error) {
     const reasonCode = mapAdministrationUnavailable(refusalForFailure(error));
     const failure = new ConnectionInstanceReadFailure(reasonCode, error);
-    console.error(`[connection] eligible archive option read failed: ${describeFailure(failure)}`);
-    return unavailableArchiveOptions(reasonCode);
+    return unavailableArchiveOptions(reasonCode, failure);
   }
 }

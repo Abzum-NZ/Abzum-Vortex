@@ -2,6 +2,7 @@ import type { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
   builderKeySchema,
+  logRefusal,
   containedComponentIdSchema,
   referenceChoiceSelectionEvidenceSchema,
   revisionSchema,
@@ -42,7 +43,10 @@ const requestSchema = z
   })
   .strict();
 
-const refusedResponse = (): NextResponse => privateResponse({ kind: "refused" }, 404);
+const refusedResponse = (code: string, cause?: unknown): NextResponse => {
+  logRefusal("reference-choices", "choice page", code, cause);
+  return privateResponse({ kind: "refused", code }, 404);
+};
 
 const fromOwnSite = (request: NextRequest): boolean => {
   const origin = request.headers.get("origin");
@@ -56,22 +60,28 @@ const fromOwnSite = (request: NextRequest): boolean => {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
+    if (!fromOwnSite(request)) {
+      logRefusal("reference-choices", "choice page", "request_not_from_own_site");
+      return privateResponse({ kind: "refused", code: "request_not_from_own_site" }, 403);
+    }
     const identity = await resolveIdentitySession();
     if (identity.kind === "temporarily_unavailable")
       return privateResponse({ kind: "temporarily_unavailable" }, 503);
-    if (identity.kind !== "active") return refusedResponse();
+    if (identity.kind !== "active") return refusedResponse("identity_not_active");
 
     const read = await readBoundedRequestText(request, maximumRequestBodyLength);
-    if (read.kind === "too_large") return privateResponse({ kind: "refused" }, 413);
-    if (read.kind !== "read") return refusedResponse();
+    if (read.kind === "too_large") {
+      logRefusal("reference-choices", "choice page", "body_too_large");
+      return privateResponse({ kind: "refused", code: "body_too_large" }, 413);
+    }
+    if (read.kind !== "read") return refusedResponse("body_unreadable");
     let parsed: z.ZodSafeParseResult<z.infer<typeof requestSchema>>;
     try {
       parsed = requestSchema.safeParse(JSON.parse(read.text));
-    } catch {
-      return refusedResponse();
+    } catch (error) {
+      return refusedResponse("body_not_json", error);
     }
-    if (!parsed.success) return refusedResponse();
+    if (!parsed.success) return refusedResponse("body_invalid", parsed.error);
     const body = parsed.data;
 
     const address = await resolveApplicationAddress(
@@ -83,7 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
     if (address.kind === "temporarily_unavailable")
       return privateResponse({ kind: "temporarily_unavailable" }, 503);
-    if (address.kind !== "application_page") return refusedResponse();
+    if (address.kind !== "application_page") return refusedResponse(`address_${address.kind}`);
 
     const result = await loadReferenceChoicePage(identity.session, address, {
       placementId: body.placementId,
@@ -105,9 +115,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       case "temporarily_unavailable":
         return privateResponse({ kind: "temporarily_unavailable" }, 503);
       default:
-        return refusedResponse();
+        return refusedResponse(`choice_page_${result.kind}`);
     }
-  } catch {
+  } catch (error) {
+    logRefusal("reference-choices", "choice page", "choice_page_failed", error);
     return privateResponse({ kind: "temporarily_unavailable" }, 503);
   }
 }

@@ -460,7 +460,7 @@ for (const file of codeFiles) {
         hasReturn = true;
       if (
         ts.isCallExpression(value) &&
-        /^(?:(?:console|logger)\.|log$|captureException$)/i.test(value.expression.getText(source))
+        /^(?:(?:console|logger)\.|log$|logRefusal$|captureException$)/i.test(value.expression.getText(source))
       )
         hasLog = true;
       ts.forEachChild(value, scan);

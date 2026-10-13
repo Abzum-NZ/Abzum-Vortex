@@ -17,6 +17,7 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
   isRecord,
+  logRefusal,
   sameId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../server-composition";
@@ -24,13 +25,6 @@ import type {
   collectPlacements} from "./placement-helpers";
 import { first, pageSubjectParameter } from "./placement-helpers";
 import type { PageSubjectType, PageDataState, SearchParameters } from "./types";
-
-const logRefusal = (placementId: string, reason: string, cause?: unknown): void => {
-  console.error(
-    `[page] attachment placement refused: placement=${placementId} reason=${reason}`,
-    ...(cause === undefined ? [] : [cause]),
-  );
-};
 
 export const readAttachmentListPlacement = async (input: {
   block: unknown;
@@ -74,7 +68,7 @@ export const readAttachmentListPlacement = async (input: {
     subjectType?.state !== "resolved" ||
     pageSubjectRecordTypeId === undefined
   ) {
-    logRefusal(placementId, "placement_shape_mismatch");
+    logRefusal("page", `attachment placement ${placementId}`, "placement_shape_mismatch");
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
@@ -95,7 +89,7 @@ export const readAttachmentListPlacement = async (input: {
       : subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ?? [];
   const attachmentField = matchingFields.length === 1 ? matchingFields[0] : undefined;
   if (fieldId === undefined || attachmentField?.type !== "attachment") {
-    logRefusal(placementId, "field_setting_not_attachment_field");
+    logRefusal("page", `attachment placement ${placementId}`, "field_setting_not_attachment_field");
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
@@ -105,7 +99,8 @@ export const readAttachmentListPlacement = async (input: {
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   if (maximumFiles === undefined || !subjectId.success) {
     logRefusal(
-      placementId,
+      "page",
+      `attachment placement ${placementId}`,
       maximumFiles === undefined ? "maximum_files_missing" : "page_subject_id_invalid",
     );
     data[placementId] = { status: "refused", reason: "not_permitted" };
@@ -143,18 +138,22 @@ export const readAttachmentListPlacement = async (input: {
         readFile: async (candidateFileId): Promise<ReadOnlyAttachmentFileEvidence> => {
           const parsedFileId = fileIdSchema.safeParse(candidateFileId);
           if (!parsedFileId.success) {
-            logRefusal(placementId, "file_id_invalid");
+            logRefusal("page", `attachment placement ${placementId}`, "file_id_invalid");
             return { kind: "refused" };
           }
           try {
             const decision = await decideFileRead(transaction, parsedFileId.data);
             if (decision.outcome !== "allowed") {
-              logRefusal(placementId, `file_read_decision_${String(decision.outcome)}`);
+              logRefusal(
+                "page",
+                `attachment placement ${placementId}`,
+                `file_read_decision_${String(decision.outcome)}`,
+              );
               return { kind: "refused" };
             }
             const file = await repository.readFile(parsedFileId.data);
             if (file === null) {
-              logRefusal(placementId, "file_record_missing");
+              logRefusal("page", `attachment placement ${placementId}`, "file_record_missing");
               return { kind: "refused" };
             }
             return {
@@ -200,10 +199,10 @@ export const readAttachmentListPlacement = async (input: {
     );
     data[placementId] = { status: "error" };
   } else if (currentAttachments.kind === "unavailable") {
-    logRefusal(placementId, "request_scope_unavailable");
+    logRefusal("page", `attachment placement ${placementId}`, "request_scope_unavailable");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (currentAttachments.value.kind === "stale") {
-    logRefusal(placementId, "request_scope_stale");
+    logRefusal("page", `attachment placement ${placementId}`, "request_scope_stale");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (currentAttachments.value.subject.kind === "temporarily_unavailable") {
     console.error(
@@ -211,7 +210,7 @@ export const readAttachmentListPlacement = async (input: {
     );
     data[placementId] = { status: "error" };
   } else if (currentAttachments.value.kind === "subject") {
-    logRefusal(placementId, "subject_read_refused");
+    logRefusal("page", `attachment placement ${placementId}`, "subject_read_refused");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else {
     adoptSubjectRead(currentAttachments.value.subject);
@@ -223,7 +222,11 @@ export const readAttachmentListPlacement = async (input: {
           ? { status: "empty" }
           : projection.kind === "unavailable"
             ? { status: "error" }
-            : (logRefusal(placementId, `projection_${projection.reason}`),
+            : (logRefusal(
+                "page",
+                `attachment placement ${placementId}`,
+                `projection_${projection.reason}`,
+              ),
               { status: "refused", reason: "not_permitted" });
   }
 };
