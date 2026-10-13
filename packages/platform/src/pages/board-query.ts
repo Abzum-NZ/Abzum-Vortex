@@ -1,8 +1,21 @@
 import "server-only";
 
 import {
+  requireInstalledRuntimeContext,
+  type InstalledRuntimeContext,
+} from "../definition/app-index";
+import {
+  arrangeProtectedBoard,
+  type createProtectedQueryService,
+  type ProtectedBoardArrangementPage,
+  type ProtectedBoardArrangementResult,
+  type ProtectedQueryPageRow,
+  type ProtectedQuerySummaryAggregateResult,
+} from "../queries/index";
+import {
   boardBlockSourceIsSupported,
   boardColumnContinuationRequestSchema,
+  describeFailure,
   exactDecimalTextSchema,
   moneyValueSchema,
   readBoardPlacementContract,
@@ -14,30 +27,11 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
-} from "@vortex/platform/schema";
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@web/platform-server";
-import type { createProtectedQueryService } from "@web/platform-server";
-import {
-  arrangeProtectedBoard,
-  type ProtectedBoardArrangementPage,
-  type ProtectedBoardArrangementResult,
-  type ProtectedQueryPageRow,
-  type ProtectedQuerySummaryAggregateResult,
-} from "@web/platform-server";
-import {
-  parseBoardPayload,
-  parseDisplayData,
-  type BoardBucketPayload,
-  type BoardPage,
-  type BoardData,
-  type BoardPayload,
-  type DisplayCellValue,
-} from "@vortex/ui";
+} from "../schema";
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleField = ModuleRelease["content"]["recordTypes"][number]["fields"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
-type BoardMetric = BoardPayload["aggregates"][number];
 type BoardQueries = Pick<
   ReturnType<typeof createProtectedQueryService>,
   "boardMembers" | "boardInitialPages" | "boardSummary"
@@ -95,7 +89,7 @@ const fieldsFor = (
 const installedFieldMap = (fields: readonly ModuleField[]): ReadonlyMap<string, ModuleField> =>
   new Map(fields.map((field) => [lower(String(field.fieldId)), field]));
 
-const displayFieldValue = (field: ModuleField, value: JsonValue): DisplayCellValue | undefined => {
+const displayFieldValue = (field: ModuleField, value: JsonValue): BoardCellValue | undefined => {
   if (value === null) return { kind: "empty" };
   switch (field.type) {
     case "text":
@@ -160,7 +154,7 @@ const projectBoardRow = (
   row: ProtectedQueryPageRow,
   contract: BoardPlacementContract,
   fieldsById: ReadonlyMap<string, ModuleField>,
-): BoardPage["rows"][number] => {
+): BoardCardRow => {
   const declared = [
     { fieldId: contract.cardTitleField, label: undefined },
     ...contract.detailFields.map((entry) => ({ fieldId: entry.field, label: entry.label })),
@@ -188,7 +182,7 @@ const projectPage = (
   page: ProtectedBoardArrangementPage | null,
   contract: BoardPlacementContract,
   fieldsById: ReadonlyMap<string, ModuleField>,
-): BoardBucketPayload["page"] =>
+): BoardPagePayload | null =>
   page === null
     ? null
     : {
@@ -283,13 +277,79 @@ const projectMetrics = (
   return values;
 };
 
-const unavailableState = (): BoardData => ({ status: "error" });
-const refusedState = (): BoardData => ({ status: "refused", reason: "not_permitted" });
+type BoardCellValue =
+  | Readonly<{ kind: "text"; text: string }>
+  | Readonly<{ kind: "number"; value: number }>
+  | Readonly<{ kind: "boolean"; value: boolean }>
+  | Readonly<{ kind: "date"; iso: string }>
+  | Readonly<{ kind: "rich_text"; document: ReturnType<typeof richTextDocumentSchema.parse> }>
+  | Readonly<{ kind: "empty" }>;
+type BoardMetric = Readonly<{
+  key: string;
+  label: string;
+  value: BoardCellValue | Readonly<{ kind: "unavailable" }>;
+}>;
+type BoardCardRow = Readonly<{
+  recordId: ProtectedQueryPageRow["recordId"];
+  revision: ProtectedQueryPageRow["revision"];
+  capabilities: ProtectedQueryPageRow["capabilities"];
+  fields: readonly Readonly<{ key: string; label: string; value: BoardCellValue }>[];
+}>;
+type BoardPagePayload = Readonly<{
+  rows: readonly BoardCardRow[];
+  nextContinuationToken?: string;
+}>;
+type BoardBucketValues = Readonly<{
+  rowCount: number;
+  aggregates: readonly BoardMetric[];
+  page: BoardPagePayload | null;
+}>;
+
+/** The board's ready values; the caller validates them with the board payload parser. */
+export type BoardPlacementValues = Readonly<{
+  kind: "board";
+  title?: string;
+  plan: Extract<ProtectedBoardArrangementResult, { arrangement: "board" }>["plan"];
+  choiceFieldId: string;
+  cardTitleFieldId: string;
+  cardFieldIds: readonly string[];
+  totalRowCount: number;
+  aggregates: readonly BoardMetric[];
+  columns: readonly (BoardBucketValues & Readonly<{ value: string; label: string }>)[];
+  unassigned: BoardBucketValues;
+}>;
+
+export type BoardPlacementFailureCause =
+  | "board_context_refused"
+  | "board_selection_mismatch"
+  | "board_placement_unavailable"
+  | "board_query_not_bound"
+  | "board_settings_invalid"
+  | "board_query_unsupported"
+  | "board_continuation_invalid"
+  | "board_query_unavailable"
+  | "board_query_refused"
+  | "board_arrangement_mismatch"
+  | "board_metrics_invalid"
+  | "board_projection_failed";
 
 /**
- * Adapts one permission-projected placement and installed Query into the closed board payload.
- * Caller, selection, parameters and optional continuation are inputs to this server-only adapter;
- * module/query identities, field projections, options and page bounds are always rebound here.
+ * One board placement read. A refusal names its cause for the server log; `unavailable` is a
+ * temporary or structural failure, `refused` a settled permission or request refusal.
+ */
+export type BoardPlacementProjection =
+  | Readonly<{ outcome: "ready"; values: BoardPlacementValues }>
+  | Readonly<{
+      outcome: "refused" | "unavailable";
+      cause: BoardPlacementFailureCause;
+      /** The underlying failure text, present only when the cause was a thrown error. */
+      detail?: string;
+    }>;
+
+/**
+ * Adapts one permission-projected placement and installed Query into the board's ready values.
+ * Caller, selection, parameters and optional continuation are inputs; module/query identities,
+ * field projections, options and page bounds are always rebound here.
  */
 export const projectBoardPlacement = async (
   input: Readonly<{
@@ -301,24 +361,34 @@ export const projectBoardPlacement = async (
     queries: BoardQueries;
     continuation?: unknown;
   }>,
-): Promise<BoardData> => {
+): Promise<BoardPlacementProjection> => {
+  const refused = (cause: BoardPlacementFailureCause) => ({ outcome: "refused", cause }) as const;
+  const unavailable = (cause: BoardPlacementFailureCause, detail?: string) =>
+    ({ outcome: "unavailable", cause, ...(detail === undefined ? {} : { detail }) }) as const;
   try {
-    const context = requireInstalledRuntimeContext(input.context);
+    let context: InstalledRuntimeContext;
+    try {
+      context = requireInstalledRuntimeContext(input.context);
+    } catch (error) {
+      return unavailable("board_context_refused", describeFailure(error));
+    }
     if (
       !sameId(String(input.selection.organizationId), String(context.organizationId)) ||
       input.selection.applicationRootId === undefined ||
       !sameId(String(input.selection.applicationRootId), String(context.applicationRootId))
     )
-      return refusedState();
-    if (input.placement.availability === "unavailable") return refusedState();
-    if (input.placement.queryId === undefined) return unavailableState();
+      return refused("board_selection_mismatch");
+    if (input.placement.availability === "unavailable")
+      return refused("board_placement_unavailable");
+    if (input.placement.queryId === undefined) return unavailable("board_query_not_bound");
 
     const contract = readBoardPlacementContract(input.placement.settings);
     const binding = findInstalledQuery(context, String(input.placement.queryId));
-    if (contract === undefined || binding === undefined) return unavailableState();
+    if (contract === undefined || binding === undefined)
+      return unavailable("board_settings_invalid");
     const fields = fieldsFor(binding.module, binding.query);
     if (fields === undefined || !boardBlockSourceIsSupported(binding.query, fields, contract))
-      return unavailableState();
+      return unavailable("board_query_unsupported");
 
     const fieldsById = installedFieldMap(fields);
     const requestedFieldIds = [
@@ -341,7 +411,7 @@ export const projectBoardPlacement = async (
         }> = { kind: "initial" };
     if (input.continuation !== undefined) {
       const continuation = boardColumnContinuationRequestSchema.safeParse(input.continuation);
-      if (!continuation.success) return refusedState();
+      if (!continuation.success) return refused("board_continuation_invalid");
       pageRequest = {
         kind: "continue",
         selector: {
@@ -363,8 +433,8 @@ export const projectBoardPlacement = async (
       pageSize: binding.query.pageSize,
       pageRequest,
     });
-    if (result.kind !== "available") return unavailableState();
-    if (result.value.outcome === "refused") return refusedState();
+    if (result.kind !== "available") return unavailable("board_query_unavailable");
+    if (result.value.outcome === "refused") return refused("board_query_refused");
 
     const board = result.value;
     if (
@@ -379,7 +449,7 @@ export const projectBoardPlacement = async (
         (fieldId, index) => !sameId(String(board.declaredFieldIds[index]), fieldId),
       )
     )
-      return unavailableState();
+      return unavailable("board_arrangement_mismatch");
 
     const aggregates = projectMetrics(
       binding.query.aggregates,
@@ -417,26 +487,28 @@ export const projectBoardPlacement = async (
       unassignedAggregates === undefined ||
       columns.length !== board.columns.length
     )
-      return unavailableState();
+      return unavailable("board_metrics_invalid");
 
-    const payload: BoardPayload = {
-      kind: "board",
-      ...(contract.title === undefined ? {} : { title: contract.title }),
-      plan: board.plan,
-      choiceFieldId: contract.choiceField,
-      cardTitleFieldId: contract.cardTitleField,
-      cardFieldIds: requestedFieldIds,
-      totalRowCount: board.totalRowCount,
-      aggregates,
-      columns,
-      unassigned: {
-        rowCount: board.unassigned.rowCount,
-        aggregates: unassignedAggregates,
-        page: projectPage(board.unassigned.page, contract, fieldsById),
+    return {
+      outcome: "ready",
+      values: {
+        kind: "board",
+        ...(contract.title === undefined ? {} : { title: contract.title }),
+        plan: board.plan,
+        choiceFieldId: contract.choiceField,
+        cardTitleFieldId: contract.cardTitleField,
+        cardFieldIds: requestedFieldIds,
+        totalRowCount: board.totalRowCount,
+        aggregates,
+        columns,
+        unassigned: {
+          rowCount: board.unassigned.rowCount,
+          aggregates: unassignedAggregates,
+          page: projectPage(board.unassigned.page, contract, fieldsById),
+        },
       },
     };
-    return parseDisplayData({ status: "ready", values: payload }, parseBoardPayload);
-  } catch {
-    return unavailableState();
+  } catch (error) {
+    return unavailable("board_projection_failed", describeFailure(error));
   }
 };

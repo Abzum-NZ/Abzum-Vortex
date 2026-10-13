@@ -29,7 +29,9 @@ import {
   type GuidedFormPageAddress,
   type GuidedFormStepActionResult,
   type GuidedFormStepRequest,
-} from "../../../_lib/guided-form-steps";
+} from "@vortex/platform/server";
+import { guidedFormDependencies } from "../../../_lib/guided-form-dependencies";
+import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 
@@ -137,6 +139,7 @@ const requestMetadata = async (loaded: Awaited<ReturnType<typeof loadActionPage>
     loaded.model.subject?.recordId,
   );
   const authority = await loadGuidedFormAuthorityForSession(
+    guidedFormDependencies(),
     loaded.session,
     loaded.selection,
     scope,
@@ -210,7 +213,7 @@ export async function advanceGuidedFormStepAction(
     input.values,
   );
   if (update === undefined) return { kind: "unavailable" };
-  const service = createGuidedFormDraftService();
+  const service = createGuidedFormDraftService(guidedFormDependencies());
   const result = await service.update(loaded.session, loaded.selection, {
     ...loaded.scope,
     draftId: platformIdSchema.parse(current.draftId),
@@ -257,7 +260,7 @@ export async function confirmGuidedFormAction(
     !sameId(input.draftId, current.draftId)
   )
     return { kind: "conflict" };
-  const service = createGuidedFormDraftService();
+  const service = createGuidedFormDraftService(guidedFormDependencies());
   const read = await service.read(loaded.session, loaded.selection, loaded.scope);
   if (read.kind !== "available") return read;
   if (
@@ -269,7 +272,7 @@ export async function confirmGuidedFormAction(
   const validation = visibleGuidedFormValidation(read.value.draft.validation, loaded.steps);
   if (computeGuidedFormStepId(loaded.steps, validation) !== summary.stepId)
     return { kind: "conflict" };
-  const proof = await issueGuidedFormConfirmation({
+  const proof = await issueGuidedFormConfirmation(getQueryContinuationKey(), {
     draftId: current.draftId,
     revision: current.revision,
     pageId: loaded.model.pageId,
@@ -309,7 +312,7 @@ export async function abandonGuidedFormDraftAction(
     organizationId: resolved.read.organizationId,
     applicationRootId: resolved.application.applicationRootId,
   });
-  const result = await createGuidedFormDraftService().abandon(identity.session, selection, {
+  const result = await createGuidedFormDraftService(guidedFormDependencies()).abandon(identity.session, selection, {
     draftId: input.draftId,
     expectedRevision: input.expectedRevision,
   });

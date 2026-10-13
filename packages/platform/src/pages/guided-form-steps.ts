@@ -6,7 +6,16 @@ import {
   createHumanOrganizationRequestService,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestResult,
-} from "@web/platform-server";
+} from "../access/index";
+import type { RequestDatabaseTransaction } from "../db/index";
+import {
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
+  type InstalledRuntimeContext,
+} from "../definition/index";
+import type { QueryContinuationKey } from "../queries/index";
+import { prepareRecordFieldValues } from "../records/index";
 import {
   organizationAccessDeclarationSchema,
   builderKeySchema,
@@ -22,17 +31,14 @@ import {
   type OrganizationAccessDeclaration,
   type OrganizationSelectionCandidate,
   type PageDefinition,
+  type PermissionDeclaration,
+  type PlatformId,
   type RecordTypeDefinition,
   type SelectedOrganizationScope,
   isRecord,
   sameId,
   walkPlacements,
-} from "@vortex/platform/schema";
-import {
-  FIELD_INPUT_BLOCK_RELEASE,
-  FIELD_INPUT_CONTROL_RELEASES,
-  FORM_CONTAINER_BLOCK_RELEASE,
-} from "@vortex/platform/server";
+} from "../schema";
 import {
   createPrivateFormDraftService,
   privateFormDraftLimits,
@@ -41,28 +47,31 @@ import {
   type PrivateFormDraftFieldValidation,
   type PrivateFormDraftScope,
   type PrivateFormDraftServiceDependencies,
-} from "@web/platform-server";
-import {
-  createHumanInstalledRuntimeContextLoader,
-  type InstalledRuntimeContext,
-} from "@web/platform-server";
-import type { RequestDatabaseTransaction } from "@web/platform-server";
-import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
-import { createActiveApplicationInstallationRepository } from "@web/platform-server";
-import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
-import { prepareRecordFieldValues } from "@web/platform-server";
-import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
-import { installedReleaseCatalogue } from "./definition-catalogue";
-import { getQueryContinuationKey } from "./query-continuation-key";
+} from "./form-drafts";
 
-type GuidedFormStepField = Readonly<{
+/**
+ * What the guided form needs from the web composition root: how to read the installed runtime
+ * context inside a protected request, which authority the session belongs to, and the platform
+ * permission declarations (owned by the definitions package, which depends on this one).
+ */
+export type GuidedFormDependencies = Readonly<{
+  identityAuthorityId: PrivateFormDraftServiceDependencies["identityAuthorityId"];
+  readContext: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+  ) => Promise<InstalledRuntimeContext | undefined>;
+  platformPermissionFor: (key: string) => PermissionDeclaration | undefined;
+  platformPermissionOwnerId: PlatformId;
+}>;
+
+export type GuidedFormStepField = Readonly<{
   field: ModuleField;
   fieldKey: string;
   placementId: string;
   required: boolean;
 }>;
 
-type GuidedFormStepFields = Readonly<{
+export type GuidedFormStepFields = Readonly<{
   stepId: string;
   summary: boolean;
   fields: readonly GuidedFormStepField[];
@@ -131,6 +140,7 @@ export const guidedFormConfirmationReference = (
 };
 
 const confirmationSignature = (
+  continuationKey: QueryContinuationKey,
   details: Readonly<{
     draftId: string;
     revision: number;
@@ -143,7 +153,7 @@ const confirmationSignature = (
     applicationRootId: string;
     subjectRecordId?: string;
   }>,
-): Buffer => createHmac("sha256", getQueryContinuationKey().key).update(JSON.stringify([
+): Buffer => createHmac("sha256", continuationKey.key).update(JSON.stringify([
   confirmationPurpose,
   details.draftId.toLowerCase(),
   details.revision,
@@ -158,41 +168,25 @@ const confirmationSignature = (
 ])).digest();
 
 export const issueGuidedFormConfirmation = async (
-  details: Omit<Parameters<typeof confirmationSignature>[0], "issuedAt">,
+  continuationKey: QueryContinuationKey,
+  details: Omit<Parameters<typeof confirmationSignature>[1], "issuedAt">,
 ): Promise<string | undefined> => {
   const issuedAt = Math.floor(Date.now() / 1_000);
-  const signature = confirmationSignature({ ...details, issuedAt }).toString("hex");
+  const signature = confirmationSignature(continuationKey, { ...details, issuedAt }).toString("hex");
   return `${details.draftId.toLowerCase()}.${details.revision}.${issuedAt}.${signature}`;
 };
 
 export const verifiesGuidedFormConfirmation = async (
+  continuationKey: QueryContinuationKey,
   proof: unknown,
-  details: Omit<Parameters<typeof confirmationSignature>[0], "issuedAt" | "draftId" | "revision">,
+  details: Omit<Parameters<typeof confirmationSignature>[1], "issuedAt" | "draftId" | "revision">,
 ): Promise<boolean> => {
   const reference = guidedFormConfirmationReference(proof);
   if (reference === undefined) return false;
   const age = Math.floor(Date.now() / 1_000) - reference.issuedAt;
   if (age < 0 || age > confirmationLifetimeSeconds) return false;
-  const expected = confirmationSignature({ ...details, ...reference });
+  const expected = confirmationSignature(continuationKey, { ...details, ...reference });
   return timingSafeEqual(Buffer.from(reference.signature, "hex"), expected);
-};
-
-const readGuidedFormContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-) => {
-  if (scope.applicationRootId === undefined) return undefined;
-  return createHumanInstalledRuntimeContextLoader({
-    activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-    releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-      installedReleaseCatalogue,
-      transaction,
-    ),
-    scope: {
-      organizationId: scope.organizationId,
-      applicationRootId: scope.applicationRootId,
-    },
-  }).load();
 };
 
 const recordTypeForPage = (
@@ -591,11 +585,12 @@ export const getGuidedFormFlowId = (
 };
 
 const pageAccess = (
+  dependencies: Pick<GuidedFormDependencies, "platformPermissionFor" | "platformPermissionOwnerId">,
   context: InstalledRuntimeContext,
   page: Readonly<Record<string, unknown>>,
 ): OrganizationAccessDeclaration | undefined => {
   if (typeof page.accessPermissionKey !== "string") return undefined;
-  const platform = platformPermissionFor(page.accessPermissionKey);
+  const platform = dependencies.platformPermissionFor(page.accessPermissionKey);
   if (platform !== undefined)
     return organizationAccessDeclarationSchema.parse({
       operationKey: "application.page.discover",
@@ -606,7 +601,7 @@ const pageAccess = (
       target: { kind: "organization" },
       requiredPermission: {
         ownerKind: "platform",
-          ownerId: platformPermissionOwnerId,
+          ownerId: dependencies.platformPermissionOwnerId,
         permissionId: platform.permissionId,
       },
       recentAuthentication: { kind: "none" },
@@ -637,9 +632,11 @@ const pageAccess = (
   });
 };
 
-const createAuthorityAdapter = (): PrivateFormDraftAuthorityAdapter => ({
+const createAuthorityAdapter = (
+  dependencies: GuidedFormDependencies,
+): PrivateFormDraftAuthorityAdapter => ({
   async load(transaction, scope, form) {
-    const context = await readGuidedFormContext(transaction, scope);
+    const context = await dependencies.readContext(transaction, scope);
     if (context === undefined) return undefined;
     const pages = context.releaseSet.application.content.pages.filter(
       (candidate) => sameId(String(candidate.pageId), String(form.formId)),
@@ -667,7 +664,7 @@ const createAuthorityAdapter = (): PrivateFormDraftAuthorityAdapter => ({
       !sameId(flowId, String(form.flowId))
     )
       return undefined;
-    const access = pageAccess(context, page);
+    const access = pageAccess(dependencies, context, page);
     if (access === undefined) return undefined;
     const fields = new Map<string, ModuleField>();
     for (const step of steps)
@@ -743,13 +740,10 @@ const createAuthorityAdapter = (): PrivateFormDraftAuthorityAdapter => ({
   },
 });
 
-export const createGuidedFormDraftService = () => {
-  const dependencies = {
-    identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
-  };
+export const createGuidedFormDraftService = (dependencies: GuidedFormDependencies) => {
   const serviceDependencies: PrivateFormDraftServiceDependencies = {
-    ...dependencies,
-    authority: createAuthorityAdapter(),
+    identityAuthorityId: dependencies.identityAuthorityId,
+    authority: createAuthorityAdapter(dependencies),
   };
   return createPrivateFormDraftService(serviceDependencies);
 };
@@ -772,12 +766,13 @@ type GuidedFormDraftOpenResult =
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 export const openGuidedFormDraft = async (
+  dependencies: GuidedFormDependencies,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   scope: PrivateFormDraftScope,
   initialValues: Readonly<Record<string, JsonValue>>,
 ): Promise<GuidedFormDraftOpenResult> => {
-  const service = createGuidedFormDraftService();
+  const service = createGuidedFormDraftService(dependencies);
   const created = await service.create(session, selection, {
     ...scope,
     values: initialValues,
@@ -833,8 +828,9 @@ export const validateGuidedFormStep = (
     fields: recordType.fields.map((field) => {
       const required = requiredById.get(String(field.fieldId));
       if (required !== undefined) return { ...field, required } as ModuleField;
-      const { default: _default, ...withoutDefault } = field;
-      return { ...withoutDefault, required: false } as ModuleField;
+      const withoutDefault: Record<string, unknown> = { ...field, required: false };
+      delete withoutDefault.default;
+      return withoutDefault as ModuleField;
     }),
   };
   const prepared = prepareRecordFieldValues({
@@ -1099,6 +1095,7 @@ export const guidedFormInputData = (
 };
 
 export const resolveGuidedFormAuthority = async (
+  dependencies: GuidedFormDependencies,
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   form: PrivateFormDraftScope,
@@ -1108,7 +1105,7 @@ export const resolveGuidedFormAuthority = async (
   recordType: RecordTypeDefinition;
   steps: readonly GuidedFormStepFields[];
 }> | undefined> => {
-  const context = await readGuidedFormContext(transaction, scope);
+  const context = await dependencies.readContext(transaction, scope);
   if (context === undefined) return undefined;
   const pages = context.releaseSet.application.content.pages.filter(
     (candidate) => sameId(String(candidate.pageId), String(form.formId)),
@@ -1130,7 +1127,7 @@ export const resolveGuidedFormAuthority = async (
     context.releaseSet.application.content.flowBindings as unknown as readonly Readonly<Record<string, unknown>>[],
     context.releaseSet.application.content.shells,
   );
-  const access = pageAccess(context, page);
+  const access = pageAccess(dependencies, context, page);
   if (
     steps === undefined ||
     flowId === undefined ||
@@ -1143,14 +1140,15 @@ export const resolveGuidedFormAuthority = async (
 };
 
 export const loadGuidedFormAuthorityForSession = async (
+  dependencies: GuidedFormDependencies,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   form: PrivateFormDraftScope,
 ): Promise<HumanOrganizationRequestResult<Awaited<ReturnType<typeof resolveGuidedFormAuthority>>>> => {
   const requests = createHumanOrganizationRequestService({
-    identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
+    identityAuthorityId: dependencies.identityAuthorityId,
   });
   return requests.run(session, selection, (transaction, scope) =>
-    resolveGuidedFormAuthority(transaction, scope, form),
+    resolveGuidedFormAuthority(dependencies, transaction, scope, form),
   );
 };

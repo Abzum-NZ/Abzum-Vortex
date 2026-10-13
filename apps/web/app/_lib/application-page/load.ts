@@ -49,7 +49,8 @@ import {
   earlierGuidedStepId,
   guidedFormInputData,
   visibleGuidedFormValidation,
-} from "../guided-form-steps";
+} from "@vortex/platform/server";
+import { guidedFormDependencies } from "../guided-form-dependencies";
 import {
   humanOrganizationRequestDependencies,
   humanOrganizationRequests,
@@ -801,6 +802,7 @@ const loadApplicationPageJoined = async (
       subject?.recordId,
     );
     const openedDraft = await openGuidedFormDraft(
+      guidedFormDependencies(),
       session,
       selection,
       draftScope,

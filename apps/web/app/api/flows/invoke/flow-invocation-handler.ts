@@ -17,7 +17,7 @@ import {
   guidedFormConfirmationKey,
   guidedFormConfirmationReference,
   verifiesGuidedFormConfirmation,
-} from "../../../_lib/guided-form-steps";
+} from "@vortex/platform/server";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import {
   applicationHasAuthoredForm,
@@ -101,7 +101,8 @@ export const createFlowInvocationHandler =
         guidedFormFlowId: getGuidedFormFlowId,
         confirmationKey: guidedFormConfirmationKey,
         confirmationReference: guidedFormConfirmationReference,
-        verifiesConfirmation: verifiesGuidedFormConfirmation,
+        verifiesConfirmation: (proof, details) =>
+          verifiesGuidedFormConfirmation(getQueryContinuationKey(), proof, details),
         hasAuthoredForm: applicationHasAuthoredForm,
         projectForm: (session, form) => loadProjectedReferenceChoiceForm(session, address, form),
         resolveFormValues: resolveReferenceChoiceFormValues,
