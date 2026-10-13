@@ -4,6 +4,7 @@ import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { applicationSourceDocumentSchema, canonicalJson,
@@ -38,7 +39,6 @@ import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
-import { ApplicationFlowCanvas } from "./application-flow-canvas";
 import { ApplicationFlowEditor } from "./application-flow-editor";
 import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./application-draft-preview";
 import { ApplicationSourceImport } from "./application-source-import";
@@ -49,6 +49,10 @@ import {
   sameStudioApplicationSourceImportSnapshot,
   type StudioApplicationSourceImportSnapshot,
 } from "../_lib/application-source-import";
+
+// The canvas pulls in @xyflow/react; load it only when a flow is open.
+const ApplicationFlowCanvas = dynamic(
+  () => import("./application-flow-canvas").then((module) => module.ApplicationFlowCanvas), { ssr: false });
 
 type WorkspaceProps = Readonly<{
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
