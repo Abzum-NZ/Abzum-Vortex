@@ -700,13 +700,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                     ...(issue.fieldId === undefined ? {} : { fieldId: issue.fieldId }),
                     path: issue.path,
                   })),
-                // A create prepares no readable fields; the fields the person submitted are theirs to name.
-                command.data.operation === "create"
-                  ? new Set([
-                      ...prepared.readableFieldIds,
-                      ...Object.keys(command.data.submittedValues),
-                    ])
-                  : prepared.readableFieldIds,
+                prepared.readableFieldIds,
               );
               return corrections === undefined || corrections.length === 0
                 ? safeRefusal(prepared.correlationId, "operation_refused")
