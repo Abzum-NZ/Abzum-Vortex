@@ -147,6 +147,9 @@ body {
     --accent-foreground: var(--primary-foreground);
     --sidebar-accent: var(--sidebar-primary);
     --sidebar-accent-foreground: var(--sidebar-primary-foreground);
+    /* Hover stays a quiet tint of the bold accent so only the current item carries the strong fill. */
+    --sidebar-hover: color-mix(in oklab, var(--sidebar-primary) 14%, transparent);
+    --sidebar-hover-foreground: var(--sidebar-foreground);
   }
 }
 

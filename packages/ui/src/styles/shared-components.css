@@ -5275,6 +5275,7 @@
   line-height: var(--vs-5ed6c396, var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875))));
 }
 :scope .cn-sidebar-group-label {
+  gap: calc(var(--spacing, 0.25rem) * 2);
   height: calc(var(--spacing, 0.25rem) * 8);
   border-radius: var(--vs-f2519dcc, calc(var(--radius) * 0.8));
   padding-inline: var(--vs-305455aa, calc(var(--spacing, 0.25rem) * 2));
@@ -5320,12 +5321,12 @@
   --tw-ring-color: var(--sidebar-ring);
   &:hover {
     @media (hover: hover) {
-      background-color: var(--sidebar-accent);
+      background-color: var(--sidebar-hover, var(--sidebar-accent));
     }
   }
   &:hover {
     @media (hover: hover) {
-      color: var(--sidebar-accent-foreground);
+      color: var(--sidebar-hover-foreground, var(--sidebar-accent-foreground));
     }
   }
   &:focus-visible {
@@ -5405,10 +5406,15 @@
 }
 @media (hover: hover) {
   :scope .cn-sidebar-menu-button-aria[aria-expanded="true"]:hover {
-    background-color: var(--sidebar-accent);
-    color: var(--sidebar-accent-foreground);
+    background-color: var(--sidebar-hover, var(--sidebar-accent));
+    color: var(--sidebar-hover-foreground, var(--sidebar-accent-foreground));
   }
   :scope .cn-sidebar-menu-button-variant-default:hover {
+    background-color: var(--sidebar-hover, var(--sidebar-accent));
+    color: var(--sidebar-hover-foreground, var(--sidebar-accent-foreground));
+  }
+  /* The current item keeps its strong fill while hovered. */
+  :scope .cn-sidebar-menu-button-variant-default:where([data-active]:not([data-active="false"])):hover {
     background-color: var(--sidebar-accent);
     color: var(--sidebar-accent-foreground);
   }

@@ -117,7 +117,6 @@ function NavigationList({
           return (
             <Item key={item.id} data-vortex-navigation-item-id={item.id}>
               <SidebarGroupLabel render={<span id={id} />}>
-                <Icon name={item.icon} aria-hidden="true" />
                 <span data-vortex-navigation-label="">{item.label}</span>
               </SidebarGroupLabel>
               <NavigationList
