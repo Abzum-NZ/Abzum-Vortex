@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import {
   createBuilderAuthority,
   prepareApplicationRoleTemplatesForHumanRequest,
-  runOrganizationAccessOperation,
   type BuilderOperation,
   type HumanOrganizationRequestResult,
 } from "@vortex/platform/server";
@@ -17,16 +16,12 @@ import {
   canonicalJson,
   describeFailure,
   moduleRootIdSchema,
-  organizationAccessDecisionSchema,
-  organizationAccessDeclarationSchema,
   organizationIdSchema,
   sameId,
   systemApplicationBoundReleaseSetResultSchema,
   type ActiveApplicationInstallationEvidence,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
-  type OrganizationAccessDeclaration,
-  type OrganizationAccessDecision,
   type OrganizationLifecycleLimits,
   type OrganizationSelectionCandidate,
   type RecordTypeLifecyclePolicy,
@@ -50,7 +45,6 @@ import {
   readFirstInstallReleaseSet,
   sameFirstInstallRelease,
   installationOperation,
-  installationPermissionDeclaration,
   installationProblem,
   installationTargetFacts,
   readBuilderOperationDeadlines,
@@ -68,9 +62,9 @@ import {
   type InstallationBindings,
   type InstallationHumanContext,
   type InstallationProblemShape,
-  assertProvisionedSetupMatchesInstallation,
   initialLifecyclePolicyMatches,
-  readProvisionedLifecycleSetup,
+  readProvisionedSetupAccessDecision,
+  readProvisionedSetupInTransaction as readInstallationProvisionedSetup,
   type ProvisionedSetup,
   saveInitialArchiveWorkflowPolicy,
   workflowIsInExactRelease,
@@ -891,47 +885,6 @@ const readCurrentFirstInstallCandidate = async (
   };
 };
 
-const provisionedSetupAccessDeclaration = (key: string): OrganizationAccessDeclaration => {
-  const declaration = installationPermissionDeclaration(platformPermissionSource, "platform.organization.applications.manage");
-  return organizationAccessDeclarationSchema.parse({
-    ...declaration,
-    operationKey: key,
-    ...(key === "platform.organization.applications.install_scope"
-      ? {
-          authority: {
-            kind: "delegated_management" as const,
-            before: { kind: "organization_catalogue" as const },
-            after: { kind: "organization_catalogue" as const },
-          },
-        }
-      : {}),
-  });
-};
-
-const readProvisionedSetupAccessDecision = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  key: string,
-): Promise<Extract<OrganizationAccessDecision, { outcome: "allowed" }>> => {
-  const result = await runOrganizationAccessOperation(
-    transaction,
-    scope,
-    provisionedSetupAccessDeclaration(key),
-    async (decision) => decision,
-  );
-  if (result.outcome !== "completed") problem("refused");
-  const parsed = organizationAccessDecisionSchema.safeParse(result.value);
-  if (!parsed.success) problem("refused");
-  const decision = parsed.data;
-  if (decision.outcome !== "allowed" || decision.operationKey !== key ||
-    decision.target.kind !== "organization" ||
-    !sameUuid(decision.organizationId, scope.organizationId) ||
-    !sameUuid(decision.organizationAccountId, scope.organizationAccountId) ||
-    decision.accessVersion !== scope.accessVersion)
-    problem("refused");
-  return decision;
-};
-
 const visiblePolicyBody = (policy: RecordTypeLifecyclePolicy) => {
   const common = {
     maxAgeDays: policy.maxAgeDays,
@@ -971,46 +924,6 @@ const visibleProvisionedSetup = (
     })),
   });
 
-const readProvisionedSetupInternalInTransaction = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-  selector: StudioApplicationFirstInstallSelector,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-): Promise<ProvisionedSetup> => {
-  const bindings = await readInstallationBindings(transaction, selector.rootId);
-  const setup = await readProvisionedLifecycleSetup(
-    transaction, selector, releaseSet, bindings, firstInstallWorkflows(releaseSet),
-  );
-
-  const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-    organizationId: selector.organizationId,
-    applicationRootId: selector.rootId,
-  });
-  const decisions = await Promise.all([
-    readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.applications.install"),
-    readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.applications.install_scope"),
-    readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.record_lifecycle.manage_policy"),
-  ]);
-  const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-    organizationId: selector.organizationId,
-    applicationRootId: selector.rootId,
-  });
-  if (!same(context, finalContext)) problem("refused");
-  const completion = await readInstallationDatabaseTime(transaction);
-  const completionMs = Date.parse(completion);
-  if (decisions.some((decision) =>
-    !sameUuid(decision.correlationId, context.correlationId) ||
-    decision.accessVersion !== context.accessVersion ||
-    Date.parse(decision.checkedAt) > completionMs ||
-    Date.parse(decision.validUntil) <= completionMs) ||
-    Date.parse(context.expiresAt) <= completionMs)
-    problem("refused");
-  assertProvisionedSetupMatchesInstallation(setup, bindings, selector.organizationId);
-  return setup;
-};
-
 const readProvisionedSetupInTransaction = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
@@ -1019,8 +932,8 @@ const readProvisionedSetupInTransaction = async (
   selector: StudioApplicationFirstInstallSelector,
   releaseSet: SystemApplicationBoundReleaseSetResult,
 ): Promise<z.infer<typeof studioApplicationFirstInstallSetupSchema>> =>
-  visibleProvisionedSetup(await readProvisionedSetupInternalInTransaction(
-    transaction, scope, session, issuedAt, selector, releaseSet,
+  visibleProvisionedSetup(await readInstallationProvisionedSetup(
+    transaction, scope, session, issuedAt, selector, releaseSet, platformPermissionSource,
   ));
 
 const readCurrentProvisionedSetup = async (
@@ -1468,8 +1381,8 @@ export const loadStudioApplicationArchiveOptions = async (
           target.applicationRootId === null || !initial.setup.organizationLimits.allowedActions.includes("archive_workflow") ||
           initial.setup.organizationLimits.allowedArchiveDestinations.length === 0)
           problem("refused");
-        const finalSetup = await readProvisionedSetupInternalInTransaction(
-          transaction, _scope, current.session, _issuedAt, query.data.selector, initial.releaseSet,
+        const finalSetup = await readInstallationProvisionedSetup(
+          transaction, _scope, current.session, _issuedAt, query.data.selector, initial.releaseSet, platformPermissionSource
         );
         if (!same(finalSetup, initial.internalSetup)) problem("conflict");
         const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, query.data.selector);
@@ -1596,9 +1509,9 @@ const firstInstallAppCompletion = async (
           transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(releaseSet),
         );
   const setupDecisions = await Promise.all([
-    readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.applications.install"),
-    readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.applications.install_scope"),
-    readProvisionedSetupAccessDecision(transaction, scope, "platform.organization.record_lifecycle.manage_policy"),
+    readProvisionedSetupAccessDecision(transaction, scope, platformPermissionSource, "platform.organization.applications.install"),
+    readProvisionedSetupAccessDecision(transaction, scope, platformPermissionSource, "platform.organization.applications.install_scope"),
+    readProvisionedSetupAccessDecision(transaction, scope, platformPermissionSource, "platform.organization.record_lifecycle.manage_policy"),
   ]);
   const completedAt = await readInstallationDatabaseTime(transaction);
   const retainedDeadlines = [draftDeadline, ...installDeadlines,
@@ -1650,8 +1563,8 @@ const readFirstInstallAppState = async (
   const bindings = await readInstallationBindings(transaction, selector.rootId);
   const state = firstInstallState(selector, releaseSet, bindings);
   if (state !== "provisioned_inactive") firstInstallUnavailable("installation_incomplete");
-  const internalSetup = await readProvisionedSetupInternalInTransaction(
-    transaction, scope, session, issuedAt, selector, releaseSet,
+  const internalSetup = await readInstallationProvisionedSetup(
+    transaction, scope, session, issuedAt, selector, releaseSet, platformPermissionSource
   );
   const setup = visibleProvisionedSetup(internalSetup);
   const current = firstInstallSnapshot(selector, expected.history, releaseSet, bindings, state, setup);
@@ -1671,8 +1584,8 @@ const completeFirstInstallConnectionRead = async (
 ): Promise<void> => {
   const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, selector);
   if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
-  const currentSetup = await readProvisionedSetupInternalInTransaction(
-    transaction, scope, session, issuedAt, selector, currentRelease,
+  const currentSetup = await readInstallationProvisionedSetup(
+    transaction, scope, session, issuedAt, selector, currentRelease, platformPermissionSource
   );
   if (!same(currentSetup, initial.internalSetup)) problem("conflict");
   const completed = await firstInstallAppCompletion(
@@ -1876,8 +1789,8 @@ export const saveStudioApplicationFirstInstallPolicy = async (
           )) problem("refused");
           const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, command.data.selector);
           if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
-          const currentSetup = await readProvisionedSetupInternalInTransaction(
-            transaction, scope, candidate.session, issuedAt, command.data.selector, currentRelease,
+          const currentSetup = await readInstallationProvisionedSetup(
+            transaction, scope, candidate.session, issuedAt, command.data.selector, currentRelease, platformPermissionSource
           );
           if (!same(currentSetup, initial.internalSetup)) problem("conflict");
           const retainedFence = await firstInstallAppCompletion(

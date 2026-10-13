@@ -2,8 +2,13 @@ import "server-only";
 
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { runOrganizationAccessOperation } from "../access/index";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import {
   applicationRootIdSchema,
+  canonicalJson,
+  organizationAccessDeclarationSchema,
+  organizationAccessDecisionSchema,
   moduleRootIdSchema,
   organizationIdSchema,
   organizationLifecycleLimitsSchema,
@@ -12,9 +17,21 @@ import {
   revisionSchema,
   sameId,
   storageContractIdSchema,
+  type IdentitySession,
   type ModuleInstallationBindingEvidence,
+  type OrganizationAccessDeclaration,
+  type OrganizationAccessDecision,
+  type SelectedOrganizationScope,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
+import { readInstallationBindings } from "./installation-binding-reader";
+import {
+  installationPermissionDeclaration,
+  installationProblem,
+  readInstallationDatabaseTime,
+  readInstallationHumanContext,
+} from "./installation-authority";
+import { firstInstallWorkflows } from "./installation-first-install";
 
 /**
  * Stable reason codes of a refused provisioned-setup read; `detail` names the failed check and is
@@ -249,4 +266,126 @@ export const assertProvisionedSetupMatchesInstallation = (
       seen.add(key);
     }
   }
+};
+
+const provisionedSetupAccessDeclaration = (
+  permissions: PlatformPermissionSource,
+  key: string,
+): OrganizationAccessDeclaration => {
+  const declaration = installationPermissionDeclaration(
+    permissions,
+    "platform.organization.applications.manage",
+  );
+  return organizationAccessDeclarationSchema.parse({
+    ...declaration,
+    operationKey: key,
+    ...(key === "platform.organization.applications.install_scope"
+      ? {
+          authority: {
+            kind: "delegated_management" as const,
+            before: { kind: "organization_catalogue" as const },
+            after: { kind: "organization_catalogue" as const },
+          },
+        }
+      : {}),
+  });
+};
+
+export const readProvisionedSetupAccessDecision = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  permissions: PlatformPermissionSource,
+  key: string,
+): Promise<Extract<OrganizationAccessDecision, { outcome: "allowed" }>> => {
+  const result = await runOrganizationAccessOperation(
+    transaction,
+    scope,
+    provisionedSetupAccessDeclaration(permissions, key),
+    async (decision) => decision,
+  );
+  if (result.outcome !== "completed")
+    installationProblem("setup_access_not_completed", "refused");
+  const parsed = organizationAccessDecisionSchema.safeParse(result.value);
+  if (!parsed.success)
+    installationProblem("setup_access_unreadable", "refused", undefined, { cause: parsed.error });
+  const decision = parsed.data;
+  if (
+    decision.outcome !== "allowed" ||
+    decision.operationKey !== key ||
+    decision.target.kind !== "organization" ||
+    !sameId(decision.organizationId, scope.organizationId) ||
+    !sameId(decision.organizationAccountId, scope.organizationAccountId) ||
+    decision.accessVersion !== scope.accessVersion
+  )
+    installationProblem("setup_access_decision_mismatch", "refused");
+  return decision;
+};
+
+/**
+ * Reads the provisioned setup of the selected release inside the open transaction, proves the
+ * install, install-scope and lifecycle-policy access decisions are current and for this exact
+ * request context, and proves the setup matches the installation's provisioned bindings.
+ */
+export const readProvisionedSetupInTransaction = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  session: IdentitySession,
+  issuedAt: string,
+  selector: ProvisionedSetupSelector,
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+  permissions: PlatformPermissionSource,
+): Promise<ProvisionedSetup> => {
+  const bindings = await readInstallationBindings(transaction, selector.rootId);
+  const setup = await readProvisionedLifecycleSetup(
+    transaction,
+    selector,
+    releaseSet,
+    bindings,
+    firstInstallWorkflows(releaseSet),
+  );
+  const expected = { organizationId: selector.organizationId, applicationRootId: selector.rootId };
+  const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, expected);
+  const decisions = await Promise.all([
+    readProvisionedSetupAccessDecision(
+      transaction,
+      scope,
+      permissions,
+      "platform.organization.applications.install",
+    ),
+    readProvisionedSetupAccessDecision(
+      transaction,
+      scope,
+      permissions,
+      "platform.organization.applications.install_scope",
+    ),
+    readProvisionedSetupAccessDecision(
+      transaction,
+      scope,
+      permissions,
+      "platform.organization.record_lifecycle.manage_policy",
+    ),
+  ]);
+  const finalContext = await readInstallationHumanContext(
+    transaction,
+    scope,
+    session,
+    issuedAt,
+    expected,
+  );
+  if (canonicalJson(context) !== canonicalJson(finalContext))
+    installationProblem("setup_context_changed", "refused");
+  const completionMs = Date.parse(await readInstallationDatabaseTime(transaction));
+  if (
+    decisions.some(
+      (decision) =>
+        !sameId(decision.correlationId, context.correlationId) ||
+        decision.accessVersion !== context.accessVersion ||
+        Date.parse(decision.checkedAt) > completionMs ||
+        Date.parse(decision.validUntil) <= completionMs,
+    ) ||
+    Date.parse(context.expiresAt) <= completionMs
+  )
+    installationProblem("setup_decision_expired", "refused");
+  assertProvisionedSetupMatchesInstallation(setup, bindings, selector.organizationId);
+  return setup;
 };
