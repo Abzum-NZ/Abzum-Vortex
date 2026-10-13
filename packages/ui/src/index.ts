@@ -314,6 +314,7 @@ export {
   type ApplicationShellRuntime,
   type ApplicationWebMcpRuntime,
   NAVIGATION_COMPONENT_REGISTRATIONS,
+  WebMcpStatus,
   createNavigationComponentRegistry,
 } from "./navigation";
 
