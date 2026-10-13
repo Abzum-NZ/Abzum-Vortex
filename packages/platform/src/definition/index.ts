@@ -70,7 +70,7 @@ export {
 } from "./installation-first-install";
 export {
   ProvisionedSetupError,
-  assertProvisionedSetupMatchesInstallation,
-  readProvisionedLifecycleSetup,
+  readProvisionedSetupAccessDecision,
+  readProvisionedSetupInTransaction,
   type ProvisionedSetup,
 } from "./installation-provisioned-setup";
