@@ -4,9 +4,7 @@ create or replace function vortex_record.named_action_deleted_subject_replay_int
   p_action_owner_id uuid,
   p_action_release_revision bigint,
   p_action_id uuid,
-  p_record_type_id uuid,
-  p_record_id uuid,
-  p_expected_concurrency_number bigint
+  p_record_type_id uuid
 )
 returns jsonb
 language plpgsql
@@ -31,12 +29,7 @@ begin
     return null;
   end if;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, 'delete',
-    vortex_record.record_lifecycle_command_fingerprint_internal(
-      p_command_id, 'delete', p_record_type_id, p_record_id,
-      p_expected_concurrency_number
-    ),
-    p_record_type_id, p_record_id, '{}'::jsonb, '{}'::jsonb, true
+    'record_lifecycle', p_command_id, true
   );
   if receipt_claim ->> 'status' is distinct from 'completed' then
     return null;
@@ -53,12 +46,12 @@ begin
 end
 $function$;
 
-alter function vortex_record.named_action_deleted_subject_replay_internal(uuid,text,uuid,bigint,uuid,uuid,uuid,bigint) owner to vortex_record_adapter;
+alter function vortex_record.named_action_deleted_subject_replay_internal(uuid,text,uuid,bigint,uuid,uuid) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.named_action_deleted_subject_replay_internal(
-  uuid, text, uuid, bigint, uuid, uuid, uuid, bigint
+  uuid, text, uuid, bigint, uuid, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.named_action_deleted_subject_replay_internal(
-  uuid, text, uuid, bigint, uuid, uuid, uuid, bigint
+  uuid, text, uuid, bigint, uuid, uuid
 ) is
   'Private named-action step: for an installed action that declares record.delete, reports the stored outcome of the completed protected delete carrying the same command identity and revision (the deleted revision and no values), because a deleted subject cannot be projected. Returns null otherwise.';

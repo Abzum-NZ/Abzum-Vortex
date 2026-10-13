@@ -29,7 +29,6 @@ declare
   organization_id_value uuid;
   application_root_id_value uuid;
   actor_id_value uuid;
-  command_fingerprint_value text;
   receipt_claim jsonb;
   installation jsonb;
   loaded jsonb;
@@ -56,7 +55,7 @@ declare
 begin
   -- The terminal delete, restore and ownership-transfer writes now run inside the
   -- one protected apply_record_changes operation. Each branch is the exact body
-  -- its own writer used to carry, so its receipt, fingerprint, Activity and
+  -- its own writer used to carry, so its receipt, Activity and
   -- Events are unchanged; only the entry point moved. The delete and restore
   -- branches complete the record_lifecycle receipt the protected preflight
   -- already claimed and, for a delete, already soft-deleted behind; the transfer
@@ -65,13 +64,14 @@ begin
     context_value := vortex_access.validated_human_request_context();
     receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
     if receipt.command_id is null
-      or receipt.state is distinct from 'pending'
-      or receipt.operation is distinct from 'delete'
-      or receipt.record_type_id is distinct from p_record_type_id
-      or receipt.record_id is distinct from p_record_id
-      or receipt.expected_concurrency_number is distinct from p_expected_concurrency_number then
+      or receipt.result is not null then
       raise exception using errcode = '55000',
         message = 'Protected record delete is not prepared';
+    end if;
+    if p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
+      or p_occurrence_id is null or p_occurrence_id = '00000000-0000-0000-0000-000000000000'::uuid then
+      raise exception using errcode = '22023',
+        message = 'Protected record delete identities are invalid';
     end if;
 
     -- Closure identity and revisions are re-derived under the held locks rather
@@ -90,9 +90,9 @@ begin
     for effect_row in
       select effect.*
       from vortex_record.record_lifecycle_command_effects as effect
-      where effect.organization_id = receipt.organization_id
-        and effect.application_root_id = receipt.application_root_id
-        and effect.actor_organization_account_id = receipt.actor_organization_account_id
+      where effect.organization_id = (context_value ->> 'organizationId')::uuid
+        and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+        and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
         and effect.command_id = receipt.command_id
       order by effect.effect_sequence
     loop
@@ -107,7 +107,7 @@ begin
           'occurrenceId', case
             when event_kind = 'deleted' and effect_row.record_id = p_record_id
               and effect_row.record_type_id = p_record_type_id
-              then receipt.occurrence_id
+              then p_occurrence_id
             else pg_catalog.gen_random_uuid() end,
           'descriptor', pg_catalog.jsonb_build_object(
             'kind', 'standard', 'eventKind', event_kind,
@@ -125,20 +125,20 @@ begin
     select pg_catalog.array_agg(distinct effect.record_id order by effect.record_id)
       into subject_ids
     from vortex_record.record_lifecycle_command_effects as effect
-    where effect.organization_id = receipt.organization_id
-      and effect.application_root_id = receipt.application_root_id
-      and effect.actor_organization_account_id = receipt.actor_organization_account_id
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
       and effect.command_id = receipt.command_id;
     if subject_ids is null or not (p_record_id = any (subject_ids)) then
       raise exception using errcode = '55000',
         message = 'Protected record delete effects are unavailable';
     end if;
     perform vortex_record.append_record_lifecycle_activity_internal(
-      receipt.activity_id, 'delete', subject_ids
+      p_activity_id, 'delete', subject_ids
     );
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_lifecycle', p_command_id, null, p_expected_concurrency_number + 1,
+      'record_lifecycle', p_command_id, p_record_id, p_expected_concurrency_number + 1,
       'Protected record delete receipt is stale'
     );
 
@@ -153,13 +153,13 @@ begin
     context_value := vortex_access.validated_human_request_context();
     receipt := vortex_record.lock_command_receipt_internal('record_lifecycle', p_command_id);
     if receipt.command_id is null
-      or receipt.state is distinct from 'pending'
-      or receipt.operation is distinct from 'restore'
-      or receipt.record_type_id is distinct from p_record_type_id
-      or receipt.record_id is distinct from p_record_id
-      or receipt.expected_concurrency_number is distinct from p_expected_concurrency_number then
+      or receipt.result is not null then
       raise exception using errcode = '55000',
         message = 'Protected record restore is not prepared';
+    end if;
+    if p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid then
+      raise exception using errcode = '22023',
+        message = 'Protected record restore identities are invalid';
     end if;
 
     preparation := vortex_record.prepare_record_lifecycle_totals_internal(
@@ -182,11 +182,11 @@ begin
     where item.value ->> 'recordKey' = 'root';
 
     perform vortex_record.append_record_lifecycle_activity_internal(
-      receipt.activity_id, 'restore', array[p_record_id]::uuid[]
+      p_activity_id, 'restore', array[p_record_id]::uuid[]
     );
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_lifecycle', p_command_id, null, restored_revision,
+      'record_lifecycle', p_command_id, p_record_id, restored_revision,
       'Protected record restore receipt is stale'
     );
 
@@ -237,14 +237,8 @@ begin
     organization_id_value := (context_value ->> 'organizationId')::uuid;
     application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
     actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
-    command_fingerprint_value := vortex_record.ownership_transfer_command_fingerprint_internal(
-      p_command_id, p_record_type_id, p_record_id, p_expected_concurrency_number,
-      target_kind, target_id, 'public', null
-    );
-
     receipt_claim := vortex_record.claim_command_receipt_internal(
-      'record_save', p_command_id, 'transfer_ownership', command_fingerprint_value,
-      p_record_type_id, null, '{}'::jsonb, '{}'::jsonb, false
+      'record_save', p_command_id, false
     );
     if receipt_claim ->> 'status' is distinct from 'claimed' then
       if receipt_claim ->> 'status' = 'identity_conflict' then
@@ -649,4 +643,4 @@ grant execute on function vortex_record.apply_lifecycle_record_changes_internal(
 comment on function vortex_record.apply_lifecycle_record_changes_internal(
   text, uuid, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
-  'The terminal delete, restore and ownership-transfer record-change writes, applied inside the one protected operation: each keeps its own receipt kind, fingerprint, Activity and Event, and completes the preflight its protected preflight (delete and restore) or itself (ownership transfer) claimed.';
+  'The terminal delete, restore and ownership-transfer record-change writes, applied inside the one protected operation: each keeps its own receipt kind, Activity and Event, and completes the preflight its protected preflight (delete and restore) or itself (ownership transfer) claimed.';

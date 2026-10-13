@@ -86,7 +86,6 @@ declare
   application_root_id_value uuid;
   actor_id_value uuid;
   correlation_id_value uuid;
-  command_fingerprint_value text;
   receipt_claim jsonb;
   meta jsonb;
   loaded jsonb;
@@ -202,7 +201,7 @@ begin
 
   if p_action is not null then
     -- A named action names its exact installed action and carries its typed
-    -- inputs; the receipt fingerprint, the field rules and the facts all follow
+    -- inputs; the field rules and the facts all follow
     -- from that identity. Nothing about the actor or the organization is read
     -- from it: both come from the verified request context below.
     if pg_catalog.jsonb_typeof(p_action) is distinct from 'object'
@@ -679,19 +678,8 @@ begin
       );
       return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
     end if;
-    command_fingerprint_value := vortex_record.named_action_command_fingerprint_internal(
-      p_command_id, action_owner_kind, action_owner_id,
-      action_release_revision, action_id_value, p_record_type_id, p_record_id,
-      p_expected_concurrency_number, action_inputs
-    );
     receipt_claim := vortex_record.claim_command_receipt_internal(
-      'named_action', effective_command_id, 'named_action', command_fingerprint_value,
-      p_record_type_id, p_record_id, pg_catalog.jsonb_build_object(
-        'actionOwnerKind', action_owner_kind,
-        'actionOwnerId', action_owner_id,
-        'actionReleaseRevision', action_release_revision,
-        'actionId', action_id_value
-      ), '{}'::jsonb, false
+      'named_action', effective_command_id, false
     );
     if receipt_claim ->> 'status' is distinct from 'claimed' then
       if receipt_claim ->> 'status' = 'identity_conflict' then
@@ -742,7 +730,7 @@ begin
     end if;
     if creation_count = 0 then
       perform vortex_record.complete_command_receipt_internal(
-        'named_action', effective_command_id, null, p_expected_concurrency_number,
+        'named_action', effective_command_id, p_record_id, p_expected_concurrency_number,
         'Named action receipt is stale'
       );
     else
@@ -761,28 +749,12 @@ begin
   end if;
 
   if action_mode then
-    command_fingerprint_value := vortex_record.named_action_command_fingerprint_internal(
-      p_command_id, action_owner_kind, action_owner_id,
-      action_release_revision, action_id_value, p_record_type_id, p_record_id,
-      p_expected_concurrency_number, action_inputs
-    );
     receipt_claim := vortex_record.claim_command_receipt_internal(
-      'named_action', effective_command_id, 'named_action', command_fingerprint_value,
-      p_record_type_id, p_record_id, pg_catalog.jsonb_build_object(
-        'actionOwnerKind', action_owner_kind,
-        'actionOwnerId', action_owner_id,
-        'actionReleaseRevision', action_release_revision,
-        'actionId', action_id_value
-      ), '{}'::jsonb, false
+      'named_action', effective_command_id, false
     );
   else
-    command_fingerprint_value := vortex_record.base_save_command_fingerprint_internal(
-      p_command_id, p_operation, p_record_type_id, p_record_id,
-      p_expected_concurrency_number, p_submitted_values, p_selected_group_id
-    );
     receipt_claim := vortex_record.claim_command_receipt_internal(
-      'record_save', effective_command_id, p_operation, command_fingerprint_value,
-      p_record_type_id, null, '{}'::jsonb, '{}'::jsonb, false
+      'record_save', effective_command_id, false
     );
   end if;
   if receipt_claim ->> 'status' is distinct from 'claimed' then
@@ -1785,7 +1757,7 @@ begin
       );
     else
       perform vortex_record.complete_command_receipt_internal(
-        'named_action', effective_command_id, null, p_expected_concurrency_number,
+        'named_action', effective_command_id, p_record_id, p_expected_concurrency_number,
         'Named action receipt is stale'
       );
     end if;
@@ -1851,4 +1823,4 @@ grant execute on function vortex_record.apply_record_changes(
 comment on function vortex_record.apply_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, jsonb, uuid, uuid, jsonb
 ) is
-  'The one protected Record-change operation: claims one live or preview-local receipt and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
+  'The one protected Record-change operation: claims one command receipt (a preview command carries its own preview-scoped id) and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';

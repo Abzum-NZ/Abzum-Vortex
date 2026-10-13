@@ -17,7 +17,7 @@ set search_path = ''
 as $function$
 declare
   context_value jsonb; organization_id_value uuid; application_root_id_value uuid;
-  actor_id_value uuid; fingerprint text; receipt_claim jsonb;
+  actor_id_value uuid; receipt_claim jsonb;
   loaded jsonb; decision jsonb; record_fact jsonb; type_fact jsonb;
   previous_owner uuid; updated_concurrency bigint; changed_rows integer; event_result jsonb;
   evaluation_facts jsonb;
@@ -46,12 +46,8 @@ begin
   if correlation_id_value is null or not vortex_platform.is_non_nil_uuid(correlation_id_value::text) then
     raise exception using errcode='42501',message='Offboarding ownership transfer authority is unavailable';
   end if;
-  fingerprint := vortex_record.ownership_transfer_command_fingerprint_internal(
-    p_command_id,p_record_type_id,p_record_id,p_expected_concurrency_number,p_target_kind,p_target_id,
-    'offboarding',p_source_organization_account_id);
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_save', p_command_id, 'transfer_ownership', fingerprint,
-    p_record_type_id, null, '{}'::jsonb, '{}'::jsonb, false
+    'record_save', p_command_id, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then

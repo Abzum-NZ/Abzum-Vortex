@@ -29,7 +29,6 @@ declare
   application_root_id_value uuid;
   actor_id_value uuid;
   correlation_id_value uuid;
-  fingerprint_value text;
   receipt_claim jsonb;
   projection jsonb;
   decision jsonb;
@@ -73,14 +72,9 @@ begin
   if effective_command_id is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
-  fingerprint_value := vortex_record.base_save_command_fingerprint_internal(
-    p_command_id, p_operation, p_record_type_id, p_record_id,
-    p_expected_concurrency_number, p_submitted_values, p_selected_group_id
-  );
 
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_save', effective_command_id, p_operation, fingerprint_value,
-    p_record_type_id, null, '{}'::jsonb, '{}'::jsonb, true
+    'record_save', effective_command_id, true
   );
   if receipt_claim ->> 'status' is distinct from 'none' then
     if receipt_claim ->> 'status' = 'identity_conflict' then

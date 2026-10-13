@@ -15,7 +15,6 @@ declare
   nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   context_value jsonb;
   correlation_value jsonb;
-  fingerprint_value text;
   receipt_claim jsonb;
   restore_result jsonb;
   storage_row vortex_record.storage_catalogue%rowtype;
@@ -73,19 +72,8 @@ begin
         then (context_value ->> 'applicationRootId')::uuid else null end,
       p_expected_concurrency_number;
   end if;
-  fingerprint_value := vortex_record.record_lifecycle_command_fingerprint_internal(
-    p_command_id, 'restore', p_record_type_id, p_record_id, p_expected_concurrency_number
-  );
-
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, 'restore', fingerprint_value,
-    p_record_type_id, p_record_id, '{}'::jsonb,
-    pg_catalog.jsonb_build_object(
-      'expectedConcurrencyNumber', p_expected_concurrency_number,
-      'recoveryPolicyRevision', expected_policy_revision,
-      'activityId', p_activity_id,
-      'occurrenceId', null
-    ), false
+    'record_lifecycle', p_command_id, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then

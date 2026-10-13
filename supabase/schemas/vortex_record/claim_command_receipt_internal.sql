@@ -1,12 +1,6 @@
 create or replace function vortex_record.claim_command_receipt_internal(
   p_command_kind text,
   p_command_id uuid,
-  p_operation text,
-  p_fingerprint text,
-  p_record_type_id uuid,
-  p_record_id uuid,
-  p_identity jsonb,
-  p_details jsonb,
   p_replay_only boolean
 )
 returns jsonb
@@ -18,161 +12,71 @@ as $function$
 declare
   context_value jsonb;
   organization_id_value uuid;
-  application_root_id_value uuid;
-  actor_id_value uuid;
-  identity_value jsonb := coalesce(p_identity, '{}'::jsonb);
+  tenant_id_value uuid;
   inserted_command_id uuid;
   receipt vortex_record.command_receipts%rowtype;
-  preview_value jsonb;
-  preview_installation_id_value uuid;
-  inserted_preview_command_id uuid;
-  preview_receipt vortex_record.preview_command_receipts%rowtype;
 begin
   context_value := vortex_access.validated_human_request_context();
   organization_id_value := (context_value ->> 'organizationId')::uuid;
-  application_root_id_value := (context_value ->> 'applicationRootId')::uuid;
-  actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
-  preview_value := vortex_record.read_current_preview_installation_internal();
-  if preview_value is not null then
-    if preview_value ->> 'outcome' = 'refused' then
-      raise exception using errcode = '42501',
-        message = 'Preview Record command is unavailable';
-    end if;
-    if p_command_kind <> 'record_save'
-      or p_operation not in ('create', 'update')
-      or p_record_id is not null
-      or identity_value is distinct from '{}'::jsonb then
-      return pg_catalog.jsonb_build_object('status', 'identity_conflict');
-    end if;
-    preview_installation_id_value :=
-      (preview_value ->> 'previewInstallationId')::uuid;
-    if not p_replay_only then
-      insert into vortex_record.preview_command_receipts (
-        preview_installation_id, organization_id, application_root_id,
-        actor_organization_account_id, command_kind, command_id, operation,
-        command_fingerprint, record_type_id, state
-      ) values (
-        preview_installation_id_value, organization_id_value,
-        application_root_id_value, actor_id_value, p_command_kind, p_command_id,
-        p_operation, p_fingerprint, p_record_type_id, 'pending'
-      )
-      on conflict do nothing
-      returning command_id into inserted_preview_command_id;
-      if inserted_preview_command_id is not null then
-        return pg_catalog.jsonb_build_object('status', 'claimed');
-      end if;
-    end if;
-    if p_replay_only then
-      select stored.* into preview_receipt
-      from vortex_record.preview_command_receipts as stored
-      where stored.preview_installation_id = preview_installation_id_value
-        and stored.command_kind = p_command_kind
-        and stored.command_id = p_command_id
-        and stored.organization_id = organization_id_value
-        and stored.application_root_id = application_root_id_value
-        and stored.actor_organization_account_id = actor_id_value;
-    else
-      select stored.* into preview_receipt
-      from vortex_record.preview_command_receipts as stored
-      where stored.preview_installation_id = preview_installation_id_value
-        and stored.command_kind = p_command_kind
-        and stored.command_id = p_command_id
-        and stored.organization_id = organization_id_value
-        and stored.application_root_id = application_root_id_value
-        and stored.actor_organization_account_id = actor_id_value
-      for update;
-    end if;
-    if not found then
-      return pg_catalog.jsonb_build_object('status', 'none');
-    end if;
-    if preview_receipt.command_fingerprint is distinct from p_fingerprint
-      or preview_receipt.operation is distinct from p_operation
-      or preview_receipt.record_type_id is distinct from p_record_type_id then
-      return pg_catalog.jsonb_build_object('status', 'identity_conflict');
-    end if;
-    if preview_receipt.state is distinct from 'completed' then
-      return pg_catalog.jsonb_build_object('status', 'pending');
-    end if;
-    return pg_catalog.jsonb_build_object(
-      'status', 'completed',
-      'recordId', preview_receipt.record_id,
-      'concurrencyNumber', preview_receipt.concurrency_number
-    );
-  end if;
+  tenant_id_value := (context_value ->> 'tenantId')::uuid;
 
-  -- The command identity is claimed as pending. A claim that finds an existing
-  -- receipt locks it and classifies it; a replay-only read classifies without
-  -- inserting or locking.
+  -- The command id is claimed as pending (no result yet). A claim that finds an
+  -- existing receipt locks it and classifies it; a replay-only read classifies
+  -- without inserting or locking.
   if not p_replay_only then
     insert into vortex_record.command_receipts (
-      organization_id, application_root_id, actor_organization_account_id,
-      command_kind, command_id, operation, command_fingerprint, record_type_id,
-      record_id, command_identity, expected_concurrency_number, recovery_policy_revision,
-      activity_id, occurrence_id, state
+      command_id, organization_id, tenant_id, command_kind
     ) values (
-      organization_id_value, application_root_id_value, actor_id_value,
-      p_command_kind, p_command_id, p_operation, p_fingerprint, p_record_type_id,
-      p_record_id, identity_value,
-      (p_details ->> 'expectedConcurrencyNumber')::bigint,
-      (p_details ->> 'recoveryPolicyRevision')::bigint,
-      (p_details ->> 'activityId')::uuid,
-      (p_details ->> 'occurrenceId')::uuid,
-      'pending'
+      p_command_id, organization_id_value, tenant_id_value, p_command_kind
     )
-    on conflict do nothing
+    on conflict (command_id) do nothing
     returning command_id into inserted_command_id;
     if inserted_command_id is not null then
       return pg_catalog.jsonb_build_object('status', 'claimed');
     end if;
     select stored.* into receipt
     from vortex_record.command_receipts as stored
-    where stored.organization_id = organization_id_value
-      and stored.application_root_id = application_root_id_value
-      and stored.actor_organization_account_id = actor_id_value
-      and stored.command_kind = p_command_kind
-      and stored.command_id = p_command_id
+    where stored.command_id = p_command_id
     for update;
+    if not found then
+      raise exception using errcode = '40001',
+        message = 'Command receipt was released while it was claimed';
+    end if;
   else
     select stored.* into receipt
     from vortex_record.command_receipts as stored
-    where stored.organization_id = organization_id_value
-      and stored.application_root_id = application_root_id_value
-      and stored.actor_organization_account_id = actor_id_value
-      and stored.command_kind = p_command_kind
-      and stored.command_id = p_command_id;
+    where stored.command_id = p_command_id;
     if not found then
       return pg_catalog.jsonb_build_object('status', 'none');
     end if;
   end if;
 
-  if not found
-    or receipt.command_fingerprint is distinct from p_fingerprint
-    or receipt.operation is distinct from p_operation
-    or receipt.record_type_id is distinct from p_record_type_id
-    or receipt.command_identity is distinct from identity_value
-    or (p_record_id is not null and receipt.record_id is distinct from p_record_id) then
+  -- A command id replays only inside the scope that stored it.
+  if receipt.organization_id is distinct from organization_id_value
+    or receipt.tenant_id is distinct from tenant_id_value
+    or receipt.command_kind is distinct from p_command_kind then
     return pg_catalog.jsonb_build_object('status', 'identity_conflict');
   end if;
-  if receipt.state is distinct from 'completed' then
+  if receipt.result is null then
     return pg_catalog.jsonb_build_object('status', 'pending');
   end if;
   return pg_catalog.jsonb_build_object(
     'status', 'completed',
-    'recordId', receipt.record_id,
-    'concurrencyNumber', receipt.concurrency_number
+    'recordId', receipt.result -> 'recordId',
+    'concurrencyNumber', receipt.result -> 'concurrencyNumber'
   );
 end
 $function$;
 
-alter function vortex_record.claim_command_receipt_internal(text,uuid,text,text,uuid,uuid,jsonb,jsonb,boolean) owner to vortex_record_adapter;
+alter function vortex_record.claim_command_receipt_internal(text,uuid,boolean) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.claim_command_receipt_internal(
-  text, uuid, text, text, uuid, uuid, jsonb, jsonb, boolean
+  text, uuid, boolean
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.claim_command_receipt_internal(
-  text, uuid, text, text, uuid, uuid, jsonb, jsonb, boolean
+  text, uuid, boolean
 ) to vortex_record_adapter;
 comment on function vortex_record.claim_command_receipt_internal(
-  text, uuid, text, text, uuid, uuid, jsonb, jsonb, boolean
+  text, uuid, boolean
 ) is
-  'The one command-receipt claim and replay classifier. Claims the request actor''s live or preview-local command identity as pending, or classifies its receipt as identity_conflict, pending or completed with its stored result; with p_replay_only it only reads, returning none when there is no receipt.';
+  'The one command-receipt claim and replay classifier. Claims the command id as pending, or classifies its receipt as identity_conflict (stored under another organisation, tenant or command kind), pending or completed with its stored result; with p_replay_only it only reads, returning none when there is no receipt.';
