@@ -91,9 +91,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Static Next assets, immutable component bundles and images bypass the session proxy; keep
-  // application paths covered even when a tenant is named "api".
+  // Static Next assets, immutable component bundles, images and the exact public health check
+  // bypass the session proxy; keep application paths covered even when a tenant is named "api"
+  // or "health". The install manifest stays covered: it needs the verified session header.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/components/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/components/|health$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
