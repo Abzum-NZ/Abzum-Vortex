@@ -2,22 +2,20 @@ import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import type { ConnectionTypeSourceDocument } from "../schema";
 
 /**
- * The one derivation of every platform catalogue release fingerprint. The publication catalogue
- * uses it to materialise and verify releases, and it derived the fingerprints the contracts
- * catalogues carry, so a release fingerprint has one definition. This module is plain, erasable
- * TypeScript with no server-only import.
+ * The one derivation of each platform catalogue release content hash. The publication catalogue
+ * uses the same hash that the server-owned catalogue materialises when it loads a release.
+ * This module is plain, erasable TypeScript with no server-only import.
  */
-type CatalogueReleaseFingerprints = Readonly<{
+type CatalogueReleaseContentHash = Readonly<{
   contentFingerprint: `sha256:${string}`;
-  catalogueFingerprint: `sha256:${string}`;
 }>;
 
 /** A provider-neutral connection release hashes the same canonical content the compiler emits. */
-export const platformConnectionTypeReleaseFingerprints = (definition: {
+export const platformConnectionTypeReleaseContentHash = (definition: {
   source: ConnectionTypeSourceDocument;
   rootId: string;
   releaseVersion: string;
-}): CatalogueReleaseFingerprints => {
+}): CatalogueReleaseContentHash => {
   const source = definition.source;
   const body = source.body;
   const authentication = body.authentication;
@@ -69,21 +67,11 @@ export const platformConnectionTypeReleaseFingerprints = (definition: {
     ...(body.health_operation ? { healthOperationKey: body.health_operation } : {}),
     ...(body.revocation_operation ? { revocationOperationKey: body.revocation_operation } : {}),
   };
-  const contentFingerprint = fingerprintCanonicalValue(canonical);
-  return {
-    contentFingerprint,
-    catalogueFingerprint: fingerprintCanonicalValue({
-      kind: "connection_type",
-      key: source.key,
-      rootId: definition.rootId,
-      releaseVersion: definition.releaseVersion,
-      sourceFingerprint: fingerprintCanonicalValue(source),
-    }),
-  };
+  return { contentFingerprint: fingerprintCanonicalValue(canonical) };
 };
 
-/** A block release's content is its own metadata; its catalogue fingerprint binds identity to it. */
-export const platformBlockReleaseFingerprints = (definition: {
+/** A block release's content hash is its metadata hash. */
+export const platformBlockReleaseContentHash = (definition: {
   blockId: string;
   key: string;
   releaseVersion: string;
@@ -97,7 +85,7 @@ export const platformBlockReleaseFingerprints = (definition: {
   supportedEvents: unknown;
   supportedStateOperations: unknown;
   customComponent?: unknown;
-}): CatalogueReleaseFingerprints => {
+}): CatalogueReleaseContentHash => {
   const contentFingerprint = fingerprintCanonicalValue({
     name: definition.name,
     icon: definition.icon,
@@ -109,56 +97,26 @@ export const platformBlockReleaseFingerprints = (definition: {
     supportedEvents: definition.supportedEvents,
     supportedStateOperations: definition.supportedStateOperations,
     // A custom component release's bundle manifest and declared events are part of its content,
-    // so any bundle digest change moves its content and catalogue fingerprints. The field is
-    // omitted for platform block releases, whose fingerprints stay unchanged.
+    // so a bundle digest change updates its content hash.
     ...(definition.customComponent === undefined
       ? {}
       : { customComponent: definition.customComponent }),
   });
-  return {
-    contentFingerprint,
-    catalogueFingerprint: fingerprintCanonicalValue({
-      kind: "platform_block",
-      blockId: definition.blockId,
-      key: definition.key,
-      releaseVersion: definition.releaseVersion,
-      contentFingerprint,
-    }),
-  };
+  return { contentFingerprint };
 };
 
 /** A theme release's content is its token map. */
-export const platformThemeReleaseFingerprints = (definition: {
+export const platformThemeReleaseContentHash = (definition: {
   catalogueThemeId: string;
   releaseVersion: string;
   tokens: unknown;
-}): CatalogueReleaseFingerprints => {
-  const contentFingerprint = fingerprintCanonicalValue(definition.tokens);
-  return {
-    contentFingerprint,
-    catalogueFingerprint: fingerprintCanonicalValue({
-      kind: "platform_theme",
-      catalogueThemeId: definition.catalogueThemeId,
-      releaseVersion: definition.releaseVersion,
-      contentFingerprint,
-    }),
-  };
+}): CatalogueReleaseContentHash => {
+  return { contentFingerprint: fingerprintCanonicalValue(definition.tokens) };
 };
 
 /** A platform-service operation release's content is its typed descriptor. */
-export const platformServiceOperationReleaseFingerprints = (
-  release: { serviceId: string; operationId: string; releaseVersion: string },
+export const platformServiceOperationReleaseContentHash = (
   descriptor: unknown,
-): CatalogueReleaseFingerprints => {
-  const contentFingerprint = fingerprintCanonicalValue(descriptor);
-  return {
-    contentFingerprint,
-    catalogueFingerprint: fingerprintCanonicalValue({
-      kind: "platform_service_operation",
-      serviceId: release.serviceId,
-      operationId: release.operationId,
-      releaseVersion: release.releaseVersion,
-      contentFingerprint,
-    }),
-  };
+): CatalogueReleaseContentHash => {
+  return { contentFingerprint: fingerprintCanonicalValue(descriptor) };
 };

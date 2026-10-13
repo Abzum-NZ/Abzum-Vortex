@@ -126,22 +126,19 @@ begin
             'key', dependency.dependency_reference,
             'rootId', dependency.catalogue_item_id,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'platform_block' then pg_catalog.jsonb_build_object(
             'kind', 'platform_block',
             'blockId', dependency.catalogue_item_id,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'platform_theme' then pg_catalog.jsonb_build_object(
             'kind', 'platform_theme',
             'catalogueThemeId', dependency.dependency_reference,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           else dependency.dependency_entry
         end
@@ -258,7 +255,9 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'permissionId', '0548c061-b1a9-48e5-a04a-eb1d0dae0644'
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),

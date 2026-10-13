@@ -7,7 +7,6 @@
       "includeEntryExports": false,
       "entry": [
         "tooling/guard/guard.ts",
-        "tooling/generate-catalogue-fingerprints.mjs",
         "tooling/supabase/ensure-local-signing-key.mjs"
       ],
       "project": ["tooling/**/*.{js,mjs,ts}"]

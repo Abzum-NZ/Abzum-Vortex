@@ -21,7 +21,11 @@ import {
 } from "./page-composition";
 import { PagePuckRenderer } from "./page-puck-renderer";
 import { cn } from "./lib/utils";
-import type { PlatformComponentRegistry, RuntimeInputsByPlacement } from "./registry";
+import type {
+  FieldInputControlReleaseMap,
+  PlatformComponentRegistry,
+  RuntimeInputsByPlacement,
+} from "./registry";
 import {
   CONTROL_EVENT_NAMES,
   type ControlSemanticEventName,
@@ -30,7 +34,7 @@ import {
   DISPLAY_EVENT_NAMES,
   type DisplaySemanticEventName,
 } from "./display/projected-data";
-import type { ThemeMode } from "./theme";
+import type { PlatformThemeTokens, ThemeMode } from "./theme";
 
 /**
  * Browser side of the exact-draft Application preview (#597).
@@ -349,6 +353,8 @@ const validateSamplePlacementKeys = (
 export type ApplicationPreviewProps = Readonly<{
   artifact: ApplicationPreviewArtifact;
   registry: PlatformComponentRegistry;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
   breakpoint?: Breakpoint;
   themeMode?: ThemeMode;
   locale?: string;
@@ -382,6 +388,8 @@ const outcomeLabel = (outcome: ApplicationPreviewOutcome): string => {
 export function ApplicationPreview({
   artifact,
   registry,
+  fieldInputControlReleases,
+  platformThemeTokens,
   breakpoint = artifact.breakpoint,
   themeMode,
   locale,
@@ -528,6 +536,8 @@ export function ApplicationPreview({
         <PagePuckRenderer
           composition={composition}
           registry={registry}
+          fieldInputControlReleases={fieldInputControlReleases}
+          platformThemeTokens={platformThemeTokens}
           pageId={artifact.pageId}
           {...(artifact.activeStepId === undefined ? {} : { activeStepId: artifact.activeStepId })}
           breakpoint={breakpoint}

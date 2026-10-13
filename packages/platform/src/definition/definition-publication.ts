@@ -185,7 +185,6 @@ export type ResolvableConnectionTypeRelease = Readonly<{
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;
   contentFingerprint: Fingerprint;
-  catalogueFingerprint: Fingerprint;
   compilationOutput: ConnectionOutput;
 }>;
 
@@ -979,9 +978,7 @@ const resolveApplicationComposition = async (
     if (
       release === undefined ||
       !stable(release.releaseVersion) ||
-      release.releaseVersion !== authored.release_version ||
-      release.contentFingerprint !== authored.content_fingerprint ||
-      release.catalogueFingerprint !== authored.catalogue_fingerprint
+      release.releaseVersion !== authored.release_version
     )
       return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
     if (pinned !== undefined) {
@@ -993,8 +990,7 @@ const resolveApplicationComposition = async (
       );
       if (
         exact.releaseVersion !== release.releaseVersion ||
-        exact.contentFingerprint !== release.contentFingerprint ||
-        exact.catalogueFingerprint !== release.catalogueFingerprint
+        exact.contentFingerprint !== release.contentFingerprint
       )
         refuse("DEFINITION_CONFIRMATION_MISMATCH");
     }
@@ -1003,8 +999,6 @@ const resolveApplicationComposition = async (
   if (
     snapshot.platformTheme.catalogueThemeId !== base.catalogue_theme_id ||
     snapshot.platformTheme.releaseVersion !== base.release_version ||
-    snapshot.platformTheme.contentFingerprint !== base.content_fingerprint ||
-    snapshot.platformTheme.catalogueFingerprint !== base.catalogue_fingerprint ||
     !stable(snapshot.platformTheme.releaseVersion)
   )
     refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
@@ -1012,8 +1006,7 @@ const resolveApplicationComposition = async (
     const exact = findPinned(pinned, "platform_theme", String(base.catalogue_theme_id));
     if (
       exact.releaseVersion !== snapshot.platformTheme.releaseVersion ||
-      exact.contentFingerprint !== snapshot.platformTheme.contentFingerprint ||
-      exact.catalogueFingerprint !== snapshot.platformTheme.catalogueFingerprint
+      exact.contentFingerprint !== snapshot.platformTheme.contentFingerprint
     )
       refuse("DEFINITION_CONFIRMATION_MISMATCH");
   }
@@ -1082,9 +1075,8 @@ const resolveDependencies = async (
             refuse("DEFINITION_CONFIRMATION_MISMATCH");
           release = await catalogue.readConnectionTypeRelease(exact.rootId, exact.releaseVersion);
           if (
-            release === undefined ||
-            release.contentFingerprint !== exact.contentFingerprint ||
-            release.catalogueFingerprint !== exact.catalogueFingerprint
+          release === undefined ||
+            release.contentFingerprint !== exact.contentFingerprint
           )
             refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
         }
@@ -1146,8 +1138,7 @@ const resolveDependencies = async (
         const pinnedOperation = exact[0]!;
         if (
           pinnedOperation.releaseVersion !== release.releaseVersion ||
-          pinnedOperation.contentFingerprint !== release.contentFingerprint ||
-          pinnedOperation.catalogueFingerprint !== release.catalogueFingerprint
+          pinnedOperation.contentFingerprint !== release.contentFingerprint
         )
           refuse("DEFINITION_CONFIRMATION_MISMATCH");
       }
@@ -1360,7 +1351,6 @@ const flowTargetManifestFor = (
       releaseVersion: release.releaseVersion,
       contentFingerprint: release.contentFingerprint,
       resolutionFingerprint: output.resolutionFingerprint,
-      catalogueFingerprint: release.catalogueFingerprint,
     }),
   );
   return [...flowEntries, ...flowNodeEntries, ...platformOperationEntries];
@@ -1387,7 +1377,6 @@ const manifestFor = (
       rootId: release.rootId,
       releaseVersion: release.releaseVersion,
       contentFingerprint: release.contentFingerprint,
-      catalogueFingerprint: release.catalogueFingerprint,
     })),
     ...(dependencies.composition === undefined
       ? []
@@ -1397,14 +1386,12 @@ const manifestFor = (
             blockId: release.blockId,
             releaseVersion: release.releaseVersion,
             contentFingerprint: release.contentFingerprint,
-            catalogueFingerprint: release.catalogueFingerprint,
           })),
           {
             kind: "platform_theme" as const,
             catalogueThemeId: dependencies.composition.platformTheme.catalogueThemeId,
             releaseVersion: dependencies.composition.platformTheme.releaseVersion,
             contentFingerprint: dependencies.composition.platformTheme.contentFingerprint,
-            catalogueFingerprint: dependencies.composition.platformTheme.catalogueFingerprint,
           },
         ]),
     ...flowTargetManifestFor(dependencies, output, resolution),

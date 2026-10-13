@@ -4,7 +4,7 @@ import {
   type PlatformServiceOperationRelease,
   type ProtectedOperationDescriptor,
 } from "../definition/application-flow-bindings";
-import { generatedReleaseFingerprints } from "./catalogue/generated-fingerprints";
+import { platformServiceOperationReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import sources from "./catalogue/platform-service-operation-catalogue.source.json";
 
 const deepFreeze = <Value>(value: Value): Value => {
@@ -36,10 +36,7 @@ const entry = (definition: {
     name: definition.name,
     release: platformServiceOperationReleaseSchema.parse({
       ...definition.release,
-      ...generatedReleaseFingerprints(
-        "platformServiceOperations",
-        `${definition.release.serviceId}:${definition.release.operationId}:${definition.release.releaseVersion}`,
-      ),
+      ...platformServiceOperationReleaseContentHash(definition.descriptor),
     }),
     descriptor: protectedOperationDescriptorSchema.parse(definition.descriptor),
   });
@@ -50,14 +47,9 @@ const entry = (definition: {
  * that runs under the current human's own authority in the owning Access service, which
  * re-authorises it and never accepts an organisation or actor from its caller, so a flow carries
  * only the target record's identity, its expected revision and the new values. Each release is
- * parsed through its contract at module load and deep-frozen. Its content fingerprint is the
- * canonical-JSON SHA-256 of the descriptor and its catalogue fingerprint that of
- * `{ kind: "platform_service_operation", serviceId, operationId, releaseVersion,
- * contentFingerprint }`. The operations live in catalogue/platform-service-operation-catalogue.source.json
- * and `pnpm catalogue:fingerprints` derives both fingerprints from them into
- * catalogue/catalogue-fingerprints.generated.json, merged in by service, operation and release
- * version and never written by hand; the publication catalogue recomputes both when it is created,
- * so a changed descriptor without regenerated fingerprints refuses instead of publishing.
+ * parsed through its contract at module load and deep-frozen. Its content hash is the canonical-JSON
+ * SHA-256 of the descriptor, computed once as the catalogue loads. The publication catalogue
+ * recomputes it when validating a release, so a changed descriptor without a new release refuses.
  *
  * Access and Identity operations are registered here, including the grant-side assign-role and
  * add-membership operations, role creation, template acceptance and preparation of an existing

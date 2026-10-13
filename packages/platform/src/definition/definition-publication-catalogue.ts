@@ -35,11 +35,11 @@ import { compare } from "semver";
 import { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
-  platformBlockReleaseFingerprints,
-  platformConnectionTypeReleaseFingerprints,
-  platformServiceOperationReleaseFingerprints,
-  platformThemeReleaseFingerprints,
-} from "./catalogue-release-fingerprints";
+  platformBlockReleaseContentHash,
+  platformConnectionTypeReleaseContentHash,
+  platformServiceOperationReleaseContentHash,
+  platformThemeReleaseContentHash,
+} from "./catalogue-release-content-hashes";
 import { compileDefinitionSet } from "./validation";
 import type {
   DefinitionPublicationCatalogue,
@@ -51,7 +51,6 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;
   contentFingerprint?: string | undefined;
-  catalogueFingerprint?: string | undefined;
 }>;
 
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
@@ -62,12 +61,12 @@ export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
 
 export type PlatformBlockReleaseDefinition = Omit<
   PlatformBlockRelease,
-  "contentFingerprint" | "catalogueFingerprint" | "customComponent"
+  "contentFingerprint" | "customComponent"
 >;
 
 export type PlatformThemeReleaseDefinition = Omit<
   PlatformThemeRelease,
-  "contentFingerprint" | "catalogueFingerprint"
+  "contentFingerprint"
 >;
 
 export type CustomComponentReleaseDefinition = PlatformBlockReleaseDefinition &
@@ -128,10 +127,6 @@ const connectionTypeReleaseDefinitionSchema = z
       .string()
       .regex(/^sha256:[a-f0-9]{64}$/)
       .optional(),
-    catalogueFingerprint: z
-      .string()
-      .regex(/^sha256:[a-f0-9]{64}$/)
-      .optional(),
   })
   .strict();
 
@@ -139,13 +134,13 @@ const connectionTypeReleaseDefinitionSchema = z
 // arrive only through `customComponentReleases`, where their ownership and bundle rules apply.
 const platformBlockReleaseDefinitionSchema = z
   .object(platformBlockReleaseSchema.shape)
-  .omit({ contentFingerprint: true, catalogueFingerprint: true, customComponent: true })
+  .omit({ contentFingerprint: true, customComponent: true })
   .extend({ releaseVersion: stableDefinitionReleaseVersionSchema })
   .strict();
 
 const platformThemeReleaseDefinitionSchema = z
   .object(platformThemeReleaseSchema.shape)
-  .omit({ contentFingerprint: true, catalogueFingerprint: true })
+  .omit({ contentFingerprint: true })
   .extend({ releaseVersion: stableDefinitionReleaseVersionSchema })
   .strict();
 
@@ -298,19 +293,17 @@ const ensurePlatformThemeReleasesCoverEveryRole = (
 
 /**
  * The registered platform-service operations are published exactly as registered: each release's
- * content fingerprint must be the canonical-JSON SHA-256 of its descriptor and its catalogue
- * fingerprint that of its identity and content, so a descriptor edited without a new release
- * refuses instead of silently changing what an Application published against.
+ * content hash must be the canonical-JSON SHA-256 of its descriptor, so a descriptor edited
+ * without a new release refuses instead of silently changing what an Application published against.
  */
 const ensureRegisteredPlatformServiceOperationsAuthentic = (): void => {
   for (const { release, descriptor } of Object.values(PLATFORM_SERVICE_OPERATIONS)) {
-    const expected = platformServiceOperationReleaseFingerprints(release, descriptor);
+    const expected = platformServiceOperationReleaseContentHash(descriptor);
     if (
       descriptor.operation.owner.kind !== "platform_service" ||
       descriptor.operation.owner.serviceId !== release.serviceId ||
       descriptor.operation.operationId !== release.operationId ||
-      release.contentFingerprint !== expected.contentFingerprint ||
-      release.catalogueFingerprint !== expected.catalogueFingerprint
+      release.contentFingerprint !== expected.contentFingerprint
     )
       duplicate();
   }
@@ -347,21 +340,18 @@ const compileConnectionTypeRelease = (
   )[0];
   const connectionOutput =
     compilationOutput?.kind === "connection_type" ? compilationOutput : duplicate();
-  const fingerprints = platformConnectionTypeReleaseFingerprints(definition);
+  const contentHash = platformConnectionTypeReleaseContentHash(definition);
   if (
-    connectionOutput.artifact.contentFingerprint !== fingerprints.contentFingerprint ||
+    connectionOutput.artifact.contentFingerprint !== contentHash.contentFingerprint ||
     (definition.contentFingerprint !== undefined &&
-      definition.contentFingerprint !== fingerprints.contentFingerprint) ||
-    (definition.catalogueFingerprint !== undefined &&
-      definition.catalogueFingerprint !== fingerprints.catalogueFingerprint)
+      definition.contentFingerprint !== contentHash.contentFingerprint)
   )
     duplicate();
   return deepFreeze({
     key: definition.source.key,
     rootId: definition.rootId,
     releaseVersion: definition.releaseVersion,
-    contentFingerprint: fingerprints.contentFingerprint,
-    catalogueFingerprint: fingerprints.catalogueFingerprint,
+    contentFingerprint: contentHash.contentFingerprint,
     compilationOutput: connectionOutput,
   });
 };
@@ -372,7 +362,7 @@ const materialisePlatformBlockRelease = (
   return deepFreeze(
     platformBlockReleaseSchema.parse({
       ...definition,
-      ...platformBlockReleaseFingerprints(definition),
+      ...platformBlockReleaseContentHash(definition),
     }),
   );
 };
@@ -383,7 +373,7 @@ const materialisePlatformThemeRelease = (
   return deepFreeze(
     platformThemeReleaseSchema.parse({
       ...definition,
-      ...platformThemeReleaseFingerprints(definition),
+      ...platformThemeReleaseContentHash(definition),
     }),
   );
 };

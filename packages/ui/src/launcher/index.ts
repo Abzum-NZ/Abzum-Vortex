@@ -25,10 +25,7 @@ export { ViewFilter } from "./view-filter";
 
 // Launcher Registrations & Registry
 export {
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LAUNCHER_COMPONENT_REGISTRATIONS,
-  LINK_TILES_BLOCK_RELEASE,
-  VIEW_FILTER_BLOCK_RELEASE,
   createLauncherComponentRegistry,
 } from "./registrations";
 

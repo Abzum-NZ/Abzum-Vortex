@@ -28,42 +28,6 @@ import {
 } from "react";
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
-  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  APPLICATION_NAVIGATION_BLOCK_RELEASE,
-  APPLICATION_SEARCH_BLOCK_RELEASE,
-  APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
-  ATTACHMENT_LIST_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE,
-  BOOLEAN_INPUT_BLOCK_RELEASE,
-  BUTTON_BLOCK_RELEASE,
-  CALENDAR_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE,
-  DATE_INPUT_BLOCK_RELEASE,
-  DIALOG_BLOCK_RELEASE,
-  DRAWER_BLOCK_RELEASE,
-  FIELD_INPUT_BLOCK_RELEASE,
-  FORM_CONTAINER_BLOCK_RELEASE,
-  GROUPED_DATA_BLOCK_RELEASE,
-  HEADING_BLOCK_RELEASE,
-  LINK_INPUT_BLOCK_RELEASE,
-  LINK_TILES_BLOCK_RELEASE,
-  LIST_BLOCK_RELEASE,
-  NOTICE_BLOCK_RELEASE,
-  NUMBER_INPUT_BLOCK_RELEASE,
-  QUERY_NOTICE_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE,
-  RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
-  RICH_TEXT_BLOCK_RELEASE,
-  RICH_TEXT_INPUT_BLOCK_RELEASE,
-  SUMMARY_VALUES_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE,
-  TEXT_BLOCK_RELEASE,
-  TEXT_INPUT_BLOCK_RELEASE,
-  VALIDATION_MESSAGE_BLOCK_RELEASE,
-  VIEW_FILTER_BLOCK_RELEASE,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   type BlockPlacementContract,
@@ -100,9 +64,14 @@ import {
   type PlatformBlockRuntimeInputs,
   type PlatformComponentRegistry,
   type PlatformComponentRenderer,
+  type FieldInputControlReleaseMap,
   type RuntimeInputsByPlacement,
 } from "./registry";
-import { resolvePlacementTheme, type PlacementThemeScope } from "./theme";
+import {
+  resolvePlacementTheme,
+  type PlacementThemeScope,
+  type PlatformThemeTokens,
+} from "./theme";
 import { ApplicationLauncher } from "./launcher/application-launcher";
 import { LinkTiles } from "./launcher/link-tiles";
 import { ViewFilter } from "./launcher/view-filter";
@@ -181,6 +150,7 @@ export type VortexPuckMetadata = Readonly<{
   /** Record subject preserved when submitting application search from a detail page. */
   applicationSearchPageSubject?: string | undefined;
 }>;
+type FieldInputControlReleases = FieldInputControlReleaseMap;
 
 /**
  * The part of a placement that is not a block setting. It is the `vortex` prop the Vortex Puck
@@ -246,42 +216,40 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   string,
   PlatformComponentRenderer
 >([
-  [CONTAINER_BLOCK_RELEASE.rendererKey, Container],
-  [HEADING_BLOCK_RELEASE.rendererKey, Heading],
-  [TABS_BLOCK_RELEASE.rendererKey, Tabs],
-  [DIALOG_BLOCK_RELEASE.rendererKey, Dialog],
-  [DRAWER_BLOCK_RELEASE.rendererKey, Drawer],
-  [TEXT_BLOCK_RELEASE.rendererKey, PlainTextDisplay],
-  [RICH_TEXT_BLOCK_RELEASE.rendererKey, RichTextDisplay],
-  [LIST_BLOCK_RELEASE.rendererKey, ListDisplay],
-  [TABLE_BLOCK_RELEASE.rendererKey, TableDisplay],
-  [RECORD_DETAIL_BLOCK_RELEASE.rendererKey, RecordDetailDisplay],
-  [GROUPED_DATA_BLOCK_RELEASE.rendererKey, GroupedDataDisplay],
-  [SUMMARY_VALUES_BLOCK_RELEASE.rendererKey, SummaryValuesDisplay],
-  [NOTICE_BLOCK_RELEASE.rendererKey, NoticeBlock],
-  [QUERY_NOTICE_BLOCK_RELEASE.rendererKey, QueryNoticeDisplay],
-  [CALENDAR_BLOCK_RELEASE.rendererKey, CalendarDisplay],
-  [BOARD_BLOCK_RELEASE.rendererKey, BoardDisplay],
-  [ATTACHMENT_LIST_BLOCK_RELEASE.rendererKey, SearchAttachmentDisplay],
-  [FORM_CONTAINER_BLOCK_RELEASE.rendererKey, FormContainer],
-  [FIELD_INPUT_BLOCK_RELEASE.rendererKey, FieldInput],
-  [TEXT_INPUT_BLOCK_RELEASE.rendererKey, TextInput],
-  [LINK_INPUT_BLOCK_RELEASE.rendererKey, LinkInput],
-  [RICH_TEXT_INPUT_BLOCK_RELEASE.rendererKey, RichTextInput],
-  [NUMBER_INPUT_BLOCK_RELEASE.rendererKey, NumberInput],
-  [BOOLEAN_INPUT_BLOCK_RELEASE.rendererKey, BooleanInput],
-  [DATE_INPUT_BLOCK_RELEASE.rendererKey, DateInput],
-  [CHOICE_INPUT_BLOCK_RELEASE.rendererKey, ChoiceInput],
-  [VALIDATION_MESSAGE_BLOCK_RELEASE.rendererKey, ValidationMessage],
-  [BUTTON_BLOCK_RELEASE.rendererKey, Button],
-  [APPLICATION_NAVIGATION_BLOCK_RELEASE.rendererKey, ApplicationNavigationBlock],
-  [APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE.rendererKey, ApplicationAccountActionsBlock],
-  [APPLICATION_SEARCH_BLOCK_RELEASE.rendererKey, ApplicationSearchBlock],
-  [APPLICATION_LAUNCHER_BLOCK_RELEASE.rendererKey, ApplicationLauncher],
-  [LINK_TILES_BLOCK_RELEASE.rendererKey, LinkTiles],
-  [RECORD_PIN_LINK_TILES_BLOCK_RELEASE.rendererKey, LinkTiles],
-  [APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.rendererKey, LinkTiles],
-  [VIEW_FILTER_BLOCK_RELEASE.rendererKey, ViewFilter],
+  ["platform.renderer.container", Container],
+  ["platform.renderer.heading", Heading],
+  ["platform.renderer.tabs", Tabs],
+  ["platform.renderer.dialog", Dialog],
+  ["platform.renderer.drawer", Drawer],
+  ["platform.renderer.text", PlainTextDisplay],
+  ["platform.renderer.rich_text", RichTextDisplay],
+  ["platform.renderer.list", ListDisplay],
+  ["platform.renderer.table", TableDisplay],
+  ["platform.renderer.record_detail", RecordDetailDisplay],
+  ["platform.renderer.grouped_data", GroupedDataDisplay],
+  ["platform.renderer.summary_values", SummaryValuesDisplay],
+  ["platform.renderer.notice", NoticeBlock],
+  ["platform.renderer.query_notice", QueryNoticeDisplay],
+  ["platform.renderer.calendar", CalendarDisplay],
+  ["platform.renderer.board", BoardDisplay],
+  ["platform.renderer.attachment_list", SearchAttachmentDisplay],
+  ["platform.renderer.form_container", FormContainer],
+  ["platform.renderer.field_input", FieldInput],
+  ["platform.renderer.text_input", TextInput],
+  ["platform.renderer.link_input", LinkInput],
+  ["platform.renderer.rich_text_input", RichTextInput],
+  ["platform.renderer.number_input", NumberInput],
+  ["platform.renderer.boolean_input", BooleanInput],
+  ["platform.renderer.date_input", DateInput],
+  ["platform.renderer.choice_input", ChoiceInput],
+  ["platform.renderer.validation_message", ValidationMessage],
+  ["platform.renderer.button", Button],
+  ["platform.renderer.application_navigation", ApplicationNavigationBlock],
+  ["platform.renderer.account_actions", ApplicationAccountActionsBlock],
+  ["platform.renderer.application_search", ApplicationSearchBlock],
+  ["platform.renderer.application_launcher", ApplicationLauncher],
+  ["platform.renderer.link_tiles", LinkTiles],
+  ["platform.renderer.view_filter", ViewFilter],
 ]);
 
 const implementationFor = (release: PlatformBlockRelease): PlatformComponentRenderer => {
@@ -559,8 +527,10 @@ const cssAttributeValue = (value: string): string =>
 function PlacementBlock(props: {
   registry: PlatformComponentRegistry;
   componentProps: VortexPuckComponentProps;
+  fieldInputControlReleases: FieldInputControlReleases;
+  platformThemeTokens: PlatformThemeTokens;
 }): ReactElement {
-  const { registry, componentProps } = props;
+  const { registry, componentProps, fieldInputControlReleases, platformThemeTokens } = props;
   const { id: placementId, vortex, puck, wrapper } = componentProps;
   const metadataIn = (puck.metadata ?? {}) as VortexPuckMetadata;
   const inheritedScope = useContext(ThemeScopeContext);
@@ -606,7 +576,11 @@ function PlacementBlock(props: {
 
   // Declared theme overrides apply to this placement and its subtree; a re-themed placement is
   // also a theme root, so its surface, text and typography repaint from its own variables.
-  const placementTheme = resolvePlacementTheme(inheritedScope, vortex.themeOverrides);
+  const placementTheme = resolvePlacementTheme(
+    inheritedScope,
+    vortex.themeOverrides,
+    platformThemeTokens,
+  );
 
   const slotStyle: CSSProperties = { gap: slotGapFor(release, settings, rootSlotGap, location) };
   const slots: Record<string, ReactNode> = {};
@@ -687,6 +661,7 @@ function PlacementBlock(props: {
             breakpoint={activeBreakpoint}
             responsiveLayout={responsive}
             metadata={release}
+            fieldInputControlReleases={fieldInputControlReleases}
             themeOverrides={vortex.themeOverrides}
             themeTokens={placementTheme.scope.inherited}
             {...availability}
@@ -749,7 +724,11 @@ type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
  * from that key's newest release. Every registered release renders through its key's component;
  * the placement's own `vortex.block` selects the exact release at render time.
  */
-export function createVortexPuckConfig(registry: PlatformComponentRegistry): Config {
+export function createVortexPuckConfig(
+  registry: PlatformComponentRegistry,
+  fieldInputControlReleases: FieldInputControlReleases,
+  platformThemeTokens: PlatformThemeTokens,
+): Config {
   const newestByKey = new Map<string, PlatformBlockRelease>();
   for (const { metadata } of registry.list()) {
     const current = newestByKey.get(metadata.rendererKey);
@@ -822,6 +801,8 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
       render: (componentProps) => (
         <PlacementBlock
           registry={registry}
+          fieldInputControlReleases={fieldInputControlReleases}
+          platformThemeTokens={platformThemeTokens}
           componentProps={componentProps as unknown as VortexPuckComponentProps}
         />
       ),
@@ -890,10 +871,14 @@ export function createVortexPuckConfig(registry: PlatformComponentRegistry): Con
 const configs = new WeakMap<PlatformComponentRegistry, Config>();
 
 /** The registry's Puck config, built once per registry. */
-export function getVortexPuckConfig(registry: PlatformComponentRegistry): Config {
+export function getVortexPuckConfig(
+  registry: PlatformComponentRegistry,
+  fieldInputControlReleases: FieldInputControlReleases,
+  platformThemeTokens: PlatformThemeTokens,
+): Config {
   let config = configs.get(registry);
   if (config === undefined) {
-    config = createVortexPuckConfig(registry);
+    config = createVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens);
     configs.set(registry, config);
   }
   return config;

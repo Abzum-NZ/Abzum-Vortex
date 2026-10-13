@@ -3,10 +3,8 @@ import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
-  platformIdSchema,
-  type SessionContext,
-  type StoredDefinitionSource,
-} from "@vortex/platform/schema";
+} from "@vortex/platform/server";
+import { platformIdSchema, type SessionContext, type StoredDefinitionSource } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   createDatabaseDefinitionPublicationService,
@@ -61,17 +59,15 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
   applicationComposition: {
     compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
     platformBlockReleases: PLATFORM_BLOCK_RELEASES.map(
-      ({ contentFingerprint, catalogueFingerprint, customComponent, ...definition }) => {
+      ({ contentFingerprint, customComponent, ...definition }) => {
         void contentFingerprint;
-        void catalogueFingerprint;
         void customComponent;
         return definition;
       },
     ),
     platformThemeReleases: [
-      (({ contentFingerprint, catalogueFingerprint, ...definition }) => {
+      (({ contentFingerprint, ...definition }) => {
         void contentFingerprint;
-        void catalogueFingerprint;
         return definition;
       })(DEFAULT_PLATFORM_THEME_RELEASE),
     ],

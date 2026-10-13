@@ -6,7 +6,8 @@ import {
   type ImmutablePlatformBlockCatalogue,
   immutablePlatformBlockCatalogueSchema,
 } from "./application-composition";
-import { generatedReleaseFingerprints } from "../catalogue/catalogue/generated-fingerprints";
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "./application-composition-release-identities";
+import { platformBlockReleaseContentHash } from "./catalogue-release-content-hashes";
 import sources from "../catalogue/catalogue/application-composition-catalogue.source.json";
 
 const deepFreeze = <Value>(value: Value): Value => {
@@ -15,22 +16,49 @@ const deepFreeze = <Value>(value: Value): Value => {
   return Object.freeze(value);
 };
 
+const sourcesByIdentity = new Map(
+  Object.values(sources).map((definition) => [
+    `${definition.blockId}:${definition.releaseVersion}`,
+    definition,
+  ]),
+);
+const catalogueReleaseIdentities = new Map(
+  Object.values(PLATFORM_BLOCK_RELEASE_IDENTITIES).map(
+    ({ blockId, key, releaseVersion }) => [`${key}@${releaseVersion}`, blockId],
+  ),
+);
+const sourceReleaseIdentities = new Map(
+  Object.values(sources).map(({ blockId, key, releaseVersion }) => [
+    `${key}@${releaseVersion}`,
+    blockId,
+  ]),
+);
+if (
+  catalogueReleaseIdentities.size !== sourceReleaseIdentities.size ||
+  [...catalogueReleaseIdentities].some(
+    ([identity, blockId]) => sourceReleaseIdentities.get(identity) !== blockId,
+  )
+)
+  throw new Error("Platform block release identities do not match their server catalogue data");
+
 /**
  * The registered platform block releases: the one source of block metadata for server
  * validation and for the renderer registrations that pair each release with its component. Each
  * release's content lives in catalogue/application-composition-catalogue.source.json and is
- * parsed through the release contract at module load and deep-frozen. Its fingerprints are the
- * canonical-JSON SHA-256 values that `pnpm catalogue:fingerprints` derives from that same
- * content into catalogue/catalogue-fingerprints.generated.json; they are merged in by block id
- * and release version and never written by hand.
+ * parsed through the release contract at module load and deep-frozen. Its content hash is computed
+ * once from that source when the catalogue loads.
  */
 const release = (definition: { blockId: string; releaseVersion: string }): PlatformBlockRelease =>
   deepFreeze(
     platformBlockReleaseSchema.parse({
       ...definition,
-      ...generatedReleaseFingerprints(
-        "platformBlocks",
-        `${definition.blockId}:${definition.releaseVersion}`,
+      ...platformBlockReleaseContentHash(
+        sourcesByIdentity.get(`${definition.blockId}:${definition.releaseVersion}`) ??
+          (() => {
+            throw new Error(
+              `Platform block catalogue is missing release ${definition.blockId}:${definition.releaseVersion}`,
+            );
+          })(),
       ),
     }),
   );

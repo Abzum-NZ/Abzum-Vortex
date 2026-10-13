@@ -1,9 +1,6 @@
 import "server-only";
 
 import {
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
-  FORM_CONTAINER_BLOCK_RELEASE,
   builderKeySchema,
   jsonValueSchema,
   referenceChoiceSelectionEvidenceMapSchema,
@@ -16,6 +13,11 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "@vortex/platform/schema";
+import {
+  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
+  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
+  FORM_CONTAINER_BLOCK_RELEASE,
+} from "@vortex/platform/server";
 import type {
   createReferenceChoiceService} from "@web/platform-server";
 import {

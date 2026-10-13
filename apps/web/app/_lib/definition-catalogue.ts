@@ -1,11 +1,13 @@
 import "server-only";
 
 import {
-  containsCustomComponentReleases,
   DEFAULT_PLATFORM_THEME_RELEASE,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
+} from "@vortex/platform/server";
+import {
+  containsCustomComponentReleases,
   type PlatformBlockRelease,
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
@@ -24,10 +26,10 @@ export const installedReleaseCatalogue: ImmutableDefinitionPublicationCatalogueD
   applicationComposition: {
     compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
     platformBlockReleases: PLATFORM_BLOCK_RELEASES.map(
-      ({ contentFingerprint, catalogueFingerprint, customComponent, ...definition }) => definition,
+      ({ contentFingerprint, customComponent, ...definition }) => definition,
     ),
     platformThemeReleases: [
-      (({ contentFingerprint, catalogueFingerprint, ...definition }) => definition)(
+      (({ contentFingerprint, ...definition }) => definition)(
         DEFAULT_PLATFORM_THEME_RELEASE,
       ),
     ],
@@ -50,8 +52,7 @@ export const releaseSetContainsCustomComponents = (
       (candidate) =>
         candidate.blockId === dependency.blockId &&
         candidate.releaseVersion === dependency.releaseVersion &&
-        candidate.contentFingerprint === dependency.contentFingerprint &&
-        candidate.catalogueFingerprint === dependency.catalogueFingerprint,
+        candidate.contentFingerprint === dependency.contentFingerprint,
     );
     if (release === undefined) return true;
     releases.push(release);

@@ -1,24 +1,8 @@
 import {
-  BOOLEAN_INPUT_BLOCK_RELEASE,
-  BUTTON_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
-  CONTROL_BLOCK_RELEASES,
-  DATE_INPUT_BLOCK_RELEASE,
-  DIALOG_BLOCK_RELEASE,
-  DRAWER_BLOCK_RELEASE,
-  FIELD_INPUT_BLOCK_RELEASE,
-  FORM_CONTAINER_BLOCK_RELEASE,
   flowRefusalFeedbackCodeSchema,
   labelSchema,
-  LINK_INPUT_BLOCK_RELEASE,
-  NUMBER_INPUT_BLOCK_RELEASE,
-  RICH_TEXT_INPUT_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE_2_0_0,
-  TEXT_INPUT_BLOCK_RELEASE,
-  VALIDATION_MESSAGE_BLOCK_RELEASE,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
@@ -65,31 +49,6 @@ import {
 } from "./projected-data";
 import type { FormDraftFeedbackSupply } from "./draft-feedback";
 import type { FormFlowFeedback } from "./form-container";
-
-/**
- * Release metadata is owned by the server-side platform block catalogue in @vortex/contracts;
- * these registrations only pair each registered release with its renderer, so a renderer
- * change cannot redefine or extend what authors may place.
- */
-export {
-  BOOLEAN_INPUT_BLOCK_RELEASE,
-  BUTTON_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-  CONTROL_BLOCK_RELEASES,
-  DATE_INPUT_BLOCK_RELEASE,
-  DIALOG_BLOCK_RELEASE,
-  DRAWER_BLOCK_RELEASE,
-  FIELD_INPUT_BLOCK_RELEASE,
-  FORM_CONTAINER_BLOCK_RELEASE,
-  LINK_INPUT_BLOCK_RELEASE,
-  NUMBER_INPUT_BLOCK_RELEASE,
-  RICH_TEXT_INPUT_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE_2_0_0,
-  TEXT_INPUT_BLOCK_RELEASE,
-  VALIDATION_MESSAGE_BLOCK_RELEASE,
-};
 
 /**
  * The parser a control block's registration supplies: its own ready values under `data` and its own
@@ -345,76 +304,78 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
 export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     Object.freeze({
-      metadata: TEXT_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<TextInputPayload>(parseTextInputPayload),
     }),
     Object.freeze({
-      metadata: LINK_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LINK_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<LinkInputPayload>(parseLinkInputPayload),
     }),
     Object.freeze({
-      metadata: RICH_TEXT_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RICH_TEXT_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<RichTextInputPayload>(parseRichTextInputPayload),
     }),
     Object.freeze({
-      metadata: NUMBER_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NUMBER_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<NumberInputPayload>(parseNumberInputPayload),
     }),
     Object.freeze({
-      metadata: BOOLEAN_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BOOLEAN_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<BooleanInputPayload>(parseBooleanInputPayload),
     }),
     Object.freeze({
-      metadata: DATE_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.DATE_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<DateInputPayload>(parseDateInputPayload),
     }),
     Object.freeze({
-      metadata: CHOICE_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
     }),
     Object.freeze({
-      metadata: CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
     }),
     Object.freeze({
-      metadata: CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
     }),
     Object.freeze({
-      metadata: FIELD_INPUT_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<FieldInputPayload>(parseFieldInputPayload),
     }),
     Object.freeze({
-      metadata: VALIDATION_MESSAGE_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.VALIDATION_MESSAGE_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<ValidationPayload>(parseValidationPayload),
     }),
     Object.freeze({
-      metadata: BUTTON_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BUTTON_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<ButtonPayload>(parseButtonPayload),
     }),
     Object.freeze({
-      metadata: TABS_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABS_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
     }),
     Object.freeze({
-      metadata: TABS_BLOCK_RELEASE_2_0_0,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABS_BLOCK_RELEASE_2_0_0,
       parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
     }),
     Object.freeze({
-      metadata: DIALOG_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.DIALOG_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<DialogPayload>(parseDialogPayload),
     }),
     Object.freeze({
-      metadata: DRAWER_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.DRAWER_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<DrawerPayload>(parseDrawerPayload),
     }),
     Object.freeze({
-      metadata: FORM_CONTAINER_BLOCK_RELEASE,
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
       parsePayload: FORM_PAYLOAD_PARSER,
     }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with all control components. */
-export function createControlComponentRegistry(): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(CONTROL_COMPONENT_REGISTRATIONS);
+export function createControlComponentRegistry(
+  platformReleases: readonly PlatformBlockRelease[],
+): PlatformComponentRegistry {
+  return createPlatformComponentRegistry(CONTROL_COMPONENT_REGISTRATIONS, platformReleases);
 }

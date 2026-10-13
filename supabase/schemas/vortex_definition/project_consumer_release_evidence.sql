@@ -39,22 +39,19 @@ as $function$
             'key', dependency.dependency_reference,
             'rootId', dependency.catalogue_item_id,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'platform_block' then pg_catalog.jsonb_build_object(
             'kind', 'platform_block',
             'blockId', dependency.catalogue_item_id,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'platform_theme' then pg_catalog.jsonb_build_object(
             'kind', 'platform_theme',
             'catalogueThemeId', dependency.dependency_reference,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           else dependency.dependency_entry
         end

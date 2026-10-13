@@ -1,9 +1,8 @@
-CREATE FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency jsonb) RETURNS text
+CREATE OR REPLACE FUNCTION vortex_definition.flow_target_dependency_reference(p_dependency jsonb) RETURNS text
     LANGUAGE sql IMMUTABLE
     SET search_path TO ''
     AS $$
   select case p_dependency ->> 'kind'
-    when 'platform_flow' then p_dependency ->> 'flowId'
     when 'application_flow' then
       (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'flowId')
     when 'application_flow_node' then

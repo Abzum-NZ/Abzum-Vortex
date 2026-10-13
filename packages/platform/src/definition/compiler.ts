@@ -5175,7 +5175,23 @@ function applicationProvenance(
       entries.push({
         canonicalPath,
         origin: "resolved",
-        sourcePath: ["body", "theme", "base", "content_fingerprint"],
+        sourcePath: ["body", "theme", "base", "release_version"],
+        ruleCode: RESOLUTION_RULE,
+      });
+      continue;
+    }
+    if (
+      canonicalPath[0] === "content" &&
+      canonicalPath[1] === "platformBlockDependencies" &&
+      typeof canonicalPath[2] === "number"
+    ) {
+      const dependencyIndex = canonicalPath[2];
+      if (source.body.platform_block_dependencies[dependencyIndex] === undefined)
+        fail("vortex.definition.application_dependency_manifest", "broken_reference");
+      entries.push({
+        canonicalPath,
+        origin: "resolved",
+        sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "release_version"],
         ruleCode: RESOLUTION_RULE,
       });
       continue;
@@ -5198,7 +5214,7 @@ function applicationProvenance(
       entries.push({
         canonicalPath,
         origin: "resolved",
-        sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "content_fingerprint"],
+        sourcePath: ["body", "platform_block_dependencies", dependencyIndex, "release_version"],
         ruleCode: RESOLUTION_RULE,
       });
       continue;

@@ -14,6 +14,7 @@ import {
   resolveVortexStyleSelection,
   VortexStyleRoot,
   type ApplicationTheme,
+  type PlatformThemeTokens,
   type ThemeMode,
 } from "./theme";
 import { IconLibraryProvider } from "./icons";
@@ -24,6 +25,7 @@ import { validatePlacementTree, type Breakpoint } from "./definition-error";
 import {
   assertRuntimeInputKeysArePlacements,
   type PlatformComponentRegistry,
+  type FieldInputControlReleaseMap,
   type RuntimeInputsByPlacement,
 } from "./registry";
 import {
@@ -151,6 +153,8 @@ export type PagePuckRendererProps = Readonly<{
    */
   breakpoint?: Breakpoint;
   registry: PlatformComponentRegistry;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
   shells?: readonly ApplicationShell[];
   /** The selected definition shell for a page already projected by the server. */
   shell?: ApplicationShell;
@@ -213,6 +217,8 @@ export function PagePuckRenderer({
   composition,
   breakpoint,
   registry,
+  fieldInputControlReleases,
+  platformThemeTokens,
   shells,
   shell: selectedShell,
   pageId,
@@ -256,7 +262,7 @@ export function PagePuckRenderer({
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const tokens = applicationTheme?.tokens ?? {};
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
-  const themeRootProps = createThemeRootProps(applicationTheme, themeMode);
+  const themeRootProps = createThemeRootProps(applicationTheme, platformThemeTokens, themeMode);
   const vortexStyleProps = createVortexStyleRootProps(vortexStyle);
   const metadata: VortexPuckMetadata = {
     ...(breakpoint === undefined ? {} : { breakpoint }),
@@ -291,7 +297,11 @@ export function PagePuckRenderer({
           {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
           <div className={className} style={style}>
             <VortexPuckThemeScopeProvider scope={{ application: tokens, inherited: tokens }}>
-              <Render config={getVortexPuckConfig(registry)} data={data} metadata={metadata} />
+              <Render
+                config={getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)}
+                data={data}
+                metadata={metadata}
+              />
             </VortexPuckThemeScopeProvider>
           </div>
           {step?.summary !== true || guidedSummaryValues === undefined ? null : (

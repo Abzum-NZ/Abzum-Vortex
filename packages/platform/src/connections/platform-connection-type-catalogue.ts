@@ -1,5 +1,5 @@
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
-import { generatedReleaseFingerprints } from "../catalogue/catalogue/generated-fingerprints";
+import { platformConnectionTypeReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import source from "../catalogue/catalogue/platform-connection-type-catalogue.source.json";
 import type { ConnectionTypeSourceDocument } from "../definition/definition-source";
 import {
@@ -20,7 +20,6 @@ export type PlatformConnectionTypeCatalogueRelease = Readonly<{
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;
   contentFingerprint: string;
-  catalogueFingerprint: string;
 }>;
 
 const release = (definition: {
@@ -33,10 +32,11 @@ const release = (definition: {
     source: sourceDocument,
     rootId: connectionTypeIdSchema.parse(definition.rootId),
     releaseVersion: semanticVersionSchema.parse(definition.releaseVersion),
-    ...generatedReleaseFingerprints(
-      "platformConnectionTypes",
-      `${definition.rootId}:${definition.releaseVersion}`,
-    ),
+    ...platformConnectionTypeReleaseContentHash({
+      source: sourceDocument,
+      rootId: definition.rootId,
+      releaseVersion: definition.releaseVersion,
+    }),
   });
 };
 

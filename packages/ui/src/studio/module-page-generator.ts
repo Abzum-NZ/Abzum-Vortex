@@ -672,8 +672,6 @@ export const generateModulePageFragments = (
         kind: "platform_block",
         block_id: release.blockId,
         release_version: release.releaseVersion,
-        content_fingerprint: release.contentFingerprint,
-        catalogue_fingerprint: release.catalogueFingerprint,
       }))
       .sort(
         (left, right) =>

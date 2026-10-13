@@ -3,13 +3,17 @@ import { redirect } from "next/navigation";
 import type { OrganizationLauncherEntry } from "@vortex/platform/schema";
 import {
   ALL_UI_STYLES_CSS,
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
   ApplicationLauncher,
   createThemeRootProps,
   type DisplayRow,
   type DisplaySemanticEvent,
   type ListPayload,
 } from "@vortex/ui";
+import {
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+} from "@vortex/platform/server";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -116,7 +120,7 @@ export default async function SignedInPage() {
     return (
       <main
         className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
-        {...createThemeRootProps(undefined)}
+        {...createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
       >
         <style href="vortex-ui-styles" precedence="default">
           {ALL_UI_STYLES_CSS}
@@ -156,7 +160,7 @@ export default async function SignedInPage() {
     return (
       <main
         className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
-        {...createThemeRootProps(undefined)}
+        {...createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
       >
         <style href="vortex-ui-styles" precedence="default">
           {ALL_UI_STYLES_CSS}
@@ -196,7 +200,7 @@ export default async function SignedInPage() {
   return (
     <main
       className="flex min-h-svh w-full flex-col bg-background text-foreground"
-      {...createThemeRootProps(undefined)}
+      {...createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
     >
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
@@ -252,9 +256,10 @@ export default async function SignedInPage() {
               placementId="organization-chooser"
               settings={{ title: { kind: "text", value: "Available organisations" } }}
               slots={{}}
-              breakpoint="desktop"
-              metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
-              availability="available"
+                breakpoint="desktop"
+                metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
+                fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+                availability="available"
               data={{ status: "ready", values: organizationTileValues(launcher.entries) }}
               events={{ row_action: openOrganization }}
             />

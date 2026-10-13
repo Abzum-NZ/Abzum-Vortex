@@ -1,7 +1,7 @@
 import "server-only";
 
 export * from "./canonical-json-definition";
-export * from "./catalogue-release-fingerprints";
+export * from "./catalogue-release-content-hashes";
 export * from "./semantic-version";
 export * from "./version-impact-definition";
 export * from "./version-impact-error";
@@ -10,6 +10,7 @@ export * from "./definition-error";
 export * from "./flow-compilation";
 export * from "./flow-validation";
 export * from "./application-materialisation";
+export * from "./application-composition-catalogue";
 export * from "./application-resolution";
 export * from "./extension-contributions";
 export * from "./application-preview";

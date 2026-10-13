@@ -99,7 +99,9 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -109,6 +111,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
+            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),
@@ -370,16 +373,16 @@ begin
       if exists (
         select 1 from pg_catalog.jsonb_object_keys(supplied_dependency) as supplied(key)
         where supplied.key not in (
-          'kind', 'key', 'rootId', 'releaseVersion', 'contentFingerprint', 'catalogueFingerprint'
+          'kind', 'key', 'rootId', 'releaseVersion', 'contentFingerprint'
         )
-      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 6 then
+      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 5 then
         raise exception using errcode = '22023', message = 'Connection type dependency has an invalid shape';
       end if;
       supplied_reference := supplied_dependency ->> 'key';
       supplied_catalogue_item_id := (supplied_dependency ->> 'rootId')::uuid;
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_dependency ->> 'catalogueFingerprint';
+      supplied_evidence_fingerprint := supplied_content_fingerprint;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       if supplied_reference !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$'
@@ -387,17 +390,16 @@ begin
         or supplied_catalogue_item_id is null
         or supplied_catalogue_item_id = '00000000-0000-0000-0000-000000000000'::uuid
         or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-        or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-        or supplied_evidence_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
+        or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
         raise exception using errcode = '22023', message = 'Connection type dependency has invalid evidence';
       end if;
     elsif supplied_kind = 'platform_block' then
       if exists (
         select 1 from pg_catalog.jsonb_object_keys(supplied_dependency) as supplied(key)
         where supplied.key not in (
-          'kind', 'blockId', 'releaseVersion', 'contentFingerprint', 'catalogueFingerprint'
+          'kind', 'blockId', 'releaseVersion', 'contentFingerprint'
         )
-      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 5 then
+      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 4 then
         raise exception using errcode = '22023', message = 'Platform block dependency has an invalid shape';
       end if;
       supplied_reference := supplied_dependency ->> 'blockId';
@@ -408,48 +410,46 @@ begin
       end;
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_dependency ->> 'catalogueFingerprint';
+      supplied_evidence_fingerprint := supplied_content_fingerprint;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       if supplied_catalogue_item_id is null
         or supplied_catalogue_item_id = '00000000-0000-0000-0000-000000000000'::uuid
         or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-        or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-        or supplied_evidence_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
+        or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
         raise exception using errcode = '22023', message = 'Platform block dependency has invalid evidence';
       end if;
     elsif supplied_kind = 'platform_theme' then
       if exists (
         select 1 from pg_catalog.jsonb_object_keys(supplied_dependency) as supplied(key)
         where supplied.key not in (
-          'kind', 'catalogueThemeId', 'releaseVersion', 'contentFingerprint', 'catalogueFingerprint'
+          'kind', 'catalogueThemeId', 'releaseVersion', 'contentFingerprint'
         )
-      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 5 then
+      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 4 then
         raise exception using errcode = '22023', message = 'Platform theme dependency has an invalid shape';
       end if;
       supplied_reference := supplied_dependency ->> 'catalogueThemeId';
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := supplied_dependency ->> 'catalogueFingerprint';
+      supplied_evidence_fingerprint := supplied_content_fingerprint;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       supplied_catalogue_item_id := null;
       if supplied_reference !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
         or supplied_reference = '00000000-0000-0000-0000-000000000000'
         or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-        or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-        or supplied_evidence_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
+        or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
         raise exception using errcode = '22023', message = 'Platform theme dependency has invalid evidence';
       end if;
     elsif supplied_kind in (
-      'platform_flow', 'application_flow', 'application_flow_node', 'application_query',
+      'application_flow', 'application_flow_node', 'application_query',
       'module_query', 'application_form', 'application_workflow', 'application_action',
       'protected_operation'
     ) then
       -- Flow targets are contained by, or pinned for, one exact Application
       -- release. Each entry has exactly its contract shape, and its owner is
       -- this release, an exact pinned Module release in this same manifest, or
-      -- platform catalogue evidence that publication verifies before append.
+      -- a protected platform service operation verified before append.
       if root_row.kind is distinct from 'application' then
         raise exception using errcode = '23514',
           message = 'Flow target dependencies belong only to an Application release';
@@ -457,13 +457,11 @@ begin
       supplied_owner_kind := case supplied_kind
         when 'protected_operation' then supplied_dependency #>> '{operation,owner,kind}'
         when 'module_query' then 'module'
-        when 'platform_flow' then 'platform_service'
         else 'application'
       end;
       supplied_expected_keys := pg_catalog.array_cat(
         array['kind', 'releaseVersion', 'contentFingerprint']::text[],
         case supplied_kind
-          when 'platform_flow' then array['flowId', 'catalogueFingerprint']::text[]
           when 'application_flow' then
             array['applicationRootId', 'flowId', 'resolutionFingerprint']::text[]
           when 'application_flow_node' then
@@ -481,11 +479,7 @@ begin
             array['applicationRootId', 'workflowId', 'resolutionFingerprint']::text[]
           when 'application_action' then
             array['applicationRootId', 'actionId', 'resolutionFingerprint']::text[]
-          when 'protected_operation' then
-            case when supplied_owner_kind = 'platform_service'
-              then array['operation', 'resolutionFingerprint', 'catalogueFingerprint']::text[]
-              else array['operation', 'resolutionFingerprint']::text[]
-            end
+          when 'protected_operation' then array['operation', 'resolutionFingerprint']::text[]
         end
       );
       if exists (
@@ -682,10 +676,7 @@ begin
       supplied_reference := vortex_definition.flow_target_dependency_reference(supplied_dependency);
       supplied_version := supplied_dependency ->> 'releaseVersion';
       supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-      supplied_evidence_fingerprint := case
-        when supplied_kind = 'platform_flow' then supplied_dependency ->> 'catalogueFingerprint'
-        else supplied_dependency ->> 'resolutionFingerprint'
-      end;
+      supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       supplied_catalogue_item_id := null;
@@ -698,10 +689,6 @@ begin
         or (
           supplied_dependency ? 'resolutionFingerprint'
           and supplied_dependency ->> 'resolutionFingerprint' !~ '^sha256:[a-f0-9]{64}$'
-        )
-        or (
-          supplied_dependency ? 'catalogueFingerprint'
-          and supplied_dependency ->> 'catalogueFingerprint' !~ '^sha256:[a-f0-9]{64}$'
         ) then
         raise exception using errcode = '22023',
           message = 'Definition flow target dependency has invalid evidence';
@@ -933,8 +920,10 @@ begin
     end;
     supplied_version := supplied_dependency ->> 'releaseVersion';
     supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
-    supplied_evidence_fingerprint := case when supplied_kind = 'module'
-      then supplied_dependency ->> 'resolutionFingerprint' else supplied_dependency ->> 'catalogueFingerprint' end;
+    supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
+    if supplied_kind in ('connection_type', 'platform_block', 'platform_theme') then
+      supplied_evidence_fingerprint := supplied_content_fingerprint;
+    end if;
     supplied_target_root_id := case when supplied_kind = 'module'
       then (supplied_dependency ->> 'rootId')::uuid else null end;
     supplied_target_release_revision := case when supplied_kind = 'module'
@@ -946,16 +935,13 @@ begin
     end;
     supplied_entry := null;
     if supplied_kind in (
-      'platform_flow', 'application_flow', 'application_flow_node', 'application_query',
+      'application_flow', 'application_flow_node', 'application_query',
       'module_query', 'application_form', 'application_workflow', 'application_action',
       'protected_operation'
     ) then
       supplied_entry := supplied_dependency;
       supplied_reference := vortex_definition.flow_target_dependency_reference(supplied_dependency);
-      supplied_evidence_fingerprint := case
-        when supplied_kind = 'platform_flow' then supplied_dependency ->> 'catalogueFingerprint'
-        else supplied_dependency ->> 'resolutionFingerprint'
-      end;
+      supplied_evidence_fingerprint := supplied_dependency ->> 'resolutionFingerprint';
     end if;
 
     insert into vortex_definition.release_dependencies (
@@ -1004,7 +990,9 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -1014,6 +1002,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
+            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),
@@ -1072,21 +1061,18 @@ begin
             'kind', 'connection_type', 'key', dependency.dependency_reference,
             'rootId', dependency.catalogue_item_id,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'platform_block' then pg_catalog.jsonb_build_object(
             'kind', 'platform_block',
             'blockId', dependency.catalogue_item_id,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           when 'platform_theme' then pg_catalog.jsonb_build_object(
             'kind', 'platform_theme', 'catalogueThemeId', dependency.dependency_reference,
             'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint,
-            'catalogueFingerprint', dependency.evidence_fingerprint
+            'contentFingerprint', dependency.dependency_content_fingerprint
           )
           else dependency.dependency_entry
         end order by

@@ -1,23 +1,12 @@
 import {
-  APPLICATION_NAVIGATION_BLOCK_RELEASE,
   applicationSourceDocumentSchema,
-  BUTTON_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_2_0,
-  CONTAINER_BLOCK_RELEASE_1_3_0,
-  DEFAULT_PLATFORM_THEME_RELEASE,
+  DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
-  FORM_CONTAINER_BLOCK_RELEASE,
-  PLATFORM_BLOCK_RELEASES,
-  RECORD_DETAIL_BLOCK_RELEASE,
-  RICH_TEXT_INPUT_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE_1_3_0,
-  TEXT_BLOCK_RELEASE,
-  TEXT_INPUT_BLOCK_RELEASE,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   defaultOperationFlowSource,
   defaultSaveFlowSource,
   type ApplicationSourceDocument,
-  type PlatformBlockRelease,
+  type PlatformBlockReleaseIdentity,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import {
@@ -27,6 +16,20 @@ import {
 } from "./runbooks";
 
 type JsonObject = Record<string, unknown>;
+
+const {
+  APPLICATION_NAVIGATION_BLOCK_RELEASE,
+  BUTTON_BLOCK_RELEASE,
+  CHOICE_INPUT_BLOCK_RELEASE,
+  CONTAINER_BLOCK_RELEASE_1_2_0,
+  CONTAINER_BLOCK_RELEASE_1_3_0,
+  FORM_CONTAINER_BLOCK_RELEASE,
+  RECORD_DETAIL_BLOCK_RELEASE,
+  RICH_TEXT_INPUT_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE_1_3_0,
+  TEXT_BLOCK_RELEASE,
+  TEXT_INPUT_BLOCK_RELEASE,
+} = PLATFORM_BLOCK_RELEASE_IDENTITIES;
 
 const incidentRecordType = "vortex.operations.incidents:incident";
 /** The open-incidents query the Incidents module exposes, by module key and query key. */
@@ -113,7 +116,7 @@ const placementLayout = {
 
 /** Authored  block placement: exact block release, typed settings and named child slots. */
 const placement = (
-  release: PlatformBlockRelease,
+  release: PlatformBlockReleaseIdentity,
   settings: Record<string, SourceBlockPropertyValueContract> = {},
   slots: Record<string, unknown> = {},
 ) => ({
@@ -465,34 +468,25 @@ const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<s
   return result;
 };
 
-const releasesByKey = new Map<string, PlatformBlockRelease>(
-  PLATFORM_BLOCK_RELEASES.map((release) => [
-    `${String(release.blockId)}@${release.releaseVersion}`,
-    release,
-  ]),
-);
 /** Exactly the registered block releases the shell and pages place, in permanent-identity order. */
 const platformBlockDependencies = [
   ...collectBlockReleases({ shell: applicationShell, pages: applicationPages }),
 ].sort().map((releaseKey) => {
-  const release = releasesByKey.get(releaseKey);
-  if (!release) throw new TypeError(`Unregistered platform block release: ${releaseKey}`);
+  const separator = releaseKey.lastIndexOf("@");
+  if (separator < 1 || separator === releaseKey.length - 1)
+    throw new TypeError(`Invalid platform block release identity: ${releaseKey}`);
   return {
     kind: "platform_block" as const,
-    block_id: String(release.blockId),
-    release_version: release.releaseVersion,
-    content_fingerprint: release.contentFingerprint,
-    catalogue_fingerprint: release.catalogueFingerprint,
+    block_id: releaseKey.slice(0, separator),
+    release_version: releaseKey.slice(separator + 1),
   };
 });
 
 const theme = {
   base: {
     kind: "platform_theme" as const,
-    catalogue_theme_id: String(DEFAULT_PLATFORM_THEME_RELEASE.catalogueThemeId),
-    release_version: DEFAULT_PLATFORM_THEME_RELEASE.releaseVersion,
-    content_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint,
-    catalogue_fingerprint: DEFAULT_PLATFORM_THEME_RELEASE.catalogueFingerprint,
+    catalogue_theme_id: String(DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.catalogueThemeId),
+    release_version: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.releaseVersion,
   },
   selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   token_overrides: {},

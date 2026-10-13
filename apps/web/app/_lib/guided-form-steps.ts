@@ -9,9 +9,6 @@ import {
 } from "@web/platform-server";
 import {
   organizationAccessDeclarationSchema,
-  FIELD_INPUT_BLOCK_RELEASE,
-  FIELD_INPUT_CONTROL_RELEASES,
-  FORM_CONTAINER_BLOCK_RELEASE,
   builderKeySchema,
   containedComponentIdSchema,
   jsonValueSchema,
@@ -28,6 +25,11 @@ import {
   type RecordTypeDefinition,
   type SelectedOrganizationScope,
 } from "@vortex/platform/schema";
+import {
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
+} from "@vortex/platform/server";
 import {
   createPrivateFormDraftService,
   privateFormDraftLimits,

@@ -1,7 +1,8 @@
 import {
   blockPropertyValueSchema,
-  NOTICE_BLOCK_RELEASE,
   validateComponentSettings,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  type PlatformBlockRelease,
   type BlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
@@ -12,6 +13,7 @@ import type { DisplayRenderProps } from "./context";
 const NOTICE_SEVERITIES =
   ["info", "success", "warning", "critical"] as const satisfies readonly NoticeSeverity[];
 const NOTICE_CONTENT_KINDS = ["text", "link"] as const;
+const NOTICE_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE;
 
 type NoticeSettings = Readonly<Record<string, BlockPropertyValueContract>>;
 
@@ -66,6 +68,7 @@ const readChoiceSetting = <const Choices extends readonly string[]>(
 const parseCanonicalSettings = (
   input: unknown,
   location: DefinitionRenderErrorLocation,
+  release: PlatformBlockRelease,
 ): NoticeSettings => {
   if (typeof input !== "object" || input === null || Array.isArray(input))
     return refuse(location, "Notice settings must be an object");
@@ -78,7 +81,7 @@ const parseCanonicalSettings = (
     settings[key] = parsed.data;
   }
 
-  const failures = validateComponentSettings(settings, NOTICE_BLOCK_RELEASE.properties);
+  const failures = validateComponentSettings(settings, release.properties);
   const failure = failures[0];
   if (failure !== undefined) {
     return refuse(
@@ -93,6 +96,7 @@ const parseCanonicalSettings = (
 function readDismissible(
   settings: NoticeSettings,
   location: DefinitionRenderErrorLocation,
+  release: PlatformBlockRelease,
 ): boolean {
   const setting = settings.dismissible;
   if (setting !== undefined) {
@@ -105,7 +109,7 @@ function readDismissible(
     return setting.value;
   }
 
-  const declaration = NOTICE_BLOCK_RELEASE.properties.find(
+  const declaration = release.properties.find(
     (property) => property.key === "dismissible",
   );
   if (declaration?.kind !== "boolean" || declaration.defaultValue?.kind !== "boolean")
@@ -122,12 +126,9 @@ export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
   const location = noticeLocation(props);
   const metadata = props.metadata;
   if (
-    metadata.blockId !== NOTICE_BLOCK_RELEASE.blockId ||
-    metadata.key !== NOTICE_BLOCK_RELEASE.key ||
-    metadata.releaseVersion !== NOTICE_BLOCK_RELEASE.releaseVersion ||
-    metadata.rendererKey !== NOTICE_BLOCK_RELEASE.rendererKey ||
-    metadata.contentFingerprint !== NOTICE_BLOCK_RELEASE.contentFingerprint ||
-    metadata.catalogueFingerprint !== NOTICE_BLOCK_RELEASE.catalogueFingerprint
+    metadata.key !== NOTICE_RELEASE.key ||
+    metadata.releaseVersion !== NOTICE_RELEASE.releaseVersion ||
+    metadata.rendererKey !== "platform.renderer.notice"
   )
     throw new DefinitionRenderError(
       "MISMATCHED_RELEASE",
@@ -135,7 +136,7 @@ export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
       location,
     );
 
-  const settings = parseCanonicalSettings(props.settings, location);
+  const settings = parseCanonicalSettings(props.settings, location, metadata);
   const severity = readChoiceSetting(settings, "severity", NOTICE_SEVERITIES, location);
   const contentSetting = settings.content;
   if (contentSetting === undefined || contentSetting.kind !== "list")
@@ -175,7 +176,7 @@ export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
     <Notice
       severity={severity}
       content={content}
-      dismissible={readDismissible(settings, location)}
+      dismissible={readDismissible(settings, location, metadata)}
       {...(title === undefined ? {} : { title })}
     />
   );

@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { applicationSourceDocumentSchema, canonicalJson,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  type PublishDefinitionResult } from "@vortex/platform/schema";
+  type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -31,6 +31,7 @@ import {
   type StudioCompositionContext,
   type StudioFlowTextContext,
 } from "@vortex/ui/studio";
+import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
 import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";
@@ -48,11 +49,15 @@ import {
   type StudioApplicationSourceImportSnapshot,
 } from "../_lib/application-source-import";
 
-type WorkspaceProps =
+type WorkspaceProps = Readonly<{
+  platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
+}> & (
   | Readonly<{ mode: "new"; organizationId: string }>
   | Readonly<{ mode: "existing"; organizationId: string; draft: StudioStoredApplicationDraft;
       searchMetadata?: StudioApplicationSearchMetadata | null;
-      pageCompiledSlots?: StudioApplicationCompiledPageSlots | null }>;
+      pageCompiledSlots?: StudioApplicationCompiledPageSlots | null }>);
 
 type PublicationSnapshot = Readonly<{
   organizationId: string; rootId: string; key: string; draftRevision: number;
@@ -80,7 +85,10 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
     ? <NewApplicationWorkspace organizationId={props.organizationId} />
     : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft}
         initialSearchMetadata={props.searchMetadata ?? null}
-        pageCompiledSlots={props.pageCompiledSlots ?? null} />;
+        pageCompiledSlots={props.pageCompiledSlots ?? null}
+        platformBlockCatalogue={props.platformBlockCatalogue}
+        fieldInputControlReleases={props.fieldInputControlReleases}
+        platformThemeTokens={props.platformThemeTokens} />;
 }
 
 function NewApplicationWorkspace({ organizationId }: { organizationId: string }) {
@@ -189,9 +197,13 @@ function Outline({ node, selectedKey, choose, disabled = false }: {
   </li>;
 }
 
-function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMetadata, pageCompiledSlots }: {
+function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMetadata, pageCompiledSlots,
+  platformBlockCatalogue, fieldInputControlReleases, platformThemeTokens }: {
   organizationId: string; draft: StudioStoredApplicationDraft; initialSearchMetadata: StudioApplicationSearchMetadata | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
+  platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
 }) {
   const active = useRef(false);
   const lifetime = useRef(0);
@@ -383,8 +395,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     canonicalJson(state.source) === canonicalJson(savedPreviewDraft.current.source) ? searchMetadata : null;
   const compositionContext = useMemo<StudioCompositionContext>(() => ({
     organizationId, rootId: state.rootId, key: draft.key, draftRevision: state.draftRevision,
-    localLifetime: workspaceLifetime, source: state.source,
-  }), [organizationId, state.rootId, draft.key, state.draftRevision, workspaceLifetime, state.source]);
+    localLifetime: workspaceLifetime, catalogue: platformBlockCatalogue, source: state.source,
+  }), [organizationId, state.rootId, draft.key, state.draftRevision, workspaceLifetime,
+    platformBlockCatalogue, state.source]);
   const inspector = resolveStudioSelectionInspectorContext({ rootId: state.rootId, source }, selected);
   const selectedPage = selected?.kind === "page"
     ? source.body.pages.find((page) => page.id === selected.pageAlias) : undefined;
@@ -534,7 +547,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     const currentSelection = selection.getSelection();
     if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || currentSelection?.kind !== "placement") return null;
     return { context: { organizationId, rootId: current.rootId, key: draft.key,
-      draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source },
+      draftRevision: current.draftRevision, localLifetime: lifetime.current,
+      catalogue: platformBlockCatalogue, source: current.source },
       selection: currentSelection, saved: savedPreviewDraft.current };
   }, [organizationId, draft.key, history, selection]);
 
@@ -816,6 +830,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         {selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
           <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}`} source={source}
             compiledSource={draft.source}
+            platformBlockCatalogue={platformBlockCatalogue}
+            fieldInputControlReleases={fieldInputControlReleases}
+            platformThemeTokens={platformThemeTokens}
             pageAlias={selectedPage.id} compiledSlots={pageCompiledSlots?.[selectedPage.id]}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening ||
               state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition ||
@@ -833,7 +850,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
                 return "stale";
               const currentContext: StudioCompositionContext = {
                 organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+                draftRevision: current.draftRevision, localLifetime: lifetime.current,
+                catalogue: platformBlockCatalogue, source: current.source,
               };
               const result = applyStudioCompositionCommand(currentContext, expected, currentSelection, command);
               if (result.kind !== "applied") return result.kind;
@@ -865,7 +883,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
                 currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
                 currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
               const currentContext: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source };
+                draftRevision: current.draftRevision, localLifetime: lifetime.current,
+                catalogue: platformBlockCatalogue, source: current.source };
               const result = applyStudioVisibilityCondition(expected, currentContext, currentSelection, metadata, condition);
               if (result.kind !== "applied") return result;
               const latest = history.getState();
@@ -1050,6 +1069,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
             }} />}
       </aside>
     </div>
-    <ApplicationDraftPreview context={readPreviewContext()} readContext={readPreviewContext} />
+    <ApplicationDraftPreview context={readPreviewContext()} readContext={readPreviewContext}
+      platformBlockCatalogue={platformBlockCatalogue}
+      fieldInputControlReleases={fieldInputControlReleases}
+      platformThemeTokens={platformThemeTokens} />
   </main>;
 }

@@ -1,9 +1,5 @@
 import { platformPermissionSource } from "../access/platform-permissions";
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
-  FIELD_INPUT_BLOCK_RELEASE,
-  FIELD_INPUT_CONTROL_RELEASES,
-  FORM_CONTAINER_BLOCK_RELEASE,
   applicationDraftSchema,
   boardBlockSourceIsSupported,
   readBoardPlacementContract,
@@ -65,6 +61,12 @@ import {
   type PublishedDefinitionHistory,
   type VersionRequirement,
 } from "../schema";
+import {
+  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
+} from "./application-composition-catalogue";
 import type { z } from "zod";
 import {
   evaluateTypedCondition,

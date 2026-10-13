@@ -9,10 +9,8 @@ import {
   flowSchema,
   flowTaskChildLists,
   flowBindingInvocationSchema,
-  FORM_CONTAINER_BLOCK_RELEASE,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
-  PLATFORM_BLOCK_RELEASES,
   safeFlowResultDescriptors,
   recordIdSchema,
   recordTypeIdSchema,
@@ -32,6 +30,7 @@ import {
   type OrganizationSelectionCandidate,
   type SafeFlowResultDescriptor,
 } from "../schema";
+import { FORM_CONTAINER_BLOCK_RELEASE, PLATFORM_BLOCK_RELEASES } from "./application-composition-catalogue";
 import type {
   FlowNamedAction,
   FlowOrchestrator,

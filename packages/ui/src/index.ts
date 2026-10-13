@@ -20,8 +20,10 @@ export {
   type PlatformBlockRuntimeInputs,
   type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
+  type RegisteredPlatformComponent,
   type PlatformComponentRenderer,
   type PlatformComponentRegistry,
+  type FieldInputControlReleaseMap,
   type RuntimeInputReader,
   type RuntimeInputsByPlacement,
 } from "./registry";
@@ -150,17 +152,7 @@ export {
 
 // Display Registrations & Registry
 export {
-  DISPLAY_BLOCK_RELEASES,
   DISPLAY_COMPONENT_REGISTRATIONS,
-  GROUPED_DATA_BLOCK_RELEASE,
-  LIST_BLOCK_RELEASE,
-  NOTICE_BLOCK_RELEASE,
-  QUERY_NOTICE_BLOCK_RELEASE,
-  RECORD_DETAIL_BLOCK_RELEASE,
-  RICH_TEXT_BLOCK_RELEASE,
-  SUMMARY_VALUES_BLOCK_RELEASE,
-  TABLE_BLOCK_RELEASE,
-  TEXT_BLOCK_RELEASE,
   createDisplayComponentRegistry,
 } from "./display";
 
@@ -276,25 +268,8 @@ export {
 
 // Control Registrations & Registry
 export {
-  BOOLEAN_INPUT_BLOCK_RELEASE,
-  BUTTON_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE,
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-  CONTROL_BLOCK_RELEASES,
   CONTROL_COMPONENT_REGISTRATIONS,
   createControlComponentRegistry,
-  DATE_INPUT_BLOCK_RELEASE,
-  DIALOG_BLOCK_RELEASE,
-  DRAWER_BLOCK_RELEASE,
-  FIELD_INPUT_BLOCK_RELEASE,
-  FORM_CONTAINER_BLOCK_RELEASE,
-  LINK_INPUT_BLOCK_RELEASE,
-  NUMBER_INPUT_BLOCK_RELEASE,
-  RICH_TEXT_INPUT_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE_2_0_0,
-  TEXT_INPUT_BLOCK_RELEASE,
-  VALIDATION_MESSAGE_BLOCK_RELEASE,
 } from "./controls";
 
 // Launcher List Payload & Binding Contracts
@@ -320,10 +295,7 @@ export { ApplicationLauncher, LinkTiles, ViewFilter } from "./launcher";
 
 // Launcher Registrations & Registry
 export {
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LAUNCHER_COMPONENT_REGISTRATIONS,
-  LINK_TILES_BLOCK_RELEASE,
-  VIEW_FILTER_BLOCK_RELEASE,
   createLauncherComponentRegistry,
 } from "./launcher";
 
@@ -332,12 +304,6 @@ export { Container, Heading, type ContainerProps, type HeadingProps } from "./la
 
 // General Layout Registrations & Registry
 export {
-  CONTAINER_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_1_0,
-  CONTAINER_BLOCK_RELEASE_1_2_0,
-  CONTAINER_BLOCK_RELEASE_1_3_0,
-  HEADING_BLOCK_RELEASE,
-  LAYOUT_BLOCK_RELEASES,
   LAYOUT_COMPONENT_REGISTRATIONS,
   createLayoutComponentRegistry,
 } from "./layout";
@@ -353,12 +319,9 @@ export {
 
 // Application Navigation Registrations & Registry (#1009)
 export {
-  APPLICATION_NAVIGATION_BLOCK_RELEASE,
-  APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   ApplicationAccountActionsBlock,
   ApplicationAccountActionsProvider,
   type ApplicationAccountActions,
-  NAVIGATION_BLOCK_RELEASES,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   createNavigationComponentRegistry,
 } from "./navigation";
@@ -367,6 +330,7 @@ export {
 export {
   ALL_PLATFORM_COMPONENT_REGISTRATIONS,
   createFullPlatformComponentRegistry,
+  createPlatformComponentRegistryForReleases,
 } from "./combined-registry";
 
 // Generic Connection Administration Page Contracts (#693)
@@ -435,6 +399,7 @@ export {
   VORTEX_STYLES,
   type ThemeMode,
   type ThemeRootProps,
+  type PlatformThemeTokens,
   type VortexMenuAccent,
   type VortexMenuColor,
   type VortexStyle,

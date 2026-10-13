@@ -9,6 +9,11 @@ import {
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
+import {
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  PLATFORM_BLOCK_RELEASES,
+} from "@vortex/platform/server";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import { ApplicationPageView } from "./_components/application-page-view";
@@ -82,6 +87,35 @@ const unavailableFallback = (
     <Link href="/signed-in">Choose an organisation</Link>
   </AuthShell>
 );
+
+/** The browser registry only needs metadata for releases present in this rendered composition. */
+const platformBlockReleasesFor = (...compositions: readonly unknown[]) => {
+  const availableIdentities = new Set(
+    PLATFORM_BLOCK_RELEASES.map((release) => `${release.blockId}:${release.releaseVersion}`),
+  );
+  const referencedIdentities = new Set<string>();
+  const visited = new WeakSet<object>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      if (visited.has(value)) return;
+      visited.add(value);
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value !== "object" || value === null || visited.has(value)) return;
+    visited.add(value);
+    const candidate = value as Readonly<{ blockId?: unknown; releaseVersion?: unknown }>;
+    if (typeof candidate.blockId === "string" && typeof candidate.releaseVersion === "string") {
+      const identity = `${candidate.blockId}:${candidate.releaseVersion}`;
+      if (availableIdentities.has(identity)) referencedIdentities.add(identity);
+    }
+    for (const nested of Object.values(value)) visit(nested);
+  };
+  for (const composition of compositions) visit(composition);
+  return PLATFORM_BLOCK_RELEASES.filter((release) =>
+    referencedIdentities.has(`${release.blockId}:${release.releaseVersion}`),
+  );
+};
 
 type ApplicationAddressPageProps = Readonly<{
   params: Promise<{
@@ -271,6 +305,12 @@ export default async function ApplicationAddressPage({
         theme={resolved.experience.theme}
         organizationName={organizationShortName}
         identityId={identity.session.identityId}
+        platformBlockReleases={platformBlockReleasesFor(
+          resolved.experience.page,
+          resolved.experience.shells,
+        )}
+        fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+        platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
       />
     );
   }
@@ -302,10 +342,11 @@ export default async function ApplicationAddressPage({
             placementId: organizationLauncherStudioPlacementId,
           }
         : undefined;
+    const page = studio === undefined ? organizationLauncherPage : organizationLauncherStudioPage;
 
     return (
       <OrganizationLauncherPage
-        page={studio === undefined ? organizationLauncherPage : organizationLauncherStudioPage}
+        page={page}
         shell={organizationLauncherShell}
         placementId={organizationLauncherPlacementId}
         values={launcherValues}
@@ -313,6 +354,9 @@ export default async function ApplicationAddressPage({
         identityId={identity.session.identityId}
         openApplication={openApplication}
         launcherHref={launcherPath(tenantShortName, organizationShortName)}
+        platformBlockReleases={platformBlockReleasesFor(page, organizationLauncherShell)}
+        fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+        platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
         {...(studio === undefined ? {} : { studio })}
       />
     );
@@ -410,6 +454,13 @@ export default async function ApplicationAddressPage({
   return (
     <ApplicationPageView
       model={applicationModel}
+      platformBlockReleases={platformBlockReleasesFor(
+        applicationModel.page,
+        applicationModel.shells,
+        applicationModel.applicationShell,
+      )}
+      fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
+      platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
       onOpenApplication={openApplication}
       adoptReleaseAction={adoptRelease}
       applicationSwitcherState={applicationSwitcherState}

@@ -25,8 +25,7 @@
     "guard": "node tooling/guard/guard.ts",
     "knip": "knip",
     "build": "turbo run build",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
-    "catalogue:fingerprints": "node --conditions=react-server --import tsx tooling/generate-catalogue-fingerprints.mjs"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@vortex/definitions": "workspace:*",

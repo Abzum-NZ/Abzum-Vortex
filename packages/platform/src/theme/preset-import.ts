@@ -3,13 +3,15 @@ import "server-only";
 import {
   SHADCN_HEADING_FONT_INHERIT,
   findShadcnFont,
-  findShadcnThemeCatalogueOption,
   isShadcnIconLibrary,
-  shadcnThemeCatalogueDimensionKeys,
   sourceApplicationThemeSelectionSchema,
-  type ShadcnThemeCatalogueDimensionKey,
   type SourceApplicationThemeSelection,
 } from "../schema";
+import {
+  findShadcnThemeCatalogueOption,
+  shadcnThemeCatalogueDimensionKeys,
+  type ShadcnThemeCatalogueDimensionKey,
+} from "./shadcn-theme-catalogue";
 import { findShadcnThemeRelease } from "./shadcn-theme-releases";
 import {
   decodePreset,

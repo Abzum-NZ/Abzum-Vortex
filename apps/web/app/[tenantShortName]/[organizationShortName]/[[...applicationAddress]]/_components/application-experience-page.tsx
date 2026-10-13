@@ -1,17 +1,17 @@
 "use client";
 
-import type { ComponentProps, ReactElement } from "react";
+import { useMemo, type ComponentProps, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import type { ApplicationShell, PageDefinition } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
-  createFullPlatformComponentRegistry,
+  createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
+  type FieldInputControlReleaseMap,
+  type PlatformThemeTokens,
 } from "@vortex/ui";
+import type { PlatformBlockRelease } from "@vortex/platform/schema";
 import { signOut } from "../../../../auth/actions";
-
-/** One registry shared by every rendered experience page. */
-const platformComponentRegistry = createFullPlatformComponentRegistry();
 
 /**
  * Renders one application-declared experience page through the normal page renderer. Experience
@@ -24,6 +24,9 @@ export function ApplicationExperiencePage({
   theme,
   organizationName,
   identityId,
+  platformBlockReleases,
+  fieldInputControlReleases,
+  platformThemeTokens,
 }: Readonly<{
   page: PageDefinition;
   shells: readonly ApplicationShell[];
@@ -31,8 +34,15 @@ export function ApplicationExperiencePage({
   theme?: ComponentProps<typeof PagePuckRenderer>["theme"];
   organizationName: string;
   identityId: string;
+  platformBlockReleases: readonly PlatformBlockRelease[];
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
   const router = useRouter();
+  const platformComponentRegistry = useMemo(
+    () => createPlatformComponentRegistryForReleases(platformBlockReleases),
+    [platformBlockReleases],
+  );
   return (
     <ApplicationAccountActionsProvider
       actions={{
@@ -47,6 +57,8 @@ export function ApplicationExperiencePage({
         themeMode="system"
         composition={page}
         registry={platformComponentRegistry}
+        fieldInputControlReleases={fieldInputControlReleases}
+        platformThemeTokens={platformThemeTokens}
         shells={shells}
         pageId={page.pageId}
         theme={theme}

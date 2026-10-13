@@ -1,5 +1,5 @@
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
+  type ImmutablePlatformBlockCatalogue,
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
   organizationIdSchema,
@@ -33,6 +33,7 @@ export type StudioCompositionContext = Readonly<{
   key: string;
   draftRevision: number;
   localLifetime: number;
+  catalogue: ImmutablePlatformBlockCatalogue;
   source: Readonly<ApplicationSourceDocument>;
 }>;
 
@@ -119,10 +120,23 @@ type SlotStep = Readonly<{ parentAlias: string; slotKey: string }>;
 type Target = { region: Region; slot: SourceSlot; placement: SourcePlacement;
   steps: readonly SlotStep[]; responsiveOrder: boolean };
 
-const catalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
-const bridge = createVortexAuthoredPuckAdapter(catalogue);
-const releases = new Map(catalogue.releases.map((release) =>
-  [`${release.blockId}:${release.releaseVersion}`, release]));
+type CompositionCatalogueTools = Readonly<{
+  bridge: ReturnType<typeof createVortexAuthoredPuckAdapter>;
+  releases: ReadonlyMap<string, PlatformBlockRelease>;
+}>;
+const catalogueTools = new WeakMap<ImmutablePlatformBlockCatalogue, CompositionCatalogueTools>();
+const toolsFor = (catalogue: ImmutablePlatformBlockCatalogue): CompositionCatalogueTools => {
+  let tools = catalogueTools.get(catalogue);
+  if (tools === undefined) {
+    tools = Object.freeze({
+      bridge: createVortexAuthoredPuckAdapter(catalogue),
+      releases: new Map(catalogue.releases.map((release) =>
+        [`${release.blockId}:${release.releaseVersion}`, release])),
+    });
+    catalogueTools.set(catalogue, tools);
+  }
+  return tools;
+};
 const refuse = (): never => { throw new TypeError("Composition edit refused"); };
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -156,7 +170,8 @@ const validContext = (context: StudioCompositionContext): boolean =>
 const sameContext = (expected: StudioCompositionContext, current: StudioCompositionContext): boolean =>
   expected.organizationId === current.organizationId && expected.rootId === current.rootId &&
   expected.key === current.key && expected.draftRevision === current.draftRevision &&
-  expected.localLifetime === current.localLifetime && expected.source === current.source;
+  expected.localLifetime === current.localLifetime && expected.catalogue === current.catalogue &&
+  expected.source === current.source;
 
 /** Enumerate native regions; a caller cannot supply a JSON pointer or a guessed step id. */
 const regions = (source: ApplicationSourceDocument): Region[] => {
@@ -208,10 +223,17 @@ const regions = (source: ApplicationSourceDocument): Region[] => {
   return result;
 };
 
-const releaseFor = (placement: SourcePlacement): PlatformBlockRelease | undefined =>
-  releases.get(`${placement.block.block_id}:${placement.block.release_version}`);
+const releaseFor = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  placement: SourcePlacement,
+): PlatformBlockRelease | undefined =>
+  toolsFor(catalogue).releases.get(`${placement.block.block_id}:${placement.block.release_version}`);
 
-const targetFor = (source: ApplicationSourceDocument, alias: string): Target | undefined => {
+const targetFor = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  alias: string,
+): Target | undefined => {
   const matches: Target[] = [];
   for (const region of regions(source)) {
     let count = 0;
@@ -223,38 +245,45 @@ const targetFor = (source: ApplicationSourceDocument, alias: string): Target | u
         if (id === alias) matches.push({ region, slot, placement, steps, responsiveOrder });
         for (const [slotKey, child] of Object.entries(placement.slots))
           visit(child, [...steps, { parentAlias: id, slotKey }],
-            releaseFor(placement)?.capabilities.responsiveOrder === true);
+            releaseFor(catalogue, placement)?.capabilities.responsiveOrder === true);
       }
     };
     visit(region.slot, [], region.parent === undefined ||
-      releaseFor(region.parent)?.capabilities.responsiveOrder === true);
+      releaseFor(catalogue, region.parent)?.capabilities.responsiveOrder === true);
   }
   return matches.length === 1 ? matches[0] : undefined;
 };
 
 /** Only the selected region needs supported releases; unrelated regions remain untouched. */
-const pinnedRelease = (source: ApplicationSourceDocument, placement: SourcePlacement): boolean => {
-  const release = releaseFor(placement);
+const pinnedRelease = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  placement: SourcePlacement,
+): boolean => {
+  const release = releaseFor(catalogue, placement);
   return release !== undefined && source.body.platform_block_dependencies.some((dependency) =>
-    dependency.block_id === release.blockId && dependency.release_version === release.releaseVersion &&
-    dependency.content_fingerprint === release.contentFingerprint &&
-    dependency.catalogue_fingerprint === release.catalogueFingerprint);
+    dependency.block_id === release.blockId && dependency.release_version === release.releaseVersion);
 };
-const manifestMatches = (source: ApplicationSourceDocument, slot: SourceSlot): boolean => {
+const manifestMatches = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  slot: SourceSlot,
+): boolean => {
   for (const placement of Object.values(slot.placements)) {
-    if (!pinnedRelease(source, placement)) return false;
+    if (!pinnedRelease(catalogue, source, placement)) return false;
     for (const child of Object.values(placement.slots))
-      if (!manifestMatches(source, child)) return false;
+      if (!manifestMatches(catalogue, source, child)) return false;
   }
   return true;
 };
 
 const resolve = (context: StudioCompositionContext, selection: StudioSemanticSelection | null) => {
   if (!validContext(context) || selection?.kind !== "placement") return undefined;
+  const catalogue = context.catalogue;
   const source = applicationSourceDocumentSchema.parse(context.source);
   if (resolveStudioSelectionInspectorContext({ rootId: context.rootId, source }, selection).status !== "resolved")
     return undefined;
-  const target = targetFor(source, selection.placementAlias);
+  const target = targetFor(catalogue, source, selection.placementAlias);
   return target === undefined ? undefined : { source, target, alias: selection.placementAlias };
 };
 
@@ -266,7 +295,11 @@ const sameSteps = (left: readonly SlotStep[], right: readonly SlotStep[]): boole
     step.parentAlias === right[index]?.parentAlias && step.slotKey === right[index]?.slotKey);
 
 /** Only actual non-repeatable slots in this original ordinary region are destinations. */
-const moveDestinations = (target: Target, alias: string): MoveDestination[] => {
+const moveDestinations = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  target: Target,
+  alias: string,
+): MoveDestination[] => {
   if (target.region.ordinaryMain !== true) return [];
   const subtree = new Set<string>([alias]);
   const descendants = (slot: SourceSlot): void => {
@@ -276,14 +309,14 @@ const moveDestinations = (target: Target, alias: string): MoveDestination[] => {
     }
   };
   for (const child of Object.values(target.placement.slots)) descendants(child);
-  const movedRelease = releaseFor(target.placement) ?? refuse();
+  const movedRelease = releaseFor(catalogue, target.placement) ?? refuse();
   const result: MoveDestination[] = [];
   let selectedPathSupported = target.steps.length === 0;
   const visit = (slot: SourceSlot, steps: readonly SlotStep[]): void => {
     if (sameSteps(steps, target.steps)) selectedPathSupported = true;
     for (const [parentAlias, placement] of Object.entries(slot.placements)) {
       if (subtree.has(parentAlias)) continue;
-      const release = releaseFor(placement) ?? refuse();
+      const release = releaseFor(catalogue, placement) ?? refuse();
       for (const declaration of release.slots) {
         if (declaration.repeats !== undefined) continue;
         const child = placement.slots[declaration.key];
@@ -402,6 +435,8 @@ const resolveAdd = (context: StudioCompositionContext, selection: StudioSemantic
   if (selection?.kind !== "page") return { kind: "invalid" };
   plainSource(context.source);
   if (!validContext(context)) return { kind: "invalid" };
+  const catalogue = context.catalogue;
+  const { bridge } = toolsFor(catalogue);
   // Bound and validate the actual selected raw region before the recursive whole-source schema.
   const rawPages = object(object(context.source).body).pages;
   if (!Array.isArray(rawPages)) return { kind: "invalid" };
@@ -421,7 +456,7 @@ const resolveAdd = (context: StudioCompositionContext, selection: StudioSemantic
   if (page.type === "public" || page.type === "guided_form" || page.composition.shell_kind !== "default")
     return { kind: "unsupported" };
   const composition = page.composition;
-  if (!manifestMatches(source, composition.main)) return { kind: "unsupported" };
+  if (!manifestMatches(catalogue, source, composition.main)) return { kind: "unsupported" };
   return { kind: "available", source, main: composition.main,
     layoutAllowed: (page.type === "list" || page.type === "detail" || page.type === "dashboard") &&
       !source.body.public_addresses.some((address) => address.page === page.id) &&
@@ -429,9 +464,15 @@ const resolveAdd = (context: StudioCompositionContext, selection: StudioSemantic
     replace: (slot) => { composition.main = slot; } };
 };
 
-const addChoices = (searchText: string, authoredAlias: string, layoutAllowed: boolean): StudioCompositionPaletteChoice[] => {
+const addChoices = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  searchText: string,
+  authoredAlias: string,
+  layoutAllowed: boolean,
+): StudioCompositionPaletteChoice[] => {
   // This surface describes an already resolved nonpublic page; it grants no authority.
   const discovery = createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } });
+  const { bridge, releases } = toolsFor(catalogue);
   return getStudioContextualPaletteGroups(discovery, { kind: "page" }, searchText)
     .flatMap((group) => group.choices).flatMap((choice) => {
       const release = releases.get(`${choice.blockId}:${choice.releaseVersion}`);
@@ -468,12 +509,14 @@ export const describeStudioCompositionPalette = (context: StudioCompositionConte
     if (selection?.kind !== "page") return { kind: "invalid" };
     const target = resolveAdd(context, selection);
     return target.kind === "available"
-      ? { kind: "available", choices: addChoices(searchText, selection.pageAlias, target.layoutAllowed) } : target;
+      ? { kind: "available", choices: addChoices(context.catalogue, searchText, selection.pageAlias, target.layoutAllowed) } : target;
   } catch { return { kind: "invalid" }; }
 };
 
 const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
+  const catalogue = current.catalogue;
+  const { bridge, releases } = toolsFor(catalogue);
   const input = closedPlain(command, ["kind", "blockId", "releaseVersion", "alias", "settings"]);
   if (input.kind !== "add" || typeof input.blockId !== "string" || typeof input.releaseVersion !== "string")
     return { kind: "invalid" };
@@ -484,7 +527,7 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   const release = releases.get(`${input.blockId}:${input.releaseVersion}`);
   if (release === undefined || (!eligibleAddRelease(release) &&
     !(target.layoutAllowed && eligibleLayoutAddRelease(release))) ||
-    !addChoices("", alias, target.layoutAllowed).some((choice) =>
+    !addChoices(catalogue, "", alias, target.layoutAllowed).some((choice) =>
       choice.blockId === input.blockId && choice.releaseVersion === input.releaseVersion))
     return { kind: "unsupported" };
   const allSlots = regions(target.source).map((region) => region.slot);
@@ -523,12 +566,10 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
   const dependencies = target.source.body.platform_block_dependencies;
   const existing = dependencies.find((dependency) => dependency.block_id === release.blockId &&
     dependency.release_version === release.releaseVersion);
-  if (existing !== undefined) {
-    if (existing.content_fingerprint !== release.contentFingerprint ||
-      existing.catalogue_fingerprint !== release.catalogueFingerprint) return { kind: "invalid" };
-  } else {
+  if (existing === undefined) {
+    // The authoring source pins the release identity; publication records its content hash.
     dependencies.push({ kind: "platform_block", block_id: release.blockId, release_version: release.releaseVersion,
-      content_fingerprint: release.contentFingerprint, catalogue_fingerprint: release.catalogueFingerprint });
+    });
     dependencies.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
       : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
   }
@@ -537,7 +578,8 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
 };
 
 /** Named content settings require the actual shell reservation and fixed-slot ancestry. */
-const ordinaryNamedSettingsPage = (source: ApplicationSourceDocument, target: Target,
+const ordinaryNamedSettingsPage = (catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument, target: Target,
   optionalLayoutAncestry = false) => {
   const matches: { page: ApplicationSourceDocument["body"]["pages"][number];
     shellAlias: string; slotAlias: string }[] = [];
@@ -554,10 +596,10 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocument, target: Ta
   if (shells.length !== 1) return undefined;
   const shell = shells[0]!;
   const bindings = shell.content_slots.filter((binding) => binding.id === match.slotAlias);
-  if (bindings.length !== 1 || !manifestMatches(source, shell.layout)) return undefined;
+  if (bindings.length !== 1 || !manifestMatches(catalogue, source, shell.layout)) return undefined;
   const binding = bindings[0]!;
   // Validate the complete original shell, including its required-but-empty reservations.
-  bridge.toPuckShell(shell);
+  toolsFor(catalogue).bridge.toPuckShell(shell);
   // Reservation validation does not validate each authored binding's metadata.
   const shellPlacements = new Map<string, SourcePlacement>();
   const collect = (slot: SourceSlot): void => {
@@ -570,7 +612,7 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocument, target: Ta
   collect(shell.layout);
   for (const authoredBinding of shell.content_slots) {
     const parent = shellPlacements.get(authoredBinding.parent_placement);
-    const declarations = parent === undefined ? undefined : releaseFor(parent)?.slots
+    const declarations = parent === undefined ? undefined : releaseFor(catalogue, parent)?.slots
       .filter((slot) => slot.key === authoredBinding.parent_slot);
     if (declarations?.length !== 1) return undefined;
     const declaration = declarations[0]!;
@@ -582,7 +624,7 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocument, target: Ta
   const optionalParentPaths: boolean[] = [];
   const visit = (slot: SourceSlot, optionalPath = true): void => {
     for (const [alias, placement] of Object.entries(slot.placements)) {
-      const release = releaseFor(placement) ?? refuse();
+      const release = releaseFor(catalogue, placement) ?? refuse();
       if (alias === binding.parent_placement) {
         parents.push(placement);
         optionalParentPaths.push(optionalPath);
@@ -596,13 +638,13 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocument, target: Ta
   };
   visit(shell.layout);
   if (parents.length !== 1 || parents[0] !== target.region.parent) return undefined;
-  const declarations = releaseFor(parents[0]!)?.slots.filter((slot) => slot.key === binding.parent_slot);
+  const declarations = releaseFor(catalogue, parents[0]!)?.slots.filter((slot) => slot.key === binding.parent_slot);
   if (declarations?.length !== 1 || declarations[0]!.repeats !== undefined) return undefined;
   const declaration = declarations[0]!;
   // Layout settings alone require optional immutable slots; authored required content stays required.
   if (optionalLayoutAncestry && (!optionalParentPaths[0] || declaration.required)) return undefined;
   if (Object.values(target.region.slot.placements).some((placement) => {
-    const release = releaseFor(placement);
+    const release = releaseFor(catalogue, placement);
     return release === undefined || !declaration.allowedChildCategories.includes(release.paletteGroup) ||
       !binding.allowed_child_categories.includes(release.paletteGroup);
   })) return undefined;
@@ -612,11 +654,13 @@ const ordinaryNamedSettingsPage = (source: ApplicationSourceDocument, target: Ta
 /** Setting changes retain identity, so Flow references and required content do not block them. */
 const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null,
   eligible: (release: PlatformBlockRelease) => boolean = eligibleAddRelease) => {
+  const catalogue = context.catalogue;
+  const { bridge } = toolsFor(catalogue);
   plainSource(context.source);
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
-  const release = releaseFor(target.placement);
+  const release = releaseFor(catalogue, target.placement);
   const layoutSettings = release !== undefined && eligibleLayoutSettingsRelease(release);
   const ordinaryPage = source.body.pages.find((candidate) => candidate.type !== "guided_form" &&
     candidate.composition.shell_kind === "default" && candidate.composition.main === target.region.slot);
@@ -629,7 +673,7 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
   });
   const guidedPage = guidedPages.length === 1 ? guidedPages[0] : undefined;
   const namedPage = ordinaryPage === undefined && guidedPage === undefined
-    ? ordinaryNamedSettingsPage(source, target, layoutSettings) : undefined;
+    ? ordinaryNamedSettingsPage(catalogue, source, target, layoutSettings) : undefined;
   const page = ordinaryPage ?? guidedPage ?? namedPage;
   const guided = ordinaryPage === undefined && guidedPage !== undefined;
   const named = namedPage !== undefined;
@@ -643,11 +687,11 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
       (release.paletteGroup !== "content" || release.slots.length !== 0)))
     return { kind: "unsupported" } as const;
   if ((!layoutSettings && Object.keys(target.placement.slots).length !== 0) ||
-    !manifestMatches(source, target.region.slot)) return { kind: "unsupported" } as const;
+    !manifestMatches(catalogue, source, target.region.slot)) return { kind: "unsupported" } as const;
   let slot = target.region.slot;
   for (const step of target.steps) {
     const parent = slot.placements[step.parentAlias];
-    const declaration = parent === undefined ? undefined : releaseFor(parent)?.slots.find((item) => item.key === step.slotKey);
+    const declaration = parent === undefined ? undefined : releaseFor(catalogue, parent)?.slots.find((item) => item.key === step.slotKey);
     const child = parent?.slots[step.slotKey];
     // Layout settings keep their existing children but cannot edit through required ancestor slots.
     if (declaration === undefined || declaration.repeats !== undefined || child === undefined ||
@@ -691,6 +735,7 @@ export const describeStudioCompositionSettings = (context: StudioCompositionCont
 
 const applySettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
+  const { bridge } = toolsFor(current.catalogue);
   const input = closedPlain(command, ["kind", "settings"]);
   if (input.kind !== "settings") return { kind: "invalid" };
   const resolved = resolveSettings(current, selection);
@@ -758,6 +803,7 @@ export const describeStudioCompositionScalarSettings = (context: StudioCompositi
 
 const applyScalarSettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
+  const { bridge } = toolsFor(current.catalogue);
   const input = closedPlain(command, ["kind", "settings"]);
   if (input.kind !== "scalar_settings") return { kind: "invalid" };
   const resolved = resolveSettings(current, selection, eligibleScalarRelease);
@@ -871,6 +917,8 @@ type ResolvedRemoval = { kind: "available"; removal: Removal }
   | Exclude<StudioCompositionRemovalModel, { kind: "available" }>;
 const resolveRemoval = (context: StudioCompositionContext,
   selection: StudioSemanticSelection | null): ResolvedRemoval => {
+  const catalogue = context.catalogue;
+  const { bridge } = toolsFor(catalogue);
   plainSource(context.source);
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" };
@@ -880,14 +928,14 @@ const resolveRemoval = (context: StudioCompositionContext,
   if (page === undefined || (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
     target.region.ordinaryMain !== true || source.body.public_addresses.some((address) => address.page === page.id) ||
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" };
-  const release = releaseFor(target.placement);
+  const release = releaseFor(catalogue, target.placement);
   if (release === undefined || !eligibleAddRelease(release) || Object.keys(target.placement.slots).length !== 0 ||
-    !manifestMatches(source, target.region.slot)) return { kind: "unsupported" };
+    !manifestMatches(catalogue, source, target.region.slot)) return { kind: "unsupported" };
   bridge.toPuckData(target.region.slot);
   let slot = target.region.slot;
   for (const step of target.steps) {
     const parent = slot.placements[step.parentAlias];
-    const declaration = parent === undefined ? undefined : releaseFor(parent)?.slots.find((item) => item.key === step.slotKey);
+    const declaration = parent === undefined ? undefined : releaseFor(catalogue, parent)?.slots.find((item) => item.key === step.slotKey);
     const child = parent?.slots[step.slotKey];
     if (declaration === undefined || declaration.repeats !== undefined || child === undefined)
       return { kind: "unsupported" };
@@ -925,6 +973,7 @@ export const describeStudioCompositionRemoval = (context: StudioCompositionConte
 
 const applyRemoval = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
+  const { bridge } = toolsFor(current.catalogue);
   closedPlain(command, ["kind"]);
   const resolved = resolveRemoval(current, selection);
   if (resolved.kind !== "available") return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
@@ -948,11 +997,13 @@ export const describeStudioCompositionDestinations = (context: StudioComposition
   try {
     const resolved = resolve(context, selection);
     if (resolved === undefined) return { kind: "invalid" };
+    const catalogue = context.catalogue;
+    const { bridge } = toolsFor(catalogue);
     const { target, source, alias } = resolved;
-    if (target.region.ordinaryMain !== true || !manifestMatches(source, target.region.slot))
+    if (target.region.ordinaryMain !== true || !manifestMatches(catalogue, source, target.region.slot))
       return { kind: "unsupported" };
     bridge.toPuckData(target.region.slot);
-    return { kind: "available", destinations: moveDestinations(target, alias).map(({ destination, label }) =>
+    return { kind: "available", destinations: moveDestinations(catalogue, target, alias).map(({ destination, label }) =>
       ({ destination, label })) };
   } catch { return { kind: "invalid" }; }
 };
@@ -963,14 +1014,16 @@ export const describeStudioCompositionEdit = (context: StudioCompositionContext,
     if (!breakpointValid(breakpoint)) return { kind: "invalid" };
     const resolved = resolve(context, selection);
     if (resolved === undefined) return { kind: "invalid" };
+    const catalogue = context.catalogue;
+    const { bridge } = toolsFor(catalogue);
     const { target, source, alias } = resolved;
-    if (!manifestMatches(source, target.region.slot) ||
-      (target.region.parent !== undefined && !pinnedRelease(source, target.region.parent)))
+    if (!manifestMatches(catalogue, source, target.region.slot) ||
+      (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent)))
       return { kind: "unsupported" };
     // Validate the complete original region and reserved shell targets before offering controls.
     if (target.region.shell) bridge.toPuckShell(target.region.shell);
     else bridge.toPuckData(target.region.slot);
-    const release = releaseFor(target.placement);
+    const release = releaseFor(catalogue, target.placement);
     if (release === undefined) return { kind: "unsupported" };
     return { kind: "available", placementAlias: alias,
       order: [...effective(target.slot.order, breakpoint)],
@@ -989,6 +1042,8 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
   command: StudioCompositionCommand): StudioCompositionCommandResult => {
   try {
     if (!sameContext(expected, current)) return { kind: "stale" };
+    const catalogue = current.catalogue;
+    const { bridge } = toolsFor(catalogue);
     const kind = Object.getOwnPropertyDescriptor(command, "kind");
     if (kind === undefined || kind.get !== undefined || kind.set !== undefined) return { kind: "invalid" };
     if (command.kind === "add") return applyAdd(current, selection, command);
@@ -998,14 +1053,14 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const { source, target, alias } = resolved;
-    if (!manifestMatches(source, target.region.slot) ||
-      (target.region.parent !== undefined && !pinnedRelease(source, target.region.parent)))
+    if (!manifestMatches(catalogue, source, target.region.slot) ||
+      (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent)))
       return { kind: "unsupported" };
     if (command.kind === "move") {
       closedPlain(command, ["kind", "destination"]);
       if (target.region.ordinaryMain !== true) return { kind: "unsupported" };
       const destination = parseDestination(command.destination);
-      const resolvedDestination = moveDestinations(target, alias).find((candidate) =>
+      const resolvedDestination = moveDestinations(catalogue, target, alias).find((candidate) =>
         sameDestination(candidate.destination, destination));
       if (resolvedDestination === undefined) return { kind: "invalid" };
       const data = bridge.toPuckData(target.region.slot);

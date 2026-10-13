@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import {
-  ATTACHMENT_LIST_BLOCK_RELEASE,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   attachmentListPayloadSchema,
   validateComponentSettings,
   type AttachmentListPayload,
@@ -13,6 +13,8 @@ import { DisplayHeader } from "./display/controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./display/context";
 import { parseDisplayData, parseDisplayEventHandlers } from "./display/projected-data";
 import { createPayloadParser, type PlatformComponentRegistration } from "./registry";
+
+const ATTACHMENT_LIST_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.ATTACHMENT_LIST_BLOCK_RELEASE;
 
 type ReadonlyAttachmentListPayload = Readonly<{
   kind: AttachmentListPayload["kind"];
@@ -62,19 +64,16 @@ export function SearchAttachmentDisplay(
     releaseVersion: metadata.releaseVersion,
   };
   if (
-    metadata.blockId !== ATTACHMENT_LIST_BLOCK_RELEASE.blockId ||
-    metadata.key !== ATTACHMENT_LIST_BLOCK_RELEASE.key ||
-    metadata.releaseVersion !== ATTACHMENT_LIST_BLOCK_RELEASE.releaseVersion ||
-    metadata.rendererKey !== ATTACHMENT_LIST_BLOCK_RELEASE.rendererKey ||
-    metadata.contentFingerprint !== ATTACHMENT_LIST_BLOCK_RELEASE.contentFingerprint ||
-    metadata.catalogueFingerprint !== ATTACHMENT_LIST_BLOCK_RELEASE.catalogueFingerprint
+    metadata.key !== ATTACHMENT_LIST_RELEASE.key ||
+    metadata.releaseVersion !== ATTACHMENT_LIST_RELEASE.releaseVersion ||
+    metadata.rendererKey !== "platform.renderer.attachment_list"
   )
     throw new DefinitionRenderError(
       "MISMATCHED_RELEASE",
       "Attachment list received a different immutable release",
       location,
     );
-  if (validateComponentSettings(props.settings, ATTACHMENT_LIST_BLOCK_RELEASE.properties).length !== 0)
+  if (validateComponentSettings(props.settings, metadata.properties).length !== 0)
     return refuse(location);
 
   const {
@@ -149,7 +148,7 @@ export function SearchAttachmentDisplay(
 export const ATTACHMENT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     Object.freeze({
-      metadata: ATTACHMENT_LIST_BLOCK_RELEASE,
+      releaseIdentity: ATTACHMENT_LIST_RELEASE,
       parsePayload: ATTACHMENT_PAYLOAD_PARSER,
     }),
   ]);
