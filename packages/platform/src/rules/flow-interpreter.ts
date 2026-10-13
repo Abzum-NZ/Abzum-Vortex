@@ -27,6 +27,7 @@ import {
   type FlowFormulaScope,
   type FlowRuntimeValue,
 } from "./flow-formula";
+import { recordRichTextDocumentSchema } from "../records/module-field-values";
 
 /**
  * The pure interpreter of the in-house flow engine (architecture decision 1). It runs the nested
@@ -83,6 +84,8 @@ export type FlowFailure = Readonly<{
   code: FlowFailureCode;
   taskId?: string;
   diagnostic?: FlowRefusalFeedback;
+  /** The cause for the server log: names and types only, never a submitted value. */
+  reason?: string;
 }>;
 
 export type FlowRuntimeValues = Readonly<Record<string, FlowRuntimeValue>>;
@@ -274,8 +277,10 @@ const valueMatchesType = (type: string, candidate: unknown): candidate is JsonVa
     case "date_time":
       return typeof candidate === "string" && Number.isFinite(Date.parse(candidate));
     case "text":
-    case "formatted_text":
       return typeof candidate === "string";
+    // A formatted text value is the rich text document the form, the field and the action carry.
+    case "formatted_text":
+      return recordRichTextDocumentSchema.safeParse(candidate).success;
     case "choice":
     case "record_reference":
     case "organization_account_reference":
@@ -324,8 +329,18 @@ class Failed extends Error {
   }
 }
 
-const failed = (code: FlowFailureCode, outcome: FlowFailureOutcome, taskId?: string): never => {
-  throw new Failed({ outcome, code, ...(taskId === undefined ? {} : { taskId }) });
+const failed = (
+  code: FlowFailureCode,
+  outcome: FlowFailureOutcome,
+  taskId?: string,
+  reason?: string,
+): never => {
+  throw new Failed({
+    outcome,
+    code,
+    ...(taskId === undefined ? {} : { taskId }),
+    ...(reason === undefined ? {} : { reason }),
+  });
 };
 
 // ─── Values ───────────────────────────────────────────────────────────────────────────────────
@@ -507,17 +522,19 @@ const buildInputs = (
   supplied: Readonly<Record<string, unknown>>,
   taskId?: string,
 ): FlowRuntimeValues => {
-  const invalid = () => failed("inputs_invalid", "validation", taskId);
-  if (Object.keys(supplied).some((name) => !Object.hasOwn(flow.inputs, name))) invalid();
+  const invalid = (reason: string) => failed("inputs_invalid", "validation", taskId, reason);
+  const undeclared = Object.keys(supplied).find((name) => !Object.hasOwn(flow.inputs, name));
+  if (undeclared !== undefined) invalid(`input "${undeclared}" is not declared by the flow`);
   const inputs: Record<string, FlowRuntimeValue> = {};
   for (const [name, declaration] of Object.entries(flow.inputs)) {
     const candidate = Object.hasOwn(supplied, name) ? supplied[name] : undefined;
     if (candidate === undefined || candidate === null) {
       if (declaration.default !== undefined) inputs[name] = typed(declaration.type, declaration.default);
-      else if (declaration.required) invalid();
+      else if (declaration.required) invalid(`required input "${name}" is missing`);
       continue;
     }
-    if (!valueMatchesType(declaration.type, candidate)) invalid();
+    if (!valueMatchesType(declaration.type, candidate))
+      invalid(`input "${name}" is not a valid ${declaration.type} value`);
     inputs[name] = typed(declaration.type, candidate as JsonValue);
   }
   return inputs;
@@ -1204,16 +1221,27 @@ export const resumeFlowRun = (
       values = resume.values;
     }
     if (submitted && awaiting.answerTypes !== undefined) {
-      const valid = values !== null && typeof values === "object" && !Array.isArray(values) &&
-        Object.keys(values).length === Object.keys(awaiting.answerTypes).length &&
-        Object.entries(awaiting.answerTypes).every(([name, type]) =>
-          Object.hasOwn(values, name) && valueMatchesType(type, values[name]),
-        );
-      if (!valid) {
+      const answers = values !== null && typeof values === "object" && !Array.isArray(values)
+        ? values
+        : undefined;
+      const declared = Object.entries(awaiting.answerTypes);
+      const invalidAnswer =
+        answers === undefined
+          ? "the submitted answers are not an object"
+          : Object.keys(answers).length !== declared.length
+            ? "the submitted answers do not match the form's declared answers"
+            : declared.find(
+                ([name, type]) => !Object.hasOwn(answers, name) || !valueMatchesType(type, answers[name]),
+              );
+      if (invalidAnswer !== undefined) {
         replaceTop(machine, failActivation(activation, {
           outcome: "validation",
           code: "inputs_invalid",
           taskId: awaiting.taskId,
+          reason:
+            typeof invalidAnswer === "string"
+              ? invalidAnswer
+              : `answer "${invalidAnswer[0]}" is missing or not a valid ${invalidAnswer[1]} value`,
         }));
         return drive(machine, observer);
       }

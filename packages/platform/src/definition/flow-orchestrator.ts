@@ -848,7 +848,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         failedTaskId !== undefined && run.unavailable.some((notice) => notice.taskId === failedTaskId);
       if (failedTaskId === undefined || !run.refusalLoggedTaskIds.includes(failedTaskId))
         console.error(
-          `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}`,
+          `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}${step.result.failure.reason === undefined ? "" : `: ${step.result.failure.reason}`}`,
         );
       return {
         kind: "finished",
