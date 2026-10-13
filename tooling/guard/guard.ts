@@ -199,6 +199,52 @@ for (const file of codeFiles) {
           );
       }
     }
+    // Forward migrations from #2379 on must run object DDL under an explicitly set role. Without one
+    // the migration runs as postgres, whose schema privileges are revoked after the baseline, so
+    // `supabase db reset` fails with permission denied even though a superuser proof passes.
+    const migrationTimestamp = /^\d{14}/.exec(basename(file))?.[0];
+    if (
+      file.startsWith(paths.migrations) &&
+      !baselineMigrationFiles.has(file) &&
+      migrationTimestamp !== undefined &&
+      migrationTimestamp >= "20261014002300"
+    ) {
+      // Comment lines are blanked (not removed) so line numbers stay exact.
+      const code = content
+        .split("\n")
+        .map((line) => (line.trimStart().startsWith("--") ? "" : line))
+        .join("\n");
+      const events = [
+        ...[
+          ...code.matchAll(
+            /\bset\s+(?:local\s+)?role\s+([\w"]+)\s*;|\breset\s+role\s*;/gi,
+          ),
+        ].map((match) => ({
+          index: match.index,
+          role: match[1]?.replace(/"/g, "").toLowerCase(),
+          ddl: false,
+        })),
+        ...[
+          ...code.matchAll(
+            /\b(?:create\s+(?:or\s+replace\s+|unique\s+)?|alter\s+|drop\s+)(?:function|table|(?:materialized\s+)?view|index|type|sequence|trigger)\b/gi,
+          ),
+        ].map((match) => ({ index: match.index, role: undefined, ddl: true })),
+      ].sort((a, b) => a.index - b.index);
+      let activeRole: string | undefined;
+      for (const event of events) {
+        if (!event.ddl) {
+          activeRole = event.role;
+          continue;
+        }
+        if (activeRole === undefined || activeRole === "postgres")
+          add(
+            "migration-owner-role",
+            file,
+            lineAt(code, event.index),
+            code.slice(event.index).replace(/\s+/g, " ").slice(0, 60).toLowerCase(),
+          );
+      }
+    }
     continue;
   }
   const source = ts.createSourceFile(
