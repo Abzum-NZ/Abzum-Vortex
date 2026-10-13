@@ -44,7 +44,7 @@ import {
 } from "../records/module-field-values";
 import { moduleSourceRecordOwnershipModeSchema } from "../records/record-ownership-compatibility";
 import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
-import { protectedReadModelKeySchema } from "./application-composition";
+import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import {
   permissionActionKindSchema,

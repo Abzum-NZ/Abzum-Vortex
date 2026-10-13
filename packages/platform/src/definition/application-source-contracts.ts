@@ -26,14 +26,9 @@ import {
   sourcePermissionFieldPolicySchema,
 } from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "../access/permissions";
-import {
-  sourceGuidedFormPageCompositionSchema,
-  sourceApplicationShellSchema,
-  sourceApplicationThemeSchema,
-  sourcePageCompositionSchema,
-  sourcePlacementEntries,
-  sourcePlatformBlockDependenciesSchema,
-} from "./application-composition";
+import { sourceGuidedFormPageCompositionSchema, sourceApplicationShellSchema, sourcePageCompositionSchema, sourcePlacementEntries } from "./application-composition/page-composition";
+import { sourceApplicationThemeSchema } from "./application-composition/theme";
+import { sourcePlatformBlockDependenciesSchema } from "./application-composition/platform-block-release";
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
 import { flowAliasSchema, sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
 import { vortexIconNameSchema } from "../catalogue/icon-names";

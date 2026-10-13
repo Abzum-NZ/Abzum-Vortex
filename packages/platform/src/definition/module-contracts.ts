@@ -57,7 +57,7 @@ export { isRegisteredWritableSystemProjection, writableSystemProjectionRegistrat
 import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
-import { protectedReadModelKeySchema } from "./application-composition";
+import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
 import { flowSchema } from "../workflows/flow-contracts";
 import { recordOwnershipModeSchema } from "../records/record-ownership-compatibility";
 import { ruleGraphSchema } from "../rules/rule-graph-contracts";
