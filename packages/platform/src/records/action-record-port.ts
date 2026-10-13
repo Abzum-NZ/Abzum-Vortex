@@ -269,18 +269,36 @@ const deleteLifecycleCommandId = (actionCommandId: string): string => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
+/** Issue codes, fields and paths only: never a record value. */
+const describeIssues = (
+  issues: ReadonlyArray<
+    Readonly<{ code: string; fieldId?: string; path: readonly (string | number)[] }>
+  >,
+): string =>
+  issues.length === 0
+    ? "no issue was reported"
+    : issues
+        .map(
+          (value) =>
+            `${value.code}${value.fieldId === undefined ? "" : ` field ${value.fieldId}`} at ${value.path.join(".") || "(root)"}`,
+        )
+        .join("; ");
+
 const creationFinalValues = (
   prepared: PreparedAction,
   creations: readonly NamedActionCreation[],
   issuedAt: string,
   organizationCurrency: string | undefined,
   timeZone: string | undefined,
-): Record<number, Record<string, JsonValue | null>> | undefined => {
+): Readonly<{ values: Record<number, Record<string, JsonValue | null>> } | { reason: string }> => {
   const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
   const values: Record<number, Record<string, JsonValue | null>> = {};
   for (const creation of creations) {
     const target = targets.get(creation.ordinal);
-    if (target === undefined) return undefined;
+    if (target === undefined)
+      return {
+        reason: `the action creates ordinal ${creation.ordinal}, which has no declared target`,
+      };
     const command = saveRecordCommandSchema.safeParse({
       contractVersion: "2.0.0",
       commandId: randomUUID(),
@@ -288,7 +306,10 @@ const creationFinalValues = (
       recordTypeId: target.recordTypeId,
       submittedValues: creation.values,
     });
-    if (!command.success) return undefined;
+    if (!command.success)
+      return {
+        reason: `the created record ${creation.ordinal} is not a valid save command: ${describeIssues(command.error.issues.map((value) => ({ code: value.code, path: value.path.map(String) })))}`,
+      };
     const calculated = calculateAndFinalize({
       operation: command.data.operation,
       submittedValues: command.data.submittedValues,
@@ -297,18 +318,23 @@ const creationFinalValues = (
       organizationCurrency,
       timeZone,
     });
-    if (!calculated.success) return undefined;
+    if (!calculated.success)
+      return {
+        reason: `the created record ${creation.ordinal} did not calculate: ${describeIssues(calculated.issues)}`,
+      };
     if (
       calculated.pendingChecks.some(
         (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
       )
     )
-      return undefined;
+      return {
+        reason: `a pending check on the created record ${creation.ordinal} is not authorised`,
+      };
     const created: Record<string, JsonValue | null> = { ...calculated.setValues };
     for (const fieldId of calculated.clearFieldIds) created[fieldId] = null;
     values[creation.ordinal] = created;
   }
-  return values;
+  return { values };
 };
 
 const validateReferenceInputs = async (
@@ -749,14 +775,19 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                         timeZone: settings?.timeZone,
                         rules: attempted.rules,
                       });
-              if (
-                !calculated.success ||
-                (totalPreparation.outcome === "prepared" && root === undefined)
-              )
+              if (!calculated.success)
                 return safeRefusal(
                   prepared.correlationId,
                   "operation_refused",
-                  "the subject values the action writes did not calculate",
+                  totalPreparation.outcome === "prepared" && clock === undefined
+                    ? "the relationship totals have no operation clock for the records' time zone"
+                    : `the subject values the action writes did not calculate: ${describeIssues(calculated.issues)}`,
+                );
+              if (totalPreparation.outcome === "prepared" && root === undefined)
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  "the prepared relationship totals hold no root record for the subject",
                 );
               if (
                 calculated.pendingChecks.some(
@@ -803,7 +834,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 );
               const createdFinalValues =
                 "creationFinalValues" in calculated
-                  ? calculated.creationFinalValues
+                  ? { values: calculated.creationFinalValues }
                   : creationFinalValues(
                       prepared,
                       composition.creations,
@@ -811,11 +842,11 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       settings?.currency,
                       settings?.timeZone,
                     );
-              if (createdFinalValues === undefined)
+              if ("reason" in createdFinalValues)
                 return safeRefusal(
                   prepared.correlationId,
                   "operation_refused",
-                  "a record the action creates did not calculate",
+                  createdFinalValues.reason,
                 );
               // `values` stays the composed authored field map, which the
               // database re-derives from the installed action; `finalValues`
@@ -825,7 +856,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 ordinal: creation.ordinal,
                 recordTypeId: creation.recordTypeId,
                 values: creation.values,
-                finalValues: createdFinalValues[creation.ordinal] ?? creation.values,
+                finalValues: createdFinalValues.values[creation.ordinal] ?? creation.values,
               }));
             }
             try {

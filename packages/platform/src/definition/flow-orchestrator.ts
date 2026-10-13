@@ -820,6 +820,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     carriedMilliseconds: number;
     segmentStart: number;
     unavailable: FlowUnavailableNotice[];
+    /** Tasks whose refusal the named-action port already logged with its reason. */
+    refusalLoggedTaskIds: string[];
     /**
      * The raw values of declared sensitive outputs this segment received, held in memory only, so
      * nothing that carries one is stored or handed to another protected operation.
@@ -844,9 +846,10 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       // A task the platform could not run ends the run as not available, never as a refusal.
       const notAvailable =
         failedTaskId !== undefined && run.unavailable.some((notice) => notice.taskId === failedTaskId);
-      console.error(
-        `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}`,
-      );
+      if (failedTaskId === undefined || !run.refusalLoggedTaskIds.includes(failedTaskId))
+        console.error(
+          `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}`,
+        );
       return {
         kind: "finished",
         runId: step.state.runId,
@@ -1189,6 +1192,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         };
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
+      // The action port logged this refusal with its reason; the run-ended line must not repeat it.
+      run.refusalLoggedTaskIds.push(call.taskId);
       return { result: { outcome: refusalOutcome(value.error.code) }, stored: {} };
     }
 
@@ -1599,6 +1604,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
+          refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
         };
@@ -1724,6 +1730,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
+          refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
         };
@@ -1805,6 +1812,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: stored.elapsedMilliseconds,
           segmentStart: clock(),
           unavailable: [],
+          refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
         };
