@@ -25,6 +25,9 @@ const reasonMessages: Record<string, string> = {
     "You do not have the release permission (manage definition releases) for this organisation.",
   release_permission_not_eligible:
     "You do not have the release permission (manage definition releases) for this organisation.",
+  publication_authority_unavailable:
+    "The database did not confirm your publication authority for this Module. Sign in again and retry; if it persists, check your release permission.",
+  organization_mismatch: "This Module belongs to a different organisation than the one you are working in.",
   recent_authentication_required: "Sign in again to confirm it is you, then retry.",
   draft_stale_or_missing:
     "The Module draft is missing or has changed since this page loaded. Reload and prepare the current saved draft.",
