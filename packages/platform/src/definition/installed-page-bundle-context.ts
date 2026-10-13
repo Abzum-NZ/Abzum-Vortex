@@ -6,6 +6,7 @@ import {
   type installationRuntimeBundleSections,
   jsonValueSchema,
   type InstallationRuntimeBundleSourceManifest,
+  type PreparedApplicationPermissionRegistration,
   systemApplicationBoundReleaseSetResultSchema,
   type ResolvedPageComposition,
   type SystemApplicationBoundReleaseSetResult,
@@ -142,6 +143,48 @@ const withCorrelation = (
   modules: releaseSet.modules.map((module) => Object.freeze({ ...module, correlationId })),
 });
 
+/**
+ * The permission registration of one immutable installed bundle, prepared once per organisation,
+ * application and release revision and then shared. Preparation is a pure function of
+ * those and the bundle's frozen release content, so a cached registration is exactly the one this
+ * request would prepare; it decides nothing, and every request still checks its installation
+ * against the release set before the registration is used. It lives as long as its bundle.
+ */
+const preparedRegistrations = new WeakMap<
+  InstalledPageBundle,
+  Map<string, PreparedApplicationPermissionRegistration>
+>();
+
+const preparedRegistrationFor = (
+  bundle: InstalledPageBundle,
+  validated: SystemApplicationBoundReleaseSetResult,
+  prepare: (
+    validated: SystemApplicationBoundReleaseSetResult,
+  ) => PreparedApplicationPermissionRegistration,
+): PreparedApplicationPermissionRegistration => {
+  const application = validated.application;
+  // Each request stamps its own correlation on the shared release; the registration does not carry
+  // it, but preparation requires one correlation across the set, so a mixed set is prepared (and
+  // refused) afresh rather than answered from the cache.
+  if (validated.modules.some((module) => module.correlationId !== application.correlationId))
+    return prepare(validated);
+  const key = JSON.stringify([
+    application.organizationId.toLowerCase(),
+    application.rootId.toLowerCase(),
+    application.releaseRevision,
+  ]);
+  let registrations = preparedRegistrations.get(bundle);
+  if (registrations === undefined) {
+    registrations = new Map();
+    preparedRegistrations.set(bundle, registrations);
+  }
+  const cached = registrations.get(key);
+  if (cached !== undefined) return cached;
+  const prepared = deepFreeze(prepare(validated));
+  registrations.set(key, prepared);
+  return prepared;
+};
+
 const identityMatchesReleaseSet = (
   state: ActiveInstallationBundleState,
   releaseSet: SystemApplicationBoundReleaseSetResult,
@@ -221,6 +264,7 @@ export const createHumanInstalledPageBundleContextLoader = (
         installation,
         withCorrelation(bundle.releaseSet, state.identity.correlationId),
         dependencies.scope,
+        (validated, prepare) => preparedRegistrationFor(bundle, validated, prepare),
       );
       return retainPageCompositions(context, bundle.compositions, deepFreeze({
         organizationId: state.identity.organizationId,

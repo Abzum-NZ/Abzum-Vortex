@@ -39,6 +39,24 @@ export {
   type InitialLifecyclePolicyTarget,
 } from "./installation-initial-lifecycle-policy";
 export {
+  InstallationProblem,
+  firstInstallConferredPermissions,
+  installationOperation,
+  installationPermissionDeclaration,
+  installationProblem,
+  installationTargetFacts,
+  readBuilderOperationDeadlines,
+  readInstallationAuthorityDeadlines,
+  readInstallationDatabaseTime,
+  readInstallationHumanContext,
+  readInstallationOrdinaryRoot,
+  readInstallationPermissionDeadline,
+  requireInstallationAuthority,
+  type InstallationHumanContext,
+  type InstallationProblemShape,
+  type InstallationUnavailableReason,
+} from "./installation-authority";
+export {
   ProvisionedSetupError,
   assertProvisionedSetupMatchesInstallation,
   readProvisionedLifecycleSetup,

@@ -130,6 +130,14 @@ body {
   }
 
   /*
+   * While a client-side page transition is in flight the current page stays in place and shows
+   * progress, so a menu choice is acknowledged at once. Zero specificity, inherited by the page.
+   */
+  :where([data-vortex-page-transition]) {
+    cursor: progress;
+  }
+
+  /*
    * The shadcn/create menu colour and menu accent selections, published on the application root by
    * the layout renderer. An inverted menu paints its menu surfaces (the navigation sidebar and the
    * menu popups) from the dark values of the same resolved theme; the bold accent highlights their

@@ -245,6 +245,15 @@ export const assembleHumanInstalledRuntimeContext = (
   installation: ActiveApplicationInstallationEvidence,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   scope: HumanInstalledRuntimeContextDependencies["scope"],
+  /**
+   * Prepares the registration for the validated release set. A caller holding an immutable,
+   * already validated release may reuse the registration it prepared for that same release; the
+   * default prepares it from this release set.
+   */
+  prepareRegistration: (
+    validated: SystemApplicationBoundReleaseSetResult,
+    prepare: (validated: SystemApplicationBoundReleaseSetResult) => PreparedApplicationPermissionRegistration,
+  ) => PreparedApplicationPermissionRegistration = (validated, prepare) => prepare(validated),
 ): InstalledRuntimeContext =>
   assembleContext(
     installation,
@@ -252,13 +261,15 @@ export const assembleHumanInstalledRuntimeContext = (
     scope.organizationId,
     undefined,
     (validated) =>
-      prepareApplicationPermissionRegistrationForHumanRequest(
-        scope.organizationId,
-        {
-          applicationRootId: installation.applicationRootId,
-          releaseRevision: installation.applicationReleaseRevision,
-        },
-        validated,
+      prepareRegistration(validated, (candidate) =>
+        prepareApplicationPermissionRegistrationForHumanRequest(
+          scope.organizationId,
+          {
+            applicationRootId: installation.applicationRootId,
+            releaseRevision: installation.applicationReleaseRevision,
+          },
+          candidate,
+        ),
       ),
   );
 
