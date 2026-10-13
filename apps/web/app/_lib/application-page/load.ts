@@ -110,7 +110,30 @@ export const loadInstalledContext = (
     },
   );
 
+/**
+ * Loads one page. Reads the loader starts ahead of where their results are consulted are joined
+ * before it returns or throws, whichever path it takes, so no HUMAN request outlives the loader.
+ */
 export const loadApplicationPageInternal = async (
+  session: IdentitySession,
+  address: ApplicationPageLoaderAddress,
+  parameters: SearchParameters,
+  selectedPlacementIds?: ReadonlySet<string>,
+  boardContinuation?: BoardContinuationTarget,
+  expectedInstallationRevision?: number,
+  tableContinuation?: TableContinuationTarget,
+): Promise<ApplicationPageInternalResult> => {
+  const startedReads: Promise<unknown>[] = [];
+  try {
+    return await loadApplicationPageJoined(startedReads, session, address, parameters,
+      selectedPlacementIds, boardContinuation, expectedInstallationRevision, tableContinuation);
+  } finally {
+    await Promise.allSettled(startedReads);
+  }
+};
+
+const loadApplicationPageJoined = async (
+  startedReads: Promise<unknown>[],
   session: IdentitySession,
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
@@ -189,9 +212,11 @@ export const loadApplicationPageInternal = async (
     ...dependencies,
     context,
   }).project(session, selection);
-  // A failure is rethrown where its result is consulted, never left unobserved meanwhile.
+  // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
+  // both reads are joined before the loader returns on any path (early returns included).
   void projectedPageRead.catch(() => undefined);
   void navigationRead.catch(() => undefined);
+  startedReads.push(projectedPageRead, navigationRead);
   const adoptionTarget = await adoptionRead;
   const projectedPage = await projectedPageRead;
   if (projectedPage.kind !== "available") return projectedPage;

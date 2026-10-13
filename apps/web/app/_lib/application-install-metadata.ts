@@ -14,6 +14,7 @@ import {
   type ApplicationInstallAddress, type ApplicationInstallManifest, type InstalledRuntimeContext,
 } from "@web/platform-server";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import { withPooledRequestLifetime } from "@web/platform-server";
 import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
@@ -108,8 +109,11 @@ const readHuman = async (transaction: RequestDatabaseTransaction, scope: Selecte
   return context;
 };
 
-/** The request's own abort signal and deadline, checked between every step of the one read. */
-type InstallReadLifetime = Readonly<{ deadline: number; checkpoint: () => void }>;
+/**
+ * The request's own abort signal and deadline: checked between every step of the one read, and
+ * applied to its database work, which is cancelled (releasing the pooled connection) on either.
+ */
+type InstallReadLifetime = Readonly<{ signal: AbortSignal; deadline: number; checkpoint: () => void }>;
 class InstallReadEnded extends Error {}
 
 const readCurrent = async (address: ApplicationInstallAddress, lifetime: InstallReadLifetime) => {
@@ -126,7 +130,9 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Install
       resolved.read.organizationShortName !== address.organizationShortName) return refused();
   let explicitRefusal = false;
   const deny = (): never => { explicitRefusal = true; return refused(); };
-  const result = await humanOrganizationRequests().run(identity.session, {
+  // Identity and address reads are shared with the page of this render and keep their own
+  // lifetime; the install read below is bounded by this request's signal and deadline.
+  const result = await withPooledRequestLifetime(lifetime, () => humanOrganizationRequests().run(identity.session, {
     organizationId: resolved.read.organizationId, applicationRootId: resolved.application.applicationRootId,
   }, async (transaction, scope, issuedAt) => {
     try {
@@ -183,7 +189,7 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Install
       if (error instanceof InstallRefused) explicitRefusal = true;
       throw error;
     }
-  });
+  }));
   lifetime.checkpoint();
   if (result.kind !== "available") return { kind: explicitRefusal || result.kind === "unavailable"
     ? "unavailable" as const : "temporarily_unavailable" as const };
@@ -197,9 +203,10 @@ export const loadApplicationInstallMetadata = async (
   const expected = expectedCandidate === undefined ? undefined : expectationSchema.safeParse(expectedCandidate);
   if (!address.success || (expected !== undefined && !expected.success)) return { kind: "unavailable" };
   // One read on the pooled request runner. Every access decision is still made inside it (and
-  // re-evaluated after the manifest is derived); the request's signal and deadline end it early.
+  // re-evaluated after the manifest is derived); the request's signal and deadline end it early,
+  // cancelling any statement still in flight so its pooled connection is released.
   const deadline = Date.now() + 15_000;
-  const lifetime: InstallReadLifetime = { deadline, checkpoint: () => {
+  const lifetime: InstallReadLifetime = { signal, deadline, checkpoint: () => {
     if (signal.aborted || Date.now() >= deadline) throw new InstallReadEnded();
   } };
   try {

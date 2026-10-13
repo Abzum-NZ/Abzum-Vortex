@@ -414,13 +414,11 @@ export default async function ApplicationAddressPage({
   // When the addressed page's shell shows the application switcher, its permitted-applications
   // read starts now, beside the page load, instead of after it. The read is cached for this
   // request, so the switcher below awaits this same read.
-  if (switcherShownFor(resolved.installedContext, resolved.pageKey))
-    void loadPermittedApplicationsAtAddress(
-      identity.session,
-      tenantShortName,
-      organizationShortName,
-    ).catch(() => undefined);
-  const page = await loadApplicationPage(
+  const switcherPrefetch = switcherShownFor(resolved.installedContext, resolved.pageKey)
+    ? loadPermittedApplicationsAtAddress(identity.session, tenantShortName, organizationShortName)
+    : undefined;
+  void switcherPrefetch?.catch(() => undefined);
+  const loadedPage = await loadApplicationPage(
     identity.session,
     {
       tenantShortName,
@@ -433,7 +431,14 @@ export default async function ApplicationAddressPage({
         : { installedContext: resolved.installedContext }),
     },
     parameters,
-  );
+  ).catch(async (error: unknown) => {
+    await switcherPrefetch?.catch(() => undefined);
+    throw error;
+  });
+  // A page that does not render joins the switcher read before returning, so it never outlives
+  // this request's render.
+  if (loadedPage.kind !== "available") await switcherPrefetch?.catch(() => undefined);
+  const page = loadedPage;
   if (page.kind === "temporarily_unavailable")
     return (
       <AuthShell
