@@ -16,7 +16,7 @@ export default async function StudioModulePublicationPage({
       <main className="mx-auto max-w-3xl space-y-3 p-6">
         <h1>Module publication unavailable</h1>
         <p role="status">
-          This Module draft is unavailable. Sign in with an account permitted to manage drafts and
+          This Module draft is unavailable. Sign in with an account permitted to manage releases and
           try again.
         </p>
       </main>
