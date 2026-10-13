@@ -53,7 +53,7 @@ const shellFrameCss = `
   display: none !important;
 }
 [data-vortex-sidebar-state="collapsed"] [data-vortex-shell-navigation] [data-slot="sidebar-group-label"] {
-  justify-content: center;
+  display: none;
 }
 [data-vortex-sidebar-state="collapsed"] [data-vortex-shell-navigation] [data-sidebar="menu-button"] {
   justify-content: center;
