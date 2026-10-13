@@ -8,7 +8,7 @@ import catalogue from "./application-install-icons.generated.json";
 export const createApplicationInstallIcon = (candidate: InstalledRuntimeContext): string => {
   const context = requireInstalledRuntimeContext(candidate);
   const content = context.releaseSet.application.content;
-  const library = resolveShadcnIconLibrary(content.theme.selection?.iconLibrary);
+  const library = resolveShadcnIconLibrary(content.theme.selection.iconLibrary);
   const glyphs: Readonly<Record<string, string>> = catalogue.libraries[library];
   const name = Object.hasOwn(glyphs, content.icon) ? content.icon : "circle";
   const glyph = glyphs[name];

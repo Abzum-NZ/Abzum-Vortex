@@ -215,9 +215,7 @@ export const materialiseApplicationTheme = (
   const selection = resolveThemeSelection({
     base: release,
     baseTokens: release.tokens,
-    ...(authored.selection === undefined
-      ? {}
-      : { selection: canonicalApplicationThemeSelection(authored.selection) }),
+    selection: canonicalApplicationThemeSelection(authored.selection),
     overrides,
     options: { documentKey },
   });
@@ -241,9 +239,7 @@ export const materialiseApplicationTheme = (
       ...canonicalThemeDependency(authored.base),
       contentFingerprint: release.contentFingerprint,
     },
-    ...(selection.resolved.selection === undefined
-      ? {}
-      : { selection: selection.resolved.selection }),
+    selection: selection.resolved.selection,
     tokens: selection.resolved.tokens,
   });
   const assetIds = new Set<PlatformId>();
@@ -875,7 +871,7 @@ export const materialiseApplicationComposition = (
         validateTheme(
           applicationThemeSchema.parse({
             base: theme.base,
-            ...(theme.selection === undefined ? {} : { selection: theme.selection }),
+            selection: theme.selection,
             tokens: { ...theme.tokens, ...effectiveOverrides },
           }),
           source.key,

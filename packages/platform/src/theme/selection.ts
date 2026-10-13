@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  DEFAULT_APPLICATION_THEME_SELECTION,
   applicationThemeSelectionSchema,
   themeTokenValueSchema,
   type ApplicationThemeSelection,
@@ -42,11 +41,8 @@ import type {
 const TOKEN_DIMENSION_ORDER = ["baseColor", "theme", "chartColor", "radius"] as const;
 
 export type ResolvedThemeSelection = Readonly<{
-  /**
-   * The effective selection: the authored one, or the platform default when none was authored.
-   * Absent only for a theme pinned to an earlier release than the catalogue's base release.
-   */
-  selection?: ApplicationThemeSelection | undefined;
+  /** The authored selection, validated and canonical. */
+  selection: ApplicationThemeSelection;
   /** The selected, catalogue-backed shadcn style id, for the style CSS loader. */
   style: string;
   /** The complete resolved application token set: base release plus every selected option. */
@@ -58,8 +54,8 @@ export type ThemeSelectionResolutionInput = Readonly<{
   base: Pick<ExactPlatformThemeDependency, "catalogueThemeId" | "releaseVersion">;
   /** The pinned base release's tokens. */
   baseTokens: Readonly<Record<string, ThemeTokenValue>>;
-  /** The authored catalogue selection; absent means the platform default selection. */
-  selection?: ApplicationThemeSelection | undefined;
+  /** The authored catalogue selection, including its icon library. */
+  selection: ApplicationThemeSelection;
   /** Already-canonical token overrides applied after the selection. */
   overrides?: Readonly<Record<string, ThemeTokenValue>> | undefined;
   options?: ThemeResolutionOptions | undefined;
@@ -189,12 +185,8 @@ export function validateThemeSelectionOptions(
  * role the selected theme does not allow. The resolved tokens then pass the same contrast and
  * focus checks publication runs, so an override cannot hide focus or lower required contrast.
  *
- * The selected body and heading fonts (the catalogue defaults when the selection names none) become
- * the families of the `body` and `heading` typography tokens.
- *
- * On the catalogue's base release an absent selection resolves as the platform default. On an
- * earlier release an absent selection keeps that release's exact tokens (plus the overrides), as
- * the platform theme catalogue promises for applications that still pin it.
+ * The selected body and heading fonts become the families of the `body` and `heading` typography
+ * tokens. The selection is required: an absent one is refused by the caller, never defaulted here.
  */
 export function resolveThemeSelection(
   input: ThemeSelectionResolutionInput,
@@ -215,65 +207,59 @@ export function resolveThemeSelection(
   };
 
   const tokens: Record<string, ThemeTokenValue> = { ...input.baseTokens };
-  let selection: ApplicationThemeSelection | undefined;
+  const parsedSelection = applicationThemeSelectionSchema.safeParse(input.selection);
+  if (!parsedSelection.success) {
+    addSelectionFailure({
+      code: "INVALID_THEME_SELECTION",
+      family: "invalid_value",
+      message: `Application theme selection is invalid: ${parsedSelection.error.message}`,
+    });
+    return { valid: false, failures, ruleFailures };
+  }
+  const selection = parsedSelection.data;
+  checkSelectionOptions(selection, input.base, addSelectionFailure);
+  if (failures.length > 0) return { valid: false, failures, ruleFailures };
 
-  if (input.selection !== undefined || isShadcnThemeCatalogueBaseRelease(input.base)) {
-    const parsedSelection = applicationThemeSelectionSchema.safeParse(
-      input.selection ?? DEFAULT_APPLICATION_THEME_SELECTION,
-    );
-    if (!parsedSelection.success) {
+  for (const dimension of TOKEN_DIMENSION_ORDER) {
+    const optionId = selection[dimension];
+    const option = findShadcnThemeCatalogueOption(dimension, optionId);
+    const release =
+      option?.releaseKey === undefined ? undefined : findShadcnThemeRelease(option.releaseKey);
+    if (option === undefined || release === undefined) {
       addSelectionFailure({
-        code: "INVALID_THEME_SELECTION",
-        family: "invalid_value",
-        message: `Application theme selection is invalid: ${parsedSelection.error.message}`,
+        code: "UNKNOWN_THEME_OPTION_RELEASE",
+        family: "broken_reference",
+        message: `Theme selection ${dimension} option "${optionId}" has no catalogue release`,
+        dimension,
       });
-      return { valid: false, failures, ruleFailures };
+      continue;
     }
-    selection = parsedSelection.data;
-    checkSelectionOptions(selection, input.base, addSelectionFailure);
-    if (failures.length > 0) return { valid: false, failures, ruleFailures };
-
-    for (const dimension of TOKEN_DIMENSION_ORDER) {
-      const optionId = selection[dimension];
-      const option = findShadcnThemeCatalogueOption(dimension, optionId);
-      const release =
-        option?.releaseKey === undefined ? undefined : findShadcnThemeRelease(option.releaseKey);
-      if (option === undefined || release === undefined) {
+    for (const tokenKey of option.tokenKeys ?? []) {
+      const raw = release.tokens[tokenKey];
+      const parsed = raw === undefined ? undefined : themeTokenValueSchema.safeParse(raw);
+      if (parsed === undefined || !parsed.success) {
         addSelectionFailure({
-          code: "UNKNOWN_THEME_OPTION_RELEASE",
+          code: "INVALID_THEME_OPTION_TOKEN",
           family: "broken_reference",
-          message: `Theme selection ${dimension} option "${optionId}" has no catalogue release`,
+          message: `Theme selection ${dimension} option "${optionId}" does not map token "${tokenKey}"`,
           dimension,
         });
         continue;
       }
-      for (const tokenKey of option.tokenKeys ?? []) {
-        const raw = release.tokens[tokenKey];
-        const parsed = raw === undefined ? undefined : themeTokenValueSchema.safeParse(raw);
-        if (parsed === undefined || !parsed.success) {
-          addSelectionFailure({
-            code: "INVALID_THEME_OPTION_TOKEN",
-            family: "broken_reference",
-            message: `Theme selection ${dimension} option "${optionId}" does not map token "${tokenKey}"`,
-            dimension,
-          });
-          continue;
-        }
-        tokens[tokenKey] = parsed.data;
-      }
+      tokens[tokenKey] = parsed.data;
     }
+  }
 
-    // The selected fonts become the families of the `body` and `heading` typography tokens, so the
-    // theme bridge and the renderer's font loading read one decision. Size, line height and weight
-    // stay the release's, and an authored override of either token still applies below.
-    const fonts = resolveShadcnFontSelection(selection);
-    for (const [key, font] of [
-      ["body", fonts.body],
-      ["heading", fonts.heading],
-    ] as const) {
-      const token = tokens[key];
-      if (token?.kind === "typography") tokens[key] = { ...token, family: shadcnFontFamilyKey(font) };
-    }
+  // The selected fonts become the families of the `body` and `heading` typography tokens, so the
+  // theme bridge and the renderer's font loading read one decision. Size, line height and weight
+  // stay the release's, and an authored override of either token still applies below.
+  const fonts = resolveShadcnFontSelection(selection);
+  for (const [key, font] of [
+    ["body", fonts.body],
+    ["heading", fonts.heading],
+  ] as const) {
+    const token = tokens[key];
+    if (token?.kind === "typography") tokens[key] = { ...token, family: shadcnFontFamilyKey(font) };
   }
 
   for (const key of Object.keys(input.overrides ?? {}).sort()) {
@@ -329,8 +315,8 @@ export function resolveThemeSelection(
   return {
     valid: true,
     resolved: Object.freeze({
-      ...(selection === undefined ? {} : { selection: Object.freeze({ ...selection }) }),
-      style: (selection ?? DEFAULT_APPLICATION_THEME_SELECTION).style,
+      selection: Object.freeze({ ...selection }),
+      style: selection.style,
       tokens: Object.freeze(tokens),
     }),
   };

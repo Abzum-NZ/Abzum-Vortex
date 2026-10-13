@@ -1,11 +1,12 @@
 import { Render } from "@puckeditor/core";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import type {
-  ApplicationShell,
-  ApplicationPuckRootShell,
-  PageDefinition,
-  PageComposition,
-  ProjectedNavigation,
+import {
+  resolveShadcnIconLibrary,
+  type ApplicationShell,
+  type ApplicationPuckRootShell,
+  type PageDefinition,
+  type PageComposition,
+  type ProjectedNavigation,
 } from "@vortex/platform/schema";
 import {
   ALL_UI_STYLES_CSS,
@@ -282,6 +283,64 @@ export function PagePuckRenderer({
       ? -1
       : (guidedSteps?.findIndex((step) => step.id === activeStepId) ?? -1);
   const step = stepIndex < 0 ? undefined : guidedSteps?.[stepIndex];
+  const screen = (
+    <DateFormatProvider locale={locale} timeZone={timeZone}>
+      {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
+      <div className={className} style={style}>
+        <VortexPuckThemeScopeProvider scope={{ application: tokens, inherited: tokens }}>
+          <Render
+            config={getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)}
+            data={data}
+            metadata={metadata}
+          />
+        </VortexPuckThemeScopeProvider>
+      </div>
+      {step?.summary !== true || guidedSummaryValues === undefined ? null : (
+        <section aria-label="Review your answers" className="mt-6">
+          <h2 className="text-lg font-semibold">Review your answers</h2>
+          <dl className="mt-3 grid gap-3">
+            {Object.entries(guidedSummaryValues).map(([field, value]) => (
+              <div key={field} className="rounded-md border p-3">
+                <dt className="font-medium">{field}</dt>
+                <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                  {value === null
+                    ? "Empty"
+                    : typeof value === "string"
+                      ? value
+                      : JSON.stringify(value)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+      {guidedStepNavigation === undefined || stepIndex < 0 || guidedSteps === undefined ? null : (
+        <nav aria-label="Guided form steps" className="mt-6 flex items-center gap-3">
+          <span aria-live="polite" className="mr-auto text-sm text-muted-foreground">
+            <span className="block font-medium text-foreground">{step?.name}</span>
+            <span>
+              Step {stepIndex + 1} of {guidedSteps.length}
+            </span>
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={guidedStepNavigation.disabled || stepIndex === 0}
+            onClick={guidedStepNavigation.onBack}
+          >
+            Back
+          </Button>
+          <Button
+            type="button"
+            disabled={guidedStepNavigation.disabled}
+            onClick={guidedStepNavigation.onNext}
+          >
+            {step?.summary === true ? "Confirm" : "Next"}
+          </Button>
+        </nav>
+      )}
+    </DateFormatProvider>
+  );
   return (
     <VortexStyleRoot
       {...themeRootProps}
@@ -292,66 +351,15 @@ export function PagePuckRenderer({
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}
       </style>
-      <IconLibraryProvider library={applicationTheme?.selection?.iconLibrary}>
-        <DateFormatProvider locale={locale} timeZone={timeZone}>
-          {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
-          <div className={className} style={style}>
-            <VortexPuckThemeScopeProvider scope={{ application: tokens, inherited: tokens }}>
-              <Render
-                config={getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)}
-                data={data}
-                metadata={metadata}
-              />
-            </VortexPuckThemeScopeProvider>
-          </div>
-          {step?.summary !== true || guidedSummaryValues === undefined ? null : (
-            <section aria-label="Review your answers" className="mt-6">
-              <h2 className="text-lg font-semibold">Review your answers</h2>
-              <dl className="mt-3 grid gap-3">
-                {Object.entries(guidedSummaryValues).map(([field, value]) => (
-                  <div key={field} className="rounded-md border p-3">
-                    <dt className="font-medium">{field}</dt>
-                    <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {value === null
-                        ? "Empty"
-                        : typeof value === "string"
-                          ? value
-                          : JSON.stringify(value)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          )}
-          {guidedStepNavigation === undefined ||
-          stepIndex < 0 ||
-          guidedSteps === undefined ? null : (
-            <nav aria-label="Guided form steps" className="mt-6 flex items-center gap-3">
-              <span aria-live="polite" className="mr-auto text-sm text-muted-foreground">
-                <span className="block font-medium text-foreground">{step?.name}</span>
-                <span>
-                  Step {stepIndex + 1} of {guidedSteps.length}
-                </span>
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={guidedStepNavigation.disabled || stepIndex === 0}
-                onClick={guidedStepNavigation.onBack}
-              >
-                Back
-              </Button>
-              <Button
-                type="button"
-                disabled={guidedStepNavigation.disabled}
-                onClick={guidedStepNavigation.onNext}
-              >
-                {step?.summary === true ? "Confirm" : "Next"}
-              </Button>
-            </nav>
-          )}
-        </DateFormatProvider>
-      </IconLibraryProvider>
+      {applicationTheme === undefined ? (
+        screen
+      ) : (
+        <IconLibraryProvider
+          library={resolveShadcnIconLibrary(applicationTheme.selection.iconLibrary)}
+        >
+          {screen}
+        </IconLibraryProvider>
+      )}
       {overlay}
     </VortexStyleRoot>
   );
