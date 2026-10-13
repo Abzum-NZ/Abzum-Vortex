@@ -42,7 +42,6 @@ type PreviewInstallationDraftCompiler = Readonly<{
   ): Promise<PreviewInstallationCandidate>;
 }>;
 
-
 export const previewInstallationCoordinatorErrorCodes = [
   "INVALID_PREVIEW_INSTALLATION_COMMAND",
   "PREVIEW_INSTALLATION_REFUSED",
@@ -106,7 +105,9 @@ const toCoordinatorError = (
         return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
           cause: error,
         });
+      // An expired or mismatched live request context is a refusal, not a preview failure.
       case "PREVIEW_INSTALLATION_AUTHORITY_REFUSED":
+      case "DEFINITION_CONTEXT_REFUSED":
         return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
           cause: error,
         });
@@ -172,8 +173,7 @@ export const createPreviewInstallationCoordinator = (
         try {
           if (
             !sameId(scope.organizationId, organizationId) ||
-            (applicationRootId !== undefined &&
-              !sameId(scope.applicationRootId, applicationRootId))
+            (applicationRootId !== undefined && !sameId(scope.applicationRootId, applicationRootId))
           )
             throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
           const authority = dependencies.builderAuthority(transaction, scope);

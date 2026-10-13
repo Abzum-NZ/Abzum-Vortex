@@ -55,7 +55,9 @@ const refuse = (reason: LiveContextRefusalReason, cause?: unknown): LiveContextR
 };
 
 /** The database transaction's own clock; the one time source of every live check. */
-export const readDatabaseClock = async (transaction: RequestDatabaseTransaction): Promise<number> => {
+export const readDatabaseClock = async (
+  transaction: RequestDatabaseTransaction,
+): Promise<number> => {
   const rows =
     await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as completed_at`;
   const parsed = timestampSchema.safeParse(databaseTimestamp(rows[0]?.completed_at));
@@ -102,7 +104,8 @@ export const readLiveHumanContext = async (
   const context = parsed.data;
   const now = Date.parse(clock.data);
   const hasAuthenticationEvidence =
-    session.primaryAuthenticatedAt !== undefined || session.multiFactorAuthenticatedAt !== undefined;
+    session.primaryAuthenticatedAt !== undefined ||
+    session.multiFactorAuthenticatedAt !== undefined;
   if (
     !Number.isFinite(now) ||
     (scope.applicationRootId === undefined
@@ -110,7 +113,8 @@ export const readLiveHumanContext = async (
       : !sameId(context.applicationRootId, scope.applicationRootId)) ||
     context.delegatedContext !== undefined ||
     context.supportContext !== undefined ||
-    (identityAuthorityId !== undefined && !sameId(context.identityAuthorityId, identityAuthorityId)) ||
+    (identityAuthorityId !== undefined &&
+      !sameId(context.identityAuthorityId, identityAuthorityId)) ||
     !sameId(context.tenantId, scope.tenantId) ||
     !sameId(context.organizationId, scope.organizationId) ||
     !sameId(context.organizationAccountId, scope.organizationAccountId) ||
@@ -120,7 +124,8 @@ export const readLiveHumanContext = async (
     context.authenticationStrength !== session.authenticationStrength ||
     context.issuedAt !== issuedAt ||
     context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !== (hasAuthenticationEvidence ? session.accessTokenIssuedAt : undefined) ||
+    context.accessTokenIssuedAt !==
+      (hasAuthenticationEvidence ? session.accessTokenIssuedAt : undefined) ||
     context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
     context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
     Date.parse(context.issuedAt) > now ||
@@ -210,7 +215,18 @@ export const assertLivePermission = async (
   )
     throw refuse(
       "permission_not_eligible",
-      !decision.success ? decision.error : !clock.success ? clock.error : undefined,
+      !decision.success
+        ? decision.error
+        : !clock.success
+          ? clock.error
+          : // Keep the database's own reason (for example a revoked role) for the operator log.
+            new Error(
+              `eligibility outcome=${decision.data.outcome} reason=${String(
+                ("reasonCode" in decision.data ? decision.data.reasonCode : undefined) ??
+                  row?.reason_code ??
+                  "none",
+              )}`,
+            ),
     );
   return { validUntil: Date.parse(decision.data.validUntil), completedAt: Date.parse(clock.data) };
 };
