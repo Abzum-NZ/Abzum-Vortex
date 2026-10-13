@@ -14,7 +14,7 @@ export const createDatabaseDefinitionHistoryService = (
   authority: BuilderAuthority,
 ) =>
   createDefinitionHistoryService(
-    createDatabaseDefinitionHistoryRepository(transaction),
+    createDatabaseDefinitionHistoryRepository(transaction, catalogueDefinition.permissions),
     createImmutableDefinitionPublicationCatalogue(catalogueDefinition),
     authority,
   );

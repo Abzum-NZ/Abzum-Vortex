@@ -9,12 +9,12 @@ import {
   type BuilderOperation,
   type BuilderConferredPermission,
   type HumanOrganizationRequestResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   createApplicationInstallationCoordinator,
   type ApplicationInstallationActivationResult,
   type HumanInstallationDefinitionAccess,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   canonicalJson,
@@ -59,8 +59,8 @@ import {
   type InitialLifecyclePolicyTarget,
   readInstallationArchiveConnectionOptions,
   readSelectedInstallationArchiveConnection,
-} from "@web/platform-server";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+} from "@vortex/platform/server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   builderRecentAuthentication,
   createDatabaseApplicationBoundReleaseSetService,
@@ -70,9 +70,9 @@ import {
   deriveBuilderRequirements,
   readApplicationDefinitionDraft,
   resolveModuleContributions,
-} from "@web/platform-server";
-import { createActiveApplicationInstallationRepository } from "@web/platform-server";
-import { createRecordTypeLifecyclePolicyService } from "@web/platform-server";
+} from "@vortex/platform/server";
+import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
+import { createRecordTypeLifecyclePolicyService } from "@vortex/platform/server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
@@ -112,7 +112,8 @@ import {
   type StudioApplicationInstallationSelector,
   type StudioApplicationInstallationSnapshot,
 } from "./studio-application-installation-contracts";
-import { DefinitionError, classifyDatabaseError } from "@web/platform-server";
+import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
 type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRoleTemplatesForHumanRequest>;
@@ -348,7 +349,7 @@ const requireAuthority = async (
   scope: SelectedOrganizationScope,
   operation: BuilderOperation,
 ): Promise<void> => {
-  const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+  const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
   await requireBuilderAuthority(authority, operation).catch((error: unknown) => {
     if (error instanceof Error && "code" in error &&
       String((error as { readonly code?: unknown }).code) === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")
@@ -1014,7 +1015,7 @@ const coordinatorFor = (selector: StudioApplicationInstallationSelector, baselin
   return createApplicationInstallationCoordinator({
     installerRequests,
     resolveModuleContributions,
-    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts }),
+    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource }),
     containsCustomComponents: releaseSetContainsCustomComponents,
     humanDefinitionAccess: humanDefinitionAccess(),
   });
@@ -2018,7 +2019,7 @@ const firstInstallCoordinator = (
   return createApplicationInstallationCoordinator({
     installerRequests,
     resolveModuleContributions,
-    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts }),
+    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource }),
     containsCustomComponents: releaseSetContainsCustomComponents,
     humanDefinitionAccess: firstInstallDefinitionAccess(
       selector,

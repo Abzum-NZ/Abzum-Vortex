@@ -3,12 +3,12 @@ import "server-only";
 import {
   createBuilderAuthority,
   prepareApplicationRoleTemplatesForHumanRequest,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationInstallationActivationRequestSchema,
   createApplicationInstallationCoordinator,
   type HumanInstallationDefinitionAccess,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import type {
   ApplicationRootId,
   IdentitySession,
@@ -20,13 +20,14 @@ import {
   createDatabaseApplicationReleaseAdoptionTargetService,
   resolveModuleContributions,
   type ApplicationReleaseAdoptionTarget,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   installedReleaseCatalogue,
   releaseSetContainsCustomComponents,
 } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 /**
  * The deliberate release adoption of one installed application (#610). The offered target is the
@@ -88,6 +89,7 @@ const coordinator = () =>
         // application; an upgrade is never refused on that fact. Reading the fact is a separate
         // composition concern owned by the system-application work.
         targetFacts: async () => ({ isSystemApplication: false }),
+        permissions: platformPermissionSource,
       }),
     // Derived from the exact release set, so a release that places a custom component also
     // requires `custom_code.manage` and a recent sign-in.

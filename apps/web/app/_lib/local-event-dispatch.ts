@@ -5,7 +5,7 @@ import {
   createEventDispatcherWakeup,
   createSearchEventConsumer,
   createSearchIndexDependencies,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 
 /**
  * Local development has no database webhook (it needs a public HTTPS endpoint) and no Kestra

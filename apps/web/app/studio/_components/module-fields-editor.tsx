@@ -11,7 +11,7 @@ import {
   deriveFieldKey, offeredFieldTypes, sameId, storedModuleDefinitionDraftSchema,
   type DefinitionValidationResult,
 } from "@vortex/platform/schema";
-import type { StoredModuleDefinitionDraft, StudioModuleFieldChangeResult } from "@web/platform-server";
+import type { StoredModuleDefinitionDraft, StudioModuleFieldChangeResult } from "@vortex/platform/server";
 import { reopenModuleFields, saveModuleFieldChange } from "../modules/[organizationId]/[moduleRootId]/fields/actions";
 
 const typeLabel = (type: string) => type.replaceAll("_", " ");

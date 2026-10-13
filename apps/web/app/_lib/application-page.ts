@@ -4,7 +4,7 @@ import "server-only";
 import {
   createReferenceChoiceService,
   projectReferenceChoiceInputValues,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import type {
   IdentitySession,
   ReferenceChoiceSelectionEvidence,

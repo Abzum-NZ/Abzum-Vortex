@@ -10,7 +10,6 @@ import { object, array, outputKey, failure } from "./helpers";
 import { fingerprintCanonicalValue, compareCanonicalStrings } from "../canonical-json-definition";
 import { applicationSearchFieldIsSelectable } from "../application-resolution";
 import { type ApplicationFieldValuePair, actionValueReferenceEntry } from "./action-values";
-import { platformPermissionSource } from "../../access/platform-permissions";
 import { permissionRecordScopesValid } from "./permission-scopes";
 import { actionPermissionKeys } from "./source-paths";
 import { versionRequirementAccepts } from "./publication-rules";
@@ -187,13 +186,13 @@ export function applicationScope(
           permission.key === key &&
           permission.actionKind === "named" &&
           permission.recordTypeId === undefined,
-      ) || platformPermissionSource().hasKey(key)
+      ) || context.permissions.hasKey(key)
     );
   };
   // A requirement key names exactly one permission, and the runtime reads a platform catalogue
   // key as platform authority. An application or bound-Module permission reusing a platform key
   // would make that reference ambiguous, so it is refused.
-  if ([...permissions].some((key) => platformPermissionSource().hasKey(key)))
+  if ([...permissions].some((key) => context.permissions.hasKey(key)))
     failures.push(
       failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
     );

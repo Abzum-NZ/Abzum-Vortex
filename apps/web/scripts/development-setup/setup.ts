@@ -4,7 +4,7 @@ import {
   createHumanOrganizationRequestService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   organizationSelectionCandidateSchema,
@@ -16,9 +16,9 @@ import {
   requireLocalDevelopmentEnvironment,
   resolveFirstOwnerIdentity,
 } from "./guards";
-import { createConfiguredTenantAdministrationService } from "@web/platform-server";
-import { createDatabaseSystemApplicationBoundReleaseSetService } from "@web/platform-server";
-import { createRecordSaveService } from "@web/platform-server";
+import { createConfiguredTenantAdministrationService } from "@vortex/platform/server";
+import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/platform/server";
+import { createRecordSaveService } from "@vortex/platform/server";
 import {
   developmentPublicationCatalogue,
   publishShippedDefinitions,

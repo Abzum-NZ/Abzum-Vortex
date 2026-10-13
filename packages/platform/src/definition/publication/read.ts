@@ -1,3 +1,4 @@
+import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import "server-only";
 
 import {
@@ -54,6 +55,8 @@ export type PlatformConnectionTypeReleaseDefinition = Readonly<{
 }>;
 
 export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
+  /** The shipped platform permission catalogue; the composition root supplies it. */
+  permissions: PlatformPermissionSource;
   connectionTypeReleases: readonly PlatformConnectionTypeReleaseDefinition[];
   applicationComposition?: ApplicationCompositionCatalogueDefinition;
   platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
@@ -308,6 +311,7 @@ const ensureRegisteredPlatformServiceOperationsAuthentic = (): void => {
 
 const compileConnectionTypeRelease = (
   definition: PlatformConnectionTypeReleaseDefinition,
+  permissions: PlatformPermissionSource,
 ): ResolvableConnectionTypeRelease => {
   const definitions = [
     {
@@ -334,6 +338,7 @@ const compileConnectionTypeRelease = (
       },
     ],
     { publishedHistories: [] },
+    permissions,
   )[0];
   const connectionOutput =
     compilationOutput?.kind === "connection_type" ? compilationOutput : duplicate();
@@ -384,7 +389,8 @@ const materialisePlatformThemeRelease = (
 export const createImmutableDefinitionPublicationCatalogue = (
   input: ImmutableDefinitionPublicationCatalogueDefinition,
 ): ImmutableDefinitionPublicationCatalogue => {
-  const parsed = catalogueDefinitionSchema.safeParse(input);
+  const { permissions, ...catalogueInput } = input;
+  const parsed = catalogueDefinitionSchema.safeParse(catalogueInput);
   const definition = parsed.success ? parsed.data : duplicate();
   ensureUniqueConnectionTypeReleases(definition.connectionTypeReleases);
   ensureUniqueApplicationCompositionReleases(definition.applicationComposition);
@@ -402,7 +408,7 @@ export const createImmutableDefinitionPublicationCatalogue = (
   if (operationIdentities.size !== operationReleases.length) duplicate();
 
   const connectionTypes = definition.connectionTypeReleases
-    .map((release) => compileConnectionTypeRelease(release))
+    .map((release) => compileConnectionTypeRelease(release, permissions))
     .sort((left, right) =>
       left.key === right.key
         ? compare(left.releaseVersion, right.releaseVersion)
@@ -445,6 +451,7 @@ export const createImmutableDefinitionPublicationCatalogue = (
     themesByIdentity.get(`${catalogueThemeId}:${releaseVersion}`);
 
   return Object.freeze({
+    permissions,
     listConnectionTypeReleases: async (key: string) => connectionsByKey.get(key) ?? [],
     readConnectionTypeRelease: async (rootId: ConnectionTypeId, releaseVersion: string) =>
       connectionsByIdentity.get(`${rootId}:${releaseVersion}`),

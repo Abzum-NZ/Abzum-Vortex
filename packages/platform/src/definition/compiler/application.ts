@@ -1,4 +1,4 @@
-import { platformPermissionSource } from "../../access/platform-permissions";
+import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import type { applicationCompilationRequestSchema } from "../../schema";
 import {
   inspectApplicationPageReplacements,
@@ -62,6 +62,7 @@ function compileApplicationPages(
   resolution: Resolution,
   composition: MaterialisedApplicationComposition,
   moduleQueryId: (reference: string) => string,
+  platformPermissions: PlatformPermissionSource,
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -81,7 +82,7 @@ function compileApplicationPages(
       // A page keeps its exact access permission key. An application or bound-Module permission is
       // resolved against its owner; a platform administration permission is carried through as its
       // exact catalogue key, which the runtime evaluates against the viewer's platform authority.
-      accessPermissionKey: platformPermissionSource().hasKey(String(page.permission))
+      accessPermissionKey: platformPermissions.hasKey(String(page.permission))
         ? String(page.permission)
         : resolution.exactOwnedReference(
             "permission",
@@ -182,6 +183,7 @@ function compileApplication(
   composition: MaterialisedApplicationComposition,
   valueIndex: ApplicationModuleValueIndex,
   flows: readonly FlowDefinition[],
+  platformPermissions: PlatformPermissionSource,
 ) {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -219,7 +221,13 @@ function compileApplication(
     };
   });
   const pageId = (alias: string) => resolution.id(definitionKey, "page", alias, "content");
-  const pages = compileApplicationPages(source, resolution, composition, valueIndex.query);
+  const pages = compileApplicationPages(
+    source,
+    resolution,
+    composition,
+    valueIndex.query,
+    platformPermissions,
+  );
   const searchSource = (source as unknown as ApplicationSourceDocument).body.search;
   const searchReferences = applicationSearchSourceReferences(
     source as unknown as ApplicationSourceDocument,
@@ -762,6 +770,7 @@ const applicationCompositionResolution = (
 export function compileParsedApplicationRequest(
   request: ParsedApplicationRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
+  platformPermissions: PlatformPermissionSource,
 ): ApplicationCompilationOutput {
   const source = request.source;
   const sourceObject = source as unknown as JsonObject;
@@ -794,6 +803,7 @@ export function compileParsedApplicationRequest(
         composition,
         valueIndex,
         flowSet.flows,
+        platformPermissions,
       ),
     );
     const ownDefinition = resolution.definition(source.key, "application");

@@ -8,16 +8,16 @@ import {
 } from "@vortex/platform/schema";
 import {
   assertBeforeLiveDeadline, LiveContextRefused, readLiveHumanContext, runOrganizationAccessOperation,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationInstallAddressSchema, createApplicationInstallManifest,
   createHumanInstalledRuntimeContextLoader,
   type ApplicationInstallAddress, type ApplicationInstallManifest, type InstalledRuntimeContext,
-} from "@web/platform-server";
-import type { RequestDatabaseTransaction } from "@web/platform-server";
-import { withPooledRequestLifetime } from "@web/platform-server";
-import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
-import { createActiveApplicationInstallationRepository } from "@web/platform-server";
+} from "@vortex/platform/server";
+import type { RequestDatabaseTransaction } from "@vortex/platform/server";
+import { withPooledRequestLifetime } from "@vortex/platform/server";
+import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/platform/server";
+import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";

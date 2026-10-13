@@ -3,7 +3,7 @@ import type {
   createLinkTilesQueryResolver,
   createQueryNoticeQueryResolver,
   createProtectedQueryService,
-  createRecordsTableQueryResolver} from "@web/platform-server";
+  createRecordsTableQueryResolver} from "@vortex/platform/server";
 import {
   projectReferenceChoiceInputValues,
   projectRecordDetailData,
@@ -14,7 +14,7 @@ import {
   type HumanOrganizationRequestDependencies,
   type PageSubjectReadResult,
   type PermittedApplicationsRead
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   type ApplicationLauncherQueryRow,
   applicationLauncherQueryRowsToListValues,

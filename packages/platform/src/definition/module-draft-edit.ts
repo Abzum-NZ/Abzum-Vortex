@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "../access/builder-authority";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import type { HumanOrganizationRequestDependencies } from "../access/human-organization-request";
 import {
   assertBeforeLiveDeadline,
@@ -176,12 +177,18 @@ export const saveModuleDraftEdit = async (
   scope: SelectedOrganizationScope,
   previous: StoredModuleDefinitionDraft,
   source: ModuleSourceDocument,
+  permissions: PlatformPermissionSource,
 ): Promise<StoredModuleDefinitionDraft> => {
-  const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
+  const authority = createBuilderAuthority({
+    transaction,
+    scope,
+    targetFacts: moduleTargetFacts,
+    permissions,
+  });
   await requireBuilderAuthority(authority, { kind: "draft_change", rootId: previous.rootId });
   const startedAt = await readDatabaseClock(transaction);
   const returned = verifySavedDraft(
-    await createDefinitionStore(transaction, authority).saveDraft({
+    await createDefinitionStore(transaction, authority, permissions).saveDraft({
       rootId: platformIdSchema.parse(previous.rootId),
       expectedDraftRevision: previous.draftRevision,
       source,

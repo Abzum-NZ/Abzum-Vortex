@@ -5,13 +5,13 @@ import {
   PLATFORM_BLOCK_RELEASES,
 } from "@vortex/platform/server";
 import { platformIdSchema, type SessionContext, type StoredDefinitionSource } from "@vortex/platform/schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   createDatabaseDefinitionPublicationService,
   createDefinitionStore,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   crmApplication,
   crmModuleSources,
@@ -41,7 +41,8 @@ import {
   type SystemContextFacts,
 } from "./development-authority";
 import type { PublishedRelease, SetupState } from "./state";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError } from "@vortex/platform/server";
+import { platformPermissionSource } from "../../app/_lib/platform-permission-source";
 
 /**
  * Publishes the shipped module and application definitions into the target organisation through
@@ -55,6 +56,7 @@ import { DefinitionError } from "@web/platform-server";
  * shipped platform connection types CRM and Service Desk bind.
  */
 export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCatalogueDefinition = {
+  permissions: platformPermissionSource,
   connectionTypeReleases: PLATFORM_CONNECTION_TYPE_RELEASES,
   applicationComposition: {
     compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
@@ -247,7 +249,7 @@ const publishOne = async (
   let draft = state.drafts[source.key];
   if (draft === undefined) {
     const created = await inSystemTransaction(context, async (transaction) => {
-      const store = createDefinitionStore(transaction, authority);
+      const store = createDefinitionStore(transaction, authority, platformPermissionSource);
       const creation =
         descriptor === undefined
           ? store.createRoot({ source })
@@ -272,7 +274,7 @@ const publishOne = async (
       const rootId =
         descriptor === undefined ? platformIdSchema.parse(draft!.rootId) : recordedRootId(draft);
       if (descriptor !== undefined) await verifyApplicationRoot(transaction, descriptor, rootId);
-      return createDefinitionStore(transaction, authority).saveDraft({
+      return createDefinitionStore(transaction, authority, platformPermissionSource).saveDraft({
         rootId,
         expectedDraftRevision: draft!.draftRevision,
         source,

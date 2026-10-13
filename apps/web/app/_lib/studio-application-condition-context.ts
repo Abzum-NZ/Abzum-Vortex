@@ -1,18 +1,19 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
 import {
   applicationRootIdSchema, organizationIdSchema, revisionSchema,
   type IdentitySession,
 } from "@vortex/platform/schema";
-import type { DatabaseRow } from "@web/platform-server";
+import type { DatabaseRow } from "@vortex/platform/server";
 import { BuilderAuthorityError, createDatabaseDefinitionPublicationService, fingerprintCanonicalValue,
-  readApplicationDefinitionDraft, readLiveHumanContext, requireBuilderAuthority } from "@web/platform-server";
+  readApplicationDefinitionDraft, readLiveHumanContext, requireBuilderAuthority } from "@vortex/platform/server";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 const requestSchema = z.object({ rootId: applicationRootIdSchema,
   draftRevision: revisionSchema, pageAlias: z.string().min(1).max(160).regex(/^[a-z][a-z0-9_]*$/) }).strict();
@@ -63,7 +64,7 @@ export const readSavedStudioApplicationConditionContext = async (
         try {
           if (!sameUuid(scope.organizationId, organization.data)) throw new ContextRefused();
           const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+          const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
           const operation = { kind: "draft_change" as const, rootId: request.rootId };
           await requireBuilderAuthority(authority, operation);
           const command = { rootId: request.rootId, expectedDraftRevision: request.draftRevision };

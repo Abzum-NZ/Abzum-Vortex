@@ -2,7 +2,7 @@
 import { WebMcpStatus, type ApplicationWebMcpRuntime } from "@vortex/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeFailure, sameId, storedModuleDefinitionDraftSchema, type DefinitionValidationResult } from "@vortex/platform/schema";
-import type { StoredModuleDefinitionDraft } from "@web/platform-server";
+import type { StoredModuleDefinitionDraft } from "@vortex/platform/server";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
 import { offeredFieldTypes, type OfferedFieldType } from "../../_lib/studio-module-field-shape";

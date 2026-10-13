@@ -7,10 +7,11 @@ import {
   requireBuilderAuthority,
   type BuilderTargetFactsReader,
   type OrganizationBuilderRoot,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { organizationIdSchema, type OrganizationId } from "@vortex/platform/schema";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
+import { platformPermissionSource } from "./platform-permission-source";
 
 export type StudioOrganizationHomeResult =
   | Readonly<{
@@ -55,6 +56,7 @@ export const loadStudioOrganizationHome = async (
         transaction,
         scope,
         targetFacts: organizationFacts,
+        permissions: platformPermissionSource,
       });
       try {
         await requireBuilderAuthority(organizationAuthority, { kind: "draft_change" });
@@ -79,7 +81,7 @@ export const loadStudioOrganizationHome = async (
         if (rootId !== systemRoot.rootId) throw new Error("STUDIO_ROOT_LIST_TARGET_MISSING");
         return { isSystemApplication: true };
       };
-      const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+      const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
       try {
         await requireBuilderAuthority(authority, {
           kind: "draft_change",

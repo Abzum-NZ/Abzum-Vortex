@@ -1,6 +1,6 @@
 import "server-only";
 
-export { installPlatformPermissionSource } from "./access/platform-permissions";
+export type { PlatformPermissionSource } from "./access/platform-permissions";
 export * from "./db/index";
 export * from "./identity/index";
 export * from "./access/index";

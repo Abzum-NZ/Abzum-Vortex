@@ -1,16 +1,15 @@
 import {
+  isPlatformPermissionKey,
   platformPermissionDeclarations,
   platformPermissionFor,
   platformPermissionOwnerId,
-  isPlatformPermissionKey,
 } from "@vortex/definitions";
-import { installPlatformPermissionSource } from "@vortex/platform/server";
+import type { PlatformPermissionSource } from "@vortex/platform/server";
 
-installPlatformPermissionSource({
+/** The shipped platform permission catalogue, passed to every platform operation that needs it. */
+export const platformPermissionSource: PlatformPermissionSource = {
   ownerId: platformPermissionOwnerId,
   declarations: platformPermissionDeclarations,
   forKey: platformPermissionFor,
   hasKey: isPlatformPermissionKey,
-});
-
-export * from "@vortex/platform/server";
+};

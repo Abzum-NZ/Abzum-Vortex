@@ -2,7 +2,7 @@ import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { IdentityVerificationExecution } from "@web/platform-server";
+import type { IdentityVerificationExecution } from "@vortex/platform/server";
 import { getIdentityJourneyConfiguration } from "./authority-configuration";
 import {
   createSessionCookieStage,

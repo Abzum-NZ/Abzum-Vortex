@@ -86,6 +86,7 @@ import {
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import { createApplicationResolutionSnapshot } from "./application-resolution";
 import { compileParsedDefinition } from "./compiler";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import {
   flowOperationReferencesByNode,
   platformOperationsCalledBy,
@@ -209,6 +210,8 @@ export interface DefinitionPublicationReader {
 }
 
 export interface DefinitionPublicationCatalogue {
+  /** The shipped platform permission catalogue publication rules resolve platform keys against. */
+  readonly permissions: PlatformPermissionSource;
   listConnectionTypeReleases(key: string): Promise<readonly ResolvableConnectionTypeRelease[]>;
   readConnectionTypeRelease(
     rootId: ConnectionTypeId,
@@ -1505,7 +1508,7 @@ const provisionalSavedConditionRevisions = (
 };
 
 /**
- * The request parse compileDefinitionWithContext performed for the requests this service
+ * The request parse the compile entry performed for the requests this service
  * assembles. compileParsedDefinition takes a parsed request, so the parse happens here, with the
  * schema that entry point would have selected, and refuses in the same way.
  */
@@ -1529,8 +1532,10 @@ const assertFinalPublicationValidation = (
   output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   historyEvidence: DefinitionPublicationHistoryEvidence,
+  permissions: PlatformPermissionSource,
 ): void => {
   const validation = validateDefinitionSet({
+    permissions,
     requests: [request],
     outputs: [output],
     dependencyOutputs,
@@ -1569,6 +1574,7 @@ const compileModuleCandidate = (
   candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
+  permissions: PlatformPermissionSource,
 ): CompiledModuleCandidate => {
   if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "3.0.0")
     return refuse("DEFINITION_COMPILATION_REFUSED");
@@ -1589,6 +1595,7 @@ const compileModuleCandidate = (
       savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
     }),
     dependencyOutputs,
+    permissions,
   );
   if (
     provisional.kind !== "module" ||
@@ -1604,7 +1611,7 @@ const compileModuleCandidate = (
     ...common,
     savedConditionRevisions,
   });
-  const output = compileParsedDefinition(request, dependencyOutputs);
+  const output = compileParsedDefinition(request, dependencyOutputs, permissions);
   if (
     output === undefined ||
     output.kind !== "module" ||
@@ -1620,6 +1627,7 @@ const compileCandidate = (
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
   final: boolean,
+  permissions: PlatformPermissionSource,
 ): PublishableCompilationOutput => {
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
@@ -1639,6 +1647,7 @@ const compileCandidate = (
     const output = compileParsedDefinition(
       parsedCompilationRequest(applicationCompilationRequestSchema, request),
       dependencyOutputs,
+      permissions,
     );
     if (
       final &&
@@ -1652,17 +1661,19 @@ const compileCandidate = (
         output,
         dependencyOutputs,
         candidate.historyEvidence,
+        permissions,
       );
     return output;
   }
   if (candidate.draft.source.kind === "module") {
     if (final) {
-      const compiled = compileModuleCandidate(candidate, dependencies, resolution);
+      const compiled = compileModuleCandidate(candidate, dependencies, resolution, permissions);
       assertFinalPublicationValidation(
         compiled.request,
         compiled.output,
         compiled.dependencyOutputs,
         candidate.historyEvidence,
+        permissions,
       );
       return compiled.output;
     }
@@ -1680,6 +1691,7 @@ const compileCandidate = (
         savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
       }),
       dependencyOutputs,
+      permissions,
     );
     if (
       provisional.kind !== "module" ||
@@ -1698,6 +1710,7 @@ const compileCandidate = (
     return compileParsedDefinition(
       parsedCompilationRequest(moduleCompilationRequestSchema, request),
       dependencyOutputs,
+      permissions,
     );
   }
   // Only an Application or a Module is a customer-publishable definition, and each has exactly
@@ -1767,7 +1780,13 @@ const prepareFromReader = async (
   const provisionalVersion =
     candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
   const provisionalResolution = buildResolution(candidate, dependencies, provisionalVersion);
-  const provisional = compileCandidate(candidate, dependencies, provisionalResolution, false);
+  const provisional = compileCandidate(
+    candidate,
+    dependencies,
+    provisionalResolution,
+    false,
+    catalogue.permissions,
+  );
   const impact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
     ...candidateValidationContractVersion(candidate.draft.source),
@@ -1777,7 +1796,7 @@ const prepareFromReader = async (
   if (impact.outcome === "no_change") refuse("DEFINITION_NO_CHANGE");
   const confirmableImpact = impact as Extract<typeof impact, { assignedVersion: string }>;
   const resolution = buildResolution(candidate, dependencies, confirmableImpact.assignedVersion);
-  const compilationOutput = compileCandidate(candidate, dependencies, resolution, true);
+  const compilationOutput = compileCandidate(candidate, dependencies, resolution, true, catalogue.permissions);
   const confirmedImpact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
     ...candidateValidationContractVersion(candidate.draft.source),
@@ -2156,12 +2175,13 @@ const definitionModuleReferenceFailures = (
   request: z.output<typeof moduleCompilationRequestSchema>,
   output: ModuleOutput,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
+  permissions: PlatformPermissionSource,
 ): readonly DefinitionRuleFailure[] => {
   const rule = definitionSemanticRules.find(
     (entry) => entry.ruleId === "vortex.definition.module_references",
   );
   if (rule === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
-  return rule.run({ requests: [request], outputs: [output], dependencyOutputs });
+  return rule.run({ permissions, requests: [request], outputs: [output], dependencyOutputs });
 };
 
 type CurrentModuleQueryFilterState = Readonly<{
@@ -2212,7 +2232,7 @@ const compileCurrentModuleQueryFilterState = async (
         moduleValidationTranslationContext(candidate.draft.source, context.correlationId),
       ),
     };
-  const shapeValidation = validateDefinitionSource(source.data);
+  const shapeValidation = validateDefinitionSource(source.data, catalogue.permissions);
   if (!shapeValidation.valid)
     return {
       kind: "validation_failed",
@@ -2229,11 +2249,12 @@ const compileCurrentModuleQueryFilterState = async (
       candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
     const resolution = buildResolution(candidate, dependencies, ownVersion);
     if (resolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
-    const compiled = compileModuleCandidate(candidate, dependencies, resolution);
+    const compiled = compileModuleCandidate(candidate, dependencies, resolution, catalogue.permissions);
     const moduleReferenceFailures = definitionModuleReferenceFailures(
       compiled.request,
       compiled.output,
       compiled.dependencyOutputs,
+      catalogue.permissions,
     );
     if (moduleReferenceFailures.length > 0)
       return {
@@ -2636,11 +2657,13 @@ const beforeSaveChoices = (
 };
 const beforeSaveSemanticFailures = (
   compiled: CompiledModuleCandidate,
+  permissions: PlatformPermissionSource,
 ): readonly DefinitionRuleFailure[] =>
   ["vortex.definition.module_references", "vortex.definition.module_rule_graphs"].flatMap((id) => {
     const rule = definitionSemanticRules.find((entry) => entry.ruleId === id);
     if (rule === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
     return rule.run({
+      permissions,
       requests: [compiled.request],
       outputs: [compiled.output],
       dependencyOutputs: compiled.dependencyOutputs,
@@ -2651,7 +2674,7 @@ const compileBeforeSaveState = async (
 ) => {
   const state = await compileCurrentModuleQueryFilterState(...args);
   if (state.kind !== "available") return state;
-  const failures = beforeSaveSemanticFailures(state.state.compiled);
+  const failures = beforeSaveSemanticFailures(state.state.compiled, args[2].permissions);
   return failures.length === 0
     ? state
     : {
@@ -2774,7 +2797,7 @@ export const createDefinitionPublicationService = (
             moduleValidationTranslationContext(draft.source, context.correlationId),
           ),
         };
-      const shape = validateDefinitionSource(parsedSource.data);
+      const shape = validateDefinitionSource(parsedSource.data, catalogue.permissions);
       if (!shape.valid)
         return {
           kind: "validation_failed",
@@ -2792,8 +2815,8 @@ export const createDefinitionPublicationService = (
           candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0",
         );
         if (resolution.contractVersion !== "3.0.0") return refuse("DEFINITION_COMPILATION_REFUSED");
-        const compiled = compileModuleCandidate(candidate, state.dependencies, resolution);
-        const failures = beforeSaveSemanticFailures(compiled);
+        const compiled = compileModuleCandidate(candidate, state.dependencies, resolution, catalogue.permissions);
+        const failures = beforeSaveSemanticFailures(compiled, catalogue.permissions);
         if (failures.length > 0)
           return {
             kind: "validation_failed",
@@ -2867,7 +2890,12 @@ export const createDefinitionPublicationService = (
     const parsed = command.data;
     await authorize(authority, context, { kind: "draft_change", rootId: parsed.rootId });
     return repository.read(context, async (reader) => {
-      const state = await compileCurrentModuleQueryFilterState(context, reader, catalogue, parsed);
+      const state = await compileCurrentModuleQueryFilterState(
+        context,
+        reader,
+        catalogue,
+        parsed,
+      );
       if (state.kind !== "available") return state;
       const queryChoices = state.state.eligibleQueries.map((entry) => entry.choice);
       if (parsed.queryAlias === undefined) return { kind: "available", queryChoices };
@@ -2894,7 +2922,12 @@ export const createDefinitionPublicationService = (
     const parsed = command.data;
     await authorize(authority, context, { kind: "draft_change", rootId: parsed.rootId });
     return repository.read(context, async (reader) => {
-      const state = await compileCurrentModuleQueryFilterState(context, reader, catalogue, parsed);
+      const state = await compileCurrentModuleQueryFilterState(
+        context,
+        reader,
+        catalogue,
+        parsed,
+      );
       if (state.kind !== "available") return state;
       const selected = state.state.eligibleQueries.filter(
         (entry) => entry.source.id === parsed.queryAlias,
@@ -2930,7 +2963,7 @@ export const createDefinitionPublicationService = (
             moduleValidationTranslationContext(draft.source, context.correlationId),
           ),
         };
-      const shapeValidation = validateDefinitionSource(source.data);
+      const shapeValidation = validateDefinitionSource(source.data, catalogue.permissions);
       if (!shapeValidation.valid)
         return {
           kind: "validation_failed",
@@ -2954,7 +2987,12 @@ export const createDefinitionPublicationService = (
         if (nextResolution.contractVersion !== "3.0.0")
           return refuse("DEFINITION_COMPILATION_REFUSED");
         resolution = nextResolution;
-        compiled = compileModuleCandidate(candidate, state.state.dependencies, resolution);
+        compiled = compileModuleCandidate(
+          candidate,
+          state.state.dependencies,
+          resolution,
+          catalogue.permissions,
+        );
       } catch (error) {
         if (!(error instanceof DefinitionCompilationError)) throw error;
         return {
@@ -2966,6 +3004,7 @@ export const createDefinitionPublicationService = (
         compiled.request,
         compiled.output,
         compiled.dependencyOutputs,
+        catalogue.permissions,
       );
       if (moduleReferenceFailures.length > 0)
         return {
@@ -3048,7 +3087,7 @@ export const createDefinitionPublicationService = (
       const currentVersion =
         candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
       const resolution = buildResolution(candidate, dependencies, currentVersion);
-      const compilation = compileCandidate(candidate, dependencies, resolution, false);
+      const compilation = compileCandidate(candidate, dependencies, resolution, false, catalogue.permissions);
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION

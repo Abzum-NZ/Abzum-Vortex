@@ -514,6 +514,7 @@ export async function invokeInstalledFlow(
   const selectedRecordReader = createViewerSafeRecordLinkReadService();
   const recordPinService = createViewerSafeRecordLinkService({
     ...requestDependencies,
+    permissions: dependencies.releaseCatalogue.permissions,
     createInstalledContextLoader: (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
       return createHumanInstalledRuntimeContextLoader({
@@ -534,6 +535,7 @@ export async function invokeInstalledFlow(
       )
         return undefined;
       const permitted = await readPermittedApplicationsAtAddress(
+        dependencies.releaseCatalogue.permissions,
         session,
         body.tenantShortName,
         body.organizationShortName,

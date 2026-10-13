@@ -9,7 +9,7 @@ import {
   serveComponentBundle,
   type ComponentBundleObjectStore,
   type ServeComponentBundleResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { isComponentOriginRequest } from "../_lib/component-origin";
 import {
   hostedStorageSigningConfiguration,

@@ -1,4 +1,4 @@
-import { platformPermissionSource } from "../access/platform-permissions";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -341,10 +341,11 @@ export type AddressedActiveApplicationIdentity = z.infer<
  * organisation-scoped, so its declaration targets the organisation.
  */
 const pageDiscoveryDeclaration = (
+  permissions: PlatformPermissionSource,
   candidate: ApplicationCandidate,
   page: ApplicationCandidate["pages"][number],
 ): OrganizationAccessDeclaration => {
-  const platformDeclaration = platformPermissionSource().forKey(page.accessPermissionKey);
+  const platformDeclaration = permissions.forKey(page.accessPermissionKey);
   if (platformDeclaration !== undefined)
     return organizationAccessDeclarationSchema.parse({
       operationKey: "application.page.discover",
@@ -357,7 +358,7 @@ const pageDiscoveryDeclaration = (
       target: { kind: "organization" },
       requiredPermission: {
         ownerKind: "platform",
-        ownerId: platformPermissionSource().ownerId,
+        ownerId: permissions.ownerId,
         permissionId: platformDeclaration.permissionId,
       },
       recentAuthentication: { kind: "none" },
@@ -387,6 +388,7 @@ const pageDiscoveryDeclaration = (
 
 /** Projects one application's permitted pages inside the caller's application-scoped request. */
 const projectPermittedApplication = async (
+  permissions: PlatformPermissionSource,
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   candidate: ApplicationCandidate,
@@ -420,7 +422,7 @@ const projectPermittedApplication = async (
   const decisions = await decideOrganizationAccessBatch(
     transaction,
     scope,
-    candidate.pages.map((page) => pageDiscoveryDeclaration(candidate, page)),
+    candidate.pages.map((page) => pageDiscoveryDeclaration(permissions, candidate, page)),
   );
   const allowedPageKeys = new Set<string>();
   candidate.pages.forEach((page, index) => {
@@ -474,6 +476,7 @@ const projectPermittedApplication = async (
 };
 
 const permittedApplication = async (
+  permissions: PlatformPermissionSource,
   requests: ReturnType<typeof createHumanOrganizationRequestService>,
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
@@ -486,7 +489,7 @@ const permittedApplication = async (
   const result = await requests.run(
     session,
     { organizationId, applicationRootId: candidate.applicationRootId },
-    (transaction, scope) => projectPermittedApplication(transaction, scope, candidate),
+    (transaction, scope) => projectPermittedApplication(permissions, transaction, scope, candidate),
   );
   if (result.kind === "temporarily_unavailable")
     return {
@@ -505,6 +508,7 @@ const permittedApplication = async (
  * is null, so it must only resolve that address and never feed a launcher.
  */
 export const readPermittedApplicationsAtAddress = async (
+  permissions: PlatformPermissionSource,
   session: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
@@ -513,6 +517,7 @@ export const readPermittedApplicationsAtAddress = async (
 ): Promise<PermittedApplicationsRead> =>
   (
     await readAtAddress(
+      permissions,
       session,
       tenantShortNameCandidate,
       organizationShortNameCandidate,
@@ -527,6 +532,7 @@ export const readPermittedApplicationsAtAddress = async (
  * discloses any of its content.
  */
 export const readAddressedApplicationAtAddress = (
+  permissions: PlatformPermissionSource,
   session: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
@@ -534,6 +540,7 @@ export const readAddressedApplicationAtAddress = (
   applicationKeyCandidate: string,
 ): Promise<AddressedApplicationRead> =>
   readAtAddress(
+    permissions,
     session,
     tenantShortNameCandidate,
     organizationShortNameCandidate,
@@ -543,6 +550,7 @@ export const readAddressedApplicationAtAddress = (
 
 /** Resolves one addressed App from the current HUMAN installed bundle and page authority. */
 export const readAddressedApplicationFromInstalledBundleAtAddress = async (
+  permissions: PlatformPermissionSource,
   sessionCandidate: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
@@ -612,6 +620,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           application.releaseRevision !== context.applicationReleaseRevision)
           return undefined;
         const permitted = await projectPermittedApplication(
+          permissions,
           transaction,
           scope,
           applicationCandidateFromInstalledContext(context),
@@ -766,6 +775,7 @@ export const readAddressedApplicationIdentityAtAddress = async (
 };
 
 const readAtAddress = async (
+  permissions: PlatformPermissionSource,
   session: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
@@ -774,6 +784,7 @@ const readAtAddress = async (
 ): Promise<AddressedApplicationRead> => {
   let experiences: readonly ApplicationExperience[] = [];
   const read = await readPermittedApplications(
+    permissions,
     session,
     tenantShortNameCandidate,
     organizationShortNameCandidate,
@@ -787,6 +798,7 @@ const readAtAddress = async (
 };
 
 const readPermittedApplications = async (
+  permissions: PlatformPermissionSource,
   session: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
@@ -842,6 +854,7 @@ const readPermittedApplications = async (
       const candidate = read.applications.find((entry) => entry.key === addressedApplicationKey);
       if (candidate === undefined) return { kind: "unavailable" };
       const permitted = await permittedApplication(
+        permissions,
         requests,
         parsedSession.data,
         read.organizationId,
@@ -869,7 +882,8 @@ const readPermittedApplications = async (
     );
     void defaultReadRequest.catch(() => undefined);
     const candidateReads = mapWithConcurrency(read.applications, permittedReadConcurrency,
-      (candidate) => permittedApplication(requests, parsedSession.data, read.organizationId, candidate));
+      (candidate) =>
+        permittedApplication(permissions, requests, parsedSession.data, read.organizationId, candidate));
     void candidateReads.catch(() => undefined);
     const defaultRead = await defaultReadRequest;
     if (defaultRead.kind !== "available") return defaultRead;

@@ -14,9 +14,9 @@ import {
   type PrivateInvalidationChannelAccessReader,
   type PrivateInvalidationChannelAuthorizer,
   type PrivateInvalidationTopicScope,
-} from "@web/platform-server";
-import { createActiveApplicationInstallationRepository } from "@web/platform-server";
-import type { IdentityVerificationExecution } from "@web/platform-server";
+} from "@vortex/platform/server";
+import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
+import type { IdentityVerificationExecution } from "@vortex/platform/server";
 import { z } from "zod";
 import { resolveApplicationAddress } from "./application-address";
 import { humanOrganizationRequests } from "./server-composition";

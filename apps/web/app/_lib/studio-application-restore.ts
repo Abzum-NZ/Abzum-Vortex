@@ -1,14 +1,14 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
 import {
   organizationIdSchema,
   sameId,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
 import { BuilderAuthorityError, createDatabaseDefinitionHistoryService, readLiveHumanContext, requireBuilderAuthority,
-  type LiveHumanContext } from "@web/platform-server";
-import type { DatabaseRow} from "@web/platform-server";
+  type LiveHumanContext } from "@vortex/platform/server";
+import type { DatabaseRow} from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -30,7 +30,8 @@ import {
   type StudioApplicationRestoreLoadResult,
   type StudioApplicationRestoreReceipt,
 } from "./studio-application-restore-contracts";
-import { DefinitionError, classifyDatabaseError } from "@web/platform-server";
+import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
@@ -225,7 +226,7 @@ export async function restoreStudioApplicationDraft(
             Object.hasOwn(scope, "applicationRootId")) throw new RestoreRefused();
           const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt,
             identityAuthorityId: getIdentityAuthorityConfiguration().authorityId });
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+          const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
           await requireBuilderAuthority(authority, {
             kind: "draft_change",
             rootId: command.data.selector.rootId,

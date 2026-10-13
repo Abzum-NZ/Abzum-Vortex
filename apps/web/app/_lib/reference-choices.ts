@@ -25,13 +25,13 @@ import {
   FORM_CONTAINER_BLOCK_RELEASE,
 } from "@vortex/platform/server";
 import type {
-  createReferenceChoiceService} from "@web/platform-server";
+  createReferenceChoiceService} from "@vortex/platform/server";
 import {
   recordReferenceChoiceCommandSchema,
   resolveReferenceChoiceSelection,
   type RecordReferenceChoiceCommand,
   type ReferenceChoiceOption,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 
 type ChoicePlacementSettings = Readonly<{
   fieldKey: string;

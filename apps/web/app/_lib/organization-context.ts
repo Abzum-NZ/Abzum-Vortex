@@ -2,9 +2,10 @@ import "server-only";
 
 import { cache } from "react";
 import type { IdentitySession, OrganizationLauncherResolution } from "@vortex/platform/schema";
-import { readPermittedApplicationsAtAddress, type PermittedApplicationsRead } from "@web/platform-server";
-import { createOrganizationLauncherService } from "@web/platform-server";
+import { readPermittedApplicationsAtAddress, type PermittedApplicationsRead } from "@vortex/platform/server";
+import { createOrganizationLauncherService } from "@vortex/platform/server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
+import { platformPermissionSource } from "./platform-permission-source";
 
 const organizationLauncherService = createOrganizationLauncherService();
 
@@ -37,6 +38,7 @@ export const loadPermittedApplicationsAtAddress = cache(
       return { kind: "temporarily_unavailable", cause: describeFailure(error) };
     }
     return readPermittedApplicationsAtAddress(
+      platformPermissionSource,
       session,
       tenantShortName,
       organizationShortName,

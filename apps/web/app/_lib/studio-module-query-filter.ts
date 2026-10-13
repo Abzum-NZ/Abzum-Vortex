@@ -1,6 +1,6 @@
 import "server-only";
 
-import { moduleQueryFilterEdits } from "@web/platform-server";
+import { moduleQueryFilterEdits } from "@vortex/platform/server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";

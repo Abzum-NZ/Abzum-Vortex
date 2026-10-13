@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from "react";
-import { applicationInstallAddressSchema } from "@web/platform-server";
+import { applicationInstallAddressSchema } from "@vortex/platform/server";
 import { loadApplicationInstallMetadata } from "../../../_lib/application-install-metadata";
 import { ApplicationInstallGuidance } from "./_components/application-install-guidance";
 

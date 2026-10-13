@@ -20,6 +20,7 @@ import {
 } from "../../schema";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "../application-composition-catalogue";
 import type { z } from "zod";
+import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import { createContractValueWalker } from "../contract-value-walker";
 
 export type JsonObject = Record<string, unknown>;
@@ -88,6 +89,8 @@ export type DefinitionSemanticRule = Readonly<{
 }>;
 
 export type DefinitionSetValidationContext = Readonly<{
+  /** The shipped platform permission catalogue the rules resolve platform keys against. */
+  permissions: PlatformPermissionSource;
   requests: readonly PublicationCompilationRequest[];
   outputs: readonly Output[];
   rawSources?: readonly unknown[];

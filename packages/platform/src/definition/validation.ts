@@ -13,6 +13,7 @@ import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings } from "./canonical-json-definition";
 import { compileParsedDefinition } from "./compiler";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import {
   type DefinitionSemanticRule,
   type DefinitionValidationStage,
@@ -261,8 +262,11 @@ export function validateDefinitionSet(
   return { valid: sorted.length === 0, failures: sorted } as const;
 }
 
-export function validateDefinitionSource(source: unknown) {
-  return validateDefinitionSet({ requests: [], outputs: [], rawSources: [source] }, "edit_save");
+export function validateDefinitionSource(source: unknown, permissions: PlatformPermissionSource) {
+  return validateDefinitionSet(
+    { permissions, requests: [], outputs: [], rawSources: [source] },
+    "edit_save",
+  );
 }
 
 function dependencyKeys(request: PublicationCompilationRequest): string[] {
@@ -280,7 +284,8 @@ function dependencyKeys(request: PublicationCompilationRequest): string[] {
 
 export function compileDefinitionSet(
   inputs: readonly PublicationCompilationRequest[],
-  options?: DefinitionPublicationContext,
+  options: DefinitionPublicationContext | undefined,
+  permissions: PlatformPermissionSource,
 ): Output[] {
   if (!Array.isArray(inputs))
     throw new DefinitionCompilationError(
@@ -343,10 +348,12 @@ export function compileDefinitionSet(
   const compilePublicationRequest = compileParsedDefinition as (
     request: PublicationCompilationRequest,
     dependencyOutputs: readonly Output[],
+    permissions: PlatformPermissionSource,
   ) => Output;
   for (const request of ordered)
-    outputs.push(compilePublicationRequest(request, [...dependencyOutputs, ...outputs]));
+    outputs.push(compilePublicationRequest(request, [...dependencyOutputs, ...outputs], permissions));
   const validation = validateDefinitionSet({
+    permissions,
     requests: ordered,
     outputs,
     ...(dependencyOutputs.length === 0 ? {} : { dependencyOutputs }),

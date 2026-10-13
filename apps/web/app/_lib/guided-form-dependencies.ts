@@ -4,7 +4,7 @@ import {
   createActiveApplicationInstallationRepository,
   createDatabaseApplicationBoundReleaseSetService,
   createHumanInstalledRuntimeContextLoader,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import type { GuidedFormDependencies } from "@vortex/platform/server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";

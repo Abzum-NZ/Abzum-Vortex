@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@vortex/ui/components/table";
 import { loadStudioOrganizationHome } from "../../_lib/studio-organization-home";
-import type { OrganizationBuilderRoot } from "@web/platform-server";
+import type { OrganizationBuilderRoot } from "@vortex/platform/server";
 
 export const dynamic = "force-dynamic";
 

@@ -1,5 +1,5 @@
 import type {
-  createReferenceChoiceService} from "@web/platform-server";
+  createReferenceChoiceService} from "@vortex/platform/server";
 import {
   type ReferenceChoiceInputValues,
   type PermittedApplicationsRead,
@@ -8,7 +8,7 @@ import {
   createStoredPageCapabilityService,
   type ReferenceChoiceOption,
   projectReferenceChoiceInputValues,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { FIELD_INPUT_BLOCK_RELEASE, FIELD_INPUT_CONTROL_RELEASES } from "@vortex/platform/server";
 import {
   type IdentitySession,
@@ -25,6 +25,7 @@ import {
 import type { ReferenceChoiceFormField } from "../reference-choices";
 import { requestDependencies, loadInstalledContext } from "./load";
 import type { DateTimeZones, PageDataState, ModuleField } from "./types";
+import { platformPermissionSource } from "../platform-permission-source";
 
 export type ReferenceChoicePageResult =
   | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
@@ -81,6 +82,7 @@ export const projectReferenceChoicePage = async (
   const projected = await createStoredPageCapabilityService({
     ...dependencies,
     context,
+    permissions: platformPermissionSource,
     selection: { pageId: pageDefinition.pageId },
   }).project(session, selection);
   if (projected.kind === "temporarily_unavailable")

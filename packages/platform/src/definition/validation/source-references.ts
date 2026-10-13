@@ -4,7 +4,6 @@ import {
   builderKeySchema,
 } from "../../schema";
 import { createContractValueWalker } from "../contract-value-walker";
-import { platformPermissionSource } from "../../access/platform-permissions";
 import {
   type PreparedValidationContext,
   editSaveSources,
@@ -327,7 +326,7 @@ export function sourceLocalReferenceRule(
       );
       const pageGateKnown = (key: unknown) =>
         applicationPermissionKeys.has(String(key)) ||
-        platformPermissionSource().hasKey(String(key));
+        context.permissions.hasKey(String(key));
       for (const permission of array(body.permissions)) {
         const scope = permission.record_scope ? object(permission.record_scope) : undefined;
         for (const route of scope ? array(scope.routes) : []) {

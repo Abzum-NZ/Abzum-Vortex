@@ -17,7 +17,7 @@ import {
   fingerprintCanonicalValue,
   type AuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { z } from "zod";
 
 type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;

@@ -10,10 +10,11 @@ import {
   type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import type { IdentitySession } from "@vortex/platform/schema";
+import { platformPermissionSource } from "./platform-permission-source";
 
 type ApplicationAddressResult =
   | Readonly<{
@@ -58,6 +59,7 @@ const loadAddressedApplicationAtAddress = cache(
       return { read: { kind: "temporarily_unavailable" }, experiences: [] };
     }
     return readAddressedApplicationFromInstalledBundleAtAddress(
+      platformPermissionSource,
       session,
       tenantShortName,
       organizationShortName,

@@ -14,11 +14,11 @@ import {
   validateStudioCondition,
   type StudioConditionValidation,
 } from "@vortex/ui/studio";
-import type { ModuleQueryFilterDraftContext, ModuleQueryFilterQueryChoice } from "@web/platform-server";
+import type { ModuleQueryFilterDraftContext, ModuleQueryFilterQueryChoice } from "@vortex/platform/server";
 import type {
   StudioModuleQueryFilterResult,
   StudioModuleQueryFilterSnapshot,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { moduleQueryFilterControlsContext, sameModuleQueryFilter } from "../_lib/module-query-filter-commands";
 import {
   loadModuleQueryFilter,

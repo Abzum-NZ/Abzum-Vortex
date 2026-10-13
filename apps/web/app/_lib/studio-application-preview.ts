@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
@@ -14,7 +14,7 @@ import {
   type IdentitySession,
   type OrganizationId,
   } from "@vortex/platform/schema";
-import type { DatabaseRow} from "@web/platform-server";
+import type { DatabaseRow} from "@vortex/platform/server";
 import {
   applicationPreviewBreakpoints,
   BuilderAuthorityError,
@@ -27,11 +27,12 @@ import {
   requireBuilderAuthority,
   type ApplicationPreviewArtifact,
   type ApplicationPreviewRefusalReason,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 const savedHomepageRequestSchema = z.object({
   rootId: applicationRootIdSchema,
@@ -163,7 +164,7 @@ export const previewSavedStudioApplication = async (
         try {
           if (!sameUuid(scope.organizationId, organization.data)) throw new ContextRefused();
           const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+          const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
           const operation = { kind: "draft_change" as const, rootId: request.rootId };
           await requireBuilderAuthority(authority, operation);
           const command = { rootId: request.rootId, expectedDraftRevision: request.draftRevision };

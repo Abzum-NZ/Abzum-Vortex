@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   organizationIdSchema,
@@ -15,7 +15,7 @@ import {
   type PageSlotAddress,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
-import type { DatabaseRow } from "@web/platform-server";
+import type { DatabaseRow } from "@vortex/platform/server";
 import {
   BuilderAuthorityError,
   DefinitionError,
@@ -29,11 +29,12 @@ import {
   DefinitionCompilationError,
   type ModuleReleasePageCursor,
   type ResolvableModuleRelease,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import type { StudioCompileFailure } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
+import { platformPermissionSource } from "./platform-permission-source";
 
 type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 
@@ -248,7 +249,7 @@ export const loadStudioCreateAccess = async (
         transaction,
         scope,
       ): Promise<StudioAuthorityResult<OrganizationId>> => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change" });
         } catch (error) {
@@ -315,7 +316,7 @@ export const loadStudioApplicationDraft = async (
         pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
         compileFailure: StudioCompileFailure | null;
       }>>> => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
         } catch (error) {

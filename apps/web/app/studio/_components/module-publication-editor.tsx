@@ -11,7 +11,7 @@ import type {
   HumanDefinitionPublicationPreparationResult,
   HumanDefinitionPublicationResult,
   StoredModuleDefinitionDraft,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-import { platformPermissionSource } from "../access/platform-permissions";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import {
   organizationAccessDeclarationSchema,
   storedDefinitionDraftSchema,
@@ -45,8 +45,9 @@ const asCandidate = (value: unknown): Record<string, unknown> | undefined =>
     ? (value as Record<string, unknown>)
     : undefined;
 
-const humanPermissionDeclaration = (): OrganizationAccessDeclaration => {
-  const permissions = platformPermissionSource();
+const humanPermissionDeclaration = (
+  permissions: PlatformPermissionSource,
+): OrganizationAccessDeclaration => {
   const operationKey = "platform.organization.definition_drafts.manage";
   const permission = permissions.forKey(operationKey);
   if (permission === undefined) throw new Error("DEFINITION_DRAFTS_MANAGE_PERMISSION_UNAVAILABLE");
@@ -107,6 +108,7 @@ const parseHumanCurrentDraft = (candidate: unknown): StoredDefinitionDraft => {
 };
 
 const assertHumanRestoreCompletion = async (
+  permissions: PlatformPermissionSource,
   transaction: RequestDatabaseTransaction,
   context: Extract<SessionContext, { callerKind: "human" }>,
   restored: StoredDefinitionDraft,
@@ -118,7 +120,7 @@ const assertHumanRestoreCompletion = async (
       "restored draft",
     );
   const restoredAt = restored.restoredAt;
-  const declaration = humanPermissionDeclaration();
+  const declaration = humanPermissionDeclaration(permissions);
   const decisions = await transaction.query<PermissionDecisionRow>`
     select decision.*
     from vortex_access.evaluate_organization_permission_eligibility(
@@ -238,6 +240,7 @@ const one = <Row extends DatabaseRow>(rows: readonly Row[], message: string): Ro
  */
 export const createDatabaseDefinitionHistoryRepository = (
   transaction: RequestDatabaseTransaction,
+  permissions: PlatformPermissionSource,
 ): DefinitionHistoryRepository => ({
   async list(_context, command) {
     const rows = await transaction.query<HistoryRow>`
@@ -328,7 +331,7 @@ export const createDatabaseDefinitionHistoryRepository = (
     )
       throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
 
-    await assertHumanRestoreCompletion(transaction, context, verifiedDraft);
+    await assertHumanRestoreCompletion(permissions, transaction, context, verifiedDraft);
     return { outcome: "restored", draft: verifiedDraft } as const;
   },
 });

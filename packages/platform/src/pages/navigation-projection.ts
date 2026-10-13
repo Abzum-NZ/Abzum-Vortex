@@ -1,4 +1,4 @@
-import { platformPermissionSource } from "../access/platform-permissions";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -15,6 +15,7 @@ import {
   type ProjectedNavigation,
   type ProjectedNavigationItem,
   type SelectedOrganizationScope,
+  type PlatformId,
 } from "../schema";
 import type { RequestDatabaseTransaction } from "../db/index";
 import {
@@ -173,7 +174,7 @@ export const createAuthenticatedNavigationProjectionService = <Command>(
  */
 type NavigationPermissionBindingValue =
   | Readonly<{ kind: "definition"; entry: PermissionRegistryEntryCandidate }>
-  | Readonly<{ kind: "platform"; permission: PermissionDeclaration }>;
+  | Readonly<{ kind: "platform"; ownerId: PlatformId; permission: PermissionDeclaration }>;
 
 const declaration = (
   operationKey: string,
@@ -192,7 +193,7 @@ const declaration = (
         target: { kind: "organization" },
         requiredPermission: {
           ownerKind: "platform",
-          ownerId: platformPermissionSource().ownerId,
+          ownerId: binding.ownerId,
           permissionId: binding.permission.permissionId,
         },
         recentAuthentication: { kind: "none" },
@@ -225,6 +226,8 @@ export type StoredNavigationProjectionDependencies = HumanOrganizationRequestDep
      * authority.
      */
     context: InstalledRuntimeContext;
+    /** The shipped platform permission catalogue navigation requirements may name. */
+    permissions: PlatformPermissionSource;
   }>;
 
 /**
@@ -263,8 +266,9 @@ export const createStoredNavigationProjectionService = (
 
   const load = (): FixedAuthenticatedNavigationProjection => {
     const permission = (key: string): NavigationPermissionBindingValue => {
-      const platform = platformPermissionSource().forKey(key);
-      if (platform !== undefined) return { kind: "platform", permission: platform };
+      const platform = dependencies.permissions.forKey(key);
+      if (platform !== undefined)
+        return { kind: "platform", ownerId: dependencies.permissions.ownerId, permission: platform };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)
         throw new Error("STORED_NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");

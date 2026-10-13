@@ -2,7 +2,7 @@ import type {
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   createProtectedQueryService,
   HumanOrganizationRequestResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { projectCalendarPlacement, type CalendarPlacementContract } from "@vortex/platform/server";
 import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
 import type { collectPlacements } from "./placement-helpers";

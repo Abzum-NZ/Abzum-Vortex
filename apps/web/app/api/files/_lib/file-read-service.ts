@@ -23,7 +23,7 @@ import {
   type FileReadRefusalReason,
   type FileReadResult,
   type StorageKeySigner,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import {
   getIdentityAuthorityConfiguration,

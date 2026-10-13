@@ -1,6 +1,6 @@
 import "server-only";
 
-import { moduleFieldEdits } from "@web/platform-server";
+import { moduleFieldEdits } from "@vortex/platform/server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";

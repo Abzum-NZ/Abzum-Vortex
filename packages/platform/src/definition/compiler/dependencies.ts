@@ -1,4 +1,4 @@
-import { definitionPublicationContextSchema, type DefinitionCompilationOutput } from "../../schema";
+import type { DefinitionCompilationOutput } from "../../schema";
 import type { Resolution } from "./resolution";
 import { asObject, fail, type JsonObject } from "./shared";
 
@@ -34,28 +34,9 @@ export function resolvedDependencies(source: JsonObject, resolution: Resolution)
   return keys.map((key) => resolution.definition(key));
 }
 
-export function parseDefinitionCompilationContext(
-  context: unknown,
-): readonly DefinitionCompilationOutput[] {
-  if (context === undefined) return [];
-  if (
-    context === null ||
-    typeof context !== "object" ||
-    Array.isArray(context) ||
-    Object.keys(context).some((key) => key !== "dependencyOutputs")
-  )
-    fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  const parsed = definitionPublicationContextSchema.safeParse({
-    ...(context as JsonObject),
-    publishedHistories: [],
-  });
-  if (!parsed.success) fail("vortex.definition.invalid_compilation_request", "invalid_value");
-  return parsed.data.dependencyOutputs ?? [];
-}
-
 /**
  * The limits definitionPublicationContextSchema places on dependencyOutputs, for outputs that
- * already passed its element schema. parseDefinitionCompilationContext applied them on every
+ * already passed its element schema. the compile entry applied them on every
  * compile, so a set whose dependency outputs repeat a subject it has just compiled is still
  * refused here, with the same code and no location.
  */

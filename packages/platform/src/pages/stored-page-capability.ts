@@ -1,4 +1,4 @@
-import { platformPermissionSource } from "../access/platform-permissions";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -27,6 +27,7 @@ import {
   type ProtectedReadModelKey,
   type ConditionNode,
   type JsonValue,
+  type PlatformId,
 } from "../schema";
 import { evaluateTypedCondition, TypedConditionEvaluationError } from "../rules/index";
 import {
@@ -74,6 +75,8 @@ export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependenc
      */
     context: InstalledRuntimeContext;
     selection: StoredPageCapabilitySelection;
+    /** The shipped platform permission catalogue page requirements may name. */
+    permissions: PlatformPermissionSource;
     /**
      * The existing protected Access and Identity readers, composed by the server. A read-model
      * placement is refused while they are not supplied; Page never reads those tables itself.
@@ -119,7 +122,7 @@ type StoredLinkTargetDeclaration =
  */
 type PagePermissionBinding =
   | Readonly<{ kind: "definition"; entry: PermissionRegistryEntryCandidate }>
-  | Readonly<{ kind: "platform"; permission: PermissionDeclaration }>;
+  | Readonly<{ kind: "platform"; ownerId: PlatformId; permission: PermissionDeclaration }>;
 
 const declaration = (
   operationKey: string,
@@ -138,7 +141,7 @@ const declaration = (
         target: { kind: "organization" },
         requiredPermission: {
           ownerKind: "platform",
-          ownerId: platformPermissionSource().ownerId,
+          ownerId: binding.ownerId,
           permissionId: binding.permission.permissionId,
         },
         recentAuthentication: { kind: "none" },
@@ -444,8 +447,9 @@ export const createStoredPageCapabilityService = (
     // release's prepared registration, or an exact platform administration permission from the
     // shipped platform catalogue. Anything else fails this page closed.
     const permission = (key: string): PagePermissionBinding => {
-      const platform = platformPermissionSource().forKey(key);
-      if (platform !== undefined) return { kind: "platform", permission: platform };
+      const platform = dependencies.permissions.forKey(key);
+      if (platform !== undefined)
+        return { kind: "platform", ownerId: dependencies.permissions.ownerId, permission: platform };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)
         throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");

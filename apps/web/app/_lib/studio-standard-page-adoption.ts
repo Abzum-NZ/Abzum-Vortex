@@ -11,7 +11,7 @@ import {
   type SessionContext,
   type StoredDefinitionSource,
   } from "@vortex/platform/schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   BuilderAuthorityError,
   createHumanApplicationDraftWriter,
@@ -19,7 +19,7 @@ import {
   createBuilderAuthority,
   requireBuilderAuthority,
   type BuilderTargetFactsReader,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   readApplicationDefinitionDraft,
   createDatabaseDefinitionPublicationRepository,
@@ -27,7 +27,7 @@ import {
   fingerprintCanonicalValue,
   readAuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import {
@@ -39,7 +39,8 @@ import {
   type PageAdoptionTargetOption,
 } from "./studio-standard-page-adoption-plan";
 import { installedReleaseCatalogue } from "./definition-catalogue";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
@@ -230,7 +231,7 @@ export const loadStudioStandardPageAdoption = async (
       resolved.session,
       { organizationId: organization.data },
       async (transaction, scope, issuedAt): Promise<Readonly<{ kind: "available"; value: Omit<Extract<StudioStandardPageAdoptionLoadResult, { kind: "available" }>, "kind"> } | { kind: "refused" }>> => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
           const facts = await targetFacts(transaction, scope, root.data);
@@ -322,7 +323,10 @@ export const saveStudioStandardPageAdoption = async (
       return resolved.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" } as const
         : { kind: "refused" } as const;
-    const writer = createHumanApplicationDraftWriter({ requests: humanOrganizationRequests() });
+    const writer = createHumanApplicationDraftWriter({
+      requests: humanOrganizationRequests(),
+      permissions: platformPermissionSource,
+    });
     return await writer.saveDerivedDraft(
       resolved.session,
       organizationId,
@@ -336,7 +340,7 @@ export const saveStudioStandardPageAdoption = async (
       )
         throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
       const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-      const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+      const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
       const facts = await targetFacts(transaction, scope, draft.rootId);
       if (facts.isSystemApplication) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
       const current = await createDatabaseDefinitionPublicationService(
@@ -382,7 +386,7 @@ export const saveStudioStandardPageAdoption = async (
           const verifiedCandidate = await createDatabaseDefinitionPublicationService(
             installedReleaseCatalogue,
             verifyTransaction,
-            createBuilderAuthority({ transaction: verifyTransaction, scope: verifyScope, targetFacts }),
+            createBuilderAuthority({ transaction: verifyTransaction, scope: verifyScope, targetFacts, permissions: platformPermissionSource }),
           ).compileApplicationDraft(verifiedContext, {
             rootId: String(savedDraft.rootId),
             expectedDraftRevision: savedDraft.draftRevision,

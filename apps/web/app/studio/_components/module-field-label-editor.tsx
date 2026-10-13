@@ -10,7 +10,7 @@ import type {
   StoredModuleDefinitionDraft,
   StudioModuleFieldDescriptor,
   StudioModuleFieldLabelResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { reopenModuleFieldLabel, saveModuleFieldLabel } from "../module-field-label-actions";
 import { moduleSaveRefusal } from "./studio-refusal-messages";
 

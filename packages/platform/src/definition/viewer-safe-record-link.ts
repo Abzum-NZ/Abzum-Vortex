@@ -1,4 +1,4 @@
-import { platformPermissionSource } from "../access/platform-permissions";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
@@ -42,6 +42,8 @@ export type ViewerSafeRecordLinkServiceDependencies = HumanOrganizationRequestDe
   Readonly<{
     /** Compose the existing human installed-context loader for this request transaction and scope. */
     createInstalledContextLoader: ViewerSafeRecordLinkInstalledContextLoaderFactory;
+    /** The shipped platform permission catalogue a detail page requirement may name. */
+    permissions: PlatformPermissionSource;
     /** Server-composed addressed target lookup; absence never permits a guessed target root. */
     resolveTargetApplication?: (
       session: IdentitySession,
@@ -102,12 +104,13 @@ const permissionAction = (permission: PermissionDeclaration) => ({
 
 /** Check the detail page's own required permission under this viewer's resolved request. */
 const canOpenDetailPage = async (
+  permissions: PlatformPermissionSource,
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   context: InstalledRuntimeContext,
   page: PageDefinition,
 ): Promise<boolean> => {
-  const platform = platformPermissionSource().forKey(page.accessPermissionKey);
+  const platform = permissions.forKey(page.accessPermissionKey);
   let declaration: OrganizationAccessDeclaration;
   if (platform !== undefined) {
     declaration = {
@@ -116,7 +119,7 @@ const canOpenDetailPage = async (
       target: { kind: "organization" },
       requiredPermission: {
         ownerKind: "platform",
-        ownerId: platformPermissionSource().ownerId,
+        ownerId: permissions.ownerId,
         permissionId: platform.permissionId,
       },
       recentAuthentication: { kind: "none" },
@@ -244,7 +247,7 @@ export const createViewerSafeRecordLinkService = (
             });
             if (!currentContextMatches(context, identity)) return pinUnavailable;
             const page = matchingDetailPage(context, identity);
-            if (page === undefined || !(await canOpenDetailPage(transaction, scope, context, page)))
+            if (page === undefined || !(await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page)))
               return pinUnavailable;
             const titleRead = await records.read(transaction, scope, {
               identity,
@@ -294,7 +297,7 @@ export const createViewerSafeRecordLinkService = (
             const recordType = matchingRecordType(context, identity.data);
             const page = matchingDetailPage(context, identity.data);
             if (recordType === undefined || page === undefined) return unavailable;
-            if (!(await canOpenDetailPage(transaction, scope, context, page))) return unavailable;
+            if (!(await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page))) return unavailable;
 
             const titleRead = await records.read(transaction, scope, {
               identity: identity.data,

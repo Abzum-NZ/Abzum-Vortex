@@ -11,7 +11,8 @@ import {
   type PlatformBlockRelease,
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
-import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@web/platform-server";
+import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 /**
  * The publication catalogue every installed release was published against: every registered
@@ -22,6 +23,7 @@ import type { ImmutableDefinitionPublicationCatalogueDefinition } from "@web/pla
  * platform catalogue entry.
  */
 export const installedReleaseCatalogue: ImmutableDefinitionPublicationCatalogueDefinition = {
+  permissions: platformPermissionSource,
   connectionTypeReleases: PLATFORM_CONNECTION_TYPE_RELEASES,
   applicationComposition: {
     compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,

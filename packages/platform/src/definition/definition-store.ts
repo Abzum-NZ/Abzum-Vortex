@@ -14,6 +14,7 @@ import { requireBuilderAuthority, type BuilderAuthority } from "./builder-author
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import {
   DefinitionError,
   classifyDatabaseError,
@@ -128,8 +129,11 @@ const sourceFailureDetail = (validation: ReturnType<typeof validateDefinitionSou
   return `${path}: ${first.family} (${first.ruleCode})`;
 };
 
-const validateSource = (source: CreateDefinitionRootCommand["source"]) => {
-  const validation = validateDefinitionSource(source);
+const validateSource = (
+  source: CreateDefinitionRootCommand["source"],
+  permissions: PlatformPermissionSource,
+) => {
+  const validation = validateDefinitionSource(source, permissions);
   if (!validation.valid)
     throw new DefinitionError("INVALID_DEFINITION_SOURCE", {
       detail: sourceFailureDetail(validation),
@@ -137,10 +141,13 @@ const validateSource = (source: CreateDefinitionRootCommand["source"]) => {
   return source;
 };
 
-const invalidSourceDetail = (candidate: unknown): string | undefined => {
+const invalidSourceDetail = (
+  candidate: unknown,
+  permissions: PlatformPermissionSource,
+): string | undefined => {
   if (candidate === null || typeof candidate !== "object" || !("source" in candidate))
     return undefined;
-  const validation = validateDefinitionSource(candidate.source);
+  const validation = validateDefinitionSource(candidate.source, permissions);
   return validation.valid ? undefined : sourceFailureDetail(validation);
 };
 
@@ -211,6 +218,7 @@ type RootCreationMode =
 export const createDefinitionStore = (
   transaction: RequestDatabaseTransaction,
   authority: BuilderAuthority,
+  permissions: PlatformPermissionSource,
 ) => {
   const createRoot = async (
     candidate: CreateDefinitionRootCommand,
@@ -220,14 +228,14 @@ export const createDefinitionStore = (
     return safeStoreOperation("create_root", async () => {
       const command = createDefinitionRootCommandSchema.safeParse(candidate);
       if (!command.success) {
-        const sourceDetail = invalidSourceDetail(candidate);
+        const sourceDetail = invalidSourceDetail(candidate, permissions);
         if (sourceDetail)
           throw new DefinitionError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
         throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
           detail: commandIssueDetail(command.error),
         });
       }
-      const source = validateSource(command.data.source);
+      const source = validateSource(command.data.source, permissions);
       if (
         mode.kind === "trusted_application" &&
         (source.kind !== "application" ||
@@ -285,14 +293,14 @@ export const createDefinitionStore = (
       return safeStoreOperation("save_draft", async () => {
         const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
         if (!command.success) {
-          const sourceDetail = invalidSourceDetail(candidate);
+          const sourceDetail = invalidSourceDetail(candidate, permissions);
           if (sourceDetail)
             throw new DefinitionError("INVALID_DEFINITION_SOURCE", { detail: sourceDetail });
           throw new DefinitionError("INVALID_DEFINITION_COMMAND", {
             detail: commandIssueDetail(command.error),
           });
         }
-        const source = validateSource(command.data.source);
+        const source = validateSource(command.data.source, permissions);
         const sourceFingerprint = fingerprintCanonicalValue(source);
         const identityRequirements = extractStoredSourceIdentityRequirements(source);
         const rows = await transaction.query<StoredDraftRow>`

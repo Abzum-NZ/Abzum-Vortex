@@ -1,13 +1,13 @@
 import {
   createHumanOrganizationRequestService,
   type PermissionRegistryDefinitionSetReader,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationInstallationActivationRequestSchema,
   applicationInstallationPreparationRequestSchema,
   createApplicationInstallationCoordinator,
   type ApplicationInstallationCoordinatorDependencies,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   moduleRootIdSchema,
@@ -17,7 +17,7 @@ import {
   createDatabaseSystemApplicationBoundReleaseSetService,
   createDatabasePreparedInstallationRuntimeSourceService,
   resolveModuleContributions,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
 import { developmentPublicationCatalogue } from "./definitions";
 import {
@@ -30,7 +30,7 @@ import {
 import type { DevelopmentSetupManifest } from "./manifest";
 import { initializeLifecycleLimits, storeInitialLifecyclePolicies } from "./lifecycle";
 import type { PublishedRelease, SetupState } from "./state";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError } from "@vortex/platform/server";
 
 /**
  * Installs the exact published application releases for the nominated steward through the

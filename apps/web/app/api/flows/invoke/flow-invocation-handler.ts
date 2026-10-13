@@ -4,7 +4,7 @@ import {
   flowBindingInvocationSchema,
   type ProtectedOperationChannel,
 } from "@vortex/platform/schema";
-import { invokeInstalledFlow } from "@web/platform-server";
+import { invokeInstalledFlow } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import {
   loadApplicationPage,

@@ -11,11 +11,11 @@ import {
   translateDefinitionSchemaError,
   type DefinitionValidationLocation, type DefinitionValidationResult,
 } from "@vortex/platform/schema";
-import type { StoredModuleDefinitionDraft } from "@web/platform-server";
+import type { StoredModuleDefinitionDraft } from "@vortex/platform/server";
 import type {
   StudioModuleTextFieldDescriptor,
   StudioModuleTextFieldSettingsResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { reopenModuleTextFieldSettings, saveModuleTextFieldSettings } from "../modules/[organizationId]/[moduleRootId]/fields/actions";
 import { moduleSaveRefusal } from "./studio-refusal-messages";
 
