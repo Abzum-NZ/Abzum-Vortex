@@ -22,8 +22,9 @@ import {
   type FormFlowFeedback,
   type ProjectedPageCapability,
   type PlatformThemeTokens,
+  type ApplicationWebMcpRuntime,
 } from "@vortex/ui";
-import type { ReferenceChoiceSelectionEvidence } from "@vortex/platform/schema";
+import { describeFailure, type ReferenceChoiceSelectionEvidence } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Toaster, toast } from "@vortex/ui/components/sonner";
@@ -36,6 +37,7 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
+import type { PageWebMcpTool } from "../../../../../_lib/application-page";
 import { signOut } from "../../../../../auth/actions";
 import type {
   GuidedFormActions,
@@ -55,6 +57,10 @@ import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useRuntimeInputs } from "./use-runtime-inputs";
+import { WebMcpAdapter } from "./webmcp-adapter";
+
+const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
 export function ApplicationPageViewContent({
   model,
@@ -95,9 +101,9 @@ export function ApplicationPageViewContent({
   const [choicePagesOwner, setChoicePagesOwner] = useState(model);
   const activeChoicePages = choicePagesOwner === model ? choicePages : {};
   const activeDialogChoicePages = choicePagesOwner === model ? dialogChoicePages : {};
-  const [refreshedPlacementData, setRefreshedPlacementData] = useState<RefreshedPlacementData | undefined>(
-    undefined,
-  );
+  const [refreshedPlacementData, setRefreshedPlacementData] = useState<
+    RefreshedPlacementData | undefined
+  >(undefined);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   // A confirmation is a transient toast; a problem stays on the page as an alert until dismissed
   // by the next action, so it is never missed.
@@ -105,6 +111,11 @@ export function ApplicationPageViewContent({
     if (notice?.tone === "info") toast.success(notice.text);
   }, [notice]);
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
+  const [webMcpShellState, setWebMcpShellState] = useState<ApplicationWebMcpRuntime>();
+  const reportWebMcpShellState = useCallback(
+    (runtime: ApplicationWebMcpRuntime | undefined) => setWebMcpShellState(runtime),
+    [],
+  );
   const [busy, setBusy] = useState(false);
   const currentBusyRef = useRef(busy);
   currentBusyRef.current = busy;
@@ -121,19 +132,20 @@ export function ApplicationPageViewContent({
     ) => Promise<void>
   >(async () => undefined);
   const choiceRequestIdsRef = useRef<Record<string, number>>({});
-  const choiceSelectionsRef = useRef<Record<string, Readonly<{
-    key: string;
-    evidence: ReferenceChoiceSelectionEvidence;
-  }>>>({});
+  const choiceSelectionsRef = useRef<
+    Record<
+      string,
+      Readonly<{
+        key: string;
+        evidence: ReferenceChoiceSelectionEvidence;
+      }>
+    >
+  >({});
   const choiceDefaultContextsRef = useRef<Record<string, boolean>>({});
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
-  const {
-    unsavedWorkRegistry,
-    unsavedWork,
-    leavePromptOpen,
-    settleDiscardConfirmation,
-  } = useUnsavedWorkPrompt({ router });
+  const { unsavedWorkRegistry, unsavedWork, leavePromptOpen, settleDiscardConfirmation } =
+    useUnsavedWorkPrompt({ router });
 
   const application = model.invocation;
   const formOwners = useMemo(
@@ -164,7 +176,7 @@ export function ApplicationPageViewContent({
   const subject =
     refreshedPlacementData?.navigationKey === navigationKey &&
     refreshedPlacementData.subject !== undefined
-      ? refreshedPlacementData.subject ?? undefined
+      ? (refreshedPlacementData.subject ?? undefined)
       : model.subject;
   const currentPageKey = model.pages.find(
     (page) => page.pageId.toLowerCase() === model.pageId.toLowerCase(),
@@ -235,7 +247,7 @@ export function ApplicationPageViewContent({
     requestChoicePageRef,
   });
 
-  const { formBlock, flowRuntime, intentHostElement } = useFlowRuntime({
+  const { formBlock, flowRuntime, webMcpRuntime, intentHostElement } = useFlowRuntime({
     application,
     subject,
     continuingFormsRef,
@@ -287,6 +299,57 @@ export function ApplicationPageViewContent({
     refreshPlacements,
     refreshTargetsForBinding,
   });
+
+  const invokeWebMcpTool = useCallback(
+    async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
+      if (signal?.aborted) return { outcome: "cancelled" };
+      if (currentBusyRef.current) return { outcome: "busy" };
+      if (!isRecord(input)) return { outcome: "refused" };
+      currentBusyRef.current = true;
+      setBusy(true);
+      setNotice(undefined);
+      try {
+        const dispatch = await webMcpRuntime.dispatchReference(
+          tool.binding,
+          input,
+          undefined,
+          signal,
+        );
+        await applyDispatch(
+          Promise.resolve(dispatch),
+          undefined,
+          undefined,
+          tool.binding.bindingId,
+        );
+        if (signal?.aborted) return { outcome: "cancelled" };
+        if (dispatch.ranIn !== "server") return { outcome: "unavailable" };
+        const result = dispatch.result;
+        if (result.kind === "finished")
+          return {
+            outcome: result.descriptor.outcome,
+            ...(result.descriptor.outputs === "available" ? { outputs: result.outputs } : {}),
+          };
+        return { outcome: result.kind };
+      } catch (error) {
+        console.error(`[webmcp] flow dispatch failed for ${tool.name}: ${describeFailure(error)}`);
+        return { outcome: "unavailable" };
+      } finally {
+        currentBusyRef.current = false;
+        setBusy(false);
+      }
+    },
+    [applyDispatch, webMcpRuntime],
+  );
+
+  const webMcpContextKey = JSON.stringify([
+    model.accessVersion,
+    application.tenantShortName,
+    application.organizationShortName,
+    application.applicationKey,
+    application.pageKey,
+    application.installationRevision,
+    application.releaseKey,
+  ]);
 
   const {
     guidedActiveFormIds,
@@ -397,7 +460,10 @@ export function ApplicationPageViewContent({
               formData.set("applicationKey", model.invocation.applicationKey);
               formData.set("pageKey", model.invocation.pageKey);
               formData.set("targetReleaseRevision", String(releaseAdoption.offeredReleaseRevision));
-              formData.set("expectedActiveReleaseRevision", String(releaseAdoption.installedReleaseRevision));
+              formData.set(
+                "expectedActiveReleaseRevision",
+                String(releaseAdoption.installedReleaseRevision),
+              );
               await adoptReleaseAction(formData);
             },
           },
@@ -426,72 +492,82 @@ export function ApplicationPageViewContent({
       name: candidate.name,
       href: `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
     })),
+    ...(webMcpShellState === undefined ? {} : { webMcp: webMcpShellState }),
   };
 
   return (
     <>
       <ApplicationAccountActionsProvider actions={accountActions}>
-      <div ref={compositionRootRef} className="contents">
-      <PagePuckRenderer
-        overlay={<Toaster position="bottom-right" />}
-        themeMode="system"
-        applicationSurface
-        feedback={pageFeedback === undefined && (notice === undefined || notice.tone === "info") &&
-          model.bodyContentAvailable !== false ? undefined : (
-          <>
-            {pageFeedback}
-            {model.bodyContentAvailable !== false ? null : (
-              <Alert role="status" aria-live="polite">
-                <AlertDescription>No page content is available.</AlertDescription>
-              </Alert>
-            )}
-            {notice === undefined || notice.tone === "info" ? null : (
-              <Alert
-                variant={notice.tone === "problem" ? "destructive" : "default"}
-                role={notice.tone === "problem" ? "alert" : "status"}
-                aria-live="polite"
-                data-vortex-notice={notice.tone}
-              >
-                <AlertDescription>{notice.text}</AlertDescription>
-              </Alert>
-            )}
-          </>
-        )}
-        composition={model.page as unknown as ProjectedPageCapability}
-        registry={platformComponentRegistry}
-        fieldInputControlReleases={fieldInputControlReleases}
-        platformThemeTokens={platformThemeTokens}
-        shells={model.shells}
-        {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
-        applicationShellRuntime={applicationShellRuntime}
-        applicationSearch={applicationSearch}
-        applicationSearchPageSubject={applicationSearchPageSubject}
-        pageId={model.pageId}
-        theme={model.theme}
-        projectedNavigation={model.navigation}
-        resolvePageHref={resolvePageHref}
-        currentPageId={model.pageId}
-        {...(model.guidedForm === undefined
-          ? {}
-          : {
-              activeStepId: model.guidedForm.activeStepId,
-              guidedSummaryValues: model.guidedForm.values,
-            })}
-        runtimeInputs={runtimeInputs}
-        {...(model.guidedForm === undefined
-          ? {}
-          : {
-              guidedStepNavigation: {
-                  disabled: busy || guidedFormCompleted,
-                  onBack: () => {
-                    if (guidedPreviousStepId !== undefined)
-                      requestGuidedStep(guidedPreviousStepId);
+        <div ref={compositionRootRef} className="contents">
+          <WebMcpAdapter
+            contextKey={webMcpContextKey}
+            tools={model.webMcpTools}
+            onInvoke={invokeWebMcpTool}
+            onStatusChange={reportWebMcpShellState}
+          />
+          <PagePuckRenderer
+            overlay={<Toaster position="bottom-right" />}
+            themeMode="system"
+            applicationSurface
+            feedback={
+              pageFeedback === undefined &&
+              (notice === undefined || notice.tone === "info") &&
+              model.bodyContentAvailable !== false ? undefined : (
+                <>
+                  {pageFeedback}
+                  {model.bodyContentAvailable !== false ? null : (
+                    <Alert role="status" aria-live="polite">
+                      <AlertDescription>No page content is available.</AlertDescription>
+                    </Alert>
+                  )}
+                  {notice === undefined || notice.tone === "info" ? null : (
+                    <Alert
+                      variant={notice.tone === "problem" ? "destructive" : "default"}
+                      role={notice.tone === "problem" ? "alert" : "status"}
+                      aria-live="polite"
+                      data-vortex-notice={notice.tone}
+                    >
+                      <AlertDescription>{notice.text}</AlertDescription>
+                    </Alert>
+                  )}
+                </>
+              )
+            }
+            composition={model.page as unknown as ProjectedPageCapability}
+            registry={platformComponentRegistry}
+            fieldInputControlReleases={fieldInputControlReleases}
+            platformThemeTokens={platformThemeTokens}
+            shells={model.shells}
+            {...(model.applicationShell === undefined ? {} : { shell: model.applicationShell })}
+            applicationShellRuntime={applicationShellRuntime}
+            applicationSearch={applicationSearch}
+            applicationSearchPageSubject={applicationSearchPageSubject}
+            pageId={model.pageId}
+            theme={model.theme}
+            projectedNavigation={model.navigation}
+            resolvePageHref={resolvePageHref}
+            currentPageId={model.pageId}
+            {...(model.guidedForm === undefined
+              ? {}
+              : {
+                  activeStepId: model.guidedForm.activeStepId,
+                  guidedSummaryValues: model.guidedForm.values,
+                })}
+            runtimeInputs={runtimeInputs}
+            {...(model.guidedForm === undefined
+              ? {}
+              : {
+                  guidedStepNavigation: {
+                    disabled: busy || guidedFormCompleted,
+                    onBack: () => {
+                      if (guidedPreviousStepId !== undefined)
+                        requestGuidedStep(guidedPreviousStepId);
+                    },
+                    onNext: () => requestGuidedStep(),
                   },
-                  onNext: () => requestGuidedStep(),
-              },
-            })}
-      />
-      </div>
+                })}
+          />
+        </div>
       </ApplicationAccountActionsProvider>
       {intentHostElement}
       <Dialog
