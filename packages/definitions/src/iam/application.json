@@ -3474,7 +3474,7 @@
                 "theme_overrides": {},
                 "responsive": {
                   "desktop": {
-                    "visible": true,
+                    "visible": false,
                     "width": {
                       "kind": "fill"
                     },
@@ -3730,39 +3730,6 @@
                           }
                         },
                         "slots": {}
-                      },
-                      "button_accept_application_role_template": {
-                        "block": {
-                          "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                          "release_version": "1.0.0"
-                        },
-                        "settings": {
-                          "label": {
-                            "kind": "text",
-                            "value": "Accept role template"
-                          },
-                          "action_kind": {
-                            "kind": "choice",
-                            "value": "action"
-                          },
-                          "variant": {
-                            "kind": "choice",
-                            "value": "primary"
-                          }
-                        },
-                        "theme_overrides": {},
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        },
-                        "slots": {}
                       }
                     },
                     "order": {
@@ -3772,12 +3739,44 @@
                         "input_accept_application_role_template_role_key",
                         "input_accept_application_role_template_label",
                         "input_accept_application_role_template_description",
-                        "input_accept_application_role_template_privilege_classification",
-                        "button_accept_application_role_template"
+                        "input_accept_application_role_template_privilege_classification"
                       ]
                     }
                   }
                 }
+              },
+              "button_accept_application_role_template": {
+                "block": {
+                  "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                  "release_version": "1.0.0"
+                },
+                "settings": {
+                  "label": {
+                    "kind": "text",
+                    "value": "Accept role template"
+                  },
+                  "action_kind": {
+                    "kind": "choice",
+                    "value": "action"
+                  },
+                  "variant": {
+                    "kind": "choice",
+                    "value": "primary"
+                  }
+                },
+                "theme_overrides": {},
+                "responsive": {
+                  "desktop": {
+                    "visible": true,
+                    "width": {
+                      "kind": "fill"
+                    },
+                    "height": {
+                      "kind": "content"
+                    }
+                  }
+                },
+                "slots": {}
               }
             },
             "order": {
@@ -3787,6 +3786,7 @@
                 "form_create_group",
                 "form_rename_group",
                 "form_create_custom_role",
+                "button_accept_application_role_template",
                 "form_accept_application_role_template"
               ]
             }
