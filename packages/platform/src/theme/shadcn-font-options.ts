@@ -8,7 +8,6 @@ export type ShadcnFontOption = Readonly<{
 }>;
 
 type ShadcnFontOptionsDocument = Readonly<{
-  defaults: Readonly<{ bodyFont: string; headingFont: string }>;
   headingInherit: string;
   fonts: readonly ShadcnFontOption[];
 }>;
@@ -42,17 +41,17 @@ const SANS_FALLBACK =
 export const shadcnFontStack = (font: ShadcnFontOption): string =>
   `"${font.family}", ${CATEGORY_FALLBACKS[font.category] ?? SANS_FALLBACK}`;
 
-const defaultBody = findShadcnFont(fontOptions.defaults.bodyFont);
-if (defaultBody === undefined)
-  throw new Error(`Font options omit their default body font "${fontOptions.defaults.bodyFont}"`);
-
-/** Default body and heading fonts used by the current platform theme release. */
+/** The body and heading fonts a selection paints with; `inherit` paints headings in the body font. */
 export const resolveShadcnFontSelection = (
-  selection?: Readonly<{ bodyFont?: string | undefined; headingFont?: string | undefined }>,
+  selection: Readonly<{ bodyFont: string; headingFont: string }>,
 ): Readonly<{ body: ShadcnFontOption; heading: ShadcnFontOption }> => {
-  const body = findShadcnFont(selection?.bodyFont ?? "") ?? defaultBody;
-  const headingOption = selection?.headingFont ?? fontOptions.defaults.headingFont;
+  const requireFont = (id: string): ShadcnFontOption => {
+    const font = findShadcnFont(id);
+    if (font === undefined) throw new Error(`The font options do not offer "${id}"`);
+    return font;
+  };
+  const body = requireFont(selection.bodyFont);
   const heading =
-    headingOption === SHADCN_HEADING_FONT_INHERIT ? body : (findShadcnFont(headingOption) ?? body);
+    selection.headingFont === SHADCN_HEADING_FONT_INHERIT ? body : requireFont(selection.headingFont);
   return { body, heading };
 };

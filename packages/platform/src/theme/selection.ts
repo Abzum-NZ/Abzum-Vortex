@@ -136,14 +136,14 @@ const checkSelectionOptions = (
       continue;
     }
   }
-  if (selection.iconLibrary !== undefined && !isShadcnIconLibrary(selection.iconLibrary))
+  if (!isShadcnIconLibrary(selection.iconLibrary))
     addFailure({
       code: "UNKNOWN_THEME_OPTION",
       family: "invalid_value",
       message: `Theme selection names unknown iconLibrary option "${selection.iconLibrary}"`,
       dimension: "iconLibrary",
     });
-  if (selection.bodyFont !== undefined && findShadcnFont(selection.bodyFont) === undefined)
+  if (findShadcnFont(selection.bodyFont) === undefined)
     addFailure({
       code: "UNKNOWN_THEME_OPTION",
       family: "invalid_value",
@@ -151,7 +151,6 @@ const checkSelectionOptions = (
       dimension: "bodyFont",
     });
   if (
-    selection.headingFont !== undefined &&
     selection.headingFont !== SHADCN_HEADING_FONT_INHERIT &&
     findShadcnFont(selection.headingFont) === undefined
   )

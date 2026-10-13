@@ -2,7 +2,6 @@ import "server-only";
 
 import type {
   ApplicationContent,
-  BuilderKey,
   DefinitionValidationLocation,
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
@@ -41,25 +40,6 @@ export type ContrastPairDeclaration = Readonly<{
   label?: string | undefined;
 }>;
 
-export type ComponentThemeOverrideContext = Readonly<{
-  /**
-   * Component-level theme overrides (token key -> ThemeTokenValue).
-   */
-  overrides?: Readonly<Record<string, ThemeTokenValue>> | undefined;
-  /**
-   * Permitted token kinds for this component.
-   * If omitted, all registered token kinds from themeTokenKindSchema are permitted.
-   */
-  permittedTokenKinds?:
-    | ReadonlySet<ThemeTokenKind>
-    | readonly ThemeTokenKind[]
-    | undefined;
-  /** Display-safe definition keys/aliases used only to locate a refusal. */
-  pageKey?: BuilderKey | undefined;
-  componentKey?: NamespacedKey | undefined;
-  placementAlias?: BuilderKey | undefined;
-}>;
-
 export type ThemeResolutionOptions = Readonly<{
   /** Exact approval evidence supplied by the trusted publication/runtime caller. */
   approvedAssetIds?: ReadonlySet<PlatformId> | readonly PlatformId[] | undefined;
@@ -67,22 +47,6 @@ export type ThemeResolutionOptions = Readonly<{
   publicAssetIds?: ReadonlySet<PlatformId> | readonly PlatformId[] | undefined;
   contrastPairs?: readonly ContrastPairDeclaration[] | undefined;
   documentKey?: NamespacedKey | undefined;
-}>;
-
-export type ThemeResolutionInput = Readonly<{
-  theme: ApplicationTheme;
-  componentOverrideContext?: ComponentThemeOverrideContext | undefined;
-  options?: ThemeResolutionOptions | undefined;
-}>;
-
-export type ResolvedTheme = Readonly<{
-  base: ExactPlatformThemeDependency;
-  /**
-   * The catalogue-backed shadcn style id the theme selects; the platform default style when the
-   * theme records no selection (a theme pinned to an earlier release than the catalogue's base).
-   */
-  style: string;
-  tokens: Readonly<Record<string, ThemeTokenValue>>;
 }>;
 
 export type ThemeValidationFailure = Readonly<{

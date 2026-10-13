@@ -49,14 +49,6 @@ const requireFont = (id: string): ShadcnFont => {
   return font;
 };
 
-/** The pinned preset's default body font, which a selection that names none paints with. */
-export const DEFAULT_SHADCN_BODY_FONT: ShadcnFont = requireFont(
-  shadcnFontCatalogue.defaults.bodyFont,
-);
-
-/** The pinned preset's default heading font option (`inherit`: the body font). */
-export const DEFAULT_SHADCN_HEADING_FONT: string = shadcnFontCatalogue.defaults.headingFont;
-
 /**
  * Typography tokens name their family by builder key (lowercase words joined by underscores), so a
  * catalogue font's family key is its id with underscores: `source-sans-3` is `source_sans_3`.
@@ -82,16 +74,14 @@ export const shadcnFontStack = (font: ShadcnFont): string =>
   `"${font.family}", ${CATEGORY_FALLBACKS[font.category] ?? SANS_FALLBACK}`;
 
 /**
- * The body and heading fonts a selection paints with. An absent body font is the catalogue default;
- * an absent heading font is the default heading option; `inherit` paints headings in the body font.
- * Unknown ids resolve to the defaults here; the theme resolution refuses them before this is used.
+ * The body and heading fonts a selection paints with; `inherit` paints headings in the body font.
+ * The theme resolution refuses unknown ids before this is used.
  */
 export const resolveShadcnFontSelection = (
-  selection?: Readonly<{ bodyFont?: string | undefined; headingFont?: string | undefined }>,
+  selection: Readonly<{ bodyFont: string; headingFont: string }>,
 ): Readonly<{ body: ShadcnFont; heading: ShadcnFont }> => {
-  const body = findShadcnFont(selection?.bodyFont ?? "") ?? DEFAULT_SHADCN_BODY_FONT;
-  const headingOption = selection?.headingFont ?? DEFAULT_SHADCN_HEADING_FONT;
+  const body = requireFont(selection.bodyFont);
   const heading =
-    headingOption === SHADCN_HEADING_FONT_INHERIT ? body : (findShadcnFont(headingOption) ?? body);
+    selection.headingFont === SHADCN_HEADING_FONT_INHERIT ? body : requireFont(selection.headingFont);
   return { body, heading };
 };

@@ -20,6 +20,9 @@ const selection = sourceApplicationThemeSelectionSchema.parse({
   radius: "large",
   menu_color: "default",
   menu_accent: "bold",
+  icon_library: "lucide",
+  body_font: "inter",
+  heading_font: "inherit",
 });
 
 /** CRM's current Application source; all placements use the shared registered block catalogue. */

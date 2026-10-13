@@ -63,39 +63,3 @@ export function createLocatedFailure(params: {
 
   return { failure, ruleFailure };
 }
-
-export class ThemeResolutionError extends Error {
-  readonly code: string;
-  readonly ruleCode: string;
-  readonly family: DefinitionRuleFailureFamily;
-  readonly location: DefinitionValidationLocation | undefined;
-  readonly failures: readonly ThemeValidationFailure[];
-  readonly ruleFailures: readonly DefinitionRuleFailure[];
-
-  constructor(
-    message: string,
-    failures: readonly ThemeValidationFailure[],
-    ruleFailures: readonly DefinitionRuleFailure[],
-  ) {
-    super(message);
-    this.name = "ThemeResolutionError";
-    const primary = failures[0];
-    this.code = primary?.code ?? "THEME_RESOLUTION_FAILED";
-    this.ruleCode = primary?.ruleCode ?? THEME_DEFAULT_RULE_CODE;
-    this.family = primary?.family ?? "invalid_value";
-    this.location = primary?.location;
-    this.failures = failures;
-    this.ruleFailures = ruleFailures;
-  }
-}
-
-export class ThemeValidationError extends ThemeResolutionError {
-  constructor(
-    failures: readonly ThemeValidationFailure[],
-    ruleFailures: readonly DefinitionRuleFailure[],
-  ) {
-    const primary = failures[0];
-    super(primary?.message ?? "Theme validation failed", failures, ruleFailures);
-    this.name = "ThemeValidationError";
-  }
-}

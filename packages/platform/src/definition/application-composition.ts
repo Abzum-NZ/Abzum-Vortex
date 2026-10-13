@@ -2015,13 +2015,11 @@ export const themeCatalogueOptionIdSchema = z
  * id, a refused option or a missing dimension.
  *
  * The icon library names one of the shadcn/create icon libraries
- * (`../pages/shadcn-icon-libraries.ts`). It is optional so selections recorded before the icon
- * catalogue keep their meaning: an absent icon library is the catalogue default.
+ * (`../pages/shadcn-icon-libraries.ts`).
  *
  * The body and heading fonts name fonts of the shadcn/create font catalogue
  * (`../theme/shadcn-font-catalogue.ts`); the heading font may also be `inherit`, which paints
- * headings in the body font. They are optional so selections recorded before the font catalogue
- * keep their meaning: an absent font is the catalogue's default.
+ * headings in the body font.
  */
 export const applicationThemeSelectionSchema = z
   .object({
@@ -2032,9 +2030,9 @@ export const applicationThemeSelectionSchema = z
     radius: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
     menuColor: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
     menuAccent: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
-    iconLibrary: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
-    bodyFont: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
-    headingFont: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
+    iconLibrary: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    bodyFont: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    headingFont: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
   })
   .strict();
 export type ApplicationThemeSelection = z.infer<typeof applicationThemeSelectionSchema>;
@@ -2052,9 +2050,9 @@ export const sourceApplicationThemeSelectionSchema = z
     radius: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
     menu_color: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
     menu_accent: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
-    icon_library: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
-    body_font: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
-    heading_font: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema.optional()),
+    icon_library: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    body_font: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
+    heading_font: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
   })
   .strict();
 export type SourceApplicationThemeSelection = z.infer<typeof sourceApplicationThemeSelectionSchema>;
@@ -2068,6 +2066,9 @@ export const DEFAULT_APPLICATION_THEME_SELECTION = applicationThemeSelectionSche
   radius: "default",
   menuColor: "default",
   menuAccent: "subtle",
+  iconLibrary: "lucide",
+  bodyFont: "inter",
+  headingFont: "inherit",
 });
 
 export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION = sourceApplicationThemeSelectionSchema.parse({
@@ -2078,6 +2079,9 @@ export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION = sourceApplicationTheme
   radius: "default",
   menu_color: "default",
   menu_accent: "subtle",
+  icon_library: "lucide",
+  body_font: "inter",
+  heading_font: "inherit",
 });
 
 /** Maps an authored selection onto its canonical form. */
@@ -2091,9 +2095,9 @@ export const canonicalApplicationThemeSelection = (
   radius: source.radius,
   menuColor: source.menu_color,
   menuAccent: source.menu_accent,
-  ...(source.icon_library === undefined ? {} : { iconLibrary: source.icon_library }),
-  ...(source.body_font === undefined ? {} : { bodyFont: source.body_font }),
-  ...(source.heading_font === undefined ? {} : { headingFont: source.heading_font }),
+  iconLibrary: source.icon_library,
+  bodyFont: source.body_font,
+  headingFont: source.heading_font,
 });
 
 /**
