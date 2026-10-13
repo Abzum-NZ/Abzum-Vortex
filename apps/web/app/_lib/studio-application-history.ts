@@ -74,6 +74,8 @@ type ExpectedSnapshot = z.infer<typeof expectedSnapshotSchema>;
 class HistoryRefused extends Error {}
 class HistoryConflict extends Error {}
 class HistoryStorageUnavailable extends Error {}
+/** The root does not exist, is foreign to this organization or is not an application: the classifier answers one `unavailable`. */
+class HistoryRootMissing extends Error {}
 
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new HistoryRefused();
@@ -81,6 +83,7 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
     select outcome, application_origin_kind
     from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
   `;
+  if (rows.length === 1 && rows[0]?.outcome === "unavailable") throw new HistoryRootMissing();
   if (rows.length !== 1 || rows[0]?.outcome !== "available" ||
     rows[0]?.application_origin_kind !== "ordinary") throw new HistoryRefused();
   return { isSystemApplication: false };
@@ -112,6 +115,8 @@ const safeFailure = (error: unknown): StudioApplicationHistoryFailure => {
     return declined({ kind: "conflict", reason: "draft_changed" }, error);
   if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
     return declined({ kind: "conflict", reason: "draft_changed" }, error);
+  if (error instanceof HistoryRootMissing)
+    return declined({ kind: "refused", reason: "draft_missing" }, error);
   if (error instanceof BuilderAuthorityError)
     return declined({ kind: "refused", reason: error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
       ? "recent_authentication_required" : "permission_missing" }, error);

@@ -321,6 +321,10 @@ export const loadStudioApplicationDraft = async (
         } catch (error) {
           const reason = builderRefusalReason(error);
           if (reason !== undefined) return { kind: "refused", reason };
+          // The request runner replaces a thrown error with a bare failure, so the missing-root
+          // marker must be answered here, inside the request, to reach the page as its real reason.
+          if (error instanceof Error && error.message === "STUDIO_DRAFT_UNAVAILABLE")
+            return { kind: "refused", reason: "draft_missing" };
           throw error;
         }
         const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
