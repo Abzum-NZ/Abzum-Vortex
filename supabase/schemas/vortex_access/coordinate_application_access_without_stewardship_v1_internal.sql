@@ -482,8 +482,7 @@ begin
       revision.label, revision.description, revision.source_definition_key,
       revision.source_release_revision, revision.source_release_version,
       revision.source_validation_contract_version,
-      revision.source_content_fingerprint, revision.source_resolution_fingerprint,
-      revision.source_catalogue_fingerprint, revision.accepted_registration_revision,
+      revision.accepted_registration_revision,
       revision.template_continuity_revision
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
@@ -645,9 +644,7 @@ begin
       activation_policy_id,
       activation_policy_revision, role_key,
       label, description, source_definition_key, source_release_revision,
-      source_release_version, source_validation_contract_version,
-      source_content_fingerprint, source_resolution_fingerprint,
-      source_catalogue_fingerprint, accepted_registration_revision,
+      source_release_version, source_validation_contract_version, accepted_registration_revision,
       template_continuity_revision,
       changed_by, changed_at, change_correlation_id
     ) values (
@@ -662,9 +659,6 @@ begin
       role_record.source_definition_key, role_record.source_release_revision,
       role_record.source_release_version,
       role_record.source_validation_contract_version,
-      role_record.source_content_fingerprint,
-      role_record.source_resolution_fingerprint,
-      role_record.source_catalogue_fingerprint,
       role_record.accepted_registration_revision,
       role_record.template_continuity_revision,
       p_changed_by,
@@ -692,8 +686,6 @@ exception
       message = 'Coordinated application access input is invalid';
 end
 $_$;
-
-ALTER FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) IS 'Internal application-access implementation retained only behind the stewardship safeguard.';
 

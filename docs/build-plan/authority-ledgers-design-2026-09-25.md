@@ -63,21 +63,18 @@ Abbreviations for the direct writers:
 
 The public `coordinate_organization_role_change` and `coordinate_application_access_change` are steward-check wrappers. They write nothing directly. So do their callers `retire_organization_role_for_administration` and `coordinate_private_organization_role_authority_change`.
 
-### 2.1 The nine source fingerprints
+### 2.1 Historical source fingerprint inventory
 
-Every fingerprint is `text` in the form `sha256:` followed by 64 hex characters.
+This table records the earlier ledger design. The role-revision content, resolution and catalogue mirrors have been removed; the remaining entries are historical context. Fingerprints used `text` in the form `sha256:` followed by 64 hex characters.
 
 | # | Column (table) | Meaning | Direct writers | Direct readers | Check it protects |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `source_content_fingerprint` (revisions) | exact published release content | RoleInt, AppInt, StewAdopt, ConnCat; RevMeta copies forward | `validate_organization_role_revision_evidence`; RoleInt's "acceptance must change evidence" comparison | an application role is bound to one exact release |
-| 2 | `source_resolution_fingerprint` (revisions) | resolved dependency set of that release | same | same | same, for bound modules |
 | 3 | `source_template_fingerprint` (revisions) | exact supplied role template | same | `application_access_current_state_matches_candidate`, RoleInt, AppInt | a template change is detected and needs acceptance |
-| 4 | `source_catalogue_fingerprint` (revisions) | exact permission catalogue revision | same | `validate_organization_role_revision_evidence`, RoleInt | acceptance names the catalogue it was made against |
 | 5 | `accepted_grant_fingerprint` (revisions) | the exact explicit acceptance decision | same (required on `accept_new_application_role` / `accept_application_role_revision`) | RoleInt only | an explicit acceptance must change accepted evidence (it cannot replay an older acceptance) |
 | 6 | `activation_policy_fingerprint` (revisions) | exact activation policy identity | same | `evaluate_permission_role_path_internal`, `validate_organization_role_activation_insert`, `protect_organization_role_activation`, `validate_organization_role_revision_evidence`, `coordinate_organization_role_activation_change`, `read_current_application_role_ids_for_launcher`, `read_organization_role_activation`, administration reads, `project_organization_role_change_summary` | an activation is bound to the exact policy it satisfied |
 | 7–9 | `derived_source_content/resolution/template_fingerprint` (`organization_roles`) | where a custom role was copied from (copy provenance) | RoleInt, StewAdopt | `protect_organization_role_identity` (immutability only); returned in `derivedFromTemplate` in RoleInt's role result | **none**: no access decision reads them |
 
-Fingerprints 1–5 are acceptance provenance, and several of them feed the acceptance checks in RoleInt and AppInt. Fingerprint 6 is policy identity. Fingerprints 7–9 are display provenance only.
+The original inventory grouped entries 1–5 as acceptance provenance, 6 as policy identity and 7–9 as display provenance.
 
 ### 2.2 Continuity numbers and continuity tables
 

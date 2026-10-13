@@ -224,9 +224,7 @@ begin
     activation_policy_id, activation_policy_revision,
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint,
-    source_catalogue_fingerprint, accepted_registration_revision,
+    source_validation_contract_version, accepted_registration_revision,
     template_continuity_revision,
     changed_by, changed_at, change_correlation_id
   ) values (
@@ -240,9 +238,6 @@ begin
     p_label, p_description, revision_fact.source_definition_key,
     revision_fact.source_release_revision, revision_fact.source_release_version,
     revision_fact.source_validation_contract_version,
-    revision_fact.source_content_fingerprint,
-    revision_fact.source_resolution_fingerprint,
-    revision_fact.source_catalogue_fingerprint,
     revision_fact.accepted_registration_revision,
     revision_fact.template_continuity_revision,
     context_account_id, operation_at, context_correlation_id
