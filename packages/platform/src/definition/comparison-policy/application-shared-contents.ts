@@ -1,0 +1,663 @@
+import type { ApplicationContent, VersionImpactReason } from "../../schema";
+import {
+  type RecordValue,
+  compareUnknownText,
+  asRecord,
+  same,
+  makeReason,
+  pushChange,
+  compareSet,
+  compareBound,
+  compareKeyed,
+  finaliseReasons,
+  sorted,
+} from "./shared";
+import {
+  compareAction,
+  compareSimpleComponent,
+  compareFlow,
+  compareEvent,
+} from "./module-contents";
+
+export const compareSharingCondition = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const id = candidate.conditionId;
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "sharing_condition",
+    "key",
+    id,
+  );
+  for (const key of ["sourceRecordTypeId", "parameters", "condition", "declaredFieldIds"])
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "major",
+      "public_contract_changed",
+      "sharing_condition",
+      "behavior",
+      id,
+    );
+  const previousTests = previous.publicationTests as RecordValue[];
+  const candidateTests = candidate.publicationTests as RecordValue[];
+  const testSemantics = (tests: RecordValue[]) =>
+    sorted(
+      tests.map((test) => ({
+        parameters: test.parameters,
+        fieldValues: test.fieldValues,
+        expected: test.expected,
+      })),
+    );
+  if (!same(testSemantics(previousTests), testSemantics(candidateTests)))
+    reasons.push(
+      makeReason("major", "existing_behavior_changed", "sharing_condition", "behavior", id),
+    );
+  else
+    pushChange(
+      reasons,
+      previousTests,
+      candidateTests,
+      "patch",
+      "definition_text_changed",
+      "sharing_condition",
+      "configuration",
+      id,
+    );
+};
+
+/**
+ * The definition-wide comparison every Application release shares. Shells, pages, placements and
+ * the theme carry their own current-contract comparison in compareApplicationContents.
+ */
+export const compareApplicationSharedContent = (
+  previousContent: ApplicationContent,
+  candidateContent: ApplicationContent,
+): VersionImpactReason[] => {
+  const reasons: VersionImpactReason[] = [];
+  const previous = asRecord(previousContent);
+  const candidate = asRecord(candidateContent);
+  pushChange(
+    reasons,
+    previous.search,
+    candidate.search,
+    "major",
+    "presentation_changed",
+    "application",
+    "configuration",
+  );
+  for (const key of ["name", "description", "icon"])
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "patch",
+      key === "icon" ? "presentation_changed" : "definition_text_changed",
+      "application",
+      key === "description" ? "description" : "name",
+    );
+  compareKeyed(
+    reasons,
+    previous.moduleBindings as RecordValue[],
+    candidate.moduleBindings as RecordValue[],
+    "moduleRootId",
+    "module_binding",
+    (left, right) =>
+      compareSimpleComponent(
+        reasons,
+        "module_binding",
+        right.moduleRootId,
+        left,
+        right,
+        [],
+        "purpose",
+      ),
+    () => "major",
+  );
+  compareNavigation(
+    reasons,
+    previous.navigation as RecordValue[],
+    candidate.navigation as RecordValue[],
+  );
+  compareKeyed(
+    reasons,
+    previous.roles as RecordValue[],
+    candidate.roles as RecordValue[],
+    "roleId",
+    "role",
+    (left, right) => compareRole(reasons, left, right),
+  );
+  comparePermissions(
+    reasons,
+    previous.permissions as RecordValue[],
+    candidate.permissions as RecordValue[],
+  );
+  compareKeyed(
+    reasons,
+    previous.queries as RecordValue[],
+    candidate.queries as RecordValue[],
+    "queryId",
+    "query",
+    (left, right) => compareSimpleComponent(reasons, "query", right.queryId, left, right),
+  );
+  compareKeyed(
+    reasons,
+    previous.pipelines as RecordValue[],
+    candidate.pipelines as RecordValue[],
+    "pipelineId",
+    "pipeline",
+    (left, right) => comparePipeline(reasons, left, right),
+    () => "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.actions as RecordValue[],
+    candidate.actions as RecordValue[],
+    "actionId",
+    "action",
+    (left, right) => compareAction(reasons, left, right),
+  );
+  compareKeyed(
+    reasons,
+    previous.events as RecordValue[],
+    candidate.events as RecordValue[],
+    "eventId",
+    "event",
+    (left, right) => compareEvent(reasons, left, right),
+  );
+  compareKeyed(
+    reasons,
+    previous.connectionBindings as RecordValue[],
+    candidate.connectionBindings as RecordValue[],
+    "bindingId",
+    "connection_binding",
+    (left, right) =>
+      compareSimpleComponent(reasons, "connection_binding", right.bindingId, left, right),
+    () => "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.interfaces as RecordValue[],
+    candidate.interfaces as RecordValue[],
+    "interfaceId",
+    "interface",
+    (left, right) => compareInterface(reasons, left, right),
+    (definition) =>
+      (definition.operations as RecordValue[]).every(isPrivateInterfaceOperation)
+        ? "minor"
+        : "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.publicAddresses as RecordValue[],
+    candidate.publicAddresses as RecordValue[],
+    "addressId",
+    "public_address",
+    (left, right) =>
+      compareSimpleComponent(reasons, "public_address", right.addressId, left, right),
+    () => "major",
+  );
+  compareKeyed(
+    reasons,
+    previous.flows as RecordValue[],
+    candidate.flows as RecordValue[],
+    "id",
+    "flow",
+    (left, right) => compareFlow(reasons, left, right),
+  );
+  const flowBindingKey = (item: RecordValue) => String(item.bindingId);
+  const previousFlowBindings = (previous.flowBindings as RecordValue[]).map((b) => ({
+    ...b,
+    _flowBindingKey: flowBindingKey(b),
+  }));
+  const candidateFlowBindings = (candidate.flowBindings as RecordValue[]).map((b) => ({
+    ...b,
+    _flowBindingKey: flowBindingKey(b),
+  }));
+  compareKeyed(
+    reasons,
+    previousFlowBindings,
+    candidateFlowBindings,
+    "_flowBindingKey",
+    "flow_binding",
+    (left, right) =>
+      compareSimpleComponent(reasons, "flow_binding", right._flowBindingKey, left, right),
+    () => "major",
+  );
+  compareKeyed(
+    reasons,
+    (previous.experiences as RecordValue[] | undefined) ?? [],
+    (candidate.experiences as RecordValue[] | undefined) ?? [],
+    "state",
+    "application",
+    (left, right) =>
+      pushChange(
+        reasons,
+        left.pageId,
+        right.pageId,
+        "patch",
+        "presentation_changed",
+        "application",
+        "configuration",
+        right.state,
+      ),
+    () => "patch",
+    (item) => item.state,
+  );
+  pushChange(
+    reasons,
+    previous.homePageId,
+    candidate.homePageId,
+    "patch",
+    "presentation_changed",
+    "application",
+    "configuration",
+  );
+  return finaliseReasons(reasons);
+};
+
+export const flattenNavigation = (items: RecordValue[]): RecordValue[] =>
+  items.flatMap((item) => [
+    item,
+    ...flattenNavigation((item.children as RecordValue[] | undefined) ?? []),
+  ]);
+
+const navigationParents = (
+  items: RecordValue[],
+  parentId = "root",
+  result = new Map<string, { parentId: string; order: number }>(),
+): Map<string, { parentId: string; order: number }> => {
+  items.forEach((item, order) => {
+    result.set(String(item.id), { parentId, order });
+    navigationParents((item.children as RecordValue[] | undefined) ?? [], String(item.id), result);
+  });
+  return result;
+};
+
+const compareNavigation = (
+  reasons: VersionImpactReason[],
+  previousItems: RecordValue[],
+  candidateItems: RecordValue[],
+): void => {
+  const previous = flattenNavigation(previousItems);
+  const candidate = flattenNavigation(candidateItems);
+  compareKeyed(reasons, previous, candidate, "id", "navigation_item", (left, right) => {
+    const id = right.id;
+    pushChange(
+      reasons,
+      left.label,
+      right.label,
+      "patch",
+      "presentation_changed",
+      "navigation_item",
+      "name",
+      id,
+    );
+    pushChange(
+      reasons,
+      left.icon,
+      right.icon,
+      "patch",
+      "presentation_changed",
+      "navigation_item",
+      "icon",
+      id,
+    );
+    for (const key of ["type", "pageId", "address", "permissionKey"])
+      pushChange(
+        reasons,
+        left[key],
+        right[key],
+        "major",
+        key === "permissionKey" ? "permission_changed" : "existing_behavior_changed",
+        "navigation_item",
+        key === "permissionKey" ? "permission" : "behavior",
+        id,
+      );
+  });
+  const previousPositions = navigationParents(previousItems);
+  const candidatePositions = navigationParents(candidateItems);
+  for (const [id, previousPosition] of previousPositions) {
+    const candidatePosition = candidatePositions.get(id);
+    if (!candidatePosition) continue;
+    if (candidatePosition.parentId !== previousPosition.parentId)
+      reasons.push(
+        makeReason("major", "existing_behavior_changed", "navigation_item", "behavior", id),
+      );
+    else if (candidatePosition.order !== previousPosition.order)
+      reasons.push(makeReason("patch", "presentation_changed", "navigation_item", "order", id));
+  }
+};
+
+const compareRole = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const id = candidate.roleId;
+  pushChange(
+    reasons,
+    previous.name,
+    candidate.name,
+    "patch",
+    "presentation_changed",
+    "role",
+    "name",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "role",
+    "key",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.homePageId,
+    candidate.homePageId,
+    "major",
+    "existing_behavior_changed",
+    "role",
+    "behavior",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.permissionKeys,
+    candidate.permissionKeys,
+    "major",
+    "permission_changed",
+    "role",
+    "permission",
+    id,
+  );
+};
+
+export const comparePermissions = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue[],
+  candidate: RecordValue[],
+): void => {
+  compareKeyed(reasons, previous, candidate, "permissionId", "permission", (left, right) => {
+    const id = right.permissionId;
+    for (const key of ["label", "description"])
+      pushChange(
+        reasons,
+        left[key],
+        right[key],
+        "patch",
+        key === "description" ? "definition_text_changed" : "presentation_changed",
+        "permission",
+        key === "description" ? "description" : "name",
+        id,
+      );
+    pushChange(
+      reasons,
+      left.key,
+      right.key,
+      "major",
+      "component_key_changed",
+      "permission",
+      "key",
+      id,
+    );
+    for (const key of [
+      "recordTypeId",
+      "actionKind",
+      "namedAction",
+      "administrative",
+      "recordScope",
+      "fieldPolicy",
+    ])
+      pushChange(
+        reasons,
+        left[key],
+        right[key],
+        "major",
+        "permission_changed",
+        "permission",
+        "permission",
+        id,
+      );
+  });
+};
+
+const comparePipeline = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const id = candidate.pipelineId;
+  pushChange(
+    reasons,
+    previous.name,
+    candidate.name,
+    "patch",
+    "presentation_changed",
+    "pipeline",
+    "name",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "pipeline",
+    "key",
+    id,
+  );
+  for (const key of ["recordType", "stageFieldId", "transitions", "timeTargets"])
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "major",
+      "existing_behavior_changed",
+      "pipeline",
+      "behavior",
+      id,
+    );
+  compareKeyed(
+    reasons,
+    previous.stages as RecordValue[],
+    candidate.stages as RecordValue[],
+    "key",
+    "pipeline_stage",
+    (left, right) => compareSimpleComponent(reasons, "pipeline_stage", id, left, right, ["label"]),
+    () => "major",
+    () => id,
+  );
+  const beforeOrder = (previous.stages as RecordValue[]).map((stage) => stage.key);
+  const afterOrder = (candidate.stages as RecordValue[]).map((stage) => stage.key);
+  if (
+    same([...beforeOrder].sort(compareUnknownText), [...afterOrder].sort(compareUnknownText)) &&
+    !same(beforeOrder, afterOrder)
+  )
+    reasons.push(makeReason("patch", "presentation_changed", "pipeline", "order", id));
+};
+
+const compareInterface = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const id = candidate.interfaceId;
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "interface",
+    "key",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.version,
+    candidate.version,
+    "patch",
+    "definition_text_changed",
+    "interface",
+    "configuration",
+    id,
+  );
+  if (previous.state !== candidate.state)
+    reasons.push(
+      makeReason(
+        previous.state === "supported" && candidate.state === "deprecated" ? "patch" : "major",
+        previous.state === "supported" && candidate.state === "deprecated"
+          ? "definition_text_changed"
+          : "public_contract_changed",
+        "interface",
+        previous.state === "supported" && candidate.state === "deprecated"
+          ? "configuration"
+          : "visibility",
+        id,
+      ),
+    );
+  compareKeyed(
+    reasons,
+    previous.operations as RecordValue[],
+    candidate.operations as RecordValue[],
+    "operationId",
+    "interface",
+    (left, right) => compareInterfaceOperation(reasons, id, left, right),
+    (operation) => (isPrivateInterfaceOperation(operation) ? "minor" : "major"),
+    () => id,
+  );
+};
+
+const isPrivateInterfaceOperation = (operation: RecordValue): boolean =>
+  operation.visibility === "organization_private" &&
+  operation.authentication === "organization_token";
+
+const compareInterfaceShape = (
+  reasons: VersionImpactReason[],
+  interfaceId: unknown,
+  previous: unknown,
+  candidate: unknown,
+  direction: "input" | "output",
+): void => {
+  const before = asRecord(previous);
+  const after = asRecord(candidate);
+  const beforeKeys = Object.keys(before);
+  const afterKeys = Object.keys(after);
+  for (const key of afterKeys)
+    if (!(key in before)) {
+      const descriptor = asRecord(after[key]);
+      const impact = direction === "input" && descriptor.required === true ? "major" : "minor";
+      reasons.push(
+        makeReason(
+          impact,
+          impact === "major" ? "public_contract_changed" : "constraint_widened",
+          "interface",
+          "configuration",
+          interfaceId,
+        ),
+      );
+    }
+  if (beforeKeys.some((key) => !(key in after)))
+    reasons.push(
+      makeReason("major", "constraint_narrowed", "interface", "configuration", interfaceId),
+    );
+  for (const key of beforeKeys)
+    if (key in after && !same(before[key], after[key]))
+      reasons.push(
+        makeReason("major", "public_contract_changed", "interface", "configuration", interfaceId),
+      );
+};
+
+const compareInterfaceOperation = (
+  reasons: VersionImpactReason[],
+  interfaceId: unknown,
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  pushChange(
+    reasons,
+    previous.description,
+    candidate.description,
+    "patch",
+    "definition_text_changed",
+    "interface",
+    "description",
+    interfaceId,
+  );
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "interface",
+    "key",
+    interfaceId,
+  );
+  compareInterfaceShape(reasons, interfaceId, previous.inputShape, candidate.inputShape, "input");
+  compareInterfaceShape(
+    reasons,
+    interfaceId,
+    previous.outputShape,
+    candidate.outputShape,
+    "output",
+  );
+  compareSet(
+    reasons,
+    previous.errorCodes as unknown[],
+    candidate.errorCodes as unknown[],
+    "interface",
+    interfaceId,
+    "constraint",
+  );
+  compareBound(
+    reasons,
+    previous.rateLimitPerMinute,
+    candidate.rateLimitPerMinute,
+    "maximum",
+    "interface",
+    interfaceId,
+  );
+  compareBound(
+    reasons,
+    previous.maximumRequestBytes,
+    candidate.maximumRequestBytes,
+    "maximum",
+    "interface",
+    interfaceId,
+  );
+  for (const key of [
+    "method",
+    "path",
+    "authentication",
+    "permissionKey",
+    "visibility",
+    "duplicateProtection",
+    "target",
+  ])
+    pushChange(
+      reasons,
+      previous[key],
+      candidate[key],
+      "major",
+      key === "permissionKey" || key === "visibility"
+        ? "permission_changed"
+        : "public_contract_changed",
+      "interface",
+      key === "permissionKey" || key === "visibility" ? "visibility" : "configuration",
+      interfaceId,
+    );
+};
