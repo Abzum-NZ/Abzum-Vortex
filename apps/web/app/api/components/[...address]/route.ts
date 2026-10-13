@@ -10,6 +10,7 @@ import {
   type ComponentBundleObjectStore,
   type ServeComponentBundleResult,
 } from "@vortex/platform/server";
+import { logRefusal } from "@vortex/platform/schema";
 import { isComponentOriginRequest } from "../_lib/component-origin";
 import {
   hostedStorageSigningConfiguration,
@@ -106,7 +107,8 @@ export async function GET(
       { contentAddress, ...(relativePath === undefined ? {} : { relativePath }) },
       componentBundleObjectStore(),
     );
-  } catch {
+  } catch (error) {
+    logRefusal("components", "serve bundle", "storage_unavailable", error);
     return refusal("storage_unavailable");
   }
   if (result.outcome === "refused") return refusal(result.reason, result.headers);
