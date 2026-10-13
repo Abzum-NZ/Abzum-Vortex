@@ -2,7 +2,7 @@ import "server-only";
 
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
-  canonicalJson, databaseRevision, describeFailure, databaseTimestamp, fingerprintSchema, labelSchema,
+  builderKeySchema, canonicalJson, databaseRevision, databaseTimestamp, describeFailure, fingerprintSchema, labelSchema,
   moduleRootIdSchema, moduleSourceDocumentSchema, organizationAccessDeclarationSchema,
   organizationIdSchema, organizationPermissionEligibilitySchema, platformIdSchema, revisionSchema, sameId,
   sessionContextSchema, storedModuleDefinitionDraftSchema, timestampSchema,
@@ -18,6 +18,9 @@ import {
 } from "@web/platform-server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import { z } from "zod";
+import {
+  deriveFieldAlias, deriveFieldKey, newAuthoredField, offeredFieldTypes, settingsForType,
+} from "./studio-module-field-shape";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { DefinitionError } from "@web/platform-server";
@@ -293,4 +296,145 @@ export const saveStudioModuleFieldLabel = async (
     return result.kind === "available" ? result.value : failure ?? (result.kind === "unavailable"
       ? declined("REFUSED_BY_REQUEST_SERVICE", "context_changed") : { kind: "temporarily_unavailable" });
   } catch (error) { console.error(`[studio] field label failed unexpectedly STUDIO_FIELD_LABEL_FAILED: ${describeFailure(error)}`); return { kind: "temporarily_unavailable" }; }
+};
+
+export type StudioModuleFieldChangeResult =
+  | Readonly<{ kind: "available"; draft: StoredModuleDefinitionDraft }>
+  | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
+  | Readonly<{ kind: "conflict"; reason: string }>
+  | Readonly<{ kind: "refused"; reason: string }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+// Without a field alias the request adds a field to the record type; with one it edits that field.
+const fieldChangeSchema = z.object({
+  rootId: moduleRootIdSchema,
+  expectedDraftRevision: revisionSchema,
+  expectedSavedSourceFingerprint: fingerprintSchema,
+  recordAlias: z.string().min(1).max(160),
+  fieldAlias: z.string().min(1).max(160).optional(),
+  label: z.string().max(1_000),
+  type: z.string().min(1).max(80),
+  required: z.boolean(),
+  maxLength: z.number().int().optional(),
+}).strict();
+
+const changeFailure = (error: unknown): StudioModuleFieldChangeResult => {
+  const cause = describeFailure(error);
+  if (error instanceof LocatedValidationFailure) {
+    console.warn(`[studio] module field change failed validation: ${error.validation.errors.map((item) => item.code).join(",")}`);
+    return { kind: "validation_failed", validation: error.validation };
+  }
+  if (error instanceof BuilderAuthorityError) {
+    console.warn(`[studio] module field change refused by builder authority: ${cause} code=${error.code}`);
+    return { kind: "refused", reason: error.code };
+  }
+  if (error instanceof DefinitionError) {
+    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || error.code === "DEFINITION_ROOT_MISSING" ||
+        error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT") {
+      console.warn(`[studio] module field change conflicted: ${cause} code=${error.code}`);
+      return { kind: "conflict", reason: error.code };
+    }
+    if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE" ||
+        error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_STORAGE_VALIDATION_FAILED") {
+      console.warn(`[studio] module field change refused: ${cause} code=${error.code}`);
+      return { kind: "refused", reason: error.code };
+    }
+  }
+  console.error(`[studio] module field change failed unexpectedly: ${cause}`);
+  return { kind: "temporarily_unavailable" };
+};
+
+/** Add a field to one record type, or edit one field's label, type and required flag, in the draft. */
+export const saveStudioModuleFieldChange = async (
+  candidateOrganizationId: string, candidate: unknown,
+): Promise<StudioModuleFieldChangeResult> => {
+  const organization = organizationIdSchema.safeParse(candidateOrganizationId);
+  const request = fieldChangeSchema.safeParse(candidate);
+  if (!organization.success || !request.success) {
+    console.warn("[studio] module field change request was malformed:",
+      request.success ? "organization" : request.error.issues.map((issue) => `${issue.path.join(".")}=${issue.code}`).join(","));
+    return { kind: "refused", reason: "INVALID_REQUEST" };
+  }
+  try {
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active") {
+      if (resolved.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+      console.warn(`[studio] module field change without an active session: ${resolved.kind}`);
+      return { kind: "refused", reason: "SESSION_NOT_ACTIVE" };
+    }
+    let failure: StudioModuleFieldChangeResult | undefined;
+    const result = await humanOrganizationRequests().runChange(resolved.session, { organizationId: organization.data },
+      async (transaction, scope, issuedAt) => {
+        try {
+          const context = await readLiveContext(transaction, scope, resolved.session, issuedAt);
+          const previous = await readModuleDefinitionDraft(transaction, scope, {
+            rootId: request.data.rootId, expectedDraftRevision: request.data.expectedDraftRevision,
+          });
+          if (!sameId(previous.organizationId, organization.data) || previous.sourceFingerprint !== request.data.expectedSavedSourceFingerprint)
+            throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
+          await requireBuilderAuthority(authority, { kind: "draft_change", rootId: previous.rootId });
+          const source = structuredClone(previous.source);
+          const record = source.body.record_types.find((item) => item.id === request.data.recordAlias);
+          if (record === undefined) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+          const existing = request.data.fieldAlias === undefined ? undefined
+            : record.fields.find((item) => item.id === request.data.fieldAlias);
+          if (request.data.fieldAlias !== undefined && existing === undefined) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+          const key = existing?.key ?? deriveFieldKey(request.data.label, new Set(record.fields.map((item) => item.key)));
+          const location: DefinitionValidationLocation = { documentKind: "module", documentKey: previous.key,
+            segments: [{ kind: "module", key: previous.key }, { kind: "record_type", key: record.key }, { kind: "field", key: key ?? "new_field" }] };
+          const rejected = (error: z.ZodError) => new LocatedValidationFailure(translateDefinitionSchemaError(error,
+            { correlationId: context.correlationId, rootLocation: location }));
+          const label = labelSchema.safeParse(request.data.label);
+          if (!label.success) throw rejected(label.error);
+          if (key === undefined) {
+            const keyShape = builderKeySchema.safeParse("");
+            if (!keyShape.success) throw rejected(keyShape.error);
+            throw new DefinitionError("INVALID_DEFINITION_COMMAND");
+          }
+          // A type the schema does not offer still goes to the schema, so the schema's own reason is what the builder reads.
+          const offered = offeredFieldTypes(previous.source).find((item) => item.type === request.data.type);
+          const settings = offered === undefined ? {} : settingsForType(offered, request.data.maxLength);
+          if (existing === undefined) {
+            const taken = new Set(source.body.record_types.flatMap((item) => [item.id, ...item.fields.map((field) => field.id)]));
+            record.fields.push(newAuthoredField(deriveFieldAlias(record.key, key, taken), key, label.data,
+              request.data.required, request.data.type, settings));
+          } else {
+            const destination = existing as Record<string, unknown>;
+            destination.label = label.data;
+            destination.required = request.data.required;
+            if (existing.type !== request.data.type) {
+              // A default and settings belong to one type; the previous ones cannot carry over.
+              delete destination.default;
+              destination.type = request.data.type;
+              destination.settings = settings;
+            }
+          }
+          const shape = moduleSourceDocumentSchema.safeParse(source);
+          if (!shape.success) throw rejected(shape.error);
+          const validation = validateDefinitionSource(shape.data);
+          if (!validation.valid) throw new LocatedValidationFailure(translateDefinitionRuleFailures(validation.failures,
+            { correlationId: context.correlationId, rootLocation: location }));
+          const startedAt = await databaseClock(transaction);
+          const returned = verifySaved(await createDefinitionStore(transaction, authority).saveDraft({
+            rootId: platformIdSchema.parse(previous.rootId), expectedDraftRevision: previous.draftRevision, source: shape.data,
+          }), shape.data, previous, scope, startedAt);
+          const reread = verifySaved(await readModuleDefinitionDraft(transaction, scope, {
+            rootId: returned.rootId, expectedDraftRevision: returned.draftRevision,
+          }), shape.data, previous, scope, startedAt);
+          if (Date.parse(reread.createdAt) !== Date.parse(returned.createdAt) ||
+              Date.parse(reread.updatedAt) !== Date.parse(returned.updatedAt) || reread.createdAt !== previous.createdAt)
+            return invalidResult();
+          await assertLiveCompletion(transaction, scope, resolved.session, issuedAt, context, reread);
+          return { kind: "available", draft: reread } as const;
+        } catch (error) { failure = changeFailure(error); throw error; }
+      });
+    if (result.kind === "available") return result.value;
+    if (failure !== undefined) return failure;
+    if (result.kind === "unavailable") {
+      console.warn("[studio] module field change unavailable for the organization request");
+      return { kind: "refused", reason: "ORGANIZATION_REQUEST_UNAVAILABLE" };
+    }
+    return { kind: "temporarily_unavailable" };
+  } catch (error) { return changeFailure(error); }
 };
