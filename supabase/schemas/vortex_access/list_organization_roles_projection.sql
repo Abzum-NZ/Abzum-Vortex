@@ -75,3 +75,7 @@ grant execute on function vortex_access.list_organization_roles_projection(
 
 comment on function vortex_access.list_organization_roles_projection(uuid, integer) is
   'Registered role projection: returns every current local role the fixed platform.organization.roles.read decision admits, with the organisation, the role identity, the role live revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Acceptance evidence and audit columns are never projected.';
+
+alter function vortex_access.list_organization_roles_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_roles_projection(p_record_id uuid, p_page_size integer) to postgres;

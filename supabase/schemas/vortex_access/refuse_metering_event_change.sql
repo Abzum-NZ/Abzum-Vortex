@@ -7,6 +7,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.refuse_metering_event_change() OWNER TO postgres;
+alter function vortex_access.refuse_metering_event_change() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.refuse_metering_event_change() FROM PUBLIC;
+
+grant execute on function vortex_access.refuse_metering_event_change() to postgres;

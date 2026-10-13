@@ -203,3 +203,7 @@ to vortex_request;
 
 comment on function vortex_access.add_organization_group_membership_for_administration(uuid, uuid, uuid, timestamptz, timestamptz, uuid) is
   'Standalone request entry: performs add_membership after fixed protected checks of the caller current authority, the delegation subset and the target organisation account, with one atomic completed Activity or one content-free refused Activity row; no SQL function composes this result.';
+
+alter function vortex_access.add_organization_group_membership_for_administration(p_membership_id uuid, p_group_id uuid, p_organization_account_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.add_organization_group_membership_for_administration(p_membership_id uuid, p_group_id uuid, p_organization_account_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) to postgres;

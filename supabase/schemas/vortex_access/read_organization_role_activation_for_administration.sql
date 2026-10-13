@@ -121,3 +121,7 @@ to vortex_request;
 comment on function
   vortex_access.read_organization_role_activation_for_administration(uuid) is
   'Returns one safe exact activation with historical source and policy settings, not current authority.';
+
+alter function vortex_access.read_organization_role_activation_for_administration(p_role_activation_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.read_organization_role_activation_for_administration(p_role_activation_id uuid) to postgres;

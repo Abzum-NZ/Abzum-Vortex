@@ -36,7 +36,6 @@ begin
       'releaseRevision', release.release_revision,
       'releaseVersion', release.release_version,
       'sourceFingerprint', release.authored_source_fingerprint,
-      'contentFingerprint', release.content_fingerprint,
       'releaseNote', release.release_note,
       'publishedAt', release.published_at,
       'publishedBy', release.published_by,
@@ -62,3 +61,7 @@ grant execute on function vortex_definition.read_release_history_entry(text, uui
 
 comment on function vortex_definition.read_release_history_entry(text, uuid, bigint) is
   'Returns one exact same-organization immutable Definition release metadata entry.';
+
+alter function vortex_definition.read_release_history_entry(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_release_history_entry(p_kind text, p_root_id uuid, p_release_revision bigint) to postgres;

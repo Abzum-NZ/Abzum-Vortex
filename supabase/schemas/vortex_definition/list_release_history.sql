@@ -50,7 +50,6 @@ begin
             'releaseRevision', candidate.release_revision,
             'releaseVersion', candidate.release_version,
             'sourceFingerprint', candidate.authored_source_fingerprint,
-            'contentFingerprint', candidate.content_fingerprint,
             'releaseNote', candidate.release_note,
             'publishedAt', candidate.published_at,
             'publishedBy', candidate.published_by,
@@ -93,3 +92,7 @@ grant execute on function vortex_definition.list_release_history(text, uuid, int
 
 comment on function vortex_definition.list_release_history(text, uuid, integer, bigint) is
   'Returns one bounded newest-first metadata page from a same-organization Definition release history.';
+
+alter function vortex_definition.list_release_history(p_kind text, p_root_id uuid, p_page_size integer, p_before_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.list_release_history(p_kind text, p_root_id uuid, p_page_size integer, p_before_release_revision bigint) to postgres;

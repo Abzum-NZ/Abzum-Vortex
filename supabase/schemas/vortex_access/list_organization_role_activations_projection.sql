@@ -83,3 +83,7 @@ grant execute on function vortex_access.list_organization_role_activations_proje
 
 comment on function vortex_access.list_organization_role_activations_projection(uuid, integer) is
   'Registered role-activation projection: returns every retained activation of the viewer''s organisation under the fixed platform.organization.assignments.read decision, with the organisation, the activation identity, the activation revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Policy provenance, caller bindings and audit evidence are never projected.';
+
+alter function vortex_access.list_organization_role_activations_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_role_activations_projection(p_record_id uuid, p_page_size integer) to postgres;

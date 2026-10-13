@@ -283,13 +283,12 @@ begin
     application_root_id, owner_kind, owner_id, permission_id, permission_key,
     label, description, record_type_id, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint, meaning_fingerprint
+    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint
   )
   select p_organization_id, 'platform', platform_owner_id, 3, null, 'platform',
     platform_owner_id, (entry ->> 'permissionId')::uuid, entry ->> 'key',
     entry ->> 'label', entry ->> 'description', null, entry ->> 'actionKind', null, true,
-    'platform_catalogue', null, null, p_target_catalogue_version, null, null, null, null,
+    'platform_catalogue', null, null, p_target_catalogue_version, null, null,
     catalogue_fingerprint, entry ->> 'meaningFingerprint'
   from pg_catalog.jsonb_array_elements(catalogue_entries) as item(entry);
 
@@ -371,8 +370,10 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.adopt_shipped_platform_permission_catalogue(p_organization_id uuid, p_expected_registration_revision bigint, p_target_catalogue_version text, p_target_catalogue_fingerprint text, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
+ALTER FUNCTION vortex_access.adopt_shipped_platform_permission_catalogue(p_organization_id uuid, p_expected_registration_revision bigint, p_target_catalogue_version text, p_target_catalogue_fingerprint text, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.adopt_shipped_platform_permission_catalogue(p_organization_id uuid, p_expected_registration_revision bigint, p_target_catalogue_version text, p_target_catalogue_fingerprint text, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only adoption of one compiled-in shipped platform catalogue successor.';
 
 REVOKE ALL ON FUNCTION vortex_access.adopt_shipped_platform_permission_catalogue(p_organization_id uuid, p_expected_registration_revision bigint, p_target_catalogue_version text, p_target_catalogue_fingerprint text, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.adopt_shipped_platform_permission_catalogue(p_organization_id uuid, p_expected_registration_revision bigint, p_target_catalogue_version text, p_target_catalogue_fingerprint text, p_changed_by uuid, p_correlation_id uuid) to postgres;

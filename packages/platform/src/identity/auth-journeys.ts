@@ -134,6 +134,8 @@ export const localDevelopmentSignInAvailable = (
     validateConfiguration(configuration.journey);
     const authority = identityAuthoritySchema.safeParse(configuration.authority);
     const site = new URL(configuration.journey.siteUrl);
+    // The main Local Supabase stack or a worker's database lane, on the canonical local host.
+    const supabase = new URL(configuration.journey.supabaseUrl);
     return (
       authority.success &&
       authority.data.environment === "local" &&
@@ -143,9 +145,12 @@ export const localDevelopmentSignInAvailable = (
       site.pathname === "/" &&
       site.search.length === 0 &&
       site.hash.length === 0 &&
-      new URL(configuration.journey.supabaseUrl).href === "http://127.0.0.1:54321/" &&
-      authority.data.issuer === "http://127.0.0.1:54321/auth/v1" &&
-      authority.data.jwksUrl === "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json" &&
+      supabase.protocol === "http:" &&
+      supabase.hostname === "127.0.0.1" &&
+      supabase.port.length > 0 &&
+      supabase.href === `${supabase.origin}/` &&
+      authority.data.issuer === `${supabase.origin}/auth/v1` &&
+      authority.data.jwksUrl === `${supabase.origin}/auth/v1/.well-known/jwks.json` &&
       configuration.adminKey.length <= 512 &&
       /^sb_secret_[A-Za-z0-9_-]+$/u.test(configuration.adminKey)
     );

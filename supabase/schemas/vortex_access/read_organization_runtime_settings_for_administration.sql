@@ -30,9 +30,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_organization_runtime_settings_for_administration() OWNER TO postgres;
+alter function vortex_access.read_organization_runtime_settings_for_administration() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_organization_runtime_settings_for_administration() IS 'Protected explicit-presence runtime-settings read under the fixed runtime_settings.read decision.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_organization_runtime_settings_for_administration() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_organization_runtime_settings_for_administration() TO vortex_request;
+
+grant execute on function vortex_access.read_organization_runtime_settings_for_administration() to postgres;

@@ -93,9 +93,11 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) OWNER TO postgres;
+alter function vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) IS 'Server-only Identity Authority adapter step: records or re-opens one identity disablement command and replays a completed exact retry.';
 
 REVOKE ALL ON FUNCTION vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) TO vortex_runtime;
+
+grant execute on function vortex_identity.begin_identity_disablement(p_actor_identity_id uuid, p_subject_identity_id uuid, p_command_id uuid, p_command_fingerprint text, p_correlation_id uuid) to postgres;

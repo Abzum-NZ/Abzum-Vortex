@@ -17,9 +17,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) OWNER TO postgres;
+alter function vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) IS 'Protected exact invitation detail under the fixed invitations.read decision.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) TO vortex_request;
+
+grant execute on function vortex_access.read_organization_invitation_for_administration(p_invitation_id uuid) to postgres;

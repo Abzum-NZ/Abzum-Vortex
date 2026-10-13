@@ -25,3 +25,5 @@ comment on function vortex_platform.alert_signal_namespaced_key_is_valid(text) i
 
 alter function vortex_platform.alert_signal_namespaced_key_is_valid(text)
   owner to postgres;
+
+alter function vortex_platform.alert_signal_namespaced_key_is_valid(p_key text) owner to vortex_owner;

@@ -105,3 +105,7 @@ grant execute on function
   vortex_platform.grant_connection_application_internal(uuid, uuid, uuid) to vortex_runtime;
 
 grant execute on function vortex_platform.grant_connection_application_internal(uuid, uuid, uuid) to vortex_owner;
+
+alter function vortex_platform.grant_connection_application_internal(p_connection_instance_id uuid, p_application_root_id uuid, p_administrator_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_platform.grant_connection_application_internal(p_connection_instance_id uuid, p_application_root_id uuid, p_administrator_activity_id uuid) to postgres;

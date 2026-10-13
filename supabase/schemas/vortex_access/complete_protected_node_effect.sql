@@ -51,3 +51,7 @@ comment on function vortex_access.complete_protected_node_effect(
   uuid, uuid, uuid, text, text, text, jsonb
 ) is
   'Records the safe response of a claimed protected node effect in the same durable actor transaction as its operation.';
+
+alter function vortex_access.complete_protected_node_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text, p_outcome text, p_outputs jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.complete_protected_node_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text, p_outcome text, p_outputs jsonb) to postgres;

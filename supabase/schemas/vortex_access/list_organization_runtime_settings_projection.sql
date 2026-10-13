@@ -75,3 +75,7 @@ grant execute on function vortex_access.list_organization_runtime_settings_proje
 
 comment on function vortex_access.list_organization_runtime_settings_projection(uuid, integer) is
   'Registered organisation runtime-settings projection: returns the one settings row the current viewer may read under the fixed runtime-settings decision, with the organisation, the record identity, the settings revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer or no settings exist.';
+
+alter function vortex_access.list_organization_runtime_settings_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_runtime_settings_projection(p_record_id uuid, p_page_size integer) to postgres;

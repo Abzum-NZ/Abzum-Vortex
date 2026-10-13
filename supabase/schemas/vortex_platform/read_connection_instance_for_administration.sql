@@ -87,3 +87,7 @@ to vortex_request;
 comment on function
   vortex_platform.read_connection_instance_for_administration(uuid, uuid) is
   'Reads one connection instance safe status for the administration page in the request context organisation. Returns state, health, expiry, authority revision and both scope lists; never a secret, a secret reference, an organisation identity or another organisation instance.';
+
+alter function vortex_platform.read_connection_instance_for_administration(p_organization_id uuid, p_connection_instance_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_platform.read_connection_instance_for_administration(p_organization_id uuid, p_connection_instance_id uuid) to postgres;

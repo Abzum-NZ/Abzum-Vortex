@@ -137,3 +137,7 @@ revoke all on function vortex_identity.resolve_active_organization_account(uuid,
 
 comment on function vortex_identity.resolve_active_organization_account(uuid, uuid) is
   'Returns an active local account or transactionally provisions one for an assigned Vortex super administrator with immutable provenance and Activity evidence.';
+
+alter function vortex_identity.resolve_active_organization_account(p_identity_id uuid, p_organization_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.resolve_active_organization_account(p_identity_id uuid, p_organization_id uuid) to postgres;

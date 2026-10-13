@@ -236,3 +236,7 @@ comment on function vortex_access.register_flow_run_as_principal(
   uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, uuid, uuid, timestamptz, bigint, uuid
 ) is
   'Registers or replaces one exact compiled flow run-as principal under the existing execution-binding administration authority.';
+
+alter function vortex_access.register_flow_run_as_principal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_duplicate_key uuid, p_execution_binding_id uuid, p_organization_id uuid, p_application_root_id uuid, p_release_version text, p_flow_id uuid, p_actor_kind text, p_actor_account_id uuid, p_actor_system_actor_id uuid, p_expires_at timestamp with time zone, p_expected_revision bigint, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.register_flow_run_as_principal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_duplicate_key uuid, p_execution_binding_id uuid, p_organization_id uuid, p_application_root_id uuid, p_release_version text, p_flow_id uuid, p_actor_kind text, p_actor_account_id uuid, p_actor_system_actor_id uuid, p_expires_at timestamp with time zone, p_expected_revision bigint, p_activity_id uuid) to postgres;

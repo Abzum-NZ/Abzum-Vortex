@@ -166,3 +166,7 @@ to vortex_request;
 
 comment on function vortex_access.rename_organization_group_for_administration(uuid, bigint, text, uuid) is
   'Standalone request entry: revises one Group label after fixed teams-manage authorization, records one atomic completed Activity or returns one content-free refused Activity row; no SQL function composes this result.';
+
+alter function vortex_access.rename_organization_group_for_administration(p_group_id uuid, p_expected_group_revision bigint, p_label text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.rename_organization_group_for_administration(p_group_id uuid, p_expected_group_revision bigint, p_label text, p_activity_id uuid) to postgres;

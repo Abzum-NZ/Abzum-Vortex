@@ -14,9 +14,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_current_organization_default_application_for_application() OWNER TO postgres;
+alter function vortex_access.read_current_organization_default_application_for_application() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_current_organization_default_application_for_application() IS 'Reads only the exact default application root of the validated human organisation context; absence is null and does not grant application access.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_current_organization_default_application_for_application() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_current_organization_default_application_for_application() TO vortex_request;
+
+grant execute on function vortex_access.read_current_organization_default_application_for_application() to postgres;

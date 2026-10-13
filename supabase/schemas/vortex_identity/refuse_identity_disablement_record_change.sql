@@ -8,6 +8,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_identity.refuse_identity_disablement_record_change() OWNER TO postgres;
+alter function vortex_identity.refuse_identity_disablement_record_change() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_identity.refuse_identity_disablement_record_change() FROM PUBLIC;
+
+grant execute on function vortex_identity.refuse_identity_disablement_record_change() to postgres;

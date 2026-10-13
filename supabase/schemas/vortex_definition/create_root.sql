@@ -129,4 +129,6 @@ grant execute on function vortex_definition.create_root(text, text, jsonb, text,
 comment on function vortex_definition.create_root(text, text, jsonb, text, jsonb, text) is
   'Creates a Definition root with explicit Application provenance, permanent component identities and initial draft atomically; Modules remain unclassified.';
 
-alter function vortex_definition.create_root(text, text, jsonb, text, jsonb, text) owner to postgres;
+alter function vortex_definition.create_root(p_kind text, p_key text, p_draft_source jsonb, p_source_fingerprint text, p_identity_requirements jsonb, p_application_origin_kind text) owner to vortex_owner;
+
+grant execute on function vortex_definition.create_root(p_kind text, p_key text, p_draft_source jsonb, p_source_fingerprint text, p_identity_requirements jsonb, p_application_origin_kind text) to postgres;

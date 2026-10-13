@@ -20,11 +20,9 @@ const permissionRegistryDefinitionReleaseCommon = {
   releaseRevision: revisionSchema,
   releaseVersion: stableDefinitionReleaseVersionSchema,
   validationContractVersion: semanticVersionSchema,
-  contentFingerprint: fingerprintSchema,
-  resolutionFingerprint: fingerprintSchema,
 };
 
-export const permissionRegistryDefinitionReleaseSchema = z.discriminatedUnion("kind", [
+export const permissionRegistrySourceRevisionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("application"),
@@ -37,6 +35,30 @@ export const permissionRegistryDefinitionReleaseSchema = z.discriminatedUnion("k
       kind: z.literal("module"),
       rootId: moduleRootIdSchema,
       ...permissionRegistryDefinitionReleaseCommon,
+    })
+    .strict(),
+]);
+
+const permissionRegistryDefinitionReleaseFingerprints = {
+  contentFingerprint: fingerprintSchema,
+  resolutionFingerprint: fingerprintSchema,
+};
+
+export const permissionRegistryDefinitionReleaseSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("application"),
+      rootId: applicationRootIdSchema,
+      ...permissionRegistryDefinitionReleaseCommon,
+      ...permissionRegistryDefinitionReleaseFingerprints,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("module"),
+      rootId: moduleRootIdSchema,
+      ...permissionRegistryDefinitionReleaseCommon,
+      ...permissionRegistryDefinitionReleaseFingerprints,
     })
     .strict(),
 ]);
@@ -220,7 +242,7 @@ export const permissionCatalogueEntrySchema = z
     ownerId: platformIdSchema,
     permission: permissionDeclarationSchema,
     sourceRelease: z.union([
-      permissionRegistryDefinitionReleaseSchema,
+      permissionRegistrySourceRevisionSchema,
       permissionRegistryPlatformReleaseSchema,
     ]),
     meaningFingerprint: fingerprintSchema,

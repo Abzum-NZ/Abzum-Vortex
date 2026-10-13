@@ -30,6 +30,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.private_current_role_management_scope(p_organization_id uuid, p_role_id uuid, p_role_revision bigint) OWNER TO postgres;
+alter function vortex_access.private_current_role_management_scope(p_organization_id uuid, p_role_id uuid, p_role_revision bigint) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.private_current_role_management_scope(p_organization_id uuid, p_role_id uuid, p_role_revision bigint) FROM PUBLIC;
+
+grant execute on function vortex_access.private_current_role_management_scope(p_organization_id uuid, p_role_id uuid, p_role_revision bigint) to postgres;

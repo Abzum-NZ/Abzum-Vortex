@@ -88,9 +88,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) OWNER TO postgres;
+alter function vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) IS 'Returns one safe exact delegation detail without inferring holder authority.';
 
 REVOKE ALL ON FUNCTION vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) TO vortex_request;
+
+grant execute on function vortex_access.read_organization_delegation_authority_for_administration(p_delegation_authority_id uuid) to postgres;

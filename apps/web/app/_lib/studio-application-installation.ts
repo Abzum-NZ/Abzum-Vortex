@@ -1315,12 +1315,10 @@ const firstInstallSetMatchesHistory = (
   metadata: Readonly<{
     releaseRevision: number;
     releaseVersion: string;
-    contentFingerprint: string;
   }>,
   selector: StudioApplicationFirstInstallSelector,
 ): boolean => releaseSet.application.releaseRevision === metadata.releaseRevision &&
   releaseSet.application.releaseVersion === metadata.releaseVersion &&
-  releaseSet.application.contentFingerprint === metadata.contentFingerprint &&
   sameUuid(releaseSet.application.rootId, selector.rootId) &&
   releaseSet.application.releaseRevision === selector.releaseRevision;
 
@@ -1353,11 +1351,6 @@ const firstInstallCommandFailure = (
 type FirstInstallCandidate = Readonly<{
   selector: StudioApplicationFirstInstallSelector;
   history: ReturnType<typeof firstInstallHistory>;
-  historyMetadata: Readonly<{
-    releaseRevision: number;
-    releaseVersion: string;
-    contentFingerprint: string;
-  }>;
   releaseSet: SystemApplicationBoundReleaseSetResult;
   snapshot: StudioApplicationFirstInstallSnapshot;
   session: IdentitySession;
@@ -1443,7 +1436,6 @@ const readCurrentFirstInstallCandidate = async (
   return {
     selector,
     history,
-    historyMetadata: inspected.metadata,
     releaseSet,
     snapshot,
     session,

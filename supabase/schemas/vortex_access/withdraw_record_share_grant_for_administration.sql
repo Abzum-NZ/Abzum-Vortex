@@ -126,3 +126,7 @@ comment on function vortex_access.withdraw_record_share_grant_for_administration
   uuid, bigint, text, uuid
 ) is
   'Fixed protected withdrawal: its proposer, or a holder of current row-independent share authority over its scope, revokes a draft or pending_consent proposal of the context organisation and application under an exact expected revision and withdraws its consent request.';
+
+alter function vortex_access.withdraw_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_reason text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.withdraw_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_reason text, p_activity_id uuid) to postgres;

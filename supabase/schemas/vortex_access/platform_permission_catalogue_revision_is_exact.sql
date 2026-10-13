@@ -251,8 +251,6 @@ begin
           current_entry.source_version,
           current_entry.source_revision,
           current_entry.source_validation_contract_version,
-          current_entry.source_content_fingerprint,
-          current_entry.source_resolution_fingerprint,
           current_entry.source_catalogue_fingerprint,
           current_entry.meaning_fingerprint
         ) is not distinct from row(
@@ -274,8 +272,6 @@ begin
           null::uuid,
           expected.source_version,
           null::bigint,
-          null::text,
-          null::text,
           null::text,
           expected.catalogue_fingerprint,
           expected.meaning_fingerprint
@@ -308,8 +304,6 @@ begin
           current_entry.source_version,
           current_entry.source_revision,
           current_entry.source_validation_contract_version,
-          current_entry.source_content_fingerprint,
-          current_entry.source_resolution_fingerprint,
           current_entry.source_catalogue_fingerprint,
           current_entry.meaning_fingerprint
         ) is not distinct from row(
@@ -331,8 +325,6 @@ begin
           null::uuid,
           expected.source_version,
           null::bigint,
-          null::text,
-          null::text,
           null::text,
           expected.catalogue_fingerprint,
           expected.meaning_fingerprint
@@ -409,8 +401,6 @@ begin
               current_entry.source_root_id,
               current_entry.source_revision,
               current_entry.source_validation_contract_version,
-              current_entry.source_content_fingerprint,
-              current_entry.source_resolution_fingerprint,
               current_entry.meaning_fingerprint
             ) is distinct from row(
               previous.organization_id,
@@ -434,8 +424,6 @@ begin
               previous.source_root_id,
               previous.source_revision,
               previous.source_validation_contract_version,
-              previous.source_content_fingerprint,
-              previous.source_resolution_fingerprint,
               previous.meaning_fingerprint
             )
         )
@@ -484,3 +472,7 @@ revoke all on function
 
 comment on function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint) is
   'Owner-only fixed evidence assertion for the exact current platform catalogue, its immutable historical predecessors, and required available continuities.';
+
+alter function vortex_access.platform_permission_catalogue_revision_is_exact(p_organization_id uuid, p_registration_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact(p_organization_id uuid, p_registration_revision bigint) to postgres;

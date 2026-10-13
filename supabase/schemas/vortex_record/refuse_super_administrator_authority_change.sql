@@ -15,3 +15,7 @@ revoke all on function vortex_record.refuse_super_administrator_authority_change
 
 comment on function vortex_record.refuse_super_administrator_authority_change() is
   'Prevents rewriting or deleting activity evidence that names its super-administrator authority.';
+
+alter function vortex_record.refuse_super_administrator_authority_change() owner to vortex_owner;
+
+grant execute on function vortex_record.refuse_super_administrator_authority_change() to postgres;

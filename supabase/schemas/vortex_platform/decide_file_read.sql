@@ -60,9 +60,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_platform.decide_file_read(p_file_id uuid) OWNER TO postgres;
+alter function vortex_platform.decide_file_read(p_file_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_platform.decide_file_read(p_file_id uuid) IS 'Decides current read authority for a file through the protected record read and the attachment value that names it.';
 
 REVOKE ALL ON FUNCTION vortex_platform.decide_file_read(p_file_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_platform.decide_file_read(p_file_id uuid) TO vortex_request;
+
+grant execute on function vortex_platform.decide_file_read(p_file_id uuid) to postgres;

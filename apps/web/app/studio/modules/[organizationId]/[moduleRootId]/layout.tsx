@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { loadHumanDefinitionPublicationDraft } from "../../../../_lib/definition-publication";
-import { loadStudioModuleTextFieldSettings } from "../../../../_lib/studio-module-text-field-settings";
+import { loadStudioModuleTextFieldSettings } from "../../../../_lib/studio-module-field-edits";
 
 export const dynamic = "force-dynamic";
 

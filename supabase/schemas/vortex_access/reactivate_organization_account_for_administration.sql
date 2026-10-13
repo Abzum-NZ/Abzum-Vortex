@@ -103,3 +103,7 @@ revoke execute on function
 
 grant execute on function
   vortex_access.reactivate_organization_account_for_administration(uuid, uuid, bigint) to vortex_request;
+
+alter function vortex_access.reactivate_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.reactivate_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) to postgres;

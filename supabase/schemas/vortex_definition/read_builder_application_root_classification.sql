@@ -54,4 +54,6 @@ grant execute on function vortex_definition.read_builder_application_root_classi
 comment on function vortex_definition.read_builder_application_root_classification(uuid) is
   'Returns only the persisted classification for the exact Application root in the validated current request organisation; missing, foreign, wrong-kind and unknown roots share one unavailable result.';
 
-alter function vortex_definition.read_builder_application_root_classification(uuid) owner to postgres;
+alter function vortex_definition.read_builder_application_root_classification(p_root_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_builder_application_root_classification(p_root_id uuid) to postgres;

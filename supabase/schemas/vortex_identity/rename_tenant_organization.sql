@@ -148,4 +148,6 @@ grant execute on function vortex_identity.rename_tenant_organization(uuid, text,
 comment on function vortex_identity.rename_tenant_organization(uuid, text, uuid, uuid, bigint, text) is
   'Protected same-tenant display-name-only organisation rename under the bound request context person''s current structural authority, exact revision and accepted replay.';
 
-alter function vortex_identity.rename_tenant_organization(uuid,text,uuid,uuid,bigint,text) owner to postgres;
+alter function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) owner to vortex_owner;
+
+grant execute on function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) to postgres;

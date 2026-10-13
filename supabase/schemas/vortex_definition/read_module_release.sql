@@ -102,3 +102,7 @@ grant execute on function vortex_definition.read_module_release(uuid, bigint) to
 
 comment on function vortex_definition.read_module_release(uuid, bigint) is
   'Reads one exact same-organisation immutable Module release and its stored compilation and resolution evidence.';
+
+alter function vortex_definition.read_module_release(p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_module_release(p_root_id uuid, p_release_revision bigint) to postgres;

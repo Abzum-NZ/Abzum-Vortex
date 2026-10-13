@@ -37,7 +37,6 @@ const loadIdentity = (load: StudioApplicationRestoreAvailable | null): string | 
     load.snapshot.anchorReleaseRevision,
     load.metadata.releaseVersion,
     load.metadata.sourceFingerprint,
-    load.metadata.contentFingerprint,
     load.metadata.publishedAt,
     load.metadata.publishedBy,
     load.metadata.releaseNote,
@@ -255,7 +254,6 @@ export function ApplicationReleaseRestore({
           <div><dt className="font-semibold">Application</dt><dd>{displayedLoad.snapshot.definitionKey}</dd></div>
           <div><dt className="font-semibold">Selected version and revision</dt><dd>{displayedLoad.metadata.releaseVersion} · revision {displayedLoad.metadata.releaseRevision}</dd></div>
           <div><dt className="font-semibold">Selected release source fingerprint</dt><dd className="break-all"><code>{displayedLoad.metadata.sourceFingerprint}</code></dd></div>
-          <div><dt className="font-semibold">Selected release content fingerprint</dt><dd className="break-all"><code>{displayedLoad.metadata.contentFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Release status</dt><dd>{displayedLoad.metadata.isCurrent ? "Current published release" : "Earlier published release"}</dd></div>
           <div><dt className="font-semibold">Published</dt><dd><time dateTime={displayedLoad.metadata.publishedAt}>{displayedLoad.metadata.publishedAt}</time></dd></div>
           <div><dt className="font-semibold">Published by</dt><dd className="break-all">{displayedLoad.metadata.publishedBy}</dd></div>

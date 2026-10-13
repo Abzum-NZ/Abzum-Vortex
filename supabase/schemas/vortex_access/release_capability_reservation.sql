@@ -171,3 +171,7 @@ grant execute on function
   vortex_access.release_capability_reservation(
     uuid, uuid, text, text, uuid, bigint, uuid, bigint, uuid, uuid, numeric
   ) to vortex_request;
+
+alter function vortex_access.release_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_duplicate_key uuid, p_quantity numeric) owner to vortex_owner;
+
+grant execute on function vortex_access.release_capability_reservation(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_reservation_id uuid, p_duplicate_key uuid, p_quantity numeric) to postgres;

@@ -73,6 +73,8 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) OWNER TO postgres;
+alter function vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) FROM PUBLIC;
+
+grant execute on function vortex_access.typed_condition_value_matches_internal(p_value jsonb, p_semantic_type text, p_nullable boolean) to postgres;

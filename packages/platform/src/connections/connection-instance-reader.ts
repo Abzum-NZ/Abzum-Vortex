@@ -501,11 +501,6 @@ const tokenExpiryInstant = (value: string | undefined): number | null | undefine
   return Number.isFinite(instant) ? instant : undefined;
 };
 
-type ReadConnectionInstanceRow = DatabaseRow & {
-  readonly organization_id: unknown;
-  readonly connection_instance: unknown;
-};
-
 type ListConnectionInstancesRow = DatabaseRow & {
   readonly organization_id: unknown;
   readonly connection_instances: unknown;
@@ -545,21 +540,6 @@ class ConnectionInstanceReadFailure<Code extends string> extends Error {
 const sameIdentifier = (left: unknown, right: string): boolean =>
   typeof left === "string" && sameId(left, right);
 
-/** Validates the two read identifiers as shapes, returning no value when either is malformed. */
-const validateIdentifiers = (
-  organizationId: unknown,
-  connectionInstanceId: unknown,
-): Readonly<{ organization: string; connectionInstance: string }> | undefined => {
-  try {
-    return Object.freeze({
-      organization: organizationIdSchema.parse(organizationId),
-      connectionInstance: connectionInstanceIdSchema.parse(connectionInstanceId),
-    });
-  } catch {
-    return undefined;
-  }
-};
-
 /** Validates a page request as shapes, returning no value when the page size or cursor is malformed. */
 const validatePageQuery = (
   organizationId: unknown,
@@ -596,51 +576,6 @@ const validatePageQuery = (
     return undefined;
   }
 };
-
-/**
- * Reads one connection instance's safe status for the administration page.
- *
- * The organisation and the instance identity are validated as shapes first; the SQL reader then
- * re-checks the organisation, the administration permission and the instance's organisation from the
- * request context. A value that does not satisfy the page read model, a row from a different
- * organisation than the caller asserted, and a row that is absent are all one neutral
- * `unavailable`, so no secret and no other organisation's instance is ever returned.
- */
-export async function readConnectionInstanceForAdministration(
-  transaction: RequestDatabaseTransaction,
-  organizationId: OrganizationId,
-  connectionInstanceId: ConnectionInstanceId,
-): Promise<ConnectionInstanceReadResult> {
-  const validated = validateIdentifiers(organizationId, connectionInstanceId);
-  if (validated === undefined) return unavailable("invalid_parameters");
-  const { organization, connectionInstance } = validated;
-
-  try {
-    const rows = await transaction.query<ReadConnectionInstanceRow>`
-      select organization_id, connection_instance
-      from vortex_platform.read_connection_instance_for_administration(
-        ${organization}::uuid,
-        ${connectionInstance}::uuid
-      )
-    `;
-    const row = rows.length === 1 ? rows[0] : undefined;
-    if (row === undefined) return unavailable("connection_unavailable");
-    if (!sameIdentifier(row.organization_id, organization))
-      throw new Error("CONNECTION_INSTANCE_READER_ORGANIZATION_MISMATCH");
-
-    const parsed = connectionInstanceStatusSchema.safeParse(row.connection_instance);
-    if (!parsed.success)
-      throw new Error("CONNECTION_INSTANCE_STATUS_MALFORMED", { cause: parsed.error });
-    if (!sameIdentifier(parsed.data.connectionInstanceId, connectionInstance))
-      throw new Error("CONNECTION_INSTANCE_STATUS_IDENTITY_MISMATCH");
-
-    return Object.freeze({ outcome: "available", instance: parsed.data });
-  } catch (error) {
-    const failure = new ConnectionInstanceReadFailure(refusalForFailure(error), error);
-    console.error(`[connection] administration instance read failed: ${describeFailure(failure)}`);
-    return unavailable(failure.reasonCode);
-  }
-}
 
 /**
  * Reads one bounded page of the organisation's connection instance safe statuses.

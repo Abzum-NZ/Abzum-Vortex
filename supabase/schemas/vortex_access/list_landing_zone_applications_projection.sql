@@ -97,3 +97,7 @@ grant execute on function vortex_access.list_landing_zone_applications_projectio
 
 comment on function vortex_access.list_landing_zone_applications_projection(uuid, integer) is
   'Registered Landing Zone application projection: returns each installed application the current viewer may reach in the viewer''s organisation, with the application identity, registration revision and only its key, name and icon, or no row when the application scope refuses the viewer. Pages, roles, compilation output, fingerprints and installation evidence are never projected.';
+
+alter function vortex_access.list_landing_zone_applications_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_landing_zone_applications_projection(p_record_id uuid, p_page_size integer) to postgres;

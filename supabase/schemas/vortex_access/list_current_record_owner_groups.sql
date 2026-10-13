@@ -35,3 +35,7 @@ grant execute on function vortex_access.list_current_record_owner_groups()
 
 comment on function vortex_access.list_current_record_owner_groups() is
   'Returns only the active Groups of which the verified current organisation account is a current member, for an explicit initial record ownership choice. The protected Record writer rechecks the selected Group under its own transaction lock.';
+
+alter function vortex_access.list_current_record_owner_groups() owner to vortex_owner;
+
+grant execute on function vortex_access.list_current_record_owner_groups() to postgres;

@@ -101,8 +101,7 @@ begin
     permission_id, permission_key, label, description, record_type_id,
     action_kind, named_action, administrative, source_kind,
     source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     meaning_fingerprint, record_scope, field_policy
   )
   select entry.organization_id, entry.registration_kind,
@@ -113,7 +112,6 @@ begin
     entry.administrative, entry.source_kind, entry.source_definition_key,
     entry.source_root_id, '1.2.0', entry.source_revision,
     entry.source_validation_contract_version,
-    entry.source_content_fingerprint, entry.source_resolution_fingerprint,
     catalogue_fingerprint, entry.meaning_fingerprint,
     entry.record_scope, entry.field_policy
   from vortex_access.permission_catalogue_entries as entry
@@ -133,8 +131,7 @@ begin
     permission_id, permission_key, label, description, record_type_id,
     action_kind, named_action, administrative, source_kind,
     source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     meaning_fingerprint
   ) values (
     p_organization_id, 'platform', platform_owner_id, 4, null,
@@ -142,7 +139,7 @@ begin
     'platform.organization.connections.manage', 'Manage connections',
     'Register, grant, check, revoke and reauthorise connection instances in the selected organisation without application-installation or access-assignment authority.',
     null, 'manage', null, true, 'platform_catalogue', null, null,
-    '1.2.0', null, null, null, null, catalogue_fingerprint,
+    '1.2.0', null, null, catalogue_fingerprint,
     meaning_fingerprint
   );
 
@@ -368,3 +365,7 @@ end
 $$;
 
 REVOKE ALL ON FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+alter function vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

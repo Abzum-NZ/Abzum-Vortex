@@ -254,3 +254,7 @@ comment on function vortex_access.revoke_record_share_for_administration(
   uuid, bigint, text, uuid
 ) is
   'Protected direct-share revocation: permitted only to an account currently acting in the share''s own application and organisation (organisation_shared shares excepted from the application match) that either is the share''s own non-delegated, non-support granted_by identity, or currently holds a record.share permission whose own catalogue record scope is decidable without the record row -- an all_records route and no saved condition, since a saved condition narrows every route including that one -- re-evaluated fresh under the governance lock, never the complete exact-record decision. Narrowing never requires the share''s own target record to be visible: never a re-requirement of the acting account''s present field ceiling, and never the record''s own existence or lifecycle state. Owner-only; reached only through a fixed adapter.';
+
+alter function vortex_access.revoke_record_share_for_administration(p_direct_share_id uuid, p_expected_revision bigint, p_reason text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revoke_record_share_for_administration(p_direct_share_id uuid, p_expected_revision bigint, p_reason text, p_activity_id uuid) to postgres;

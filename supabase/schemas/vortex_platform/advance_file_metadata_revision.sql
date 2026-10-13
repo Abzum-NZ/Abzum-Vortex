@@ -38,4 +38,6 @@ revoke execute on function vortex_platform.advance_file_metadata_revision()
 comment on function vortex_platform.advance_file_metadata_revision() is
   'Maintains the File metadata revision on each file record insert or update.';
 
-alter function vortex_platform.advance_file_metadata_revision() owner to postgres;
+alter function vortex_platform.advance_file_metadata_revision() owner to vortex_owner;
+
+grant execute on function vortex_platform.advance_file_metadata_revision() to postgres;

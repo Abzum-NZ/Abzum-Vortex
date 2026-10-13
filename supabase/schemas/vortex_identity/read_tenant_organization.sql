@@ -42,4 +42,6 @@ grant execute on function vortex_identity.read_tenant_organization(uuid, uuid)
 comment on function vortex_identity.read_tenant_organization(uuid, uuid) is
   'Exact same-tenant structural organisation read under the bound request context person''s hierarchy.read capability.';
 
-alter function vortex_identity.read_tenant_organization(uuid,uuid) owner to postgres;
+alter function vortex_identity.read_tenant_organization(p_tenant_id uuid, p_organization_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.read_tenant_organization(p_tenant_id uuid, p_organization_id uuid) to postgres;

@@ -36,3 +36,7 @@ grant execute on function vortex_platform.uuid_array_is_canonical(uuid[])
 
 comment on function vortex_platform.uuid_array_is_canonical(uuid[]) is
   'Accepts only a one-dimensional array of strict non-nil UUIDs in ascending unique order.';
+
+alter function vortex_platform.uuid_array_is_canonical(p_values uuid[]) owner to vortex_owner;
+
+grant execute on function vortex_platform.uuid_array_is_canonical(p_values uuid[]) to postgres;

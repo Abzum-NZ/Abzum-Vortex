@@ -18,14 +18,6 @@ export const identityVerificationRefusalCodes = Object.freeze([
 
 export type IdentityVerificationRefusalCode = (typeof identityVerificationRefusalCodes)[number];
 
-const identityVerificationRefusalCodeSet: ReadonlySet<string> = new Set(
-  identityVerificationRefusalCodes,
-);
-
-export const isIdentityVerificationRefusalCode = (
-  value: string,
-): value is IdentityVerificationRefusalCode => identityVerificationRefusalCodeSet.has(value);
-
 export class IdentityVerificationError extends Error {
   readonly refusalCode: IdentityVerificationRefusalCode;
 

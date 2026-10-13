@@ -393,3 +393,7 @@ comment on function vortex_access.grant_record_share_for_administration(
   uuid, jsonb
 ) is
   'Protected same-organisation direct-share grant: locks governance before confirming the grantor currently holds record.share and re-deriving their own current read/update ceiling from the live catalogue evaluated over the caller''s trusted facts, requires the proposal to be a subset of that ceiling, then invokes the existing private writer. Owner-only; a fixed trusted adapter supplies p_facts (the target record''s real row, relationships and conditions) and holds the only request-role grant, exactly as #35''s own record decision.';
+
+alter function vortex_access.grant_record_share_for_administration(p_direct_share_id uuid, p_record_id uuid, p_recipient_kind text, p_organization_account_id uuid, p_group_id uuid, p_readable_field_ids uuid[], p_changeable_field_ids uuid[], p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_reason text, p_activity_id uuid, p_facts jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.grant_record_share_for_administration(p_direct_share_id uuid, p_record_id uuid, p_recipient_kind text, p_organization_account_id uuid, p_group_id uuid, p_readable_field_ids uuid[], p_changeable_field_ids uuid[], p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_reason text, p_activity_id uuid, p_facts jsonb) to postgres;

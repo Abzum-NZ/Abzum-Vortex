@@ -14,7 +14,7 @@ import type { StoredModuleDefinitionDraft } from "@web/platform-server";
 import type {
   StudioModuleTextFieldDescriptor,
   StudioModuleTextFieldSettingsResult,
-} from "../../_lib/studio-module-text-field-settings";
+} from "@web/platform-server";
 import { reopenModuleTextFieldSettings, saveModuleTextFieldSettings } from "../modules/[organizationId]/[moduleRootId]/fields/actions";
 import { moduleSaveRefusal } from "./studio-refusal-messages";
 

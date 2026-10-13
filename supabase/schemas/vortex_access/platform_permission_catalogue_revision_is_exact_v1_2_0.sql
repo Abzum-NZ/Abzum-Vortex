@@ -122,8 +122,6 @@ begin
            and entry.source_version = '1.2.0'
            and entry.source_revision is null
            and entry.source_validation_contract_version is null
-           and entry.source_content_fingerprint is null
-           and entry.source_resolution_fingerprint is null
            and entry.source_catalogue_fingerprint = catalogue_fingerprint
            and entry.meaning_fingerprint = connection_meaning_fingerprint)
     and (select pg_catalog.count(*) = 15
@@ -163,3 +161,7 @@ revoke all on function
 
 comment on function vortex_access.platform_permission_catalogue_revision_is_exact_v1_2_0(uuid, bigint) is
   'Owner-only fixed evidence assertion for exact platform catalogue revision 4 (1.2.0), which adds the connection administration permission to revision 3.';
+
+alter function vortex_access.platform_permission_catalogue_revision_is_exact_v1_2_0(p_organization_id uuid, p_registration_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact_v1_2_0(p_organization_id uuid, p_registration_revision bigint) to postgres;

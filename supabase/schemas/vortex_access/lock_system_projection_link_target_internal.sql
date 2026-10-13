@@ -83,3 +83,7 @@ grant execute on function vortex_access.lock_system_projection_link_target_inter
 
 comment on function vortex_access.lock_system_projection_link_target_internal(text, uuid, uuid) is
   'Private protected system-projection link lock: share-locks only an active same-organisation People account and its active identity projection, or an active Group, after confirming the registered reader and current organisation; read authority remains with the Record access decision.';
+
+alter function vortex_access.lock_system_projection_link_target_internal(p_protected_read_model_key text, p_target_record_id uuid, p_organization_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.lock_system_projection_link_target_internal(p_protected_read_model_key text, p_target_record_id uuid, p_organization_id uuid) to postgres;

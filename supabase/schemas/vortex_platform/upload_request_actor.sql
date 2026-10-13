@@ -15,7 +15,9 @@ CREATE OR REPLACE FUNCTION vortex_platform.upload_request_actor(p_context jsonb)
   end
 $$;
 
-ALTER FUNCTION vortex_platform.upload_request_actor(p_context jsonb) OWNER TO postgres;
+alter function vortex_platform.upload_request_actor(p_context jsonb) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_platform.upload_request_actor(p_context jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_platform.upload_request_actor(p_context jsonb) TO vortex_owner;
+
+grant execute on function vortex_platform.upload_request_actor(p_context jsonb) to postgres;

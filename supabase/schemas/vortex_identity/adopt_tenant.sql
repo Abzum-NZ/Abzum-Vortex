@@ -148,4 +148,6 @@ grant execute on function vortex_identity.adopt_tenant(uuid,uuid,text,uuid,uuid)
 
 comment on function vortex_identity.adopt_tenant(uuid,uuid,text,uuid,uuid) is 'Configured-system-only explicit tenant stewardship adoption; it creates no organisation authority.';
 
-alter function vortex_identity.adopt_tenant(uuid,uuid,text,uuid,uuid) owner to postgres;
+alter function vortex_identity.adopt_tenant(p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_tenant_steward_identity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.adopt_tenant(p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_tenant_steward_identity_id uuid) to postgres;

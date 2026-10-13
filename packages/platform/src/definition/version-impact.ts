@@ -17,7 +17,6 @@ import {
 import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
-export const applicationVersionImpactPolicyVersion = "2.0.0" as const;
 export const moduleVersionImpactPolicyVersion = "3.0.0" as const;
 export { stableDefinitionReleaseVersionSchema };
 

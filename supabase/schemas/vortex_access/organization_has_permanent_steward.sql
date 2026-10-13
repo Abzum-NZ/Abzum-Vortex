@@ -135,3 +135,5 @@ comment on function vortex_access.organization_has_permanent_steward(uuid, times
   'Checks the direct permanent steward and original platform-permission invariant for an adopted organisation.';
 alter function vortex_access.organization_has_permanent_steward(uuid, timestamptz)
   owner to postgres;
+
+alter function vortex_access.organization_has_permanent_steward(p_organization_id uuid, p_checked_at timestamp with time zone) owner to vortex_owner;

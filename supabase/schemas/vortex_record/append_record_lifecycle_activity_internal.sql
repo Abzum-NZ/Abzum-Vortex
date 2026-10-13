@@ -65,3 +65,5 @@ comment on function vortex_record.append_record_lifecycle_activity_internal(
   uuid, text, uuid[]
 ) is
   'Private Record delete and restore Activity composer: derives the organisation, account and correlation from the validated request context and records the channel from that context.';
+
+alter function vortex_record.append_record_lifecycle_activity_internal(p_activity_id uuid, p_operation text, p_subject_ids uuid[]) owner to vortex_owner;

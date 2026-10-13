@@ -298,13 +298,19 @@ begin
             'releaseRevision', entry.source_revision,
             'releaseVersion', entry.source_version,
             'validationContractVersion', entry.source_validation_contract_version,
-            'contentFingerprint', entry.source_content_fingerprint,
-            'resolutionFingerprint', entry.source_resolution_fingerprint
+            'contentFingerprint', source_release.content_fingerprint,
+            'resolutionFingerprint', source_release.resolution_fingerprint
           ),
           'meaningFingerprint', entry.meaning_fingerprint
         ) as entry_json,
         entry.owner_kind, entry.owner_id, entry.permission_key, entry.permission_id
       from vortex_access.permission_catalogue_entries as entry
+      left join vortex_definition.releases as source_release
+        on source_release.root_id = entry.source_root_id
+        and source_release.release_revision = entry.source_revision
+        and source_release.release_version = entry.source_version
+        and source_release.validation_contract_version =
+          entry.source_validation_contract_version
       where entry.organization_id = context_organization_id
         and entry.registration_kind = 'application'
         and entry.registration_owner_id = target_application_root_id
@@ -579,3 +585,7 @@ to vortex_request;
 
 comment on function vortex_access.read_organization_role_change_evidence_for_administration(jsonb) is
   'Server-side preparation read: given bounded role configuration or an existing Application role identity and expected revision, it returns complete, fingerprinted permission and template evidence for the verified caller organisation only, deriving stored role configuration, actor and organisation from protected context and including an exact live-assignment snapshot only when the writer requires it.';
+
+alter function vortex_access.read_organization_role_change_evidence_for_administration(p_preparation jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.read_organization_role_change_evidence_for_administration(p_preparation jsonb) to postgres;

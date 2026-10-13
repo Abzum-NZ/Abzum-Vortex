@@ -212,7 +212,6 @@ export function ApplicationReleaseHistory({ initialPage }: {
         <div><dt className="font-semibold">Version and revision</dt><dd>{metadata.releaseVersion} · revision {metadata.releaseRevision}</dd></div>
         <div><dt className="font-semibold">Current release</dt><dd>{metadata.isCurrent ? "Yes" : "No"}</dd></div>
         <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{metadata.sourceFingerprint}</code></dd></div>
-        <div><dt className="font-semibold">Content fingerprint</dt><dd className="break-all"><code>{metadata.contentFingerprint}</code></dd></div>
         <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{metadata.publishedAt}</time></dd></div>
         <div><dt className="font-semibold">Published by</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>

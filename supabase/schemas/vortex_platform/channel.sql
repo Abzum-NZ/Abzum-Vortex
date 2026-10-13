@@ -14,3 +14,7 @@ grant execute on function vortex_platform.channel() to vortex_request;
 
 comment on function vortex_platform.channel() is
   'Returns the channel the trusted entry point installed in this transaction''s request context, or web when that entry point set none; never a client-supplied value.';
+
+alter function vortex_platform.channel() owner to vortex_owner;
+
+grant execute on function vortex_platform.channel() to postgres;

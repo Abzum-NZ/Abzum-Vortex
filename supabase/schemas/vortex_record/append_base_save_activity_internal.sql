@@ -68,3 +68,5 @@ comment on function vortex_record.append_base_save_activity_internal(
   uuid, text, uuid, uuid[], text
 ) is
   'Private Record save Activity composer: derives the organisation, account and correlation from the validated request context and records the channel from that context.';
+
+alter function vortex_record.append_base_save_activity_internal(p_activity_id uuid, p_operation text, p_subject_id uuid, p_changed_field_ids uuid[], p_outcome text) owner to vortex_owner;

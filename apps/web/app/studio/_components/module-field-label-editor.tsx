@@ -5,8 +5,11 @@ import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { canonicalJson, labelSchema, sameId, storedModuleDefinitionDraftSchema } from "@vortex/platform/schema";
-import type { StoredModuleDefinitionDraft } from "@web/platform-server";
-import type { StudioModuleFieldDescriptor, StudioModuleFieldLabelResult } from "../../_lib/studio-module-field-label";
+import type {
+  StoredModuleDefinitionDraft,
+  StudioModuleFieldDescriptor,
+  StudioModuleFieldLabelResult,
+} from "@web/platform-server";
 import { reopenModuleFieldLabel, saveModuleFieldLabel } from "../module-field-label-actions";
 import { moduleSaveRefusal } from "./studio-refusal-messages";
 

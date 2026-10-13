@@ -48,3 +48,7 @@ revoke all on function vortex_platform.append_connection_instance_activity_inter
 grant execute on function vortex_platform.append_connection_instance_activity_internal(jsonb, uuid, uuid, text, timestamp with time zone) to vortex_owner;
 
 comment on function vortex_platform.append_connection_instance_activity_internal(jsonb, uuid, uuid, text, timestamp with time zone) is null;
+
+alter function vortex_platform.append_connection_instance_activity_internal(p_context jsonb, p_activity_id uuid, p_connection_instance_id uuid, p_action text, p_occurred_at timestamp with time zone) owner to vortex_owner;
+
+grant execute on function vortex_platform.append_connection_instance_activity_internal(p_context jsonb, p_activity_id uuid, p_connection_instance_id uuid, p_action text, p_occurred_at timestamp with time zone) to postgres;

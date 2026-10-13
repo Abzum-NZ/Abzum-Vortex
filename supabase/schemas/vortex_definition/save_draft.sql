@@ -144,3 +144,7 @@ grant execute on function vortex_definition.save_draft(uuid, bigint, jsonb, text
 
 comment on function vortex_definition.save_draft(uuid, bigint, jsonb, text, jsonb) is
   'Conditionally saves a draft and records new permanent identities and aliases atomically.';
+
+alter function vortex_definition.save_draft(p_root_id uuid, p_expected_revision bigint, p_draft_source jsonb, p_source_fingerprint text, p_identity_requirements jsonb) owner to vortex_owner;
+
+grant execute on function vortex_definition.save_draft(p_root_id uuid, p_expected_revision bigint, p_draft_source jsonb, p_source_fingerprint text, p_identity_requirements jsonb) to postgres;

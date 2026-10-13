@@ -155,7 +155,7 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) OWNER TO postgres;
+alter function vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) IS 'Private strict validator for canonical unique record-scope routes, the sole all-record route rule and the saved-condition envelope shape.';
 
@@ -164,3 +164,5 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 REVOKE ALL ON FUNCTION vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) FROM PUBLIC;
+
+grant execute on function vortex_access.permission_record_scope_is_valid(p_record_scope jsonb) to postgres;

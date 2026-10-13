@@ -18,6 +18,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_definition.protect_root_identity() OWNER TO postgres;
+alter function vortex_definition.protect_root_identity() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_definition.protect_root_identity() FROM PUBLIC;
+
+grant execute on function vortex_definition.protect_root_identity() to postgres;

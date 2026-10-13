@@ -402,3 +402,7 @@ grant execute on function vortex_access.evaluate_organization_record_access_inte
   to vortex_record_adapter;
 comment on function vortex_access.evaluate_organization_record_access_internal(jsonb, uuid, jsonb) is
   'The complete exact-record access decision: unions every eligible alternative''s own complete row scope and always carries the exact recordId. Owner-only except for the fixed record adapter.';
+
+alter function vortex_access.evaluate_organization_record_access_internal(p_declaration jsonb, p_target_record_id uuid, p_facts jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.evaluate_organization_record_access_internal(p_declaration jsonb, p_target_record_id uuid, p_facts jsonb) to postgres;

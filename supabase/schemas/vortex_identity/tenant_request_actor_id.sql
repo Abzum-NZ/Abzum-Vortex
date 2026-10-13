@@ -25,4 +25,6 @@ revoke execute on function vortex_identity.tenant_request_actor_id()
 comment on function vortex_identity.tenant_request_actor_id() is
   'Returns the acting person from the verified request context for tenant governance, or refuses when the bound context names no human or federated person or that person is disabled.';
 
-alter function vortex_identity.tenant_request_actor_id() owner to postgres;
+alter function vortex_identity.tenant_request_actor_id() owner to vortex_owner;
+
+grant execute on function vortex_identity.tenant_request_actor_id() to postgres;

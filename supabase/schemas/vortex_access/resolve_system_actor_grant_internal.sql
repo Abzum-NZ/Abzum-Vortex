@@ -53,3 +53,7 @@ comment on function vortex_access.resolve_system_actor_grant_internal(
   uuid, text, uuid, uuid, text
 ) is
   'Owner-only lookup of the one system actor grant for an exact actor, protected operation, organisation, optional flow and scope subject; returns active, revoked or null and never derives authority from the session role.';
+
+alter function vortex_access.resolve_system_actor_grant_internal(p_system_actor_id uuid, p_operation_key text, p_organization_id uuid, p_flow_id uuid, p_scope_key text) owner to vortex_owner;
+
+grant execute on function vortex_access.resolve_system_actor_grant_internal(p_system_actor_id uuid, p_operation_key text, p_organization_id uuid, p_flow_id uuid, p_scope_key text) to postgres;

@@ -41,9 +41,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.resolve_human_application_change_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) OWNER TO postgres;
+alter function vortex_access.resolve_human_application_change_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.resolve_human_application_change_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) IS 'Resolves one active human application change scope under the organization Access governance lock.';
 
 REVOKE ALL ON FUNCTION vortex_access.resolve_human_application_change_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.resolve_human_application_change_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) TO vortex_runtime;
+
+grant execute on function vortex_access.resolve_human_application_change_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) to postgres;
