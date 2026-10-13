@@ -23,7 +23,8 @@ declare
   evaluated_at timestamptz;
   actor_identity_id uuid;
   current_revision bigint;
-  receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored record;
+  claimed jsonb;
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
   resulting_revision bigint;
 begin
@@ -74,16 +75,17 @@ begin
     evaluated_at
   );
 
-  select stored.*
-  into receipt
-  from vortex_identity.accepted_administration_receipts as stored
-  where stored.actor_id = actor_identity_id
-    and stored.tenant_id = p_tenant_id
-    and stored.operation_key = 'rename_tenant_organization'
-    and stored.duplicate_key = p_duplicate_key
-  for update;
-  if found then
-    if receipt.command_fingerprint <> p_command_fingerprint then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'rename_tenant_organization', p_duplicate_key, null, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+    );
+    if stored."fingerprint" <> p_command_fingerprint then
       raise exception using
         errcode = 'V3001',
         message = 'Administration duplicate conflicts';
@@ -91,10 +93,10 @@ begin
     return query
     select 'replayed'::text,
       'rename_tenant_organization'::text,
-      receipt.subject_ids[1],
-      receipt.subject_revisions[1],
-      receipt.receipt_id,
-      receipt.accepted_at;
+      stored."subjectIds"[1],
+      stored."subjectRevisions"[1],
+      stored."receiptId",
+      stored."acceptedAt";
     return;
   end if;
 
@@ -118,26 +120,14 @@ begin
   where organizations.tenant_id = p_tenant_id
     and organizations.organization_id = p_organization_id;
 
-  insert into vortex_identity.accepted_administration_receipts (
-    receipt_id,
-    actor_id,
-    tenant_id,
-    operation_key,
-    duplicate_key,
-    command_fingerprint,
-    subject_ids,
-    subject_revisions,
-    accepted_at
-  ) values (
-    new_correlation_id,
-    actor_identity_id,
-    p_tenant_id,
-    'rename_tenant_organization',
+  perform vortex_record.complete_scoped_command_receipt_internal(
     p_duplicate_key,
-    p_command_fingerprint,
-    array[p_organization_id],
-    array[resulting_revision],
-    evaluated_at
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
+      'fingerprint', p_command_fingerprint, 'clusterId', null::uuid
+    )
   );
 
   return query

@@ -37,7 +37,8 @@ security definer
 set search_path = ''
 as $function$
 declare
-  receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored record;
+  claimed jsonb;
   new_tenant_id uuid := pg_catalog.gen_random_uuid();
   new_organization_id uuid := pg_catalog.gen_random_uuid();
   new_tenant_assignment_id uuid := pg_catalog.gen_random_uuid();
@@ -73,41 +74,44 @@ begin
     30
   ));
 
-  select stored.* into receipt
-  from vortex_identity.accepted_administration_receipts as stored
-  where stored.actor_id = p_operator_actor_id
-    and stored.cluster_id = p_cluster_id
-    and stored.operation_key = 'provision_tenant'
-    and stored.duplicate_key = p_duplicate_key
-  for update;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'provision_tenant', p_duplicate_key, null, null, p_operator_actor_id,
+    'Administration duplicate conflicts'
+  );
 
-  if found then
-    if receipt.command_fingerprint <> p_command_fingerprint then
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+    );
+    if stored."fingerprint" <> p_command_fingerprint
+      or stored."clusterId" is distinct from p_cluster_id then
       raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
     end if;
     select tenant.tenant_id into replay_tenant_id
     from vortex_identity.tenants as tenant
-    where tenant.tenant_id = any(receipt.subject_ids);
+    where tenant.tenant_id = any(stored."subjectIds");
     select organization.organization_id into replay_organization_id
     from vortex_identity.organizations as organization
-    where organization.organization_id = any(receipt.subject_ids);
+    where organization.organization_id = any(stored."subjectIds");
     select assignment.assignment_id into replay_assignment_id
     from vortex_identity.tenant_administrator_assignments as assignment
-    where assignment.assignment_id = any(receipt.subject_ids);
+    where assignment.assignment_id = any(stored."subjectIds");
     select account.organization_account_id into replay_account_id
     from vortex_identity.organization_accounts as account
-    where account.organization_account_id = any(receipt.subject_ids);
+    where account.organization_account_id = any(stored."subjectIds");
     if replay_tenant_id is null or replay_organization_id is null
       or replay_assignment_id is null or replay_account_id is null then
       raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
     end if;
     return query select 'replayed'::text, 'provision_tenant'::text,
       replay_tenant_id, replay_organization_id, replay_assignment_id,
-      receipt.subject_revisions[pg_catalog.array_position(receipt.subject_ids, replay_assignment_id)],
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_assignment_id)],
       replay_account_id,
-      receipt.subject_revisions[pg_catalog.array_position(receipt.subject_ids, replay_account_id)],
-      receipt.subject_revisions[pg_catalog.array_position(receipt.subject_ids, replay_organization_id)],
-      receipt.receipt_id, receipt.accepted_at;
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_account_id)],
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_organization_id)],
+      stored."receiptId", stored."acceptedAt";
     return;
   end if;
 
@@ -252,13 +256,14 @@ begin
     (new_account_id, 1::bigint)
   ) as result(subject_id, subject_revision);
 
-  insert into vortex_identity.accepted_administration_receipts (
-    receipt_id, actor_id, cluster_id, operation_key, duplicate_key,
-    command_fingerprint, subject_ids, subject_revisions, accepted_at
-  ) values (
-    new_correlation_id, p_operator_actor_id, p_cluster_id,
-    'provision_tenant', p_duplicate_key, p_command_fingerprint,
-    result_subject_ids, result_subject_revisions, operation_at
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', operation_at,
+      'subjectIds', pg_catalog.to_jsonb(result_subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions),
+      'fingerprint', p_command_fingerprint, 'clusterId', p_cluster_id
+    )
   );
 
   return query select 'accepted'::text, 'provision_tenant'::text,

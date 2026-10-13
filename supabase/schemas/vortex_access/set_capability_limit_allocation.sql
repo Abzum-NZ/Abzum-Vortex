@@ -26,7 +26,7 @@ declare
   request_correlation_id uuid;
   live_ceiling record;
   target vortex_access.capability_policy_assignments%rowtype;
-  receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored record; claimed jsonb;
   evidence vortex_access.capability_limit_changes%rowtype;
   correlation uuid := pg_catalog.gen_random_uuid();
   command_fingerprint text;
@@ -82,26 +82,27 @@ begin
       p_tenant_id::text, coalesce(p_organization_id::text, ''), p_assignment_id::text,
       p_capability_key, p_unit, p_quantity_limit::text, coalesce(p_expires_at::text, ''),
       coalesce(p_expected_revision::text, '')), 'UTF8'), 'sha256'), 'hex');
-  select stored.* into receipt
-  from vortex_identity.accepted_administration_receipts as stored
-  where stored.actor_id = actor_identity_id and stored.tenant_id = p_tenant_id
-    and stored.operation_key = 'set_capability_limit_allocation'
-    and stored.duplicate_key = p_duplicate_key for update;
-  if found then
-    if receipt.command_fingerprint <> command_fingerprint
-      or receipt.subject_ids <> array[p_assignment_id] then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'set_capability_limit_allocation', p_duplicate_key, null,
+    p_tenant_id, actor_identity_id, 'Capability allocation duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid);
+    if stored."fingerprint" <> command_fingerprint
+      or stored."subjectIds" <> array[p_assignment_id] then
       raise exception using errcode = 'V3001', message = 'Capability allocation duplicate conflicts';
     end if;
-    select stored.* into evidence
-    from vortex_access.capability_limit_changes as stored
-    where stored.change_id = receipt.receipt_id;
+    select change.* into evidence
+    from vortex_access.capability_limit_changes as change
+    where change.change_id = stored."receiptId";
     if not found then
       raise exception using errcode = '42501', message = 'Capability allocation replay is unavailable';
     end if;
     return query select 'replayed'::text, evidence.assignment_id, evidence.tenant_id,
       evidence.organization_id, evidence.capability_key, evidence.unit,
       evidence.quantity_limit, evidence.policy_id, evidence.policy_revision,
-      evidence.assignment_revision, receipt.receipt_id, receipt.accepted_at;
+      evidence.assignment_revision, stored."receiptId", stored."acceptedAt";
     return;
   end if;
   -- An allocation is only ever made beneath a live platform ceiling and never
@@ -166,14 +167,12 @@ begin
         changed_by_actor_id = actor_identity_id, change_correlation_id = correlation
     where assignment.assignment_id = p_assignment_id;
   end if;
-  insert into vortex_identity.accepted_administration_receipts(
-    receipt_id, actor_id, tenant_id, operation_key, duplicate_key,
-    command_fingerprint, subject_ids, subject_revisions, accepted_at
-  ) values (
-    correlation, actor_identity_id, p_tenant_id, 'set_capability_limit_allocation',
-    p_duplicate_key, command_fingerprint, array[p_assignment_id],
-    array[resulting_revision], evaluated_at
-  );
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', correlation,
+      'acceptedAt', evaluated_at, 'subjectIds', pg_catalog.to_jsonb(array[p_assignment_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
+      'fingerprint', command_fingerprint, 'clusterId', null));
   insert into vortex_access.capability_limit_changes(
     change_id, tenant_id, organization_id, change_kind, actor_kind, actor_id,
     policy_id, policy_revision, assignment_id, assignment_revision,

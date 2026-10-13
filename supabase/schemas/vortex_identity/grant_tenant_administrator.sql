@@ -19,7 +19,8 @@ declare
   expiry_cap timestamptz;
   evaluated_at timestamptz;
   actor_identity_id uuid;
-  receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored record;
+  claimed jsonb;
   new_assignment_id uuid := pg_catalog.gen_random_uuid();
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
 begin
@@ -77,17 +78,21 @@ begin
     ) then
     raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
   end if;
-  select stored.* into receipt
-  from vortex_identity.accepted_administration_receipts stored
-  where stored.actor_id = actor_identity_id and stored.tenant_id = p_tenant_id
-    and stored.operation_key = 'grant_tenant_administrator'
-    and stored.duplicate_key = p_duplicate_key for update;
-  if found then
-    if receipt.command_fingerprint <> computed_fingerprint then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'grant_tenant_administrator', p_duplicate_key, null, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+    );
+    if stored."fingerprint" <> computed_fingerprint then
       raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
     end if;
     return query select 'replayed'::text, 'grant_tenant_administrator'::text,
-      receipt.subject_ids[1], receipt.subject_revisions[1], receipt.receipt_id, receipt.accepted_at;
+      stored."subjectIds"[1], stored."subjectRevisions"[1], stored."receiptId", stored."acceptedAt";
     return;
   end if;
   expiry_cap := vortex_identity.tenant_administrator_grant_expiry_cap(
@@ -103,12 +108,14 @@ begin
     new_assignment_id, p_tenant_id, p_subject_identity_id, capabilities, p_starts_at, p_expires_at, 1,
     evaluated_at, actor_identity_id, new_correlation_id, evaluated_at, actor_identity_id, new_correlation_id, null, null, null
   );
-  insert into vortex_identity.accepted_administration_receipts(
-    receipt_id, actor_id, tenant_id, operation_key, duplicate_key,
-    command_fingerprint, subject_ids, subject_revisions, accepted_at
-  ) values (
-    new_correlation_id, actor_identity_id, p_tenant_id, 'grant_tenant_administrator',
-    p_duplicate_key, computed_fingerprint, array[new_assignment_id], array[1::bigint], evaluated_at
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[new_assignment_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[1::bigint]),
+      'fingerprint', computed_fingerprint, 'clusterId', null::uuid
+    )
   );
   return query select 'accepted'::text, 'grant_tenant_administrator'::text,
     new_assignment_id, 1::bigint, new_correlation_id, evaluated_at;

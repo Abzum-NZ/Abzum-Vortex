@@ -8,7 +8,8 @@ declare
   protected_context record;
   target vortex_access.capability_reservations%rowtype;
   balance record;
-  existing_command vortex_access.capability_reservation_commands%rowtype;
+  claimed jsonb;
+  request_actor_id uuid;
   command_fingerprint text;
   remaining numeric;
   new_consumed numeric;
@@ -53,19 +54,20 @@ begin
       coalesce(protected_context.request_organization_id::text, ''),
       p_duplicate_key::text), 650)
   );
-  select stored.* into existing_command
-  from vortex_access.capability_reservation_commands as stored
-  where stored.tenant_id = p_tenant_id
-    and stored.request_organization_id
-      is not distinct from protected_context.request_organization_id
-    and stored.duplicate_key = p_duplicate_key for update;
-  if found then
-    if existing_command.operation_kind <> 'consume'
-      or existing_command.command_fingerprint <> command_fingerprint then
+  request_actor_id := coalesce(
+    vortex_platform.current_context() ->> 'organizationAccountId',
+    vortex_platform.current_context() ->> 'systemActorId'
+  )::uuid;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'capability_consume', p_duplicate_key, protected_context.request_organization_id,
+    p_tenant_id, request_actor_id, 'Capability consumption duplicate conflicts'
+  );
+  if claimed is not null then
+    if claimed ->> 'fingerprint' <> command_fingerprint then
       raise exception using errcode = 'V3001', message = 'Capability consumption duplicate conflicts';
     end if;
     return query select pg_catalog.jsonb_set(
-      existing_command.result, '{status}', '"replayed"'::jsonb, false
+      claimed - 'fingerprint', '{status}', '"replayed"'::jsonb, false
     );
     return;
   end if;
@@ -112,15 +114,9 @@ begin
         'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
       'correlationId', protected_context.correlation_id
     ));
-    insert into vortex_access.capability_reservation_commands (
-      tenant_id, request_organization_id, duplicate_key,
-      operation_kind, command_fingerprint, reservation_id,
-      result, correlation_id, accepted_at
-    ) values (
-      p_tenant_id, protected_context.request_organization_id, p_duplicate_key,
-      'consume', command_fingerprint,
-      case when target.reservation_id is null then null else target.reservation_id end,
-      safe_result, protected_context.correlation_id, evaluated_at
+    perform vortex_record.complete_scoped_command_receipt_internal(
+      p_duplicate_key,
+      safe_result || pg_catalog.jsonb_build_object('fingerprint', command_fingerprint)
     );
     return query select safe_result;
     return;
@@ -160,14 +156,9 @@ begin
       'releasedQuantity', balance.released_quantity::text,
       'availableQuantity', balance.available_quantity::text)
   ));
-  insert into vortex_access.capability_reservation_commands (
-    tenant_id, request_organization_id, duplicate_key,
-    operation_kind, command_fingerprint, reservation_id,
-    result, correlation_id, accepted_at
-  ) values (
-    p_tenant_id, effective.request_organization_id, p_duplicate_key,
-    'consume', command_fingerprint, p_reservation_id,
-    safe_result, effective.correlation_id, evaluated_at
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    safe_result || pg_catalog.jsonb_build_object('fingerprint', command_fingerprint)
   );
   return query select safe_result;
 end

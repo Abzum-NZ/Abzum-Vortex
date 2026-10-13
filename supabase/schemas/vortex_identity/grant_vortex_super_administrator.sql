@@ -18,7 +18,7 @@ as $function$
 declare
   context_value jsonb;
   actor_identity_id uuid;
-  existing_receipt vortex_identity.vortex_super_administrator_assignment_receipts%rowtype;
+  claimed jsonb;
   active_assignment_id uuid;
   new_assignment_id uuid := pg_catalog.gen_random_uuid();
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
@@ -84,20 +84,18 @@ begin
     pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'grant', p_identity_id::text), 'UTF8'),
     'sha256'
   ), 'hex');
-  select receipt.* into existing_receipt
-  from vortex_identity.vortex_super_administrator_assignment_receipts as receipt
-  where receipt.actor_kind = 'identity'
-    and receipt.actor_id = actor_identity_id
-    and receipt.operation_key = 'grant'
-    and receipt.duplicate_key = p_duplicate_key;
-  if found then
-    if existing_receipt.command_fingerprint <> computed_fingerprint then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'vortex_super_administrator_grant', p_duplicate_key, null, null, actor_identity_id,
+    'Super-administrator grant duplicate conflicts', 'V3143'
+  );
+  if claimed is not null then
+    if claimed ->> 'fingerprint' <> computed_fingerprint then
       raise exception using errcode = 'V3143',
         message = 'Super-administrator grant duplicate conflicts';
     end if;
-    return query select 'replayed'::text, existing_receipt.assignment_id,
-      p_identity_id, existing_receipt.revision, existing_receipt.correlation_id,
-      existing_receipt.accepted_at;
+    return query select 'replayed'::text, (claimed ->> 'assignmentId')::uuid,
+      p_identity_id, (claimed ->> 'revision')::bigint,
+      (claimed ->> 'correlationId')::uuid, (claimed ->> 'acceptedAt')::timestamptz;
     return;
   end if;
 
@@ -121,12 +119,11 @@ begin
     actor_identity_id, new_correlation_id
   );
 
-  insert into vortex_identity.vortex_super_administrator_assignment_receipts (
-    actor_kind, actor_id, operation_key, duplicate_key, command_fingerprint,
-    assignment_id, revision, correlation_id, accepted_at
-  ) values (
-    'identity', actor_identity_id, 'grant', p_duplicate_key,
-    computed_fingerprint, new_assignment_id, 1, new_correlation_id, evaluated_at
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key, pg_catalog.jsonb_build_object(
+      'fingerprint', computed_fingerprint, 'assignmentId', new_assignment_id, 'revision', 1,
+      'correlationId', new_correlation_id, 'acceptedAt', evaluated_at
+    )
   );
 
   perform vortex_record.append_organization_activity_entry(

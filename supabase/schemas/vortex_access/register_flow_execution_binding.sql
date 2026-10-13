@@ -35,11 +35,11 @@ as $function$
 declare
   authority record;
   command_fingerprint text;
-  receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored record; claimed jsonb;
   current_binding vortex_access.flow_execution_bindings%rowtype;
   stored_binding vortex_access.flow_execution_bindings%rowtype;
   operation_at timestamptz;
-  receipt_id uuid := pg_catalog.gen_random_uuid();
+  new_receipt_id uuid := pg_catalog.gen_random_uuid();
   next_revision bigint;
   activity_result text;
   permits_system boolean;
@@ -161,32 +161,30 @@ begin
     ), 'UTF8'),
     'sha256'), 'hex');
 
-  select stored.* into receipt
-  from vortex_identity.accepted_administration_receipts as stored
-  where stored.actor_id = p_actor_organization_account_id
-    and stored.tenant_id = authority.tenant_id
-    and stored.operation_key = 'register_flow_execution_binding'
-    and stored.duplicate_key = p_duplicate_key
-  for update;
-
-  if found then
-    if receipt.command_fingerprint <> command_fingerprint
-      or receipt.subject_ids <> array[p_execution_binding_id]
-      or receipt.subject_revisions[1] is null then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'register_flow_execution_binding', p_duplicate_key, p_organization_id,
+    authority.tenant_id, p_actor_organization_account_id, 'Flow execution binding duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid);
+    if stored."fingerprint" <> command_fingerprint
+      or stored."subjectIds" <> array[p_execution_binding_id]
+      or stored."subjectRevisions"[1] is null then
       raise exception using errcode = 'V3001', message = 'Flow execution binding duplicate conflicts';
     end if;
     select binding.* into stored_binding
     from vortex_access.flow_execution_bindings as binding
     where binding.execution_binding_id = p_execution_binding_id
-      and binding.revision = receipt.subject_revisions[1]
+      and binding.revision = stored."subjectRevisions"[1]
       and binding.organization_id = p_organization_id;
     if not found then
       raise exception using errcode = '42501', message = 'Flow execution binding replay is unavailable';
     end if;
     return query select 'replayed'::text,
       vortex_access.flow_execution_binding_to_json_internal(stored_binding),
-      receipt.receipt_id,
-      receipt.accepted_at;
+      stored."receiptId",
+      stored."acceptedAt";
     return;
   end if;
 
@@ -304,18 +302,16 @@ begin
     raise exception using errcode = '40001', message = 'Flow execution binding Activity is stale';
   end if;
 
-  insert into vortex_identity.accepted_administration_receipts (
-    receipt_id, actor_id, tenant_id, operation_key, duplicate_key,
-    command_fingerprint, subject_ids, subject_revisions, accepted_at
-  ) values (
-    receipt_id, p_actor_organization_account_id, authority.tenant_id,
-    'register_flow_execution_binding', p_duplicate_key, command_fingerprint,
-    array[p_execution_binding_id], array[next_revision], operation_at
-  );
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', new_receipt_id,
+      'acceptedAt', operation_at, 'subjectIds', pg_catalog.to_jsonb(array[p_execution_binding_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[next_revision]),
+      'fingerprint', command_fingerprint, 'clusterId', null));
 
   return query select 'accepted'::text,
     vortex_access.flow_execution_binding_to_json_internal(stored_binding),
-    receipt_id,
+    new_receipt_id,
     operation_at;
 end
 $function$;

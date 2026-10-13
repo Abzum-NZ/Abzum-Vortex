@@ -17,7 +17,7 @@ security definer
 set search_path = ''
 as $function$
 declare
-  existing_receipt vortex_identity.vortex_super_administrator_assignment_receipts%rowtype;
+  claimed jsonb;
   new_assignment_id uuid := pg_catalog.gen_random_uuid();
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
   evaluated_at timestamptz;
@@ -40,20 +40,18 @@ begin
     'sha256'
   ), 'hex');
 
-  select receipt.* into existing_receipt
-  from vortex_identity.vortex_super_administrator_assignment_receipts as receipt
-  where receipt.actor_kind = 'configured_system_operator'
-    and receipt.actor_id = p_operator_actor_id
-    and receipt.operation_key = 'bootstrap'
-    and receipt.duplicate_key = p_duplicate_key;
-  if found then
-    if existing_receipt.command_fingerprint <> computed_fingerprint then
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'vortex_super_administrator_bootstrap', p_duplicate_key, null, null, p_operator_actor_id,
+    'Super-administrator bootstrap duplicate conflicts', 'V3143'
+  );
+  if claimed is not null then
+    if claimed ->> 'fingerprint' <> computed_fingerprint then
       raise exception using errcode = 'V3143',
         message = 'Super-administrator bootstrap duplicate conflicts';
     end if;
-    return query select 'replayed'::text, existing_receipt.assignment_id,
-      p_identity_id, existing_receipt.revision, existing_receipt.correlation_id,
-      existing_receipt.accepted_at;
+    return query select 'replayed'::text, (claimed ->> 'assignmentId')::uuid,
+      p_identity_id, (claimed ->> 'revision')::bigint,
+      (claimed ->> 'correlationId')::uuid, (claimed ->> 'acceptedAt')::timestamptz;
     return;
   end if;
 
@@ -87,13 +85,11 @@ begin
     new_correlation_id
   );
 
-  insert into vortex_identity.vortex_super_administrator_assignment_receipts (
-    actor_kind, actor_id, operation_key, duplicate_key, command_fingerprint,
-    assignment_id, revision, correlation_id, accepted_at
-  ) values (
-    'configured_system_operator', p_operator_actor_id, 'bootstrap',
-    p_duplicate_key, computed_fingerprint, new_assignment_id, 1,
-    new_correlation_id, evaluated_at
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key, pg_catalog.jsonb_build_object(
+      'fingerprint', computed_fingerprint, 'assignmentId', new_assignment_id, 'revision', 1,
+      'correlationId', new_correlation_id, 'acceptedAt', evaluated_at
+    )
   );
 
   return query select 'accepted'::text, new_assignment_id, p_identity_id,

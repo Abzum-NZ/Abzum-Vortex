@@ -18,7 +18,8 @@ security definer
 set search_path = ''
 as $function$
 declare
-  stored_receipt vortex_identity.accepted_administration_receipts%rowtype;
+  stored_receipt record;
+  receipt_payload jsonb;
   resolved_tenant_id uuid;
   resolved_organization_id uuid;
   resolved_organization_tenant_id uuid;
@@ -47,10 +48,31 @@ begin
       message = 'Tenant operation is unavailable';
   end if;
 
-  select stored.*
+  receipt_payload := vortex_record.read_command_receipt_by_receipt_id_internal(
+    p_expected_operation, p_receipt_id
+  );
+  if receipt_payload is null then
+    raise exception using
+      errcode = 'V3101',
+      message = 'Tenant operation is unavailable';
+  end if;
+  select payload_row."tenantId" as tenant_id,
+    result_row."clusterId" as cluster_id,
+    payload_row."actorId" as actor_id,
+    p_expected_operation as operation_key,
+    result_row."subjectIds" as subject_ids,
+    result_row."subjectRevisions" as subject_revisions,
+    result_row."acceptedAt" as accepted_at,
+    result_row."receiptId" as receipt_id,
+    result_row."fingerprint" as command_fingerprint
   into stored_receipt
-  from vortex_identity.accepted_administration_receipts as stored
-  where stored.receipt_id = p_receipt_id;
+  from pg_catalog.jsonb_to_record(receipt_payload) as payload_row(
+    "tenantId" uuid, "actorId" uuid, "result" jsonb
+  )
+  cross join lateral pg_catalog.jsonb_to_record(payload_row."result") as result_row(
+    "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+    "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+  );
   if not found then
     raise exception using
       errcode = 'V3101',
