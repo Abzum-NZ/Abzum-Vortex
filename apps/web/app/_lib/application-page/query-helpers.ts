@@ -4,7 +4,10 @@ import type {
   PermittedApplication,
 } from "@web/platform-server";
 import type { DisplayCellValue } from "@vortex/ui";
-import { APPLICATION_LAUNCHER_BLOCK_RELEASE } from "@vortex/platform/server";
+import {
+  APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  type BoardPlacementFailureCause,
+} from "@vortex/platform/server";
 import {
   type JsonValue,
   jsonValueSchema,
@@ -221,10 +224,13 @@ export const logPlacementFailure = (
     | "summary_query_unavailable"
     | "summary_query_refused"
     | "summary_dataset_limit_exceeded"
-    | "summary_result_invalid",
+    | "summary_result_invalid"
+    | BoardPlacementFailureCause
+    | "board_payload_invalid",
+  detail?: string,
 ): void => {
   console.error(
-    `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}`,
+    `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}${detail === undefined ? "" : ` cause=${detail}`}`,
   );
 };
 

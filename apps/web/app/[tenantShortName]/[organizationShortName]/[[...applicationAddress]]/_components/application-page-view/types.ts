@@ -14,7 +14,7 @@ import type {
   GuidedFormConfirmResult,
   GuidedFormStepActionResult,
   GuidedFormStepRequest,
-} from "../../../../../_lib/guided-form-steps";
+} from "@vortex/platform/server";
 
 export type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
 

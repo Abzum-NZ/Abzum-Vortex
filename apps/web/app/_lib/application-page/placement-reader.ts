@@ -19,6 +19,8 @@ import {
   type ApplicationLauncherQueryRow,
   applicationLauncherQueryRowsToListValues,
   type DisplayCellValue,
+  parseBoardPayload,
+  parseDisplayData,
 } from "@vortex/ui";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
@@ -28,6 +30,7 @@ import {
   SUMMARY_VALUES_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
+  projectBoardPlacement,
   readCalendarPlacementContract,
 } from "@vortex/platform/server";
 import type {
@@ -42,8 +45,8 @@ import {
   type OrganizationSelectionCandidate,
   sameId,
   isRecord,
+  describeFailure,
 } from "@vortex/platform/schema";
-import { projectBoardPlacement } from "../board-placement";
 import { hasReferenceChoiceSource, projectedReferenceChoiceForm } from "../reference-choices";
 import type {
   collectPlacements} from "./placement-helpers";
@@ -450,7 +453,7 @@ export const readPlacement = async (
       boardContinuation !== undefined && sameId(boardContinuation.placementId, placementId)
         ? boardContinuation.request
         : undefined;
-    data[placementId] = await projectBoardPlacement({
+    const projection = await projectBoardPlacement({
       context,
       session,
       selection,
@@ -459,6 +462,23 @@ export const readPlacement = async (
       queries,
       ...(continuation === undefined ? {} : { continuation }),
     });
+    if (projection.outcome === "ready") {
+      try {
+        data[placementId] = parseDisplayData(
+          { status: "ready", values: projection.values },
+          parseBoardPayload,
+        );
+      } catch (error) {
+        logPlacementFailure(address, placementId, "board_payload_invalid", describeFailure(error));
+        data[placementId] = { status: "error" };
+      }
+      return;
+    }
+    logPlacementFailure(address, placementId, projection.cause, projection.detail);
+    data[placementId] =
+      projection.outcome === "unavailable"
+        ? { status: "error" }
+        : { status: "refused", reason: "not_permitted" };
     return;
   }
 
