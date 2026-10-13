@@ -99,7 +99,7 @@ begin
     or pg_catalog.jsonb_typeof(target_meta) is distinct from 'object'
     or (target_meta ->> 'recordTypeId')::uuid is distinct from p_record_type_id
     or coalesce(target_meta ->> 'ownershipMode', '') not in
-      ('none', 'organisation_account', 'group')
+      ('none', 'organization_account', 'group')
     or read_declaration -> 'recordBinding' is distinct from
       pg_catalog.jsonb_build_object(
         'moduleRootId', target_meta -> 'moduleRootId',
