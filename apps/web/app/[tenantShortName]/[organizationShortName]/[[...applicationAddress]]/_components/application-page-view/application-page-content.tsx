@@ -57,7 +57,7 @@ import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useRuntimeInputs } from "./use-runtime-inputs";
-import { WebMcpAdapter } from "./webmcp-adapter";
+import { WebMcpAdapter } from "../../../../../_components/webmcp-adapter";
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
