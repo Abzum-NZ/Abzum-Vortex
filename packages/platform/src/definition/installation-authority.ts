@@ -8,7 +8,11 @@ import {
   type BuilderConferredPermission,
   type BuilderOperation,
 } from "../access/index";
-import { readLiveHumanContext, type LiveHumanContext } from "../access/live-context";
+import {
+  LiveContextRefused,
+  readLiveHumanContext,
+  type LiveHumanContext,
+} from "../access/live-context";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import {
   databaseTimestamp,
@@ -113,7 +117,9 @@ export const readInstallationHumanContext = async (
   try {
     return await readLiveHumanContext(transaction, { scope, session, issuedAt });
   } catch (error) {
-    return installationProblem("human_context_refused", "refused", undefined, { cause: error });
+    if (error instanceof LiveContextRefused)
+      return installationProblem("human_context_refused", "refused", undefined, { cause: error });
+    throw error;
   }
 };
 
