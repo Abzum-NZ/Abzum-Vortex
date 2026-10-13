@@ -22,7 +22,6 @@ import {
   organizationIdSchema,
   sameId,
   systemApplicationBoundReleaseSetResultSchema,
-  workflowIdSchema,
   type ActiveApplicationInstallationEvidence,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
@@ -36,10 +35,20 @@ import {
   type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
 import {
+  FirstInstallUnavailable,
   InstallationArchiveConnectionError,
   InstallationProblem,
   ProvisionedSetupError,
   firstInstallConferredPermissions,
+  firstInstallHistory,
+  firstInstallHistoryMatchesDraft,
+  firstInstallSelectedIdentity,
+  firstInstallSetMatchesHistory,
+  firstInstallState,
+  firstInstallUnavailable,
+  firstInstallWorkflows,
+  readFirstInstallReleaseSet,
+  sameFirstInstallRelease,
   installationOperation,
   installationPermissionDeclaration,
   installationProblem,
@@ -73,9 +82,7 @@ import type { RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   createDatabaseApplicationBoundReleaseSetService,
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
-  createDatabaseFirstInstallApplicationReleaseSetService,
   createDatabasePreparedInstallationRuntimeSourceService,
-  readApplicationDefinitionDraft,
   resolveModuleContributions,
 } from "@vortex/platform/server";
 import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
@@ -741,70 +748,6 @@ export const installSelectedStudioApplicationRelease = async (
   }
 };
 
-type FirstInstallUnavailableReason =
-  | "release_not_published"
-  | "already_installed"
-  | "installation_incomplete"
-  | "setup_unavailable"
-  | "unsupported_root";
-
-class FirstInstallUnavailable extends Error {
-  constructor(readonly reason: FirstInstallUnavailableReason) {
-    super(reason);
-    this.name = "FirstInstallUnavailable";
-  }
-}
-
-const firstInstallUnavailable = (reason: FirstInstallUnavailableReason): never => {
-  throw new FirstInstallUnavailable(reason);
-};
-
-const firstInstallHistory = (snapshot: Readonly<{
-  draftRevision: number;
-  sourceFingerprint: string;
-  anchorReleaseRevision: number | null;
-}>) => ({
-  draftRevision: snapshot.draftRevision,
-  sourceFingerprint: snapshot.sourceFingerprint,
-  anchorReleaseRevision: snapshot.anchorReleaseRevision,
-});
-
-const sameFirstInstallRelease = (
-  left: SystemApplicationBoundReleaseSetResult,
-  right: SystemApplicationBoundReleaseSetResult,
-): boolean => {
-  const withoutCorrelation = (value: SystemApplicationBoundReleaseSetResult) => ({
-    application: (({ correlationId: _correlationId, ...application }) => application)(value.application),
-    modules: value.modules.map(({ correlationId: _correlationId, ...module }) => module),
-  });
-  return same(withoutCorrelation(left), withoutCorrelation(right));
-};
-
-const firstInstallWorkflows = (releaseSet: SystemApplicationBoundReleaseSetResult): string[] => {
-  const seen = new Set<string>();
-  for (const dependency of releaseSet.application.dependencyManifest) {
-    if (dependency.kind !== "application_workflow" ||
-      !sameUuid(dependency.applicationRootId, releaseSet.application.rootId)) continue;
-    const workflow = workflowIdSchema.safeParse(dependency.workflowId);
-    if (!workflow.success || seen.has(workflow.data.toLowerCase())) problem("refused");
-    seen.add(workflow.data.toLowerCase());
-  }
-  return [...seen].sort();
-};
-
-const firstInstallModuleSetFingerprint = (releaseSet: SystemApplicationBoundReleaseSetResult): string =>
-  fingerprint("application-first-install-module-set-v1", releaseSetModuleTuples(releaseSet));
-
-const firstInstallSelectedIdentity = (releaseSet: SystemApplicationBoundReleaseSetResult) => ({
-  definitionKey: releaseSet.application.definitionKey,
-  releaseRevision: releaseSet.application.releaseRevision,
-  releaseVersion: releaseSet.application.releaseVersion,
-  validationContractVersion: releaseSet.application.validationContractVersion,
-  contentFingerprint: releaseSet.application.contentFingerprint,
-  resolutionFingerprint: releaseSet.application.resolutionFingerprint,
-  moduleSetFingerprint: firstInstallModuleSetFingerprint(releaseSet),
-});
-
 const firstInstallSnapshot = (
   selector: StudioApplicationFirstInstallSelector,
   history: ReturnType<typeof firstInstallHistory>,
@@ -823,123 +766,6 @@ const firstInstallSnapshot = (
   workflows: firstInstallWorkflows(releaseSet),
   setup,
 });
-
-const firstInstallState = (
-  selector: StudioApplicationFirstInstallSelector,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-  bindings: InstallationBindings,
-): StudioApplicationFirstInstallSnapshot["registrationState"] => {
-  const pinned = new Map(releaseSet.modules.map((module) => [module.rootId.toLowerCase(), module]));
-  if (pinned.size !== releaseSet.modules.length || pinned.size === 0)
-    firstInstallUnavailable("setup_unavailable");
-  if (bindings.moduleBindings.some((binding) =>
-    !sameUuid(binding.organizationId, selector.organizationId) ||
-    !sameUuid(binding.applicationRootId, selector.rootId) || binding.state === "draining"))
-    firstInstallUnavailable("installation_incomplete");
-  if (bindings.registeredReleaseRevision === null) {
-    if (bindings.moduleBindings.some((binding) => binding.state !== "detached"))
-      firstInstallUnavailable("installation_incomplete");
-    return "unprepared";
-  }
-  if (bindings.registeredReleaseRevision !== selector.releaseRevision)
-    firstInstallUnavailable("already_installed");
-
-  const nonDetached = bindings.moduleBindings.filter((binding) => binding.state !== "detached");
-  if (new Set(nonDetached.map((binding) => binding.moduleRootId.toLowerCase())).size !== nonDetached.length ||
-    nonDetached.some((binding) => !pinned.has(binding.moduleRootId.toLowerCase())))
-    firstInstallUnavailable("installation_incomplete");
-  const expected = releaseSet.modules;
-  if (nonDetached.some((binding) => {
-    const module = pinned.get(binding.moduleRootId.toLowerCase());
-    return module === undefined || binding.state !== "provisioned" ||
-      binding.applicationReleaseRevision !== selector.releaseRevision ||
-      binding.moduleReleaseRevision !== module.releaseRevision;
-  })) {
-    const activeExact = expected.every((module) => {
-      const matches = nonDetached.filter((binding) =>
-        sameUuid(binding.moduleRootId, module.rootId) &&
-        binding.applicationReleaseRevision === selector.releaseRevision &&
-        binding.moduleReleaseRevision === module.releaseRevision && binding.state === "active");
-      return matches.length === 1;
-    });
-    if (activeExact && nonDetached.length === expected.length) return "active_exact";
-    firstInstallUnavailable("installation_incomplete");
-  }
-  const exactState = (state: "active" | "provisioned") => expected.every((module) => {
-    const matches = nonDetached.filter((binding) =>
-      sameUuid(binding.moduleRootId, module.rootId) &&
-      binding.applicationReleaseRevision === selector.releaseRevision &&
-      binding.moduleReleaseRevision === module.releaseRevision && binding.state === state);
-    return matches.length === 1;
-  }) && nonDetached.length === expected.length;
-  if (exactState("active")) return "active_exact";
-  if (exactState("provisioned")) return "provisioned_inactive";
-  return "registration_aligned_partial";
-};
-
-const firstInstallHistoryMatchesDraft = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  selector: StudioApplicationFirstInstallSelector,
-  history: ReturnType<typeof firstInstallHistory>,
-  definitionKey: string,
-): Promise<void> => {
-  const draft = await readApplicationDefinitionDraft(transaction, scope, {
-    rootId: selector.rootId,
-    expectedDraftRevision: history.draftRevision,
-  });
-  if (!sameUuid(draft.rootId, selector.rootId) || draft.key !== definitionKey ||
-    draft.sourceFingerprint !== history.sourceFingerprint ||
-    draft.publishedRevision !== history.anchorReleaseRevision ||
-    history.anchorReleaseRevision === null || selector.releaseRevision > history.anchorReleaseRevision)
-    problem("conflict");
-};
-
-const readFirstInstallReleaseSet = async (
-  transaction: RequestDatabaseTransaction,
-  selector: StudioApplicationFirstInstallSelector,
-  context: HumanContext,
-): Promise<SystemApplicationBoundReleaseSetResult> => {
-  let candidate: unknown;
-  try {
-    candidate = await createDatabaseFirstInstallApplicationReleaseSetService(
-      installedReleaseCatalogue,
-      transaction,
-    ).read({
-      applicationRootId: selector.rootId,
-      applicationReleaseRevision: selector.releaseRevision,
-    });
-  } catch (error) {
-    if (!(error instanceof DefinitionError)) problem("temporarily_unavailable");
-    if (error.code === "DEFINITION_RELEASE_NOT_FOUND")
-      firstInstallUnavailable("release_not_published");
-    if (error.code === "DEFINITION_CONTEXT_REFUSED") problem("refused");
-    if (error.code === "DEFINITION_RELEASE_INTEGRITY_FAILED") problem("refused");
-    problem("temporarily_unavailable");
-  }
-  const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
-  if (!parsed.success || parsed.data.application.kind !== "application" ||
-    !sameUuid(parsed.data.application.organizationId, context.organizationId) ||
-    !sameUuid(parsed.data.application.rootId, selector.rootId) ||
-    parsed.data.application.releaseRevision !== selector.releaseRevision ||
-    !sameUuid(parsed.data.application.correlationId, context.correlationId) ||
-    parsed.data.modules.some((module) => !sameUuid(module.organizationId, context.organizationId) ||
-      !sameUuid(module.correlationId, context.correlationId)))
-    problem("refused");
-  return parsed.data;
-};
-
-const firstInstallSetMatchesHistory = (
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-  metadata: Readonly<{
-    releaseRevision: number;
-    releaseVersion: string;
-  }>,
-  selector: StudioApplicationFirstInstallSelector,
-): boolean => releaseSet.application.releaseRevision === metadata.releaseRevision &&
-  releaseSet.application.releaseVersion === metadata.releaseVersion &&
-  sameUuid(releaseSet.application.rootId, selector.rootId) &&
-  releaseSet.application.releaseRevision === selector.releaseRevision;
 
 const firstInstallLoadFailure = (error: unknown): StudioApplicationFirstInstallLoadResult => {
   if (error instanceof FirstInstallUnavailable)
@@ -1016,7 +842,7 @@ const readCurrentFirstInstallCandidate = async (
       await firstInstallHistoryMatchesDraft(
         transaction, scope, selector, history, inspected.snapshot.definitionKey,
       );
-      const releaseSet = await readFirstInstallReleaseSet(transaction, selector, context);
+      const releaseSet = await readFirstInstallReleaseSet(transaction, installedReleaseCatalogue, selector, context);
       if (!firstInstallSetMatchesHistory(releaseSet, inspected.metadata, selector) ||
         releaseSet.application.definitionKey !== inspected.snapshot.definitionKey)
         problem("conflict");
@@ -1297,7 +1123,7 @@ const firstInstallDefinitionAccess = (
           await firstInstallHistoryMatchesDraft(
             transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
           );
-          const releaseSet = await readFirstInstallReleaseSet(transaction, selector, context);
+          const releaseSet = await readFirstInstallReleaseSet(transaction, installedReleaseCatalogue, selector, context);
           if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
           await firstInstallHistoryMatchesDraft(
             transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
@@ -1437,7 +1263,7 @@ const firstInstallCoordinator = (
           await firstInstallHistoryMatchesDraft(
             transaction, scope, selector, expected.history, expected.selected.definitionKey,
           );
-          const releaseSet = await readFirstInstallReleaseSet(transaction, selector, context);
+          const releaseSet = await readFirstInstallReleaseSet(transaction, installedReleaseCatalogue, selector, context);
           if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
           await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
           const before = await readInstallationBindings(transaction, selector.rootId);

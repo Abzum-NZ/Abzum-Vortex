@@ -57,6 +57,18 @@ export {
   type InstallationUnavailableReason,
 } from "./installation-authority";
 export {
+  FirstInstallUnavailable,
+  firstInstallHistory,
+  firstInstallHistoryMatchesDraft,
+  firstInstallSelectedIdentity,
+  firstInstallSetMatchesHistory,
+  firstInstallState,
+  firstInstallUnavailable,
+  firstInstallWorkflows,
+  readFirstInstallReleaseSet,
+  sameFirstInstallRelease,
+} from "./installation-first-install";
+export {
   ProvisionedSetupError,
   assertProvisionedSetupMatchesInstallation,
   readProvisionedLifecycleSetup,
