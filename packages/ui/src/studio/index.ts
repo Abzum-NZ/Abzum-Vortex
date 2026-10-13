@@ -1,5 +1,4 @@
 export * from "./contextual-palette";
-export * from "./application-page-puck-editor";
 export * from "./discovery-adapter";
 export * from "./semantic-selection";
 export * from "./application-draft-history";
