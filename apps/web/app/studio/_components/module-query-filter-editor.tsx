@@ -204,7 +204,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
     if (busy || nextAlias === selectedAlias) return;
     if ((dirty || staged) && !await confirm({
       title: "Switch to another Query?",
-      description: "Discard the pending filter changes and switch Query? Choose OK to discard or Cancel to keep editing this Query.",
+      description: "Discard the pending filter changes and switch Query? Choose Cancel to keep editing this Query.",
       confirmLabel: "Discard and switch",
     })) {
       pendingValidationFocus.current = null;
@@ -423,7 +423,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
     if (busy) return;
     if ((dirty || staged) && !await confirm({
       title: "Reopen the saved Module draft?",
-      description: "Discard the pending filter changes and reopen the saved Module draft? Choose OK to discard or Cancel to keep editing.",
+      description: "Discard the pending filter changes and reopen the saved Module draft? Choose Cancel to keep editing.",
       confirmLabel: "Discard and reopen",
     })) return;
     const selectedEpoch = ++selectionEpoch.current;
