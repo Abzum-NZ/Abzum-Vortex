@@ -117,6 +117,11 @@ export default async function StudioOrganizationPage({
           New application
         </Link>
       </div>
+      {result.mayHaveMore && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Showing the first 200 definitions. More may exist in this organization.
+        </p>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Applications</CardTitle>

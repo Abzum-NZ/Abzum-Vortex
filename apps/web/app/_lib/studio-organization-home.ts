@@ -17,6 +17,7 @@ export type StudioOrganizationHomeResult =
       kind: "available";
       organizationId: OrganizationId;
       roots: readonly OrganizationBuilderRoot[];
+      mayHaveMore: boolean;
     }>
   | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -45,26 +46,30 @@ export const loadStudioOrganizationHome = async (
     { organizationId: organization.data },
     async (transaction, scope) => {
       const roots = await listOrganizationBuilderRoots(transaction);
-      const byId = new Map(roots.map((root) => [root.rootId, root]));
+      const systemRoot = roots.find((root) => root.isSystemApplication);
+      if (systemRoot === undefined)
+        return { organizationId: scope.organizationId, roots, mayHaveMore: roots.length === 200 };
+
       const targetFacts: BuilderTargetFactsReader = async (_transaction, _scope, rootId) => {
-        if (rootId === undefined) return { isSystemApplication: false };
-        const root = byId.get(rootId);
-        if (root === undefined) throw new Error("STUDIO_ROOT_LIST_TARGET_MISSING");
-        return { isSystemApplication: root.isSystemApplication };
+        if (rootId !== systemRoot.rootId) throw new Error("STUDIO_ROOT_LIST_TARGET_MISSING");
+        return { isSystemApplication: true };
       };
       const authority = createBuilderAuthority({ transaction, scope, targetFacts });
-      const visible: OrganizationBuilderRoot[] = [];
-      for (const root of roots) {
-        try {
-          await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.rootId });
-          visible.push(root);
-        } catch (error) {
-          if (error instanceof BuilderAuthorityError && error.code === "BUILDER_PERMISSION_REFUSED")
-            continue;
-          throw error;
-        }
+      try {
+        await requireBuilderAuthority(authority, {
+          kind: "draft_change",
+          rootId: systemRoot.rootId,
+        });
+        return { organizationId: scope.organizationId, roots, mayHaveMore: roots.length === 200 };
+      } catch (error) {
+        if (error instanceof BuilderAuthorityError && error.code === "BUILDER_PERMISSION_REFUSED")
+          return {
+            organizationId: scope.organizationId,
+            roots: roots.filter((root) => !root.isSystemApplication),
+            mayHaveMore: roots.length === 200,
+          };
+        throw error;
       }
-      return { organizationId: scope.organizationId, roots: visible };
     },
   );
   if (result.kind === "available") return { kind: "available", ...result.value };
