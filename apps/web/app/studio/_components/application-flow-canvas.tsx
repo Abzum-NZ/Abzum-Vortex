@@ -28,8 +28,7 @@ const withoutBranchTasks = (key: string, value: unknown): unknown =>
   key === "cases" && Array.isArray(value)
     ? value.map((entry) => {
       if (typeof entry !== "object" || entry === null) return entry;
-      const { tasks: _tasks, ...rest } = entry as Record<string, unknown>;
-      return rest;
+      return Object.fromEntries(Object.entries(entry).filter(([name]) => name !== "tasks"));
     })
     : value;
 
