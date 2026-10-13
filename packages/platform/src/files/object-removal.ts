@@ -25,6 +25,7 @@ import {
   isValidFileLifecycleTransition,
   transitionFileLifecycleState,
 } from "./file-metadata";
+import { logRefusal } from "../catalogue/runtime-primitives";
 import type { FileRemovalEligibilityService } from "./removal-eligibility";
 
 const REMOVAL_STAGES: readonly FileRemovalStage[] = Object.freeze([
@@ -400,8 +401,10 @@ export const createFileRemovalCoordinator = (
         await dependencies.eligibilityService.decideFileRemovalEligibility({
           fileId: intent.fileId,
         });
-    } catch {
-      throw new Error("File removal refused: current eligibility is unavailable");
+    } catch (error) {
+      throw new Error("File removal refused: current eligibility is unavailable", {
+        cause: error,
+      });
     }
     if (!currentDecision.eligible || !intentBindingMatches(intent, currentDecision)) {
       throw new Error("File removal refused: file is no longer eligible for removal");
@@ -431,8 +434,10 @@ export const createFileRemovalCoordinator = (
             await dependencies.eligibilityService.decideFileRemovalEligibility({
               fileId: request.fileId,
             });
-        } catch {
-          throw new Error("File removal refused: current eligibility is unavailable");
+        } catch (error) {
+          throw new Error("File removal refused: current eligibility is unavailable", {
+            cause: error,
+          });
         }
         if (!currentDecision.eligible || !bindingsMatch(request.decision, currentDecision)) {
           throw new Error("File removal refused: eligible decision is not current");
@@ -577,7 +582,8 @@ export const createFileRemovalCoordinator = (
           if (effect.outcome !== "removed" && effect.outcome !== "already_absent") {
             throw new Error("File removal effect returned an invalid outcome");
           }
-        } catch {
+        } catch (error) {
+          logRefusal("files", `removal stage ${stage}`, "removal_effect_failed", error);
           const interrupted = await dependencies.repository.interruptStage({
             deletionKey: intent.deletionKey,
             intentFingerprint: intent.intentFingerprint,

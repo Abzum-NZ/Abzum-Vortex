@@ -7,6 +7,8 @@ import { createHash } from "node:crypto";
 
 import { applicationRootIdSchema, builderKeySchema, flowIdSchema, flowScheduleRecurrenceSchema, flowSchema, organizationIdSchema, revisionSchema, stableDefinitionReleaseVersionSchema, type FlowDefinition, type FlowTrigger, isRecord } from "../schema";
 
+import { logRefusal } from "../catalogue/runtime-primitives";
+
 import type { KestraFlowCompilerEnvironment, KestraFlowIdentity } from "./kestra-compiler";
 
 type ScheduleRecurrence = Extract<FlowTrigger, { type: "Schedule" }>["recurrence"];
@@ -361,7 +363,8 @@ const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceRe
       formatter = makeZoneFormatter(recurrence.data.timeZone);
       formatter.formatToParts(new Date(afterEpoch));
       isUtcZone = formatter.resolvedOptions().timeZone === "UTC";
-    } catch {
+    } catch (error) {
+      logRefusal("schedule", "occurrence calculation", "invalid_time_zone", error);
       return refused("invalid_time_zone");
     }
     // The two-day margins on both UTC bounds contain every possible local slot whose UTC
@@ -393,7 +396,8 @@ const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceRe
       let instant: number | undefined;
       try {
         instant = resolveLocalSlot(recurrence.data.timeZone, isUtcZone, fields);
-      } catch {
+      } catch (error) {
+        logRefusal("schedule", "occurrence calculation", "time_zone_resolution_unavailable", error);
         return refused("time_zone_resolution_unavailable");
       }
       if (
@@ -417,7 +421,8 @@ const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceRe
         scheduledForUtc,
       )}`,
     };
-  } catch {
+  } catch (error) {
+    logRefusal("schedule", "occurrence calculation", "invalid_input", error);
     return refused("invalid_input");
   }
 };
@@ -530,7 +535,8 @@ export const computeDeclaredScheduleOccurrence = (
       afterUtc,
       throughUtc,
     });
-  } catch {
+  } catch (error) {
+    logRefusal("schedule", "declared occurrence calculation", "invalid_input", error);
     return refuseDeclared("invalid_input");
   }
 };
