@@ -1263,14 +1263,3 @@ export const resumeFlowRun = (
   );
   return drive(machine, observer);
 };
-
-/** A finished step for a run the host must stop itself, such as one that exhausted its server time. */
-export const flowRunWithFailure = (
-  state: FlowRunState,
-  failure: FlowFailure,
-): Extract<FlowRunStep, { kind: "finished" }> => ({
-  kind: "finished",
-  state,
-  intents: [],
-  result: { status: "failed", failure },
-});

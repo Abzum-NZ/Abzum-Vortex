@@ -26,7 +26,7 @@ import {
  * never authority: the actor, organisation, permissions and the run itself come from the verified
  * session and the server-stored continuation, never from these values.
  */
-export const formContinuationContractVersion = "1.1.0" as const;
+
 const maximumAnswerValues = 500;
 
 /** Opaque evidence for the permitted Query page that issued one reference-choice option key. */

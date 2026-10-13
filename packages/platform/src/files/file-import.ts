@@ -119,64 +119,6 @@ export const recordImportSourceRefusalReasonSchema = z.enum([
   "resource_limit",
 ]);
 
-const recordImportSourceResultUnionSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("available"),
-      source: recordImportSourceDescriptorSchema,
-      columns: structuredRecordImportColumnsSchema,
-      rows: z.array(decodedRecordImportRowSchema).max(STRUCTURED_RECORD_IMPORT_MAXIMUM_ROWS),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("refused"),
-      reason: recordImportSourceRefusalReasonSchema,
-      rowNumber: z
-        .number()
-        .int()
-        .safe()
-        .min(1)
-        .max(STRUCTURED_RECORD_IMPORT_MAXIMUM_ROWS)
-        .optional(),
-      columnNumber: z
-        .number()
-        .int()
-        .safe()
-        .min(1)
-        .max(STRUCTURED_RECORD_IMPORT_MAXIMUM_COLUMNS)
-        .optional(),
-    })
-    .strict(),
-]);
-
-export const recordImportSourceResultSchema = recordImportSourceResultUnionSchema.superRefine(
-  (result, context) => {
-    if (result.kind !== "available") return;
-    const expectedIds = result.columns.map((column) => column.columnId);
-    result.rows.forEach((row, index) => {
-      if (row.rowNumber !== index + 1) {
-        context.addIssue({
-          code: "custom",
-          path: ["rows", index, "rowNumber"],
-          message: "Decoded row numbers follow their one-based source order",
-        });
-      }
-      const actualIds = Reflect.ownKeys(row.cells);
-      if (
-        actualIds.length !== expectedIds.length ||
-        expectedIds.some((columnId) => !Object.prototype.hasOwnProperty.call(row.cells, columnId))
-      ) {
-        context.addIssue({
-          code: "custom",
-          path: ["rows", index, "cells"],
-          message: "Decoded cells contain exactly the source column identifiers",
-        });
-      }
-    });
-  },
-);
-
 export type StructuredRecordImportFormat = z.infer<typeof structuredRecordImportFormatSchema>;
 export type StructuredRecordImportColumn = Readonly<
   z.infer<typeof structuredRecordImportColumnSchema>

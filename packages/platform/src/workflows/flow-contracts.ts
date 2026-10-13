@@ -180,30 +180,6 @@ export const parseFlowReference = (text: string): FlowReference | undefined => {
     : undefined;
 };
 
-/** The one canonical text form of a typed reference, for designers and diagnostics. */
-export const formatFlowReference = (reference: FlowReference): string => {
-  switch (reference.source) {
-    case "input":
-      return `{{ inputs.${reference.name} }}`;
-    case "variable":
-      return `{{ vars.${reference.name} }}`;
-    case "trigger_record":
-      return `{{ trigger.record.${reference.field} }}`;
-    case "trigger_previous":
-      return `{{ trigger.previous.${reference.field} }}`;
-    case "module_field":
-      return `{{ module.fields.${reference.fieldId} }}`;
-    case "task_output":
-      return `{{ outputs.${reference.task}.${reference.key}${
-        reference.path === undefined ? "" : `.${reference.path.join(".")}`
-      } }}`;
-    case "execution_actor":
-      return "{{ execution.actor }}";
-    case "execution_now":
-      return "{{ execution.now }}";
-  }
-};
-
 const referenceTextSchema = z.string().transform((text, context) => {
   const reference = parseFlowReference(text);
   if (reference === undefined) {
@@ -294,37 +270,6 @@ export const flowRoundingModeSchema = z.enum([
 export const flowDateUnitSchema = z.enum(["minutes", "hours", "days", "weeks", "months", "years"]);
 export type FlowRoundingMode = z.infer<typeof flowRoundingModeSchema>;
 export type FlowDateUnit = z.infer<typeof flowDateUnitSchema>;
-
-export const flowFormulaOperatorKeys = [
-  "literal",
-  "reference",
-  "now",
-  "record_id",
-  "add",
-  "subtract",
-  "multiply",
-  "divide",
-  "round",
-  "eq",
-  "neq",
-  "lt",
-  "lte",
-  "gt",
-  "gte",
-  "contains",
-  "starts_with",
-  "ends_with",
-  "is_empty",
-  "is_not_empty",
-  "in",
-  "and",
-  "or",
-  "not",
-  "if",
-  "join",
-  "date_add",
-  "date_diff",
-] as const;
 
 type ArithmeticPrecision = { scale: number; rounding: FlowRoundingMode };
 export type FlowFormula =

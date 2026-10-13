@@ -103,43 +103,6 @@ export type DefaultQueryFlowInput = DefaultFlowIdentity &
     /** The record type of the rows the query returns, for the typed `records` output. */
     recordType: string;
   }>;
-/**
- * The default Query flow of one data component: one `record.query` task that reads the declared
- * query under the viewer's authority and returns its records. It takes no inputs; a query that
- * needs parameters is an ordinary flow whose task maps them in its `parameters` property.
- */
-export const defaultQueryFlowSource = (input: DefaultQueryFlowInput): SourceFlow => ({
-  contractVersion: flowContractVersion,
-  id: input.id,
-  key: input.key,
-  ...(input.description === undefined ? {} : { description: input.description }),
-  labels: {},
-  execution: "interactive",
-  runAs: { kind: "initiator" },
-  inputs: {},
-  variables: {},
-  triggers: [],
-  tasks: [
-    {
-      id: "query",
-      type: "record.query",
-      version: taskVersion,
-      properties: { query: textLiteral(input.query) },
-    },
-  ],
-  outputs: {
-    records: {
-      type: "record_reference_list",
-      recordTypeIds: [input.recordType],
-      value: {
-        kind: "reference",
-        reference: { source: "task_output", task: "query", key: "records" },
-      },
-    },
-  },
-  errors: [],
-  finally: [],
-});
 
 /**
  * The readable key a Call protected operation task uses for a registered platform-service
