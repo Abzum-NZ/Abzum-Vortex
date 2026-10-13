@@ -1,48 +1,5 @@
 set local role vortex_owner;
 
--- The baseline catalogue table and these functions are owned by postgres.
-reset role;
--- guard-allow: migration-owner-role Transfer the legacy catalogue table before changing its columns.
-alter table vortex_access.permission_catalogue_entries owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.adopt_builder_permission_catalogue(uuid,uuid,uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.adopt_connection_administration_permission_catalogue(uuid,uuid,uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.evaluate_record_permission_row_scope_internal(jsonb,timestamp with time zone,timestamp with time zone,uuid,jsonb,jsonb,uuid,jsonb,uuid[]) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.platform_permission_catalogue_revision_is_exact(uuid,bigint) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.platform_permission_catalogue_revision_is_exact_v1_2_0(uuid,bigint) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.platform_permission_catalogue_revision_is_exact_v1_4_0(uuid,bigint) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.read_organization_role_change_evidence_for_administration(jsonb) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.revise_platform_permission_catalogue_metadata(uuid,bigint,text,text,uuid,uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.adopt_security_and_support_operator_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.adopt_shipped_platform_permission_catalogue(p_organization_id uuid, p_expected_registration_revision bigint, p_target_catalogue_version text, p_target_catalogue_fingerprint text, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.apply_application_permission_registration_v1_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.initialize_platform_permission_catalogue_v1(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.platform_permission_catalogue_revision_is_exact_v1_0_1(p_organization_id uuid, p_registration_revision bigint) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.platform_permission_catalogue_revision_is_exact_v1_3_0(p_organization_id uuid, p_registration_revision bigint) owner to vortex_owner;
--- guard-allow: migration-owner-role Transfer a legacy function before replacing its definition.
-alter function vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
-set local role vortex_owner;
-
--- Other baseline functions still access the transferred catalogue table.
-grant all on table vortex_access.permission_catalogue_entries to postgres;
-
 alter table vortex_access.permission_catalogue_entries
   drop constraint permission_catalogue_entries_fingerprints_valid,
   drop constraint permission_catalogue_entries_scope_shape;
