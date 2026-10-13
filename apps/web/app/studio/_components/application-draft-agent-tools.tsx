@@ -35,7 +35,21 @@ const settingValue = z.discriminatedUnion("kind", [textValue, booleanValue, choi
 
 const inputSchema = (schema: z.ZodType) => {
   const json = z.toJSONSchema(schema, { io: "input", unrepresentable: "any" });
-  return { type: "object", properties: json.properties ?? {}, required: json.required ?? [], additionalProperties: false };
+  const variants = (json.oneOf ?? json.anyOf ?? []).filter((variant) => typeof variant === "object");
+  if (json.properties !== undefined || variants.length === 0)
+    return { type: "object", properties: json.properties ?? {}, required: json.required ?? [], additionalProperties: false };
+  // A discriminated union has no top-level properties: advertise the union of its variants' properties, the
+  // discriminator as an enum, and as required only what every variant requires (zod still validates each variant).
+  const properties: Record<string, unknown> = {};
+  for (const variant of variants) for (const [key, value] of Object.entries(variant.properties ?? {})) {
+    const known = properties[key] as { const?: unknown; enum?: unknown[] } | undefined;
+    const incoming = value as { const?: unknown };
+    properties[key] = known?.const !== undefined && incoming.const !== undefined
+      ? { type: "string", enum: [known.const, incoming.const] }
+      : known?.enum !== undefined && incoming.const !== undefined ? { ...known, enum: [...known.enum, incoming.const] } : value;
+  }
+  const required = Object.keys(properties).filter((key) => variants.every((variant) => variant.required?.includes(key)));
+  return { type: "object", properties, required, additionalProperties: false };
 };
 const tool = (name: ToolName, description: string, input: z.ZodType, readOnly: boolean): StudioApplicationTool =>
   ({ name, description, input, readOnly, inputSchema: inputSchema(input) });
