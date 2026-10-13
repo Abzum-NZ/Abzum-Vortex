@@ -49,6 +49,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/index";
+import { logRefusedOperations } from "./log-refused-operations";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -199,7 +200,7 @@ export const createConfiguredTenantAdministrationService = (
       acceptedAt: databaseTimestamp(row.accepted_at),
     };
 
-  return Object.freeze({
+  const operations = {
     async bootstrapVortexSuperAdministrator(
       candidate: BootstrapVortexSuperAdministratorCommand,
     ): Promise<VortexSuperAdministratorAssignmentMutationResult> {
@@ -550,7 +551,9 @@ export const createConfiguredTenantAdministrationService = (
         };
       }
     },
-  });
+  };
+
+  return Object.freeze(logRefusedOperations("TENANT_ADMIN", operations));
 };
 
 const defaultService = createConfiguredTenantAdministrationService();

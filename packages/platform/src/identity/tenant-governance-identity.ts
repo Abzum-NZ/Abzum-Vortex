@@ -65,6 +65,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/index";
+import { logRefusedOperations } from "./log-refused-operations";
 
 type Runner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -199,7 +200,7 @@ export const createTenantGovernanceService = (
 ) => {
   const run = dependencies.runtimeTransaction ?? withRuntimeTransaction;
   const sessionIdentity = (session: IdentitySession) => identitySessionSchema.safeParse(session);
-  return Object.freeze({
+  const operations = {
     async listTenants(
       session: IdentitySession,
       candidate: TenantLauncherQuery,
@@ -555,7 +556,9 @@ export const createTenantGovernanceService = (
         };
       }
     },
-  });
+  };
+
+  return Object.freeze(logRefusedOperations("TENANT_GOVERNANCE", operations));
 };
 
 const defaultService = createTenantGovernanceService();
