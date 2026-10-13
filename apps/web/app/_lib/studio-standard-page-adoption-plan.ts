@@ -292,7 +292,6 @@ const pageFacts = (
         usePermission: placement.usePermissionKey ?? null,
         visibilityCondition: placement.visibilityCondition ?? null,
         query: placement.queryId ?? null,
-        readModel: placement.readModel ?? null,
       };
       add(
         `${placementLabel} / access and data bindings`,

@@ -2242,7 +2242,6 @@ const placementSubtreeIsOptionalPresentation = (placement: RecordValue): boolean
   placement.usePermissionKey === undefined &&
   placement.visibilityCondition === undefined &&
   placement.queryId === undefined &&
-  placement.readModel === undefined &&
   Object.values(asRecord(placement.settings)).every(presentationPropertyValue) &&
   Object.values(asRecord(placement.slots)).every((slot) =>
     Object.values(asRecord(asRecord(slot).placements)).every((child) =>
@@ -2448,16 +2447,6 @@ const comparePlacements = (
       reasons,
       before.placement.queryId,
       after.placement.queryId,
-      "major",
-      "existing_behavior_changed",
-      "block_placement",
-      "behavior",
-      id,
-    );
-    pushChange(
-      reasons,
-      before.placement.readModel,
-      after.placement.readModel,
       "major",
       "existing_behavior_changed",
       "block_placement",

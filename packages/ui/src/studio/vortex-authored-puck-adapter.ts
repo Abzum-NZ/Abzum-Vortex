@@ -687,7 +687,6 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
                   "use_permission",
                   "visibility_condition",
                   "query",
-                  "read_model",
                   "theme_overrides",
                   "responsive",
                 ]);

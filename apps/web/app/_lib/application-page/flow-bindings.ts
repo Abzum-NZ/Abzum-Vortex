@@ -45,7 +45,6 @@ export const projectPlacementRecordTypes = (input: {
       dataPlacementsByRecordType.set(key, [...current, placementId]);
   };
   for (const { placementId, placement } of allPlacements) {
-    if (placement.readModel !== undefined) continue;
     const block = placement.block;
     const isAttachmentListBlock =
       isRecord(block) &&

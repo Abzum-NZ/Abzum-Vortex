@@ -13,7 +13,6 @@ import {
   calendarMappingSchema,
   calendarBlockSourceIsSupported,
   moduleQueryDefinitionSchema,
-  protectedReadModelKeys,
 } from "../../schema";
 import { tableQueryParameterFailures } from "../table-query-parameters";
 import type { ApplicationScope } from "./application-scope";
@@ -304,20 +303,6 @@ export function applicationPageRules(scope: ApplicationScope): void {
           failure(output, "vortex.definition.application_block_settings", "broken_reference"),
         );
     }
-    // A placement reads one data source: a declared protected read model or a query, never both.
-    if (
-      placements.some(
-        (placement) =>
-          placement.readModel !== undefined &&
-          (placement.queryId !== undefined ||
-            !(protectedReadModelKeys as readonly string[]).includes(
-              String(object(placement.readModel).key),
-            )),
-      )
-    )
-      failures.push(
-        failure(output, "vortex.definition.application_block_references", "broken_reference"),
-      );
     if (page.type === "public") {
       const record = page.recordType
         ? records.get(String(object(page.recordType).recordTypeId))
@@ -366,7 +351,6 @@ export function applicationPageRules(scope: ApplicationScope): void {
           }
         };
         walkValues(placement.settings, inspectPublicSetting);
-        if (placement.readModel !== undefined) publicBlockReferencesSafe = false;
         if (placement.queryId) {
           const query = moduleQueries.get(String(placement.queryId));
           if (!publicQuerySafe(query, pageRecordId, pagePublicFields))

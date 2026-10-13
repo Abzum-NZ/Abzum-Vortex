@@ -8,7 +8,7 @@ import {
   semanticVersionSchema,
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
-import { jsonValueSchema, labelSchema } from "../catalogue/common";
+import { labelSchema } from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
   refineActionTaskIds,
@@ -147,7 +147,6 @@ const sourceExperienceGatedPlacementKeys = [
   "use_permission",
   "visibility_condition",
   "query",
-  "read_model",
 ] as const;
 const declaresGatedSourcePlacement = (value: unknown): boolean => {
   if (Array.isArray(value)) return value.some(declaresGatedSourcePlacement);
@@ -197,16 +196,11 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
   ]),
 );
-// Preserve legacy page settings when parsing authored source; they are never compiled.
-const retiredSourcePageSettingSchema = jsonValueSchema.optional();
-
 const sourcePageCommon = {
   id: sourceProvenanceTarget(sourceAliasSchema, ["pageId"]),
   key: sourceProvenanceUnchanged(builderKeySchema),
   name: sourceProvenanceUnchanged(labelSchema),
   replaces_page: sourceProvenanceTarget(sourceAliasSchema.optional(), ["replacementOfPageId"]),
-  states: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
-  standard_page_replacement: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
 };
 
 const sourcePageBase = {
@@ -221,8 +215,6 @@ const sourceListPageSchema = z
     record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
     permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
     query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema, ["queryId"]),
-    arrangements: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
-    calendar_mapping: sourceProvenanceUnchanged(retiredSourcePageSettingSchema),
   })
   .strict();
 
