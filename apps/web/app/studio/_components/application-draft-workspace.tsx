@@ -29,6 +29,7 @@ import {
   studioSemanticSelectionKey,
   type StudioSemanticOutlineNode,
   type StudioStoredApplicationDraft,
+  type StudioCompileFailure,
   type StudioCompositionContext,
   type StudioFlowTextContext,
   type StudioSemanticSelection,
@@ -39,7 +40,7 @@ import {
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication,
-  prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
+  prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
 import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
@@ -72,7 +73,8 @@ type WorkspaceProps = Readonly<{
   | Readonly<{ mode: "new"; organizationId: string }>
   | Readonly<{ mode: "existing"; organizationId: string; draft: StudioStoredApplicationDraft;
       searchMetadata?: StudioApplicationSearchMetadata | null;
-      pageCompiledSlots?: StudioApplicationCompiledPageSlots | null }>);
+      pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
+      compileFailure?: StudioCompileFailure | null }>);
 
 type PublicationSnapshot = Readonly<{
   organizationId: string; rootId: string; key: string; draftRevision: number;
@@ -101,6 +103,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
     : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft}
         initialSearchMetadata={props.searchMetadata ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
+        compileFailure={props.compileFailure ?? null}
         platformBlockCatalogue={props.platformBlockCatalogue}
         fieldInputControlReleases={props.fieldInputControlReleases}
         platformThemeTokens={props.platformThemeTokens} />;
@@ -212,10 +215,11 @@ function Outline({ node, selectedKey, choose, disabled = false }: {
   </li>;
 }
 
-function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMetadata, pageCompiledSlots,
+function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMetadata, pageCompiledSlots, compileFailure,
   platformBlockCatalogue, fieldInputControlReleases, platformThemeTokens }: {
   organizationId: string; draft: StudioStoredApplicationDraft; initialSearchMetadata: StudioApplicationSearchMetadata | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
+  compileFailure: StudioCompileFailure | null;
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
@@ -271,6 +275,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [themeOverrideProblems, setThemeOverrideProblems] = useState(false);
   const [pendingAppearance, setPendingAppearance] = useState(false);
   const appearancePending = useRef(false);
   const reportAppearancePending = useCallback((pending: boolean) => {
@@ -663,7 +668,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   };
 
   const save = async () => {
-    if (publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || history.getState().isSaving || conditionPending.current || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current) return;
+    if (themeOverrideProblems || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || history.getState().isSaving || conditionPending.current || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current) return;
     publicationEpoch.current += 1;
     setPreparedPublication(null);
     const requestLifetime = lifetime.current;
@@ -755,7 +760,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!state.canRedo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
           if (!publicationPending.current && !sourceImportPending.current && !searchPending.current && !reopening.current && !conditionPending.current && !pendingLabels && !appearancePending.current && !compositionPending.current && !flowTextPending.current && !flowAppendPending.current) history.redo();
         }}>Redo</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!state.isDirty || state.isSaving || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={save}>Save draft</Button>
+        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!state.isDirty || themeOverrideProblems || state.isSaving || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={save}>Save draft</Button>
         <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={isPublishing || state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</Button>
       </div>
       <p role="status" aria-live="polite">{state.isSaving ? "Saving… Local history remains editable." : pendingSearch
@@ -905,6 +910,10 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening ||
               state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition ||
               pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
+            compileFailure={compileFailure}
+            validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
+              rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
+            onThemeOverrideProblems={setThemeOverrideProblems}
             onChange={applyPuckPageEdit} />}
         {selected?.kind === "placement" && inspector.status === "resolved" &&
           <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
