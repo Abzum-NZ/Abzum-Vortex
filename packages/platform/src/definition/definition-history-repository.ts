@@ -122,7 +122,7 @@ const assertHumanRestoreCompletion = async (
   const decisions = await transaction.query<PermissionDecisionRow>`
     select decision.*
     from vortex_access.evaluate_organization_permission_eligibility(
-      ${JSON.stringify(declaration)}::jsonb
+      ${JSON.stringify(declaration)}::text::jsonb
     ) as decision
   `;
   const decision = one(decisions, "DEFINITION_RESTORE_AUTHORITY_UNAVAILABLE");
@@ -190,7 +190,7 @@ const assertHumanRestoreCompletion = async (
             coalesce(final_context.request_context -> 'accessTokenIssuedAt', 'null'::jsonb),
             coalesce(final_context.request_context -> 'primaryAuthenticatedAt', 'null'::jsonb),
             coalesce(final_context.request_context -> 'multiFactorAuthenticatedAt', 'null'::jsonb)
-          ) is not distinct from ${expectedBindings}::jsonb
+          ) is not distinct from ${expectedBindings}::text::jsonb
         ) as context_is_current
       from final_context
     ),
@@ -282,7 +282,7 @@ export const createDatabaseDefinitionHistoryRepository = (
         ${command.targetReleaseRevision},
         ${command.expectedDraftRevision},
         ${verified.sourceFingerprint},
-        ${JSON.stringify(verified.identityRequirements)}
+        ${JSON.stringify(verified.identityRequirements)}::text::jsonb
       ) as restored_draft
     `;
     const restored = one(restoredRows, "DEFINITION_RESTORE_STORAGE_INVALID").restored_draft;
