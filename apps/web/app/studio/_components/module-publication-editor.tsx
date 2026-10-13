@@ -20,6 +20,43 @@ type PublicationConfirmation = ReturnType<
 >["confirmation"];
 type PublishedRelease = ReturnType<typeof publishDefinitionResultSchema.parse>;
 
+const reasonMessages: Record<string, string> = {
+  release_permission_missing:
+    "You do not have the release permission (manage definition releases) for this organisation.",
+  release_permission_not_eligible:
+    "You do not have the release permission (manage definition releases) for this organisation.",
+  recent_authentication_required: "Sign in again to confirm it is you, then retry.",
+  draft_stale_or_missing:
+    "The Module draft is missing or has changed since this page loaded. Reload and prepare the current saved draft.",
+  confirmation_mismatch:
+    "The prepared release no longer matches the draft. Reload and prepare again.",
+  no_change:
+    "The draft is unchanged since the last release, so there is nothing to publish. Save a change first.",
+  dependency_missing: "A Module this one depends on has no published release.",
+  dependency_prerelease_only: "A Module this one depends on has only a pre-release published.",
+  dependency_incompatible:
+    "A Module this one depends on is published at an incompatible version.",
+  dependency_ambiguous: "A dependency of this Module matches more than one published release.",
+  dependency_substituted: "A dependency of this Module resolves to a different Module than declared.",
+  dependency_cycle: "This Module's dependencies form a cycle.",
+  version_impact_refused:
+    "The change needs a version that this release cannot assign. Review the Module changes.",
+};
+
+const failureMessage = (result: { kind: string; reason?: string }, action: string): string => {
+  const reason = result.reason ?? "";
+  const specific =
+    reasonMessages[reason] ??
+    (reason.startsWith("compilation_")
+      ? `The Module draft does not compile (${reason.slice("compilation_".length)}).`
+      : undefined);
+  const outcome = `No release was ${action}.`;
+  if (specific !== undefined) return `${specific} ${outcome}`;
+  return result.kind === "temporarily_unavailable"
+    ? `Publication is temporarily unavailable (${reason || "unknown"}). ${outcome} Try again shortly.`
+    : `Publication was refused (${reason || "unknown"}). ${outcome}`;
+};
+
 export function ModulePublicationEditor({
   draft,
   prepare,
@@ -59,23 +96,17 @@ export function ModulePublicationEditor({
       if (
         parsed?.success &&
         sameId(parsed.data.confirmation.rootId, draft.rootId) &&
-        parsed.data.confirmation.expectedDraftRevision === draft.draftRevision &&
-        parsed.data.confirmation.sourceFingerprint === draft.sourceFingerprint
+        parsed.data.confirmation.expectedDraftRevision === draft.draftRevision
       ) {
         setConfirmation(parsed.data.confirmation);
         setMessage(
           "Preparation verified. Review the release identity and dependencies, then publish explicitly.",
         );
       } else {
-        const kind = result.kind;
         setMessage(
-          kind === "no_change"
-            ? "The saved Module draft has no publication change. No release was appended."
-            : kind === "dependency_unavailable"
-              ? "An exact published dependency is unavailable or incompatible. No release was prepared."
-              : kind === "conflict"
-                ? "The Module draft changed. Reload the page and prepare the current saved draft."
-                : "The Module draft, permission, or dependencies could not be prepared. No release was published.",
+          result.kind === "available"
+            ? "The prepared release did not match the saved draft. No release was published. Reload and prepare again."
+            : failureMessage(result, "published"),
         );
       }
     } catch {
@@ -121,17 +152,10 @@ export function ModulePublicationEditor({
           "Published the verified Module release. Application bindings and installations were not changed.",
         );
       } else {
-        const kind = result.kind;
         setMessage(
-          kind === "conflict"
-            ? "The Module draft or confirmation changed. No release was published; reload and prepare again."
-            : kind === "refused"
-              ? "Module publication was refused. No release was published."
-              : kind === "dependency_unavailable"
-                ? "An exact dependency changed or became unavailable. No release was published."
-                : kind === "no_change"
-                  ? "The saved Module draft has no publication change. No release was appended."
-                  : "The publication result could not be verified. Reload and inspect the current release before trying again.",
+          result.kind === "available"
+            ? "The publication result could not be verified. Reload and inspect the current release before trying again."
+            : failureMessage(result, "published"),
         );
       }
     } catch {
@@ -165,10 +189,6 @@ export function ModulePublicationEditor({
             <dd className="inline">{draft.draftRevision}</dd>
           </div>
           <div>
-            <dt className="inline font-medium">Saved source fingerprint: </dt>
-            <dd className="inline">{draft.sourceFingerprint}</dd>
-          </div>
-          <div>
             <dt className="inline font-medium">Current published revision: </dt>
             <dd className="inline">{draft.publishedRevision ?? "No release"}</dd>
           </div>
@@ -196,14 +216,6 @@ export function ModulePublicationEditor({
             <div>
               <dt className="inline font-medium">Module revision: </dt>
               <dd className="inline">{confirmation.expectedDraftRevision}</dd>
-            </div>
-            <div>
-              <dt className="inline font-medium">Content fingerprint: </dt>
-              <dd className="inline">{confirmation.contentFingerprint}</dd>
-            </div>
-            <div>
-              <dt className="inline font-medium">Resolution fingerprint: </dt>
-              <dd className="inline">{confirmation.resolutionFingerprint}</dd>
             </div>
           </dl>
           <details>
@@ -245,18 +257,6 @@ export function ModulePublicationEditor({
             <div>
               <dt className="inline font-medium">Release revision: </dt>
               <dd className="inline">{release.releaseRevision}</dd>
-            </div>
-            <div>
-              <dt className="inline font-medium">Content fingerprint: </dt>
-              <dd className="inline">{release.contentFingerprint}</dd>
-            </div>
-            <div>
-              <dt className="inline font-medium">Resolution fingerprint: </dt>
-              <dd className="inline">{release.resolutionFingerprint}</dd>
-            </div>
-            <div>
-              <dt className="inline font-medium">Comparison fingerprint: </dt>
-              <dd className="inline">{release.comparisonFingerprint}</dd>
             </div>
             <div>
               <dt className="inline font-medium">Published at: </dt>

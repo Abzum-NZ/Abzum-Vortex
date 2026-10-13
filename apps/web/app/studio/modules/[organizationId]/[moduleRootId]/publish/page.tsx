@@ -18,6 +18,7 @@ export default async function StudioModulePublicationPage({
         <p role="status">
           This Module draft is unavailable. Sign in with an account permitted to manage releases and
           try again.
+          {result.kind === "available" ? "" : ` (reason: ${result.reason ?? result.kind})`}
         </p>
       </main>
     );
