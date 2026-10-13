@@ -34,7 +34,7 @@ export type InitialLifecyclePolicyInput =
       allowUnlimitedCount: boolean;
       archiveWorkflowId: WorkflowId;
       archiveConnectionInstanceId: ConnectionInstanceId;
-      archiveDestination: string;
+      archiveDestination: EligibleArchiveConnectionOption["destinationKey"];
       expectedConnectionRevision: number;
     }>;
 

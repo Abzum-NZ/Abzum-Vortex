@@ -8,6 +8,7 @@ import {
   systemApplicationBoundReleaseSetResultSchema,
   workflowIdSchema,
   type ApplicationRootId,
+  type OrganizationId,
   type SelectedOrganizationScope,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
@@ -40,7 +41,7 @@ export const firstInstallUnavailable = (reason: FirstInstallUnavailableReason): 
 };
 
 export type FirstInstallSelector = Readonly<{
-  organizationId: string;
+  organizationId: OrganizationId;
   rootId: ApplicationRootId;
   releaseRevision: number;
 }>;

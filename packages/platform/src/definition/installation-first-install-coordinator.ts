@@ -14,7 +14,6 @@ import {
   sameId,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
-  type OrganizationId,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
   type SystemApplicationBoundReleaseSetResult,
@@ -63,10 +62,6 @@ type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRole
 export type FirstInstallCoordinatorEnvironment = FirstInstallEnvironment &
   Readonly<{ requests: ReturnType<typeof createHumanOrganizationRequestService> }>;
 
-/** The organisation, application and release one first install targets. */
-export type FirstInstallCoordinatorSelector = FirstInstallSelector &
-  Readonly<{ organizationId: OrganizationId }>;
-
 /** The state the caller proved and showed the person before running a first-install command. */
 export type FirstInstallExpectation = Readonly<{
   history: FirstInstallHistory;
@@ -84,7 +79,7 @@ const same = (left: unknown, right: unknown): boolean => canonicalJson(left) ===
 
 const firstInstallDefinitionAccess = (
   environment: FirstInstallCoordinatorEnvironment,
-  selector: FirstInstallCoordinatorSelector,
+  selector: FirstInstallSelector,
   history: FirstInstallHistory,
   expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
   onPreparedRegistration: (prepared: PreparedFirstInstallRegistration) => void,
@@ -161,7 +156,7 @@ const firstInstallDefinitionAccess = (
 });
 
 const exactFirstInstallBindings = (
-  selector: FirstInstallCoordinatorSelector,
+  selector: FirstInstallSelector,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   bindings: InstallationBindings,
   state: "active" | "provisioned",
@@ -185,7 +180,7 @@ const sameFirstInstallBindings = (
 const assertFirstInstallCoordinatorBoundary = (
   mode: "prepare" | "activate",
   phase: "before" | "after_first" | "after_final",
-  selector: FirstInstallCoordinatorSelector,
+  selector: FirstInstallSelector,
   expected: FirstInstallExpectation,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   bindings: InstallationBindings,
@@ -220,7 +215,7 @@ const assertFirstInstallCoordinatorBoundary = (
  */
 export const createFirstInstallCoordinator = (
   environment: FirstInstallCoordinatorEnvironment,
-  selector: FirstInstallCoordinatorSelector,
+  selector: FirstInstallSelector,
   expected: FirstInstallExpectation,
   expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
   mode: "prepare" | "activate",
@@ -378,7 +373,7 @@ export const createFirstInstallCoordinator = (
 /** Proves the activation result names exactly the selected release and its modules, all active. */
 export const verifyFirstInstallActivation = (
   result: ApplicationInstallationActivationResult<unknown>,
-  selector: FirstInstallCoordinatorSelector,
+  selector: FirstInstallSelector,
   releaseSet: SystemApplicationBoundReleaseSetResult,
 ): void => {
   const installed = result.installation;

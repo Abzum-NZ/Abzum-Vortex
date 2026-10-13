@@ -6,39 +6,16 @@ import {
   organizationIdSchema,
   sameId,
   type IdentitySession,
-  type OrganizationLifecycleLimits,
-  type RecordTypeLifecyclePolicy,
-  type StorageContractId,
   type SelectedOrganizationScope,
-  type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
 import {
   FirstInstallUnavailable,
   ProvisionedSetupError,
-  firstInstallHistory,
-  firstInstallSelectedIdentity,
-  firstInstallState,
-  firstInstallUnavailable,
-  firstInstallWorkflows,
   installationProblem,
-  type InstallationBindings,
   type InstallationProblemShape,
-  initialLifecyclePolicyMatches,
-  completeFirstInstallConnectionRead,
-  firstInstallAppCompletion,
-  readFirstInstallAppState,
-  readFirstInstallCandidateInTransaction,
-  readFirstInstallCurrentRelease,
-  readFirstInstallProvisionedSetupInTransaction,
-  requireFirstInstallSetupUnchanged,
-  visibleLifecyclePolicyBody,
-  visibleProvisionedSetup,
-  type FirstInstallAppState as FirstInstallProvedState,
+  type FirstInstallCommandRun,
   type FirstInstallEnvironment,
-  type ProvisionedSetup,
-  saveInitialArchiveWorkflowPolicy,
-  workflowIsInExactRelease,
-  type InitialLifecyclePolicyTarget,
+  type FirstInstallFlowEnvironment,
   activateUpgradeRelease,
   classifyInstallationFailure,
   readUpgradeActiveObservation,
@@ -49,14 +26,12 @@ import {
   type UpgradeReleaseIdentity,
   type UpgradeState,
   createFirstInstallCoordinator,
+  createRecordTypeLifecyclePolicyService,
+  readCurrentFirstInstallCandidate,
+  readFirstInstallArchiveOptions,
+  saveFirstInstallInitialPolicy,
   verifyFirstInstallActivation,
-  type FirstInstallCoordinatorEnvironment,
-  readInstallationArchiveConnectionOptions,
-  readSelectedInstallationArchiveConnection,
 } from "@vortex/platform/server";
-import type { RequestDatabaseTransaction } from "@vortex/platform/server";
-import { createRecordTypeLifecyclePolicyService } from "@vortex/platform/server";
-import type { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue, releaseSetContainsCustomComponents } from "./definition-catalogue";
 import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
@@ -64,9 +39,6 @@ import {
   inspectStudioApplicationReleaseHistory,
   loadStudioApplicationHistoryAccess,
 } from "./studio-application-history";
-import type {
-  studioApplicationFirstInstallPolicyInputSchema,
-  studioApplicationFirstInstallTargetSchema} from "./studio-application-installation-contracts";
 import {
   studioApplicationInstallationCommandResultSchema,
   studioApplicationInstallationCommandSchema,
@@ -82,8 +54,6 @@ import {
   studioApplicationFirstInstallPrepareCommandSchema,
   studioApplicationFirstInstallSaveCommandSchema,
   studioApplicationFirstInstallSelectorSchema,
-  studioApplicationFirstInstallSetupSchema,
-  studioApplicationFirstInstallSnapshotSchema,
   type StudioApplicationArchiveOptionsResult,
   type StudioApplicationFirstInstallCommandResult,
   type StudioApplicationFirstInstallLoadResult,
@@ -110,14 +80,15 @@ const firstInstallEnvironment: FirstInstallEnvironment = {
   containsCustomComponents: releaseSetContainsCustomComponents,
 };
 
-const firstInstallCoordinatorEnvironment = (): FirstInstallCoordinatorEnvironment => ({
+const firstInstallFlowEnvironment = (): FirstInstallFlowEnvironment => ({
   ...firstInstallEnvironment,
   requests: humanOrganizationRequests(),
+  history: {
+    readAccess: loadStudioApplicationHistoryAccess,
+    inspectRelease: inspectStudioApplicationReleaseHistory,
+  },
+  lifecyclePolicies: createRecordTypeLifecyclePolicyService(humanOrganizationRequestDependencies()),
 });
-
-function problem(kind: Problem["kind"], unavailableReason?: Problem["unavailableReason"]): never {
-  return installationProblem(unavailableReason ?? kind, kind, unavailableReason);
-}
 
 const unavailable = (reason: NonNullable<Problem["unavailableReason"]>) =>
   studioApplicationInstallationLoadResultSchema.parse({ kind: "unavailable", reason });
@@ -140,7 +111,8 @@ const toCommandFailure = (
 
 const exactSession = async (): Promise<IdentitySession | undefined> => {
   const resolved = await resolveIdentitySession();
-  if (resolved.kind === "temporarily_unavailable") problem("temporarily_unavailable");
+  if (resolved.kind === "temporarily_unavailable")
+    return installationProblem("identity_session_unavailable", "temporarily_unavailable");
   return resolved.kind === "active" ? resolved.session : undefined;
 };
 
@@ -281,24 +253,6 @@ export const installSelectedStudioApplicationRelease = async (
   }
 };
 
-const firstInstallSnapshot = (
-  selector: StudioApplicationFirstInstallSelector,
-  history: ReturnType<typeof firstInstallHistory>,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-  bindings: InstallationBindings,
-  registrationState: StudioApplicationFirstInstallSnapshot["registrationState"],
-  setup: unknown | null,
-): StudioApplicationFirstInstallSnapshot => studioApplicationFirstInstallSnapshotSchema.parse({
-  organizationId: selector.organizationId,
-  rootId: selector.rootId,
-  selected: firstInstallSelectedIdentity(releaseSet),
-  history,
-  registrationState,
-  registeredReleaseRevision: bindings.registeredReleaseRevision,
-  moduleBindings: bindings.moduleBindings,
-  workflows: firstInstallWorkflows(releaseSet),
-  setup,
-});
 
 const firstInstallLoadFailure = (error: unknown): StudioApplicationFirstInstallLoadResult => {
   if (error instanceof FirstInstallUnavailable)
@@ -330,97 +284,20 @@ const firstInstallCommandFailure = (
   });
 };
 
-type FirstInstallCandidate = Readonly<{
-  selector: StudioApplicationFirstInstallSelector;
-  history: ReturnType<typeof firstInstallHistory>;
-  releaseSet: SystemApplicationBoundReleaseSetResult;
-  snapshot: StudioApplicationFirstInstallSnapshot;
-  session: IdentitySession;
-}>;
-
-const readCurrentFirstInstallCandidate = async (
-  selector: StudioApplicationFirstInstallSelector,
-): Promise<FirstInstallCandidate> => {
+const firstInstallSession = async (): Promise<IdentitySession> => {
   const session = await exactSession();
-  if (session === undefined) problem("refused");
-  const access = await loadStudioApplicationHistoryAccess(selector.organizationId, selector.rootId);
-  if (access.kind !== "available") {
-    if (access.kind === "conflict") problem("conflict");
-    if (access.kind === "refused") problem("refused");
-    problem("temporarily_unavailable");
-  }
-  const history = firstInstallHistory(access.snapshot);
-  if (history.anchorReleaseRevision === null || selector.releaseRevision > history.anchorReleaseRevision)
-    firstInstallUnavailable("release_not_published");
-  const inspected = await inspectStudioApplicationReleaseHistory(selector.organizationId, {
-    rootId: selector.rootId,
-    expected: history,
-    releaseRevision: selector.releaseRevision,
-  });
-  if (inspected.kind !== "available") {
-    if (inspected.kind === "conflict") problem("conflict");
-    if (inspected.kind === "refused") firstInstallUnavailable("release_not_published");
-    problem("temporarily_unavailable");
-  }
-  const result = await humanOrganizationRequests().runChange(
-    session,
-    { organizationId: selector.organizationId },
-    (transaction, scope, issuedAt) => readFirstInstallCandidateInTransaction(
-      transaction, scope, session, issuedAt, firstInstallEnvironment, selector, history,
-      { definitionKey: inspected.snapshot.definitionKey, metadata: inspected.metadata },
-    ),
-  );
-  if (result.kind !== "available") problem(result.kind === "unavailable" ? "refused" : "temporarily_unavailable");
-  const { releaseSet, bindings } = result.value;
-  const registrationState = firstInstallState(selector, releaseSet, bindings);
-  let setup: unknown | null = null;
-  if (registrationState === "provisioned_inactive") {
-    setup = await readCurrentProvisionedSetup(selector, history, releaseSet, session);
-    if (setup === null) firstInstallUnavailable("setup_unavailable");
-  }
-  const snapshot = firstInstallSnapshot(
-    selector, history, releaseSet, bindings, registrationState, setup,
-  );
-  return {
-    selector,
-    history,
-    releaseSet,
-    snapshot,
-    session,
-  };
+  if (session === undefined) return installationProblem("identity_session_missing", "refused");
+  return session;
 };
 
-const visibleProvisionedSetupBody = (
-  setup: ProvisionedSetup,
-): z.infer<typeof studioApplicationFirstInstallSetupSchema> =>
-  studioApplicationFirstInstallSetupSchema.parse(visibleProvisionedSetup(setup));
-
-const readCurrentProvisionedSetup = async (
+const firstInstallCommandMatches = (
+  organizationId: string,
   selector: StudioApplicationFirstInstallSelector,
-  history: ReturnType<typeof firstInstallHistory>,
-  expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
-  session: IdentitySession,
-): Promise<z.infer<typeof studioApplicationFirstInstallSetupSchema> | null> => {
-  let callbackFailure: unknown;
-  const result = await humanOrganizationRequests().runChange(
-    session,
-    { organizationId: selector.organizationId, applicationRootId: selector.rootId },
-    async (transaction, scope, issuedAt) => {
-      try {
-        return await readFirstInstallProvisionedSetupInTransaction(
-          transaction, scope, session, issuedAt, firstInstallEnvironment, selector, history, expectedReleaseSet,
-        );
-      } catch (error) {
-        callbackFailure = error;
-        throw error;
-      }
-    },
-  );
-  if (result.kind === "available") return visibleProvisionedSetupBody(result.value);
-  if (callbackFailure !== undefined) throw callbackFailure;
-  if (result.kind === "unavailable") problem("refused");
-  problem("temporarily_unavailable");
-};
+  expected: StudioApplicationFirstInstallSnapshot,
+): boolean => sameUuid(organizationId, selector.organizationId) &&
+  sameUuid(expected.organizationId, selector.organizationId) &&
+  sameUuid(expected.rootId, selector.rootId) &&
+  expected.selected.releaseRevision === selector.releaseRevision;
 
 export const loadStudioApplicationFirstInstall = async (
   organizationIdCandidate: string,
@@ -432,7 +309,9 @@ export const loadStudioApplicationFirstInstall = async (
     !sameUuid(organizationId.data, selector.data.organizationId))
     return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "refused" });
   try {
-    const current = await readCurrentFirstInstallCandidate(selector.data);
+    const current = await readCurrentFirstInstallCandidate(
+      firstInstallFlowEnvironment(), await firstInstallSession(), selector.data,
+    );
     return studioApplicationFirstInstallLoadResultSchema.parse({
       kind: "available",
       snapshot: current.snapshot,
@@ -442,11 +321,6 @@ export const loadStudioApplicationFirstInstall = async (
   }
 };
 
-const sameFirstInstallExpectation = (
-  expected: StudioApplicationFirstInstallSnapshot,
-  actual: StudioApplicationFirstInstallSnapshot,
-): boolean => same(expected, actual);
-
 export const prepareStudioApplicationFirstInstall = async (
   organizationIdCandidate: string,
   commandCandidate: unknown,
@@ -454,27 +328,23 @@ export const prepareStudioApplicationFirstInstall = async (
   const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
   const command = studioApplicationFirstInstallPrepareCommandSchema.safeParse(commandCandidate);
   if (!organizationId.success || !command.success ||
-    !sameUuid(organizationId.data, command.data.selector.organizationId) ||
-    !sameUuid(command.data.expected.organizationId, command.data.selector.organizationId) ||
-    !sameUuid(command.data.expected.rootId, command.data.selector.rootId) ||
-    command.data.expected.selected.releaseRevision !== command.data.selector.releaseRevision)
+    !firstInstallCommandMatches(organizationId.data, command.data.selector, command.data.expected))
     return studioApplicationFirstInstallCommandResultSchema.parse({
       kind: "refused", stateMayHaveChanged: false,
     });
   let invocationStarted = false;
   try {
-    const current = await readCurrentFirstInstallCandidate(command.data.selector);
-    if (!sameFirstInstallExpectation(command.data.expected, current.snapshot))
-      return studioApplicationFirstInstallCommandResultSchema.parse({
-        kind: "conflict", stateMayHaveChanged: false,
-      });
+    const environment = firstInstallFlowEnvironment();
+    const current = await readCurrentFirstInstallCandidate(
+      environment, await firstInstallSession(), command.data.selector, command.data.expected,
+    );
     if (current.snapshot.registrationState !== "unprepared" &&
       current.snapshot.registrationState !== "registration_aligned_partial")
       return studioApplicationFirstInstallCommandResultSchema.parse({
         kind: "conflict", stateMayHaveChanged: false,
       });
     const coordinator = createFirstInstallCoordinator(
-      firstInstallCoordinatorEnvironment(), current.selector, current.snapshot, current.releaseSet, "prepare",
+      environment, current.selector, current.snapshot, current.releaseSet, "prepare",
     );
     invocationStarted = true;
     const outcome = await coordinator.prepare(current.session, {
@@ -508,260 +378,22 @@ export const loadStudioApplicationArchiveOptions = async (
   const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
   const query = studioApplicationArchiveOptionsQuerySchema.safeParse(queryCandidate);
   if (!organizationId.success || !query.success ||
-    !sameUuid(organizationId.data, query.data.selector.organizationId) ||
-    !sameUuid(query.data.expected.organizationId, query.data.selector.organizationId) ||
-    !sameUuid(query.data.expected.rootId, query.data.selector.rootId) ||
-    query.data.expected.selected.releaseRevision !== query.data.selector.releaseRevision)
+    !firstInstallCommandMatches(organizationId.data, query.data.selector, query.data.expected))
     return studioApplicationArchiveOptionsResultSchema.parse({ kind: "refused" });
   try {
-    const current = await readCurrentFirstInstallCandidate(query.data.selector);
-    if (!sameFirstInstallExpectation(query.data.expected, current.snapshot))
-      return studioApplicationArchiveOptionsResultSchema.parse({ kind: "conflict" });
-    const result = await runFirstInstallAppTransaction(
-      current,
-      query.data.expected,
-      async (transaction, _scope, _issuedAt, initial) => {
-        const target = currentTarget(initial.visibleSetup, query.data.storageContractId);
-        if (target.policy.state !== "absent" || target.storageScope !== "application_contained" ||
-          target.applicationRootId === null || !initial.visibleSetup.organizationLimits.allowedActions.includes("archive_workflow") ||
-          initial.visibleSetup.organizationLimits.allowedArchiveDestinations.length === 0)
-          problem("refused");
-        const currentRelease = await readFirstInstallCurrentRelease(
-          transaction, firstInstallEnvironment, query.data.selector, initial.releaseSet,
-        );
-        await requireFirstInstallSetupUnchanged(
-          transaction, _scope, current.session, _issuedAt, firstInstallEnvironment, query.data.selector,
-          currentRelease, initial,
-        );
-        const retainedFence = await firstInstallAppCompletion(
-          transaction, _scope, current.session, _issuedAt, firstInstallEnvironment, query.data.selector,
-          query.data.expected.history, currentRelease, initial.context,
-        );
-        const page = await readInstallationArchiveConnectionOptions(
-          transaction,
-          query.data.selector.organizationId,
-          query.data.selector.rootId,
-          initial.visibleSetup.organizationLimits.allowedArchiveDestinations,
-          query.data.afterConnectionInstanceId,
-        );
-        await completeFirstInstallConnectionRead(
-          transaction,
-          _scope,
-          current.session,
-          _issuedAt,
-          firstInstallEnvironment,
-          query.data.selector,
-          query.data.expected.history,
-          initial,
-          retainedFence,
-        );
-        return studioApplicationArchiveOptionsResultSchema.parse({
-          kind: "available",
-          options: page.options.map(({ destinationFingerprint: _privateFingerprint, ...option }) => option),
-          ...(page.nextAfterConnectionInstanceId === undefined
-            ? {}
-            : { nextAfterConnectionInstanceId: page.nextAfterConnectionInstanceId }),
-        });
-      },
-      true,
+    const page = await readFirstInstallArchiveOptions(
+      firstInstallFlowEnvironment(), await firstInstallSession(), query.data,
     );
-    return result;
+    return studioApplicationArchiveOptionsResultSchema.parse({
+      kind: "available",
+      options: page.options.map(({ destinationFingerprint: _privateFingerprint, ...option }) => option),
+      ...(page.nextAfterConnectionInstanceId === undefined
+        ? {}
+        : { nextAfterConnectionInstanceId: page.nextAfterConnectionInstanceId }),
+    });
   } catch (error) {
     return archiveOptionsFailure(error);
   }
-};
-
-const initialPolicyTarget = (
-  candidate: FirstInstallCandidate,
-  target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
-): InitialLifecyclePolicyTarget => ({
-  organizationId: candidate.selector.organizationId,
-  installationRootId: candidate.selector.rootId,
-  releaseRevision: candidate.selector.releaseRevision,
-  storageContractId: target.storageContractId,
-  applicationRootId: target.applicationRootId,
-});
-
-const saveDeleteInitialPolicy = async (
-  candidate: FirstInstallCandidate,
-  target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
-  expectedBindingRevision: number,
-  expectedSettingsRevision: number,
-  policy: Extract<z.infer<typeof studioApplicationFirstInstallPolicyInputSchema>, { action: "delete" }>,
-): Promise<RecordTypeLifecyclePolicy> => {
-  if (!target.sourceBindings.some((binding) => binding.bindingRevision === expectedBindingRevision))
-    problem("conflict");
-  const service = createRecordTypeLifecyclePolicyService(humanOrganizationRequestDependencies());
-  const result = await service.saveInitialForProvisionedSetup(candidate.session, initialPolicyCommand(
-    candidate, target, expectedBindingRevision, expectedSettingsRevision, policy,
-  ));
-  if (result.kind !== "available") {
-    if (result.kind === "unavailable") problem("refused");
-    problem("temporarily_unavailable");
-  }
-  return initialLifecyclePolicyMatches(result.value, initialPolicyTarget(candidate, target), policy);
-};
-
-type FirstInstallAppState = FirstInstallProvedState & Readonly<{
-  visibleSetup: z.infer<typeof studioApplicationFirstInstallSetupSchema>;
-}>;
-
-const firstInstallCurrentSnapshotMatches = (
-  selector: StudioApplicationFirstInstallSelector,
-  expected: StudioApplicationFirstInstallSnapshot,
-  current: Readonly<{
-    releaseSet: SystemApplicationBoundReleaseSetResult;
-    bindings: InstallationBindings;
-    state: StudioApplicationFirstInstallSnapshot["registrationState"];
-    setup: ProvisionedSetup;
-  }>,
-): boolean => sameFirstInstallExpectation(expected, firstInstallSnapshot(
-  selector, expected.history, current.releaseSet, current.bindings, current.state,
-  visibleProvisionedSetupBody(current.setup),
-));
-
-type FirstInstallTransactionAction<Value> = (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  issuedAt: string,
-  initial: FirstInstallAppState,
-) => Promise<Value>;
-
-const runFirstInstallAppTransaction = async <Value>(
-  candidate: FirstInstallCandidate,
-  expected: StudioApplicationFirstInstallSnapshot,
-  action: FirstInstallTransactionAction<Value>,
-  actionIsFinalDatabaseOperation = false,
-): Promise<Value> => {
-  let callbackFailure: unknown;
-  const result = await humanOrganizationRequests().runChange(
-    candidate.session,
-    { organizationId: candidate.selector.organizationId, applicationRootId: candidate.selector.rootId },
-    async (transaction, scope, issuedAt) => {
-      try {
-        const proved = await readFirstInstallAppState(
-          transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, candidate.selector, expected,
-          (current) => firstInstallCurrentSnapshotMatches(candidate.selector, expected, current),
-        );
-        const initial: FirstInstallAppState = { ...proved, visibleSetup: visibleProvisionedSetupBody(proved.setup) };
-        const value = await action(transaction, scope, issuedAt, initial);
-        if (!actionIsFinalDatabaseOperation) {
-          const currentRelease = await readFirstInstallCurrentRelease(
-            transaction, firstInstallEnvironment, candidate.selector, initial.releaseSet,
-          );
-          await firstInstallAppCompletion(
-            transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, candidate.selector,
-            expected.history, currentRelease, initial.context,
-          );
-        }
-        return value;
-      } catch (error) {
-        callbackFailure = error;
-        throw error;
-      }
-    },
-  );
-  if (result.kind === "available") return result.value;
-  if (callbackFailure !== undefined) throw callbackFailure;
-  if (result.kind === "unavailable") problem("refused");
-  problem("temporarily_unavailable");
-};
-
-const currentTarget = (
-  setup: z.infer<typeof studioApplicationFirstInstallSetupSchema>,
-  storageContractId: StorageContractId,
-) => {
-  const matching = setup.targets.filter((target) => sameUuid(target.storageContractId, storageContractId));
-  if (matching.length !== 1) problem("conflict");
-  const target = matching[0];
-  if (target === undefined) problem("conflict");
-  return target;
-};
-
-const assertPolicyCommonFields = (
-  policy: z.infer<typeof studioApplicationFirstInstallPolicyInputSchema>,
-  limits: OrganizationLifecycleLimits,
-): void => {
-  if (!limits.allowedActions.includes(policy.action) ||
-    (policy.allowUnlimitedAge && policy.maxAgeDays !== null) ||
-    (!policy.allowUnlimitedAge && policy.maxAgeDays === null) ||
-    (policy.allowUnlimitedCount && policy.maxCount !== null) ||
-    (!policy.allowUnlimitedCount && policy.maxCount === null) ||
-    (policy.maxAgeDays !== null && limits.maxRetentionDays !== null &&
-      limits.maxRetentionDays !== undefined && policy.maxAgeDays > limits.maxRetentionDays) ||
-    (policy.maxCount !== null && limits.maxRecordCount !== null &&
-      limits.maxRecordCount !== undefined && policy.maxCount > limits.maxRecordCount) ||
-    (policy.allowUnlimitedAge && !limits.allowUnlimitedRetentionDays) ||
-    (policy.allowUnlimitedCount && !limits.allowUnlimitedRecordCount))
-    problem("refused");
-};
-
-const initialPolicyCommand = (
-  candidate: FirstInstallCandidate,
-  target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
-  expectedBindingRevision: number,
-  expectedSettingsRevision: number,
-  policy: z.infer<typeof studioApplicationFirstInstallPolicyInputSchema>,
-) => ({
-  organizationId: candidate.selector.organizationId,
-  bindingApplicationRootId: candidate.selector.rootId,
-  expectedBindingRevision,
-  storageContractId: target.storageContractId,
-  applicationRootId: target.applicationRootId,
-  expectedSettingsRevision,
-  policy,
-});
-
-const firstInstallCommandMatches = (
-  organizationId: string,
-  selector: StudioApplicationFirstInstallSelector,
-  expected: StudioApplicationFirstInstallSnapshot,
-): boolean => sameUuid(organizationId, selector.organizationId) &&
-  sameUuid(expected.organizationId, selector.organizationId) &&
-  sameUuid(expected.rootId, selector.rootId) &&
-  expected.selected.releaseRevision === selector.releaseRevision;
-
-const assertInitialPolicyTarget = (
-  setup: z.infer<typeof studioApplicationFirstInstallSetupSchema>,
-  command: z.infer<typeof studioApplicationFirstInstallSaveCommandSchema>,
-): z.infer<typeof studioApplicationFirstInstallTargetSchema> => {
-  const target = currentTarget(setup, command.storageContractId);
-  if ((target.applicationRootId === null) !== (command.targetApplicationRootId === null) ||
-    (target.applicationRootId !== null && command.targetApplicationRootId !== null &&
-      !sameUuid(target.applicationRootId, command.targetApplicationRootId)) ||
-    target.policy.state !== "absent" ||
-    setup.organizationLimits.settingsRevision !== command.expectedSettingsRevision ||
-    !target.sourceBindings.some((binding) =>
-      binding.bindingRevision === command.expectedBindingRevision))
-    problem("conflict");
-  assertPolicyCommonFields(command.policy, setup.organizationLimits);
-  if (command.policy.action === "archive_workflow" &&
-    (target.storageScope !== "application_contained" ||
-      target.applicationRootId === null ||
-      !sameUuid(target.applicationRootId, command.selector.rootId)))
-    problem("refused");
-  return target;
-};
-
-const freshSavedPolicyIsObserved = async (
-  selector: StudioApplicationFirstInstallSelector,
-  history: ReturnType<typeof firstInstallHistory>,
-  selected: StudioApplicationFirstInstallSnapshot["selected"],
-  target: z.infer<typeof studioApplicationFirstInstallTargetSchema>,
-  saved: RecordTypeLifecyclePolicy,
-): Promise<void> => {
-  const current = await readCurrentFirstInstallCandidate(selector);
-  if (!same(current.snapshot.history, history) || !same(current.snapshot.selected, selected))
-    problem("conflict");
-  if (current.snapshot.registrationState === "active_exact") return;
-  if (current.snapshot.registrationState !== "provisioned_inactive" || current.snapshot.setup === null)
-    problem("temporarily_unavailable");
-  const observedTarget = currentTarget(current.snapshot.setup, target.storageContractId);
-  if (observedTarget.policy.state !== "configured" ||
-    !sameUuid(observedTarget.policy.policyId, saved.policyId) ||
-    observedTarget.policy.policyRevision !== saved.policyRevision ||
-    !same(observedTarget.policy.policyBody, visibleLifecyclePolicyBody(saved)))
-    problem("temporarily_unavailable");
 };
 
 export const saveStudioApplicationFirstInstallPolicy = async (
@@ -776,99 +408,16 @@ export const saveStudioApplicationFirstInstallPolicy = async (
       kind: "refused", stateMayHaveChanged: false,
     });
 
-  let invocationStarted = false;
+  const run: FirstInstallCommandRun = { writeStarted: false };
   try {
-    const candidate = await readCurrentFirstInstallCandidate(command.data.selector);
-    if (!sameFirstInstallExpectation(command.data.expected, candidate.snapshot))
-      return studioApplicationFirstInstallCommandResultSchema.parse({
-        kind: "conflict", stateMayHaveChanged: false,
-      });
-    if (candidate.snapshot.registrationState !== "provisioned_inactive" ||
-      candidate.snapshot.setup === null)
-      return studioApplicationFirstInstallCommandResultSchema.parse({
-        kind: "conflict", stateMayHaveChanged: false,
-      });
-    const target = assertInitialPolicyTarget(candidate.snapshot.setup, command.data);
-    const selectedPolicy = command.data.policy;
-    let saved: RecordTypeLifecyclePolicy;
-    if (selectedPolicy.action === "delete") {
-      await runFirstInstallAppTransaction(candidate, command.data.expected,
-        async (_transaction, _scope, _issuedAt, initial) => {
-          const currentTargetValue = assertInitialPolicyTarget(initial.visibleSetup, command.data);
-          if (!same(currentTargetValue, target)) problem("conflict");
-        });
-      invocationStarted = true;
-      saved = await saveDeleteInitialPolicy(
-        candidate,
-        target,
-        command.data.expectedBindingRevision,
-        command.data.expectedSettingsRevision,
-        selectedPolicy,
-      );
-    } else {
-      const archivePolicy = selectedPolicy;
-      saved = await runFirstInstallAppTransaction(candidate, command.data.expected,
-        async (transaction, scope, issuedAt, initial) => {
-          const currentTargetValue = assertInitialPolicyTarget(initial.visibleSetup, command.data);
-          if (!same(currentTargetValue, target) || !same(initial.visibleSetup, candidate.snapshot.setup))
-            problem("conflict");
-          if (!workflowIsInExactRelease(
-            initial.releaseSet, command.data.selector.rootId, archivePolicy.archiveWorkflowId,
-          )) problem("refused");
-          const currentRelease = await readFirstInstallCurrentRelease(
-            transaction, firstInstallEnvironment, command.data.selector, initial.releaseSet,
-          );
-          await requireFirstInstallSetupUnchanged(
-            transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, command.data.selector,
-            currentRelease, initial,
-          );
-          const retainedFence = await firstInstallAppCompletion(
-            transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, command.data.selector,
-            command.data.expected.history, currentRelease, initial.context,
-          );
-          const option = await readSelectedInstallationArchiveConnection(
-            transaction,
-            command.data.selector.organizationId,
-            command.data.selector.rootId,
-            initial.visibleSetup.organizationLimits.allowedArchiveDestinations,
-            {
-              connectionInstanceId: archivePolicy.archiveConnectionInstanceId,
-              destinationKey: archivePolicy.archiveDestination,
-              expectedRevision: archivePolicy.expectedConnectionRevision,
-            },
-          );
-          await completeFirstInstallConnectionRead(
-            transaction,
-            scope,
-            candidate.session,
-            issuedAt,
-            firstInstallEnvironment,
-            command.data.selector,
-            command.data.expected.history,
-            initial,
-            retainedFence,
-          );
-          invocationStarted = true;
-          return saveInitialArchiveWorkflowPolicy(
-            transaction,
-            initialPolicyTarget(candidate, currentTargetValue),
-            candidate.releaseSet,
-            currentTargetValue.sourceBindings.map((binding) => binding.bindingRevision),
-            command.data.expectedBindingRevision,
-            command.data.expectedSettingsRevision,
-            archivePolicy,
-            option,
-          );
-        }, true);
-    }
-    await freshSavedPolicyIsObserved(
-      candidate.selector, candidate.history, candidate.snapshot.selected, target, saved,
+    await saveFirstInstallInitialPolicy(
+      firstInstallFlowEnvironment(), await firstInstallSession(), command.data, run,
     );
     return studioApplicationFirstInstallCommandResultSchema.parse({
       kind: "completed", action: "policy_saved", stateMayHaveChanged: true,
     });
   } catch (error) {
-    return firstInstallCommandFailure(error, invocationStarted ? "unknown" : false);
+    return firstInstallCommandFailure(error, run.writeStarted ? "unknown" : false);
   }
 };
 
@@ -886,11 +435,10 @@ export const activateStudioApplicationFirstInstall = async (
 
   let invocationStarted = false;
   try {
-    const candidate = await readCurrentFirstInstallCandidate(command.data.selector);
-    if (!sameFirstInstallExpectation(command.data.expected, candidate.snapshot))
-      return studioApplicationFirstInstallCommandResultSchema.parse({
-        kind: "conflict", stateMayHaveChanged: false,
-      });
+    const environment = firstInstallFlowEnvironment();
+    const candidate = await readCurrentFirstInstallCandidate(
+      environment, await firstInstallSession(), command.data.selector, command.data.expected,
+    );
     if (candidate.snapshot.registrationState !== "provisioned_inactive" ||
       candidate.snapshot.setup === null ||
       candidate.snapshot.setup.targets.some((target) => target.policy.state !== "configured"))
@@ -899,7 +447,7 @@ export const activateStudioApplicationFirstInstall = async (
       });
 
     const coordinator = createFirstInstallCoordinator(
-      firstInstallCoordinatorEnvironment(), candidate.selector, candidate.snapshot, candidate.releaseSet, "activate",
+      environment, candidate.selector, candidate.snapshot, candidate.releaseSet, "activate",
     );
     invocationStarted = true;
     const result = await coordinator.activate(candidate.session, {
