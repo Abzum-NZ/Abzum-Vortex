@@ -261,11 +261,9 @@ begin
   ) as changed;
 
   set constraints
-    vortex_access.permission_continuities_evidence,
     vortex_access.organization_role_revisions_evidence
     immediate;
   set constraints
-    vortex_access.permission_continuities_evidence,
     vortex_access.organization_role_revisions_evidence
     deferred;
 
