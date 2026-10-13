@@ -122,8 +122,6 @@ begin
            and entry.source_version = '1.2.0'
            and entry.source_revision is null
            and entry.source_validation_contract_version is null
-           and entry.source_content_fingerprint is null
-           and entry.source_resolution_fingerprint is null
            and entry.source_catalogue_fingerprint = catalogue_fingerprint
            and entry.meaning_fingerprint = connection_meaning_fingerprint)
     and (select pg_catalog.count(*) = 15

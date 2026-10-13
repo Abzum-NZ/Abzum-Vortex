@@ -337,8 +337,7 @@ begin
     application_root_id, owner_kind, owner_id, permission_id, permission_key,
     label, description, record_type_id, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint, meaning_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint,
     record_scope, field_policy
   )
   select candidate_organization_id, 'application', candidate_application_root_id,
@@ -354,9 +353,7 @@ begin
     source.source_value ->> 'kind', source.source_value ->> 'definitionKey',
     (source.source_value ->> 'rootId')::uuid, source.source_value ->> 'releaseVersion',
     (source.source_value ->> 'releaseRevision')::bigint,
-    source.source_value ->> 'validationContractVersion',
-    source.source_value ->> 'contentFingerprint',
-    source.source_value ->> 'resolutionFingerprint', null,
+    source.source_value ->> 'validationContractVersion', null,
     item.entry_value ->> 'meaningFingerprint',
     permission.permission_value -> 'recordScope',
     permission.permission_value -> 'fieldPolicy'
@@ -398,7 +395,7 @@ exception when invalid_text_representation or numeric_value_out_of_range then
 end
 $_$;
 
-alter function vortex_access.apply_application_permission_registration_v1_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+ALTER FUNCTION vortex_access.apply_application_permission_registration_v1_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.apply_application_permission_registration_v1_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) IS 'Legacy raw registration writer retained privately for the coordinated application-access composition only.';
 

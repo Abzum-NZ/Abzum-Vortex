@@ -113,8 +113,7 @@ begin
     permission_id, permission_key, label, description, record_type_id,
     action_kind, named_action, administrative, source_kind,
     source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     meaning_fingerprint, record_scope, field_policy
   )
   select entry.organization_id, entry.registration_kind,
@@ -125,7 +124,6 @@ begin
     entry.administrative, entry.source_kind, entry.source_definition_key,
     entry.source_root_id, '1.4.0', entry.source_revision,
     entry.source_validation_contract_version,
-    entry.source_content_fingerprint, entry.source_resolution_fingerprint,
     catalogue_fingerprint, entry.meaning_fingerprint,
     entry.record_scope, entry.field_policy
   from vortex_access.permission_catalogue_entries as entry
@@ -145,8 +143,7 @@ begin
     permission_id, permission_key, label, description, record_type_id,
     action_kind, named_action, administrative, source_kind,
     source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     meaning_fingerprint
   ) values
     (
@@ -155,7 +152,7 @@ begin
       'platform.organization.definition_drafts.manage', 'Manage definition drafts',
       'Create and change module and application drafts, including flows, placements and role templates, without publication or installation authority.',
       null, 'manage', null, true, 'platform_catalogue', null, null,
-      '1.4.0', null, null, null, null, catalogue_fingerprint,
+      '1.4.0', null, null, catalogue_fingerprint,
       drafts_meaning_fingerprint
     ),
     (
@@ -164,7 +161,7 @@ begin
       'platform.organization.definition_releases.manage', 'Manage definition releases',
       'Publish module and application drafts as immutable releases without receiving installation or business-record authority.',
       null, 'manage', null, true, 'platform_catalogue', null, null,
-      '1.4.0', null, null, null, null, catalogue_fingerprint,
+      '1.4.0', null, null, catalogue_fingerprint,
       releases_meaning_fingerprint
     ),
     (
@@ -173,7 +170,7 @@ begin
       'platform.organization.custom_code.manage', 'Manage custom code',
       'Required in addition to the application-management permission to install, upgrade or uninstall packages that bundle custom components or scripts.',
       null, 'manage', null, true, 'platform_catalogue', null, null,
-      '1.4.0', null, null, null, null, catalogue_fingerprint,
+      '1.4.0', null, null, catalogue_fingerprint,
       custom_code_meaning_fingerprint
     ),
     (
@@ -182,7 +179,7 @@ begin
       'platform.organization.system_applications.manage', 'Manage system applications',
       'Change system application definitions, including extension fields, theme, navigation and dependent applications, without uninstallation authority.',
       null, 'manage', null, true, 'platform_catalogue', null, null,
-      '1.4.0', null, null, null, null, catalogue_fingerprint,
+      '1.4.0', null, null, catalogue_fingerprint,
       system_applications_meaning_fingerprint
     );
 

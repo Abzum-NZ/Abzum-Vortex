@@ -346,6 +346,7 @@ begin
         'ownerId', source_owner_id,
         'permissionId', (route ->> 'sourcePermissionId')::uuid
       ),
+      'registrationRevision', (source_permission_entry).registration_revision,
       'recordScope', (source_permission_entry).record_scope,
       'source', pg_catalog.jsonb_build_object(
         'kind', (source_permission_entry).source_kind,
@@ -353,9 +354,7 @@ begin
         'rootId', (source_permission_entry).source_root_id,
         'releaseRevision', (source_permission_entry).source_revision,
         'releaseVersion', (source_permission_entry).source_version,
-        'validationContractVersion', (source_permission_entry).source_validation_contract_version,
-        'contentFingerprint', (source_permission_entry).source_content_fingerprint,
-        'resolutionFingerprint', (source_permission_entry).source_resolution_fingerprint
+        'validationContractVersion', (source_permission_entry).source_validation_contract_version
       ),
       'validUntil', pg_catalog.to_char(
         pg_catalog.timezone('UTC', source_valid_until), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
@@ -480,6 +479,7 @@ begin
   for route_index in 1 .. coalesce(pg_catalog.array_length(route_list, 1), 0) loop
     result := result || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
       'permission', candidate_permission,
+      'registrationRevision', p_candidate -> 'registrationRevision',
       'recordScope', candidate_record_scope,
       'source', p_candidate -> 'source',
       'route', route_list[route_index],
