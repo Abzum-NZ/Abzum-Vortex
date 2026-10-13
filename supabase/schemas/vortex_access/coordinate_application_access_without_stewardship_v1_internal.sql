@@ -82,17 +82,12 @@ begin
       select 1
       from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
       where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
-        or item.value - array[
-          'template', 'sourceTemplateFingerprint', 'sourcePermissions', 'livePermissions'
-        ]::text[] <> '{}'::jsonb
-        or not (item.value ?& array[
-          'template', 'sourceTemplateFingerprint', 'sourcePermissions', 'livePermissions'
-        ])
+        or item.value - array['template', 'sourcePermissions', 'livePermissions']::text[]
+          <> '{}'::jsonb
+        or not (item.value ?& array['template', 'sourcePermissions', 'livePermissions'])
         or pg_catalog.jsonb_typeof(item.value -> 'template') is distinct from 'object'
         or pg_catalog.jsonb_typeof(item.value -> 'sourcePermissions') is distinct from 'array'
         or pg_catalog.jsonb_typeof(item.value -> 'livePermissions') is distinct from 'array'
-        or item.value ->> 'sourceTemplateFingerprint' is null
-        or item.value ->> 'sourceTemplateFingerprint' !~ '^sha256:[a-f0-9]{64}$'
         or item.value #>> '{template,roleId}' is null
         or (item.value #>> '{template,roleId}')::uuid =
           '00000000-0000-0000-0000-000000000000'::uuid
@@ -403,8 +398,7 @@ begin
 
   if exists (
     with target as (
-      select (item.value #>> '{template,roleId}')::uuid as source_role_id,
-        item.value ->> 'sourceTemplateFingerprint' as source_template_fingerprint
+      select (item.value #>> '{template,roleId}')::uuid as source_role_id
       from pg_catalog.jsonb_array_elements(
         case when raw_result.registration_state = 'active'
           then p_prepared_templates -> 'templates'
@@ -431,8 +425,7 @@ begin
   end if;
 
   with target as (
-    select (item.value #>> '{template,roleId}')::uuid as source_role_id,
-      item.value ->> 'sourceTemplateFingerprint' as source_template_fingerprint
+    select (item.value #>> '{template,roleId}')::uuid as source_role_id
     from pg_catalog.jsonb_array_elements(
       case when raw_result.registration_state = 'active'
         then p_prepared_templates -> 'templates'
@@ -440,8 +433,7 @@ begin
       end
     ) as item(value)
   ), transition as (
-    select continuity.ctid as continuity_row, target.source_role_id as target_role_id,
-      target.source_template_fingerprint
+    select continuity.ctid as continuity_row, target.source_role_id as target_role_id
     from vortex_access.application_role_template_continuities as continuity
     left join target on target.source_role_id = continuity.source_role_id
     where continuity.organization_id = p_organization_id
@@ -457,9 +449,6 @@ begin
           then continuity.continuity_revision
         else continuity.continuity_revision + 1
       end,
-      source_template_fingerprint = coalesce(
-        transition.source_template_fingerprint, continuity.source_template_fingerprint
-      ),
       last_processed_registration_revision = raw_result.registration_revision,
       changed_at = pg_catalog.statement_timestamp()
   from transition
@@ -468,13 +457,11 @@ begin
   if raw_result.registration_state = 'active' then
     insert into vortex_access.application_role_template_continuities (
       organization_id, application_root_id, source_role_id, state,
-      continuity_revision, source_template_fingerprint,
-      last_processed_registration_revision, changed_at
+      continuity_revision, last_processed_registration_revision, changed_at
     )
     select p_organization_id, p_application_root_id,
       (item.value #>> '{template,roleId}')::uuid, 'available', 1,
-      item.value ->> 'sourceTemplateFingerprint', raw_result.registration_revision,
-      pg_catalog.statement_timestamp()
+      raw_result.registration_revision, pg_catalog.statement_timestamp()
     from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
     where not exists (
       select 1
@@ -496,8 +483,7 @@ begin
       revision.source_release_revision, revision.source_release_version,
       revision.source_validation_contract_version,
       revision.source_content_fingerprint, revision.source_resolution_fingerprint,
-      revision.source_template_fingerprint, revision.source_catalogue_fingerprint,
-      revision.accepted_registration_revision,
+      revision.source_catalogue_fingerprint, revision.accepted_registration_revision,
       revision.template_continuity_revision
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
@@ -661,8 +647,8 @@ begin
       label, description, source_definition_key, source_release_revision,
       source_release_version, source_validation_contract_version,
       source_content_fingerprint, source_resolution_fingerprint,
-      source_template_fingerprint, source_catalogue_fingerprint,
-      accepted_registration_revision, template_continuity_revision,
+      source_catalogue_fingerprint, accepted_registration_revision,
+      template_continuity_revision,
       changed_by, changed_at, change_correlation_id
     ) values (
       p_organization_id, role_record.role_id, next_role_revision, 'application',
@@ -678,7 +664,6 @@ begin
       role_record.source_validation_contract_version,
       role_record.source_content_fingerprint,
       role_record.source_resolution_fingerprint,
-      role_record.source_template_fingerprint,
       role_record.source_catalogue_fingerprint,
       role_record.accepted_registration_revision,
       role_record.template_continuity_revision,

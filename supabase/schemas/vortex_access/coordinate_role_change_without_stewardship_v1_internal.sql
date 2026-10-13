@@ -41,7 +41,6 @@ declare
   target_source_validation_contract_version text;
   target_source_content_fingerprint text;
   target_source_resolution_fingerprint text;
-  target_source_template_fingerprint text;
   target_source_catalogue_fingerprint text;
   target_accepted_registration_revision bigint;
   target_template_continuity_revision bigint;
@@ -553,16 +552,12 @@ begin
     where (item.value #>> '{template,roleId}')::uuid = target_source_role_id;
     if selected_template_count <> 1
       or pg_catalog.jsonb_typeof(selected_template) <> 'object'
-      or selected_template - array[
-        'template', 'sourceTemplateFingerprint', 'sourcePermissions', 'livePermissions'
-      ]::text[] <> '{}'::jsonb
-      or not (selected_template ?& array[
-        'template', 'sourceTemplateFingerprint', 'sourcePermissions', 'livePermissions'
-      ])
+      or selected_template - array['template', 'sourcePermissions', 'livePermissions']::text[]
+        <> '{}'::jsonb
+      or not (selected_template ?& array['template', 'sourcePermissions', 'livePermissions'])
       or pg_catalog.jsonb_typeof(selected_template -> 'template') <> 'object'
       or pg_catalog.jsonb_typeof(selected_template -> 'livePermissions') <> 'array'
-      or pg_catalog.jsonb_array_length(selected_template -> 'livePermissions') = 0
-      or selected_template ->> 'sourceTemplateFingerprint' !~ '^sha256:[a-f0-9]{64}$' then
+      or pg_catalog.jsonb_array_length(selected_template -> 'livePermissions') = 0 then
       raise exception using errcode = '22023',
         message = 'Selected application role-template evidence is invalid';
     end if;
@@ -583,8 +578,6 @@ begin
     target_source_resolution_fingerprint :=
       prepared_templates #>>
         '{permissionRegistration,applicationRelease,resolutionFingerprint}';
-    target_source_template_fingerprint :=
-      selected_template ->> 'sourceTemplateFingerprint';
     target_source_catalogue_fingerprint :=
       prepared_templates #>> '{permissionRegistration,applicationCatalogueFingerprint}';
   end if;
@@ -704,7 +697,6 @@ begin
       and continuity.source_role_id = target_source_role_id
       and continuity.state = 'available'
       and continuity.continuity_revision = target_template_continuity_revision
-      and continuity.source_template_fingerprint = target_source_template_fingerprint
       and continuity.last_processed_registration_revision =
         target_accepted_registration_revision
     for update;
@@ -770,7 +762,7 @@ begin
       derived_source_definition_key, derived_source_release_revision,
       derived_source_release_version, derived_source_validation_contract_version,
       derived_source_content_fingerprint, derived_source_resolution_fingerprint,
-      derived_source_template_fingerprint, live_revision, created_by, created_at
+      live_revision, created_by, created_at
     ) values (
       target_organization_id, target_role_id, target_role_kind, target_role_key,
       case when target_role_kind = 'application' then target_application_root_id else null end,
@@ -791,8 +783,6 @@ begin
         then target_source_content_fingerprint else null end,
       case when operation_name = 'create_custom_from_template'
         then target_source_resolution_fingerprint else null end,
-      case when operation_name = 'create_custom_from_template'
-        then target_source_template_fingerprint else null end,
       1, p_changed_by, operation_at
     );
 
@@ -811,7 +801,6 @@ begin
       target_source_validation_contract_version := null;
       target_source_content_fingerprint := null;
       target_source_resolution_fingerprint := null;
-      target_source_template_fingerprint := null;
       target_source_catalogue_fingerprint := null;
       target_accepted_registration_revision := null;
       target_template_continuity_revision := null;
@@ -898,7 +887,6 @@ begin
       current_revision.source_validation_contract_version;
     target_source_content_fingerprint := current_revision.source_content_fingerprint;
     target_source_resolution_fingerprint := current_revision.source_resolution_fingerprint;
-    target_source_template_fingerprint := current_revision.source_template_fingerprint;
     target_source_catalogue_fingerprint := current_revision.source_catalogue_fingerprint;
     target_accepted_registration_revision := current_revision.accepted_registration_revision;
     target_template_continuity_revision := current_revision.template_continuity_revision;
@@ -910,7 +898,6 @@ begin
     target_source_validation_contract_version := null;
     target_source_content_fingerprint := null;
     target_source_resolution_fingerprint := null;
-    target_source_template_fingerprint := null;
     target_source_catalogue_fingerprint := null;
     target_accepted_registration_revision := null;
     target_template_continuity_revision := null;
@@ -1017,8 +1004,6 @@ begin
       target_source_content_fingerprint
     and current_revision.source_resolution_fingerprint is not distinct from
       target_source_resolution_fingerprint
-    and current_revision.source_template_fingerprint is not distinct from
-      target_source_template_fingerprint
     and current_revision.source_catalogue_fingerprint is not distinct from
       target_source_catalogue_fingerprint
     and current_revision.accepted_registration_revision is not distinct from
@@ -1052,8 +1037,6 @@ begin
         target_source_content_fingerprint
       or current_revision.source_resolution_fingerprint is distinct from
         target_source_resolution_fingerprint
-      or current_revision.source_template_fingerprint is distinct from
-        target_source_template_fingerprint
       or current_revision.source_catalogue_fingerprint is distinct from
         target_source_catalogue_fingerprint
       or current_revision.accepted_registration_revision is distinct from
@@ -1303,7 +1286,7 @@ begin
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
     source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_template_fingerprint,
+    source_resolution_fingerprint,
     source_catalogue_fingerprint, accepted_registration_revision,
     template_continuity_revision,
     changed_by, changed_at, change_correlation_id
@@ -1317,7 +1300,7 @@ begin
     target_description, target_source_definition_key,
     target_source_release_revision, target_source_release_version,
     target_source_validation_contract_version, target_source_content_fingerprint,
-    target_source_resolution_fingerprint, target_source_template_fingerprint,
+    target_source_resolution_fingerprint,
     target_source_catalogue_fingerprint, target_accepted_registration_revision,
     target_template_continuity_revision,
     p_changed_by, operation_at, p_correlation_id
@@ -1407,7 +1390,6 @@ begin
           'contentFingerprint', revision.source_content_fingerprint,
           'resolutionFingerprint', revision.source_resolution_fingerprint
         ),
-        'sourceTemplateFingerprint', revision.source_template_fingerprint,
         'sourceCatalogueFingerprint', revision.source_catalogue_fingerprint,
         'acceptedRegistrationRevision', revision.accepted_registration_revision,
         'templateContinuityRevision', revision.template_continuity_revision
@@ -1428,8 +1410,7 @@ begin
               identity.derived_source_validation_contract_version,
             'contentFingerprint', identity.derived_source_content_fingerprint,
             'resolutionFingerprint', identity.derived_source_resolution_fingerprint
-          ),
-          'sourceTemplateFingerprint', identity.derived_source_template_fingerprint
+          )
         )
       )
     else '{}'::jsonb

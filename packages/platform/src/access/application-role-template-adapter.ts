@@ -19,7 +19,7 @@ import {
   type PreparedApplicationRoleTemplates,
   type SessionContext,
 } from "../schema";
-import { canonicalJson, fingerprintCanonicalValue } from "../definition/definition-index";
+import { canonicalJson } from "../definition/definition-index";
 import {
   PermissionRegistryPreparationError,
   prepareApplicationPermissionRegistrationForHumanRequest,
@@ -148,7 +148,6 @@ const resolveTemplate = (
   });
   return {
     template,
-    sourceTemplateFingerprint: fingerprintCanonicalValue(template),
     sourcePermissions,
     livePermissions: [
       ...projectLiveApplicationRolePermissions(
@@ -192,13 +191,6 @@ export const verifyPreparedApplicationRoleTemplates = (
   } catch (error) {
     throw evidenceError(error);
   }
-  if (
-    candidate.templates.some(
-      (prepared) =>
-        prepared.sourceTemplateFingerprint !== fingerprintCanonicalValue(prepared.template),
-    )
-  )
-    throw evidenceError();
   return candidate;
 };
 

@@ -172,7 +172,6 @@ export const applicationRoleSourceReferenceSchema = z
     applicationRootId: applicationRootIdSchema,
     sourceRoleId: roleIdSchema,
     sourceRelease: applicationReleaseEvidenceSchema,
-    sourceTemplateFingerprint: fingerprintSchema,
     sourceCatalogueFingerprint: fingerprintSchema,
     acceptedRegistrationRevision: revisionSchema,
     templateContinuityRevision: revisionSchema,
@@ -192,7 +191,6 @@ export const customRoleTemplateProvenanceSchema = z
     applicationRootId: applicationRootIdSchema,
     sourceRoleId: roleIdSchema,
     sourceRelease: applicationReleaseEvidenceSchema,
-    sourceTemplateFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine((value, context) => {
@@ -612,7 +610,6 @@ export const applicationRoleTemplateContinuitySchema = z
     sourceRoleId: roleIdSchema,
     state: z.enum(["available", "unavailable"]),
     continuityRevision: revisionSchema,
-    sourceTemplateFingerprint: fingerprintSchema,
     lastProcessedRegistrationRevision: revisionSchema,
     changedAt: timestampSchema,
   })
@@ -652,7 +649,6 @@ export const affectedRoleAssignmentManifestSchema = z
 export const preparedApplicationRoleTemplateSchema = z
   .object({
     template: applicationRoleSchema,
-    sourceTemplateFingerprint: fingerprintSchema,
     sourcePermissions: z.array(permissionRegistryEntryCandidateSchema).min(1),
     livePermissions: z.array(permissionRegistryEntryCandidateSchema),
   })

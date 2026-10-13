@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.protect_organization_role_identity() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_organization_role_identity() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -23,8 +23,6 @@ begin
       from old.derived_source_content_fingerprint
     or new.derived_source_resolution_fingerprint is distinct
       from old.derived_source_resolution_fingerprint
-    or new.derived_source_template_fingerprint is distinct
-      from old.derived_source_template_fingerprint
     or new.created_by is distinct from old.created_by
     or new.created_at is distinct from old.created_at
     or old.live_revision = 9007199254740991

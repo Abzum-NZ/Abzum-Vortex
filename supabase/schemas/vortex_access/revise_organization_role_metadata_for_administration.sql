@@ -225,7 +225,7 @@ begin
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
     source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_template_fingerprint,
+    source_resolution_fingerprint,
     source_catalogue_fingerprint, accepted_registration_revision,
     template_continuity_revision,
     changed_by, changed_at, change_correlation_id
@@ -242,7 +242,6 @@ begin
     revision_fact.source_validation_contract_version,
     revision_fact.source_content_fingerprint,
     revision_fact.source_resolution_fingerprint,
-    revision_fact.source_template_fingerprint,
     revision_fact.source_catalogue_fingerprint,
     revision_fact.accepted_registration_revision,
     revision_fact.template_continuity_revision,
