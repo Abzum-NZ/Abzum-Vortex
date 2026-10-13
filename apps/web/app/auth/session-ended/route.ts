@@ -12,6 +12,7 @@ import {
 import { requestMatchesConfiguredSite } from "../_lib/session-request-state";
 import { revokeIdentitySession } from "../_lib/session-server";
 import { privateResponse } from "../../_lib/private-response";
+import { mapWebError } from "../../_lib/web-error-mapper";
 
 const destinationPath = "/auth/sign-in?status=session-ended";
 
@@ -43,9 +44,15 @@ export function GET(request: NextRequest): NextResponse {
         "applicationHome",
         serializeApplicationHomeContinuation(applicationHome),
       );
-  } catch {
+  } catch (error) {
     siteUrl = undefined;
     destination = new URL(destinationPath, request.url);
+    mapWebError(error, {
+      route: "auth/session-ended",
+      operation: "resolve-site-url",
+      code: "SESSION_ENDED_SITE_URL_INVALID",
+      fallback: undefined,
+    });
   }
 
   const response = privateResponse(NextResponse.redirect(destination, 303));
@@ -66,9 +73,14 @@ export function GET(request: NextRequest): NextResponse {
     const profile = identitySessionCookieProfile(siteUrl);
     for (const mutation of identitySessionCookieDeletions(profile))
       response.cookies.set(mutation.name, mutation.value, mutation.options);
-  } catch {
+  } catch (error) {
     // A fixed safe redirect remains available when configuration is invalid.
-    return response;
+    return mapWebError(error, {
+      route: "auth/session-ended",
+      operation: "clear-session-cookies",
+      code: "SESSION_ENDED_CONFIGURATION_INVALID",
+      fallback: response,
+    });
   }
 
   // Attempt to revoke this browser's provider refresh token after the redirect is sent, so a slow
@@ -77,8 +89,14 @@ export function GET(request: NextRequest): NextResponse {
   const sessionCookies = request.cookies.getAll().map(({ name, value }) => ({ name, value }));
   try {
     after(() => revokeIdentitySession(sessionCookies).then(() => undefined));
-  } catch {
+  } catch (error) {
     // Outside a request scope nothing can be scheduled; the cookies are still cleared.
+    mapWebError(error, {
+      route: "auth/session-ended",
+      operation: "schedule-provider-revocation",
+      code: "SESSION_ENDED_REVOCATION_NOT_SCHEDULED",
+      fallback: undefined,
+    });
   }
   return response;
 }

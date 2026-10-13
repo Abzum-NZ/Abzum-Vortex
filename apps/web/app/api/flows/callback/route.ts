@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { NextResponse} from "next/server";
 import type { NextRequest } from "next/server";
+import { mapWebError } from "../../../_lib/web-error-mapper";
 import {
   createDurableActorRequestService,
   createOrganizationAccessAdministrationService,
@@ -45,9 +46,12 @@ export const dynamic = "force-dynamic";
 
 const maximumRequestBodyLength = 131_072;
 
+const callbackRefusalLog = (code: string, operation: string, cause?: unknown): undefined =>
+  mapWebError(cause, { route: "api/flows/callback", operation, code, fallback: undefined });
+
 const readBoundedBody = async (request: NextRequest): Promise<string | undefined> => {
   const reader = request.body?.getReader();
-  if (reader === undefined) return undefined;
+  if (reader === undefined) return callbackRefusalLog("CALLBACK_BODY_MISSING", "read-body");
   const chunks: Uint8Array[] = [];
   let length = 0;
   try {
@@ -56,13 +60,15 @@ const readBoundedBody = async (request: NextRequest): Promise<string | undefined
       if (done) break;
       length += value.byteLength;
       if (length > maximumRequestBodyLength) {
-        await reader.cancel().catch(() => undefined);
-        return undefined;
+        await reader.cancel().catch((error: unknown) =>
+          callbackRefusalLog("CALLBACK_BODY_CANCEL_FAILED", "read-body", error),
+        );
+        return callbackRefusalLog("CALLBACK_BODY_TOO_LARGE", "read-body");
       }
       chunks.push(value);
     }
-  } catch {
-    return undefined;
+  } catch (error) {
+    return callbackRefusalLog("CALLBACK_BODY_READ_FAILED", "read-body", error);
   } finally {
     reader.releaseLock();
   }
@@ -75,8 +81,8 @@ const readBoundedBody = async (request: NextRequest): Promise<string | undefined
   }
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return undefined;
+  } catch (error) {
+    return callbackRefusalLog("CALLBACK_BODY_NOT_UTF8", "decode-body", error);
   }
 };
 
@@ -180,15 +186,23 @@ const createCallbackService = () => {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const declaredLength = Number(request.headers.get("content-length") ?? 0);
-    if (
-      declaredLength > maximumRequestBodyLength ||
-      request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !==
-        "application/json"
-    )
+    if (declaredLength > maximumRequestBodyLength) {
+      callbackRefusalLog("CALLBACK_DECLARED_LENGTH_TOO_LARGE", "check-request");
       return privateJsonResponse({
         outcome: "permanent_refusal",
         safeCode: "callback_refused",
       }, 200);
+    }
+    if (
+      request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !==
+        "application/json"
+    ) {
+      callbackRefusalLog("CALLBACK_CONTENT_TYPE_NOT_JSON", "check-request");
+      return privateJsonResponse({
+        outcome: "permanent_refusal",
+        safeCode: "callback_refused",
+      }, 200);
+    }
     const text = await readBoundedBody(request);
     if (text === undefined)
       return privateJsonResponse({
@@ -198,14 +212,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let candidate: unknown;
     try {
       candidate = JSON.parse(text);
-    } catch {
+    } catch (error) {
+      callbackRefusalLog("CALLBACK_BODY_NOT_JSON", "parse-body", error);
       return privateJsonResponse({
         outcome: "permanent_refusal",
         safeCode: "callback_refused",
       }, 200);
     }
     return privateJsonResponse(await createCallbackService().execute(candidate), 200);
-  } catch {
+  } catch (error) {
+    callbackRefusalLog("CALLBACK_EXECUTION_FAILED", "execute-callback", error);
     return privateJsonResponse({
       outcome: "retryable_failure",
       safeCode: "callback_unavailable",

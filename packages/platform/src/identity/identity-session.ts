@@ -72,10 +72,14 @@ const activeResult = (
   let now: number;
   try {
     now = clock().getTime();
-  } catch {
+  } catch (error) {
+    console.error(`[identity] session clock failed: ${describeFailure(error)}`);
     return closed({ kind: "temporarily_unavailable" });
   }
-  if (!Number.isFinite(now)) return closed({ kind: "temporarily_unavailable" });
+  if (!Number.isFinite(now)) {
+    console.error("[identity] session clock returned a non-finite time");
+    return closed({ kind: "temporarily_unavailable" });
+  }
   if (Date.parse(verifiedIdentity.expiresAt) <= now) return closed({ kind: "expired_or_revoked" });
 
   return closed({

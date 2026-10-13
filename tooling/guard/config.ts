@@ -111,7 +111,8 @@ export const guardRules = {
     tier: "warning",
     owner: "lead",
     reviewBy: "2027-01-15",
-    description: "Silent handling of a failed safeParse result",
+    description:
+      "Silent handling of a failed safeParse result, a catch, or a refusal branch that neither logs nor rethrows",
   },
   "invalid-guard-allow": {
     tier: "blocking",

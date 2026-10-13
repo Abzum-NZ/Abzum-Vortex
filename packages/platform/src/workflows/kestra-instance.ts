@@ -96,6 +96,7 @@ const parseBaseUrl = (value: unknown): string | undefined => {
   try {
     url = new URL(value);
   } catch {
+    console.error("KESTRA_BASE_URL_NOT_A_URL");
     return undefined;
   }
   if (url.username !== "" || url.password !== "") return undefined;
