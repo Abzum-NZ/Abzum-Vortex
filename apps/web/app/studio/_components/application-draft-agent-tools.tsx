@@ -166,8 +166,9 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
       const blocked = blockedReason();
       if (blocked !== undefined) return { outcome: "blocked", message: blocked };
       if (found.name === "save_application_draft") {
+        if (!history.getState().isDirty) return { outcome: "unchanged", message: "The workspace draft has no unsaved changes, so nothing was saved." };
         const outcome = await save();
-        if (outcome === undefined) return { outcome: "blocked", message: "The workspace could not save right now. Nothing was saved; call read_application_draft." };
+        if (outcome === undefined) return { outcome: "unavailable", message: "The save did not report a result, so it is unknown whether it completed. Call read_application_draft and compare the draft revision before saving again." };
         if (outcome.kind !== "saved") {
           console.error(`[studio] agent save refused: STUDIO_AGENT_SAVE_${outcome.kind.toUpperCase()}${"reason" in outcome && outcome.reason !== undefined ? `:${outcome.reason}` : ""}`);
           return { outcome: outcome.kind, ...("reason" in outcome && outcome.reason !== undefined ? { reason: outcome.reason } : {}), message: saveMessage(outcome) };
@@ -216,6 +217,8 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
       // change_placement_settings: the forms send the complete supplied set, so merge onto the current one.
       const set = input.set ?? {};
       const clear = new Set(input.clear ?? []);
+      if (Object.keys(set).length === 0 && clear.size === 0)
+        return { outcome: "validation_failed", issues: [{ path: "set", message: "Supply at least one setting to set or clear." }], message: "Nothing was requested, so nothing changed." };
       const context = contextNow();
       const text = describeStudioCompositionSettings(context, placement);
       const scalar = describeStudioCompositionScalarSettings(context, placement);
