@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.read_organization_delegation_authority(p_organization_id uuid, p_delegation_authority_id uuid) RETURNS TABLE(organization_id uuid, delegation_authority_id uuid, holder_kind text, organization_account_id uuid, group_id uuid, scope jsonb, revision bigint, starts_at timestamp with time zone, expires_at timestamp with time zone, state text, granted_by_actor_id uuid, granted_at timestamp with time zone, grant_correlation_id uuid, changed_by_actor_id uuid, changed_at timestamp with time zone, change_correlation_id uuid, revoked_by_actor_id uuid, revoked_at timestamp with time zone, revocation_correlation_id uuid, effective_state text)
+CREATE OR REPLACE FUNCTION vortex_access.read_organization_delegation_authority(p_organization_id uuid, p_delegation_authority_id uuid) RETURNS TABLE(organization_id uuid, delegation_authority_id uuid, holder_kind text, organization_account_id uuid, group_id uuid, scope jsonb, revision bigint, starts_at timestamp with time zone, expires_at timestamp with time zone, state text, granted_by_actor_id uuid, granted_at timestamp with time zone, grant_correlation_id uuid, changed_by_actor_id uuid, changed_at timestamp with time zone, change_correlation_id uuid, revoked_by_actor_id uuid, revoked_at timestamp with time zone, revocation_correlation_id uuid, effective_state text)
     LANGUAGE sql STABLE
     SET search_path TO ''
     AS $$
@@ -10,8 +10,7 @@ CREATE FUNCTION vortex_access.read_organization_delegation_authority(p_organizat
         pg_catalog.jsonb_build_object('kind', 'organization_catalogue')
       when 'bounded' then pg_catalog.jsonb_build_object(
         'kind', 'bounded',
-        'permissions', delegation.bounded_permissions,
-        'scopeFingerprint', delegation.scope_fingerprint
+        'permissions', delegation.bounded_permissions
       )
     end,
     delegation.revision, delegation.starts_at, delegation.expires_at,

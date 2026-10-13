@@ -92,7 +92,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -199,6 +201,7 @@ begin
     where registration.organization_id = context_organization_id
       and registration.registration_kind = 'platform'
       and registration.registration_owner_id =
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
       and registration.state = 'active'
       and vortex_access.platform_permission_catalogue_revision_is_exact(
@@ -206,6 +209,7 @@ begin
       )
       and entry.application_root_id is null
       and entry.owner_kind = 'platform'
+      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
       and entry.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
   ), qualifying_role as (
     select role.role_id
@@ -352,7 +356,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -455,13 +461,13 @@ begin
   insert into vortex_access.organization_delegation_authorities (
     organization_id, delegation_authority_id, holder_kind,
     organization_account_id, group_id, scope_kind, bounded_permissions,
-    scope_fingerprint, revision, starts_at, expires_at, state, granted_by,
+    revision, starts_at, expires_at, state, granted_by,
     granted_at, grant_correlation_id, changed_by, changed_at,
     change_correlation_id, revoked_by, revoked_at, revocation_correlation_id
   ) values (
     context_organization_id, generated_delegation_authority_id,
     'organization_account', p_organization_account_id, null,
-    'organization_catalogue', null, null, 1, appointment_starts_at, null, 'live',
+    'organization_catalogue', null, 1, appointment_starts_at, null, 'live',
     context_account_id, appointment_starts_at, context_correlation_id,
     context_account_id, appointment_starts_at, context_correlation_id, null, null, null
   ) returning * into delegation_fact;
@@ -538,7 +544,6 @@ begin
         and delegation.group_id is null
         and delegation.scope_kind = 'organization_catalogue'
         and delegation.bounded_permissions is null
-        and delegation.scope_fingerprint is null
         and delegation.revision = 1
         and delegation.state = 'live'
         and delegation.starts_at = appointment_starts_at
@@ -571,6 +576,7 @@ begin
               on registration.organization_id = permission.organization_id
               and registration.registration_kind = 'platform'
               and registration.registration_owner_id =
+                -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
                 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
               and registration.state = 'active'
               and continuity.last_processed_registration_revision = registration.revision
@@ -581,6 +587,7 @@ begin
               and entry.registration_revision = registration.revision
               and entry.application_root_id is null
               and entry.owner_kind = 'platform'
+              -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
               and entry.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
               and entry.permission_id = permission.permission_id
               and entry.meaning_fingerprint = permission.meaning_fingerprint
@@ -589,6 +596,7 @@ begin
               and permission.role_revision = role.live_revision
               and permission.application_root_id is null
               and permission.owner_kind = 'platform'
+              -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
               and permission.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
               and permission.permission_id = (required.value ->> 'permissionId')::uuid
               and permission.meaning_fingerprint = required.value ->> 'meaningFingerprint'

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_scope_fingerprint text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, delegation jsonb, access_version bigint, correlation_id uuid)
+CREATE FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, delegation jsonb, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $_$
@@ -71,7 +71,6 @@ begin
     or p_group_id is not null
     or p_scope_kind is not null
     or p_bounded_permissions is not null
-    or p_scope_fingerprint is not null
     or p_starts_at is not null
     or p_expires_at is not null then
     raise exception using errcode = '22023',
@@ -83,18 +82,11 @@ begin
     or p_scope_kind not in ('organization_catalogue', 'bounded')
     or (
       p_scope_kind = 'organization_catalogue'
-      and (
-        p_bounded_permissions is not null
-        or p_scope_fingerprint is not null
-      )
+      and p_bounded_permissions is not null
     )
     or (
       p_scope_kind = 'bounded'
-      and (
-        p_bounded_permissions is null
-        or p_scope_fingerprint is null
-        or p_scope_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-      )
+      and p_bounded_permissions is null
     )
   ) then
     raise exception using errcode = '22023',
@@ -157,14 +149,14 @@ begin
     insert into vortex_access.organization_delegation_authorities (
       organization_id, delegation_authority_id, holder_kind,
       organization_account_id, group_id, scope_kind, bounded_permissions,
-      scope_fingerprint, revision, starts_at, expires_at, state, granted_by,
+      revision, starts_at, expires_at, state, granted_by,
       granted_at, grant_correlation_id, changed_by, changed_at,
       change_correlation_id, revoked_by, revoked_at,
       revocation_correlation_id
     ) values (
       p_organization_id, p_delegation_authority_id, p_holder_kind,
       p_organization_account_id, p_group_id, p_scope_kind,
-      p_bounded_permissions, p_scope_fingerprint, 1, p_starts_at,
+      p_bounded_permissions, 1, p_starts_at,
       p_expires_at, 'live', p_changed_by, checked_at, p_correlation_id,
       p_changed_by, checked_at, p_correlation_id, null, null, null
     ) returning * into delegation_fact;
@@ -232,8 +224,6 @@ begin
         then p_scope_kind else delegation_fact.scope_kind end,
       bounded_permissions = case when p_operation = 'replace_delegation_scope'
         then p_bounded_permissions else delegation_fact.bounded_permissions end,
-      scope_fingerprint = case when p_operation = 'replace_delegation_scope'
-        then p_scope_fingerprint else delegation_fact.scope_fingerprint end,
       revision = delegation_fact.revision + 1,
       state = case when p_operation = 'revoke_delegation'
         then 'revoked' else delegation_fact.state end,
@@ -287,8 +277,7 @@ begin
         )
         else pg_catalog.jsonb_build_object(
           'kind', 'bounded',
-          'permissions', delegation_fact.bounded_permissions,
-          'scopeFingerprint', delegation_fact.scope_fingerprint
+          'permissions', delegation_fact.bounded_permissions
         )
       end,
       'revision', delegation_fact.revision,
@@ -309,8 +298,8 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_scope_fingerprint text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
+ALTER FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
 
-COMMENT ON FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_scope_fingerprint text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only atomic delegation grant, whole-scope replacement or terminal revocation. It changes Access once but grants no caller authority.';
+COMMENT ON FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) IS 'Owner-only atomic delegation grant, whole-scope replacement or terminal revocation. It changes Access once but grants no caller authority.';
 
-REVOKE ALL ON FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_scope_fingerprint text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
