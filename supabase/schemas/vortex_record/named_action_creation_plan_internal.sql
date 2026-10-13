@@ -176,7 +176,12 @@ begin
         'storageContractId', (target_meta ->> 'storageContractId')::uuid,
         'storageScope', target_meta ->> 'storageScope',
         'ownershipMode', ownership_mode,
-        'recordType', target_type
+        'recordType', target_type,
+        'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+          (target_meta ->> 'moduleRootId')::uuid,
+          (target_meta ->> 'moduleReleaseRevision')::bigint,
+          target_type_id
+        )
       )
     );
     expected_plan := expected_plan || pg_catalog.jsonb_build_array(

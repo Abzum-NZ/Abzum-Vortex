@@ -370,6 +370,7 @@ export const parseRelationshipTotalPreparation = (
       recordType: recordType.data,
       ...(concurrencyNumber === undefined ? {} : { concurrencyNumber }),
       existingValues: record.existingValues as Readonly<Record<string, unknown>>,
+      ...(record.beforeSaveRules === undefined ? {} : { beforeSaveRules: record.beforeSaveRules }),
       relationshipSources,
     });
   }

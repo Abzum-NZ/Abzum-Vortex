@@ -44,6 +44,8 @@ declare
   source_field_id text;
   proposed_target jsonb;
   creation jsonb;
+  rule_module_root_id uuid;
+  rule_release_revision bigint;
   access_loaded jsonb;
   access_decision jsonb;
   access_bounds jsonb := pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
@@ -73,15 +75,12 @@ begin
         'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
       ) end;
   end if;
-  -- Before-save Rule execution is #58's. The delivered set/announce path defers
-  -- to the terminal writer's `contributes_to_total` probe; a create-bearing
-  -- command refuses explicitly instead of being silently skipped.
-  if coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
-    return case when creation_count = 0
-      then pg_catalog.jsonb_build_object('outcome', 'defer')
-      else pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
-      ) end;
+  -- A set-only action still uses the terminal writer's total probe. A command
+  -- with creations carries the exact release's rules for every closure record
+  -- to the existing Record evaluator before any row is written.
+  if creation_count = 0
+    and coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
   end if;
 
   -- Authorize the subject without a row lock before discovering or locking any
@@ -282,8 +281,23 @@ begin
     order by case when item.value ->> 'recordKey' = 'root' then 0 else 1 end,
       item.value ->> 'recordKey'
   loop
+    select storage.module_root_id into strict rule_module_root_id
+    from vortex_record.storage_catalogue storage
+    where storage.storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+      and storage.record_type_id = (prepared_record ->> 'recordTypeId')::uuid
+      and storage.state = 'active';
+    select (item.value ->> 'moduleReleaseRevision')::bigint
+      into strict rule_release_revision
+    from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+    where (item.value ->> 'recordTypeId')::uuid =
+      (prepared_record ->> 'recordTypeId')::uuid;
     prepared_record := prepared_record || pg_catalog.jsonb_build_object(
-      'relationshipSources', '[]'::jsonb
+      'relationshipSources', '[]'::jsonb,
+      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+        rule_module_root_id,
+        rule_release_revision,
+        (prepared_record ->> 'recordTypeId')::uuid
+      )
     );
     for total_field in
       select field.value

@@ -13,6 +13,13 @@ import {
   type PrepareRecordFieldValuesResult,
 } from "./field-values";
 import { evaluateRecordTotals } from "./totals";
+import {
+  applyBeforeSaveRules,
+  beforeSaveRuleRefusedIssueCode,
+  beforeSaveRuleUnavailableIssueCode,
+  type BeforeSaveRuleExecution,
+} from "./before-save-rules";
+import type { RecordFieldValueRequirement } from "./field-values";
 
 type LockedRelationshipTotalRecord = Readonly<{
   recordKey: string;
@@ -20,6 +27,7 @@ type LockedRelationshipTotalRecord = Readonly<{
   recordType: RecordTypeDefinition;
   concurrencyNumber?: number;
   existingValues: Readonly<Record<string, unknown>>;
+  beforeSaveRules?: unknown;
   relationshipSources: readonly Readonly<{
     relationshipId: string;
     sourceRecordType: RecordTypeDefinition;
@@ -171,6 +179,7 @@ export const calculateLockedRelationshipTotalSave = (
     creations?: readonly RelationshipTotalCreationRoot[];
     organizationCurrency?: string;
     clock: Readonly<{ instant: string; organizationLocalDate: string }>;
+    rules?: ReadonlyMap<string, BeforeSaveRuleExecution>;
   }>,
 ): CalculateRelationshipTotalSaveResult => {
   const records = new Map(input.preparation.records.map((record) => [record.recordKey, record]));
@@ -192,6 +201,7 @@ export const calculateLockedRelationshipTotalSave = (
     Extract<ReturnType<typeof prepareInitialRecordFieldCandidate>, { success: true }>["candidate"]
   >();
   const valuesByRecord = new Map<string, Record<string, JsonValue>>();
+  const requirementsByRecord = new Map<string, readonly RecordFieldValueRequirement[]>();
   for (const record of records.values()) {
     const creationRoot = creationRoots.get(record.recordKey);
     const operation =
@@ -216,7 +226,90 @@ export const calculateLockedRelationshipTotalSave = (
         issues: initial.issues.map((value) => issue(record.recordKey, value)),
       };
     initialByRecord.set(record.recordKey, initial.candidate);
-    const values = { ...initial.candidate.candidateValues };
+    let candidateValues = initial.candidate.candidateValues;
+    const execution = input.rules?.get(record.recordKey);
+    if (input.rules !== undefined && execution === undefined)
+      return {
+        success: false,
+        issues: [
+          {
+            code: beforeSaveRuleUnavailableIssueCode,
+            recordKey: record.recordKey,
+            path: ["rules"],
+          },
+        ],
+      };
+    if (execution !== undefined) {
+      const applied = applyBeforeSaveRules({
+        execution,
+        recordType: record.recordType,
+        initialCandidate: initial.candidate,
+        ...(input.organizationCurrency === undefined
+          ? {}
+          : { organizationCurrency: input.organizationCurrency }),
+      });
+      if (!applied.success)
+        return {
+          success: false,
+          issues: [
+            {
+              code:
+                applied.reason === "refused"
+                  ? beforeSaveRuleRefusedIssueCode
+                  : beforeSaveRuleUnavailableIssueCode,
+              recordKey: record.recordKey,
+              ...(applied.reason === "refused" && applied.fieldId !== undefined
+                ? { fieldId: applied.fieldId }
+                : {}),
+              path: ["rules"],
+            },
+          ],
+        };
+      // The database selected and locked the closure from the authored links.
+      // A rule cannot redirect one after that selection.
+      if (
+        record.recordType.fields.some(
+          (field) =>
+            (field.type === "link" || field.type === "link_to_one_of_several") &&
+            JSON.stringify(applied.candidateValues[field.fieldId] ?? null) !==
+              JSON.stringify(initial.candidate.candidateValues[field.fieldId] ?? null),
+        )
+      )
+        return {
+          success: false,
+          issues: [
+            {
+              code: beforeSaveRuleUnavailableIssueCode,
+              recordKey: record.recordKey,
+              path: ["rules"],
+            },
+          ],
+        };
+      if (
+        record.recordKey !== "root" &&
+        creationRoot === undefined &&
+        record.recordType.fields.some(
+          (field) =>
+            field.type !== "calculation" &&
+            field.type !== "total" &&
+            JSON.stringify(applied.candidateValues[field.fieldId] ?? null) !==
+              JSON.stringify(initial.candidate.candidateValues[field.fieldId] ?? null),
+        )
+      )
+        return {
+          success: false,
+          issues: [
+            {
+              code: beforeSaveRuleUnavailableIssueCode,
+              recordKey: record.recordKey,
+              path: ["rules"],
+            },
+          ],
+        };
+      candidateValues = applied.candidateValues;
+      requirementsByRecord.set(record.recordKey, applied.requirements);
+    }
+    const values = { ...candidateValues };
     for (const field of derivedFields(record.recordType)) delete values[field.fieldId];
     valuesByRecord.set(record.recordKey, values);
   }
@@ -336,6 +429,7 @@ export const calculateLockedRelationshipTotalSave = (
       recordType: record.recordType,
       initialCandidate: initialByRecord.get(record.recordKey)!,
       candidateValues: valuesByRecord.get(record.recordKey)!,
+      requirements: requirementsByRecord.get(record.recordKey) ?? [],
       requiredGeneratedFieldIds: derivedFields(record.recordType).map((field) => field.fieldId),
       ...(input.organizationCurrency === undefined
         ? {}
