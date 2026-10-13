@@ -4,12 +4,12 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
-import type { SourceFlow, SourceFlowTask } from "@vortex/platform/schema";
+import { describeFailure, type SourceFlow, type SourceFlowTask } from "@vortex/platform/schema";
 import {
+  projectStudioFlowInsertOptions,
   projectStudioFlowTextEditor,
   type StudioFlowEditResult,
   type StudioFlowInsertCommand,
-  type StudioFlowInsertOption,
   type StudioFlowRemoveCommand,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
@@ -222,14 +222,17 @@ const flattenTasks = (lists: readonly StudioFlowTaskListOutline[]): StudioFlowTa
 
 const countNested = (task: StudioFlowTaskOutline): number => flattenTasks(task.children).length;
 
-type Adding = Readonly<{ listPath: readonly (string | number)[]; index: number; where: string }>;
+/** An insertion stays bound to the draft snapshot and flow it was opened for, so a later switch cannot redirect it. */
+type Adding = Readonly<{
+  listPath: readonly (string | number)[]; index: number; where: string;
+  expected: StudioFlowTextContext; expectedSelection: FlowSelection;
+}>;
 
 /** The draft flow's task list as a canvas; every edit goes through the draft's revision-checked history. */
-export function ApplicationFlowCanvas({ context, selection, disabled, insertOptions, onInsert, onRemove }: Readonly<{
+export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, onRemove }: Readonly<{
   context: StudioFlowTextContext;
   selection: FlowSelection;
   disabled: boolean;
-  insertOptions: readonly StudioFlowInsertOption[];
   onInsert: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowInsertCommand) => StudioFlowEditResult;
   onRemove: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowRemoveCommand) => StudioFlowEditResult;
 }>) {
@@ -240,6 +243,8 @@ export function ApplicationFlowCanvas({ context, selection, disabled, insertOpti
   // A selection belongs to one flow and one task id, so it cannot leak across flow switches or edits.
   const [selected, setSelected] = useState<Readonly<{ flowAlias: string; key: string; id: string }> | null>(null);
   const [adding, setAdding] = useState<Adding | null>(null);
+  const insertOptions = useMemo(() => projectStudioFlowInsertOptions(context, selection), [context, selection]);
+  const options = insertOptions.kind === "available" ? insertOptions.options : [];
   const [taskType, setTaskType] = useState("");
   const [status, setStatus] = useState("");
   // A task just inserted is selected once the draft has re-projected with it.
@@ -251,6 +256,15 @@ export function ApplicationFlowCanvas({ context, selection, disabled, insertOpti
     else if (flow === undefined)
       console.error("Flow canvas could not find the selected flow", { flow: selection.flowAlias });
   }, [projection, flow, selection.flowAlias]);
+
+  useEffect(() => {
+    if (insertOptions.kind === "invalid")
+      console.error("Flow canvas task types are unavailable", { flow: selection.flowAlias }, describeFailure(insertOptions.cause));
+  }, [insertOptions, selection.flowAlias]);
+
+  // A pending add belongs to the flow it was opened for; switching flows discards it.
+  useEffect(() => { setAdding((pending) => pending?.expectedSelection.flowAlias === selection.flowAlias ? pending : null); },
+    [selection.flowAlias]);
 
   useEffect(() => {
     if (focusId === null || projection.kind !== "available") return;
@@ -277,7 +291,11 @@ export function ApplicationFlowCanvas({ context, selection, disabled, insertOpti
     "--xy-controls-button-border-color-default": "var(--border)",
   } as CSSProperties;
 
-  const beginAdding = (next: Adding) => { setAdding(next); setTaskType(""); setStatus(""); };
+  const beginAdding = (next: Omit<Adding, "expected" | "expectedSelection">) => {
+    setAdding({ ...next, expected: context, expectedSelection: selection });
+    setTaskType("");
+    setStatus("");
+  };
   const addAfter = () => {
     if (selectedOutline === undefined) return;
     const index = selectedOutline.path[selectedOutline.path.length - 1];
@@ -286,7 +304,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, insertOpti
   };
   const insert = () => {
     if (adding === null || taskType === "") return;
-    const result = onInsert(context, selection, { kind: "insert_task", taskType, listPath: adding.listPath, index: adding.index });
+    const result = onInsert(adding.expected, adding.expectedSelection, { kind: "insert_task", taskType, listPath: adding.listPath, index: adding.index });
     if (result.kind === "applied") {
       setStatus(`Task ${result.taskId} added ${adding.where}. Save draft to persist it.`);
       setFocusId(result.taskId);
@@ -328,14 +346,16 @@ export function ApplicationFlowCanvas({ context, selection, disabled, insertOpti
         <p className="text-sm"><span className="text-muted-foreground">Id:</span> {selectedOutline.id}
           {" "}<span className="text-muted-foreground">Type:</span> {selectedOutline.type}</p>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={disabled || insertOptions.length === 0} onClick={addAfter}>Add task after</Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled || options.length === 0} onClick={addAfter}>Add task after</Button>
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={remove}>Remove task</Button>
         </div>
         <TaskSettings flow={flow} outline={selectedOutline} />
       </div>}
     <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-card-foreground">
       <h4 className="font-medium">Add a task to a list or branch</h4>
-      {insertOptions.length === 0
+      {insertOptions.kind === "invalid"
+        ? <p role="alert" className="text-sm">{insertOptions.reason}</p>
+        : options.length === 0
         ? <p className="text-sm text-muted-foreground">No task type can be added to this flow: its execution kind accepts none that can start from defaults, or it is at its task limit.</p>
         : <label className="block space-y-1 text-sm"><span>Task list</span>
           <NativeSelect className="w-full" disabled={disabled} value="" onChange={(event) => {
@@ -352,9 +372,9 @@ export function ApplicationFlowCanvas({ context, selection, disabled, insertOpti
       <label className="block space-y-1 text-sm"><span>Task type</span>
         <NativeSelect className="w-full" required disabled={disabled} value={taskType} onChange={(event) => setTaskType(event.target.value)}>
           <option value="" disabled>Choose a task type</option>
-          {insertOptions.map((option) => <option key={option.type} value={option.type}>{option.title}</option>)}
+          {options.map((option) => <option key={option.type} value={option.type}>{option.title}</option>)}
         </NativeSelect></label>
-      {taskType !== "" && <p className="text-sm text-muted-foreground">{insertOptions.find((option) => option.type === taskType)?.summary}</p>}
+      {taskType !== "" && <p className="text-sm text-muted-foreground">{options.find((option) => option.type === taskType)?.summary}</p>}
       <p className="text-sm text-muted-foreground">Only task types that this flow's execution kind accepts are listed. The task starts with default settings; edit its text in the Flow task editor.</p>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={disabled || taskType === ""}>Add task</Button>

@@ -25,7 +25,6 @@ import {
   ApplicationPagePuckEditor,
   projectStudioSemanticOutline,
   projectStudioFlowPresentationMoves,
-  projectStudioFlowInsertOptions,
   resolveStudioSelectionInspectorContext,
   studioSemanticSelectionKey,
   type StudioSemanticOutlineNode,
@@ -948,7 +947,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         {selected?.kind === "flow" && inspector.status === "resolved" &&
           <ApplicationFlowCanvas context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
-            insertOptions={projectStudioFlowInsertOptions(compositionContext, selected)}
             onInsert={(expected, expectedSelection, command: StudioFlowInsertCommand) =>
               editFlowFromCanvas(applyStudioFlowInsertCommand, "Task added to local history. Save draft to persist it.", expected, expectedSelection, command)}
             onRemove={(expected, expectedSelection, command: StudioFlowRemoveCommand) =>

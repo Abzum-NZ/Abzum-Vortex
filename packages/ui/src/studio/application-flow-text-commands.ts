@@ -663,9 +663,14 @@ const seededTask = (definition: FlowTaskTypeDefinition, id: string): SeededTask 
   return { id, type: definition.type, version: definition.version, properties };
 };
 
-/** The registry's own placement rule, applied to a flow of this execution kind holding these tasks. */
+/**
+ * The registry's own placement rule, applied to a flow of this execution kind holding these tasks.
+ * It reads only each task's type, version and property keys, which source tasks carry in the same
+ * shape; the authored value forms differ from compiled ones, so the argument type is narrowed here.
+ */
 const placementIssues = (flow: SourceFlow, tasks: readonly SourceFlowTask[]): string[] =>
-  validateFlowTaskPlacement({ ...flow, tasks: [...tasks] } as never).map((issue) => issue.message);
+  validateFlowTaskPlacement({ ...flow, tasks: [...tasks] } as Parameters<typeof validateFlowTaskPlacement>[0])
+    .map((issue) => issue.message);
 
 /** Registered task types the flow's execution kind accepts and that can start from registry seeds alone. */
 const insertOptions = (flow: SourceFlow): readonly StudioFlowInsertOption[] =>
@@ -677,15 +682,22 @@ const insertOptions = (flow: SourceFlow): readonly StudioFlowInsertOption[] =>
     return [{ type: definition.type, title: definition.title, summary: definition.summary }];
   });
 
+/** The picker's choices, or why none could be worked out (with the cause for the log). */
+export type StudioFlowInsertProjection =
+  | Readonly<{ kind: "available"; options: readonly StudioFlowInsertOption[] }>
+  | Readonly<{ kind: "invalid"; reason: string; cause: unknown }>;
+
 /** The task types this flow's execution kind allows, read from the registry and its placement rule. */
 export const projectStudioFlowInsertOptions = (
   context: StudioFlowTextContext,
   selection: FlowSelection,
-): readonly StudioFlowInsertOption[] => {
+): StudioFlowInsertProjection => {
   try {
     const current = outline(context, selection);
-    return current.entries.length < flowMaximumTaskCount ? insertOptions(current.flow) : [];
-  } catch { return []; }
+    return { kind: "available", options: current.entries.length < flowMaximumTaskCount ? insertOptions(current.flow) : [] };
+  } catch (cause) {
+    return { kind: "invalid", cause, reason: "The task types for this flow could not be worked out because the flow could not be read." };
+  }
 };
 
 const uniqueTaskId = (type: string, used: ReadonlySet<string>): string => {
