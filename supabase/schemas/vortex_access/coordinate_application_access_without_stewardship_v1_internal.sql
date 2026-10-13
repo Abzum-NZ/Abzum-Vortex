@@ -51,11 +51,11 @@ begin
       or pg_catalog.jsonb_typeof(p_prepared_templates) is distinct from 'object'
       or p_prepared_templates - array[
         'contractVersion', 'preparationBasis', 'permissionRegistration',
-        'templates', 'candidateFingerprint'
+        'templates'
       ]::text[] <> '{}'::jsonb
       or not (p_prepared_templates ?& array[
         'contractVersion', 'preparationBasis', 'permissionRegistration',
-        'templates', 'candidateFingerprint'
+        'templates'
       ])
       or p_prepared_templates ->> 'contractVersion' is distinct from '1.0.0'
       or p_prepared_templates -> 'preparationBasis' is distinct from
@@ -67,8 +67,6 @@ begin
       or pg_catalog.jsonb_typeof(p_prepared_templates -> 'templates')
         is distinct from 'array'
       or pg_catalog.jsonb_array_length(p_prepared_templates -> 'templates') = 0
-      or p_prepared_templates ->> 'candidateFingerprint' is null
-      or p_prepared_templates ->> 'candidateFingerprint' !~ '^sha256:[a-f0-9]{64}$'
       or (p_prepared_templates #>> '{permissionRegistration,organizationId}')::uuid
         is distinct from
         p_organization_id

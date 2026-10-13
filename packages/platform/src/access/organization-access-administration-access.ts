@@ -137,7 +137,6 @@ import {
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
 } from "../schema";
 import type { DatabaseRow } from "../db/index";
-import { fingerprintCanonicalValue } from "../definition/definition-index";
 import { verifyPreparedApplicationRoleTemplates } from "./application-role-template-adapter";
 import {
   createHumanOrganizationRequestService,
@@ -503,16 +502,14 @@ const preparationUnavailable = (): Error => {
 
 /**
  * The read returns the stored permission and template evidence for the caller's organisation. The
- * one container fingerprint that only the server can derive is added here, then the canonical
- * verifier re-derives it and proves the evidence self-consistent before it is handed to the
- * protected operation.
+ * canonical verifier proves the evidence self-consistent before it is handed to the protected
+ * operation.
  */
 const sealPreparedRoleChangeTemplates = (core: unknown): PreparedApplicationRoleTemplates => {
   if (typeof core !== "object" || core === null || Array.isArray(core))
     throw preparationUnavailable();
-  const candidateFingerprint = fingerprintCanonicalValue(core);
   try {
-    return verifyPreparedApplicationRoleTemplates({ ...core, candidateFingerprint });
+    return verifyPreparedApplicationRoleTemplates(core);
   } catch {
     throw preparationUnavailable();
   }

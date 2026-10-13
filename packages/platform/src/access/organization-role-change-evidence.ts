@@ -153,7 +153,6 @@ const templateSourceProjection = (candidate: TemplateCandidate) => {
   const selected = selectedTemplate(candidate);
   if (prepared.preparationBasis.kind !== "current_active_registration") throw evidenceError();
   return {
-    preparedTemplateCandidateFingerprint: prepared.candidateFingerprint,
     applicationRootId: normalizedUuid(prepared.permissionRegistration.applicationRootId),
     sourceRoleId: normalizedUuid(candidate.sourceRoleId),
     sourceRelease: normalizeSourceRelease(prepared.permissionRegistration.applicationRelease),
