@@ -35,6 +35,8 @@ declare
   target_ok boolean;
   matched jsonb;
   decision_valid_until text;
+  validated_record_types text;
+  validation_cache_enabled boolean;
 begin
   -- Facts shape: a closed object with exactly the declared top-level keys.
   if p_facts is null or pg_catalog.jsonb_typeof(p_facts) <> 'object'
@@ -72,6 +74,23 @@ begin
     raise exception using errcode = '22023', message = 'Record access facts are invalid';
   end if;
 
+  -- A module query evaluates many rows against the same installed type set.
+  -- Reuse only the exact JSONB type set validated earlier in this transaction;
+  -- all record-specific facts below are still checked for every decision.
+  validation_cache_enabled := pg_catalog.current_setting(
+    'vortex_access.record_types_validation_cache_enabled', true
+  ) = 'true';
+  if validation_cache_enabled then
+    validated_record_types := pg_catalog.current_setting(
+      'vortex_access.validated_record_types', true
+    );
+  end if;
+  if validation_cache_enabled and validated_record_types is not null
+    and validated_record_types = (p_facts -> 'recordTypes')::text then
+    select coalesce(pg_catalog.array_agg(pg_catalog.lower(item.value ->> 'recordTypeId')), array[]::text[])
+    into seen_type_ids
+    from pg_catalog.jsonb_array_elements(p_facts -> 'recordTypes') as item(value);
+  else
   -- Record types: unique identity, well-formed ownership/field shape.
   for record_type_item in
     select value from pg_catalog.jsonb_array_elements(p_facts -> 'recordTypes') as item(value)
@@ -129,6 +148,13 @@ begin
       seen_field_ids := pg_catalog.array_append(seen_field_ids, pg_catalog.lower(field_item ->> 'fieldId'));
     end loop;
   end loop;
+
+  if validation_cache_enabled then
+    perform pg_catalog.set_config(
+      'vortex_access.validated_record_types', (p_facts -> 'recordTypes')::text, true
+    );
+  end if;
+  end if;
 
   if not (pg_catalog.lower(facts_binding ->> 'recordTypeId') = any (seen_type_ids)) then
     raise exception using errcode = '22023', message = 'Record access facts are invalid';
