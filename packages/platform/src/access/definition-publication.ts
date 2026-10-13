@@ -21,6 +21,7 @@ import {
   platformOrganizationPermissionDeclaration, readLiveHumanContext, type LiveHumanContext,
 } from "./live-context";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import { DefinitionCompilationError, DefinitionError, isVersionImpactRefusal } from "../definition/definition-index";
 
@@ -80,12 +81,13 @@ const moduleTargetFacts: BuilderTargetFactsReader = async (transaction, scope, c
 
 /** Recheck exact decisions after compilation/append and all returned-row verification. */
 const assertLiveCompletion = async (
+  permissions: PlatformPermissionSource,
   transaction: RequestDatabaseTransaction, context: LiveHumanContext, publishedAt?: string,
 ): Promise<void> => {
   let deadline = Date.parse(context.expiresAt);
   for (const key of ["platform.organization.definition_releases.manage"]) {
     const decision = await assertLivePermission(
-      transaction, platformOrganizationPermissionDeclaration(key), context,
+      transaction, platformOrganizationPermissionDeclaration(permissions, key), context,
     );
     deadline = Math.min(deadline, decision.validUntil);
   }
@@ -177,7 +179,8 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         if (!sameId(scope.organizationId, organization.data)) throw new PublicationContextRefused("organization_mismatch");
         const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         const authority = createBuilderAuthority({ transaction, scope,
-          targetFacts: definitionKind === "application" ? targetFacts : moduleTargetFacts });
+          targetFacts: definitionKind === "application" ? targetFacts : moduleTargetFacts,
+          permissions: dependencies.catalogue.permissions });
         await requireBuilderAuthority(authority, { kind: "publication", rootId: command.rootId });
         const initial = definitionKind === "application"
           ? await readApplicationDefinitionDraft(transaction, scope, {
@@ -238,7 +241,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         );
         const completion = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         if (canonicalJson(completion) !== canonicalJson(context)) throw new PublicationContextRefused("session_context_changed");
-        await assertLiveCompletion(transaction, completion,
+        await assertLiveCompletion(dependencies.catalogue.permissions, transaction, completion,
           value.kind === "published" ? value.publication.publishedAt : undefined);
         return value;
       } catch (error) {
@@ -280,7 +283,9 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         if (!sameId(scope.organizationId, organization.data)) throw new PublicationContextRefused("organization_mismatch");
         const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         const facts = definitionKind === "application" ? targetFacts : moduleTargetFacts;
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts: facts });
+        const authority = createBuilderAuthority({
+          transaction, scope, targetFacts: facts, permissions: dependencies.catalogue.permissions,
+        });
         await requireBuilderAuthority(authority, { kind: "publication", rootId: root.data });
         const readAtRevision = (expectedDraftRevision?: number) => definitionKind === "application"
           ? readApplicationDefinitionDraft(transaction, scope, {
@@ -300,7 +305,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         await facts(transaction, scope, root.data);
         const completion = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         if (canonicalJson(completion) !== canonicalJson(context)) throw new PublicationContextRefused("session_context_changed");
-        await assertLiveCompletion(transaction, completion);
+        await assertLiveCompletion(dependencies.catalogue.permissions, transaction, completion);
         return draft;
       } catch (error) {
         failure = safeFailure(error, "read-draft");

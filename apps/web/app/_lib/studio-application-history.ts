@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
+import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
 import {
   applicationRootIdSchema, canonicalJson, correlationIdSchema, definitionReleaseMetadataSchema, describeFailure, fingerprintSchema, namespacedKeySchema,
   organizationIdSchema,
@@ -9,13 +9,14 @@ import {
   type DefinitionReleaseMetadata,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import { assertBeforeLiveDeadline, assertLivePermission, BuilderAuthorityError,
   platformOrganizationPermissionDeclaration, readApplicationDefinitionDraft, readLiveHumanContext,
-  requireBuilderAuthority, type LiveHumanContext } from "@web/platform-server";
+  requireBuilderAuthority, type LiveHumanContext } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError, classifyDatabaseError } from "@web/platform-server";
+import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 const pageSize = 20;
 const snapshotFields = {
@@ -95,7 +96,10 @@ const assertLiveCompletion = async (
   entries: readonly DefinitionReleaseMetadata[],
 ): Promise<void> => {
   const decision = await assertLivePermission(transaction,
-    platformOrganizationPermissionDeclaration("platform.organization.definition_drafts.manage"), context);
+    platformOrganizationPermissionDeclaration(
+      platformPermissionSource,
+      "platform.organization.definition_drafts.manage",
+    ), context);
   const now = await assertBeforeLiveDeadline(transaction,
     Math.min(Date.parse(context.expiresAt), decision.validUntil));
   if (entries.some((entry) => Date.parse(entry.publishedAt) > now))
@@ -151,7 +155,7 @@ const executeRead = async <Value>(
         try {
           if (!sameId(scope.organizationId, organization.data)) throw new HistoryRefused();
           const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts });
+          const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
           const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
           const anchor = draft.publishedRevision ?? null;

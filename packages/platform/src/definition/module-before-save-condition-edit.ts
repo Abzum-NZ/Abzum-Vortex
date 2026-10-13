@@ -198,7 +198,12 @@ export const moduleBeforeSaveConditionEdits = (dependencies: ModuleDraftEditDepe
     createDatabaseDefinitionPublicationService(
       installedReleaseCatalogue,
       transaction,
-      createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts }),
+      createBuilderAuthority({
+        transaction,
+        scope,
+        targetFacts: moduleTargetFacts,
+        permissions: installedReleaseCatalogue.permissions,
+      }),
     );
 
   const sameOperandBindingIdentity = (
@@ -269,6 +274,7 @@ export const moduleBeforeSaveConditionEdits = (dependencies: ModuleDraftEditDepe
       transaction,
       scope,
       targetFacts: moduleTargetFacts,
+      permissions: installedReleaseCatalogue.permissions,
     });
     await requireBuilderAuthority(authority, {
       kind: "draft_change",
@@ -441,6 +447,7 @@ export const moduleBeforeSaveConditionEdits = (dependencies: ModuleDraftEditDepe
       transaction,
       scope,
       targetFacts: moduleTargetFacts,
+      permissions: installedReleaseCatalogue.permissions,
     });
     await requireBuilderAuthority(authority, {
       kind: "draft_change",
@@ -676,6 +683,7 @@ export const moduleBeforeSaveConditionEdits = (dependencies: ModuleDraftEditDepe
               scope,
               validated.draft,
               validated.source,
+              installedReleaseCatalogue.permissions,
             );
             const rereadResult = await beforeSaveConditionService(
               transaction,

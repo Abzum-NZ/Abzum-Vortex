@@ -3,8 +3,8 @@ import "server-only";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "@web/platform-server";
-import { createAppTelemetryCollector, createOperationsAlertSink } from "@web/platform-server";
+} from "@vortex/platform/server";
+import { createAppTelemetryCollector, createOperationsAlertSink } from "@vortex/platform/server";
 import type { IdentityAuthorityId } from "@vortex/platform/schema";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 

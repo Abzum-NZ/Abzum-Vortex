@@ -4,7 +4,7 @@ import {
   walkPageComposition,
   type ApplicationToolBundle,
 } from "@vortex/platform/schema";
-import type { InstalledRuntimeContext } from "@web/platform-server";
+import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import { projectedUseAvailability } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
 

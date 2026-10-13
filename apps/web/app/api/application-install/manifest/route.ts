@@ -1,4 +1,4 @@
-import { applicationInstallAddressSchema } from "@web/platform-server";
+import { applicationInstallAddressSchema } from "@vortex/platform/server";
 import { fingerprintSchema, revisionSchema } from "@vortex/platform/schema";
 import { loadApplicationInstallMetadata } from "../../../_lib/application-install-metadata";
 

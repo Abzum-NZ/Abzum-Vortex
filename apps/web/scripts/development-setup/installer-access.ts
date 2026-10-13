@@ -2,8 +2,8 @@ import {
   createOrganizationAccessAdministrationService,
   fingerprintPermissionMeaning,
   prepareOrganizationRoleChangeEvidence,
-} from "@web/platform-server";
-import { fingerprintCanonicalValue } from "@web/platform-server";
+} from "@vortex/platform/server";
+import { fingerprintCanonicalValue } from "@vortex/platform/server";
 import { platformPermissionDeclarations, platformPermissionOwnerId } from "@vortex/definitions";
 import {
   changeOrganizationAdministrationRoleAuthorityCommandSchema,

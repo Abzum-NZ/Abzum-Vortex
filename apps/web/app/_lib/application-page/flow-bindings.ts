@@ -1,4 +1,4 @@
-import { buildLinkTilesQueryBinding, type InstalledRuntimeContext } from "@web/platform-server";
+import { buildLinkTilesQueryBinding, type InstalledRuntimeContext } from "@vortex/platform/server";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,

@@ -15,7 +15,7 @@ import {
   FIELD_INPUT_CONTROL_RELEASES,
   PLATFORM_BLOCK_RELEASES,
 } from "@vortex/platform/server";
-import type { InstalledRuntimeContext } from "@web/platform-server";
+import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import { ApplicationPageView } from "./_components/application-page-view";
@@ -48,7 +48,7 @@ import {
   organizationLauncherShell,
   organizationLauncherStudioPage,
   organizationLauncherStudioPlacementId,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 
 export const dynamic = "force-dynamic";
 

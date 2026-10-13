@@ -1,4 +1,4 @@
-import type { InstalledRuntimeContext } from "@web/platform-server";
+import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import {
   BOARD_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,

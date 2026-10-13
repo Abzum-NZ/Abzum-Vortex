@@ -10,9 +10,9 @@ import {
 import {
   createHumanOrganizationRequestService,
   readCurrentRecordOwnerGroupsAfterAuthorization,
-} from "@web/platform-server";
-import { createDatabaseSystemApplicationBoundReleaseSetService } from "@web/platform-server";
-import { createRecordSaveService } from "@web/platform-server";
+} from "@vortex/platform/server";
+import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/platform/server";
+import { createRecordSaveService } from "@vortex/platform/server";
 import { developmentPublicationCatalogue } from "../development-setup/definitions";
 import {
   inSystemTransaction,

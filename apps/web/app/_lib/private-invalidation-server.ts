@@ -3,13 +3,13 @@ import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { setTimeout as delay } from "node:timers/promises";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { withRequestDatabaseLifetime } from "@web/platform-server";
+import { withRequestDatabaseLifetime } from "@vortex/platform/server";
 import { liveInvalidationSchema, type LiveInvalidation } from "@vortex/platform/schema";
 import {
   privateInvalidationBroadcastEvent,
   privateInvalidationTopic,
   type PrivateInvalidationAuthorizationRequest,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { getIdentityJourneyConfiguration } from "../auth/_lib/authority-configuration";
 import { resolveIdentitySessionForPrivateInvalidation } from "../auth/_lib/session-server";
 import { requestMatchesConfiguredSite } from "../auth/_lib/session-request-state";

@@ -2,7 +2,7 @@ import type {
   ProtectedQuerySummaryAggregateResult,
   InstalledRuntimeContext,
   PermittedApplication,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import type { DisplayCellValue } from "@vortex/ui";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,

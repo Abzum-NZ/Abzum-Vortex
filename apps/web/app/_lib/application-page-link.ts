@@ -5,7 +5,7 @@ import {
   requireInstalledRuntimeContext,
   resolveInstalledPageIdentity,
   resolvePermittedApplicationAddress,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationPageLinkResultSchema,
   applicationPageLinkSelectorSchema,
@@ -14,8 +14,9 @@ import {
   type ApplicationPageLinkResult,
   type IdentitySession,
 } from "@vortex/platform/schema";
-import { createStoredPageCapabilityService } from "@web/platform-server";
+import { createStoredPageCapabilityService } from "@vortex/platform/server";
 import { humanOrganizationRequestDependencies } from "./server-composition";
+import { platformPermissionSource } from "./platform-permission-source";
 
 const unavailable = Object.freeze({ availability: "unavailable" as const });
 
@@ -48,6 +49,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
 
         const dependencies = humanOrganizationRequestDependencies();
         const addressed = await readAddressedApplicationFromInstalledBundleAtAddress(
+          platformPermissionSource,
           session,
           tenantShortName.data,
           organizationShortName.data,
@@ -125,6 +127,7 @@ export const createApplicationPageLinkReader = (address: ApplicationPageLinkAddr
           ...dependencies,
           context: installedContext,
           selection: { pageId: page.pageId },
+          permissions: platformPermissionSource,
         }).project(session, selection);
         if (
           projected.kind !== "available" ||

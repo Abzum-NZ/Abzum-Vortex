@@ -1,7 +1,7 @@
 import {
   createOrganizationLifecycleLimitsStore,
   createRecordTypeLifecyclePolicyService,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import type {
   IdentityAuthorityId,
   SystemApplicationBoundReleaseSetResult,

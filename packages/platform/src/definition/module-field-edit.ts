@@ -376,7 +376,12 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
               issuedAt,
             });
             const draft = await readModuleDefinitionDraft(transaction, scope, { rootId: root.data });
-            const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
+            const authority = createBuilderAuthority({
+              transaction,
+              scope,
+              targetFacts: moduleTargetFacts,
+              permissions: dependencies.releaseCatalogue.permissions,
+            });
             await requireBuilderAuthority(authority, { kind: "draft_change", rootId: draft.rootId });
             const current = await readModuleDefinitionDraft(transaction, scope, {
               rootId: draft.rootId,
@@ -440,7 +445,12 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
             previous.sourceFingerprint !== request.expectedSavedSourceFingerprint
           )
             throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
+          const authority = createBuilderAuthority({
+              transaction,
+              scope,
+              targetFacts: moduleTargetFacts,
+              permissions: dependencies.releaseCatalogue.permissions,
+            });
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: previous.rootId });
           const planned = plan(previous, context);
           const shape = moduleSourceDocumentSchema.safeParse(planned.source);
@@ -448,7 +458,7 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
             throw new LocatedValidationFailure(
               translateDefinitionSchemaError(shape.error, planned.translation),
             );
-          const validation = validateDefinitionSource(shape.data);
+          const validation = validateDefinitionSource(shape.data, dependencies.releaseCatalogue.permissions);
           if (!validation.valid)
             throw new LocatedValidationFailure(
               translateDefinitionRuleFailures(validation.failures, {
@@ -456,7 +466,13 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
                 rootLocation: planned.translation.rootLocation,
               }),
             );
-          const reread = await saveModuleDraftEdit(transaction, scope, previous, shape.data);
+          const reread = await saveModuleDraftEdit(
+            transaction,
+            scope,
+            previous,
+            shape.data,
+            dependencies.releaseCatalogue.permissions,
+          );
           await evaluateDraftPermission(
             transaction, scope, session, issuedAt, context, reread, dependencies.access,
           );

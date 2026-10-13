@@ -17,7 +17,7 @@ import {
   type SelectedOrganizationScope,
   type SessionContext,
 } from "../schema";
-import { platformPermissionSource } from "./platform-permissions";
+import type { PlatformPermissionSource } from "./platform-permissions";
 
 export type LiveHumanContext = Extract<SessionContext, { callerKind: "human" }>;
 export type LiveOrganizationAccessDeclaration = z.infer<typeof organizationAccessDeclarationSchema>;
@@ -152,9 +152,9 @@ export const organizationPermissionDeclaration = (
 
 /** The declaration of a platform permission by key; an undeclared key is refused. */
 export const platformOrganizationPermissionDeclaration = (
+  source: PlatformPermissionSource,
   key: string,
 ): LiveOrganizationAccessDeclaration => {
-  const source = platformPermissionSource();
   const permission = source.declarations.find((entry) => entry.key === key);
   if (permission === undefined) throw refuse("permission_undeclared");
   return organizationPermissionDeclaration(permission, source.ownerId);

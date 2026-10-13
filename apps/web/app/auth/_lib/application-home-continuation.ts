@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isReservedTenantSegment } from "@web/platform-server";
+import { isReservedTenantSegment } from "@vortex/platform/server";
 import { builderKeySchema, namespacedKeySchema } from "@vortex/platform/schema";
 import { organizationAddressPath } from "../../_lib/address-paths";
 

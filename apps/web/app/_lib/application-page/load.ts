@@ -14,7 +14,7 @@ import {
   createPageSubjectReader,
   type PageSubjectReadResult,
   readCurrentRecordOwnerGroupsAfterAuthorization,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { FORM_CONTAINER_BLOCK_RELEASE } from "@vortex/platform/server";
 import {
   type IdentitySession,
@@ -89,6 +89,7 @@ import {
 import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
 import { readPlacement } from "./placement-reader";
 import { projectPageWebMcpTools } from "./webmcp-projection";
+import { platformPermissionSource } from "../platform-permission-source";
 
 export const requestDependencies = (): HumanOrganizationRequestDependencies =>
   humanOrganizationRequestDependencies();
@@ -200,6 +201,7 @@ const loadApplicationPageJoined = async (
   const pageService = createStoredPageCapabilityService({
     ...dependencies,
     context,
+    permissions: platformPermissionSource,
     selection: {
       pageId: pageDefinition.pageId,
       ...(conditionSubjectId === undefined ? {} : { subjectRecordId: conditionSubjectId }),
@@ -212,6 +214,7 @@ const loadApplicationPageJoined = async (
   const navigationRead = createStoredNavigationProjectionService({
     ...dependencies,
     context,
+    permissions: platformPermissionSource,
   }).project(session, selection);
   // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
   // both reads are joined before the loader returns on any path (early returns included).
@@ -423,6 +426,7 @@ const loadApplicationPageJoined = async (
   const queryNotices = createQueryNoticeQueryResolver(queries);
   const recordLinks = createViewerSafeRecordLinkService({
     ...dependencies,
+    permissions: platformPermissionSource,
     createInstalledContextLoader(transaction, scope) {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
       return createHumanInstalledPageBundleContextLoader({

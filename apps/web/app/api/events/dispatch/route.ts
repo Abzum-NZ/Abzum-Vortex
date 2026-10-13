@@ -7,7 +7,7 @@ import {
   createSearchEventConsumer,
   createSearchIndexDependencies,
   eventDispatcherWakeupLimits,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 

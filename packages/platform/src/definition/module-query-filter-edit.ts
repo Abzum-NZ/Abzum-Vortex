@@ -190,7 +190,12 @@ export const moduleQueryFilterEdits = (dependencies: ModuleDraftEditDependencies
     createDatabaseDefinitionPublicationService(
       installedReleaseCatalogue,
       transaction,
-      createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts }),
+      createBuilderAuthority({
+        transaction,
+        scope,
+        targetFacts: moduleTargetFacts,
+        permissions: installedReleaseCatalogue.permissions,
+      }),
     );
 
   const sameOperandBindingIdentity = (
@@ -250,6 +255,7 @@ export const moduleQueryFilterEdits = (dependencies: ModuleDraftEditDependencies
       transaction,
       scope,
       targetFacts: moduleTargetFacts,
+      permissions: installedReleaseCatalogue.permissions,
     });
     await requireBuilderAuthority(authority, {
       kind: "draft_change",
@@ -390,6 +396,7 @@ export const moduleQueryFilterEdits = (dependencies: ModuleDraftEditDependencies
       transaction,
       scope,
       targetFacts: moduleTargetFacts,
+      permissions: installedReleaseCatalogue.permissions,
     });
     await requireBuilderAuthority(authority, {
       kind: "draft_change",
@@ -612,6 +619,7 @@ export const moduleQueryFilterEdits = (dependencies: ModuleDraftEditDependencies
               scope,
               validated.draft,
               validated.source,
+              installedReleaseCatalogue.permissions,
             );
             const rereadResult = await queryFilterService(
               transaction,

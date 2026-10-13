@@ -1,6 +1,6 @@
 import "server-only";
 
-import { parseComponentBootstrapTarget, renderComponentBootstrapDocument } from "@web/platform-server";
+import { parseComponentBootstrapTarget, renderComponentBootstrapDocument } from "@vortex/platform/server";
 import {
   configuredComponentOrigin,
   configuredSiteOrigin,

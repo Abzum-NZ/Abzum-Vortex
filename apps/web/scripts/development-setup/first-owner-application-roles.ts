@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createOrganizationAccessAdministrationService } from "@web/platform-server";
+import { createOrganizationAccessAdministrationService } from "@vortex/platform/server";
 import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,

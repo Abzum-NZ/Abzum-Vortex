@@ -1,4 +1,4 @@
-import { platformPermissionSource } from "./platform-permissions";
+import type { PlatformPermissionSource } from "./platform-permissions";
 import "server-only";
 
 import {
@@ -39,11 +39,16 @@ export type BuilderAuthorityDependencies = Readonly<{
   /** The selected organisation scope resolved for the authenticated human's own request. */
   scope: SelectedOrganizationScope;
   targetFacts: BuilderTargetFactsReader;
+  /** The shipped platform permission catalogue the authority's declarations are built from. */
+  permissions: PlatformPermissionSource;
 }>;
 
 /** The exact permission identity is looked up in the platform catalogue, never taken as input. */
-const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccessDeclaration => {
-  const permission = platformPermissionSource().declarations.find((entry) => entry.key === key);
+const declarationForPermission = (
+  permissions: PlatformPermissionSource,
+  key: BuilderPermissionKey,
+): OrganizationAccessDeclaration => {
+  const permission = permissions.declarations.find((entry) => entry.key === key);
   if (permission === undefined) throw unavailableError(unavailableCode);
   return organizationAccessDeclarationSchema.parse({
     operationKey: permission.key,
@@ -51,7 +56,7 @@ const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccess
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionSource().ownerId,
+      ownerId: permissions.ownerId,
       permissionId: permission.permissionId,
     },
     recentAuthentication: { kind: "none" },
@@ -65,10 +70,11 @@ const declarationForPermission = (key: BuilderPermissionKey): OrganizationAccess
  * assignment scope, whatever any approval workflow says.
  */
 const declarationForAcceptance = (
+  catalogue: PlatformPermissionSource,
   permissions: readonly BuilderConferredPermission[],
   recentAuthentication: boolean,
 ): OrganizationAccessDeclaration => {
-  const applications = platformPermissionSource().declarations.find(
+  const applications = catalogue.declarations.find(
     (entry) => entry.key === "platform.organization.applications.manage",
   );
   if (applications === undefined) throw unavailableError(unavailableCode);
@@ -78,7 +84,7 @@ const declarationForAcceptance = (
     target: { kind: "organization" },
     requiredPermission: {
       ownerKind: "platform",
-      ownerId: platformPermissionSource().ownerId,
+      ownerId: catalogue.ownerId,
       permissionId: applications.permissionId,
     },
     recentAuthentication: recentAuthentication ? builderRecentAuthentication : { kind: "none" },
@@ -144,7 +150,7 @@ export const createBuilderAuthority = (
     const requirements = deriveBuilderRequirements(operation, facts);
 
     const declarations = requirements.permissionKeys.map((key) => {
-      const declaration = declarationForPermission(key);
+      const declaration = declarationForPermission(dependencies.permissions, key);
       // Recent authentication rides on the first declaration so it is decided once.
       return key === requirements.permissionKeys[0] && requirements.recentAuthentication
         ? organizationAccessDeclarationSchema.parse({
@@ -155,7 +161,11 @@ export const createBuilderAuthority = (
     });
     const delegated = uniquePermissions(requirements.delegatedPermissions);
     if (delegated.length > 0)
-      declarations.push(declarationForAcceptance(delegated, requirements.recentAuthentication));
+      declarations.push(declarationForAcceptance(
+          dependencies.permissions,
+          delegated,
+          requirements.recentAuthentication,
+        ));
 
     for (const declaration of declarations) {
       const checked = await runOrganizationAccessOperation(

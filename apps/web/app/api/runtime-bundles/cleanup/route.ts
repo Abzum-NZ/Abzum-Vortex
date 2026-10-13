@@ -3,7 +3,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import {
   authenticateRuntimeBundleCleanup,
   runScheduledRuntimeBundleCleanup,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { privateJsonResponse } from "../../../_lib/private-response";
 
 export const runtime = "nodejs";

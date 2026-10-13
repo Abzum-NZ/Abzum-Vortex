@@ -1,7 +1,7 @@
 import "server-only";
 
 import { resolveShadcnIconLibrary } from "@vortex/platform/schema";
-import { applicationInstallColor, requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@web/platform-server";
+import { applicationInstallColor, requireInstalledRuntimeContext, type InstalledRuntimeContext } from "@vortex/platform/server";
 import catalogue from "./application-install-icons.generated.json";
 
 /** The catalogue is source-produced from the same shipped semantic adapters as ApplicationLauncher. */

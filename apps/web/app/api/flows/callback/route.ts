@@ -7,13 +7,13 @@ import {
   createOrganizationAccessAdministrationService,
   type DurableActorRequestScope,
   type HumanOrganizationRequestDependencies,
-} from "@web/platform-server";
-import { createProtectedOperationExecutor } from "@web/platform-server";
-import type { RequestDatabaseTransaction } from "@web/platform-server";
+} from "@vortex/platform/server";
+import { createProtectedOperationExecutor } from "@vortex/platform/server";
+import type { RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   createRequestBoundTenantGovernanceService,
   type RequestBoundTenantGovernanceService,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   organizationAccountIdSchema,
@@ -32,7 +32,7 @@ import {
   createProtectedNodeExecution,
   resolveApplicationKestraInstanceTarget,
   type ProtectedNodeRunRecord,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { getIdentityAuthorityConfiguration } from "../../../auth/_lib/authority-configuration";
 import { privateJsonResponse } from "../../../_lib/private-response";
 import { optionalEnvironmentValue } from "../../../_lib/server-configuration";

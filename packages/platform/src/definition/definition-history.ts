@@ -406,7 +406,7 @@ const verifyRestoreEvidence = async (
     source.key !== release.key ||
     source.source_contract_version !== release.sourceContractVersion ||
     fingerprintCanonicalValue(source) !== release.sourceFingerprint ||
-    !validateDefinitionSource(source).valid ||
+    !validateDefinitionSource(source, catalogue.permissions).valid ||
     release.compilationOutput.kind === "connection_type" ||
     !hasAuthenticStoredCustomerDefinitionRelease({
       organizationId: release.organizationId,

@@ -6,7 +6,7 @@ import {
   type HumanDefinitionPublicationDraftResult,
   type HumanDefinitionPublicationPreparationResult,
   type HumanDefinitionPublicationResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";

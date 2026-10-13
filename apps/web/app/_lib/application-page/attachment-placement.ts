@@ -7,7 +7,7 @@ import {
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   type PageSubjectReadResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { ATTACHMENT_LIST_BLOCK_RELEASE } from "@vortex/platform/server";
 import {
   recordIdSchema,

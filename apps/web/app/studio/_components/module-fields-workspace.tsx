@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { StoredModuleDefinitionDraft } from "@web/platform-server";
+import type { StoredModuleDefinitionDraft } from "@vortex/platform/server";
 import { ModuleFieldsAgentTools } from "./module-fields-agent-tools";
 import { ModuleFieldsEditor } from "./module-fields-editor";
 import { ModuleTextFieldSettingsEditor } from "./module-text-field-settings-editor";

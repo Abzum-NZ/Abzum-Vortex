@@ -4,7 +4,7 @@ import type {
   PrivateFormDraftFieldValidation,
   PermittedApplicationsRead,
   PermittedApplication,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import type {
   ApplicationShell,
   JsonValue,

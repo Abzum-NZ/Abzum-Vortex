@@ -11,7 +11,7 @@ import {
   createIdentityVerifier,
   type VerifiedSignInResult,
   type IdentityVerificationExecution,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";

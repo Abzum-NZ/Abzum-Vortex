@@ -6,7 +6,7 @@ import { Socket } from "node:net";
 import { connect as connectTls, type TLSSocket } from "node:tls";
 import { finished } from "node:stream/promises";
 import WebSocket from "ws";
-import type { IdentityVerificationExecution } from "@web/platform-server";
+import type { IdentityVerificationExecution } from "@vortex/platform/server";
 import { createOwnedNetworkLookup, type OwnedNetworkLookup } from "./owned-network-lookup";
 
 const maximumProviderBodyBytes = 65_536;

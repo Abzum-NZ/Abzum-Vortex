@@ -11,7 +11,7 @@ import {
   type ApplicationContent,
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
-import { checkPlacementThemeOverrides, fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@web/platform-server";
+import { checkPlacementThemeOverrides, fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@vortex/platform/server";
 import {
   parseStudioAppearanceRequest,
   parseStudioPlacementThemeRequest,
@@ -35,6 +35,7 @@ import {
   studioApplicationSourceReviewResultSchema,
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
+import { platformPermissionSource } from "../_lib/platform-permission-source";
 
 const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
   mapWebError(cause, { route: "studio/actions", operation, code, fallback });
@@ -73,7 +74,7 @@ export async function reviewStudioApplicationSource(
       savedSourceFingerprint: draft.sourceFingerprint,
       candidateSourceFingerprint: fingerprintCanonicalValue(source),
     };
-    const validation = validateDefinitionSource(source);
+    const validation = validateDefinitionSource(source, platformPermissionSource);
     if (!validation.valid) return studioApplicationSourceReviewResultSchema.parse({
       kind: "validation_failed", ...binding,
       validation: translateDefinitionRuleFailures(validation.failures, {
@@ -122,7 +123,7 @@ export async function createStudioApplication(organizationId: string, candidate:
   if (!source.success)
     return refuse("create-application", "STUDIO_CREATE_SOURCE_SCHEMA_INVALID",
       { kind: "refused", reason: "source_invalid" } as const, source.error);
-  const validation = validateDefinitionSource(source.data);
+  const validation = validateDefinitionSource(source.data, platformPermissionSource);
   if (!validation.valid)
     return refuse("create-application", `STUDIO_CREATE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);
@@ -137,7 +138,7 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   if (command.data.source.kind !== "application")
     return refuse("save-application", "STUDIO_SAVE_SOURCE_NOT_APPLICATION",
       { kind: "refused", reason: "source_invalid" } as const);
-  const validation = validateDefinitionSource(command.data.source);
+  const validation = validateDefinitionSource(command.data.source, platformPermissionSource);
   if (!validation.valid)
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);

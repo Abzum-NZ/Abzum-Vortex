@@ -12,7 +12,6 @@ import {
   actionPermissionsMatch,
   actionDeleteEffectsSupported,
 } from "./source-paths";
-import { platformPermissionSource } from "../../access/platform-permissions";
 import {
   applicationConditionTypesValid,
   applicationActionValueCompatible,
@@ -83,7 +82,7 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
       // platform authority for a record target. The reference is refused here rather than
       // compiled into a release that cannot enforce it.
       const usesPlatformPermission = actionPermissionKeys(action).some((key) =>
-        platformPermissionSource().hasKey(key),
+        context.permissions.hasKey(key),
       );
       if (usesPlatformPermission)
         failures.push(

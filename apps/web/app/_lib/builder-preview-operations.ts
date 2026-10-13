@@ -2,8 +2,8 @@ import "server-only";
 
 import type { NextResponse} from "next/server";
 import type { NextRequest } from "next/server";
-import { createBuilderAuthority, readLiveHumanContext } from "@web/platform-server";
-import { createFlowTestRunner, createPreviewInstallationCoordinator } from "@web/platform-server";
+import { createBuilderAuthority, readLiveHumanContext } from "@vortex/platform/server";
+import { createFlowTestRunner, createPreviewInstallationCoordinator } from "@vortex/platform/server";
 import {
   builderPreviewCreateRequestSchema,
   builderPreviewCreateResultSchema,
@@ -34,9 +34,9 @@ import {
 import {
   createDatabaseDefinitionPublicationRepository,
   createDatabaseDefinitionPublicationService,
-} from "@web/platform-server";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
-import { createPreviewRecordPort } from "@web/platform-server";
+} from "@vortex/platform/server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
+import { createPreviewRecordPort } from "@vortex/platform/server";
 import type { z } from "zod";
 import { getIdentityAuthorityConfiguration, getIdentityJourneyConfiguration } from "../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
@@ -44,7 +44,8 @@ import { readBoundedRequestText } from "../api/_lib/bounded-request-body";
 import { privateJsonResponse } from "./private-response";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { appTelemetry, humanOrganizationRequests } from "./server-composition";
-import { DefinitionCompilationError, DefinitionError } from "@web/platform-server";
+import { DefinitionCompilationError, DefinitionError } from "@vortex/platform/server";
+import { platformPermissionSource } from "./platform-permission-source";
 
 const maximumRequestBodyLength = 131_072;
 type RootClassificationRow = DatabaseRow & {
@@ -85,6 +86,7 @@ const builderAuthority = (
       const isSystemApplication = await readApplicationRootClassification(requestTransaction, rootId);
       return { isSystemApplication };
     },
+    permissions: platformPermissionSource,
   });
 
 const previewCoordinator = () => {

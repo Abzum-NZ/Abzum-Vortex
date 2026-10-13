@@ -5,8 +5,8 @@ import {
   type IdentitySession,
   type SessionContext,
 } from "@vortex/platform/schema";
-import { withResolvedRequestTransaction, type RequestDatabaseTransaction } from "@web/platform-server";
-import type { BuilderAuthority } from "@web/platform-server";
+import { withResolvedRequestTransaction, type RequestDatabaseTransaction } from "@vortex/platform/server";
+import type { BuilderAuthority } from "@vortex/platform/server";
 
 /**
  * The development-only authorities this script needs and that no runtime package provides on

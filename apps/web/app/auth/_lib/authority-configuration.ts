@@ -9,7 +9,7 @@ import {
   localDevelopmentSignInAvailable,
   type IdentityJourneyConfiguration,
   type LocalDevelopmentSignInConfiguration,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { optionalEnvironmentValue, requiredEnvironmentValue } from "../../_lib/server-configuration";
 
 export const getIdentityJourneyConfiguration = (): IdentityJourneyConfiguration => ({

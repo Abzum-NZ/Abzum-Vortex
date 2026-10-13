@@ -5,11 +5,11 @@ import {
   readAddressedApplicationAtAddress,
   requireInstalledRuntimeContext,
   resolvePermittedApplicationAddress,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { sameId, type IdentitySession } from "@vortex/platform/schema";
-import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
-import { createActiveApplicationInstallationRepository } from "@web/platform-server";
-import { searchInstalledApplication } from "@web/platform-server";
+import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/platform/server";
+import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
+import { searchInstalledApplication } from "@vortex/platform/server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { applicationPageAddressPath } from "./address-paths";
@@ -18,6 +18,7 @@ import {
   humanOrganizationRequestsFor,
 } from "./server-composition";
 import { mapWebError } from "./web-error-mapper";
+import { platformPermissionSource } from "./platform-permission-source";
 
 type ApplicationSearchView =
   | Readonly<{ kind: "disabled" }>
@@ -42,6 +43,7 @@ export const loadApplicationSearch = async (
   try {
     const dependencies = humanOrganizationRequestDependencies();
     const { read } = await readAddressedApplicationAtAddress(
+      platformPermissionSource,
       session,
       address.tenantShortName,
       address.organizationShortName,

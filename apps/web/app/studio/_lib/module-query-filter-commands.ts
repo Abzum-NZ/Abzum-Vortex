@@ -1,5 +1,5 @@
 import { canonicalJson, type ConditionNode } from "@vortex/platform/schema";
-import type { ModuleQueryFilterDraftContext } from "@web/platform-server";
+import type { ModuleQueryFilterDraftContext } from "@vortex/platform/server";
 import type { StudioConditionControlsContext } from "@vortex/ui/studio";
 export const moduleQueryFilterControlsContext = (
   context: ModuleQueryFilterDraftContext,

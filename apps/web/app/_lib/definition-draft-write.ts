@@ -3,10 +3,11 @@ import "server-only";
 import {
   createHumanApplicationDraftWriter,
   type HumanApplicationDraftWriteResult,
-} from "@web/platform-server";
+} from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { mapWebError } from "./web-error-mapper";
+import { platformPermissionSource } from "./platform-permission-source";
 
 const writeApplicationDraft = async (
   organizationId: string,
@@ -21,7 +22,10 @@ const writeApplicationDraft = async (
         ? { kind: "temporarily_unavailable" }
         : { kind: "refused", reason: "session_ended" };
     }
-    const writer = createHumanApplicationDraftWriter({ requests: humanOrganizationRequests() });
+    const writer = createHumanApplicationDraftWriter({
+      requests: humanOrganizationRequests(),
+      permissions: platformPermissionSource,
+    });
     return mode === "create"
       ? await writer.createRoot(resolved.session, organizationId, candidate)
       : await writer.saveDraft(resolved.session, organizationId, candidate);

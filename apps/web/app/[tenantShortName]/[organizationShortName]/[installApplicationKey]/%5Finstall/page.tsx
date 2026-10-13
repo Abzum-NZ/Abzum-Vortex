@@ -1,4 +1,4 @@
-import { applicationInstallAddressSchema } from "@web/platform-server";
+import { applicationInstallAddressSchema } from "@vortex/platform/server";
 import { notFound } from "next/navigation";
 import ApplicationAddressPage from "../../[[...applicationAddress]]/page";
 
