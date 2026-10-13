@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  describeFailure,
   activityIdSchema,
   applicationRootIdSchema,
   databaseRevision,
@@ -574,17 +575,24 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       commandCandidate: unknown,
     ): Promise<RecordSaveServiceResult> {
       // Do not turn a non-person authority into a person session on this adapter.
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
+      if (caller !== null && typeof caller === "object" && "kind" in caller) {
+        console.error("[record] save refused RECORD_SAVE_CALLER_NOT_A_PERSON");
         return { kind: "unavailable" };
+      }
       const command = saveRecordCommandSchema.safeParse(commandCandidate);
-      if (!command.success || selection.applicationRootId === undefined)
+      if (!command.success || selection.applicationRootId === undefined) {
+        console.error(
+          `[record] save refused RECORD_SAVE_COMMAND_INVALID: ${command.success ? "no application selected" : describeFailure(command.error)}`,
+        );
         return { kind: "unavailable" };
+      }
 
       let activityId: string;
       let occurrenceId: string | undefined;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(`[record] save identity generation failed: ${describeFailure(error)}`);
         return { kind: "temporarily_unavailable" };
       }
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -808,7 +816,10 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
 
         if (result.kind !== "available") return result;
         if (result.value === restartRelationshipTotalSave) continue;
-        if (result.value === recordedRefusal) return { kind: "unavailable" };
+        if (result.value === recordedRefusal) {
+          console.error("[record] save refused RECORD_SAVE_REFUSAL_RECORDED");
+          return { kind: "unavailable" };
+        }
         const value = result.value as SaveRecordResult;
         return value.outcome === "saved" &&
           attempted.rules !== undefined &&

@@ -66,6 +66,11 @@ export type FlowIntentHostOptions = Readonly<{
 
 /** Flow surface width, the same 36rem the theme's medium dialog scale used. */
 const FLOW_SURFACE_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
+const flowExecutionAbortError = (): Error => {
+  const error = new Error("Flow surface cancelled");
+  error.name = "AbortError";
+  return error;
+};
 
 /**
  * One modal flow surface on the shadcn Dialog (Base UI), like every other surface in the product.
@@ -132,27 +137,49 @@ export function useFlowIntentHost(
     };
   }, []);
 
-  const enqueue = useCallback(<Result,>(build: (id: number, settle: (result: Result) => void) => Surface) => {
-    return new Promise<Result>((resolve, reject) => {
-      const id = (nextId.current += 1);
-      abandon.current.set(id, () => reject(new Error("FLOW_SURFACE_ABANDONED")));
-      const surface = build(id, (result) => {
-        if (!abandon.current.delete(id)) return;
-        setSurfaces((current) => current.filter((entry) => entry.id !== id));
-        resolve(result);
-      });
-      setSurfaces((current) => [...current, surface]);
-    });
-  }, []);
+  const enqueue = useCallback(
+    <Result,>(
+      build: (id: number, settle: (result: Result) => void) => Surface,
+      signal?: AbortSignal,
+    ) =>
+      new Promise<Result>((resolve, reject) => {
+        const id = (nextId.current += 1);
+        const cancel = (reason: unknown, removeSurface = true): void => {
+          if (!abandon.current.delete(id)) return;
+          signal?.removeEventListener("abort", abort);
+          if (removeSurface) setSurfaces((current) => current.filter((entry) => entry.id !== id));
+          reject(reason);
+        };
+        const abort = (): void => cancel(signal?.reason ?? flowExecutionAbortError());
+        if (signal?.aborted) {
+          reject(signal.reason ?? flowExecutionAbortError());
+          return;
+        }
+        abandon.current.set(id, () => cancel(new Error("FLOW_SURFACE_ABANDONED"), false));
+        signal?.addEventListener("abort", abort, { once: true });
+        if (signal?.aborted) {
+          abort();
+          return;
+        }
+        const surface = build(id, (result) => {
+          if (!abandon.current.delete(id)) return;
+          signal?.removeEventListener("abort", abort);
+          setSurfaces((current) => current.filter((entry) => entry.id !== id));
+          resolve(result);
+        });
+        if (abandon.current.has(id)) setSurfaces((current) => [...current, surface]);
+      }),
+    [],
+  );
 
   const host = useMemo<FlowIntentHost>(
     () => ({
-      showMessage: (message) =>
-        enqueue<void>((id, settle) => ({ id, kind: "message", message, settle })),
-      showForm: (form) =>
-        enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle })),
-      confirm: (confirmation) =>
-        enqueue<boolean>((id, settle) => ({ id, kind: "confirm", confirmation, settle })),
+      showMessage: (message, signal) =>
+        enqueue<void>((id, settle) => ({ id, kind: "message", message, settle }), signal),
+      showForm: (form, signal) =>
+        enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
+      confirm: (confirmation, signal) =>
+        enqueue<boolean>((id, settle) => ({ id, kind: "confirm", confirmation, settle }), signal),
       navigate: (intent) => performNavigateTask(intent, optionsRef.current.navigation),
       refresh: (component) => optionsRef.current.refresh?.(component),
       setPanel: (panel, state) => optionsRef.current.setPanel?.(panel, state),
@@ -204,11 +231,7 @@ export function useFlowIntentHost(
   } else if (current?.kind === "form") {
     const { form, settle } = current;
     element = (
-      <FlowDialog
-        key={current.id}
-        title="Form"
-        onDismiss={() => settle({ kind: "cancel" })}
-      >
+      <FlowDialog key={current.id} title="Form" onDismiss={() => settle({ kind: "cancel" })}>
         {options.renderForm(form, {
           submit: (values, choiceEvidence) =>
             settle({

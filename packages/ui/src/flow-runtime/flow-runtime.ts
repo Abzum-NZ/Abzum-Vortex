@@ -22,6 +22,13 @@ export type FlowRuntimeOptions = Readonly<{
   newId?: () => string;
 }>;
 
+/** The safe identity of a binding used by a surface that does not receive its input map. */
+export type FlowBindingReference = Readonly<{
+  bindingId: string;
+  flowId: string;
+  event: string;
+}>;
+
 export type FlowRuntime = Readonly<{
   /**
    * Runs the flow bound to one component event. A browser-only flow runs in the page; every other
@@ -33,6 +40,13 @@ export type FlowRuntime = Readonly<{
     binding: ComponentFlowBinding,
     callerInputs?: Readonly<Record<string, unknown>>,
     clickId?: string,
+  ) => Promise<FlowDispatchResult>;
+  /** Starts one exact server binding and drives its normal intents and continuations. */
+  dispatchReference: (
+    binding: FlowBindingReference,
+    callerInputs?: Readonly<Record<string, unknown>>,
+    clickId?: string,
+    signal?: AbortSignal,
   ) => Promise<FlowDispatchResult>;
 }>;
 
@@ -63,13 +77,36 @@ const bindingInputs = (
 export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   const clock = options.clock ?? (() => new Date().toISOString());
   const newId = options.newId ?? (() => crypto.randomUUID());
+  const dispatchReference = async (
+    binding: FlowBindingReference,
+    callerInputs: Readonly<Record<string, unknown>> = {},
+    clickId?: string,
+    signal?: AbortSignal,
+  ): Promise<FlowDispatchResult> => {
+    if (signal?.aborted) return { ranIn: "server", result: { kind: "abandoned" } };
+    const first = await options.client.startBinding(
+      { bindingId: binding.bindingId, flowId: binding.flowId },
+      callerInputs,
+      clickId ?? newId(),
+      signal,
+    );
+    return {
+      ranIn: "server",
+      result: await driveServerFlow(options.client, binding.flowId, first, options.host, signal),
+    };
+  };
   return Object.freeze({
+    dispatchReference,
     async dispatch(binding, callerInputs = {}, clickId): Promise<FlowDispatchResult> {
       const flowId = binding.flow.flowId;
       const library = options.library;
       // A form submit carries the surface's own submission envelope; the server's form-submit
       // adapter projects it and the endpoint validates it, so it is never pre-filtered here.
-      if (binding.event !== "form_submit" && library !== undefined && flowRunsOnlyInBrowser(flowId, library)) {
+      if (
+        binding.event !== "form_submit" &&
+        library !== undefined &&
+        flowRunsOnlyInBrowser(flowId, library)
+      ) {
         const inputs = bindingInputs(binding, callerInputs);
         if (inputs === undefined)
           return {
@@ -88,16 +125,11 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
           ),
         };
       }
-      // One identity per gesture, so a repeated request for the same click is the same run.
-      const first = await options.client.startBinding(
-        { bindingId: binding.bindingId, flowId },
+      return dispatchReference(
+        { bindingId: binding.bindingId, flowId, event: binding.event },
         callerInputs,
-        clickId ?? newId(),
+        clickId,
       );
-      return {
-        ranIn: "server",
-        result: await driveServerFlow(options.client, flowId, first, options.host),
-      };
     },
   });
 }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  describeFailure,
   flowTaskChildLists,
   canonicalJson,
   flowSchema,
@@ -25,6 +26,7 @@ import {
   type JsonValue,
   type ModuleDefinitionConsumerReadResult,
   type OrganizationSelectionCandidate,
+  type ProtectedOperationChannel,
 } from "../schema";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-address";
@@ -101,6 +103,7 @@ type GuidedInvocationPage = Readonly<{
 
 type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
+  channel: ProtectedOperationChannel;
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
   continuationKey: QueryContinuationKey;
@@ -163,6 +166,11 @@ export type FlowInvocationRequest = Readonly<{
   pageKey: string;
   invocation: FlowBindingInvocation;
 }>;
+
+/** One log line per form-continuation or guided-binding refusal; the page keeps its neutral outcome. */
+const logFlowRefusal = (code: string): void => {
+  console.error(`[flows] invocation refused ${code}`);
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -493,17 +501,21 @@ export async function invokeInstalledFlow(
   const identity = { session };
   const telemetry = dependencies.telemetry;
   const authorityId = dependencies.authorityId;
-  const requests = createHumanOrganizationRequestService({
+  const requestDependencies = {
     identityAuthorityId: authorityId,
     telemetry,
+    channel: dependencies.channel,
+  };
+  const requests = createHumanOrganizationRequestService({
+    ...requestDependencies,
   });
   const referenceChoices = createReferenceChoiceService({
-    ...{ identityAuthorityId: authorityId, telemetry },
+    ...requestDependencies,
     continuationKey: dependencies.continuationKey,
   });
   const selectedRecordReader = createViewerSafeRecordLinkReadService();
   const recordPinService = createViewerSafeRecordLinkService({
-    ...{ identityAuthorityId: authorityId, telemetry },
+    ...requestDependencies,
     createInstalledContextLoader: (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
       return createHumanInstalledRuntimeContextLoader({
@@ -543,10 +555,7 @@ export async function invokeInstalledFlow(
     },
   });
   const executor = createProtectedOperationExecutor({
-    accessAdministration: createOrganizationAccessAdministrationService({
-      identityAuthorityId: authorityId,
-      telemetry,
-    }),
+    accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
     tenantGovernance: {
       run: (session, selection, operation) =>
         requests.runChange(session, selection, (transaction, scope) =>
@@ -560,12 +569,9 @@ export async function invokeInstalledFlow(
   const stores = createDatabaseFlowStores();
   // #1369, #1370: Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
-  const records = createRecordSaveService({ identityAuthorityId: authorityId, telemetry });
-  const subjectReader = createPageSubjectReader({ identityAuthorityId: authorityId, telemetry });
-  const actionRecords = createNamedActionRecordPort({
-    identityAuthorityId: authorityId,
-    telemetry,
-  });
+  const records = createRecordSaveService(requestDependencies);
+  const subjectReader = createPageSubjectReader(requestDependencies);
+  const actionRecords = createNamedActionRecordPort(requestDependencies);
   const selectedRecordReadsFor = (installation: InstalledFlowBindings) => ({
     readFields: async (
       session: IdentitySession,
@@ -863,8 +869,10 @@ export async function invokeInstalledFlow(
             return decision.outcome === "completed" && decision.value === true;
           });
           return checked.kind === "available" && checked.value === true;
-        } catch {
-          // Missing, ambiguous, stale, foreign or unavailable evidence shares one refusal.
+        } catch (error) {
+          // Missing, ambiguous, stale, foreign or unavailable evidence shares one refusal; the log
+          // keeps the cause.
+          console.error(`[flows] invocation evidence check refused: ${describeFailure(error)}`);
           return false;
         }
       },
@@ -1046,7 +1054,10 @@ export async function invokeInstalledFlow(
     request: FormContinuationRequest,
   ): Promise<FormContinuationOutcome> => {
     const installed = await readInstalled(session, selection);
-    if (installed === undefined) return { kind: "refused", reason: "unavailable" } as const;
+    if (installed === undefined) {
+      logFlowRefusal("FORM_CONTINUATION_INSTALLATION_NOT_CURRENT");
+      return { kind: "refused", reason: "unavailable" } as const;
+    }
     const release: FlowRelease = {
       releaseKey: installed.releaseKey,
       flows: installed.flows,
@@ -1066,22 +1077,33 @@ export async function invokeInstalledFlow(
           if (
             installation.applicationRootId.toLowerCase() !==
             installed.applicationRootId.toLowerCase()
-          )
+          ) {
+            logFlowRefusal("FORM_CONTINUATION_FOREIGN_APPLICATION");
             return { kind: "unavailable" };
-          if (installation.installationReleaseRevision !== installed.installationRevision)
+          }
+          if (installation.installationReleaseRevision !== installed.installationRevision) {
+            logFlowRefusal("FORM_CONTINUATION_STALE_INSTALLATION");
             return { kind: "stale" };
+          }
           const flow = installed.flows.get(flowId);
-          if (flow === undefined) return { kind: "unavailable" };
-          if (node !== undefined && !declaresPausedNode(flow, node)) return { kind: "unavailable" };
+          if (flow === undefined) {
+            logFlowRefusal("FORM_CONTINUATION_FLOW_NOT_INSTALLED");
+            return { kind: "unavailable" };
+          }
+          if (node !== undefined && !declaresPausedNode(flow, node)) {
+            logFlowRefusal("FORM_CONTINUATION_NODE_NOT_DECLARED");
+            return { kind: "unavailable" };
+          }
           return { kind: "current", releaseKey: installed.releaseKey };
         },
       }),
     });
     const answer = request.answer;
-    if (request.target.awaiting !== "form")
-      return answer.kind === "submit"
-        ? { kind: "refused", reason: "unavailable" }
-        : pageFormRequests.resume(session, selection, request);
+    if (request.target.awaiting !== "form") {
+      if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
+      logFlowRefusal("FORM_CONTINUATION_SUBMIT_WITHOUT_FORM_PAUSE");
+      return { kind: "refused", reason: "unavailable" };
+    }
 
     const trustedFormId = request.target.formId;
     if (
@@ -1095,20 +1117,26 @@ export async function invokeInstalledFlow(
         formId: trustedFormId,
       })
     ) {
+      logFlowRefusal("FORM_CONTINUATION_TARGET_NOT_CURRENT");
       return { kind: "refused", reason: "unavailable" };
     }
     if (
       installed.applicationContent === undefined ||
       installed.modules === undefined ||
       !dependencies.hasAuthoredForm(installed.applicationContent, trustedFormId)
-    )
+    ) {
+      logFlowRefusal("FORM_CONTINUATION_FORM_NOT_AUTHORED");
       return { kind: "refused", reason: "unavailable" };
+    }
     const projectedForm = await dependencies.projectForm(session, {
       installationRevision: installed.installationRevision,
       releaseKey: installed.releaseKey,
       formId: trustedFormId,
     });
-    if (projectedForm === undefined) return { kind: "refused", reason: "unavailable" };
+    if (projectedForm === undefined) {
+      logFlowRefusal("FORM_CONTINUATION_FORM_NOT_PROJECTED");
+      return { kind: "refused", reason: "unavailable" };
+    }
     if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
     const values = await dependencies.resolveFormValues({
       service: referenceChoices,
@@ -1121,7 +1149,10 @@ export async function invokeInstalledFlow(
       values: answer.values,
       ...(answer.choiceEvidence === undefined ? {} : { evidence: answer.choiceEvidence }),
     });
-    if (values === undefined) return { kind: "refused", reason: "unavailable" };
+    if (values === undefined) {
+      logFlowRefusal("FORM_CONTINUATION_VALUES_NOT_RESOLVED");
+      return { kind: "refused", reason: "unavailable" };
+    }
     return pageFormRequests.resume(session, selection, {
       ...request,
       answer: { kind: "submit", values },
@@ -1138,7 +1169,10 @@ export async function invokeInstalledFlow(
   const bindingInstallation =
     invocation.kind === "binding" ? await readInstalled(identity.session, selection) : undefined;
   if (invocation.kind === "binding") {
-    if (bindingInstallation === undefined) return { kind: "refused" };
+    if (bindingInstallation === undefined) {
+      logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
+      return { kind: "refused" };
+    }
     const binding = bindingInstallation.bindings.find(
       (candidate) => candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
     );
@@ -1147,8 +1181,10 @@ export async function invokeInstalledFlow(
     if (
       guided !== undefined &&
       (guided === null || !guided.summary || binding?.event !== "form_submit")
-    )
+    ) {
+      logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
       return { kind: "refused" };
+    }
   }
 
   const adaptFormSubmit = createPrivateFormSubmitAdapter();

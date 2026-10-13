@@ -87,6 +87,7 @@ import {
 } from "./reference-choice";
 import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
 import { readPlacement } from "./placement-reader";
+import { projectPageWebMcpTools } from "./webmcp-projection";
 
 export const requestDependencies = (): HumanOrganizationRequestDependencies =>
   humanOrganizationRequestDependencies();
@@ -170,9 +171,10 @@ export const loadApplicationPageInternal = async (
   // The page capability projection is authoritative, but its derived choice settings still
   // contain every declared option. Work on a copy so gated options never reach the browser.
   const page = structuredClone(projectedPage.value);
-  const bodyContentAvailable = pageDefinition.type === "guided_form"
-    ? undefined
-    : projectedBodyContentAvailable(pageDefinition, application.content.shells, page);
+  const bodyContentAvailable =
+    pageDefinition.type === "guided_form"
+      ? undefined
+      : projectedBodyContentAvailable(pageDefinition, application.content.shells, page);
   const allPlacements = collectPlacements(page);
   if (boardContinuation !== undefined) {
     const targets = allPlacements.filter(({ placementId }) =>
@@ -272,7 +274,7 @@ export const loadApplicationPageInternal = async (
       for (const field of recordType.fields) {
         if (
           !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
-          field.type !== "several_choices" && field.type !== "choice"
+          (field.type !== "several_choices" && field.type !== "choice")
         )
           continue;
         for (const option of field.settings.options) {
@@ -378,7 +380,8 @@ export const loadApplicationPageInternal = async (
     },
   });
   const applicationPageLinks = createApplicationPageLinkReader({
-    tenantShortName: address.tenantShortName, organizationShortName: address.organizationShortName,
+    tenantShortName: address.tenantShortName,
+    organizationShortName: address.organizationShortName,
   });
   const readConcurrently = async <Input, Output>(
     candidates: readonly Input[],
@@ -500,8 +503,7 @@ export const loadApplicationPageInternal = async (
       if (editFormId === undefined) continue;
       if (
         selectedForProjection.has(editFormId.toLowerCase()) ||
-        (isEditFieldPlacement(placement) &&
-          selectedForProjection.has(placementId.toLowerCase()))
+        (isEditFieldPlacement(placement) && selectedForProjection.has(placementId.toLowerCase()))
       ) {
         selectedForProjection.add(editFormId.toLowerCase());
         for (const entry of allPlacements)
@@ -619,8 +621,9 @@ export const loadApplicationPageInternal = async (
   // the Record writer still locks and rechecks the selected membership at save time.
   const ownershipByRecordType = new Map(
     context.releaseSet.modules.flatMap((module) =>
-      module.content.recordTypes.map((recordType) =>
-        [String(recordType.recordTypeId).toLowerCase(), recordType.ownershipMode] as const,
+      module.content.recordTypes.map(
+        (recordType) =>
+          [String(recordType.recordTypeId).toLowerCase(), recordType.ownershipMode] as const,
       ),
     ),
   );
@@ -631,37 +634,51 @@ export const loadApplicationPageInternal = async (
       visited.add(id.toLowerCase());
       const flow = flowsById.get(id.toLowerCase());
       if (flow === undefined) return false;
-      const visitTasks = (tasks: readonly FlowTask[]): boolean => tasks.some((task) => {
-        const properties = "properties" in task ? task.properties : undefined;
-        const recordType = properties?.record_type;
-        if (task.type === "record.save" && properties !== undefined &&
-            !Object.hasOwn(properties, "record") && isRecord(recordType) &&
-            recordType.kind === "literal" && isRecord(recordType.literal) &&
+      const visitTasks = (tasks: readonly FlowTask[]): boolean =>
+        tasks.some((task) => {
+          const properties = "properties" in task ? task.properties : undefined;
+          const recordType = properties?.record_type;
+          if (
+            task.type === "record.save" &&
+            properties !== undefined &&
+            !Object.hasOwn(properties, "record") &&
+            isRecord(recordType) &&
+            recordType.kind === "literal" &&
+            isRecord(recordType.literal) &&
             recordType.literal.type === "text" &&
             typeof recordType.literal.value === "string" &&
-            ownershipByRecordType.get(recordType.literal.value.toLowerCase()) === "group")
-          return true;
-        if (task.type === "run_flow" &&
-            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId)))
-          return true;
-        return flowTaskChildLists(task).some((child) => visitTasks(child.tasks));
-      });
+            ownershipByRecordType.get(recordType.literal.value.toLowerCase()) === "group"
+          )
+            return true;
+          if (
+            task.type === "run_flow" &&
+            visitFlow(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId))
+          )
+            return true;
+          return flowTaskChildLists(task).some((child) => visitTasks(child.tasks));
+        });
       return visitTasks(flow.tasks) || visitTasks(flow.errors) || visitTasks(flow.finally);
     };
     return visitFlow(flowId);
   };
   const groupCreateBindings = placements.flatMap(({ placementId, placement }) => {
     const block = placement.block;
-    if (!isRecord(block) || typeof block.blockId !== "string" ||
-        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)) return [];
+    if (
+      !isRecord(block) ||
+      typeof block.blockId !== "string" ||
+      !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+    )
+      return [];
     return (bindings[placementId] ?? [])
-      .filter((binding) => binding.event === "form_submit" &&
-        createsGroupRecord(binding.flowId))
+      .filter((binding) => binding.event === "form_submit" && createsGroupRecord(binding.flowId))
       .map((binding) => ({ formId: placementId, binding }));
   });
   if (groupCreateBindings.length > 0) {
-    if (groupCreateBindings.some(({ binding }) =>
-      !binding.callerInputs.includes("selected_owner_group_id")))
+    if (
+      groupCreateBindings.some(
+        ({ binding }) => !binding.callerInputs.includes("selected_owner_group_id"),
+      )
+    )
       return { kind: "temporarily_unavailable" };
     const choices = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
       session,
@@ -677,7 +694,10 @@ export const loadApplicationPageInternal = async (
     if (choices.value.accessVersion !== page.accessVersion)
       return { kind: "temporarily_unavailable" };
     for (const formId of new Set(groupCreateBindings.map(({ formId }) => formId)))
-      data[formId] = { status: "ready", values: { kind: "form", ownerGroups: choices.value.groups } };
+      data[formId] = {
+        status: "ready",
+        values: { kind: "form", ownerGroups: choices.value.groups },
+      };
   }
 
   // A detail or form page offers its subject to the flows it starts; a public page never does.
@@ -703,24 +723,14 @@ export const loadApplicationPageInternal = async (
     if (subjectCandidate !== undefined) {
       if (subjectRow?.kind === "temporarily_unavailable")
         return { kind: "temporarily_unavailable" };
-      if (subjectRow?.kind !== "read" || subject === undefined)
-        return { kind: "unavailable" };
+      if (subjectRow?.kind !== "read" || subject === undefined) return { kind: "unavailable" };
     }
     const recordType = getGuidedFormRecordType(pageDefinition, context.releaseSet.modules);
     if (recordType === undefined) return { kind: "unavailable" };
     const shells = context.releaseSet.application.content.shells;
-    const declaredStepFields = getGuidedFormStepFields(
-      pageDefinition,
-      recordType,
-      shells,
-    );
+    const declaredStepFields = getGuidedFormStepFields(pageDefinition, recordType, shells);
     const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page, shells);
-    const stepFields = getGuidedFormStepFields(
-      pageDefinition,
-      recordType,
-      shells,
-      page,
-    );
+    const stepFields = getGuidedFormStepFields(pageDefinition, recordType, shells, page);
     const flowId = getGuidedFormFlowId(page, application.content.flowBindings, shells);
     if (
       declaredStepFields === undefined ||
@@ -752,11 +762,7 @@ export const loadApplicationPageInternal = async (
     const values = visibleGuidedFormValues(openedDraft.draft, stepFields);
     const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
     if (computedStepId === undefined) return { kind: "unavailable" };
-    const activeStepId = earlierGuidedStepId(
-      stepFields,
-      computedStepId,
-      first(parameters.step),
-    );
+    const activeStepId = earlierGuidedStepId(stepFields, computedStepId, first(parameters.step));
     Object.assign(data, guidedFormInputData(page, recordType, values, dateTimeZones));
     guidedForm = {
       draftId: String(openedDraft.draft.draftId),
@@ -806,17 +812,22 @@ export const loadApplicationPageInternal = async (
       const projected: Record<string, PageDataState> = {};
       let complete = true;
       for (const entry of fields) {
-        let projectedField: Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
+        let projectedField:
+          Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
         if (isUnboundReferenceChoicePlacement(entry.placement)) {
           const firstPage = referenceChoiceFirstPages.get(entry.placementId);
-          const definition = firstPage === undefined
-            ? undefined
-            : subjectRecordType.fields.find((candidate) => candidate.key === firstPage.field.fieldKey);
-          const valueKey = definition === undefined
-            ? undefined
-            : Object.keys(subjectRow.row.values).find((key) =>
-                sameId(key, String(definition.fieldId)),
-              );
+          const definition =
+            firstPage === undefined
+              ? undefined
+              : subjectRecordType.fields.find(
+                  (candidate) => candidate.key === firstPage.field.fieldKey,
+                );
+          const valueKey =
+            definition === undefined
+              ? undefined
+              : Object.keys(subjectRow.row.values).find((key) =>
+                  sameId(key, String(definition.fieldId)),
+                );
           const parsedValueFieldId =
             valueKey === undefined ? undefined : fieldIdSchema.safeParse(valueKey);
           projectedField = await projectSelectedReferenceChoiceEditField({
@@ -856,64 +867,84 @@ export const loadApplicationPageInternal = async (
   }
 
   if (subjectUnreadable) return { kind: "unavailable" };
+  if (typeof page.accessVersion !== "number" || !Number.isSafeInteger(page.accessVersion))
+    throw new Error("APPLICATION_PAGE_ACCESS_VERSION_UNAVAILABLE");
   const permittedKeys = new Set(address.application.pageKeys);
-  const applicationShellId = "shellId" in pageDefinition.composition
-    ? pageDefinition.composition.shellId
-    : undefined;
-  const applicationShell = applicationShellId === undefined
-    ? undefined
-    : application.content.shells.find((candidate) => sameId(candidate.shellId, applicationShellId));
+  const applicationShellId =
+    "shellId" in pageDefinition.composition ? pageDefinition.composition.shellId : undefined;
+  const applicationShell =
+    applicationShellId === undefined
+      ? undefined
+      : application.content.shells.find((candidate) =>
+          sameId(candidate.shellId, applicationShellId),
+        );
   if (applicationShellId !== undefined && applicationShell === undefined)
-    throw new Error(`Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`);
+    throw new Error(
+      `Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`,
+    );
   const model: ApplicationPageModel = {
+    page,
+    pageId: pageDefinition.pageId,
+    pageName: pageDefinition.name,
+    shells: application.content.shells,
+    ...(applicationShell === undefined ? {} : { applicationShell }),
+    applicationName: address.application.name,
+    applicationHomePageKey: address.application.homePageKey,
+    searchEnabled: application.content.search?.enabled === true,
+    availableApplications: address.read.applications.map((candidate) => ({
+      key: candidate.key,
+      name: candidate.name,
+      homePageKey: candidate.homePageKey,
+    })),
+    theme: application.content.theme,
+    navigation: navigation.value,
+    ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
+    accessVersion: page.accessVersion,
+    webMcpTools: projectPageWebMcpTools({
       page,
-      pageId: pageDefinition.pageId,
-      pageName: pageDefinition.name,
-      shells: application.content.shells,
-      ...(applicationShell === undefined ? {} : { applicationShell }),
-      applicationName: address.application.name,
-      applicationHomePageKey: address.application.homePageKey,
-      searchEnabled: application.content.search?.enabled === true,
-      availableApplications: address.read.applications.map((candidate) => ({
-        key: candidate.key,
-        name: candidate.name,
-        homePageKey: candidate.homePageKey,
-      })),
-      theme: application.content.theme,
-      navigation: navigation.value,
-      ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
-      data,
+      ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),
       bindings,
-      refreshPlacementsByBinding,
-      editFormBaselines,
-      referenceChoiceInputs,
-      ...(guidedForm === undefined ? {} : { guidedForm }),
-      pages: application.content.pages
-        .filter((candidate) => permittedKeys.has(candidate.key))
-        .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
-      ...(subject === undefined ? {} : { subject }),
-      ...(adoptionTarget !== undefined &&
-      adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
-        ? {
-            adoption: {
-              offeredReleaseRevision: adoptionTarget.currentReleaseRevision,
-              offeredReleaseVersion: adoptionTarget.currentReleaseVersion,
-              installedReleaseRevision: context.applicationReleaseRevision,
-            },
-          }
-        : {}),
-      invocation: {
-        tenantShortName: address.tenantShortName,
-        organizationShortName: address.organizationShortName,
-        applicationKey: address.application.key,
-        pageKey: address.pageKey,
-        installationRevision: context.applicationReleaseRevision,
-        releaseKey: [
-          application.releaseVersion,
-          application.contentFingerprint,
-          application.resolutionFingerprint,
-        ].join(":"),
-      },
+      applicationBindings: application.content.flowBindings,
+      toolBundle: application.toolBundle,
+      applicationRootId: String(application.rootId),
+      applicationKey: address.application.key,
+      permittedApplications: address.read.applications.map((candidate) => ({
+        applicationRootId: candidate.applicationRootId,
+        key: candidate.key,
+      })),
+    }),
+    data,
+    bindings,
+    refreshPlacementsByBinding,
+    editFormBaselines,
+    referenceChoiceInputs,
+    ...(guidedForm === undefined ? {} : { guidedForm }),
+    pages: application.content.pages
+      .filter((candidate) => permittedKeys.has(candidate.key))
+      .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
+    ...(subject === undefined ? {} : { subject }),
+    ...(adoptionTarget !== undefined &&
+    adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
+      ? {
+          adoption: {
+            offeredReleaseRevision: adoptionTarget.currentReleaseRevision,
+            offeredReleaseVersion: adoptionTarget.currentReleaseVersion,
+            installedReleaseRevision: context.applicationReleaseRevision,
+          },
+        }
+      : {}),
+    invocation: {
+      tenantShortName: address.tenantShortName,
+      organizationShortName: address.organizationShortName,
+      applicationKey: address.application.key,
+      pageKey: address.pageKey,
+      installationRevision: context.applicationReleaseRevision,
+      releaseKey: [
+        application.releaseVersion,
+        application.contentFingerprint,
+        application.resolutionFingerprint,
+      ].join(":"),
+    },
   };
   return { kind: "available", model };
 };

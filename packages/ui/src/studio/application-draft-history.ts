@@ -24,10 +24,18 @@ export interface StudioApplicationDefinitionDraftPort {
   saveDraft(command: StudioApplicationDraftSaveCommand): Promise<StoredDefinitionDraft>;
 }
 
+/** What the person can act on when a save is refused; absent when the writer gave no reason. */
+export type StudioApplicationDraftRefusalReason = "permission_missing" | "source_invalid" | "context_changed" | "session_ended";
+export type StudioApplicationDraftConflictReason =
+  | "draft_changed"
+  | "key_exists"
+  | "alias_conflict"
+  | "draft_missing";
+
 export type StudioApplicationDraftSaveOutcome =
   | Readonly<{ kind: "saved"; draftRevision: number }>
-  | Readonly<{ kind: "conflict" }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "conflict"; reason?: StudioApplicationDraftConflictReason }>
+  | Readonly<{ kind: "refused"; reason?: StudioApplicationDraftRefusalReason }>
   | Readonly<{ kind: "failed" }>
   | Readonly<{ kind: "busy" }>;
 
@@ -120,8 +128,26 @@ const saveFailureOutcome = (error: unknown): StudioApplicationDraftSaveOutcome =
     error !== null && typeof error === "object" && "code" in error && typeof error.code === "string"
       ? error.code
       : undefined;
-  if (code === "DEFINITION_DRAFT_STALE_OR_MISSING") return Object.freeze({ kind: "conflict" });
-  if (code === "DEFINITION_CONTEXT_REFUSED") return Object.freeze({ kind: "refused" });
+  const reason =
+    error !== null && typeof error === "object" && "reason" in error ? error.reason : undefined;
+  if (code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+    return Object.freeze({
+      kind: "conflict",
+      ...(reason === "draft_changed" ||
+      reason === "key_exists" ||
+      reason === "alias_conflict" ||
+      reason === "draft_missing"
+        ? { reason }
+        : {}),
+    });
+  if (code === "DEFINITION_CONTEXT_REFUSED")
+    return Object.freeze({
+      kind: "refused",
+      ...(reason === "permission_missing" || reason === "source_invalid" || reason === "context_changed" ||
+        reason === "session_ended"
+        ? { reason }
+        : {}),
+    });
   return Object.freeze({ kind: "failed" });
 };
 

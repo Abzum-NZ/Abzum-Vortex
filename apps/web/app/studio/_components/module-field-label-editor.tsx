@@ -8,6 +8,7 @@ import { canonicalJson, labelSchema, sameId, storedModuleDefinitionDraftSchema }
 import type { StoredModuleDefinitionDraft } from "@web/platform-server";
 import type { StudioModuleFieldDescriptor, StudioModuleFieldLabelResult } from "../../_lib/studio-module-field-label";
 import { reopenModuleFieldLabel, saveModuleFieldLabel } from "../module-field-label-actions";
+import { moduleSaveRefusal } from "./studio-refusal-messages";
 
 const inputClass = "w-full";
 const buttonClass = "";
@@ -99,8 +100,9 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
       } else if (result.kind === "validation_failed") {
         setValidation(result); setMessage("The label could not be saved. Correct the located validation feedback; your pending label is preserved.");
       } else setMessage(result.kind === "conflict"
-        ? "The Module draft changed. Your pending label is preserved. Reopen explicitly before retrying."
-        : result.kind === "refused" ? "This save was refused. Your pending label is preserved."
+        ? (result.reason === "draft_missing" ? "The Module draft no longer exists. Your pending label is preserved."
+          : "The Module draft changed. Your pending label is preserved. Reopen explicitly before retrying.")
+        : result.kind === "refused" ? `${moduleSaveRefusal(result.reason)} Your pending label is preserved.`
           : "The save could not be verified. Your pending label is preserved.");
     } catch {
       if (isCurrent()) setMessage("The save could not be verified. Your pending label is preserved.");

@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import {
+  describeFailure,
   correlationIdSchema,
   identityIdSchema,
   isLoopbackHostname,
@@ -241,8 +242,10 @@ export const createIdentityAuthorityDisablement = (
           correlationId: recordedCorrelationId.data,
           replayed: false,
         };
-      } catch {
-        // No provider message, key or database detail leaves this boundary.
+      } catch (error) {
+        // No provider message, key or database detail leaves this boundary; the log carries only
+        // the safe description.
+        console.error(`[identity] authority disablement failed: ${describeFailure(error)}`);
         return { outcome: "refused", code: "authority_unavailable" };
       }
     },

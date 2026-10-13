@@ -913,8 +913,15 @@ const safeRepositoryOperation = async <Result>(
       case "40001":
       case "23505":
         throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING", { cause: error });
-      case "42501":
-        throw new DefinitionError("DEFINITION_ORGANIZATION_MISMATCH", { cause: error });
+      case "42501": {
+        // One SQLSTATE covers two refusals; the database message names which one.
+        const message = error instanceof Error ? error.message : "";
+        if (message.includes("does not belong to the context organization"))
+          throw new DefinitionError("DEFINITION_ORGANIZATION_MISMATCH", { cause: error });
+        if (message.includes("publication authority is unavailable"))
+          throw new DefinitionError("DEFINITION_PUBLICATION_AUTHORITY_UNAVAILABLE", { cause: error });
+        throw unexpectedDefinitionFailure("DEFINITION_PUBLICATION_FAILED", error, "publication repository");
+      }
       default:
         throw unexpectedDefinitionFailure(
           "DEFINITION_PUBLICATION_FAILED",

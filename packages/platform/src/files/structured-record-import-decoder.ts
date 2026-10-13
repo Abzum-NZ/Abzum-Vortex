@@ -304,7 +304,8 @@ const isPlainJsonObject = (value: unknown): value is Record<string, unknown> => 
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   try {
     return Object.getPrototypeOf(value) === Object.prototype;
-  } catch {
+  } catch (error) {
+    console.error("FILE_IMPORT_VALUE_NOT_INSPECTABLE", { cause: error });
     return false;
   }
 };

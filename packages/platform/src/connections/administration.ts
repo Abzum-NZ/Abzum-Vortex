@@ -4,6 +4,7 @@ import {
   activityIdSchema,
   applicationRootIdSchema,
   archiveDestinationReferenceSchema,
+  describeFailure,
   connectionInstanceIdSchema,
   connectionTypeIdSchema,
   organizationIdSchema,
@@ -114,15 +115,27 @@ const refusalMessages: Readonly<Record<ConnectionAdministrationRefusalCode, stri
   administration_unavailable: "Connection administration is unavailable",
 });
 
-const refuse = (reasonCode: ConnectionAdministrationRefusalCode): ConnectionAdministrationResult =>
-  Object.freeze({ outcome: "refused", reasonCode, message: refusalMessages[reasonCode] });
+/** One log line per refusal: a stable code from the reason, plus the failure's class and code. */
+const refuse = (
+  reasonCode: ConnectionAdministrationRefusalCode,
+  cause?: unknown,
+): ConnectionAdministrationResult => {
+  console.error(
+    `[connection] administration refused CONNECTION_ADMIN_${reasonCode.toUpperCase()}${
+      cause === undefined ? "" : `: ${describeFailure(cause)}`
+    }`,
+  );
+  return Object.freeze({ outcome: "refused", reasonCode, message: refusalMessages[reasonCode] });
+};
 
-const noAdapterAvailable = (): ConnectionAdministrationResult =>
-  Object.freeze({
+const noAdapterAvailable = (): ConnectionAdministrationResult => {
+  console.error("[connection] administration refused CONNECTION_ADMIN_NO_ADAPTER_AVAILABLE");
+  return Object.freeze({
     outcome: "refused",
     reasonCode: "connection_unavailable",
     message: "No adapter available",
   });
+};
 
 class SecretStoreFailure extends Error {}
 
@@ -352,8 +365,8 @@ export async function administerConnection(
 
   try {
     await transaction.query`savepoint connection_administration`;
-  } catch {
-    return refuse("administration_unavailable");
+  } catch (error) {
+    return refuse("administration_unavailable", error);
   }
 
   try {
@@ -364,9 +377,12 @@ export async function administerConnection(
     try {
       await transaction.query`rollback to savepoint connection_administration`;
       await transaction.query`release savepoint connection_administration`;
-    } catch {
+    } catch (rollbackError) {
       // The caller's transaction is no longer usable; its runner rolls it back.
+      console.error(
+        `[connection] administration savepoint rollback failed CONNECTION_ADMIN_ROLLBACK_FAILED: ${describeFailure(rollbackError)}`,
+      );
     }
-    return refuse(refusalForFailure(error));
+    return refuse(refusalForFailure(error), error);
   }
 }

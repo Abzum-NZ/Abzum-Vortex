@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
+  describeFailure,
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
   flowRefusalFeedbackSchema,
@@ -30,7 +31,10 @@ import {
   type OrganizationSelectionCandidate,
   type SafeFlowResultDescriptor,
 } from "../schema";
-import { FORM_CONTAINER_BLOCK_RELEASE, PLATFORM_BLOCK_RELEASES } from "./application-composition-catalogue";
+import {
+  FORM_CONTAINER_BLOCK_RELEASE,
+  PLATFORM_BLOCK_RELEASES,
+} from "./application-composition-catalogue";
 import type {
   FlowNamedAction,
   FlowOrchestrator,
@@ -185,6 +189,14 @@ export type FlowBindingEndpointResult =
   | Readonly<{ kind: "refused" }>;
 
 const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused" });
+
+/** Logs one flow-binding refusal with its stable reason code and cause, then returns the neutral refusal. */
+const refuse = (code: string, cause?: unknown): FlowBindingEndpointResult => {
+  console.error(
+    `[flows] binding invoke refused ${code}${cause === undefined ? "" : `: ${describeFailure(cause)}`}`,
+  );
+  return refused;
+};
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
@@ -403,7 +415,8 @@ const selectedRecordInputSchema = z
 const withinSupplied = (candidate: unknown): boolean => {
   try {
     return (JSON.stringify(candidate) ?? "").length <= maximumSuppliedCharacters;
-  } catch {
+  } catch (error) {
+    console.error(`[flows] binding invoke input not serialisable: ${describeFailure(error)}`);
     return false;
   }
 };
@@ -710,20 +723,27 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const session = identitySessionSchema.safeParse(sessionCandidate);
         const selection = organizationSelectionCandidateSchema.safeParse(selectionCandidate);
         const invocation = flowBindingInvocationSchema.safeParse(invocationCandidate);
-        if (!session.success || !selection.success || !invocation.success) return refused;
+        if (!session.success) return refuse("FLOW_INVOKE_SESSION_INVALID", session.error);
+        if (!selection.success) return refuse("FLOW_INVOKE_SELECTION_INVALID", selection.error);
+        if (!invocation.success) return refuse("FLOW_INVOKE_REQUEST_INVALID", invocation.error);
         const request = invocation.data;
         if (!withinSupplied(request.kind === "binding" ? request.callerInputs : request.answer))
-          return refused;
+          return refuse("FLOW_INVOKE_INPUT_TOO_LARGE");
 
         const installation = await dependencies.readInstallation(session.data, selection.data);
         if (
           installation === undefined ||
           !sameId(installation.organizationId, selection.data.organizationId)
         )
-          return refused;
+          return refuse(
+            installation === undefined
+              ? "FLOW_INVOKE_INSTALLATION_NOT_FOUND"
+              : "FLOW_INVOKE_INSTALLATION_ORGANIZATION_MISMATCH",
+          );
         if (request.installationRevision !== installation.installationRevision)
           return { kind: "reload", installationRevision: installation.installationRevision };
-        if (request.releaseKey !== installation.releaseKey) return refused;
+        if (request.releaseKey !== installation.releaseKey)
+          return refuse("FLOW_INVOKE_RELEASE_MISMATCH");
 
         const release: FlowRelease = {
           releaseKey: installation.releaseKey,
@@ -743,14 +763,16 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           // A continuation resumes only a flow the active installation still binds: a run started
           // from a binding that a newer installation withdrew is not resumed.
           if (!installation.bindings.some((entry) => sameId(entry.flow.flowId, request.flowId)))
-            return refused;
+            return refuse("FLOW_INVOKE_CONTINUATION_FLOW_NOT_BOUND");
           const target = request.target;
           // #588: an exact paused target always goes to the #544 interface, the one place that
           // compares the installation, release, flow, node, form and receipt with trusted state; a
           // stale target comes back as a reload and a forged one as the neutral refusal.
           if (target !== undefined) {
-            if (dependencies.continueForm === undefined || !sameId(target.flowId, request.flowId))
-              return refused;
+            if (dependencies.continueForm === undefined)
+              return refuse("FLOW_INVOKE_FORM_CONTINUATION_UNAVAILABLE");
+            if (!sameId(target.flowId, request.flowId))
+              return refuse("FLOW_INVOKE_CONTINUATION_TARGET_FLOW_MISMATCH");
             const outcome = await dependencies.continueForm(session.data, selection.data, {
               target,
               continuation: request.continuation,
@@ -764,7 +786,8 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           }
           // A form answer must pass through the paused-target adapter, which resolves every
           // reference-choice key before the flow sees the submitted values.
-          if (request.answer.kind === "submit") return refused;
+          if (request.answer.kind === "submit")
+            return refuse("FLOW_INVOKE_FORM_ANSWER_WITHOUT_TARGET");
           const expectation: FlowRunExpectation = {
             releaseKey: installation.releaseKey,
             ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
@@ -796,7 +819,11 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           matchingBindings.length !== 1 ||
           !sameId(matchingBindings[0]!.flow.flowId, request.flowId)
         )
-          return refused;
+          return refuse(
+            matchingBindings.length !== 1
+              ? "FLOW_INVOKE_BINDING_NOT_FOUND"
+              : "FLOW_INVOKE_BINDING_FLOW_MISMATCH",
+          );
         const binding = matchingBindings[0]!;
 
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
@@ -807,19 +834,20 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             request.subject,
             installation,
           );
-          if (adapted === undefined || !isRecord(adapted)) return refused;
+          if (adapted === undefined || !isRecord(adapted))
+            return refuse("FLOW_INVOKE_FORM_SUBMIT_NOT_ADAPTED");
           callerInputs = adapted;
         }
         const selectedRecordReadInputs =
           installation.selectedRecordReadInputs?.get(String(binding.flow.flowId).toLowerCase()) ??
           new Map<string, string>();
         const boundInputs = bindingInputs(binding, callerInputs, selectedRecordReadInputs);
-        if (boundInputs === undefined) return refused;
+        if (boundInputs === undefined) return refuse("FLOW_INVOKE_CALLER_INPUTS_NOT_BOUND");
         const inputs = referenceInputsAsRecordIds(
           installation.flows.get(String(binding.flow.flowId)),
           boundInputs,
         );
-        if (inputs === undefined) return refused;
+        if (inputs === undefined) return refuse("FLOW_INVOKE_REFERENCE_INPUTS_REJECTED");
 
         const runId = runIdForClick(
           session.data,
@@ -841,8 +869,8 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           binding,
           installation,
         });
-      } catch {
-        return refused;
+      } catch (error) {
+        return refuse("FLOW_INVOKE_FAILED", error);
       }
     },
   });

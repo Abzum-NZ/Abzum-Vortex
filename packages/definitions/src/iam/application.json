@@ -5,7 +5,7 @@
   "kind": "application",
   "body": {
     "name": "IAM",
-    "description": "Roles and Groups. People request, review, grant and remove access, and manage eligible and active privileged roles. Effective assignments always come from the protected Access source.",
+    "description": "Roles and Groups. People request, review, grant and remove access, and manage active privileged roles. Effective assignments always come from the protected Access source.",
     "icon": "users",
     "home_page": "iam_overview",
     "search": {
@@ -371,14 +371,6 @@
             "icon":  "grid",
             "page": "iam_assignments",
             "permission": "platform.organization.assignments.read"
-          },
-          {
-            "id": "nav_iam_manage_assignments",
-            "type": "page",
-            "label": "Manage assignments",
-            "icon":  "grid",
-            "page": "iam_manage_assignments",
-            "permission": "platform.organization.assignments.manage"
           }
         ]
       },
@@ -404,14 +396,6 @@
         "label": "Privileged access",
         "icon":  "grid",
         "children": [
-          {
-            "id": "nav_iam_eligible",
-            "type": "page",
-            "label": "Eligible roles",
-            "icon":  "sliders-horizontal",
-            "page": "iam_privileged_eligible",
-            "permission": "platform.organization.roles.read"
-          },
           {
             "id": "nav_iam_active",
             "type": "page",
@@ -3788,104 +3772,6 @@
                 "form_create_custom_role",
                 "button_accept_application_role_template",
                 "form_accept_application_role_template"
-              ]
-            }
-          } }
-        }
-      },
-      {
-        "id": "page_iam_manage_assignments",
-        "key": "iam_manage_assignments",
-        "name": "Manage assignments",
-        "type": "dashboard",
-        "permission": "platform.organization.assignments.manage",
-        "composition": {
-          "shell_kind": "application",
-          "shell": "shell_iam",
-          "content": { "slot_primary": {
-            "placements": {
-              "iam_manage_assignments_heading": {
-                "block": {
-                  "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Manage assignments"
-                  },
-                  "text": {
-                    "kind": "text",
-                    "value": "Assign or end a role assignment, deactivate a role activation, or revoke a delegation authority. Each change runs under your own authority in protected Access, is checked against the revision you read, and is refused if you lack the authority or if it exceeds your delegated scope."
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {}
-              }
-            },
-            "order": {
-              "desktop": [
-                "iam_manage_assignments_heading"
-              ]
-            }
-          } }
-        }
-      },
-      {
-        "id": "page_iam_privileged_eligible",
-        "key": "iam_privileged_eligible",
-        "name": "Eligible roles",
-        "type": "dashboard",
-        "permission": "platform.organization.roles.read",
-        "composition": {
-          "shell_kind": "application",
-          "shell": "shell_iam",
-          "content": { "slot_primary": {
-            "placements": {
-              "iam_privileged_eligible_heading": {
-                "block": {
-                  "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                  "release_version": "1.0.0"
-                },
-                "settings": {
-                  "title": {
-                    "kind": "text",
-                    "value": "Eligible roles"
-                  },
-                  "text": {
-                    "kind": "text",
-                    "value": "Privileged roles the current person may activate are not yet available from a protected read model."
-                  }
-                },
-                "theme_overrides": {},
-                "responsive": {
-                  "desktop": {
-                    "visible": true,
-                    "width": {
-                      "kind": "fill"
-                    },
-                    "height": {
-                      "kind": "content"
-                    }
-                  }
-                },
-                "slots": {}
-              }
-            },
-            "order": {
-              "desktop": [
-                "iam_privileged_eligible_heading"
               ]
             }
           } }
