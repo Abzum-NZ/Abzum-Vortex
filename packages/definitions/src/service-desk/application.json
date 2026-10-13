@@ -1122,11 +1122,13 @@
 
                                                                                                                    }
                                                                                                      },
+        "attachments_sd_case": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Attachments"}, "field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.attachments"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
         "button_edit_case": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.service_desk.case.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                         "desktop": [
                                                                             "content_2",
+                                                                            "attachments_sd_case",
                                                                             "form_sd_case_resolve_frame",
                                                                             "form_sd_case_public_comment_frame",
                                                                             "button_edit_case"
@@ -1429,6 +1431,7 @@
                                                        "content":  {
                                                                    "slot_primary":  {
                                                                     "placements":  {
+        "attachments_sd_article": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Attachments"}, "field": {"kind": "field_reference", "field": "vortex.service_desk.knowledge:article.attachments"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
         "action_sd_article_publish": {
             "block": {
                 "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1550,6 +1553,7 @@
                                                                     "order":  {
                                                                                   "desktop":  [
                                                                                                   "content_5",
+                                                                                                  "attachments_sd_article",
                                                                                                   "action_sd_article_publish"
                                                                                               ]
                                                                               }
