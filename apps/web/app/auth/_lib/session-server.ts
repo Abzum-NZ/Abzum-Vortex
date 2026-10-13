@@ -244,8 +244,16 @@ export const revokeIdentitySession = async (
     });
   }
   try {
-    if (boundary.stage.initialState.kind === "valid")
-      await boundary.client.auth.signOut({ scope: "local" });
+    if (boundary.stage.initialState.kind === "valid") {
+      const signedOut = await boundary.client.auth.signOut({ scope: "local" });
+      if (signedOut.error)
+        mapWebError(signedOut.error, {
+          route: "auth/session",
+          operation: "revoke-provider-session",
+          code: "SESSION_PROVIDER_REVOKE_FAILED",
+          fallback: undefined,
+        });
+    }
   } catch (error) {
     // Revocation is best effort; the cookies are cleared regardless.
     mapWebError(error, {

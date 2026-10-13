@@ -579,7 +579,10 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       let prior: ProtectedNodeEffectReplay;
       try {
         prior = await dependencies.effects.replay(effectKey, context.purpose.operationKey);
-      } catch {
+      } catch (error) {
+        console.error("[flows] protected node effect replay failed EFFECT_STORE_REPLAY_FAILED", {
+          cause: error,
+        });
         return { outcome: "retryable_failure", safeCode: "effect_store_unavailable", nextPollAt: nextPollAt(clock()) };
       }
       if (prior.kind === "unavailable")

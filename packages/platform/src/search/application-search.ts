@@ -87,11 +87,18 @@ export const searchConfiguredApplication = async (input: Readonly<{
 }>): Promise<ApplicationSearchResult> => {
   if (input.configuration === undefined || !input.configuration.enabled) return { kind: "disabled" };
   const parsed = applicationSearchSchema.safeParse(input.configuration);
-  if (!parsed.success || input.scope.applicationRootId === undefined)
+  if (!parsed.success || input.scope.applicationRootId === undefined) {
+    console.error(
+      `[search] refused ${parsed.success ? "SEARCH_APPLICATION_NOT_SCOPED" : "SEARCH_CONFIGURATION_INVALID"}`,
+    );
     return { kind: "refused" };
+  }
   const matches: ApplicationSearchMatch[] = [];
   for (const entry of parsed.data.recordTypes) {
-    if (entry.recordType.state !== "resolved") return { kind: "refused" };
+    if (entry.recordType.state !== "resolved") {
+      console.error("[search] refused SEARCH_RECORD_TYPE_NOT_RESOLVED");
+      return { kind: "refused" };
+    }
     const recordTypeId = String(entry.recordType.recordTypeId);
     for await (const batch of input.candidateBatches(recordTypeId)) {
       const current = new Map<string, ApplicationSearchRecord>();
@@ -116,7 +123,10 @@ export const searchConfiguredApplication = async (input: Readonly<{
           return reads;
         },
       });
-      if (result.outcome === "refused") return { kind: "refused" };
+      if (result.outcome === "refused") {
+        console.error("[search] refused SEARCH_PERMITTED_QUERY_REFUSED");
+        return { kind: "refused" };
+      }
       for (const match of result.matches) {
         const record = current.get(match.candidate.recordId.toLowerCase());
         if (record === undefined) continue;

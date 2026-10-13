@@ -67,7 +67,8 @@ const safeDecodedCellsSchema = z.custom<Readonly<Record<string, unknown>>>((valu
       const descriptor = descriptors[key];
       return descriptor !== undefined && descriptor.enumerable === true && "value" in descriptor;
     });
-  } catch {
+  } catch (error) {
+    console.error("FILE_IMPORT_ROW_CELLS_NOT_INSPECTABLE", { cause: error });
     return false;
   }
 });

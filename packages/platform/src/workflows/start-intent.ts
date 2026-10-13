@@ -221,7 +221,8 @@ export const readCommittedFlowStartIntent = async (
     if (!result.success || result.data.kind !== "available") return undefined;
     if (result.data.intent.intentId.toLowerCase() !== intentId.data.toLowerCase()) return undefined;
     return result.data.intent;
-  } catch {
+  } catch (error) {
+    console.error("[flows] start intent read failed START_INTENT_READ_FAILED", { cause: error });
     return undefined;
   }
 };

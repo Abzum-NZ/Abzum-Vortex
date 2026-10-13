@@ -163,8 +163,9 @@ const releaseQuietly = async (
       ...reservationBinding(reservation),
       duplicateKey: reservationOperationKey("release", reservation),
     });
-  } catch {
+  } catch (error) {
     // The reservation expires; release failure never changes the upload outcome.
+    console.error("UPLOAD_RESERVATION_RELEASE_FAILED", { cause: error });
   }
 };
 

@@ -1206,7 +1206,8 @@ export const cleanupAbandonedUploads = async (
       } else {
         outcomes.push({ fileId: fileRecord.fileId, outcome: "in_progress" });
       }
-    } catch {
+    } catch (error) {
+      console.error("FILE_REMOVAL_SWEEP_FAILED", { fileId: fileRecord.fileId, cause: error });
       outcomes.push({ fileId: fileRecord.fileId, outcome: "failed" });
     }
   }
