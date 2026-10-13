@@ -1,16 +1,13 @@
 import "server-only";
 
 import {
-  createHumanInstalledRuntimeContextLoader,
+  createHumanInstalledPageBundleContextLoader,
   readAddressedApplicationAtAddress,
   requireInstalledRuntimeContext,
   resolvePermittedApplicationAddress,
 } from "@vortex/platform/server";
 import { sameId, type IdentitySession } from "@vortex/platform/schema";
-import { createDatabaseApplicationBoundReleaseSetService } from "@vortex/platform/server";
-import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
 import { searchInstalledApplication } from "@vortex/platform/server";
-import { installedReleaseCatalogue } from "./definition-catalogue";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { applicationPageAddressPath } from "./address-paths";
 import {
@@ -67,12 +64,8 @@ export const loadApplicationSearch = async (
         const scopedApplicationRootId = scope.applicationRootId;
         if (scopedApplicationRootId === undefined) throw new Error("SEARCH_SCOPE_UNAVAILABLE");
         const context = requireInstalledRuntimeContext(
-          await createHumanInstalledRuntimeContextLoader({
-            activeInstallationReader: createActiveApplicationInstallationRepository(transaction),
-            releaseSetReader: createDatabaseApplicationBoundReleaseSetService(
-              installedReleaseCatalogue,
-              transaction,
-            ),
+          await createHumanInstalledPageBundleContextLoader({
+            transaction,
             scope: {
               organizationId: scope.organizationId,
               applicationRootId: scopedApplicationRootId,

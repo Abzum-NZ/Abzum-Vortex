@@ -305,11 +305,7 @@ const directFlowInputName = (candidate: unknown): string | undefined => {
   return candidate.reference.name;
 };
 
-const operationInputFlowInput = (
-  flow: FlowDefinition,
-  taskId: string,
-  operationInput: string,
-): string | undefined => {
+const uniqueFlowTask = (flow: FlowDefinition, taskId: string): FlowTask | undefined => {
   const matches: FlowTask[] = [];
   const visit = (tasks: readonly FlowTask[]): void => {
     for (const task of tasks) {
@@ -320,9 +316,16 @@ const operationInputFlowInput = (
   visit(flow.tasks);
   visit(flow.errors);
   visit(flow.finally);
-  if (matches.length !== 1 || matches[0]!.type !== "operation.call") return undefined;
+  return matches.length === 1 ? matches[0] : undefined;
+};
 
-  const matchedTask = matches[0]!;
+const operationInputFlowInput = (
+  flow: FlowDefinition,
+  taskId: string,
+  operationInput: string,
+): string | undefined => {
+  const matchedTask = uniqueFlowTask(flow, taskId);
+  if (matchedTask === undefined || matchedTask.type !== "operation.call") return undefined;
   if (!isRecord(matchedTask.properties)) return undefined;
   const properties = matchedTask.properties;
   const taskInputs = properties.inputs;
@@ -373,6 +376,26 @@ const submittedFieldForDiagnostic = (
     : undefined;
 };
 
+// A located correction names a form field only when the failed save takes its whole `values` from
+// the binding's caller `values` input, which the form adapter fills from exactly those fields.
+const saveValuesComeFromForm = (
+  taskId: string,
+  flowId: string,
+  binding: ComponentFlowBinding,
+  installation: InstalledFlowBindings,
+): boolean => {
+  if (!sameId(binding.flow.flowId, flowId)) return false;
+  const parsedFlow = flowSchema.safeParse(installation.flows.get(flowId));
+  if (!parsedFlow.success) return false;
+  const task = uniqueFlowTask(parsedFlow.data, taskId);
+  if (task === undefined || task.type !== "record.save" || !isRecord(task.properties)) return false;
+  const flowInputName = directFlowInputName(task.properties.values);
+  if (flowInputName === undefined || !Object.hasOwn(parsedFlow.data.inputs, flowInputName))
+    return false;
+  const bindingInput = binding.flow.inputs[flowInputName];
+  return isRecord(bindingInput) && bindingInput.kind === "caller" && bindingInput.name === "values";
+};
+
 const surfaceDiagnostic = (
   diagnostic: FlowRefusalFeedback | undefined,
   taskId: string | undefined,
@@ -390,9 +413,21 @@ const surfaceDiagnostic = (
     binding,
     installation,
   );
+  // A located correction is kept only for a field this exact form submit binding visibly owns.
+  const corrections =
+    parsed.data.corrections === undefined ||
+    binding === undefined ||
+    binding.event !== "form_submit" ||
+    taskId === undefined ||
+    !saveValuesComeFromForm(taskId, flowId, binding, installation)
+      ? []
+      : parsed.data.corrections.filter((correction) =>
+          hasVisibleOwningFormField(installation, binding.controlId, correction.field),
+        );
   return flowRefusalFeedbackSchema.parse({
     code: parsed.data.code,
     ...(submittedField === undefined ? {} : { submittedField }),
+    ...(corrections.length === 0 ? {} : { corrections }),
   });
 };
 

@@ -119,6 +119,9 @@ export function useApplyDispatch({
                   kind: "refusal" as const,
                   code: diagnostic.code,
                   ...(fieldLabel === undefined ? {} : { fieldLabel }),
+                  ...(diagnostic.corrections === undefined
+                    ? {}
+                    : { corrections: diagnostic.corrections }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {

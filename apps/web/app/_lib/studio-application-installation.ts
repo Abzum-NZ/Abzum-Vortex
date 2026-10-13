@@ -18,7 +18,6 @@ import {
   moduleRootIdSchema,
   organizationIdSchema,
   sameId,
-  systemApplicationBoundReleaseSetResultSchema,
   type ActiveApplicationInstallationEvidence,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
@@ -38,7 +37,6 @@ import {
   firstInstallHistory,
   firstInstallHistoryMatchesDraft,
   firstInstallSelectedIdentity,
-  firstInstallSetMatchesHistory,
   firstInstallState,
   firstInstallUnavailable,
   firstInstallWorkflows,
@@ -63,8 +61,17 @@ import {
   type InstallationHumanContext,
   type InstallationProblemShape,
   initialLifecyclePolicyMatches,
-  readProvisionedSetupAccessDecision,
-  readProvisionedSetupInTransaction as readInstallationProvisionedSetup,
+  completeFirstInstallConnectionRead,
+  firstInstallAppCompletion,
+  readFirstInstallAppState,
+  readFirstInstallCandidateInTransaction,
+  readFirstInstallCurrentRelease,
+  readFirstInstallProvisionedSetupInTransaction,
+  requireFirstInstallSetupUnchanged,
+  visibleLifecyclePolicyBody,
+  visibleProvisionedSetup,
+  type FirstInstallAppState as FirstInstallProvedState,
+  type FirstInstallEnvironment,
   type ProvisionedSetup,
   saveInitialArchiveWorkflowPolicy,
   workflowIsInExactRelease,
@@ -74,7 +81,6 @@ import {
 } from "@vortex/platform/server";
 import type { RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
-  createDatabaseApplicationBoundReleaseSetService,
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabasePreparedInstallationRuntimeSourceService,
   resolveModuleContributions,
@@ -145,6 +151,12 @@ type AuthorizedState = Readonly<{
 }>;
 
 type Problem = InstallationProblemShape;
+
+const firstInstallEnvironment: FirstInstallEnvironment = {
+  catalogue: installedReleaseCatalogue,
+  permissions: platformPermissionSource,
+  containsCustomComponents: releaseSetContainsCustomComponents,
+};
 
 function problem(kind: Problem["kind"], unavailableReason?: Problem["unavailableReason"]): never {
   return installationProblem(unavailableReason ?? kind, kind, unavailableReason);
@@ -826,44 +838,10 @@ const readCurrentFirstInstallCandidate = async (
   const result = await humanOrganizationRequests().runChange(
     session,
     { organizationId: selector.organizationId },
-    async (transaction, scope, issuedAt) => {
-      const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-        organizationId: selector.organizationId,
-      });
-      if (scope.applicationRootId !== undefined) problem("refused");
-      await readInstallationOrdinaryRoot(transaction, selector.rootId);
-      await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
-      await firstInstallHistoryMatchesDraft(
-        transaction, scope, selector, history, inspected.snapshot.definitionKey,
-      );
-      const releaseSet = await readFirstInstallReleaseSet(transaction, installedReleaseCatalogue, selector, context);
-      if (!firstInstallSetMatchesHistory(releaseSet, inspected.metadata, selector) ||
-        releaseSet.application.definitionKey !== inspected.snapshot.definitionKey)
-        problem("conflict");
-      await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
-      await firstInstallHistoryMatchesDraft(
-        transaction, scope, selector, history, inspected.snapshot.definitionKey,
-      );
-      const bindings = await readInstallationBindings(transaction, selector.rootId);
-      const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-        organizationId: selector.organizationId,
-      });
-      if (!same(context, finalContext)) problem("refused");
-      await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
-      await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
-      const draftDeadline = await readInstallationPermissionDeadline(
-          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
-      );
-      const installationDeadlines = await readInstallationAuthorityDeadlines(
-          transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(releaseSet),
-        );
-      const checkedAt = await readInstallationDatabaseTime(transaction);
-      if (Date.parse(checkedAt) >= Math.min(
-        Date.parse(finalContext.expiresAt), Date.parse(draftDeadline),
-        ...installationDeadlines.map((deadline) => Date.parse(deadline)),
-      )) problem("refused");
-      return { releaseSet, bindings };
-    },
+    (transaction, scope, issuedAt) => readFirstInstallCandidateInTransaction(
+      transaction, scope, session, issuedAt, firstInstallEnvironment, selector, history,
+      { definitionKey: inspected.snapshot.definitionKey, metadata: inspected.metadata },
+    ),
   );
   if (result.kind !== "available") problem(result.kind === "unavailable" ? "refused" : "temporarily_unavailable");
   const { releaseSet, bindings } = result.value;
@@ -885,56 +863,10 @@ const readCurrentFirstInstallCandidate = async (
   };
 };
 
-const visiblePolicyBody = (policy: RecordTypeLifecyclePolicy) => {
-  const common = {
-    maxAgeDays: policy.maxAgeDays,
-    maxCount: policy.maxCount,
-    allowUnlimitedAge: policy.allowUnlimitedAge,
-    allowUnlimitedCount: policy.allowUnlimitedCount,
-  };
-  return policy.action === "delete"
-    ? {
-        ...common,
-        action: policy.action,
-        ...(policy.recoveryWindowDays === undefined ? {} : { recoveryWindowDays: policy.recoveryWindowDays }),
-      }
-    : {
-        ...common,
-        action: policy.action,
-        archiveWorkflowId: policy.archiveWorkflowId,
-        expectedWorkflowRevision: policy.expectedWorkflowRevision,
-        archiveConnectionInstanceId: policy.archiveConnectionInstanceId,
-        archiveDestination: policy.archiveDestination,
-        expectedConnectionRevision: policy.expectedConnectionRevision,
-        expectedConnectionHealthOutcome: policy.expectedConnectionHealthOutcome,
-      };
-};
-
-const visibleProvisionedSetup = (
+const visibleProvisionedSetupBody = (
   setup: ProvisionedSetup,
 ): z.infer<typeof studioApplicationFirstInstallSetupSchema> =>
-  studioApplicationFirstInstallSetupSchema.parse({
-    ...setup,
-    targets: setup.targets.map((target) => ({
-      ...target,
-      policy: target.policy.state === "absent" ? target.policy : {
-        ...target.policy,
-        policyBody: visiblePolicyBody(target.policy.policyBody),
-      },
-    })),
-  });
-
-const readProvisionedSetupInTransaction = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-  selector: StudioApplicationFirstInstallSelector,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-): Promise<z.infer<typeof studioApplicationFirstInstallSetupSchema>> =>
-  visibleProvisionedSetup(await readInstallationProvisionedSetup(
-    transaction, scope, session, issuedAt, selector, releaseSet, platformPermissionSource,
-  ));
+  studioApplicationFirstInstallSetupSchema.parse(visibleProvisionedSetup(setup));
 
 const readCurrentProvisionedSetup = async (
   selector: StudioApplicationFirstInstallSelector,
@@ -948,43 +880,16 @@ const readCurrentProvisionedSetup = async (
     { organizationId: selector.organizationId, applicationRootId: selector.rootId },
     async (transaction, scope, issuedAt) => {
       try {
-        const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-          organizationId: selector.organizationId,
-          applicationRootId: selector.rootId,
-        });
-        await readInstallationOrdinaryRoot(transaction, selector.rootId);
-        await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
-        await firstInstallHistoryMatchesDraft(
-          transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
+        return await readFirstInstallProvisionedSetupInTransaction(
+          transaction, scope, session, issuedAt, firstInstallEnvironment, selector, history, expectedReleaseSet,
         );
-        const currentCandidate = await createDatabaseApplicationBoundReleaseSetService(
-          installedReleaseCatalogue,
-          transaction,
-        ).read({ applicationReleaseRevision: selector.releaseRevision });
-        const currentRelease = systemApplicationBoundReleaseSetResultSchema.safeParse(currentCandidate);
-        if (!currentRelease.success ||
-          !sameUuid(currentRelease.data.application.organizationId, selector.organizationId) ||
-          !sameUuid(currentRelease.data.application.rootId, selector.rootId) ||
-          !sameFirstInstallRelease(currentRelease.data, expectedReleaseSet))
-          problem("conflict");
-        await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(currentRelease.data)));
-        const setup = await readProvisionedSetupInTransaction(
-          transaction, scope, session, issuedAt, selector, currentRelease.data,
-        );
-        await firstInstallHistoryMatchesDraft(
-          transaction, scope, selector, history, expectedReleaseSet.application.definitionKey,
-        );
-        await firstInstallAppCompletion(
-          transaction, scope, session, issuedAt, selector, history, currentRelease.data, context,
-        );
-        return setup;
       } catch (error) {
         callbackFailure = error;
         throw error;
       }
     },
   );
-  if (result.kind === "available") return result.value;
+  if (result.kind === "available") return visibleProvisionedSetupBody(result.value);
   if (callbackFailure !== undefined) throw callbackFailure;
   if (result.kind === "unavailable") problem("refused");
   problem("temporarily_unavailable");
@@ -1376,26 +1281,27 @@ export const loadStudioApplicationArchiveOptions = async (
       current,
       query.data.expected,
       async (transaction, _scope, _issuedAt, initial) => {
-        const target = currentTarget(initial.setup, query.data.storageContractId);
+        const target = currentTarget(initial.visibleSetup, query.data.storageContractId);
         if (target.policy.state !== "absent" || target.storageScope !== "application_contained" ||
-          target.applicationRootId === null || !initial.setup.organizationLimits.allowedActions.includes("archive_workflow") ||
-          initial.setup.organizationLimits.allowedArchiveDestinations.length === 0)
+          target.applicationRootId === null || !initial.visibleSetup.organizationLimits.allowedActions.includes("archive_workflow") ||
+          initial.visibleSetup.organizationLimits.allowedArchiveDestinations.length === 0)
           problem("refused");
-        const finalSetup = await readInstallationProvisionedSetup(
-          transaction, _scope, current.session, _issuedAt, query.data.selector, initial.releaseSet, platformPermissionSource
+        const currentRelease = await readFirstInstallCurrentRelease(
+          transaction, firstInstallEnvironment, query.data.selector, initial.releaseSet,
         );
-        if (!same(finalSetup, initial.internalSetup)) problem("conflict");
-        const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, query.data.selector);
-        if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
+        await requireFirstInstallSetupUnchanged(
+          transaction, _scope, current.session, _issuedAt, firstInstallEnvironment, query.data.selector,
+          currentRelease, initial,
+        );
         const retainedFence = await firstInstallAppCompletion(
-          transaction, _scope, current.session, _issuedAt, query.data.selector,
+          transaction, _scope, current.session, _issuedAt, firstInstallEnvironment, query.data.selector,
           query.data.expected.history, currentRelease, initial.context,
         );
         const page = await readInstallationArchiveConnectionOptions(
           transaction,
           query.data.selector.organizationId,
           query.data.selector.rootId,
-          initial.setup.organizationLimits.allowedArchiveDestinations,
+          initial.visibleSetup.organizationLimits.allowedArchiveDestinations,
           query.data.afterConnectionInstanceId,
         );
         await completeFirstInstallConnectionRead(
@@ -1403,6 +1309,7 @@ export const loadStudioApplicationArchiveOptions = async (
           _scope,
           current.session,
           _issuedAt,
+          firstInstallEnvironment,
           query.data.selector,
           query.data.expected.history,
           initial,
@@ -1455,145 +1362,23 @@ const saveDeleteInitialPolicy = async (
   return initialLifecyclePolicyMatches(result.value, initialPolicyTarget(candidate, target), policy);
 };
 
-const readAppScopedFirstInstallReleaseSet = async (
-  transaction: RequestDatabaseTransaction,
-  selector: StudioApplicationFirstInstallSelector,
-): Promise<SystemApplicationBoundReleaseSetResult> => {
-  let candidate: unknown;
-  try {
-    candidate = await createDatabaseApplicationBoundReleaseSetService(
-      installedReleaseCatalogue,
-      transaction,
-    ).read({ applicationReleaseRevision: selector.releaseRevision });
-  } catch (error) {
-    if (!(error instanceof DefinitionError) || error.code === "DEFINITION_READ_FAILED")
-      problem("temporarily_unavailable");
-    problem("refused");
-  }
-  const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
-  if (!parsed.success) throw new FirstInstallUnavailable("setup_unavailable");
-  const releaseSet = parsed.data;
-  if (!sameUuid(releaseSet.application.organizationId, selector.organizationId) ||
-    !sameUuid(releaseSet.application.rootId, selector.rootId) ||
-    releaseSet.application.releaseRevision !== selector.releaseRevision ||
-    releaseSet.modules.length === 0)
-    throw new FirstInstallUnavailable("setup_unavailable");
-  return releaseSet;
-};
-
-const firstInstallAppCompletion = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-  selector: StudioApplicationFirstInstallSelector,
-  history: ReturnType<typeof firstInstallHistory>,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-  initialContext: HumanContext,
-): Promise<Readonly<{ checkedAt: string; minimumValidUntil: string }>> => {
-  await firstInstallHistoryMatchesDraft(
-    transaction, scope, selector, history, releaseSet.application.definitionKey,
-  );
-  await readInstallationOrdinaryRoot(transaction, selector.rootId);
-  await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
-  await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
-  const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-    organizationId: selector.organizationId,
-    applicationRootId: selector.rootId,
-  });
-  if (!same(initialContext, finalContext)) problem("refused");
-  const draftDeadline = await readInstallationPermissionDeadline(
-          transaction, scope, finalContext, platformPermissionSource, "platform.organization.definition_drafts.manage",
-  );
-  const installDeadlines = await readInstallationAuthorityDeadlines(
-          transaction, scope, finalContext, platformPermissionSource, selector.rootId, releaseSetContainsCustomComponents(releaseSet),
-        );
-  const setupDecisions = await Promise.all([
-    readProvisionedSetupAccessDecision(transaction, scope, platformPermissionSource, "platform.organization.applications.install"),
-    readProvisionedSetupAccessDecision(transaction, scope, platformPermissionSource, "platform.organization.applications.install_scope"),
-    readProvisionedSetupAccessDecision(transaction, scope, platformPermissionSource, "platform.organization.record_lifecycle.manage_policy"),
-  ]);
-  const completedAt = await readInstallationDatabaseTime(transaction);
-  const retainedDeadlines = [draftDeadline, ...installDeadlines,
-    ...setupDecisions.map((decision) => decision.validUntil)];
-  let minimumValidUntil = finalContext.expiresAt;
-  for (const deadline of retainedDeadlines) {
-    const deadlineMs = Date.parse(deadline);
-    if (!Number.isFinite(deadlineMs)) problem("refused");
-    if (deadlineMs < Date.parse(minimumValidUntil)) minimumValidUntil = deadline;
-  }
-  const completedAtMs = Date.parse(completedAt);
-  if (!Number.isFinite(completedAtMs) || !Number.isFinite(Date.parse(minimumValidUntil)) ||
-    completedAtMs >= Date.parse(minimumValidUntil) || setupDecisions.some((decision) =>
-    !sameUuid(decision.correlationId, finalContext.correlationId) ||
-    decision.accessVersion !== finalContext.accessVersion ||
-    Date.parse(decision.checkedAt) > completedAtMs)) problem("refused");
-  return { checkedAt: completedAt, minimumValidUntil };
-}
-
-type FirstInstallAppState = Readonly<{
-  context: HumanContext;
-  releaseSet: SystemApplicationBoundReleaseSetResult;
-  bindings: InstallationBindings;
-  setup: z.infer<typeof studioApplicationFirstInstallSetupSchema>;
-  internalSetup: ProvisionedSetup;
+type FirstInstallAppState = FirstInstallProvedState & Readonly<{
+  visibleSetup: z.infer<typeof studioApplicationFirstInstallSetupSchema>;
 }>;
 
-const readFirstInstallAppState = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
+const firstInstallCurrentSnapshotMatches = (
   selector: StudioApplicationFirstInstallSelector,
   expected: StudioApplicationFirstInstallSnapshot,
-): Promise<FirstInstallAppState> => {
-  const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-    organizationId: selector.organizationId,
-    applicationRootId: selector.rootId,
-  });
-  await readInstallationOrdinaryRoot(transaction, selector.rootId);
-  await requireInstallationAuthority(transaction, scope, platformPermissionSource, { kind: "draft_change", rootId: selector.rootId });
-  await firstInstallHistoryMatchesDraft(
-    transaction, scope, selector, expected.history, expected.selected.definitionKey,
-  );
-  const releaseSet = await readAppScopedFirstInstallReleaseSet(transaction, selector);
-  if (!same(firstInstallSelectedIdentity(releaseSet), expected.selected) ||
-    !same(firstInstallWorkflows(releaseSet), expected.workflows)) problem("conflict");
-  await requireInstallationAuthority(transaction, scope, platformPermissionSource, installationOperation(selector.rootId, releaseSetContainsCustomComponents(releaseSet)));
-  const bindings = await readInstallationBindings(transaction, selector.rootId);
-  const state = firstInstallState(selector, releaseSet, bindings);
-  if (state !== "provisioned_inactive") firstInstallUnavailable("installation_incomplete");
-  const internalSetup = await readInstallationProvisionedSetup(
-    transaction, scope, session, issuedAt, selector, releaseSet, platformPermissionSource
-  );
-  const setup = visibleProvisionedSetup(internalSetup);
-  const current = firstInstallSnapshot(selector, expected.history, releaseSet, bindings, state, setup);
-  if (!sameFirstInstallExpectation(expected, current)) problem("conflict");
-  return { context, releaseSet, bindings, setup, internalSetup };
-};
-
-const completeFirstInstallConnectionRead = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-  selector: StudioApplicationFirstInstallSelector,
-  history: ReturnType<typeof firstInstallHistory>,
-  initial: FirstInstallAppState,
-  retainedFence: Awaited<ReturnType<typeof firstInstallAppCompletion>>,
-): Promise<void> => {
-  const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, selector);
-  if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
-  const currentSetup = await readInstallationProvisionedSetup(
-    transaction, scope, session, issuedAt, selector, currentRelease, platformPermissionSource
-  );
-  if (!same(currentSetup, initial.internalSetup)) problem("conflict");
-  const completed = await firstInstallAppCompletion(
-    transaction, scope, session, issuedAt, selector, history, currentRelease, initial.context,
-  );
-  if (Date.parse(completed.checkedAt) >= Date.parse(retainedFence.minimumValidUntil))
-    problem("refused");
-};
+  current: Readonly<{
+    releaseSet: SystemApplicationBoundReleaseSetResult;
+    bindings: InstallationBindings;
+    state: StudioApplicationFirstInstallSnapshot["registrationState"];
+    setup: ProvisionedSetup;
+  }>,
+): boolean => sameFirstInstallExpectation(expected, firstInstallSnapshot(
+  selector, expected.history, current.releaseSet, current.bindings, current.state,
+  visibleProvisionedSetupBody(current.setup),
+));
 
 type FirstInstallTransactionAction<Value> = (
   transaction: RequestDatabaseTransaction,
@@ -1614,15 +1399,18 @@ const runFirstInstallAppTransaction = async <Value>(
     { organizationId: candidate.selector.organizationId, applicationRootId: candidate.selector.rootId },
     async (transaction, scope, issuedAt) => {
       try {
-        const initial = await readFirstInstallAppState(
-          transaction, scope, candidate.session, issuedAt, candidate.selector, expected,
+        const proved = await readFirstInstallAppState(
+          transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, candidate.selector, expected,
+          (current) => firstInstallCurrentSnapshotMatches(candidate.selector, expected, current),
         );
+        const initial: FirstInstallAppState = { ...proved, visibleSetup: visibleProvisionedSetupBody(proved.setup) };
         const value = await action(transaction, scope, issuedAt, initial);
         if (!actionIsFinalDatabaseOperation) {
-          const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, candidate.selector);
-          if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
+          const currentRelease = await readFirstInstallCurrentRelease(
+            transaction, firstInstallEnvironment, candidate.selector, initial.releaseSet,
+          );
           await firstInstallAppCompletion(
-            transaction, scope, candidate.session, issuedAt, candidate.selector,
+            transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, candidate.selector,
             expected.history, currentRelease, initial.context,
           );
         }
@@ -1732,7 +1520,7 @@ const freshSavedPolicyIsObserved = async (
   if (observedTarget.policy.state !== "configured" ||
     !sameUuid(observedTarget.policy.policyId, saved.policyId) ||
     observedTarget.policy.policyRevision !== saved.policyRevision ||
-    !same(observedTarget.policy.policyBody, visiblePolicyBody(saved)))
+    !same(observedTarget.policy.policyBody, visibleLifecyclePolicyBody(saved)))
     problem("temporarily_unavailable");
 };
 
@@ -1766,7 +1554,7 @@ export const saveStudioApplicationFirstInstallPolicy = async (
     if (selectedPolicy.action === "delete") {
       await runFirstInstallAppTransaction(candidate, command.data.expected,
         async (_transaction, _scope, _issuedAt, initial) => {
-          const currentTargetValue = assertInitialPolicyTarget(initial.setup, command.data);
+          const currentTargetValue = assertInitialPolicyTarget(initial.visibleSetup, command.data);
           if (!same(currentTargetValue, target)) problem("conflict");
         });
       invocationStarted = true;
@@ -1781,27 +1569,28 @@ export const saveStudioApplicationFirstInstallPolicy = async (
       const archivePolicy = selectedPolicy;
       saved = await runFirstInstallAppTransaction(candidate, command.data.expected,
         async (transaction, scope, issuedAt, initial) => {
-          const currentTargetValue = assertInitialPolicyTarget(initial.setup, command.data);
-          if (!same(currentTargetValue, target) || !same(initial.setup, candidate.snapshot.setup))
+          const currentTargetValue = assertInitialPolicyTarget(initial.visibleSetup, command.data);
+          if (!same(currentTargetValue, target) || !same(initial.visibleSetup, candidate.snapshot.setup))
             problem("conflict");
           if (!workflowIsInExactRelease(
             initial.releaseSet, command.data.selector.rootId, archivePolicy.archiveWorkflowId,
           )) problem("refused");
-          const currentRelease = await readAppScopedFirstInstallReleaseSet(transaction, command.data.selector);
-          if (!sameFirstInstallRelease(currentRelease, initial.releaseSet)) problem("conflict");
-          const currentSetup = await readInstallationProvisionedSetup(
-            transaction, scope, candidate.session, issuedAt, command.data.selector, currentRelease, platformPermissionSource
+          const currentRelease = await readFirstInstallCurrentRelease(
+            transaction, firstInstallEnvironment, command.data.selector, initial.releaseSet,
           );
-          if (!same(currentSetup, initial.internalSetup)) problem("conflict");
+          await requireFirstInstallSetupUnchanged(
+            transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, command.data.selector,
+            currentRelease, initial,
+          );
           const retainedFence = await firstInstallAppCompletion(
-            transaction, scope, candidate.session, issuedAt, command.data.selector,
+            transaction, scope, candidate.session, issuedAt, firstInstallEnvironment, command.data.selector,
             command.data.expected.history, currentRelease, initial.context,
           );
           const option = await readSelectedInstallationArchiveConnection(
             transaction,
             command.data.selector.organizationId,
             command.data.selector.rootId,
-            initial.setup.organizationLimits.allowedArchiveDestinations,
+            initial.visibleSetup.organizationLimits.allowedArchiveDestinations,
             {
               connectionInstanceId: archivePolicy.archiveConnectionInstanceId,
               destinationKey: archivePolicy.archiveDestination,
@@ -1813,6 +1602,7 @@ export const saveStudioApplicationFirstInstallPolicy = async (
             scope,
             candidate.session,
             issuedAt,
+            firstInstallEnvironment,
             command.data.selector,
             command.data.expected.history,
             initial,
