@@ -2102,29 +2102,26 @@ export const canonicalApplicationThemeSelection = (
 
 /**
  * Canonical  themes contain the complete resolved application token set plus the catalogue
- * selection they were materialised from. Catalogue options are releases of the catalogue's base
- * platform theme release, so a theme pinned to that release always records its effective
- * selection. A theme pinned to an earlier release (for example 2.0.0) records none and keeps that
- * release's exact tokens.
+ * selection they were materialised from. Every theme records its selection, including the icon
+ * library, so a theme without one cannot be represented.
  */
 export const applicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(exactPlatformThemeDependencySchema),
-    selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema.optional()),
+    selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
   })
   .strict();
 
 /**
- * Authored  themes carry the catalogue selection and may omit overrides; compilation resolves
- * the selection into the full token set. On the catalogue's base release an absent selection means
- * the platform default (nova, neutral base colour, neutral theme); on an earlier release a
- * selection is refused and an absent one keeps that release's exact tokens.
+ * Authored  themes carry the catalogue selection (its icon library included) and may omit overrides;
+ * compilation resolves the selection into the full token set. A theme without a selection is
+ * refused at publication, and a selection is only accepted on the catalogue's base release.
  */
 export const sourceApplicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(sourceExactPlatformThemeDependencySchema),
-    selection: sourceProvenanceUnchanged(sourceApplicationThemeSelectionSchema.optional()),
+    selection: sourceProvenanceUnchanged(sourceApplicationThemeSelectionSchema),
     token_overrides: sourceProvenanceUnchanged(
       z.record(builderKeySchema, sourceThemeTokenValueSchema),
     ),

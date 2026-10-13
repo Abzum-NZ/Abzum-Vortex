@@ -1,6 +1,7 @@
 import {
   applicationSourceDocumentSchema,
   DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
+  DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
@@ -88,6 +89,7 @@ export const minimumApplicationSource = (
           catalogue_theme_id: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.catalogueThemeId,
           release_version: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.releaseVersion,
         },
+        selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
         token_overrides: {},
       },
     },
