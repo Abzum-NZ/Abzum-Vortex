@@ -2795,6 +2795,7 @@
         "label": "Severity",
         "help": "Visual alert severity level",
         "required": false,
+        "defaultValue": { "kind": "choice", "value": "error" },
         "options": [
           {
             "key": "error",
