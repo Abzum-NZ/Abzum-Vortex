@@ -1,8 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import {
-  PRIVATE_FILE_BUCKET,
   fileRecordSchema,
   type ApplicationRootId,
   type FieldId,
@@ -17,12 +15,7 @@ import {
   type RecordTypeId,
   type VerifiedFileActor,
 } from "../schema";
-import { createUnguessableStorageKey } from "./storage-policy";
-import {
-  normalizeFileExtension,
-  verifyContentSafety,
-  type ContentKind,
-} from "./content-safety";
+import type { ContentKind } from "./content-safety";
 
 /** The preflight safety check this module performs before any external scanner runs. */
 export const PREFLIGHT_SCANNER_NAME = "vortex_file_preflight";
@@ -198,96 +191,3 @@ export type CreateFileRecordInput = Readonly<{
   legalHold?: FileLegalHoldProjection;
   clock?: () => Date;
 }>;
-
-/**
- * Creates one private, organisation-owned file record: its owning record type,
- * record and attachment field, its safe display name, verified media type,
- * extension, size and checksum, its verified human or registered system uploader,
- * and its private bucket and organisation-scoped unguessable object path.
- *
- * The file starts pending. Executable content and settings the field cannot accept
- * are refused outright; content that disagrees with its name or with the field's
- * allowed kinds and extensions is created quarantined for review. Activation is a
- * later lifecycle transition that a clean safety result gates, so this function
- * never returns an active file.
- */
-export const createFileRecord = (input: CreateFileRecordInput): FileRecord => {
-  const clock = input.clock ?? (() => new Date());
-  const nowIso = clock().toISOString();
-
-  const normalizedExtension = normalizeFileExtension(input.extension);
-  const safeDisplayName = sanitizeFileDisplayName(input.rawFilename, normalizedExtension);
-
-  const safetyResult = verifyContentSafety({
-    detectedMediaType: input.detectedMediaType,
-    extension: normalizedExtension,
-    sizeBytes: input.sizeBytes,
-    existingAttachmentCount: input.existingAttachmentCount,
-    ...(input.attachmentConstraints?.allowedKinds === undefined
-      ? {}
-      : { allowedKinds: input.attachmentConstraints.allowedKinds }),
-    ...(input.attachmentConstraints?.allowedExtensions === undefined
-      ? {}
-      : { allowedExtensions: input.attachmentConstraints.allowedExtensions }),
-    ...(input.attachmentConstraints?.maxFileSizeMb === undefined
-      ? {}
-      : { maxFileSizeMb: input.attachmentConstraints.maxFileSizeMb }),
-    ...(input.attachmentConstraints?.multiple === undefined
-      ? {}
-      : { multiple: input.attachmentConstraints.multiple }),
-    ...(input.attachmentConstraints?.maxFiles === undefined
-      ? {}
-      : { maxFiles: input.attachmentConstraints.maxFiles }),
-  });
-
-  if (!safetyResult.accepted && safetyResult.outcome === "refused") {
-    throw new Error(`File metadata creation refused: ${safetyResult.reason}`);
-  }
-
-  const fileId = input.fileId ?? (randomUUID() as FileId);
-
-  // Object paths are built from these identifiers, and a private path has one
-  // canonical lowercase form, so a differently cased identifier is refused here
-  // rather than producing a path the storage policy would later reject.
-  if (
-    input.organizationId !== input.organizationId.toLowerCase() ||
-    fileId !== fileId.toLowerCase()
-  ) {
-    throw new Error(
-      "File metadata creation refused: organisation and file identifiers must be in their canonical lowercase form",
-    );
-  }
-
-  const quarantined = !safetyResult.accepted;
-
-  return fileRecordSchema.parse({
-    fileId,
-    organizationId: input.organizationId,
-    ...(input.applicationRootId === undefined
-      ? {}
-      : { applicationRootId: input.applicationRootId }),
-    lifecycleState: quarantined ? "quarantined" : "pending",
-    originalSafeDisplayName: safeDisplayName,
-    detectedMediaType: input.detectedMediaType,
-    extension: normalizedExtension,
-    sizeBytes: input.sizeBytes,
-    checksum: input.checksum,
-    storageKey: createUnguessableStorageKey(input.organizationId, fileId),
-    bucketId: PRIVATE_FILE_BUCKET,
-    scannerName: PREFLIGHT_SCANNER_NAME,
-    scannerVersion: PREFLIGHT_SCANNER_VERSION,
-    scannerResult: quarantined ? "quarantined" : "pending",
-    previewReferences: [],
-    uploadedBy: input.uploader,
-    createdAt: nowIso,
-    owningAttachmentReferences: [...(input.owningAttachmentReferences ?? [])],
-    ...(input.owner === undefined
-      ? {}
-      : {
-          ownerRecordTypeId: input.owner.recordTypeId,
-          ownerRecordId: input.owner.recordId,
-          ownerFieldId: input.owner.fieldId,
-        }),
-    legalHold: input.legalHold ?? { isHeld: false },
-  });
-};
