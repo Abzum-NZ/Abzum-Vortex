@@ -27,6 +27,10 @@ function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
   while (sibling !== null) {
     if (sibling instanceof HTMLElement && sibling.matches("[data-vortex-style-root]"))
       return sibling;
+    // The application page may wrap its style root. Resolve that sibling before using focus:
+    // once this dialog opens, the focused field belongs to the dialog's own nested style root.
+    const nestedRoot = sibling.querySelector<HTMLElement>("[data-vortex-style-root]");
+    if (nestedRoot !== null) return nestedRoot;
     sibling = sibling.previousElementSibling;
   }
 
@@ -40,17 +44,21 @@ function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
 
 function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {
   const styleRoot = useVortexStylePortalRoot();
-  const [anchor, setAnchor] = React.useState<HTMLSpanElement | null>(null);
+  const [anchorRoot, setAnchorRoot] = React.useState<HTMLElement | null | undefined>(undefined);
+  const captureAnchor = React.useCallback((anchor: HTMLSpanElement | null) => {
+    // Capture the page root before the popup takes focus. Re-reading the focused element on
+    // later renders could select the popup's nested style root as its own portal container.
+    setAnchorRoot(anchor === null ? undefined : findStyleRoot(anchor));
+  }, []);
   if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
   const needsAnchor = styleRoot === null && container === undefined;
-  const fallbackRoot = needsAnchor ? findStyleRoot(anchor) : null;
   return (
     <>
-      {needsAnchor && <span ref={setAnchor} hidden aria-hidden="true" />}
-      {(!needsAnchor || anchor !== null) && (
+      {needsAnchor && <span ref={captureAnchor} hidden aria-hidden="true" />}
+      {(!needsAnchor || anchorRoot !== undefined) && (
         <DialogPrimitive.Portal
           data-slot="dialog-portal"
-          container={container ?? styleRoot?.element ?? fallbackRoot ?? undefined}
+          container={container ?? styleRoot?.element ?? anchorRoot ?? undefined}
           {...props}
         />
       )}
@@ -108,7 +116,11 @@ function DialogContent({
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="dialog-header" className={cn("cn-dialog-header flex flex-col", className)} {...props} />
+    <div
+      data-slot="dialog-header"
+      className={cn("cn-dialog-header flex flex-col", className)}
+      {...props}
+    />
   );
 }
 
