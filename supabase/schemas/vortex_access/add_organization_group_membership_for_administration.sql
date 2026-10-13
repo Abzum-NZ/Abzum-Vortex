@@ -98,11 +98,7 @@ begin
       'operationKey', 'platform.organization.group_memberships.add',
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', pg_catalog.jsonb_build_object(
-        'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '6185dc64-464b-4776-97dc-c64a6f299550'
-      ),
+      'requiredPermission', vortex_access.required_platform_permission('platform.organization.groups.manage'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', authority_requirement
     )

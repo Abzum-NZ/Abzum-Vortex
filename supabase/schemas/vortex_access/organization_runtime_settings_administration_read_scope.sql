@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.organization_runtime_settings_administration_read_scope() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint)
+create or replace function vortex_access.organization_runtime_settings_administration_read_scope() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -11,11 +11,7 @@ begin
       'operationKey', 'platform.organization.runtime_settings.read',
       'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', pg_catalog.jsonb_build_object(
-        'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '6dffcb0b-ded8-4cd5-acc8-c50f7d4269a5'
-      ),
+      'requiredPermission', vortex_access.required_platform_permission('platform.organization.runtime_settings.read'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )

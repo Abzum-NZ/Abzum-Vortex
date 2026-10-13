@@ -49,11 +49,7 @@ begin
     pg_catalog.jsonb_build_object('operationKey', 'platform.organization.delegations.revoke',
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', pg_catalog.jsonb_build_object('ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        'permissionId', '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'),
+      'requiredPermission', vortex_access.required_platform_permission('platform.organization.assignments.manage'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'delegated_management',
         'before', authority_before, 'after', pg_catalog.jsonb_build_object('kind', 'none')))) as evaluated;
