@@ -58,10 +58,10 @@ export const protectedRunRegisteredReleaseSchema = z
   });
 
 /**
- * #947: storage-bound repository for inactive workflow flow registrations.
+ * #947: inactive workflow flow registrations, stored through Postgres.
  *
  * A part A candidate is compiled by `compileKestraFlow` from one exact published
- * durable flow and its installation identity. This repository persists
+ * durable flow and its installation identity. This module persists
  * that candidate through the protected `register_workflow_flow_candidate`
  * function, which derives nothing from the candidate's diagnostic labels: the
  * namespace and flow id must equal the ones derived from the permanent identity,
@@ -75,11 +75,9 @@ export const protectedRunRegisteredReleaseSchema = z
  * candidate for the same identity is refused rather than overwritten.
  */
 
-export const kestraFlowRegistrationStatuses = ["inactive"] as const;
+export type KestraFlowRegistrationStatus = "inactive";
 
-export type KestraFlowRegistrationStatus = (typeof kestraFlowRegistrationStatuses)[number];
-
-export const kestraFlowRegistrationRefusalReasons = ["candidate_changed"] as const;
+const kestraFlowRegistrationRefusalReasons = ["candidate_changed"] as const;
 
 export type KestraFlowRegistrationRefusalReason =
   (typeof kestraFlowRegistrationRefusalReasons)[number];
@@ -110,13 +108,10 @@ export type KestraFlowRegistrationCommand = Readonly<{
   flow: KestraFlowCandidate;
 }>;
 
-export const kestraFlowRegistrationErrorCodes = [
-  "INVALID_FLOW_REGISTRATION_INPUT",
-  "INVALID_FLOW_REGISTRATION_STORAGE_RESULT",
-  "FLOW_REGISTRATION_FAILED",
-] as const;
-
-export type KestraFlowRegistrationErrorCode = (typeof kestraFlowRegistrationErrorCodes)[number];
+export type KestraFlowRegistrationErrorCode =
+  | "INVALID_FLOW_REGISTRATION_INPUT"
+  | "INVALID_FLOW_REGISTRATION_STORAGE_RESULT"
+  | "FLOW_REGISTRATION_FAILED";
 
 export class KestraFlowRegistrationError extends Error {
   readonly code: KestraFlowRegistrationErrorCode;
@@ -303,7 +298,7 @@ const databaseCode = (error: unknown): string | undefined =>
 const mapStorageFailure = (error: unknown): KestraFlowRegistrationError => {
   if (error instanceof KestraFlowRegistrationError) return error;
   switch (databaseCode(error)) {
-    // The database revalidates every input the repository already parsed, so a
+    // The database revalidates every input the module already parsed, so a
     // refusal there is still an invalid command, never a partial registration.
     case "22023":
     case "23502":

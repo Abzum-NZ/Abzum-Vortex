@@ -11,9 +11,6 @@ export {
 
 export {
   registerKestraFlowCandidate,
-  kestraFlowRegistrationErrorCodes,
-  kestraFlowRegistrationRefusalReasons,
-  kestraFlowRegistrationStatuses,
   KestraFlowRegistrationError,
   type KestraFlowRegistration,
   type KestraFlowRegistrationCommand,
@@ -21,7 +18,7 @@ export {
   type KestraFlowRegistrationRefusalReason,
   type KestraFlowRegistrationResult,
   type KestraFlowRegistrationStatus,
-} from "./flow-registration-repository";
+} from "./flow-registration";
 
 export {
   compileKestraFlow,
