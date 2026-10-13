@@ -4,6 +4,7 @@ import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { applicationSourceDocumentSchema, canonicalJson,
@@ -49,6 +50,10 @@ import {
   type StudioApplicationSourceImportSnapshot,
 } from "../_lib/application-source-import";
 import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
+
+// The canvas pulls in @xyflow/react; load it only when a flow is open.
+const ApplicationFlowCanvas = dynamic(
+  () => import("./application-flow-canvas").then((module) => module.ApplicationFlowCanvas), { ssr: false });
 
 type WorkspaceProps = Readonly<{
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
@@ -900,6 +905,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
               setMessage("Visibility condition applied to local history. Save to persist it.");
               return result;
             }} />}
+        {selected?.kind === "flow" && inspector.status === "resolved" &&
+          <ApplicationFlowCanvas context={compositionContext} selection={selected} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
           <ApplicationFlowEditor key={flowEpoch} context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}

@@ -11,6 +11,7 @@ export {
   type ApplicationAccount,
   type ApplicationAccountActions,
 } from "./account-actions";
+export type { ApplicationShellRuntime, ApplicationWebMcpRuntime } from "./application-shell";
 export {
   NAVIGATION_COMPONENT_REGISTRATIONS,
   createNavigationComponentRegistry,

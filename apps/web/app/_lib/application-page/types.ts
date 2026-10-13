@@ -11,6 +11,8 @@ import type {
   BoardColumnContinuationRequest,
   PageDefinition,
 } from "@vortex/platform/schema";
+import type { PageWebMcpTool } from "./webmcp-projection";
+export type { PageWebMcpTool } from "./webmcp-projection";
 
 export type PageDataState = Readonly<Record<string, unknown>>;
 
@@ -46,6 +48,10 @@ export type ApplicationPageModel = Readonly<{
   navigation: ProjectedNavigation;
   /** Structural body visibility only; absence on guided pages preserves their active-step UI. */
   bodyContentAvailable?: boolean;
+  /** Current Access revision used to re-register page tools after a permission change. */
+  accessVersion: number;
+  /** Permission-filtered tools that map to one usable control on this page. */
+  webMcpTools: readonly PageWebMcpTool[];
   /** Ready display data per data placement, by stable placement identity. */
   data: Readonly<Record<string, PageDataState>>;
   /** Each placement's flow bindings, by stable placement identity. */
@@ -108,18 +114,14 @@ export type ApplicationPagePlacementReadResult =
   | Readonly<{
       kind: "available";
       data: Readonly<Record<string, PageDataState>>;
-      editFormBaselines: Readonly<
-        Record<string, Readonly<Record<string, JsonValue>> | null>
-      >;
+      editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>> | null>>;
       subject: ApplicationPageModel["subject"] | null;
     }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type ApplicationPageInternalResult =
-  | ApplicationPageResult
-  | Readonly<{ kind: "reload" }>;
+export type ApplicationPageInternalResult = ApplicationPageResult | Readonly<{ kind: "reload" }>;
 
 export type ApplicationPageLoaderAddress = Readonly<{
   tenantShortName: string;
@@ -154,6 +156,8 @@ export type InstalledFlow =
 
 /** The resolved record type the page's own address names the subject of. */
 export type PageSubjectType = Extract<
-  NonNullable<Extract<PageDefinition, { type: "detail" | "public" | "form" | "guided_form" }>["recordType"]>,
+  NonNullable<
+    Extract<PageDefinition, { type: "detail" | "public" | "form" | "guided_form" }>["recordType"]
+  >,
   { state: "resolved" }
 >;

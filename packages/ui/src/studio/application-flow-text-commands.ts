@@ -46,7 +46,7 @@ export type StudioFlowTaskListOutline = Readonly<{
 }>;
 export type StudioFlowTextProjection =
   | Readonly<{ kind: "available"; lists: readonly StudioFlowTaskListOutline[] }>
-  | Readonly<{ kind: "invalid" }>;
+  | Readonly<{ kind: "invalid"; cause: unknown }>;
 export type StudioFlowTextCommand = Readonly<{
   taskId: string;
   taskPath: readonly (string | number)[];
@@ -217,7 +217,7 @@ export const projectStudioFlowTextEditor = (
   selection: FlowSelection,
 ): StudioFlowTextProjection => {
   try { return { kind: "available", lists: outline(context, selection).lists }; }
-  catch { return { kind: "invalid" }; }
+  catch (cause) { return { kind: "invalid", cause }; }
 };
 
 /** Changes one existing presentation value on the original detached authored source. */
