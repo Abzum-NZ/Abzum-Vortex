@@ -761,7 +761,6 @@ begin
       source_role_id, derived_application_root_id, derived_source_role_id,
       derived_source_definition_key, derived_source_release_revision,
       derived_source_release_version, derived_source_validation_contract_version,
-      derived_source_content_fingerprint, derived_source_resolution_fingerprint,
       live_revision, created_by, created_at
     ) values (
       target_organization_id, target_role_id, target_role_kind, target_role_key,
@@ -779,10 +778,6 @@ begin
         then target_source_release_version else null end,
       case when operation_name = 'create_custom_from_template'
         then target_source_validation_contract_version else null end,
-      case when operation_name = 'create_custom_from_template'
-        then target_source_content_fingerprint else null end,
-      case when operation_name = 'create_custom_from_template'
-        then target_source_resolution_fingerprint else null end,
       1, p_changed_by, operation_at
     );
 
@@ -1407,9 +1402,7 @@ begin
             'releaseRevision', identity.derived_source_release_revision,
             'releaseVersion', identity.derived_source_release_version,
             'validationContractVersion',
-              identity.derived_source_validation_contract_version,
-            'contentFingerprint', identity.derived_source_content_fingerprint,
-            'resolutionFingerprint', identity.derived_source_resolution_fingerprint
+              identity.derived_source_validation_contract_version
           )
         )
       )

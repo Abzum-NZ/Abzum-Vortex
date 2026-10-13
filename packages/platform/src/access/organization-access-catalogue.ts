@@ -10,6 +10,7 @@ import {
   fingerprintSchema,
   groupIdSchema,
   membershipIdSchema,
+  namespacedKeySchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   permissionIdSchema,
@@ -19,8 +20,10 @@ import {
   roleActivationPolicyIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
+  semanticVersionSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import {
   permissionRegistryDefinitionReleaseSchema,
   permissionRegistryEntryCandidateSchema,
@@ -190,7 +193,16 @@ export const customRoleTemplateProvenanceSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
     sourceRoleId: roleIdSchema,
-    sourceRelease: applicationReleaseEvidenceSchema,
+    sourceRelease: z
+      .object({
+        kind: z.literal("application"),
+        definitionKey: namespacedKeySchema,
+        rootId: applicationRootIdSchema,
+        releaseRevision: revisionSchema,
+        releaseVersion: stableDefinitionReleaseVersionSchema,
+        validationContractVersion: semanticVersionSchema,
+      })
+      .strict(),
   })
   .strict()
   .superRefine((value, context) => {

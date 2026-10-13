@@ -19,10 +19,6 @@ begin
     or new.derived_source_release_version is distinct from old.derived_source_release_version
     or new.derived_source_validation_contract_version is distinct
       from old.derived_source_validation_contract_version
-    or new.derived_source_content_fingerprint is distinct
-      from old.derived_source_content_fingerprint
-    or new.derived_source_resolution_fingerprint is distinct
-      from old.derived_source_resolution_fingerprint
     or new.created_by is distinct from old.created_by
     or new.created_at is distinct from old.created_at
     or old.live_revision = 9007199254740991
