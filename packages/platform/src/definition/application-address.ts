@@ -386,12 +386,74 @@ const pageDiscoveryDeclaration = (
   });
 };
 
+/**
+ * The launcher's per-application projection, remembered between requests. An entry is keyed by the
+ * person's organisation account, the organisation access version and the installed release, so it
+ * is never shared across people or access versions: any access change moves the version and the
+ * next navigation decides again. The access version does not move when a time-bound assignment
+ * lapses, so an entry also ends at the earliest decision expiry and after `launcherProjectionTtlMs`.
+ */
+const launcherProjectionTtlMs = 30_000;
+const launcherProjectionLimit = 512;
+const launcherProjections = new Map<
+  string,
+  Readonly<{ application: PermittedApplication | null; expiresAtMs: number }>
+>();
+
+const launcherProjectionKey = (
+  identityId: string,
+  scope: SelectedOrganizationScope,
+  candidate: ApplicationCandidate,
+): string =>
+  [
+    identityId,
+    scope.organizationId,
+    scope.organizationAccountId,
+    scope.accessVersion,
+    candidate.applicationRootId,
+    candidate.releaseRevision,
+  ]
+    .join("|")
+    .toLowerCase();
+
+const recallLauncherProjection = (key: string): PermittedApplication | null | undefined => {
+  const entry = launcherProjections.get(key);
+  if (entry === undefined) return undefined;
+  if (entry.expiresAtMs <= Date.now()) {
+    launcherProjections.delete(key);
+    return undefined;
+  }
+  return entry.application;
+};
+
+const rememberLauncherProjection = (
+  key: string,
+  application: PermittedApplication | null,
+  validUntil: string | undefined,
+): void => {
+  const now = Date.now();
+  const expiresAtMs = Math.min(
+    now + launcherProjectionTtlMs,
+    validUntil === undefined ? Number.POSITIVE_INFINITY : Date.parse(validUntil),
+  );
+  if (!(expiresAtMs > now)) return;
+  for (const [entryKey, entry] of launcherProjections)
+    if (entry.expiresAtMs <= now) launcherProjections.delete(entryKey);
+  while (launcherProjections.size >= launcherProjectionLimit) {
+    const oldest = launcherProjections.keys().next();
+    if (oldest.done === true) break;
+    launcherProjections.delete(oldest.value);
+  }
+  launcherProjections.set(key, { application, expiresAtMs });
+};
+
 /** Projects one application's permitted pages inside the caller's application-scoped request. */
 const projectPermittedApplication = async (
   permissions: PlatformPermissionSource,
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   candidate: ApplicationCandidate,
+  remember?: (application: PermittedApplication | null, validUntil: string | undefined) => void,
 ): Promise<Readonly<{
   application: PermittedApplication;
   experiences: ApplicationExperience[];
@@ -418,16 +480,33 @@ const projectPermittedApplication = async (
   if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
     throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
 
-  // Every page of the application is decided by one access query.
+  // Pages that require the same permission share one decision, so every distinct requirement of
+  // the application is decided by one access query.
+  const requirementKeys = [...new Set(candidate.pages.map((page) => page.accessPermissionKey))];
   const decisions = await decideOrganizationAccessBatch(
     transaction,
     scope,
-    candidate.pages.map((page) => pageDiscoveryDeclaration(permissions, candidate, page)),
+    requirementKeys.map((requirementKey) =>
+      pageDiscoveryDeclaration(
+        permissions,
+        candidate,
+        candidate.pages.find((page) => page.accessPermissionKey === requirementKey) as
+          ApplicationCandidate["pages"][number],
+      ),
+    ),
   );
-  const allowedPageKeys = new Set<string>();
-  candidate.pages.forEach((page, index) => {
-    if (decisions[index]?.allowed === true) allowedPageKeys.add(page.key);
+  const allowedRequirementKeys = new Set<string>();
+  let validUntil: string | undefined;
+  requirementKeys.forEach((requirementKey, index) => {
+    const decision = decisions[index];
+    if (decision?.allowed !== true) return;
+    allowedRequirementKeys.add(requirementKey);
+    if (decision.validUntil !== undefined && (validUntil === undefined || decision.validUntil < validUntil))
+      validUntil = decision.validUntil;
   });
+  const allowedPageKeys = new Set<string>();
+  for (const page of candidate.pages)
+    if (allowedRequirementKeys.has(page.accessPermissionKey)) allowedPageKeys.add(page.key);
 
   // The release home wins if authorised. Otherwise use the lowest source
   // role key among current application roles with an open home.
@@ -439,7 +518,14 @@ const projectPermittedApplication = async (
   const homePageKey = allowedPageKeys.has(candidate.homePageKey)
     ? candidate.homePageKey
     : roleHome?.key;
-  if (homePageKey === undefined) return null;
+  // A home chosen from current role assignments depends on time-bound assignments, memberships and
+  // activations that the page decisions' expiry does not cover, so only a projection that does not
+  // depend on them is remembered.
+  const rememberable = allowedPageKeys.has(candidate.homePageKey) || allowedPageKeys.size === 0;
+  if (homePageKey === undefined) {
+    if (rememberable) remember?.(null, validUntil);
+    return null;
+  }
 
   // An experience page is offered only when the viewer may open that page itself and it is
   // presentation-only, so it can never show gated, conditional or data-bound content.
@@ -462,17 +548,16 @@ const projectPermittedApplication = async (
       });
     });
 
-  return {
-    application: permittedApplicationSchema.parse({
-      applicationRootId: candidate.applicationRootId,
-      key: candidate.key,
-      name: candidate.name,
-      icon: candidate.icon,
-      homePageKey,
-      pageKeys: [...allowedPageKeys].sort(),
-    }),
-    experiences,
-  };
+  const application = permittedApplicationSchema.parse({
+    applicationRootId: candidate.applicationRootId,
+    key: candidate.key,
+    name: candidate.name,
+    icon: candidate.icon,
+    homePageKey,
+    pageKeys: [...allowedPageKeys].sort(),
+  });
+  if (rememberable) remember?.(application, validUntil);
+  return { application, experiences };
 };
 
 const permittedApplication = async (
@@ -481,6 +566,11 @@ const permittedApplication = async (
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
   candidate: ApplicationCandidate,
+  remember?: (
+    scope: SelectedOrganizationScope,
+    application: PermittedApplication | null,
+    validUntil: string | undefined,
+  ) => void,
 ): Promise<
   | Readonly<{ application: PermittedApplication; experiences: ApplicationExperience[] }>
   | null
@@ -489,7 +579,10 @@ const permittedApplication = async (
   const result = await requests.run(
     session,
     { organizationId, applicationRootId: candidate.applicationRootId },
-    (transaction, scope) => projectPermittedApplication(permissions, transaction, scope, candidate),
+    (transaction, scope) =>
+      projectPermittedApplication(permissions, transaction, scope, candidate, (application, validUntil) =>
+        remember?.(scope, application, validUntil),
+      ),
   );
   if (result.kind === "temporarily_unavailable")
     return {
@@ -873,28 +966,57 @@ const readPermittedApplications = async (
       });
     }
 
-    // The default and each candidate are independent HUMAN requests. They run together, bounded
-    // below the runtime pool size, and their outcomes are consulted in the original order.
-    const defaultReadRequest = requests.run(
+    // The organisation request reads the default and the access version this person holds now.
+    // Each application is then recalled for exactly that version or decided again; the decisions
+    // of the applications that are not recalled run together, bounded below the runtime pool size.
+    const defaultRead = await requests.run(
       parsedSession.data,
       { organizationId: read.organizationId },
-      (transaction) => readCurrentOrganizationDefaultApplicationAfterAuthorization(transaction),
+      async (transaction, scope) => ({
+        scope,
+        configuredDefault: await readCurrentOrganizationDefaultApplicationAfterAuthorization(transaction),
+      }),
     );
-    void defaultReadRequest.catch(() => undefined);
-    const candidateReads = mapWithConcurrency(read.applications, permittedReadConcurrency,
-      (candidate) =>
-        permittedApplication(permissions, requests, parsedSession.data, read.organizationId, candidate));
-    void candidateReads.catch(() => undefined);
-    const defaultRead = await defaultReadRequest;
     if (defaultRead.kind !== "available") return defaultRead;
+    const organizationScope = defaultRead.value.scope;
+    const recalled = read.applications.map((candidate) =>
+      recallLauncherProjection(
+        launcherProjectionKey(parsedSession.data.identityId, organizationScope, candidate),
+      ),
+    );
+    const decided = await mapWithConcurrency(
+      read.applications.filter((_candidate, index) => recalled[index] === undefined),
+      permittedReadConcurrency,
+      (candidate) =>
+        permittedApplication(
+          permissions,
+          requests,
+          parsedSession.data,
+          read.organizationId,
+          candidate,
+          (scope, application, validUntil) =>
+            rememberLauncherProjection(
+              launcherProjectionKey(parsedSession.data.identityId, scope, candidate),
+              application,
+              validUntil,
+            ),
+        ),
+    );
 
     const applications: PermittedApplication[] = [];
-    for (const permitted of await candidateReads) {
+    let decidedIndex = 0;
+    for (const recall of recalled) {
+      if (recall !== undefined) {
+        if (recall !== null) applications.push(recall);
+        continue;
+      }
+      const permitted = decided[decidedIndex++];
+      if (permitted === undefined || permitted === null) continue;
       if (isTemporarilyUnavailableApplicationRead(permitted))
         return permittedApplicationsReadSchema.parse(permitted);
-      if (permitted !== null) applications.push(permitted.application);
+      applications.push(permitted.application);
     }
-    const configuredDefault = defaultRead.value;
+    const configuredDefault = defaultRead.value.configuredDefault;
     const defaultApplicationRootId =
       configuredDefault !== null &&
       applications.some((entry) => sameId(entry.applicationRootId, configuredDefault))
