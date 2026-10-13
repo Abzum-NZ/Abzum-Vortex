@@ -16,8 +16,17 @@ export * from "./extension-contributions";
 export * from "./application-preview";
 export * from "./validation";
 export * from "./builder-authority";
+export {
+  listOrganizationBuilderRoots,
+  type OrganizationBuilderRoot,
+} from "./organization-builder-roots";
 export * from "./definition-store";
-export { readApplicationDefinitionDraft, readModuleDefinitionDraft, type StoredApplicationDefinitionDraft, type StoredModuleDefinitionDraft } from "./definition-draft-read";
+export {
+  readApplicationDefinitionDraft,
+  readModuleDefinitionDraft,
+  type StoredApplicationDefinitionDraft,
+  type StoredModuleDefinitionDraft,
+} from "./definition-draft-read";
 export * from "./source-identities";
 export * from "./saved-condition-revisions";
 export * from "./installed-event-catalogue";
