@@ -196,15 +196,24 @@ const classifyFailure = (error: unknown): Failure => {
   return { kind: "temporarily_unavailable", reason: "unexpected_failure" };
 };
 
-/** Classifies a failure and logs one line with its stable reason code and cause. */
+const causeSummary = (error: unknown): string => {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
+    const code = (current as { readonly code?: unknown }).code;
+    const message = current.name === "DefinitionError" || current.name === "PublicationContextRefused"
+      ? "" : `:${current.message.slice(0, 160)}`;
+    parts.push(`${current.name}/${typeof code === "string" ? code.slice(0, 64) : "none"}${message}`);
+    current = current.cause;
+  }
+  return parts.join(" <- ") || typeof error;
+};
+
+/** Classifies a failure and logs one line with its stable reason code and cause chain. */
 const safeFailure = (error: unknown, operation: string): Failure => {
   const failure = classifyFailure(error);
-  const name = error instanceof Error ? error.name : typeof error;
-  const code = typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code).slice(0, 64) : "none";
   console.error(
-    `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${name}/${code}`,
-    ...(failure.kind === "temporarily_unavailable" ? [error] : []),
+    `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${causeSummary(error)}`,
   );
   return failure;
 };
@@ -249,6 +258,10 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
             rootId: moduleRootIdSchema.parse(root.data), expectedDraftRevision: command.expectedDraftRevision,
           });
         if (initial.kind !== definitionKind) throw new PublicationContextRefused("draft_kind_mismatch");
+        // A draft not saved since the last release has nothing to publish.
+        if (initial.publishedRevision !== undefined && initial.publishedRevision !== null &&
+          initial.draftRevision <= initial.publishedRevision)
+          throw new DefinitionError("DEFINITION_NO_CHANGE");
         const clocks = await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as started_at`;
         const started = timestampSchema.safeParse(databaseTimestamp(clocks[0]?.started_at));
         if (clocks.length !== 1 || !started.success) throw new PublicationContextRefused("database_clock_invalid");
