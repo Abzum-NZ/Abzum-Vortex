@@ -69,6 +69,7 @@ begin
       "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
     );
     if stored."fingerprint" <> p_command_fingerprint
+      or stored."clusterId" is distinct from p_cluster_id
       or stored."subjectIds" <> array[p_tenant_id] then
       raise exception using errcode = 'V3001',
         message = 'Administration duplicate conflicts';
