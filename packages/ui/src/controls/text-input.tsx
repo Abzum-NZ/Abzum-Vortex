@@ -20,7 +20,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useFormField, useFormFieldError } from "./form-context";
 
 export type TextInputProps = ControlRenderProps<TextInputPayload>;
 
@@ -54,12 +54,18 @@ export function TextInput(props: TextInputProps): ReactElement {
     inputType === "email" &&
     (value !== "" || required) &&
     !moduleFieldValueSchemas.email_address.safeParse(value).success;
-  const error = invalidEmail ? "Enter a valid email address." : context.values?.error;
+  // A required field is satisfied by a value, not by blank text, matching the record save's rule.
+  const missingRequired = required && !disabled && !readOnly && value.trim() === "";
   useFormField(
     fieldKey,
     props.placementId,
     inputType === "email" && !required && value === "" ? null : value,
+    missingRequired ? () => `${label} is required.` : undefined,
   );
+  const validationError = useFormFieldError(fieldKey);
+  const error = invalidEmail
+    ? "Enter a valid email address."
+    : (context.values?.error ?? validationError);
 
   // FormContainer disables native validation, so this field refuses an invalid local submit.
   useEffect(() => {
