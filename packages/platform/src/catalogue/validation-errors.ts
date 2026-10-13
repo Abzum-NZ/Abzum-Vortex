@@ -312,16 +312,6 @@ const failureCodeByFamily = {
   DefinitionValidationErrorCode
 >;
 
-type FailureFamilyByCode = {
-  [Family in keyof typeof failureCodeByFamily as (typeof failureCodeByFamily)[Family]]: Family;
-};
-
-export const definitionRuleFailureFamilyByCode: Readonly<FailureFamilyByCode> = Object.freeze(
-  Object.fromEntries(
-    Object.entries(failureCodeByFamily).map(([family, code]) => [code, family]),
-  ) as FailureFamilyByCode,
-);
-
 function normalizeIssuePath(path: unknown): (string | number)[] {
   if (!Array.isArray(path)) return [];
   return path.filter(

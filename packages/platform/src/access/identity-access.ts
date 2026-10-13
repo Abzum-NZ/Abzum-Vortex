@@ -75,27 +75,6 @@ export const tenantStructuralCapabilityKeys = [
 
 export const tenantStructuralCapabilitySchema = z.enum(tenantStructuralCapabilityKeys);
 
-/** Tenant administrators receive this read permission by default. */
-export const tenantAdministratorDefaultCapabilityKeys = [
-  "platform.tenant.capability_limits.read",
-] as const satisfies readonly (typeof tenantStructuralCapabilityKeys)[number][];
-
-/** This role preset resolves to the same direct tenant permissions held in assignments. */
-export const tenantPermissionRoleTemplates = [
-  {
-    key: "tenant_limits_manager",
-    name: "Tenant limits manager",
-    capabilityKeys: [
-      "platform.tenant.capability_limits.allocate",
-      "platform.tenant.capability_limits.read",
-    ],
-  },
-] as const satisfies readonly {
-  key: string;
-  name: string;
-  capabilityKeys: readonly (typeof tenantStructuralCapabilityKeys)[number][];
-}[];
-
 /** One stable, deduplicated tenant permission set in canonical order. */
 export const tenantStructuralCapabilitySetSchema = z
   .array(tenantStructuralCapabilitySchema)
@@ -184,27 +163,6 @@ export const tenantAdministratorAssignmentOutcomeSchema = z.enum([
   "expired",
   "revoked",
 ]);
-
-/** Derive timing from trusted facts at one explicit instant; there is no editable assignment status. */
-export const deriveTenantAdministratorAssignmentOutcome = (
-  assignment: unknown,
-  evaluatedAt: unknown,
-): z.infer<typeof tenantAdministratorAssignmentOutcomeSchema> => {
-  const parsedAssignment = tenantAdministratorAssignmentSchema.parse(assignment);
-  const evaluatedTime = Date.parse(timestampSchema.parse(evaluatedAt));
-  if (
-    parsedAssignment.revokedAt !== undefined &&
-    Date.parse(parsedAssignment.revokedAt) <= evaluatedTime
-  )
-    return "revoked";
-  if (evaluatedTime < Date.parse(parsedAssignment.startsAt)) return "scheduled";
-  if (
-    parsedAssignment.expiresAt !== undefined &&
-    evaluatedTime >= Date.parse(parsedAssignment.expiresAt)
-  )
-    return "expired";
-  return "active";
-};
 
 export const organizationSchema = z
   .object({

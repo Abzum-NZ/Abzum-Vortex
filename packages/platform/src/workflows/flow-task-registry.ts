@@ -15,7 +15,6 @@ import {
   namespacedKeySchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import type { RuleGraphNode } from "../rules/rule-graph-contracts";
 
 /*
  * The one registry of task types (architecture decision 1, "The task registry"). Every building
@@ -843,33 +842,6 @@ export const flowTaskRegistry: Readonly<Record<FlowTaskTypeKey, FlowTaskTypeDefi
       ]),
     ) as Record<FlowTaskTypeKey, FlowTaskTypeDefinition>,
   );
-
-// ─── Current step catalogues, each mapped to exactly one task type ───────────────────────────
-
-/**
- * A current node, effect or target kind either becomes one registered task type or is structural:
- * it is a control task, or it is carried by the flow itself (its trigger, inputs or outputs).
- */
-export type FlowLegacyKindMapping =
-  | { kind: "task"; type: FlowRegisteredTaskTypeKey }
-  | { kind: "structural"; into: FlowControlTaskTypeKey | "trigger" | "flow_inputs" | "flow_outputs" };
-
-const task = (type: FlowRegisteredTaskTypeKey): FlowLegacyKindMapping => ({ kind: "task", type });
-const structural = (
-  into: Extract<FlowLegacyKindMapping, { kind: "structural" }>["into"],
-): FlowLegacyKindMapping => ({ kind: "structural", into });
-
-/** The before-save rule graph nodes; a rule becomes a transaction flow with a BeforeSave trigger. */
-export const flowTaskMappingForRuleGraphNode = {
-  start: structural("trigger"),
-  condition: structural("if"),
-  set_variable: task("data.set_variable"),
-  set_field: task("record.set_fields"),
-  require_field: task("rule.require"),
-  warn: task("rule.warn"),
-  refuse: task("rule.refuse"),
-  finish: structural("stop"),
-} as const satisfies Record<RuleGraphNode["type"], FlowLegacyKindMapping>;
 
 // ─── Publication: every task's run location ──────────────────────────────────────────────────
 
