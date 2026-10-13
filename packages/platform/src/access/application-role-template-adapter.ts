@@ -171,17 +171,13 @@ const buildCandidate = (
   } catch (error) {
     throw evidenceError(error);
   }
-  const core = {
+  return verifyPreparedApplicationRoleTemplates({
     contractVersion: "1.0.0" as const,
     preparationBasis: basis,
     permissionRegistration,
     templates: application.content.roles.map((template) =>
       resolveTemplate(template, permissionRegistration),
     ),
-  };
-  return verifyPreparedApplicationRoleTemplates({
-    ...core,
-    candidateFingerprint: fingerprintCanonicalValue(core),
   });
 };
 
@@ -203,8 +199,6 @@ export const verifyPreparedApplicationRoleTemplates = (
     )
   )
     throw evidenceError();
-  const { candidateFingerprint, ...core } = candidate;
-  if (candidateFingerprint !== fingerprintCanonicalValue(core)) throw evidenceError();
   return candidate;
 };
 

@@ -50,6 +50,7 @@ import {
   type ResolvedContributionBinding,
 } from "./module-index";
 import type { RequestDatabaseTransaction } from "../db/index";
+import { canonicalJson } from "./canonical-json-definition";
 import { z } from "zod";
 import {
   assertPreparedInstallationRuntimeBundleMatches,
@@ -1102,7 +1103,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       releaseRevision: application.releaseRevision,
     }, exact.releaseSet);
     if (prepared.preparationBasis.kind !== "registration_candidate" ||
-      prepared.candidateFingerprint !== own.candidateFingerprint)
+      canonicalJson(prepared) !== canonicalJson(own))
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     return prepared;
   };

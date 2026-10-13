@@ -726,7 +726,6 @@ export const preparedApplicationRoleTemplatesSchema = z
     preparationBasis: applicationRoleTemplatePreparationBasisSchema,
     permissionRegistration: preparedApplicationPermissionRegistrationSchema,
     templates: z.array(preparedApplicationRoleTemplateSchema).min(1),
-    candidateFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine((value, context) => {

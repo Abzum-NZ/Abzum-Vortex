@@ -536,11 +536,11 @@ begin
   if prepared_templates is not null then
     if prepared_templates - array[
       'contractVersion', 'preparationBasis', 'permissionRegistration',
-      'templates', 'candidateFingerprint'
+      'templates'
     ]::text[] <> '{}'::jsonb
       or not (prepared_templates ?& array[
         'contractVersion', 'preparationBasis', 'permissionRegistration',
-        'templates', 'candidateFingerprint'
+        'templates'
       ])
       or prepared_templates ->> 'contractVersion' is distinct from '1.0.0'
       or pg_catalog.jsonb_typeof(prepared_templates -> 'preparationBasis') <> 'object'
@@ -573,9 +573,7 @@ begin
           pg_catalog.trunc((prepared_templates #>>
             '{permissionRegistration,applicationRelease,releaseRevision}')::numeric)
       or pg_catalog.jsonb_typeof(prepared_templates -> 'templates') <> 'array'
-      or pg_catalog.jsonb_array_length(prepared_templates -> 'templates') = 0
-      or pg_catalog.jsonb_typeof(prepared_templates -> 'candidateFingerprint') <> 'string'
-      or prepared_templates ->> 'candidateFingerprint' !~ '^sha256:[a-f0-9]{64}$' then
+      or pg_catalog.jsonb_array_length(prepared_templates -> 'templates') = 0 then
       raise exception using errcode = '22023',
         message = 'Prepared application role-template evidence is invalid';
     end if;
@@ -672,6 +670,7 @@ begin
       end
       and registration.registration_owner_id = case
         when item.value ->> 'ownerKind' = 'platform'
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
         else (item.value ->> 'applicationRootId')::uuid
       end
