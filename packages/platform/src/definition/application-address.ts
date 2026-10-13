@@ -928,7 +928,8 @@ const readPermittedApplications = async (
         select vortex_access.read_application_address_candidates(
           ${parsedSession.data.identityId}::uuid,
           ${tenantShortName.data}::text,
-          ${organizationShortName.data}::text
+          ${organizationShortName.data}::text,
+          ${addressedApplicationKey !== undefined}::boolean
         ) as address
       `;
       if (rows.length !== 1) throw new Error("INVALID_APPLICATION_ADDRESS_RESULT");

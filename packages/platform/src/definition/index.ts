@@ -61,7 +61,6 @@ export {
   firstInstallHistory,
   firstInstallHistoryMatchesDraft,
   firstInstallSelectedIdentity,
-  firstInstallSetMatchesHistory,
   firstInstallState,
   firstInstallUnavailable,
   firstInstallWorkflows,
@@ -69,8 +68,40 @@ export {
   sameFirstInstallRelease,
 } from "./installation-first-install";
 export {
+  completeFirstInstallConnectionRead,
+  firstInstallAppCompletion,
+  readAppScopedFirstInstallReleaseSet,
+  readFirstInstallAppState,
+  readFirstInstallCandidateInTransaction,
+  readFirstInstallCurrentRelease,
+  readFirstInstallProvisionedSetupInTransaction,
+  requireFirstInstallSetupUnchanged,
+  visibleLifecyclePolicyBody,
+  visibleProvisionedSetup,
+  type FirstInstallAppState,
+  type FirstInstallEnvironment,
+} from "./installation-first-install-app";
+export {
+  createFirstInstallCoordinator,
+  verifyFirstInstallActivation,
+  type FirstInstallCoordinatorEnvironment,
+} from "./installation-first-install-coordinator";
+export { classifyInstallationFailure } from "./installation-failure";
+export {
+  activateUpgradeRelease,
+  readUpgradeActiveObservation,
+  readUpgradeAuthorizedState,
+  sameUpgradeSelectedSnapshot,
+  sameUpgradeSnapshotState,
+  type UpgradeAuthorizedState,
+  type UpgradeEnvironment,
+  type UpgradeReleaseIdentity,
+  type UpgradeSelector,
+  type UpgradeSnapshot,
+  type UpgradeState,
+} from "./installation-upgrade";
+export {
   ProvisionedSetupError,
-  readProvisionedSetupAccessDecision,
   readProvisionedSetupInTransaction,
   type ProvisionedSetup,
 } from "./installation-provisioned-setup";

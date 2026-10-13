@@ -31,14 +31,6 @@ const SEVERITY_LABELS: Readonly<Record<NoticeSeverity, string>> = {
   critical: "Critical",
 };
 
-const SEVERITY_COLORS: Readonly<Record<NoticeSeverity, string>> = {
-  info: "var(--vortex-info-text)",
-  // The current theme vocabulary has no separate success text role.
-  success: "var(--vortex-info-text)",
-  warning: "var(--vortex-warning-text)",
-  critical: "var(--vortex-danger-text)",
-};
-
 /** Accept only root-relative application paths or credential-free HTTPS addresses. */
 function safeNoticeHref(href: string): string | undefined {
   if (
@@ -102,7 +94,6 @@ export function Notice({
   if (dismissed) return null;
 
   const critical = severity === "critical";
-  const severityColor = SEVERITY_COLORS[severity];
 
   return (
     <div
@@ -113,16 +104,14 @@ export function Notice({
         role={critical ? "alert" : "status"}
         aria-live={critical ? "assertive" : "polite"}
         aria-atomic="true"
-        variant={critical ? "destructive" : "default"}
-        className="border-l-4"
-        style={{ backgroundColor: "var(--vortex-surface)", borderLeftColor: severityColor }}
+        variant={severity}
       >
         <div className="min-w-0">
-          <AlertTitle className="mb-1 font-bold" style={{ color: severityColor }}>
+          <AlertTitle className="mb-1">
             {SEVERITY_LABELS[severity]}
             {title ? `: ${title}` : null}
           </AlertTitle>
-          <AlertDescription style={{ color: "var(--vortex-text)" }}>
+          <AlertDescription>
             <p className="m-0">{renderNoticeContent(content)}</p>
           </AlertDescription>
         </div>

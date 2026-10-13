@@ -2,6 +2,24 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
+/*
+ * One severity treatment per variant: a left rule, title and surface read from the resolved theme
+ * roles. Tailwind only emits utilities it finds as complete strings in source, so each variant
+ * spells its own classes out.
+ */
+const infoVariant =
+  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-info-text)] " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-info-text)] " +
+  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+const warningVariant =
+  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-warning-text)] " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-warning-text)] " +
+  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+const dangerVariant =
+  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-danger-text)] " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-danger-text)] " +
+  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+
 const alertVariants = cva(
   "cn-alert group/alert relative w-full",
   {
@@ -9,6 +27,11 @@ const alertVariants = cva(
       variant: {
         default: "cn-alert-variant-default",
         destructive: "cn-alert-variant-destructive",
+        info: infoVariant,
+        // The theme vocabulary has no separate success text role; success reads the info role.
+        success: infoVariant,
+        warning: warningVariant,
+        critical: `cn-alert-variant-destructive ${dangerVariant}`,
       },
     },
     defaultVariants: {
@@ -64,4 +87,4 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export { Alert, AlertTitle, AlertDescription, AlertAction };
+export { Alert, alertVariants, AlertTitle, AlertDescription, AlertAction };

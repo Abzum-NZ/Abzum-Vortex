@@ -3,6 +3,8 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   isRecord,
+  describeFailure,
+  flowRefusalFeedbackSchema,
   builderKeySchema,
   PLATFORM_SERVICE_OPERATIONS,
   executeNamedActionCommandSchema,
@@ -41,6 +43,7 @@ import {
   type FlowDefinition,
   type FlowReadFieldsScalarType,
   type ExecuteNamedActionResult,
+  type FlowFieldCorrection,
   type FlowRefusalFeedback,
   type FlowTask,
   type FlowValue,
@@ -480,6 +483,14 @@ const effectCommandId = (runId: string, taskPath: string, iteration: string): st
 };
 
 /** The task outcome of a protected record path's safe refusal code. */
+const dedupeFieldCorrections = (
+  corrections: readonly FlowFieldCorrection[],
+): readonly FlowFieldCorrection[] => [
+  ...new Map(
+    corrections.map((correction) => [`${correction.field}:${correction.code}`, correction]),
+  ).values(),
+];
+
 const refusalOutcome = (code: string): FlowTaskOutcome =>
   code === "conflict" ? "conflict" : code === "invalid_request" ? "validation" : "refused";
 
@@ -900,7 +911,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   /** What one protected task will run, decided before its effect is claimed. */
   type TaskPlan =
     | Readonly<{ kind: "operation"; entry: PlatformOperation; inputs: Record<string, unknown> }>
-    | Readonly<{ kind: "save"; command: SaveRecordCommand }>
+    | Readonly<{
+        kind: "save";
+        command: SaveRecordCommand;
+        /** The submitted form field key of each record field, by lower-case field id. */
+        submittedNames: ReadonlyMap<string, string>;
+      }>
     | Readonly<{ kind: "action"; command: ExecuteNamedActionCommand }>;
 
   type TaskResult = {
@@ -931,6 +947,13 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   const isEmptyEffectOutput = (value: unknown): boolean =>
     isRecord(value) && Object.keys(value).length === 0;
+
+  /** A refused save stores only its located field keys and codes, so a replay reports them again. */
+  const storedCorrectionDiagnostic = (value: unknown): FlowRefusalFeedback | undefined => {
+    if (!isRecord(value) || Object.keys(value).length !== 1) return undefined;
+    const parsed = flowRefusalFeedbackSchema.safeParse(value.diagnostic);
+    return parsed.success ? parsed.data : undefined;
+  };
 
   /** Records a task the platform cannot run here: it fails as not available, never as refused. */
   const notAvailable = (run: Run, call: FlowProtectedTaskCall, requires: string): TaskResult => {
@@ -980,11 +1003,13 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       if (!isRecord(values) || carriesSensitive(values, run.sensitive))
         return { outcome: "validation" };
       const submittedValues: Record<string, JsonValue> = {};
+      const submittedNames = new Map<string, string>();
       for (const [name, value] of Object.entries(values)) {
         const fieldId = recordType.fieldIds.get(name.toLowerCase());
         if (fieldId === undefined || Object.hasOwn(submittedValues, fieldId))
           return { outcome: "validation" };
         submittedValues[fieldId] = value as JsonValue;
+        submittedNames.set(fieldId.toLowerCase(), name);
       }
       // A task that names a record changes it; one that names none creates a record.
       if (!Object.hasOwn(call.properties, "record")) {
@@ -1006,7 +1031,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           ...(selectedGroup === undefined ? {} : { selectedOwnerGroupId: selectedGroup.data }),
         });
         return command.success
-          ? { plan: { kind: "save", command: command.data } }
+          ? { plan: { kind: "save", command: command.data, submittedNames } }
           : { outcome: "validation" };
       }
       const recordId = recordIdSchema.safeParse(call.properties.record?.value);
@@ -1030,7 +1055,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         submittedValues,
       });
       return command.success
-        ? { plan: { kind: "save", command: command.data } }
+        ? { plan: { kind: "save", command: command.data, submittedNames } }
         : { outcome: "validation" };
     }
 
@@ -1177,9 +1202,33 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         const outputs = { record: recordId.data };
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
-      const outcome =
-        value.outcome === "correction_required" ? "validation" : refusalOutcome(value.error.code);
-      return { result: { outcome }, stored: {} };
+      if (value.outcome === "correction_required") {
+        // Only the form field key and the correction code leave the save: never a value.
+        const located = dedupeFieldCorrections(
+          value.corrections.flatMap((correction) => {
+            const field = plan.submittedNames.get(correction.fieldId.toLowerCase());
+            return field === undefined ? [] : [{ field, code: correction.code }];
+          }),
+        );
+        const diagnostic = flowRefusalFeedbackSchema.safeParse({
+          code: "invalid_command",
+          corrections: located,
+        });
+        // The caller sees the located fields; the run-ended line carries the stable reason.
+        console.error(
+          `[flows] save of task ${call.taskId} needs ${value.corrections.length} field correction(s) (${[...new Set(value.corrections.map((correction) => correction.code))].join(", ")}); ${located.length} located in the form${diagnostic.success ? "" : `: ${describeFailure(diagnostic.error)}`}`,
+        );
+        return {
+          result: {
+            outcome: "validation",
+            ...(diagnostic.success ? { diagnostic: diagnostic.data } : {}),
+          },
+          stored: diagnostic.success
+            ? { diagnostic: { code: diagnostic.data.code, corrections: [...located] } }
+            : {},
+        };
+      }
+      return { result: { outcome: refusalOutcome(value.error.code) }, stored: {} };
     }
 
     if (plan.kind === "action") {
@@ -1366,10 +1415,18 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             return { outcome: "uncertain" };
           }
         }
+        const replayedDiagnostic =
+          claim.outcome === "validation" ? storedCorrectionDiagnostic(claim.outputs) : undefined;
+        if (replayedDiagnostic !== undefined)
+          return { outcome: "validation", diagnostic: replayedDiagnostic };
         return isEmptyEffectOutput(claim.outputs)
           ? { outcome: claim.outcome as FlowTaskOutcome }
           : { outcome: "refused" };
       }
+      const replayedDiagnostic =
+        claim.outcome === "validation" ? storedCorrectionDiagnostic(claim.outputs) : undefined;
+      if (replayedDiagnostic !== undefined)
+        return { outcome: "validation", diagnostic: replayedDiagnostic };
       return {
         outcome: claim.outcome as FlowTaskOutcome,
         outputs: isRecord(claim.outputs) ? (claim.outputs as Record<string, JsonValue>) : {},
