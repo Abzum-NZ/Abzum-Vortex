@@ -4,13 +4,33 @@ import { LAYOUT_ONLY_STYLES_CSS } from "../layout-styles";
  * Platform stylesheet for every shared #580-#582 component state. It reads only the fixed
  * variables from `generateThemeCssVariables`; text is always painted on the surface or fill
  * #594 validated it against, and hover/pressed feedback uses the element's own validated
- * foreground rather than new colours. Transitions use the platform `feedback` motion token and
- * stop under reduced motion. Application definitions contribute token values only.
+ * foreground rather than new colours. The platform motion tokens below are the only timing
+ * values platform motion reads, and they stop under reduced motion. Application definitions
+ * contribute token values only.
  */
 const SHARED_COMPONENT_STYLES_CSS = `
 /* Theme roots: the runtime page or preview canvas, and each placement with declared overrides */
 [data-vortex-theme] {
-  --vortex-motion-feedback: 100ms;
+  /*
+   * The six semantic motion tokens of the specification's animation implementation standard:
+   * one duration inside each calibration band, the easing that carries it, and the layout
+   * spring. They are platform constants: a platform component reads one token, and no feature
+   * code writes a one-off timing value.
+   */
+  --vortex-motion-feedback: 100ms; /* pressed feedback and tiny state confirmation */
+  --vortex-motion-feedback-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --vortex-motion-enter-exit: 160ms; /* tooltip, menu, popover and small component entry or exit */
+  --vortex-motion-enter-exit-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --vortex-motion-refresh: 220ms; /* loading-to-content, local data refresh and a row value change */
+  --vortex-motion-refresh-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --vortex-motion-panel: 300ms; /* dialog, drawer, expanding section and larger local panel */
+  --vortex-motion-panel-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --vortex-motion-page: 360ms; /* the changing page region while the application shell stays stable */
+  --vortex-motion-page-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  /* The layout spring for reordering, resizing and dragging, approximated for CSS as one mild
+   * ease-out-back overshoot that settles to rest; Motion drives the same movement with spring
+   * physics. */
+  --vortex-motion-layout-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   color: var(--vortex-text);
   background-color: var(--vortex-surface);
   font-family: var(--vortex-font-family);
@@ -105,6 +125,10 @@ const SHARED_COMPONENT_STYLES_CSS = `
 @media (prefers-reduced-motion: reduce) {
   [data-vortex-theme] {
     --vortex-motion-feedback: 0ms;
+    --vortex-motion-enter-exit: 0ms;
+    --vortex-motion-refresh: 0ms;
+    --vortex-motion-panel: 0ms;
+    --vortex-motion-page: 0ms;
   }
 }
 
