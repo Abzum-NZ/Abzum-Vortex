@@ -1169,7 +1169,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         samePermissionAuthority(oldRegistration.entries, newRegistration.entries) &&
         sameUniqueEvidence(oldTemplates.templates, newTemplates.templates,
           (prepared) => prepared.template.roleId,
-          (prepared) => prepared.sourceTemplateFingerprint) &&
+          (prepared) => canonicalJson(prepared.template)) &&
         oldTemplates.templates.every((prepared) => {
           const next = newTemplates.templates.find((candidate) =>
             sameId(candidate.template.roleId, prepared.template.roleId));

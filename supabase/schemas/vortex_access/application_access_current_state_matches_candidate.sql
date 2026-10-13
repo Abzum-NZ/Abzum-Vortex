@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_access.application_access_current_state_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_prepared_templates jsonb) RETURNS boolean
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
@@ -34,8 +34,6 @@ begin
         and continuity.application_root_id = p_application_root_id
         and continuity.source_role_id = (item.value #>> '{template,roleId}')::uuid
         and continuity.state = 'available'
-        and continuity.source_template_fingerprint =
-          item.value ->> 'sourceTemplateFingerprint'
         and continuity.last_processed_registration_revision = p_registration_revision
     )
   ) or exists (
@@ -48,8 +46,6 @@ begin
         select 1
         from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
         where (item.value #>> '{template,roleId}')::uuid = continuity.source_role_id
-          and item.value ->> 'sourceTemplateFingerprint' =
-            continuity.source_template_fingerprint
       )
   ) then
     return false;
@@ -57,7 +53,7 @@ begin
 
   for role_record in
     select role.role_id, role.source_role_id, revision.lifecycle,
-      revision.revision as role_revision, revision.source_template_fingerprint,
+      revision.revision as role_revision,
       revision.template_continuity_revision
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision

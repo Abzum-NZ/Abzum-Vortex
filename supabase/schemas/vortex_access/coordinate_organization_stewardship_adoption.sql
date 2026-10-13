@@ -359,11 +359,10 @@ begin
     derived_source_release_version,
     derived_source_validation_contract_version,
     derived_source_content_fingerprint,
-    derived_source_resolution_fingerprint,
-    derived_source_template_fingerprint, live_revision, created_by, created_at
+    derived_source_resolution_fingerprint, live_revision, created_by, created_at
   ) values (
     p_organization_id, p_role_id, 'custom', p_role_key, null, null,
-    null, null, null, null, null, null, null, null, null, 1,
+    null, null, null, null, null, null, null, null, 1,
     p_changed_by, checked_at
   );
 
@@ -428,7 +427,7 @@ begin
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
     source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_template_fingerprint,
+    source_resolution_fingerprint,
     source_catalogue_fingerprint, accepted_registration_revision,
     template_continuity_revision,
     changed_by, changed_at, change_correlation_id
@@ -436,7 +435,7 @@ begin
     p_organization_id, p_role_id, 1, 'custom', null, 'active', 'privileged',
     'standing', 1, 1, null, null, p_role_key, p_role_label,
     p_role_description, null, null, null, null, null, null, null, null,
-    null, null, p_changed_by, checked_at, p_correlation_id
+    null, p_changed_by, checked_at, p_correlation_id
   );
 
   insert into vortex_access.organization_role_assignments (

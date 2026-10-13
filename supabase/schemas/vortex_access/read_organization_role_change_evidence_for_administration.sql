@@ -404,7 +404,6 @@ begin
       'permissionRegistration', permission_registration,
       'templates', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'template', selected_template,
-        'sourceTemplateFingerprint', selected_continuity.source_template_fingerprint,
         'sourcePermissions', source_permissions,
         'livePermissions', live_permissions
       ))
