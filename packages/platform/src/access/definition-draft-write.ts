@@ -3,6 +3,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  describeFailure,
   applicationSourceDocumentSchema,
   applicationRootIdSchema,
   canonicalJson,
@@ -42,10 +43,19 @@ import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import { DefinitionError } from "../definition/definition-index";
 
+/** Why a draft write was refused, in terms the person can act on. */
+export type HumanApplicationDraftRefusalReason =
+  | "permission_missing"
+  | "source_invalid"
+  | "context_changed";
+
+/** Why a draft write conflicted, in terms the person can act on. */
+export type HumanApplicationDraftConflictReason = "draft_changed" | "key_exists" | "draft_missing";
+
 export type HumanApplicationDraftWriteResult =
   | Readonly<{ kind: "available"; draft: StoredApplicationDefinitionDraft }>
-  | Readonly<{ kind: "conflict" }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "conflict"; reason?: HumanApplicationDraftConflictReason }>
+  | Readonly<{ kind: "refused"; reason?: HumanApplicationDraftRefusalReason }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 export type HumanApplicationDraftWriterDependencies = Readonly<{
@@ -283,24 +293,40 @@ const verifySavedDraft = (
 };
 
 const safeFailure = (error: unknown): HumanApplicationDraftWriteResult => {
-  if (error instanceof BuilderAuthorityError) return { kind: "refused" };
+  if (error instanceof BuilderAuthorityError) return { kind: "refused", reason: "permission_missing" };
   if (error instanceof DefinitionError) {
+    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+      return { kind: "conflict", reason: "draft_changed" };
+    if (error.code === "DEFINITION_ROOT_MISSING") return { kind: "conflict", reason: "draft_missing" };
     if (
-      error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
-      error.code === "DEFINITION_ROOT_MISSING" ||
       error.code === "DEFINITION_ROOT_ALREADY_EXISTS" ||
       error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT"
     )
-      return { kind: "conflict" };
+      return { kind: "conflict", reason: "key_exists" };
+    if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE")
+      return { kind: "refused", reason: "source_invalid" };
     if (
-      error.code === "INVALID_DEFINITION_COMMAND" ||
-      error.code === "INVALID_DEFINITION_SOURCE" ||
       error.code === "DEFINITION_CONTEXT_REFUSED" ||
       error.code === "DEFINITION_STORAGE_VALIDATION_FAILED"
     )
-      return { kind: "refused" };
+      return { kind: "refused", reason: "context_changed" };
   }
   return { kind: "temporarily_unavailable" };
+};
+
+/** One log line per refusal: a stable code naming the write and the reason, plus the cause class. */
+const logDraftWriteFailure = (
+  mode: "create" | "save",
+  result: HumanApplicationDraftWriteResult,
+  cause: unknown,
+): void => {
+  const reason =
+    result.kind === "refused" || result.kind === "conflict" ? (result.reason ?? "unspecified") : "unavailable";
+  console.error(
+    `[studio] application draft ${mode} ${result.kind} ${
+      mode === "create" ? "STUDIO_DRAFT_CREATE" : "STUDIO_DRAFT_SAVE"
+    }_${reason.toUpperCase()}: ${cause === undefined ? "none" : describeFailure(cause)}`,
+  );
 };
 
 const databaseErrorCode = (error: unknown): string | undefined => {
@@ -324,10 +350,17 @@ export const createHumanApplicationDraftWriter = (
     const saveCommandResult =
       mode === "save" ? saveDefinitionDraftCommandSchema.safeParse(candidate) : undefined;
     const command = createCommand ?? saveCommandResult;
-    if (!organization.success || command === undefined || !command.success)
-      return { kind: "refused" };
+    if (!organization.success || command === undefined || !command.success) {
+      const refused: HumanApplicationDraftWriteResult = { kind: "refused", reason: "source_invalid" };
+      logDraftWriteFailure(mode, refused, command?.success === false ? command.error : organization.error);
+      return refused;
+    }
     const source = applicationSourceDocumentSchema.safeParse(command.data.source);
-    if (!source.success || !validateDefinitionSource(source.data).valid) return { kind: "refused" };
+    if (!source.success || !validateDefinitionSource(source.data).valid) {
+      const refused: HumanApplicationDraftWriteResult = { kind: "refused", reason: "source_invalid" };
+      logDraftWriteFailure(mode, refused, source.success ? undefined : source.error);
+      return refused;
+    }
     const saveCommand = saveCommandResult?.success ? saveCommandResult.data : undefined;
     // Detached validated source is reused for hashing, identities, storage and result comparison.
     let failure: HumanApplicationDraftWriteResult | undefined;
@@ -380,6 +413,7 @@ export const createHumanApplicationDraftWriter = (
           return draft;
         } catch (error) {
           failure = safeFailure(error);
+          logDraftWriteFailure(mode, failure, error);
           // Throw through runChange so every partial write is rolled back before safe mapping.
           throw error;
         }
@@ -387,9 +421,12 @@ export const createHumanApplicationDraftWriter = (
     );
     if (result.kind === "available") return { kind: "available", draft: result.value };
     if (failure !== undefined) return failure;
-    return result.kind === "unavailable"
-      ? { kind: "refused" }
-      : { kind: "temporarily_unavailable" };
+    const unresolved: HumanApplicationDraftWriteResult =
+      result.kind === "unavailable"
+        ? { kind: "refused", reason: "context_changed" }
+        : { kind: "temporarily_unavailable" };
+    logDraftWriteFailure(mode, unresolved, undefined);
+    return unresolved;
   };
   const writeDerived = async (
     session: IdentitySession,
@@ -414,7 +451,11 @@ export const createHumanApplicationDraftWriter = (
   > => {
     const organization = organizationIdSchema.safeParse(organizationId);
     const command = derivedDraftCommandSchema.safeParse(candidate);
-    if (!organization.success || !command.success) return { kind: "refused" };
+    if (!organization.success || !command.success) {
+      const refused: HumanApplicationDraftWriteResult = { kind: "refused", reason: "source_invalid" };
+      logDraftWriteFailure("save", refused, command.success ? organization.error : command.error);
+      return refused;
+    }
     if (command.data.candidateReleaseRevision !== command.data.expectedPublicationAnchor)
       return { kind: "conflict" };
 
@@ -518,6 +559,7 @@ export const createHumanApplicationDraftWriter = (
           return { kind: "saved", draft: verified };
         } catch (error) {
           failure = safeFailure(error);
+          logDraftWriteFailure("save", failure, error);
           // Throw through runChange so every partial write is rolled back before safe mapping.
           throw error;
         }
@@ -528,9 +570,12 @@ export const createHumanApplicationDraftWriter = (
       return { kind: "available", draft: result.value.draft };
     }
     if (failure !== undefined) return failure;
-    return result.kind === "unavailable"
-      ? { kind: "refused" }
-      : { kind: "temporarily_unavailable" };
+    const unresolved: HumanApplicationDraftWriteResult =
+      result.kind === "unavailable"
+        ? { kind: "refused", reason: "context_changed" }
+        : { kind: "temporarily_unavailable" };
+    logDraftWriteFailure("save", unresolved, undefined);
+    return unresolved;
   };
   return Object.freeze({
     createRoot: (session: IdentitySession, organizationId: string, candidate: unknown) =>
