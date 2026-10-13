@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import {
+  describeFailure,
   identityAuthoritySchema,
   identityIdSchema,
   isLoopbackHostname,
@@ -107,6 +108,24 @@ const validAccessToken = (value: string): boolean =>
 const validRefreshToken = (value: string): boolean =>
   value.length > 0 && value.length <= 2_048 && !/\s/u.test(value);
 
+// Only the error class, HTTP status and provider code are logged: the message can carry the email.
+const logProviderFailure = (journey: string, error: unknown): void => {
+  const { name, status, code } = (error ?? {}) as {
+    name?: unknown;
+    status?: unknown;
+    code?: unknown;
+  };
+  console.error(
+    `[identity] ${journey} provider failure: ${String(name)} status=${String(status)} code=${String(code)}`,
+  );
+};
+
+const logJourneyRefusal = (journey: string, reason: string, cause?: unknown): void => {
+  console.error(
+    `[identity] ${journey} refused ${reason}${cause === undefined ? "" : `: ${describeFailure(cause)}`}`,
+  );
+};
+
 export const localDevelopmentSignInAvailable = (
   configuration: LocalDevelopmentSignInConfiguration,
 ): boolean => {
@@ -130,7 +149,8 @@ export const localDevelopmentSignInAvailable = (
       configuration.adminKey.length <= 512 &&
       /^sb_secret_[A-Za-z0-9_-]+$/u.test(configuration.adminKey)
     );
-  } catch {
+  } catch (error) {
+    logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_CONFIGURATION_INVALID", error);
     return false;
   }
 };
@@ -157,8 +177,10 @@ const confirmedLocalDevelopmentUser = (
 export const signInWithLocalDevelopmentAccount = async (
   configuration: LocalDevelopmentSignInConfiguration,
 ): Promise<VerifiedSignInResult> => {
-  if (!localDevelopmentSignInAvailable(configuration))
+  if (!localDevelopmentSignInAvailable(configuration)) {
+    logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_NOT_AVAILABLE");
     return { ok: false, code: "vortex.identity.authority_unavailable" };
+  }
 
   let sessionClient: SupabaseClient | undefined;
   let accepted = false;
@@ -170,8 +192,10 @@ export const signInWithLocalDevelopmentAccount = async (
     if (
       existing.error ||
       !confirmedLocalDevelopmentUser(existing.data.user, configuration.identityId)
-    )
+    ) {
+      logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_USER_NOT_CONFIRMED", existing.error);
       return { ok: false, code: "vortex.identity.authority_unavailable" };
+    }
 
     // Recovery refuses absent users. Magic-link generation can create an account.
     const generated = await admin.auth.admin.generateLink({
@@ -185,8 +209,10 @@ export const signInWithLocalDevelopmentAccount = async (
       generated.data.properties?.verification_type !== "recovery" ||
       !generated.data.properties.hashed_token ||
       generated.data.properties.hashed_token.length > 2_048
-    )
+    ) {
+      logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_LINK_NOT_GENERATED", generated.error);
       return { ok: false, code: "vortex.identity.authority_unavailable" };
+    }
 
     sessionClient = createAuthorityClient(configuration.journey);
     const verified = await sessionClient.auth.verifyOtp({
@@ -201,41 +227,35 @@ export const signInWithLocalDevelopmentAccount = async (
       !confirmedLocalDevelopmentUser(session.user, configuration.identityId) ||
       !validAccessToken(session.access_token) ||
       !validRefreshToken(session.refresh_token)
-    )
+    ) {
+      logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_SESSION_REJECTED", verified.error);
       return { ok: false, code: "vortex.identity.authority_unavailable" };
+    }
 
     const identity = await createIdentityVerifier(
       configuration.authority,
       configuration.journey.publishableKey,
     ).verifyAccessToken(session.access_token);
-    if (identity.identityId !== configuration.identityId)
+    if (identity.identityId !== configuration.identityId) {
+      logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_IDENTITY_MISMATCH");
       return { ok: false, code: "vortex.identity.authority_unavailable" };
+    }
 
     accepted = true;
     return { ok: true, accessToken: session.access_token, refreshToken: session.refresh_token };
-  } catch {
+  } catch (error) {
+    logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_FAILED", error);
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   } finally {
     if (!accepted && sessionClient !== undefined) {
       try {
         await sessionClient.auth.signOut({ scope: "local" });
-      } catch {
+      } catch (error) {
         // Best-effort revocation; rejected credentials never reach cookie bootstrap.
+        logJourneyRefusal("local-sign-in", "LOCAL_SIGN_IN_REVOCATION_FAILED", error);
       }
     }
   }
-};
-
-// Only the error class, HTTP status and provider code are logged: the message can carry the email.
-const logProviderFailure = (journey: string, error: unknown): void => {
-  const { name, status, code } = (error ?? {}) as {
-    name?: unknown;
-    status?: unknown;
-    code?: unknown;
-  };
-  console.error(
-    `[identity] ${journey} provider failure: ${String(name)} status=${String(status)} code=${String(code)}`,
-  );
 };
 
 const confirmationUrl = (configuration: IdentityJourneyConfiguration): string =>
@@ -291,6 +311,7 @@ export const signInWithPassword = async (
       !validAccessToken(data.session.access_token) ||
       !validRefreshToken(data.session.refresh_token)
     ) {
+      logJourneyRefusal("sign-in", "SIGN_IN_CREDENTIALS_REJECTED", error);
       return { ok: false, code: "vortex.identity.invalid_credentials" };
     }
 
@@ -299,7 +320,8 @@ export const signInWithPassword = async (
       accessToken: data.session.access_token,
       refreshToken: data.session.refresh_token,
     };
-  } catch {
+  } catch (error) {
+    logProviderFailure("sign-in", error);
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   }
 };
@@ -338,10 +360,13 @@ export const confirmEmail = async (
   try {
     const authority = createAuthorityClient(configuration);
     const { data, error } = await authority.auth.verifyOtp({ email, token, type: "email" });
-    return error || !data.user
-      ? { ok: false, code: "vortex.identity.invalid_or_expired_link" }
-      : { ok: true };
-  } catch {
+    if (error || !data.user) {
+      logJourneyRefusal("recovery-link", "RECOVERY_LINK_REJECTED", error);
+      return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
+    }
+    return { ok: true };
+  } catch (error) {
+    logProviderFailure("recovery-link", error);
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   }
 };
@@ -372,10 +397,13 @@ export const completePasswordRecovery = async (
     }
 
     const { error: updateError } = await authority.auth.updateUser({ password });
-    return updateError
-      ? { ok: false, code: "vortex.identity.invalid_or_expired_link" }
-      : { ok: true };
-  } catch {
+    if (updateError) {
+      logJourneyRefusal("password-recovery", "PASSWORD_UPDATE_REJECTED", updateError);
+      return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
+    }
+    return { ok: true };
+  } catch (error) {
+    logProviderFailure("password-recovery", error);
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   }
 };

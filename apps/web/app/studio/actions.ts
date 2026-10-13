@@ -20,6 +20,7 @@ import {
   type StudioThemeTokenValue,
 } from "@vortex/ui/studio";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
+import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
@@ -32,25 +33,37 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 
+const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
+  mapWebError(cause, { route: "studio/actions", operation, code, fallback });
+
+const failureCodes = (validation: {
+  readonly failures: readonly { readonly ruleCode: string }[];
+}): string =>
+  validation.failures.map((failure) => failure.ruleCode).slice(0, 8).join(",");
+
 /** Advisory source review only: the existing Save resolves all write authority afresh. */
 export async function reviewStudioApplicationSource(
   organizationId: string, candidate: unknown,
 ): Promise<StudioApplicationSourceReviewResult> {
   try {
     const request = studioApplicationSourceReviewRequestSchema.safeParse(candidate);
-    if (!request.success) return { kind: "invalid" };
+    if (!request.success)
+      return refuse("review-application-source", "STUDIO_SOURCE_REVIEW_REQUEST_INVALID",
+        { kind: "invalid" } as const, request.error);
     const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
     if (loaded.kind !== "available") return loaded;
     const draft = loaded.draft;
     if (!sameId(draft.rootId, request.data.rootId) || !sameId(loaded.organizationId, organizationId))
-      return { kind: "refused" };
+      return refuse("review-application-source", "STUDIO_SOURCE_REVIEW_SCOPE_MISMATCH",
+        { kind: "refused" } as const);
     if (draft.draftRevision !== request.data.expectedDraftRevision ||
       draft.sourceFingerprint !== request.data.expectedSavedSourceFingerprint)
       return { kind: "conflict" };
     const source = request.data.source;
     if (source.key !== draft.key || source.root_alias !== draft.source.root_alias ||
       new TextEncoder().encode(canonicalJson(source)).byteLength > maximumApplicationSourceImportBytes)
-      return { kind: "invalid" };
+      return refuse("review-application-source", "STUDIO_SOURCE_REVIEW_SOURCE_REJECTED",
+        { kind: "invalid" } as const);
     const binding = {
       organizationId: draft.organizationId, rootId: draft.rootId,
       key: draft.key, rootAlias: draft.source.root_alias, draftRevision: draft.draftRevision,
@@ -68,7 +81,10 @@ export async function reviewStudioApplicationSource(
     return studioApplicationSourceReviewResultSchema.parse({
       kind: "available", ...binding, source,
     });
-  } catch { return { kind: "temporarily_unavailable" }; }
+  } catch (error) {
+    return refuse("review-application-source", "STUDIO_SOURCE_REVIEW_FAILED",
+      { kind: "temporarily_unavailable" } as const, error);
+  }
 }
 
 /** Separate explicit requests: preparation never installs or publishes a release. */
@@ -86,25 +102,42 @@ export async function resolveStudioApplicationConditionContext(
 ): Promise<StudioApplicationConditionContextResult> {
   try {
     const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    if (resolved.kind !== "active")
+      return refuse("read-condition-context", `STUDIO_CONDITION_CONTEXT_SESSION_${resolved.kind.toUpperCase()}`,
+        resolved.kind === "temporarily_unavailable"
+          ? { kind: "temporarily_unavailable" } as const : { kind: "refused" } as const);
     return await readSavedStudioApplicationConditionContext(resolved.session, organizationId, candidate);
-  } catch { return { kind: "temporarily_unavailable" }; }
+  } catch (error) {
+    return refuse("read-condition-context", "STUDIO_CONDITION_CONTEXT_FAILED",
+      { kind: "temporarily_unavailable" } as const, error);
+  }
 }
 
 /** A browser document is authored input, never authority or evidence of an installed Module. */
 export async function createStudioApplication(organizationId: string, candidate: unknown) {
   const source = applicationSourceDocumentSchema.safeParse(candidate);
-  if (!source.success || !validateDefinitionSource(source.data).valid)
-    return { kind: "refused" } as const;
+  if (!source.success)
+    return refuse("create-application", "STUDIO_CREATE_SOURCE_SCHEMA_INVALID",
+      { kind: "refused" } as const, source.error);
+  const validation = validateDefinitionSource(source.data);
+  if (!validation.valid)
+    return refuse("create-application", `STUDIO_CREATE_SOURCE_INVALID:${failureCodes(validation)}`,
+      { kind: "refused" } as const);
   return createHumanApplicationDraft(organizationId, { source: source.data });
 }
 
 export async function saveStudioApplication(organizationId: string, candidate: unknown) {
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
-  if (!command.success || command.data.source.kind !== "application" ||
-    !validateDefinitionSource(command.data.source).valid)
-    return { kind: "refused" } as const;
+  if (!command.success)
+    return refuse("save-application", "STUDIO_SAVE_COMMAND_SCHEMA_INVALID",
+      { kind: "refused" } as const, command.error);
+  if (command.data.source.kind !== "application")
+    return refuse("save-application", "STUDIO_SAVE_SOURCE_NOT_APPLICATION",
+      { kind: "refused" } as const);
+  const validation = validateDefinitionSource(command.data.source);
+  if (!validation.valid)
+    return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
+      { kind: "refused" } as const);
   return saveHumanApplicationDraft(organizationId, command.data);
 }
 
@@ -118,20 +151,24 @@ export async function validateStudioApplicationAppearance(
   candidate: unknown,
 ): Promise<StudioAppearanceResult> {
   const request = parseStudioAppearanceRequest(candidate);
-  if (request === undefined) return { kind: "refused" };
+  if (request === undefined)
+    return refuse("validate-appearance", "STUDIO_APPEARANCE_REQUEST_INVALID", { kind: "refused" } as const);
   const loaded = await loadStudioApplicationDraft(organizationId, request.rootId);
   if (loaded.kind !== "available") return loaded;
   const draft = loaded.draft;
-  if (draft.rootId !== request.rootId) return { kind: "refused" };
+  if (draft.rootId !== request.rootId)
+    return refuse("validate-appearance", "STUDIO_APPEARANCE_ROOT_MISMATCH", { kind: "refused" } as const);
   if (draft.draftRevision !== request.expectedDraftRevision) return { kind: "conflict" };
   try {
     const authored = draft.source.body.theme;
     const pin = authored.base;
     const release = [PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0].find((item) =>
       item.catalogueThemeId === pin.catalogue_theme_id && item.releaseVersion === pin.release_version);
-    if (release === undefined) return { kind: "refused" };
+    if (release === undefined)
+      return refuse("validate-appearance", "STUDIO_APPEARANCE_RELEASE_UNKNOWN", { kind: "refused" } as const);
     const inherited = materialiseApplicationTheme({ ...authored, token_overrides: {} }, draft.key, release);
-    if (!inherited.valid) return { kind: "refused" };
+    if (!inherited.valid)
+      return refuse("validate-appearance", "STUDIO_APPEARANCE_INHERITED_THEME_INVALID", { kind: "refused" } as const);
     const sourceValue = (value: ApplicationContent["theme"]["tokens"][string]): StudioThemeTokenValue => {
       switch (value.kind) {
         case "color_pair": return { kind: value.kind, light: value.light, dark: value.dark };
@@ -154,7 +191,8 @@ export async function validateStudioApplicationAppearance(
       // The finite registered token set bounds every engine pair and per-token check. Refuse an
       // impossible output instead of dropping contrast failures or claiming a partial success.
       if (result.failures.length > 4 * tokens.length ** 2 + 8 * tokens.length + 64)
-        return { kind: "temporarily_unavailable" };
+        return refuse("validate-appearance", "STUDIO_APPEARANCE_FAILURES_UNBOUNDED",
+          { kind: "temporarily_unavailable" } as const);
       for (const failure of result.failures) {
         const code = studioAppearanceFailureCodes.find((item) => item === failure.code) ?? "VALIDATION_FAILED";
         const family = failure.family === "broken_reference" || failure.family === "unsafe_content"
@@ -162,13 +200,15 @@ export async function validateStudioApplicationAppearance(
         failures.push({ code, ruleCode: "vortex.definition.application_block_settings", family,
           ...(failure.tokenKey !== undefined && keys.has(failure.tokenKey) ? { tokenKey: failure.tokenKey } : {}) });
       }
-      if (failures.length === 0) return { kind: "temporarily_unavailable" };
+      if (failures.length === 0)
+        return refuse("validate-appearance", "STUDIO_APPEARANCE_FAILURES_EMPTY",
+          { kind: "temporarily_unavailable" } as const);
     }
     const publicAssetIds = [...new Set(Object.values(release.tokens)
       .flatMap((token) => token.kind === "asset" ? [String(token.assetId)] : []))].sort();
     return { kind: "available", rootId: draft.rootId, draftRevision: draft.draftRevision,
       theme, tokens, publicAssetIds, valid: result.valid, failures };
-  } catch {
-    return { kind: "refused" };
+  } catch (error) {
+    return refuse("validate-appearance", "STUDIO_APPEARANCE_FAILED", { kind: "refused" } as const, error);
   }
 }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  describeFailure,
   activityIdSchema,
   applicationRootIdSchema,
   databaseRevision,
@@ -584,7 +585,8 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       let occurrenceId: string | undefined;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(`[record] save identity generation failed: ${describeFailure(error)}`);
         return { kind: "temporarily_unavailable" };
       }
       for (let attempt = 0; attempt < 3; attempt += 1) {

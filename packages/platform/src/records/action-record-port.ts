@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
+  describeFailure,
   actionDefinitionSchema,
   activityIdSchema,
   eventOccurrenceIdSchema,
@@ -548,12 +549,19 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       run: ActionFlowRunner,
     ): Promise<NamedActionServiceResult> {
       const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
-      if (!command.success || selection.applicationRootId === undefined)
+      if (!command.success) {
+        console.error(`[named-action] refused NAMED_ACTION_COMMAND_INVALID: ${describeFailure(command.error)}`);
         return { kind: "unavailable" };
+      }
+      if (selection.applicationRootId === undefined) {
+        console.error("[named-action] refused NAMED_ACTION_APPLICATION_NOT_SELECTED");
+        return { kind: "unavailable" };
+      }
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(`[named-action] identity generation failed: ${describeFailure(error)}`);
         return { kind: "temporarily_unavailable" };
       }
       let standardOccurrenceId: string | undefined;

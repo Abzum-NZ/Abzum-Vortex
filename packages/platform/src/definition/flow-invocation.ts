@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  describeFailure,
   flowTaskChildLists,
   canonicalJson,
   flowSchema,
@@ -863,8 +864,10 @@ export async function invokeInstalledFlow(
             return decision.outcome === "completed" && decision.value === true;
           });
           return checked.kind === "available" && checked.value === true;
-        } catch {
-          // Missing, ambiguous, stale, foreign or unavailable evidence shares one refusal.
+        } catch (error) {
+          // Missing, ambiguous, stale, foreign or unavailable evidence shares one refusal; the log
+          // keeps the cause.
+          console.error(`[flows] invocation evidence check refused: ${describeFailure(error)}`);
           return false;
         }
       },
