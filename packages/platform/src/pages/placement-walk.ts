@@ -38,7 +38,7 @@ export const walkPlacements = <Inherited = undefined>(
   }
 };
 
-/** Walks the placements of a projected page composition: its main slot, else every step's content. */
+/** Walks the placements of a projected page composition: its main slot, then every step's content. */
 export const walkPageComposition = <Inherited = undefined>(
   composition: unknown,
   visit: PlacementVisitor<Inherited>,
@@ -46,7 +46,7 @@ export const walkPageComposition = <Inherited = undefined>(
 ): void => {
   if (!isRecord(composition)) return;
   if ("main" in composition) walkPlacements(composition.main, visit, inherited);
-  else if (isRecord(composition.stepContent))
+  if (isRecord(composition.stepContent))
     for (const root of Object.values(composition.stepContent))
       walkPlacements(root, visit, inherited);
 };

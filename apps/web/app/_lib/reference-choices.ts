@@ -290,18 +290,18 @@ export const projectedReferenceChoiceForm = (
   let target: Record<string, unknown> | undefined;
   walkPageComposition(
     page.composition,
-    ({ placementId, placement }, usable: boolean) => {
+    ({ placementId, placement }, inherited: Readonly<{ usable: boolean }>) => {
       const block = blockOf(placement);
       const isForm = typeof block?.blockId === "string" &&
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
-      const currentlyUsable = usable && placement.availability === undefined;
+      const currentlyUsable = inherited.usable && placement.availability === undefined;
       if (isForm && sameId(placementId, formId)) {
         matches += 1;
         if (currentlyUsable) target = placement;
       }
-      return currentlyUsable;
+      return { usable: currentlyUsable };
     },
-    true,
+    { usable: true },
   );
   if (matches !== 1 || target === undefined) return undefined;
 
