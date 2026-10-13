@@ -201,7 +201,9 @@ for (const file of codeFiles) {
     }
     // Forward migrations from #2379 on must run object DDL under an explicitly set role. Without one
     // the migration runs as postgres, whose schema privileges are revoked after the baseline, so
-    // `supabase db reset` fails with permission denied even though a superuser proof passes.
+    // `supabase db reset` fails with permission denied even though a superuser proof passes. The
+    // role must be closed again with `reset role;` as the last statement, so the migration row is
+    // not recorded as the owner role.
     const migrationTimestamp = /^\d{14}/.exec(basename(file))?.[0];
     if (
       file.startsWith(paths.migrations) &&
@@ -244,6 +246,16 @@ for (const file of codeFiles) {
             code.slice(event.index).replace(/\s+/g, " ").slice(0, 60).toLowerCase(),
           );
       }
+      // A migration that runs DDL must also close the owner role, otherwise Supabase records the
+      // migration row as that role and `supabase db reset` fails on the migrations schema.
+      const lastCode = code.trimEnd();
+      if (events.some((event) => event.ddl) && !/\breset\s+role\s*;$/i.test(lastCode))
+        add(
+          "migration-owner-role",
+          file,
+          lineAt(code, lastCode.length - 1),
+          "missing closing reset role",
+        );
     }
     continue;
   }

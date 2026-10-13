@@ -57,7 +57,8 @@ export const guardRules = {
     tier: "blocking",
     owner: "lead",
     reviewBy: "2027-01-15",
-    description: "Forward migrations must run object DDL under an explicitly set role, not postgres",
+    description:
+      "Forward migrations must run object DDL under an explicitly set role, not postgres, and end with reset role;",
   },
   "versioned-export": {
     tier: "blocking",
