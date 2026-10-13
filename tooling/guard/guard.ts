@@ -360,7 +360,8 @@ for (const file of codeFiles) {
         value.expression.properties.some(
           (property) =>
             ts.isPropertyAssignment(property) &&
-            property.name.getText(source) === "status" &&
+            (property.name.getText(source) === "status" ||
+              property.name.getText(source) === "kind") &&
             ts.isStringLiteralLike(property.initializer) &&
             refusalStatuses.has(property.initializer.text),
         )

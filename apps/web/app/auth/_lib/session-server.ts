@@ -72,20 +72,26 @@ const providerFailure = (error: unknown): IdentitySessionResolution =>
 const revokeIssuedProviderSession = async (
   signedIn: Extract<VerifiedSignInResult, { ok: true }>,
 ): Promise<void> => {
-  try {
-    const cleanup = createIdentitySessionClient([]);
-    await cleanup.client.auth
-      .setSession({ access_token: signedIn.accessToken, refresh_token: signedIn.refreshToken })
-      .catch(() => undefined);
-    await cleanup.client.auth.signOut({ scope: "local" }).catch(() => undefined);
-  } catch (error) {
-    // Revocation is best effort; the failed pair is never committed to the browser.
+  // Revocation is best effort; the failed pair is never committed to the browser.
+  const logRevokeFailure = (error: unknown): void => {
     mapWebError(error, {
       route: "auth/session",
       operation: "revoke-uncommitted-provider-session",
       code: "SESSION_PROVIDER_REVOKE_FAILED",
       fallback: undefined,
     });
+  };
+  try {
+    const cleanup = createIdentitySessionClient([]);
+    const set = await cleanup.client.auth.setSession({
+      access_token: signedIn.accessToken,
+      refresh_token: signedIn.refreshToken,
+    });
+    if (set.error) logRevokeFailure(set.error);
+    const out = await cleanup.client.auth.signOut({ scope: "local" });
+    if (out.error) logRevokeFailure(out.error);
+  } catch (error) {
+    logRevokeFailure(error);
   }
 };
 

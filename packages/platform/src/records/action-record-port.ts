@@ -519,7 +519,10 @@ const composeFromFlow = (
       reason: `the supplied inputs (${Object.keys(suppliedInputs).join(", ") || "none"}) do not match the inputs the action declares (${prepared.action.inputs.map((input) => `${input.key}: ${input.type}`).join(", ") || "none"})`,
     };
   const outcome = run(actionFlowSeed(prepared, normalizedInputs, issuedAt));
-  if (outcome.kind === "refused") return { kind: "refused", normalizedInputs };
+  if (outcome.kind === "refused") {
+    console.error("[named-action] refused NAMED_ACTION_FLOW_REFUSED");
+    return { kind: "refused", normalizedInputs };
+  }
   if (outcome.kind !== "collected") return { kind: "invalid", reason: outcome.reason };
   const composition = composeFlowEffects(prepared, normalizedInputs, outcome, issuedAt);
   return composition === undefined
@@ -970,7 +973,10 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         }
         if (result.kind !== "available") return result;
         if (result.value === restart) continue;
-        if (result.value === recordedRefusal) return { kind: "unavailable" };
+        if (result.value === recordedRefusal) {
+          console.error("[named-action] refused NAMED_ACTION_REFUSAL_RECORDED");
+          return { kind: "unavailable" };
+        }
         const value = result.value as ExecuteNamedActionResult;
         return value.outcome === "completed" &&
           attempted.rules !== undefined &&

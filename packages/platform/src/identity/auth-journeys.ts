@@ -361,12 +361,12 @@ export const confirmEmail = async (
     const authority = createAuthorityClient(configuration);
     const { data, error } = await authority.auth.verifyOtp({ email, token, type: "email" });
     if (error || !data.user) {
-      logJourneyRefusal("recovery-link", "RECOVERY_LINK_REJECTED", error);
+      logJourneyRefusal("email-confirmation", "EMAIL_CONFIRMATION_REJECTED", error);
       return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
     }
     return { ok: true };
   } catch (error) {
-    logProviderFailure("recovery-link", error);
+    logProviderFailure("email-confirmation", error);
     return { ok: false, code: "vortex.identity.authority_unavailable" };
   }
 };
@@ -393,6 +393,7 @@ export const completePasswordRecovery = async (
     });
 
     if (verificationError || !data.session) {
+      logJourneyRefusal("password-recovery", "RECOVERY_LINK_REJECTED", verificationError);
       return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
     }
 
