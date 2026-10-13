@@ -211,10 +211,11 @@ for (const file of codeFiles) {
       migrationTimestamp !== undefined &&
       migrationTimestamp >= "20261014002300"
     ) {
-      // Comment lines are blanked (not removed) so line numbers stay exact.
+      // Block and `--` comments are blanked (not removed) so line numbers stay exact.
       const code = content
+        .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "))
         .split("\n")
-        .map((line) => (line.trimStart().startsWith("--") ? "" : line))
+        .map((line) => line.replace(/--.*$/, (comment) => " ".repeat(comment.length)))
         .join("\n");
       const events = [
         ...[
