@@ -1,4 +1,4 @@
-import type { PlatformPermissionSource } from "../access/platform-permissions";
+import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import "server-only";
 
 import {
