@@ -2,7 +2,7 @@ import "server-only";
 
 import type { NextResponse} from "next/server";
 import type { NextRequest } from "next/server";
-import { createBuilderAuthority } from "@web/platform-server";
+import { createBuilderAuthority, readLiveHumanContext } from "@web/platform-server";
 import { createFlowTestRunner, createPreviewInstallationCoordinator } from "@web/platform-server";
 import {
   builderPreviewCreateRequestSchema,
@@ -24,14 +24,12 @@ import {
   revisionSchema,
   saveRecordCommandSchema,
   saveRecordResultSchema,
-  sessionContextSchema,
   type ApplicationRootId,
   type BuilderPreviewOperationLocation,
   type BuilderPreviewOperationRefusal,
   type IdentitySession,
   type OrganizationId,
   type SelectedOrganizationScope,
-  type SessionContext,
 } from "@vortex/platform/schema";
 import {
   createDatabaseDefinitionPublicationRepository,
@@ -52,34 +50,6 @@ const maximumRequestBodyLength = 131_072;
 type RootClassificationRow = DatabaseRow & {
   readonly outcome: unknown;
   readonly application_origin_kind: unknown;
-};
-type HumanContextRow = DatabaseRow & { readonly request_context: unknown };
-
-const sameId = (left: unknown, right: string): boolean =>
-  typeof left === "string" && left.toLowerCase() === right.toLowerCase();
-
-const readHumanContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-): Promise<SessionContext> => {
-  const rows = await transaction.query<HumanContextRow>`
-    select vortex_access.validated_human_request_context() - 'channel' as request_context
-  `;
-  const parsed =
-    rows.length === 1 ? sessionContextSchema.safeParse(rows[0]?.request_context) : undefined;
-  if (
-    parsed === undefined ||
-    !parsed.success ||
-    parsed.data.callerKind !== "human" ||
-    !sameId(parsed.data.organizationId, scope.organizationId) ||
-    !sameId(parsed.data.organizationAccountId, scope.organizationAccountId) ||
-    !sameId(parsed.data.identityId, session.identityId) ||
-    (scope.applicationRootId !== undefined &&
-      !sameId(parsed.data.applicationRootId, scope.applicationRootId))
-  )
-    throw new Error("BUILDER_PREVIEW_HUMAN_CONTEXT_REFUSED");
-  return parsed.data;
 };
 
 /** Reads only the persisted classification for the exact root in the validated organisation. */
@@ -369,8 +339,8 @@ const flowTestRunner = () => {
       const moduleRoot = moduleRootIdSchema.safeParse(moduleRootCandidate);
       const releaseRevision = revisionSchema.safeParse(releaseRevisionCandidate);
       if (!moduleRoot.success || !releaseRevision.success) return undefined;
-      const result = await requests.run(session, selection, async (transaction, scope) => {
-        const context = await readHumanContext(transaction, scope, session);
+      const result = await requests.run(session, selection, async (transaction, scope, issuedAt) => {
+        const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         const release = await createDatabaseDefinitionPublicationRepository(transaction).read(
           context,
           (reader) =>

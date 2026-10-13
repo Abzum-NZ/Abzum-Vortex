@@ -12,7 +12,6 @@ import {
   previewInstallationCandidateSchema,
   previewInstallationCreateRequestSchema,
   previewInstallationExpiryRequestSchema,
-  sessionContextSchema,
   type ApplicationRootId,
   type IdentitySession,
   type OrganizationId,
@@ -26,8 +25,9 @@ import {
   type SelectedOrganizationScope,
   type SessionContext,
 } from "../schema";
+import { readLiveHumanContext } from "../access/live-context";
 import { createPreviewInstallationRepository } from "./module-index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
 type InstallerRequests = Pick<
@@ -41,8 +41,6 @@ type PreviewInstallationDraftCompiler = Readonly<{
     command: Readonly<{ rootId: string; expectedDraftRevision: number }>,
   ): Promise<PreviewInstallationCandidate>;
 }>;
-
-type ContextRow = DatabaseRow & { readonly request_context: unknown };
 
 export const previewInstallationCoordinatorErrorCodes = [
   "INVALID_PREVIEW_INSTALLATION_COMMAND",
@@ -107,7 +105,9 @@ const toCoordinatorError = (
         return new DefinitionError("PREVIEW_INSTALLATION_STALE", {
           cause: error,
         });
+      // An expired or mismatched live request context is a refusal, not a preview failure.
       case "PREVIEW_INSTALLATION_AUTHORITY_REFUSED":
+      case "DEFINITION_CONTEXT_REFUSED":
         return new DefinitionError("PREVIEW_INSTALLATION_PERMISSION_REFUSED", {
           cause: error,
         });
@@ -139,30 +139,6 @@ const toCoordinatorError = (
   }
 };
 
-const readHumanContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-): Promise<SessionContext> => {
-  const rows = await transaction.query<ContextRow>`
-    select vortex_access.validated_human_request_context() - 'channel' as request_context
-  `;
-  const parsed =
-    rows.length === 1 ? sessionContextSchema.safeParse(rows[0]?.request_context) : undefined;
-  if (
-    parsed === undefined ||
-    !parsed.success ||
-    parsed.data.callerKind !== "human" ||
-    !sameId(parsed.data.organizationId, scope.organizationId) ||
-    !sameId(parsed.data.organizationAccountId, scope.organizationAccountId) ||
-    !sameId(parsed.data.identityId, session.identityId) ||
-    (scope.applicationRootId !== undefined &&
-      !sameId(parsed.data.applicationRootId, scope.applicationRootId))
-  )
-    throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
-  return parsed.data;
-};
-
 /**
  * Coordinates preview installation inside the requesting person's human transaction. No live
  * installation coordinator, permission registration or external service is invoked here.
@@ -180,6 +156,7 @@ export const createPreviewInstallationCoordinator = (
       transaction: RequestDatabaseTransaction,
       scope: SelectedOrganizationScope,
       authority: BuilderAuthority,
+      issuedAt: string,
     ) => Promise<Result>,
   ): Promise<Result> => {
     const session = identitySessionSchema.safeParse(sessionCandidate);
@@ -192,12 +169,11 @@ export const createPreviewInstallationCoordinator = (
     const result = await runner(
       session.data,
       { organizationId, ...(applicationRootId === undefined ? {} : { applicationRootId }) },
-      async (transaction, scope) => {
+      async (transaction, scope, issuedAt) => {
         try {
           if (
             !sameId(scope.organizationId, organizationId) ||
-            (applicationRootId !== undefined &&
-              !sameId(scope.applicationRootId, applicationRootId))
+            (applicationRootId !== undefined && !sameId(scope.applicationRootId, applicationRootId))
           )
             throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
           const authority = dependencies.builderAuthority(transaction, scope);
@@ -207,7 +183,7 @@ export const createPreviewInstallationCoordinator = (
             kind: "draft_change",
             ...(builderRootId === undefined ? {} : { rootId: builderRootId }),
           });
-          return await operation(transaction, scope, authority);
+          return await operation(transaction, scope, authority, issuedAt);
         } catch (error) {
           captured.failure = toCoordinatorError(error);
           throw error;
@@ -238,8 +214,8 @@ export const createPreviewInstallationCoordinator = (
         parsed.data.organizationId,
         parsed.data.applicationRootId,
         parsed.data.applicationRootId,
-        async (transaction, scope, authority) => {
-          const context = await readHumanContext(transaction, scope, session);
+        async (transaction, scope, authority, issuedAt) => {
+          const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
           const candidateValue = await dependencies
             .draftCompiler(transaction, authority)
             .compileApplicationDraft(context, {
