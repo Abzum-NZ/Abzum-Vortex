@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   actionDefinitionSchema,
   activityIdSchema,
@@ -252,6 +252,19 @@ const pendingCheckIsAuthorized = (
  * construction: the preparation only reports those outcomes when no root type
  * participates in one.
  */
+/**
+ * The deleting action's protected delete is its own command with its own receipt, so it
+ * cannot reuse the action's command id. Its id is derived from the action's, and
+ * `named_action_deleted_subject_replay_internal` derives it the same way.
+ */
+const deleteLifecycleCommandId = (actionCommandId: string): string => {
+  const digest = createHash("sha256").update(`record.delete:${actionCommandId}`).digest();
+  digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x50;
+  digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
+  const hex = digest.subarray(0, 16).toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 const creationFinalValues = (
   prepared: PreparedAction,
   creations: readonly NamedActionCreation[],
@@ -792,7 +805,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             // The subject delete is the shared protected lifecycle delete, run
             // last in this same transaction against the revision the action
             // left the subject at: the action's own tasks write nothing to a
-            // subject it deletes. It carries the action's command identity and
+            // subject it deletes. It carries an identity derived from the action's command and
             // its own Activity and `deleted` Event identities, and any refusal
             // throws so the receipt, Activity and Events roll back with it.
             try {
@@ -803,7 +816,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             }
             try {
               const deleted = await performProtectedRecordDelete(transaction, issuedAt, {
-                commandId: command.data.commandId,
+                commandId: deleteLifecycleCommandId(command.data.commandId),
                 recordTypeId: command.data.recordTypeId,
                 recordId: command.data.recordId,
                 expectedConcurrencyNumber: command.data.expectedConcurrencyNumber,

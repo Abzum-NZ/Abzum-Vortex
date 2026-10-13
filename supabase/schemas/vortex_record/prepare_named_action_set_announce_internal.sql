@@ -19,7 +19,6 @@ set search_path = ''
 as $function$
 declare
   context_value jsonb;
-  fingerprint_value text;
   receipt_claim jsonb;
   action_context jsonb;
   creation_plan jsonb;
@@ -41,19 +40,8 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
   context_value := vortex_access.validated_human_request_context();
-  fingerprint_value := vortex_record.named_action_command_fingerprint_internal(
-    p_command_id, p_action_owner_kind, p_action_owner_id,
-    p_action_release_revision, p_action_id, p_record_type_id, p_record_id,
-    p_expected_concurrency_number, p_inputs
-  );
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'named_action', p_command_id, 'named_action', fingerprint_value,
-    p_record_type_id, p_record_id, pg_catalog.jsonb_build_object(
-      'actionOwnerKind', p_action_owner_kind,
-      'actionOwnerId', p_action_owner_id,
-      'actionReleaseRevision', p_action_release_revision,
-      'actionId', p_action_id
-    ), '{}'::jsonb, true
+    'named_action', p_command_id, true
   );
   if receipt_claim ->> 'status' is distinct from 'none' then
     if receipt_claim ->> 'status' = 'identity_conflict' then
@@ -77,8 +65,7 @@ begin
       projection := coalesce(
         vortex_record.named_action_deleted_subject_replay_internal(
           p_command_id, p_action_owner_kind, p_action_owner_id,
-          p_action_release_revision, p_action_id, p_record_type_id, p_record_id,
-          p_expected_concurrency_number
+          p_action_release_revision, p_action_id, p_record_type_id
         ),
         projection
       );

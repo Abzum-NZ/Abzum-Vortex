@@ -8,12 +8,8 @@ as $function$
 begin
   if exists (
     select 1 from vortex_record.command_receipts as receipt
-    where receipt.organization_id = new.organization_id
-      and receipt.application_root_id = new.application_root_id
-      and receipt.actor_organization_account_id = new.actor_organization_account_id
-      and receipt.command_kind = new.command_kind
-      and receipt.command_id = new.command_id
-      and receipt.state = 'pending'
+    where receipt.command_id = new.command_id
+      and receipt.result is null
   ) then
     raise exception using errcode = '23514',
       message = 'Record lifecycle command was not finalized';

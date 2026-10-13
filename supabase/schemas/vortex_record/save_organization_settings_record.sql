@@ -30,7 +30,6 @@ declare
   core_values jsonb := '{}'::jsonb;
   extension_values jsonb := '{}'::jsonb;
   changed_field_ids uuid[] := array[]::uuid[];
-  command_fingerprint_value text;
   receipt_claim jsonb;
   access_result jsonb;
   projection jsonb;
@@ -253,13 +252,8 @@ begin
   into changed_field_ids
   from pg_catalog.jsonb_object_keys(p_final_values) as key;
 
-  command_fingerprint_value := vortex_record.base_save_command_fingerprint_internal(
-    p_command_id, 'update', p_record_type_id, p_record_id,
-    p_expected_concurrency_number, p_submitted_values, null::uuid
-  );
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_save', p_command_id, 'update', command_fingerprint_value,
-    p_record_type_id, null, '{}'::jsonb, '{}'::jsonb, false
+    'record_save', p_command_id, false
   );
   if receipt_claim ->> 'status' is distinct from 'claimed' then
     if receipt_claim ->> 'status' = 'identity_conflict' then

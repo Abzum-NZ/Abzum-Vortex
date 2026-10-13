@@ -233,8 +233,7 @@ correction names the mutation whose value needs correcting.
 Retired by #1063: `save_named_action_set_announce`, `save_named_action_set_fields_internal` and
 `save_named_action_effects_with_relationship_totals`. A named action is a `transaction` flow whose
 record tasks the flow runner collects and applies in one `apply_record_changes` call (through its
-request-role entry `apply_action_record_changes`), keeping the `named_action` receipt and
-fingerprint, the action's own field rules, Activity and Events.
+request-role entry `apply_action_record_changes`), keeping the `named_action` receipt, the action's own field rules, Activity and Events.
 
 The one engine retires the overlapping entry points, cloned writers, receipt
 ledgers and helpers below. No new record writer variant or named-action effect
@@ -259,8 +258,7 @@ Lifecycle and ownership entry points:
 
 Receipt ledgers and helpers:
 
-- `vortex_record.command_receipts`, the one receipt table for record saves and ownership transfers, named actions and lifecycle commands, keyed by actor scope, command kind and command identity, with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
-- `base_save_command_fingerprint_internal`, `named_action_command_fingerprint_internal`, `record_lifecycle_command_fingerprint_internal`, `ownership_transfer_command_fingerprint_internal`.
+- `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, the one receipt table for record saves and ownership transfers, named actions, deletes and restores (command kinds `record_save`, `named_action`, `record_delete`, `record_restore`), keyed by the client-generated command id and replaying its stored result only for the organisation, tenant, actor and command kind that stored it (any other combination is an identity conflict), with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
 - `append_base_save_activity_internal`, `append_named_action_activity_internal`, `append_record_lifecycle_activity_internal`, `append_ownership_transfer_activity_internal`.
 
 The engine keeps and builds on the private primitives `create_record_internal`,
