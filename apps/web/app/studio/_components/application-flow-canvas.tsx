@@ -37,14 +37,14 @@ function CanvasNode({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
 }
 const nodeTypes = { canvas: CanvasNode };
 
-type Layout = Readonly<{ width: number; height: number; firstIds: readonly string[] }>;
+type Layout = Readonly<{ width: number; height: number; firstIds: readonly string[]; lastIds: readonly string[] }>;
 
 /** Computed positions only: lists run top to bottom, branches sit side by side below their task. */
 function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
   nodes: Node<CanvasNodeData>[], edges: Edge[]): Layout {
   let y = top;
   let width = nodeWidth;
-  let previous: string | null = null;
+  let previous: readonly string[] = [];
   const firstIds: string[] = [];
   for (const task of list.tasks) {
     const id = pathKey(task.path);
@@ -68,13 +68,20 @@ function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
       for (const first of branch.firstIds)
         edges.push({ id: `${id}>${first}`, source: id, target: first, label: child.label });
     }
-    if (previous !== null) edges.push({ id: `${previous}>${id}`, source: previous, target: id });
-    else firstIds.push(id);
-    previous = id;
+    if (previous.length > 0) {
+      for (const from of previous) edges.push({ id: `${from}>${id}`, source: from, target: id });
+    } else firstIds.push(id);
+    // The next sibling follows where each branch ends; the branching task itself only falls
+    // through when a branch is empty or absent (no else / no default).
+    const ends = branches.flatMap(({ branch }) => branch.lastIds);
+    const fallsThrough = branches.length === 0 || branches.some(({ branch }) => branch.lastIds.length === 0) ||
+      (task.type === "if" && !task.children.some((child) => child.label === "Else")) ||
+      (task.type === "switch" && !task.children.some((child) => child.label === "Default"));
+    previous = fallsThrough ? [id, ...ends] : ends;
     width = Math.max(width, span);
     y += branchHeight > 0 ? branchHeight + rowGap : 0;
   }
-  return { width, height: y - top, firstIds };
+  return { width, height: y - top, firstIds, lastIds: previous };
 }
 
 type Built = Readonly<{ nodes: Node<CanvasNodeData>[]; edges: Edge[] }>;
