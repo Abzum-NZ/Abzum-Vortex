@@ -2,10 +2,15 @@
 import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
-import { Badge } from "@vortex/ui/components/badge";
-import type { SourceFlow, SourceFlowTask } from "@vortex/platform/schema";
+import { Button } from "@vortex/ui/components/button";
+import { NativeSelect } from "@vortex/ui/components/native-select";
+import { describeFailure, type SourceFlow, type SourceFlowTask } from "@vortex/platform/schema";
 import {
+  projectStudioFlowInsertOptions,
   projectStudioFlowTextEditor,
+  type StudioFlowEditResult,
+  type StudioFlowInsertCommand,
+  type StudioFlowRemoveCommand,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
   type StudioFlowTextContext,
@@ -203,10 +208,33 @@ function TaskSettings({ flow, outline }: Readonly<{ flow: SourceFlow; outline: S
   </dl>;
 }
 
-/** Read-only view of the draft flow's task list; it consumes the same projection as the text editor. */
-export function ApplicationFlowCanvas({ context, selection }: Readonly<{
+type FlowListChoice = Readonly<{ key: string; label: string; path: readonly (string | number)[]; length: number }>;
+
+/** Every authored task list, including empty ones, named by the task that owns it. */
+const flattenLists = (lists: readonly StudioFlowTaskListOutline[], prefix = ""): FlowListChoice[] =>
+  lists.flatMap((list) => [
+    { key: pathKey(list.path), label: `${prefix}${list.label}`, path: list.path, length: list.tasks.length },
+    ...list.tasks.flatMap((task) => flattenLists(task.children, `${task.title} (${task.id}) › `)),
+  ]);
+
+const flattenTasks = (lists: readonly StudioFlowTaskListOutline[]): StudioFlowTaskOutline[] =>
+  lists.flatMap((list) => list.tasks.flatMap((task) => [task, ...flattenTasks(task.children)]));
+
+const countNested = (task: StudioFlowTaskOutline): number => flattenTasks(task.children).length;
+
+/** An insertion stays bound to the draft snapshot and flow it was opened for, so a later switch cannot redirect it. */
+type Adding = Readonly<{
+  listPath: readonly (string | number)[]; index: number; where: string;
+  expected: StudioFlowTextContext; expectedSelection: FlowSelection;
+}>;
+
+/** The draft flow's task list as a canvas; every edit goes through the draft's revision-checked history. */
+export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, onRemove }: Readonly<{
   context: StudioFlowTextContext;
   selection: FlowSelection;
+  disabled: boolean;
+  onInsert: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowInsertCommand) => StudioFlowEditResult;
+  onRemove: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowRemoveCommand) => StudioFlowEditResult;
 }>) {
   const projection = useMemo(() => projectStudioFlowTextEditor(context, selection), [context, selection]);
   const flow = useMemo(() => context.source.body.flows.find((entry) => entry.id === selection.flowAlias), [context, selection]);
@@ -214,6 +242,13 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
     ? buildGraph(flow, projection.lists) : null, [projection, flow]);
   // A selection belongs to one flow and one task id, so it cannot leak across flow switches or edits.
   const [selected, setSelected] = useState<Readonly<{ flowAlias: string; key: string; id: string }> | null>(null);
+  const [adding, setAdding] = useState<Adding | null>(null);
+  const insertOptions = useMemo(() => projectStudioFlowInsertOptions(context, selection), [context, selection]);
+  const options = insertOptions.kind === "available" ? insertOptions.options : [];
+  const [taskType, setTaskType] = useState("");
+  const [status, setStatus] = useState("");
+  // A task just inserted is selected once the draft has re-projected with it.
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   useEffect(() => {
     if (projection.kind === "invalid")
@@ -222,6 +257,22 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
       console.error("Flow canvas could not find the selected flow", { flow: selection.flowAlias });
   }, [projection, flow, selection.flowAlias]);
 
+  useEffect(() => {
+    if (insertOptions.kind === "invalid")
+      console.error("Flow canvas task types are unavailable", { flow: selection.flowAlias }, describeFailure(insertOptions.cause));
+  }, [insertOptions, selection.flowAlias]);
+
+  // A pending add belongs to the flow it was opened for; switching flows discards it.
+  useEffect(() => { setAdding((pending) => pending?.expectedSelection.flowAlias === selection.flowAlias ? pending : null); },
+    [selection.flowAlias]);
+
+  useEffect(() => {
+    if (focusId === null || projection.kind !== "available") return;
+    const hit = flattenTasks(projection.lists).find((task) => task.id === focusId);
+    if (hit !== undefined) setSelected({ flowAlias: selection.flowAlias, key: pathKey(hit.path), id: hit.id });
+    setFocusId(null);
+  }, [focusId, projection, selection.flowAlias]);
+
   if (graph === null || projection.kind !== "available" || flow === undefined)
     return <p role="status">This Flow canvas is unavailable because the flow could not be read.</p>;
 
@@ -229,6 +280,7 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
     ? findOutline(projection.lists, selected.key) : undefined;
   const selectedOutline = candidate !== undefined && candidate.id === selected?.id ? candidate : undefined;
   const selectedKey = selectedOutline === undefined ? null : selected?.key ?? null;
+  const listChoices = flattenLists(projection.lists);
   const themed = {
     "--xy-edge-stroke-default": "var(--border)",
     "--xy-edge-label-color-default": "var(--muted-foreground)",
@@ -239,8 +291,40 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
     "--xy-controls-button-border-color-default": "var(--border)",
   } as CSSProperties;
 
+  const beginAdding = (next: Omit<Adding, "expected" | "expectedSelection">) => {
+    setAdding({ ...next, expected: context, expectedSelection: selection });
+    setTaskType("");
+    setStatus("");
+  };
+  const addAfter = () => {
+    if (selectedOutline === undefined) return;
+    const index = selectedOutline.path[selectedOutline.path.length - 1];
+    if (typeof index === "number")
+      beginAdding({ listPath: selectedOutline.path.slice(0, -1), index: index + 1, where: `after ${selectedOutline.id}` });
+  };
+  const insert = () => {
+    if (adding === null || taskType === "") return;
+    const result = onInsert(adding.expected, adding.expectedSelection, { kind: "insert_task", taskType, listPath: adding.listPath, index: adding.index });
+    if (result.kind === "applied") {
+      setStatus(`Task ${result.taskId} added ${adding.where}. Save draft to persist it.`);
+      setFocusId(result.taskId);
+      setAdding(null);
+    } else setStatus(result.reason);
+  };
+  const remove = () => {
+    if (selectedOutline === undefined) return;
+    const nested = countNested(selectedOutline);
+    const inside = nested > 0 ? ` and the ${nested} task${nested === 1 ? "" : "s"} inside it` : "";
+    if (!window.confirm(`Remove task ${selectedOutline.id}${inside} from the draft?`)) return;
+    const result = onRemove(context, selection, { kind: "remove_task", taskId: selectedOutline.id, taskPath: selectedOutline.path });
+    if (result.kind === "applied") {
+      setStatus(`Task ${selectedOutline.id} removed. Save draft to persist it.`);
+      setSelected(null);
+    } else setStatus(result.reason);
+  };
+
   return <section className="space-y-3" aria-label="Flow canvas">
-    <h3 className="font-medium">Flow canvas <Badge variant="secondary">Read only</Badge></h3>
+    <h3 className="font-medium">Flow canvas</h3>
     <div className="h-96 rounded-xl border border-border" style={themed}>
       <ReactFlow nodes={graph.nodes.map((node) => ({ ...node, selected: node.id === selectedKey }))} edges={graph.edges}
         nodeTypes={nodeTypes} fitView nodesDraggable={false} nodesConnectable={false} edgesFocusable={false}
@@ -248,6 +332,7 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
         onNodeClick={(_, node) => {
           const outline = node.id.startsWith("[") ? findOutline(projection.lists, node.id) : undefined;
           setSelected(outline === undefined ? null : { flowAlias: selection.flowAlias, key: node.id, id: outline.id });
+          setAdding(null);
         }}
         onPaneClick={() => setSelected(null)}>
         <Background />
@@ -255,12 +340,47 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
       </ReactFlow>
     </div>
     {selectedOutline === undefined
-      ? <p className="text-sm text-muted-foreground">Select a task to see its settings.</p>
-      : <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-card-foreground" aria-live="polite">
+      ? <p className="text-sm text-muted-foreground">Select a task to see its settings, add a task after it or remove it.</p>
+      : <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-card-foreground">
         <h4 className="font-medium">{selectedOutline.title}</h4>
         <p className="text-sm"><span className="text-muted-foreground">Id:</span> {selectedOutline.id}
           {" "}<span className="text-muted-foreground">Type:</span> {selectedOutline.type}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={disabled || options.length === 0} onClick={addAfter}>Add task after</Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={remove}>Remove task</Button>
+        </div>
         <TaskSettings flow={flow} outline={selectedOutline} />
       </div>}
+    <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-card-foreground">
+      <h4 className="font-medium">Add a task to a list or branch</h4>
+      {insertOptions.kind === "invalid"
+        ? <p role="alert" className="text-sm">{insertOptions.reason}</p>
+        : options.length === 0
+        ? <p className="text-sm text-muted-foreground">No task type can be added to this flow: its execution kind accepts none that can start from defaults, or it is at its task limit.</p>
+        : <label className="block space-y-1 text-sm"><span>Task list</span>
+          <NativeSelect className="w-full" disabled={disabled} value="" onChange={(event) => {
+            const choice = listChoices.find((entry) => entry.key === event.target.value);
+            if (choice !== undefined) beginAdding({ listPath: choice.path, index: choice.length, where: `in ${choice.label}` });
+          }}>
+            <option value="" disabled>Choose a list or branch</option>
+            {listChoices.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}{entry.length === 0 ? " (empty)" : ""}</option>)}
+          </NativeSelect></label>}
+    </div>
+    {adding !== null && <form className="space-y-2 rounded-xl border border-border bg-card p-3 text-card-foreground"
+      onSubmit={(event) => { event.preventDefault(); insert(); }}>
+      <h4 className="font-medium">Add a task {adding.where}</h4>
+      <label className="block space-y-1 text-sm"><span>Task type</span>
+        <NativeSelect className="w-full" required disabled={disabled} value={taskType} onChange={(event) => setTaskType(event.target.value)}>
+          <option value="" disabled>Choose a task type</option>
+          {options.map((option) => <option key={option.type} value={option.type}>{option.title}</option>)}
+        </NativeSelect></label>
+      {taskType !== "" && <p className="text-sm text-muted-foreground">{options.find((option) => option.type === taskType)?.summary}</p>}
+      <p className="text-sm text-muted-foreground">Only task types that this flow's execution kind accepts are listed. The task starts with default settings; edit its text in the Flow task editor.</p>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={disabled || taskType === ""}>Add task</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setAdding(null)}>Cancel</Button>
+      </div>
+    </form>}
+    <p role="status" aria-live="polite" className="text-sm">{status}</p>
   </section>;
 }
