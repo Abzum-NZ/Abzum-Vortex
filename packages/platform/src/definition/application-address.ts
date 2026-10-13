@@ -453,11 +453,10 @@ const projectPermittedApplication = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   candidate: ApplicationCandidate,
+  remember?: (application: PermittedApplication | null, validUntil: string | undefined) => void,
 ): Promise<Readonly<{
   application: PermittedApplication;
   experiences: ApplicationExperience[];
-  /** The earliest end of the allowed page decisions, absent when none of them ends. */
-  validUntil?: string;
 }> | null> => {
   const releaseRows = await transaction.query<CurrentReleaseRow>`
     select vortex_definition.is_current_application_address_release(
@@ -519,7 +518,14 @@ const projectPermittedApplication = async (
   const homePageKey = allowedPageKeys.has(candidate.homePageKey)
     ? candidate.homePageKey
     : roleHome?.key;
-  if (homePageKey === undefined) return null;
+  // A home chosen from current role assignments depends on time-bound assignments, memberships and
+  // activations that the page decisions' expiry does not cover, so only a projection that does not
+  // depend on them is remembered.
+  const rememberable = allowedPageKeys.has(candidate.homePageKey) || allowedPageKeys.size === 0;
+  if (homePageKey === undefined) {
+    if (rememberable) remember?.(null, validUntil);
+    return null;
+  }
 
   // An experience page is offered only when the viewer may open that page itself and it is
   // presentation-only, so it can never show gated, conditional or data-bound content.
@@ -542,18 +548,16 @@ const projectPermittedApplication = async (
       });
     });
 
-  return {
-    application: permittedApplicationSchema.parse({
-      applicationRootId: candidate.applicationRootId,
-      key: candidate.key,
-      name: candidate.name,
-      icon: candidate.icon,
-      homePageKey,
-      pageKeys: [...allowedPageKeys].sort(),
-    }),
-    experiences,
-    ...(validUntil === undefined ? {} : { validUntil }),
-  };
+  const application = permittedApplicationSchema.parse({
+    applicationRootId: candidate.applicationRootId,
+    key: candidate.key,
+    name: candidate.name,
+    icon: candidate.icon,
+    homePageKey,
+    pageKeys: [...allowedPageKeys].sort(),
+  });
+  if (rememberable) remember?.(application, validUntil);
+  return { application, experiences };
 };
 
 const permittedApplication = async (
@@ -575,11 +579,10 @@ const permittedApplication = async (
   const result = await requests.run(
     session,
     { organizationId, applicationRootId: candidate.applicationRootId },
-    async (transaction, scope) => {
-      const projected = await projectPermittedApplication(permissions, transaction, scope, candidate);
-      remember?.(scope, projected?.application ?? null, projected?.validUntil);
-      return projected;
-    },
+    (transaction, scope) =>
+      projectPermittedApplication(permissions, transaction, scope, candidate, (application, validUntil) =>
+        remember?.(scope, application, validUntil),
+      ),
   );
   if (result.kind === "temporarily_unavailable")
     return {
