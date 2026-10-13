@@ -11,9 +11,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
+/** The signed-in person as shown to them; an organisation account may have no display name. */
+export type ApplicationAccount = Readonly<{ email: string; displayName?: string }>;
+
 /** Current account facts and platform actions, supplied by the signed-in route. */
 export type ApplicationAccountActions = Readonly<{
-  identityId: string;
+  account: ApplicationAccount;
   organizationName: string;
   releaseAdoption?: Readonly<{ version: string; adopt: () => void | Promise<void> }>;
   chooseOrganization: () => void | Promise<void>;
@@ -40,6 +43,10 @@ export function useApplicationAccountActions(): ApplicationAccountActions | null
 export function ApplicationAccountMenu(): ReactElement {
   const actions = useApplicationAccountActions();
   const organizationName = actions?.organizationName ?? "Account";
+  const account = actions?.account;
+  const avatarInitial = (account?.displayName ?? account?.email ?? organizationName)
+    .slice(0, 1)
+    .toUpperCase();
   const releaseAdoption = actions?.releaseAdoption;
 
   return (
@@ -50,14 +57,23 @@ export function ApplicationAccountMenu(): ReactElement {
         className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
       >
         <Avatar>
-          <AvatarFallback>{organizationName.slice(0, 2).toUpperCase()}</AvatarFallback>
+          <AvatarFallback>{avatarInitial}</AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="flex flex-col gap-1">
-            {actions === null ? <span>{organizationName}</span> : <span>Signed in as {actions.identityId}</span>}
-            <span className="font-normal text-muted-foreground">{organizationName}</span>
+            {account === undefined ? (
+              <span>{organizationName}</span>
+            ) : (
+              <>
+                <span>{account.displayName ?? account.email}</span>
+                {account.displayName === undefined ? null : (
+                  <span className="font-normal text-muted-foreground">{account.email}</span>
+                )}
+                <span className="font-normal text-muted-foreground">{organizationName}</span>
+              </>
+            )}
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

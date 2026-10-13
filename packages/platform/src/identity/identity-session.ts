@@ -116,6 +116,26 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
     }
   };
 
+  const resolveVerified = async (
+    accessToken: string,
+  ): Promise<
+    Readonly<{ resolution: IdentitySessionResolution; verifiedPrimaryEmail?: string }>
+  > => {
+    const verified = await verify(accessToken);
+    if (!verified.ok) return { resolution: verified.result };
+    try {
+      dependencies.checkpoint?.();
+      const projection = await dependencies.readProjection(verified.identity);
+      dependencies.checkpoint?.();
+      const resolution = activeResult(verified.identity, projection, clock);
+      return resolution.kind === "active"
+        ? { resolution, verifiedPrimaryEmail: verified.identity.verifiedPrimaryEmail }
+        : { resolution };
+    } catch (error) {
+      return { resolution: projectionFailure(error) };
+    }
+  };
+
   return Object.freeze({
     async bootstrap(
       accessToken: string,
@@ -136,17 +156,11 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
     },
 
     async resolve(accessToken: string): Promise<IdentitySessionResolution> {
-      const verified = await verify(accessToken);
-      if (!verified.ok) return verified.result;
-      try {
-        dependencies.checkpoint?.();
-        const projection = await dependencies.readProjection(verified.identity);
-        dependencies.checkpoint?.();
-        return activeResult(verified.identity, projection, clock);
-      } catch (error) {
-        return projectionFailure(error);
-      }
+      return (await resolveVerified(accessToken)).resolution;
     },
+
+    /** The resolution with the email of the very identity that was verified, for the account menu. */
+    resolveVerified,
   });
 };
 

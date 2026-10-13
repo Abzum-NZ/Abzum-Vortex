@@ -134,6 +134,8 @@ type RequestIdentityResolution = Readonly<{
   resolution: IdentitySessionResolution;
   /** Present only when this exact token passed Identity resolution. Server request only. */
   accessToken?: string;
+  /** The verified primary email of the identity that passed resolution; present with `accessToken`. */
+  email?: string;
 }>;
 
 const resolveRequestIdentity = async (
@@ -171,13 +173,22 @@ const resolveRequestIdentity = async (
   const staged = boundary.stage.snapshot();
   if (staged.refused || staged.mutations.length > 0) return { resolution: unavailable() };
   const accessToken = current.data.session.access_token;
-  const resolution = await sessionService(execution).resolve(accessToken);
+  const { resolution, verifiedPrimaryEmail } = await sessionService(execution).resolveVerified(accessToken);
   execution?.checkpoint();
-  return resolution.kind === "active" ? { resolution, accessToken } : { resolution };
+  if (resolution.kind !== "active" || verifiedPrimaryEmail === undefined) return { resolution };
+  return { resolution, accessToken, email: verifiedPrimaryEmail };
 };
 
 export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> =>
   (await resolveRequestIdentity()).resolution;
+
+/** The ordinary resolution plus the signed-in person's email, for pages that show who is signed in. */
+export const resolveIdentitySessionWithEmail = async (): Promise<
+  Readonly<{ resolution: IdentitySessionResolution; email?: string }>
+> => {
+  const { resolution, email } = await resolveRequestIdentity();
+  return email === undefined ? { resolution } : { resolution, email };
+};
 
 /**
  * Private delivery composition only. This shares every ordinary resolution guard

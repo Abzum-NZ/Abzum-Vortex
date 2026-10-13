@@ -321,6 +321,7 @@ export {
 export {
   ApplicationAccountActionsBlock,
   ApplicationAccountActionsProvider,
+  type ApplicationAccount,
   type ApplicationAccountActions,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   createNavigationComponentRegistry,

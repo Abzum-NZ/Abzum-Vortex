@@ -168,6 +168,8 @@ export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
       tenantShortName: builderKeySchema,
       organizationShortName: builderKeySchema,
       defaultApplicationRootId: applicationRootIdSchema.nullable(),
+      /** The viewer's own display name in this organisation; absent when the account has none. */
+      accountDisplayName: z.string().trim().min(1).max(120).optional(),
       applications: z.array(permittedApplicationSchema).max(10_000),
     })
     .strict(),
@@ -599,6 +601,9 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       tenantShortName: addressedIdentity.tenantShortName,
       organizationShortName: addressedIdentity.organizationShortName,
       defaultApplicationRootId: null,
+      ...(addressedIdentity.accountDisplayName === undefined
+        ? {}
+        : { accountDisplayName: addressedIdentity.accountDisplayName }),
       applications: [permitted.application],
     });
     return {
@@ -662,6 +667,7 @@ export const readAddressedApplicationIdentityAtAddress = async (
   organizationId: string;
   tenantShortName: string;
   organizationShortName: string;
+  accountDisplayName?: string;
   identity: AddressedActiveApplicationIdentity;
 }> | undefined> => {
   const session = identitySessionSchema.safeParse(sessionCandidate);
@@ -719,6 +725,9 @@ export const readAddressedApplicationIdentityAtAddress = async (
       organizationId: address.organizationId,
       tenantShortName: address.tenantShortName,
       organizationShortName: address.organizationShortName,
+      ...(address.accountDisplayName === undefined
+        ? {}
+        : { accountDisplayName: address.accountDisplayName }),
       identity,
     });
   } catch {

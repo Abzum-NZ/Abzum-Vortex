@@ -6,6 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { recordIdSchema } from "@vortex/platform/schema";
 import {
   parsePermittedApplicationsLauncherProjection,
+  type ApplicationAccount,
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
@@ -23,8 +24,8 @@ import { Button } from "@vortex/ui/components/button";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { applicationHomeContinuationFromAddress } from "../../../auth/_lib/application-home-continuation";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
-import { resolveIdentitySession } from "../../../auth/_lib/session-server";
-import { loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
+import { resolveIdentitySession, resolveIdentitySessionWithEmail } from "../../../auth/_lib/session-server";
+import { loadOrganizationLauncher, loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
 import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
@@ -136,7 +137,8 @@ export default async function ApplicationAddressPage({
     organizationShortName,
     applicationAddress,
   );
-  const identity = await continueSessionOrEnd(await resolveIdentitySession(), applicationHome);
+  const { resolution, email } = await resolveIdentitySessionWithEmail();
+  const identity = await continueSessionOrEnd(resolution, applicationHome);
   const addressSegments = applicationAddress ?? [];
 
   /**
@@ -254,6 +256,23 @@ export default async function ApplicationAddressPage({
       </AuthShell>
     );
 
+  if (email === undefined) throw new Error("Active identity session resolved without an email");
+  const accountWithName = (displayName: string | undefined): ApplicationAccount =>
+    displayName === undefined ? { email } : { email, displayName };
+  // Pages that do not already read the addressed organisation's account look it up here.
+  const loadAccount = async (): Promise<ApplicationAccount> => {
+    const launcher = await loadOrganizationLauncher(identity.session);
+    if (launcher.kind !== "available")
+      throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+    return accountWithName(
+      launcher.entries.find(
+        (entry) =>
+          entry.tenantShortName === tenantShortName &&
+          entry.organizationShortName === organizationShortName,
+      )?.accountDisplayName,
+    );
+  };
+
   if (addressSegments.length > 2) return unavailableFallback;
 
   const resolved = await resolveApplicationAddress(
@@ -304,7 +323,7 @@ export default async function ApplicationAddressPage({
         shells={resolved.experience.shells}
         theme={resolved.experience.theme}
         organizationName={organizationShortName}
-        identityId={identity.session.identityId}
+        account={await loadAccount()}
         platformBlockReleases={platformBlockReleasesFor(
           resolved.experience.page,
           resolved.experience.shells,
@@ -351,7 +370,7 @@ export default async function ApplicationAddressPage({
         placementId={organizationLauncherPlacementId}
         values={launcherValues}
         organizationName={resolved.read.organizationShortName}
-        identityId={identity.session.identityId}
+        account={await loadAccount()}
         openApplication={openApplication}
         launcherHref={launcherPath(tenantShortName, organizationShortName)}
         platformBlockReleases={platformBlockReleasesFor(page, organizationLauncherShell)}
@@ -464,7 +483,7 @@ export default async function ApplicationAddressPage({
       onOpenApplication={openApplication}
       adoptReleaseAction={adoptRelease}
       applicationSwitcherState={applicationSwitcherState}
-      identityId={identity.session.identityId}
+      account={accountWithName(resolved.read.accountDisplayName)}
       applicationSearch={search}
       applicationSearchPageSubject={searchPageSubject.success ? searchPageSubject.data : undefined}
       pageFeedback={
