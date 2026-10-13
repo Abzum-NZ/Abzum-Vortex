@@ -62,8 +62,7 @@ begin
     application_root_id, owner_kind, owner_id, permission_id, permission_key,
     label, description, record_type_id, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint, meaning_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint,
     record_scope, field_policy
   )
   select entry.organization_id, entry.registration_kind, entry.registration_owner_id,
@@ -72,7 +71,6 @@ begin
     entry.record_type_id, entry.action_kind, entry.named_action, entry.administrative,
     entry.source_kind, entry.source_definition_key, entry.source_root_id,
     entry.source_version, entry.source_revision, entry.source_validation_contract_version,
-    entry.source_content_fingerprint, entry.source_resolution_fingerprint,
     entry.source_catalogue_fingerprint, entry.meaning_fingerprint, entry.record_scope,
     entry.field_policy
   from vortex_access.permission_catalogue_entries as entry
@@ -97,7 +95,7 @@ begin
 end
 $$;
 
-alter function vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+ALTER FUNCTION vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) IS 'Legacy raw withdrawal writer retained privately for the coordinated application-access composition only.';
 

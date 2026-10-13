@@ -67,8 +67,6 @@ type PermissionEntryRow = DatabaseRow & {
   source_version: unknown;
   source_revision: unknown;
   source_validation_contract_version: unknown;
-  source_content_fingerprint: unknown;
-  source_resolution_fingerprint: unknown;
   source_catalogue_fingerprint: unknown;
   meaning_fingerprint: unknown;
 };
@@ -138,8 +136,6 @@ const parseEntry = (row: PermissionEntryRow): PermissionCatalogueEntry => {
           releaseRevision: databaseRevision(row.source_revision),
           releaseVersion: row.source_version,
           validationContractVersion: row.source_validation_contract_version,
-          contentFingerprint: row.source_content_fingerprint,
-          resolutionFingerprint: row.source_resolution_fingerprint,
         },
     meaningFingerprint: row.meaning_fingerprint,
   });

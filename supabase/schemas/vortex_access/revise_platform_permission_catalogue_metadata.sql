@@ -211,8 +211,7 @@ begin
     application_root_id, owner_kind, owner_id, permission_id, permission_key,
     label, description, record_type_id, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_content_fingerprint,
-    source_resolution_fingerprint, source_catalogue_fingerprint, meaning_fingerprint
+    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint
   )
   -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   select p_organization_id, 'platform', 'cabe121e-0baf-4084-9471-cce915d460a8', 2,
@@ -220,7 +219,7 @@ begin
     null, 'platform', 'cabe121e-0baf-4084-9471-cce915d460a8',
     (entry ->> 'permissionId')::uuid, entry ->> 'key', entry ->> 'label',
     entry ->> 'description', null, entry ->> 'actionKind', null, true,
-    'platform_catalogue', null, null, p_target_catalogue_version, null, null, null, null,
+    'platform_catalogue', null, null, p_target_catalogue_version, null, null,
     current_catalogue_fingerprint, entry ->> 'meaningFingerprint'
   from pg_catalog.jsonb_array_elements(catalogue_entries) as item(entry);
 

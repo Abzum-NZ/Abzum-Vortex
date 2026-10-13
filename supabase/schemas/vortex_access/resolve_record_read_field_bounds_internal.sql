@@ -175,17 +175,15 @@ begin
         message = 'Record read field bounds found no catalogue entry';
     end if;
 
-    if catalogue_entry.source_kind is distinct from (source_value ->> 'kind')
+    if catalogue_entry.registration_revision is distinct from
+        (candidate ->> 'registrationRevision')::bigint
+      or catalogue_entry.source_kind is distinct from (source_value ->> 'kind')
       or catalogue_entry.source_definition_key is distinct from (source_value ->> 'definitionKey')
       or catalogue_entry.source_root_id is distinct from (source_value ->> 'rootId')::uuid
       or catalogue_entry.source_version is distinct from (source_value ->> 'releaseVersion')
       or catalogue_entry.source_revision is distinct from (source_value ->> 'releaseRevision')::bigint
       or catalogue_entry.source_validation_contract_version
-        is distinct from (source_value ->> 'validationContractVersion')
-      or catalogue_entry.source_content_fingerprint
-        is distinct from (source_value ->> 'contentFingerprint')
-      or catalogue_entry.source_resolution_fingerprint
-        is distinct from (source_value ->> 'resolutionFingerprint') then
+        is distinct from (source_value ->> 'validationContractVersion') then
       raise exception using errcode = '22023',
         message = 'Record read field bounds found a superseded permission source';
     end if;

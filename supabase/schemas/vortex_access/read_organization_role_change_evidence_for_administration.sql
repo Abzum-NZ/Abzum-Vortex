@@ -298,13 +298,19 @@ begin
             'releaseRevision', entry.source_revision,
             'releaseVersion', entry.source_version,
             'validationContractVersion', entry.source_validation_contract_version,
-            'contentFingerprint', entry.source_content_fingerprint,
-            'resolutionFingerprint', entry.source_resolution_fingerprint
+            'contentFingerprint', source_release.content_fingerprint,
+            'resolutionFingerprint', source_release.resolution_fingerprint
           ),
           'meaningFingerprint', entry.meaning_fingerprint
         ) as entry_json,
         entry.owner_kind, entry.owner_id, entry.permission_key, entry.permission_id
       from vortex_access.permission_catalogue_entries as entry
+      left join vortex_definition.releases as source_release
+        on source_release.root_id = entry.source_root_id
+        and source_release.release_revision = entry.source_revision
+        and source_release.release_version = entry.source_version
+        and source_release.validation_contract_version =
+          entry.source_validation_contract_version
       where entry.organization_id = context_organization_id
         and entry.registration_kind = 'application'
         and entry.registration_owner_id = target_application_root_id

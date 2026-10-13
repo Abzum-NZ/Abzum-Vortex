@@ -309,6 +309,7 @@ begin
   with candidate as (
     select declared.ordinality as alternative_ordinal,
       declared.value as permission_value,
+      (evaluated.permission_entry).registration_revision as registration_revision,
       (evaluated.permission_entry).record_scope as record_scope,
       pg_catalog.jsonb_build_object(
         'kind', (evaluated.permission_entry).source_kind,
@@ -317,10 +318,7 @@ begin
         'releaseRevision', (evaluated.permission_entry).source_revision,
         'releaseVersion', (evaluated.permission_entry).source_version,
         'validationContractVersion',
-          (evaluated.permission_entry).source_validation_contract_version,
-        'contentFingerprint', (evaluated.permission_entry).source_content_fingerprint,
-        'resolutionFingerprint',
-          (evaluated.permission_entry).source_resolution_fingerprint
+          (evaluated.permission_entry).source_validation_contract_version
       ) as source_release,
       evaluated.path_valid_until as path_valid_until
     from pg_catalog.jsonb_array_elements(declaration_permissions)
@@ -339,6 +337,7 @@ begin
     pg_catalog.jsonb_agg(
       pg_catalog.jsonb_build_object(
         'permission', candidate.permission_value,
+        'registrationRevision', candidate.registration_revision,
         'recordScope', candidate.record_scope,
         'source', candidate.source_release,
         'validUntil', pg_catalog.to_char(
@@ -411,7 +410,7 @@ begin
 end
 $_$;
 
-alter function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) owner to vortex_owner;
+ALTER FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) OWNER TO vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) IS 'Private record-permission eligibility evidence per declared alternative; carries the declared record binding as context and is never a record allow result. The caller supplies one Access-bound context and checked time.';
 
