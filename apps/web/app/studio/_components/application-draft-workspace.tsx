@@ -965,7 +965,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
               return result;
             }} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
-          <ApplicationFlowCanvas key={flowEpoch} context={compositionContext} selection={selected}
+          <ApplicationFlowCanvas key={`canvas-${flowEpoch}`} context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowTextEditor || pendingFlowAppend || workspaceLifetime === 0}
             onSettingPendingChange={reportFlowSettingPending}
             onInsert={(expected, expectedSelection, command: StudioFlowInsertCommand) =>
@@ -975,7 +975,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
             onSetting={(expected, expectedSelection, command: StudioFlowSettingCommand) =>
               editFlowFromCanvas(applyStudioFlowSettingCommand, "Task setting applied to local history. Save draft to persist it.", expected, expectedSelection, command)} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
-          <ApplicationFlowEditor key={flowEpoch} context={compositionContext} selection={selected}
+          <ApplicationFlowEditor key={`editor-${flowEpoch}`} context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}
             onPendingChange={reportFlowTextPending} onAppendPendingChange={reportFlowAppendPending}
             onCommand={(expected, expectedSelection, command) => {
