@@ -1,5 +1,12 @@
 set local role vortex_owner;
 
+-- The baseline helper remains postgres-owned because its system path calls
+-- other private postgres-owned functions. Allow this trusted definer to call it.
+set local role postgres;
+grant execute on function vortex_definition.validated_builder_evidence_read_context_internal()
+  to vortex_owner;
+set local role vortex_owner;
+
 create or replace function vortex_definition.list_organization_builder_roots()
 returns table (
   root_id uuid,
