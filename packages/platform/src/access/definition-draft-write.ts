@@ -51,7 +51,11 @@ export type HumanApplicationDraftRefusalReason =
   | "session_ended";
 
 /** Why a draft write conflicted, in terms the person can act on. */
-export type HumanApplicationDraftConflictReason = "draft_changed" | "key_exists" | "draft_missing";
+export type HumanApplicationDraftConflictReason =
+  | "draft_changed"
+  | "key_exists"
+  | "alias_conflict"
+  | "draft_missing";
 
 export type HumanApplicationDraftWriteResult =
   | Readonly<{ kind: "available"; draft: StoredApplicationDefinitionDraft }>
@@ -299,11 +303,9 @@ const safeFailure = (error: unknown): HumanApplicationDraftWriteResult => {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
       return { kind: "conflict", reason: "draft_changed" };
     if (error.code === "DEFINITION_ROOT_MISSING") return { kind: "conflict", reason: "draft_missing" };
-    if (
-      error.code === "DEFINITION_ROOT_ALREADY_EXISTS" ||
-      error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT"
-    )
-      return { kind: "conflict", reason: "key_exists" };
+    if (error.code === "DEFINITION_ROOT_ALREADY_EXISTS") return { kind: "conflict", reason: "key_exists" };
+    if (error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT")
+      return { kind: "conflict", reason: "alias_conflict" };
     if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE")
       return { kind: "refused", reason: "source_invalid" };
     if (
@@ -315,7 +317,11 @@ const safeFailure = (error: unknown): HumanApplicationDraftWriteResult => {
   return { kind: "temporarily_unavailable" };
 };
 
-/** One log line per refusal: a stable code naming the write and the reason, plus the cause class. */
+/**
+ * One log line per refusal: a stable code naming the write and the reason, plus the cause class.
+ * A failure thrown through the request transaction is logged with its cause (and its stable
+ * definition code) by the request boundary, so it is not logged again here.
+ */
 const logDraftWriteFailure = (
   mode: "create" | "save",
   result: HumanApplicationDraftWriteResult,
@@ -414,7 +420,6 @@ export const createHumanApplicationDraftWriter = (
           return draft;
         } catch (error) {
           failure = safeFailure(error);
-          logDraftWriteFailure(mode, failure, error);
           // Throw through runChange so every partial write is rolled back before safe mapping.
           throw error;
         }
@@ -560,7 +565,6 @@ export const createHumanApplicationDraftWriter = (
           return { kind: "saved", draft: verified };
         } catch (error) {
           failure = safeFailure(error);
-          logDraftWriteFailure("save", failure, error);
           // Throw through runChange so every partial write is rolled back before safe mapping.
           throw error;
         }

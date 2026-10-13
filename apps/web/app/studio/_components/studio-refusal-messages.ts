@@ -13,7 +13,9 @@ export const refusalMessage = (reason: string | undefined, subject: string): str
 export const conflictMessage = (reason: string | undefined, subject: string): string =>
   reason === "key_exists"
     ? `An application with this key already exists. Choose a different key. ${subject}`
-    : reason === "draft_missing"
+    : reason === "alias_conflict"
+      ? `A name this draft uses was already used by an earlier component of this application and cannot be reassigned. Rename the component you changed or restore its previous name. ${subject}`
+      : reason === "draft_missing"
       ? `This draft no longer exists. ${subject}`
       : reason === "draft_changed"
         ? `The saved draft changed since you opened it. ${subject}`

@@ -26,7 +26,11 @@ export interface StudioApplicationDefinitionDraftPort {
 
 /** What the person can act on when a save is refused; absent when the writer gave no reason. */
 export type StudioApplicationDraftRefusalReason = "permission_missing" | "source_invalid" | "context_changed" | "session_ended";
-export type StudioApplicationDraftConflictReason = "draft_changed" | "key_exists" | "draft_missing";
+export type StudioApplicationDraftConflictReason =
+  | "draft_changed"
+  | "key_exists"
+  | "alias_conflict"
+  | "draft_missing";
 
 export type StudioApplicationDraftSaveOutcome =
   | Readonly<{ kind: "saved"; draftRevision: number }>
@@ -129,7 +133,10 @@ const saveFailureOutcome = (error: unknown): StudioApplicationDraftSaveOutcome =
   if (code === "DEFINITION_DRAFT_STALE_OR_MISSING")
     return Object.freeze({
       kind: "conflict",
-      ...(reason === "draft_changed" || reason === "key_exists" || reason === "draft_missing"
+      ...(reason === "draft_changed" ||
+      reason === "key_exists" ||
+      reason === "alias_conflict" ||
+      reason === "draft_missing"
         ? { reason }
         : {}),
     });

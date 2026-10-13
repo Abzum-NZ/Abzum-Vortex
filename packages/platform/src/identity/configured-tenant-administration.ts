@@ -135,7 +135,9 @@ const configuredContext = (
   return parsed.success ? parsed.data : undefined;
 };
 
+// A refusal code is the safe result; the database cause is logged here, where it is mapped.
 const refusalCode = (error: unknown) => {
+  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
   switch (databaseCode(error)) {
     case "V3001":
       return "duplicate_conflict" as const;
@@ -152,13 +154,16 @@ const refusalCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
-      console.error(`[identity] configured operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };
-const lifecycleRefusalCode = (error: unknown) =>
-  databaseCode(error) === "V3102" ? ("stale_revision" as const) : refusalCode(error);
+const lifecycleRefusalCode = (error: unknown) => {
+  if (databaseCode(error) !== "V3102") return refusalCode(error);
+  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
+  return "stale_revision" as const;
+};
 const superAdministratorBootstrapCode = (error: unknown) => {
+  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
   switch (databaseCode(error)) {
     case "V3141":
       return "identity_unavailable" as const;
@@ -167,7 +172,6 @@ const superAdministratorBootstrapCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
-      console.error(`[identity] configured operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };

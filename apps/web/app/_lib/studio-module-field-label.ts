@@ -30,7 +30,7 @@ export type StudioModuleFieldDescriptor = Readonly<{
 export type StudioModuleFieldLabelResult =
   | Readonly<{ kind: "available"; draft: StoredModuleDefinitionDraft; fields: readonly StudioModuleFieldDescriptor[] }>
   | Readonly<{ kind: "validation_failed"; validation: DefinitionValidationResult }>
-  | Readonly<{ kind: "conflict"; reason?: "draft_changed" | "draft_missing" | "key_exists" }>
+  | Readonly<{ kind: "conflict"; reason?: "draft_changed" | "draft_missing" | "alias_conflict" }>
   | Readonly<{ kind: "refused"; reason?: "permission_missing" | "source_invalid" | "context_changed" | "session_ended" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -60,13 +60,13 @@ const declined = (code: string, reason: "permission_missing" | "source_invalid" 
   return { kind: "refused", reason };
 };
 
+// Every failure mapped here is rethrown through the request transaction, where the request boundary logs
+// its cause and stable code once.
 const safeFailure = (error: unknown): StudioModuleFieldLabelResult => {
   const refuse = (reason: "permission_missing" | "source_invalid" | "context_changed"): StudioModuleFieldLabelResult => {
-    console.error(`[studio] field label refused STUDIO_FIELD_LABEL_REFUSED_${reason.toUpperCase()}: ${describeFailure(error)}`);
     return { kind: "refused", reason };
   };
-  const conflict = (reason: "draft_changed" | "draft_missing" | "key_exists"): StudioModuleFieldLabelResult => {
-    console.error(`[studio] field label conflict STUDIO_FIELD_LABEL_CONFLICT_${reason.toUpperCase()}: ${describeFailure(error)}`);
+  const conflict = (reason: "draft_changed" | "draft_missing" | "alias_conflict"): StudioModuleFieldLabelResult => {
     return { kind: "conflict", reason };
   };
   if (error instanceof LocatedValidationFailure) return { kind: "validation_failed", validation: error.validation };
@@ -74,12 +74,11 @@ const safeFailure = (error: unknown): StudioModuleFieldLabelResult => {
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return conflict("draft_changed");
     if (error.code === "DEFINITION_ROOT_MISSING") return conflict("draft_missing");
-    if (error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT") return conflict("key_exists");
+    if (error.code === "DEFINITION_IDENTITY_ALIAS_CONFLICT") return conflict("alias_conflict");
     if (error.code === "INVALID_DEFINITION_COMMAND" || error.code === "INVALID_DEFINITION_SOURCE") return refuse("source_invalid");
     if (error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_STORAGE_VALIDATION_FAILED")
       return refuse("context_changed");
   }
-  console.error(`[studio] field label failed unexpectedly STUDIO_FIELD_LABEL_FAILED: ${describeFailure(error)}`);
   return { kind: "temporarily_unavailable" };
 };
 

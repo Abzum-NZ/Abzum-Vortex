@@ -113,6 +113,9 @@ const databaseCode = (error: unknown) =>
 // A poisoned request-bound transaction is logged once by the request boundary that aborts on it.
 export const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
 const mutationCode = (error: unknown) => {
+  // The database cause is logged where it is mapped to the safe code the caller receives.
+  if (!(error instanceof Error && error.name === transactionPoisonErrorName))
+    console.error(`[identity] tenant governance operation refused: ${describeFailure(error)}`);
   switch (databaseCode(error)) {
     case "V3001":
       return "duplicate_conflict" as const;
@@ -130,8 +133,6 @@ const mutationCode = (error: unknown) => {
     case "22023":
       return "invalid_command" as const;
     default:
-      if (!(error instanceof Error && error.name === transactionPoisonErrorName))
-        console.error(`[identity] tenant governance operation failed: ${describeFailure(error)}`);
       return "operation_unavailable" as const;
   }
 };
