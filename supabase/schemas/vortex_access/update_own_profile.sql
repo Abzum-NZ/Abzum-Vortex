@@ -178,3 +178,7 @@ comment on function vortex_access.update_own_profile(
   uuid, bigint, text, text, text, uuid
 ) is
   'Protected profile update for one active organisation account: a person may change their own display name, language and time zone, and may change another account only with platform.organization.accounts.manage. The actor and organisation come only from the validated request context; the account revision is exact and Access version is never changed.';
+
+alter function vortex_access.update_own_profile(p_organization_account_id uuid, p_expected_revision bigint, p_display_name text, p_language text, p_time_zone text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.update_own_profile(p_organization_account_id uuid, p_expected_revision bigint, p_display_name text, p_language text, p_time_zone text, p_activity_id uuid) to postgres;

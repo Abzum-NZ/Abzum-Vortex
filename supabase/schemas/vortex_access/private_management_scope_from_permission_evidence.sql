@@ -73,6 +73,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) OWNER TO postgres;
+alter function vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) FROM PUBLIC;
+
+grant execute on function vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) to postgres;

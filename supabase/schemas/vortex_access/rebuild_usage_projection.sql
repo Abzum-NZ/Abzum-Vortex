@@ -83,6 +83,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.rebuild_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) OWNER TO postgres;
+alter function vortex_access.rebuild_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.rebuild_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) FROM PUBLIC;
+
+grant execute on function vortex_access.rebuild_usage_projection(p_identity_id uuid, p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) to postgres;

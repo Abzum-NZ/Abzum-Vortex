@@ -44,3 +44,5 @@ grant execute on function vortex_definition.is_current_application_address_relea
 
 comment on function vortex_definition.is_current_application_address_release(bigint) is
   'Checks an internal candidate release against the exact active registration and binding in the validated human application context.';
+
+alter function vortex_definition.is_current_application_address_release(p_release_revision bigint) owner to vortex_owner;

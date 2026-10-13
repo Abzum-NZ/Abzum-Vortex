@@ -113,6 +113,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) OWNER TO postgres;
+alter function vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) to postgres;

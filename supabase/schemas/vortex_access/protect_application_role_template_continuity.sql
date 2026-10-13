@@ -33,6 +33,8 @@ begin
 end;
 $$;
 
-ALTER FUNCTION vortex_access.protect_application_role_template_continuity() OWNER TO postgres;
+alter function vortex_access.protect_application_role_template_continuity() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_application_role_template_continuity() FROM PUBLIC;
+
+grant execute on function vortex_access.protect_application_role_template_continuity() to postgres;

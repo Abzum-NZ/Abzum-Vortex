@@ -110,3 +110,7 @@ comment on function vortex_access.capability_limit_bounds_internal(
   uuid, uuid, text, text, timestamptz, boolean
 ) is
   'Private: the live platform ceiling and the tenant and organisation allocations that bound one capability scope, each with its precedence; allocations count only under a live ceiling.';
+
+alter function vortex_access.capability_limit_bounds_internal(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_evaluated_at timestamp with time zone, p_lock boolean) owner to vortex_owner;
+
+grant execute on function vortex_access.capability_limit_bounds_internal(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_evaluated_at timestamp with time zone, p_lock boolean) to postgres;

@@ -160,3 +160,7 @@ grant execute on function vortex_identity.revoke_vortex_super_administrator(uuid
 
 comment on function vortex_identity.revoke_vortex_super_administrator(uuid, uuid, bigint) is
   'Revokes a named super-administrator assignment through the live account-bound super-administrator context, with recent sign-in and exact revision evidence.';
+
+alter function vortex_identity.revoke_vortex_super_administrator(p_duplicate_key uuid, p_assignment_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_identity.revoke_vortex_super_administrator(p_duplicate_key uuid, p_assignment_id uuid, p_expected_revision bigint) to postgres;

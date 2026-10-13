@@ -64,3 +64,7 @@ grant execute on function vortex_identity.list_organization_launcher(uuid)
 
 comment on function vortex_identity.list_organization_launcher(uuid) is
   'Returns safe organisation labels for active local accounts and every active organisation available to a named Vortex super administrator.';
+
+alter function vortex_identity.list_organization_launcher(p_identity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.list_organization_launcher(p_identity_id uuid) to postgres;

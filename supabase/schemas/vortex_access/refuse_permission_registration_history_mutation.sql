@@ -7,6 +7,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.refuse_permission_registration_history_mutation() OWNER TO postgres;
+alter function vortex_access.refuse_permission_registration_history_mutation() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.refuse_permission_registration_history_mutation() FROM PUBLIC;
+
+grant execute on function vortex_access.refuse_permission_registration_history_mutation() to postgres;

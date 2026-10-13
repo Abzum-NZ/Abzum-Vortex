@@ -51,3 +51,7 @@ grant execute on function vortex_definition.read_saved_condition_history(uuid) t
 
 comment on function vortex_definition.read_saved_condition_history(uuid) is
   'Returns, for each saved sharing condition ever published by one organisation-scoped Module root, its most recent published form, so the next release can assign condition revisions.';
+
+alter function vortex_definition.read_saved_condition_history(p_root_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_saved_condition_history(p_root_id uuid) to postgres;

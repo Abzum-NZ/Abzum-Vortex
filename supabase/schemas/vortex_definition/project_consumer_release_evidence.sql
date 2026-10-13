@@ -96,3 +96,7 @@ revoke all on function vortex_definition.project_consumer_release_evidence(text,
 grant execute on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint) to vortex_owner;
 comment on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint) is
   'Owner-private projection of one exact immutable release; performs no scope selection.';
+
+alter function vortex_definition.project_consumer_release_evidence(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.project_consumer_release_evidence(p_kind text, p_root_id uuid, p_release_revision bigint) to postgres;

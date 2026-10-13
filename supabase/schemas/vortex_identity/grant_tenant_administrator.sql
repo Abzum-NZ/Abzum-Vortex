@@ -131,4 +131,6 @@ grant execute on function vortex_identity.grant_tenant_administrator(uuid, text,
 comment on function vortex_identity.grant_tenant_administrator(uuid, text, uuid, uuid, jsonb, timestamptz, timestamptz) is
   'Protected same-tenant tenant-administrator grant under the bound request context person''s current structural authority, with database-computed command fingerprint, self-grant refusal, grantor-bounded expiry and accepted replay.';
 
-alter function vortex_identity.grant_tenant_administrator(uuid,text,uuid,uuid,jsonb,timestamp with time zone,timestamp with time zone) owner to postgres;
+alter function vortex_identity.grant_tenant_administrator(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_subject_identity_id uuid, p_capabilities jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone) owner to vortex_owner;
+
+grant execute on function vortex_identity.grant_tenant_administrator(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_subject_identity_id uuid, p_capabilities jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone) to postgres;

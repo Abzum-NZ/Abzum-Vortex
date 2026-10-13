@@ -61,3 +61,5 @@ comment on function vortex_definition.append_application_installation_activity_i
   uuid, uuid, text
 ) is
   'Private content-free Activity composer for one protected Application installation lifecycle change.';
+
+alter function vortex_definition.append_application_installation_activity_internal(p_activity_id uuid, p_application_root_id uuid, p_action text) owner to vortex_owner;

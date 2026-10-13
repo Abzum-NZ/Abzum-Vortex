@@ -203,3 +203,7 @@ revoke execute on function
 
 grant execute on function
   vortex_access.reserve_capability_quantity(uuid, uuid, text, text, jsonb, numeric, uuid) to vortex_request;
+
+alter function vortex_access.reserve_capability_quantity(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_claim jsonb, p_requested_quantity numeric, p_duplicate_key uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.reserve_capability_quantity(p_tenant_id uuid, p_organization_id uuid, p_capability_key text, p_unit text, p_policy_claim jsonb, p_requested_quantity numeric, p_duplicate_key uuid) to postgres;

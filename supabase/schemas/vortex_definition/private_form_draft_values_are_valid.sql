@@ -25,3 +25,7 @@ comment on function vortex_definition.private_form_draft_values_are_valid(jsonb)
 
 grant execute on function vortex_definition.private_form_draft_values_are_valid(jsonb)
   to vortex_owner;
+
+alter function vortex_definition.private_form_draft_values_are_valid(p_values jsonb) owner to vortex_owner;
+
+grant execute on function vortex_definition.private_form_draft_values_are_valid(p_values jsonb) to postgres;

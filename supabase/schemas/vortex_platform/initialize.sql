@@ -21,9 +21,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_platform.initialize(candidate jsonb) OWNER TO postgres;
+alter function vortex_platform.initialize(candidate jsonb) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_platform.initialize(candidate jsonb) IS 'Validates and stores one trusted request context for the current transaction; refuses a second establishment in the same transaction.';
 
 REVOKE ALL ON FUNCTION vortex_platform.initialize(candidate jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_platform.initialize(candidate jsonb) TO vortex_runtime;
+
+grant execute on function vortex_platform.initialize(candidate jsonb) to postgres;

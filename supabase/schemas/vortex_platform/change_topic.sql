@@ -24,3 +24,7 @@ grant execute on function vortex_platform.change_topic(uuid, uuid)
 
 comment on function vortex_platform.change_topic(uuid, uuid) is
   'Returns the deterministic private Broadcast topic for one organisation and application.';
+
+alter function vortex_platform.change_topic(p_organization_id uuid, p_application_root_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_platform.change_topic(p_organization_id uuid, p_application_root_id uuid) to postgres;

@@ -64,9 +64,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.check_record_lifecycle_preview_authority() OWNER TO postgres;
+alter function vortex_access.check_record_lifecycle_preview_authority() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.check_record_lifecycle_preview_authority() IS 'Access-owned authority check for one protected record-type lifecycle policy preview transaction.';
 
 REVOKE ALL ON FUNCTION vortex_access.check_record_lifecycle_preview_authority() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.check_record_lifecycle_preview_authority() TO vortex_owner;
+
+grant execute on function vortex_access.check_record_lifecycle_preview_authority() to postgres;

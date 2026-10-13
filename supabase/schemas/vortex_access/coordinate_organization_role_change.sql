@@ -20,6 +20,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.coordinate_organization_role_change(p_evidence jsonb, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
+alter function vortex_access.coordinate_organization_role_change(p_evidence jsonb, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.coordinate_organization_role_change(p_evidence jsonb, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.coordinate_organization_role_change(p_evidence jsonb, p_changed_by uuid, p_correlation_id uuid) to postgres;

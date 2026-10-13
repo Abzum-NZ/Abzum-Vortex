@@ -79,3 +79,7 @@ revoke all on function
 
 grant execute on function
   vortex_platform.read_active_connection_evidence(uuid) to vortex_request, vortex_runtime;
+
+alter function vortex_platform.read_active_connection_evidence(p_connection_instance_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_platform.read_active_connection_evidence(p_connection_instance_id uuid) to postgres;

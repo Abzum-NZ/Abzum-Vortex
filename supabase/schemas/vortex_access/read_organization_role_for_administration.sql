@@ -138,3 +138,7 @@ to vortex_request;
 
 comment on function vortex_access.read_organization_role_for_administration(uuid) is
   'Returns one current local role and its accepted configuration without assignment evidence.';
+
+alter function vortex_access.read_organization_role_for_administration(p_role_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.read_organization_role_for_administration(p_role_id uuid) to postgres;

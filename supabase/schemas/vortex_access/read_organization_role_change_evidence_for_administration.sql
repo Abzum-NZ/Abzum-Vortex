@@ -579,3 +579,7 @@ to vortex_request;
 
 comment on function vortex_access.read_organization_role_change_evidence_for_administration(jsonb) is
   'Server-side preparation read: given bounded role configuration or an existing Application role identity and expected revision, it returns complete, fingerprinted permission and template evidence for the verified caller organisation only, deriving stored role configuration, actor and organisation from protected context and including an exact live-assignment snapshot only when the writer requires it.';
+
+alter function vortex_access.read_organization_role_change_evidence_for_administration(p_preparation jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.read_organization_role_change_evidence_for_administration(p_preparation jsonb) to postgres;

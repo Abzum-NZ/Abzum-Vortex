@@ -23,3 +23,7 @@ comment on function vortex_definition.private_form_draft_key_is_valid(text) is
 
 grant execute on function vortex_definition.private_form_draft_key_is_valid(text)
   to vortex_owner;
+
+alter function vortex_definition.private_form_draft_key_is_valid(p_key text) owner to vortex_owner;
+
+grant execute on function vortex_definition.private_form_draft_key_is_valid(p_key text) to postgres;

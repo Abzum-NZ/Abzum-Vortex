@@ -28,9 +28,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.fence_record_owner_account_target_internal() OWNER TO postgres;
+alter function vortex_access.fence_record_owner_account_target_internal() owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.fence_record_owner_account_target_internal() IS 'Row trigger on every Record table: an assigned account owner must be active in the row organisation, under a share lock on the account.';
 
 REVOKE ALL ON FUNCTION vortex_access.fence_record_owner_account_target_internal() FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.fence_record_owner_account_target_internal() TO vortex_owner;
+
+grant execute on function vortex_access.fence_record_owner_account_target_internal() to postgres;

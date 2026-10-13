@@ -67,3 +67,7 @@ grant execute on function vortex_access.resolve_search_index_scope(uuid, uuid)
 
 comment on function vortex_access.resolve_search_index_scope(uuid, uuid) is
   'Resolves the tenant, access version and the event dispatcher''s system actor for one active organisation Application, so the search consumer can read a record under a system context. Refuses for an inactive organisation, a foreign Application or a missing or ambiguous dispatcher grant. Runtime-only.';
+
+alter function vortex_access.resolve_search_index_scope(p_organization_id uuid, p_application_root_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.resolve_search_index_scope(p_organization_id uuid, p_application_root_id uuid) to postgres;

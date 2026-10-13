@@ -92,4 +92,6 @@ grant execute on function vortex_platform.append_file_activity_internal(text, uu
 comment on function vortex_platform.append_file_activity_internal(text, uuid) is
   'Appends one content-free File Activity entry for the verified request actor; used by the admission, activation and download-grant owners.';
 
-alter function vortex_platform.append_file_activity_internal(text, uuid) owner to postgres;
+alter function vortex_platform.append_file_activity_internal(p_action text, p_subject_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_platform.append_file_activity_internal(p_action text, p_subject_id uuid) to postgres;

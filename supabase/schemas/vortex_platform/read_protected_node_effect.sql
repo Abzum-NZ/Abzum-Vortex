@@ -62,3 +62,7 @@ comment on function vortex_platform.read_protected_node_effect(
   uuid, uuid, uuid, text, text, text
 ) is
   'Reads a prior protected node response only for the exact retained run and node binding; it never claims or changes an effect.';
+
+alter function vortex_platform.read_protected_node_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text, p_operation_key text) owner to vortex_owner;
+
+grant execute on function vortex_platform.read_protected_node_effect(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_task_path text, p_iteration text, p_operation_key text) to postgres;

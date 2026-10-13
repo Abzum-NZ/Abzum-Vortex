@@ -238,3 +238,7 @@ grant execute on function vortex_access.read_application_address_candidates(uuid
 
 comment on function vortex_access.read_application_address_candidates(uuid, text, text) is
   'Private App candidate read for one exact live human organisation address; only App may project metadata after current page Access decisions.';
+
+alter function vortex_access.read_application_address_candidates(p_identity_id uuid, p_tenant_short_name text, p_organization_short_name text) owner to vortex_owner;
+
+grant execute on function vortex_access.read_application_address_candidates(p_identity_id uuid, p_tenant_short_name text, p_organization_short_name text) to postgres;

@@ -45,3 +45,7 @@ comment on function vortex_definition.private_form_draft_to_json_internal(
 
 grant execute on function vortex_definition.private_form_draft_to_json_internal(vortex_definition.form_drafts, text)
   to vortex_owner;
+
+alter function vortex_definition.private_form_draft_to_json_internal(d vortex_definition.form_drafts, p_state text) owner to vortex_owner;
+
+grant execute on function vortex_definition.private_form_draft_to_json_internal(d vortex_definition.form_drafts, p_state text) to postgres;

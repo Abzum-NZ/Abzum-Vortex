@@ -152,3 +152,7 @@ grant execute on function vortex_identity.grant_vortex_super_administrator(uuid,
 
 comment on function vortex_identity.grant_vortex_super_administrator(uuid, uuid) is
   'Grants a named super-administrator assignment through the live account-bound super-administrator context, with recent sign-in and immutable attribution.';
+
+alter function vortex_identity.grant_vortex_super_administrator(p_duplicate_key uuid, p_identity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.grant_vortex_super_administrator(p_duplicate_key uuid, p_identity_id uuid) to postgres;

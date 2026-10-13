@@ -100,3 +100,7 @@ revoke all on function
 
 comment on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid) is
   'Owner-only platform catalogue initializer; creates 1.0.0 for a new organisation and advances an existing registration through every immutable revision to revision 6 (1.4.0).';
+
+alter function vortex_access.initialize_platform_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.initialize_platform_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

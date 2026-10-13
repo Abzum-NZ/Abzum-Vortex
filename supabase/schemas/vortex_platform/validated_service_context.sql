@@ -32,3 +32,7 @@ grant execute on function vortex_platform.validated_service_context()
 
 comment on function vortex_platform.validated_service_context() is
   'Dispatches an established request context through the authoritative human or system validator.';
+
+alter function vortex_platform.validated_service_context() owner to vortex_owner;
+
+grant execute on function vortex_platform.validated_service_context() to postgres;

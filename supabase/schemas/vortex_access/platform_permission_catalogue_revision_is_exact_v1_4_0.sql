@@ -268,3 +268,7 @@ revoke all on function
 
 comment on function vortex_access.platform_permission_catalogue_revision_is_exact_v1_4_0(uuid, bigint) is
   'Owner-only fixed evidence assertion for exact platform catalogue revision 6 (1.4.0), which adds the four builder permissions to revision 5.';
+
+alter function vortex_access.platform_permission_catalogue_revision_is_exact_v1_4_0(p_organization_id uuid, p_registration_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact_v1_4_0(p_organization_id uuid, p_registration_revision bigint) to postgres;

@@ -32,3 +32,5 @@ comment on function vortex_record.enforce_document_application_root() is
 
 alter function vortex_record.enforce_document_application_root()
   owner to postgres;
+
+alter function vortex_record.enforce_document_application_root() owner to vortex_owner;

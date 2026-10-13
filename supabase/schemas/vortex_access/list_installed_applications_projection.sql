@@ -104,3 +104,7 @@ grant execute on function vortex_access.list_installed_applications_projection(
 
 comment on function vortex_access.list_installed_applications_projection(uuid, integer) is
   'Registered installed-application projection: returns every application the current viewer may reach that is installed in the viewer''s organisation, being an active application registration whose published release revision and metadata still match and whose installation binding is active, with the organisation, the application identity, the registration revision and the safe projected attribute values keyed by lowercase field key, or no row when the application scope refuses the viewer. Compilation output, release evidence and binding evidence are never projected.';
+
+alter function vortex_access.list_installed_applications_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_installed_applications_projection(p_record_id uuid, p_page_size integer) to postgres;

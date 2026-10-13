@@ -118,3 +118,7 @@ comment on function vortex_access.read_flow_run_as_principal_for_run(
   uuid, uuid, uuid, text, uuid
 ) is
   'Runtime-only, exact-scope read of an active flow run-as principal; revoked, expired, inactive or unregistered actors return unavailable.';
+
+alter function vortex_access.read_flow_run_as_principal_for_run(p_execution_binding_id uuid, p_organization_id uuid, p_application_root_id uuid, p_release_version text, p_flow_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.read_flow_run_as_principal_for_run(p_execution_binding_id uuid, p_organization_id uuid, p_application_root_id uuid, p_release_version text, p_flow_id uuid) to postgres;

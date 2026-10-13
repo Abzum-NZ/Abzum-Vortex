@@ -73,3 +73,7 @@ grant execute on function vortex_access.list_organization_delegations_projection
 
 comment on function vortex_access.list_organization_delegations_projection(uuid, integer) is
   'Registered delegation projection: returns every delegation authority of the viewer''s organisation, whether active, scheduled, expired or revoked, under the fixed platform.organization.assignments.read decision, with the organisation, the delegation identity, the delegation revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. The bounded permission set, its fingerprint and every grant or revocation audit column are never projected.';
+
+alter function vortex_access.list_organization_delegations_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_delegations_projection(p_record_id uuid, p_page_size integer) to postgres;

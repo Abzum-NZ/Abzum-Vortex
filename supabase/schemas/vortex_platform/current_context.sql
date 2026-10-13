@@ -28,4 +28,6 @@ grant execute on function vortex_platform.current_context()
 comment on function vortex_platform.current_context() is
   'Returns the validated request context established in this transaction or fails closed when it is absent, expired or stale.';
 
-alter function vortex_platform.current_context() owner to postgres;
+alter function vortex_platform.current_context() owner to vortex_owner;
+
+grant execute on function vortex_platform.current_context() to postgres;

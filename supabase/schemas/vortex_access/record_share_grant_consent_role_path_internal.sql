@@ -243,3 +243,5 @@ comment on function vortex_access.record_share_grant_consent_role_path_internal(
   uuid, uuid, uuid, uuid[], timestamptz, timestamptz
 ) is
   'Private current direct, Group or activated-PIM path for one of the proposal''s exact consent roles; returns bounded path evidence or null.';
+
+alter function vortex_access.record_share_grant_consent_role_path_internal(p_organization_id uuid, p_organization_account_id uuid, p_application_root_id uuid, p_authorized_role_ids uuid[], p_checked_at timestamp with time zone, p_context_expires_at timestamp with time zone) owner to vortex_owner;

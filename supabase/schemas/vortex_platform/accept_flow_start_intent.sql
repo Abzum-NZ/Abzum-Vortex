@@ -332,3 +332,7 @@ comment on function vortex_platform.accept_flow_start_intent(
   uuid, uuid, bigint, text, text, uuid, bigint, text, uuid, text, uuid, text, text, jsonb, jsonb
 ) is
   'Accepts one exact published Event flow start under the verified human request context and committed occurrence, and returns an identical retry without dispatching it. Action starts refuse until verified invocation evidence exists.';
+
+alter function vortex_platform.accept_flow_start_intent(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_application_release_version text, p_flow_owner_kind text, p_flow_owner_root_id uuid, p_flow_release_revision bigint, p_flow_release_version text, p_flow_id uuid, p_source_kind text, p_source_id uuid, p_trigger_type text, p_trigger_id text, p_inputs jsonb, p_trigger_values jsonb) owner to vortex_owner;
+
+grant execute on function vortex_platform.accept_flow_start_intent(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_application_release_version text, p_flow_owner_kind text, p_flow_owner_root_id uuid, p_flow_release_revision bigint, p_flow_release_version text, p_flow_id uuid, p_source_kind text, p_source_id uuid, p_trigger_type text, p_trigger_id text, p_inputs jsonb, p_trigger_values jsonb) to postgres;

@@ -16,3 +16,7 @@ revoke all on function vortex_platform.read_protected_workflow_run(uuid)
 grant execute on function vortex_platform.read_protected_workflow_run(uuid) to vortex_runtime;
 comment on function vortex_platform.read_protected_workflow_run(uuid) is
   'Private protected workflow run reader: returns the retained Vortex authority and private Kestra mapping for one run id to the trusted runtime only.';
+
+alter function vortex_platform.read_protected_workflow_run(p_run_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_platform.read_protected_workflow_run(p_run_id uuid) to postgres;

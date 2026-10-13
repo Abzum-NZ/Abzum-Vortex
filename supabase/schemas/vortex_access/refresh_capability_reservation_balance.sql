@@ -114,5 +114,7 @@ comment on function vortex_access.refresh_capability_reservation_balance(
 ) is
   'Rebuilds tenant-aggregate or organisation-local balance evidence using one scope rule for active, consumed and released totals; an organisation is also bounded by the tenant-wide balance under the lower of the platform ceiling and the tenant allocation.';
 
-alter function vortex_access.refresh_capability_reservation_balance(uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz) owner to postgres;
+alter function vortex_access.refresh_capability_reservation_balance(p_tenant_id uuid, p_request_organization_id uuid, p_capability_key text, p_unit text, p_applied_scope text, p_assignment_organization_id uuid, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_quantity_limit numeric, p_evaluated_at timestamp with time zone) owner to vortex_owner;
 grant execute on function vortex_access.refresh_capability_reservation_balance(uuid, uuid, text, text, text, uuid, uuid, bigint, uuid, bigint, numeric, timestamptz) to vortex_owner;
+
+grant execute on function vortex_access.refresh_capability_reservation_balance(p_tenant_id uuid, p_request_organization_id uuid, p_capability_key text, p_unit text, p_applied_scope text, p_assignment_organization_id uuid, p_policy_id uuid, p_policy_revision bigint, p_assignment_id uuid, p_assignment_revision bigint, p_quantity_limit numeric, p_evaluated_at timestamp with time zone) to postgres;

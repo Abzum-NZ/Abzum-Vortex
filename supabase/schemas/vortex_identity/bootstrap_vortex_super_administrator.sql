@@ -105,3 +105,7 @@ grant execute on function vortex_identity.bootstrap_vortex_super_administrator(u
 
 comment on function vortex_identity.bootstrap_vortex_super_administrator(uuid, uuid, uuid) is
   'Bootstraps the first named super-administrator assignment through the existing configured system operator.';
+
+alter function vortex_identity.bootstrap_vortex_super_administrator(p_operator_actor_id uuid, p_duplicate_key uuid, p_identity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.bootstrap_vortex_super_administrator(p_operator_actor_id uuid, p_duplicate_key uuid, p_identity_id uuid) to postgres;

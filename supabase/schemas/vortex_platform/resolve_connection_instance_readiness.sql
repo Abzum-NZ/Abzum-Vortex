@@ -187,3 +187,7 @@ grant execute on function
 grant execute on function vortex_platform.resolve_connection_instance_readiness(
   uuid, uuid, uuid, text, bigint, text
 ) to vortex_owner;
+
+alter function vortex_platform.resolve_connection_instance_readiness(p_organization_id uuid, p_application_root_id uuid, p_connection_instance_id uuid, p_destination_key text, p_expected_revision bigint, p_expected_fingerprint text) owner to vortex_owner;
+
+grant execute on function vortex_platform.resolve_connection_instance_readiness(p_organization_id uuid, p_application_root_id uuid, p_connection_instance_id uuid, p_destination_key text, p_expected_revision bigint, p_expected_fingerprint text) to postgres;

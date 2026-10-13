@@ -256,3 +256,5 @@ comment on function vortex_definition.claim_organization_setup_source_manifest(
 alter function vortex_definition.claim_organization_setup_source_manifest(
   uuid, uuid, uuid, uuid, text, uuid, text, integer, text, text
 ) owner to postgres;
+
+alter function vortex_definition.claim_organization_setup_source_manifest(p_tenant_id uuid, p_organization_id uuid, p_organization_account_id uuid, p_identity_id uuid, p_operation text, p_receipt_id uuid, p_command_fingerprint text, p_expected_setup_revision integer, p_manifest_canonical_text text, p_manifest_fingerprint text) owner to vortex_owner;

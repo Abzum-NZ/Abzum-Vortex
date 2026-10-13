@@ -49,3 +49,7 @@ comment on function vortex_access.capability_reservation_request_context(uuid, u
 
 revoke execute on function
   vortex_access.capability_reservation_request_context(uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+
+alter function vortex_access.capability_reservation_request_context(p_tenant_id uuid, p_organization_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.capability_reservation_request_context(p_tenant_id uuid, p_organization_id uuid) to postgres;

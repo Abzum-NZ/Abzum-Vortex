@@ -59,7 +59,7 @@ begin
 end
 $function$;
 
-alter function vortex_access.lock_human_request_access_version_internal() owner to postgres;
+alter function vortex_access.lock_human_request_access_version_internal() owner to vortex_owner;
 
 revoke all on function vortex_access.lock_human_request_access_version_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
@@ -67,3 +67,5 @@ grant execute on function vortex_access.lock_human_request_access_version_intern
   to vortex_record_adapter;
 comment on function vortex_access.lock_human_request_access_version_internal() is
   'Locks the exact active Human organization access version with a shared row lock and revalidates the full original request context.';
+
+grant execute on function vortex_access.lock_human_request_access_version_internal() to postgres;

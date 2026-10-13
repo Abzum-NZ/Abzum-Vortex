@@ -58,3 +58,5 @@ grant execute on function vortex_definition.lock_application_page_adoption_draft
   to vortex_request;
 comment on function vortex_definition.lock_application_page_adoption_draft_internal(uuid,bigint,bigint) is
   'Locks an ordinary Application draft for current HUMAN page adoption derivation in Access, root and draft order; returns only its existing protected publication state and writes no source or release.';
+
+alter function vortex_definition.lock_application_page_adoption_draft_internal(p_root_id uuid, p_expected_draft_revision bigint, p_expected_release_revision bigint) owner to vortex_owner;

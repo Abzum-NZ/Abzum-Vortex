@@ -78,3 +78,7 @@ grant execute on function vortex_platform.write_protected_workflow_run(uuid, uui
   to vortex_runtime;
 comment on function vortex_platform.write_protected_workflow_run(uuid, uuid, uuid, jsonb) is
   'Private protected workflow run writer: stores one exact retained run authority and private Kestra mapping, allowing only an identical duplicate write.';
+
+alter function vortex_platform.write_protected_workflow_run(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_run_record jsonb) owner to vortex_owner;
+
+grant execute on function vortex_platform.write_protected_workflow_run(p_run_id uuid, p_organization_id uuid, p_identity_id uuid, p_run_record jsonb) to postgres;

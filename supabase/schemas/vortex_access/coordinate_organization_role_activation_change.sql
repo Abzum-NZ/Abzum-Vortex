@@ -478,3 +478,7 @@ comment on function vortex_access.coordinate_organization_role_activation_change
   bigint, uuid, bigint, uuid, uuid, uuid
 ) is
   'Owner-only atomic individual role activation or terminal revocation. It changes Access once but grants no caller authority; a policy that names a required caller refuses any other invoking execution binding.';
+
+alter function vortex_access.coordinate_organization_role_activation_change(p_operation text, p_organization_id uuid, p_role_activation_id uuid, p_expected_activation_revision bigint, p_organization_account_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_requested_duration_seconds bigint, p_eligibility_source_kind text, p_role_assignment_id uuid, p_expected_role_assignment_revision bigint, p_membership_id uuid, p_expected_membership_revision bigint, p_changed_by uuid, p_correlation_id uuid, p_invoking_execution_binding_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.coordinate_organization_role_activation_change(p_operation text, p_organization_id uuid, p_role_activation_id uuid, p_expected_activation_revision bigint, p_organization_account_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_requested_duration_seconds bigint, p_eligibility_source_kind text, p_role_assignment_id uuid, p_expected_role_assignment_revision bigint, p_membership_id uuid, p_expected_membership_revision bigint, p_changed_by uuid, p_correlation_id uuid, p_invoking_execution_binding_id uuid) to postgres;
