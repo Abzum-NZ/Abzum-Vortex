@@ -1,3 +1,4 @@
+import { isRecord } from "../schema";
 import { z } from "zod";
 import { sharingParameterValueTypeSchema } from "../catalogue/catalogues";
 import {
@@ -189,9 +190,6 @@ const conditionReferenceContractBaseSchema = z.discriminatedUnion("sourceProfile
     })
     .strict(),
 ]);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const boundedConditionReferenceInputSchema = z.unknown().superRefine((input, context) => {
   const rawCondition = isRecord(input) ? input.condition : undefined;

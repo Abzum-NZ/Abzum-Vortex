@@ -24,6 +24,9 @@ import {
   type PageDefinition,
   type RecordTypeDefinition,
   type SelectedOrganizationScope,
+  isRecord,
+  sameId,
+  walkPlacements,
 } from "@vortex/platform/schema";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
@@ -110,11 +113,6 @@ export type GuidedFormAbandonRequest = Readonly<{
   draftId: string;
   expectedRevision: number;
 }>;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 export const guidedFormConfirmationKey = "$guidedFormConfirmation";
 const confirmationLifetimeSeconds = 120;
@@ -233,7 +231,7 @@ const inputBlock = (placement: Record<string, unknown>): boolean => {
   );
 };
 
-const fieldForPlacement = (
+const guidedStepFieldForPlacement = (
   placement: Record<string, unknown>,
   recordType: RecordTypeDefinition,
 ): Omit<GuidedFormStepField, "placementId"> | undefined => {
@@ -279,21 +277,11 @@ const placementIdsInTree = (
   availableOnly = false,
 ): ReadonlySet<string> => {
   const ids = new Set<string>();
-  const visit = (slot: unknown): void => {
-    if (!isRecord(slot)) return;
-    if (!isRecord(slot.placements)) {
-      for (const child of Object.values(slot)) visit(child);
-      return;
-    }
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      if (availableOnly && candidate.availability === "unavailable") continue;
-      ids.add(placementId.toLowerCase());
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child);
-    }
-  };
-  visit(root);
+  walkPlacements(root, ({ placementId, placement }) => {
+    if (availableOnly && placement.availability === "unavailable") return false;
+    ids.add(placementId.toLowerCase());
+    return undefined;
+  });
   return ids;
 };
 
@@ -445,7 +433,7 @@ const collectStepFields = (
           (visiblePlacementIds === undefined || visiblePlacementIds.has(placementId.toLowerCase())) &&
           inputBlock(placementCandidate)
         ) {
-          const field = fieldForPlacement(placementCandidate, recordType);
+          const field = guidedStepFieldForPlacement(placementCandidate, recordType);
           if (
             field === undefined ||
             seenKeys.has(field.fieldKey) ||
@@ -505,35 +493,27 @@ export const getGuidedFormRecordType = (
   );
 };
 
+const formPlacementIdsInTree = (root: unknown, availableOnly: boolean): ReadonlySet<string> => {
+  const ids = new Set<string>();
+  walkPlacements(root, ({ placementId, placement }) => {
+    if (availableOnly && placement.availability === "unavailable") return false;
+    if (
+      isRecord(placement.block) &&
+      typeof placement.block.blockId === "string" &&
+      sameId(placement.block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+    )
+      ids.add(placementId.toLowerCase());
+    return undefined;
+  });
+  return ids;
+};
+
 const collectFormIds = (
   page: Readonly<Record<string, unknown>>,
   shellsCandidate?: unknown,
 ): ReadonlySet<string> => {
-  const result = new Set<string>();
   const roots = guidedStepRoots(page, shellsCandidate);
-  if (roots === undefined) return result;
-  const visit = (slot: unknown): void => {
-    if (!isRecord(slot)) return;
-    if (!isRecord(slot.placements)) {
-      for (const child of Object.values(slot)) visit(child);
-      return;
-    }
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      if (candidate.availability === "unavailable") continue;
-      const block = candidate.block;
-      if (
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-      )
-        result.add(placementId.toLowerCase());
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child);
-    }
-  };
-  for (const entry of roots) visit(entry.root);
-  return result;
+  return new Set(roots?.flatMap((entry) => [...formPlacementIdsInTree(entry.root, true)]));
 };
 
 export const getGuidedFormControlIds = (
@@ -548,35 +528,12 @@ export const getGuidedFormControlIds = (
   if (roots === undefined || !isRecord(summary) || typeof summary.id !== "string") return undefined;
   const summaryRoot = roots.find((entry) => entry.stepId === summary.id);
   if (summaryRoot === undefined) return undefined;
-  const formIds = (root: unknown): ReadonlySet<string> => {
-    const ids = new Set<string>();
-    const visit = (slot: unknown): void => {
-      if (!isRecord(slot)) return;
-      if (!isRecord(slot.placements)) {
-        for (const child of Object.values(slot)) visit(child);
-        return;
-      }
-      for (const [placementId, candidate] of Object.entries(slot.placements)) {
-        if (!isRecord(candidate)) continue;
-        if (
-          isRecord(candidate.block) &&
-          typeof candidate.block.blockId === "string" &&
-          sameId(candidate.block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-        )
-          ids.add(placementId.toLowerCase());
-        if (isRecord(candidate.slots))
-          for (const child of Object.values(candidate.slots)) visit(child);
-      }
-    };
-    visit(root);
-    return ids;
-  };
-  const summaryIds = formIds(summaryRoot.root);
+  const summaryIds = formPlacementIdsInTree(summaryRoot.root, false);
   // Gate step-owned action and display controls as well as form containers, including a form
   // supplied by a shell, so they cannot invoke a flow before final confirmation.
   const all = new Set([
     ...roots.flatMap((entry) => [...entry.pagePlacementIds]),
-    ...roots.flatMap((entry) => [...formIds(entry.root)]),
+    ...roots.flatMap((entry) => [...formPlacementIdsInTree(entry.root, false)]),
   ]);
   const summaryId = [...summaryIds][0];
   return summaryIds.size === 1 && summaryId !== undefined && all.has(summaryId)
@@ -596,30 +553,9 @@ const flowForGuidedForm = (
     ? page.steps.find((step) => isRecord(step) && step.summary === true && typeof step.id === "string")
     : undefined;
   if (!isRecord(summary) || roots === undefined) return undefined;
-  const summaryForms = new Set<string>();
-  const visitSummary = (slot: unknown): void => {
-    if (!isRecord(slot)) return;
-    if (!isRecord(slot.placements)) {
-      for (const child of Object.values(slot)) visitSummary(child);
-      return;
-    }
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      if (candidate.availability === "unavailable") continue;
-      const block = candidate.block;
-      if (
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-      )
-        summaryForms.add(placementId.toLowerCase());
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visitSummary(child);
-    }
-  };
   const summaryRoot = roots.find((entry) => entry.stepId === summary.id)?.root;
   if (summaryRoot === undefined) return undefined;
-  visitSummary(summaryRoot);
+  const summaryForms = formPlacementIdsInTree(summaryRoot, true);
   if (summaryForms.size !== 1) return undefined;
   const flowIds = new Set<string>();
   const summaryFlowIds = new Set<string>();
@@ -1026,7 +962,7 @@ export const guidedFormInputData = (
     for (const [placementId, placementCandidate] of Object.entries(slot.placements)) {
       if (!isRecord(placementCandidate)) continue;
       if (inputBlock(placementCandidate)) {
-        const entry = fieldForPlacement(placementCandidate, recordType);
+        const entry = guidedStepFieldForPlacement(placementCandidate, recordType);
         const value = entry === undefined ? undefined : byId[String(entry.field.fieldId)];
         if (entry !== undefined && value !== undefined) {
           const blockId = isRecord(placementCandidate.block)

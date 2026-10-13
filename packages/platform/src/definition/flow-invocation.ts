@@ -27,6 +27,7 @@ import {
   type ModuleDefinitionConsumerReadResult,
   type OrganizationSelectionCandidate,
   type ProtectedOperationChannel,
+  isRecord,
 } from "../schema";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-address";
@@ -171,9 +172,6 @@ export type FlowInvocationRequest = Readonly<{
 const logFlowRefusal = (code: string): void => {
   console.error(`[flows] invocation refused ${code}`);
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 type SelectedRecordReadField = Readonly<{
   alias: string;

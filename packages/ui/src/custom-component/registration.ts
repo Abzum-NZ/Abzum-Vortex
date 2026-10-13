@@ -2,6 +2,7 @@ import {
   jsonValueSchema,
   type CustomComponentRelease,
   type PlatformBlockRelease,
+  isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import {
@@ -23,9 +24,6 @@ import type { CustomComponentEventBinding } from "./custom-component-host";
 function fail(message: string, location: DefinitionRenderErrorLocation): never {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const parseValues = (
   custom: CustomComponentRelease,

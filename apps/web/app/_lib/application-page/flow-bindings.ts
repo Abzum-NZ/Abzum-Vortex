@@ -14,12 +14,12 @@ import {
   type FlowTask,
   flowTaskChildLists,
   type PageDefinition,
+  sameId,
+  isRecord,
 } from "@vortex/platform/schema";
 import type {
   collectPlacements} from "./placement-helpers";
 import {
-  sameId,
-  isRecord,
   isBoardPlacement,
   isEditFieldPlacement,
   selectedReadInputTypes

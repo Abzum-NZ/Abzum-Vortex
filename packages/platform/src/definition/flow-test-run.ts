@@ -33,6 +33,7 @@ import {
   type PreviewRecordReadResultV1,
   type SaveRecordCommand,
   type SaveRecordResult,
+  sameId,
 } from "../schema";
 import type { HumanOrganizationRequestResult } from "../access/index";
 import {
@@ -101,8 +102,6 @@ type TaskExecution = Readonly<{
   outputs?: Readonly<Record<string, string>>;
   failure?: FlowTestRunFailure;
 }>;
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const withinPayload = (candidate: unknown): boolean => {
   try {

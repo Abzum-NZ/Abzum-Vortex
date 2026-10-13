@@ -1,3 +1,4 @@
+import { sameId } from "@vortex/platform/schema";
 import "server-only";
 
 import {
@@ -21,7 +22,7 @@ import {
   projectReferenceChoicePage,
   type ReferenceChoicePageResult,
 } from "./application-page/reference-choice";
-import { collectPlacements, sameId } from "./application-page/placement-helpers";
+import { collectPlacements } from "./application-page/placement-helpers";
 import type {
   ApplicationPageLoaderAddress,
   SearchParameters,

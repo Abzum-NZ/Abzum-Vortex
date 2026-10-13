@@ -1,3 +1,4 @@
+import { isRecord } from "@vortex/platform/schema";
 import { useCallback, useMemo, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter, useSearchParams } from "next/navigation";
 import type {
@@ -11,7 +12,7 @@ import type {
   PlacementFlowBinding,
 } from "../../../../../_lib/application-page";
 import type { Notice, GuidedFormActions } from "./types";
-import { isRecord, asComponentBinding } from "./event-values";
+import { asComponentBinding } from "./event-values";
 import { placementIdsInSlot } from "./placement-helpers";
 import { unavailableNotice } from "./notices";
 

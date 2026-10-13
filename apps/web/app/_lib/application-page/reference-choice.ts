@@ -19,10 +19,11 @@ import {
   richTextDocumentSchema,
   recordLinkValueSchema,
   type ReferenceChoiceSelectionEvidence,
+  sameId,
+  isRecord,
 } from "@vortex/platform/schema";
 import type { ReferenceChoiceFormField } from "../reference-choices";
 import { requestDependencies, loadInstalledContext } from "./load";
-import { sameId, isRecord } from "./placement-helpers";
 import type { DateTimeZones, PageDataState, ModuleField } from "./types";
 
 export type ReferenceChoicePageResult =

@@ -6,6 +6,7 @@ import {
   organizationSetupReceiptResultSchema,
   organizationSetupReceiptSchema,
   type OrganizationSetupReceiptResult,
+  sameId,
 } from "../schema";
 import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
 
@@ -18,9 +19,6 @@ export type OrganizationSetupReceiptReaderDependencies = Readonly<{
 }>;
 
 const refused = Object.freeze({ kind: "refused" as const });
-const sameId = (actual: string, expected: string): boolean =>
-  actual.toLowerCase() === expected.toLowerCase();
-
 /** Reads original immutable creation evidence without creating any setup authority. */
 export const createOrganizationSetupReceiptReader = (
   dependencies: OrganizationSetupReceiptReaderDependencies = {},

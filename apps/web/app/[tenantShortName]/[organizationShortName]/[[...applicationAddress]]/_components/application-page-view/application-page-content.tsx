@@ -24,7 +24,11 @@ import {
   type PlatformThemeTokens,
   type ApplicationWebMcpRuntime,
 } from "@vortex/ui";
-import { describeFailure, type ReferenceChoiceSelectionEvidence } from "@vortex/platform/schema";
+import {
+  describeFailure,
+  type ReferenceChoiceSelectionEvidence,
+  isRecord,
+} from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Toaster, toast } from "@vortex/ui/components/sonner";
@@ -58,9 +62,6 @@ import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { WebMcpAdapter } from "../../../../../_components/webmcp-adapter";
-
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
 export function ApplicationPageViewContent({
   model,

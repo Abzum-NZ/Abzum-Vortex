@@ -11,6 +11,9 @@ import {
   type ApplicationShell,
   type FlowTask,
   flowTaskChildLists,
+  isRecord,
+  sameId,
+  walkPageComposition,
 } from "@vortex/platform/schema";
 import { hasReferenceChoiceSource } from "../reference-choices";
 import type { InstalledFlow, ModuleRelease, ModuleField } from "./types";
@@ -24,11 +27,6 @@ export const pageSubjectParameter = "record_id";
 
 export const first = (value: string | readonly string[] | undefined): string | undefined =>
   typeof value === "string" ? value : value?.[0];
-
-export const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
-export const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
 
 /** Reads only the projected body; shell chrome and permission reasons do not count as content. */
 export const projectedBodyContentAvailable = (
@@ -217,30 +215,19 @@ export const collectPlacements = (
 > => {
   const found: Array<{ placementId: string; placement: Record<string, unknown>; formId?: string }> =
     [];
-  const visit = (slot: unknown, formId?: string): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      const block = candidate.block;
+  walkPageComposition(
+    projected.composition,
+    ({ placementId, placement }, formId: string | undefined) => {
+      const block = placement.block;
       const owner =
         isRecord(block) &&
         typeof block.blockId === "string" &&
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
           ? placementId
           : formId;
-      found.push({
-        placementId,
-        placement: candidate,
-        ...(owner === undefined ? {} : { formId: owner }),
-      });
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child, owner);
-    }
-  };
-  const composition = projected.composition;
-  if (!isRecord(composition)) return found;
-  if ("main" in composition) visit(composition.main);
-  else if (isRecord(composition.stepContent))
-    for (const root of Object.values(composition.stepContent)) visit(root);
+      found.push({ placementId, placement, ...(owner === undefined ? {} : { formId: owner }) });
+      return owner;
+    },
+  );
   return found;
 };

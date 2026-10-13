@@ -33,13 +33,14 @@ import {
   formContinuationAnswerSchema,
   type ReferenceChoiceSelectionEvidenceMap,
   type ReferenceChoiceSelectionEvidence,
+  isRecord,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
 import type { SubmittedForm, Notice } from "./types";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
-import { isRecord, choiceScopeKey } from "./event-values";
+import { choiceScopeKey } from "./event-values";
 import { unavailableNotice } from "./notices";
 
 /** The keyed Show Form body owns its choice request lifetime, including Escape dismissal. */

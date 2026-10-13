@@ -1,3 +1,4 @@
+import { isRecord } from "@vortex/platform/schema";
 import { useCallback, useEffect, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
 import {
@@ -12,7 +13,7 @@ import type {
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
 import type { Notice } from "./types";
-import { choiceScopeKey, isRecord } from "./event-values";
+import { choiceScopeKey } from "./event-values";
 import { unavailableNotice } from "./notices";
 
 // The UI parser accepts at most 200 options in one projected choice payload.

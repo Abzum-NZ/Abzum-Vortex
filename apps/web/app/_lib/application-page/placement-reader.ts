@@ -38,15 +38,15 @@ import {
   type JsonValue,
   type PageDefinition,
   type IdentitySession,
-  type OrganizationSelectionCandidate
+  type OrganizationSelectionCandidate,
+  sameId,
+  isRecord,
 } from "@vortex/platform/schema";
 import { projectBoardPlacement } from "../board-placement";
 import { hasReferenceChoiceSource, projectedReferenceChoiceForm } from "../reference-choices";
 import type {
   collectPlacements} from "./placement-helpers";
 import {
-  sameId,
-  isRecord,
   projectedUseAvailability,
   isBoardPlacement,
   first

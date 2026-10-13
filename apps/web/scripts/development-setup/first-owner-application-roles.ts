@@ -10,6 +10,7 @@ import {
   type OrganizationAdministrationPermission,
   type OrganizationAdministrationRoleAssignment,
   type OrganizationAdministrationRoleSummary,
+  sameId,
 } from "@vortex/platform/schema";
 import { nominatedOwnerSession } from "./development-authority";
 import type { PublishedRelease } from "./state";
@@ -26,8 +27,6 @@ export type FirstOwnerApplicationRoleFacts = Readonly<{
   applicationKeys: readonly string[];
   releases: ReadonlyMap<string, PublishedRelease>;
 }>;
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const templateIdentity = (template: OrganizationAdministrationApplicationRoleTemplate): string =>
   `${template.reference.applicationRootId.toLowerCase()}:${template.reference.sourceRoleId.toLowerCase()}`;

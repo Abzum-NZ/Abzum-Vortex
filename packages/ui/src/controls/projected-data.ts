@@ -7,6 +7,7 @@ import {
   timestampSchema,
   type BlockPropertyValueContract,
   type ReferenceChoiceSelectionEvidence,
+  isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
@@ -226,9 +227,6 @@ const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const requireRecord = (
   value: unknown,

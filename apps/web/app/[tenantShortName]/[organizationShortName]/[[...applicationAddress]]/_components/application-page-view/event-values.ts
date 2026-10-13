@@ -83,9 +83,6 @@ export const bindingOfEvent = (
 const eventIdOf = (event: DisplaySemanticEvent): string | undefined =>
   "eventId" in event ? event.eventId : undefined;
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 export const choiceScopeKey = (placementId: string, formId?: string): string =>
   formId === undefined ? placementId : `${formId}\u0000${placementId}`;
 

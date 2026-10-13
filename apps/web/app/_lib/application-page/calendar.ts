@@ -14,9 +14,11 @@ import {
   calendarBlockSourceIsSupported,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  isRecord,
+  sameId,
 } from "@vortex/platform/schema";
 import type { collectPlacements } from "./placement-helpers";
-import { isRecord, sameId, first } from "./placement-helpers";
+import { first } from "./placement-helpers";
 import type { findModuleQuery } from "./query-helpers";
 import { logPlacementFailure } from "./query-helpers";
 import type { ApplicationPageLoaderAddress, PageDataState, SearchParameters } from "./types";

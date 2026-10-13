@@ -1,4 +1,9 @@
-import type { ApplicationToolBundle } from "@vortex/platform/schema";
+import {
+  isRecord,
+  sameId,
+  walkPageComposition,
+  type ApplicationToolBundle,
+} from "@vortex/platform/schema";
 import type { InstalledRuntimeContext } from "@web/platform-server";
 import { projectedUseAvailability } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
@@ -44,20 +49,15 @@ type ProjectionInput = Readonly<{
   permittedApplications: readonly Readonly<{ applicationRootId: string; key: string }>[];
 }>;
 
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
-  typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
-
 const visiblePlacementIds = (page: Readonly<Record<string, unknown>>): ReadonlySet<string> => {
   const breakpoints = ["desktop", "tablet", "phone"] as const;
   type Visibility = Record<(typeof breakpoints)[number], boolean>;
   const visible = new Set<string>();
-  const visit = (slot: unknown, ancestors: Visibility): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, candidate] of Object.entries(slot.placements)) {
-      if (!isRecord(candidate)) continue;
-      const responsive = candidate.responsive;
-      if (!isRecord(responsive)) continue;
+  walkPageComposition(
+    page.composition,
+    ({ placementId, placement }, ancestors: Visibility) => {
+      const responsive = placement.responsive;
+      if (!isRecord(responsive)) return false;
       const effective: Visibility = {
         desktop:
           ancestors.desktop && isRecord(responsive.desktop) && responsive.desktop.visible === true,
@@ -66,21 +66,14 @@ const visiblePlacementIds = (page: Readonly<Record<string, unknown>>): ReadonlyS
         phone: ancestors.phone && isRecord(responsive.phone) && responsive.phone.visible === true,
       };
       if (
-        projectedUseAvailability(candidate) === "available" &&
+        projectedUseAvailability(placement) === "available" &&
         breakpoints.some((breakpoint) => effective[breakpoint])
       )
         visible.add(placementId.toLowerCase());
-      if (isRecord(candidate.slots))
-        for (const child of Object.values(candidate.slots)) visit(child, effective);
-    }
-  };
-  const composition = page.composition;
-  const allVisible: Visibility = { desktop: true, tablet: true, phone: true };
-  if (isRecord(composition)) {
-    if ("main" in composition) visit(composition.main, allVisible);
-    else if (isRecord(composition.stepContent))
-      for (const content of Object.values(composition.stepContent)) visit(content, allVisible);
-  }
+      return effective;
+    },
+    { desktop: true, tablet: true, phone: true },
+  );
   return visible;
 };
 

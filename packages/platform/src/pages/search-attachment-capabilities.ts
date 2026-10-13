@@ -10,6 +10,8 @@ import {
   recordIdSchema,
   recordTypeIdSchema,
   type AttachmentListPayload,
+  isRecord,
+  sameId,
 } from "../schema";
 
 export type ReadOnlyAttachmentOwner = Readonly<{
@@ -68,11 +70,6 @@ export type ReadOnlyAttachmentListProjection =
   | Readonly<{ kind: "empty" }>
   | Readonly<{ kind: "refused"; reason: ReadOnlyAttachmentRefusalReason }>
   | Readonly<{ kind: "unavailable" }>;
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * Projects one protected attachment field only after each current File decision and metadata read
