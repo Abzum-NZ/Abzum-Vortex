@@ -6,7 +6,7 @@ import {
   type CustomComponentRelease,
 } from "../schema";
 import { z } from "zod";
-import { logRefusal } from "../catalogue/runtime-primitives";
+import { logRefusal, unavailableError } from "../catalogue/runtime-primitives";
 import {
   createStorageSignerFromPrivateKey,
   type StorageKeySigner,
@@ -345,7 +345,7 @@ export const createSupabaseComponentBundleObjectStore = (
       });
       if (response.body !== null) await response.body.cancel().catch(() => undefined);
       if (response.status === 200 || response.status === 201 || response.status === 409) return;
-      throw new Error("COMPONENT_BUNDLE_UPLOAD_REFUSED");
+      throw unavailableError("COMPONENT_BUNDLE_UPLOAD_REFUSED", `upload_status_${response.status}`);
     },
     async readObject({ objectPath }) {
       const token = (await config.mintCredential({ operation: "read", objectPath })).token;
@@ -361,7 +361,7 @@ export const createSupabaseComponentBundleObjectStore = (
       }
       if (response.status !== 200 || response.body === null) {
         if (response.body !== null) await response.body.cancel().catch(() => undefined);
-        throw new Error("COMPONENT_BUNDLE_READ_REFUSED");
+        throw unavailableError("COMPONENT_BUNDLE_READ_REFUSED", `read_status_${response.status}`);
       }
       return new Uint8Array(await response.arrayBuffer());
     },
