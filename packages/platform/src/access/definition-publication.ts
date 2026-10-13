@@ -1,16 +1,13 @@
-import { platformPermissionSource } from "./platform-permissions";
 import "server-only";
 
-import { z } from "zod";
 import {
-  applicationRootIdSchema, canonicalJson, databaseRevision, databaseTimestamp,
+  applicationRootIdSchema, canonicalJson, databaseTimestamp,
   moduleRootIdSchema,
-  organizationAccessDeclarationSchema, organizationIdSchema,
-  organizationPermissionEligibilitySchema, prepareDefinitionPublicationCommandSchema,
+  organizationIdSchema, prepareDefinitionPublicationCommandSchema,
   prepareDefinitionPublicationResultSchema, publishDefinitionCommandSchema,
-  publishDefinitionResultSchema, sameId, sessionContextSchema, timestampSchema,
+  publishDefinitionResultSchema, sameId, timestampSchema,
   type IdentitySession, type PrepareDefinitionPublicationResult, type PublishDefinitionResult,
-  type SelectedOrganizationScope, type SessionContext,
+  type SelectedOrganizationScope,
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
@@ -19,6 +16,10 @@ import {
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type StoredApplicationDefinitionDraft, type StoredModuleDefinitionDraft,
 } from "../definition/definition-index";
+import {
+  assertBeforeLiveDeadline, assertLivePermission, LiveContextRefused,
+  platformOrganizationPermissionDeclaration, readLiveHumanContext, type LiveHumanContext,
+} from "./live-context";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import { DefinitionCompilationError, DefinitionError, isVersionImpactRefusal } from "../definition/definition-index";
@@ -40,7 +41,6 @@ export type HumanDefinitionPublisherDependencies = Readonly<{
   catalogue: ImmutableDefinitionPublicationCatalogueDefinition;
 }>;
 export type HumanDefinitionKind = "application" | "module";
-type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
 class PublicationContextRefused extends Error {
   constructor(readonly reason: string) {
     super(reason);
@@ -78,93 +78,20 @@ const moduleTargetFacts: BuilderTargetFactsReader = async (transaction, scope, c
   return { isSystemApplication: false };
 };
 
-/** The sole projection removes the trusted web transport channel, never authority fields. */
-const readHumanContext = async (
-  transaction: RequestDatabaseTransaction, scope: SelectedOrganizationScope,
-  session: IdentitySession, issuedAt: string,
-): Promise<HumanContext> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_access.validated_human_request_context() as request_context,
-      pg_catalog.clock_timestamp() as checked_at
-  `;
-  const row = rows[0];
-  const transport = z.record(z.string(), z.unknown()).safeParse(row?.request_context);
-  if (rows.length !== 1 || !transport.success || transport.data.channel !== "web")
-    throw new PublicationContextRefused("request_context_invalid");
-  const parsed = sessionContextSchema.safeParse(Object.fromEntries(
-    Object.entries(transport.data).filter(([key]) => key !== "channel"),
-  ));
-  const clock = timestampSchema.safeParse(databaseTimestamp(row?.checked_at));
-  if (!parsed.success || parsed.data.callerKind !== "human" || !clock.success)
-    throw new PublicationContextRefused("request_context_invalid");
-  const context = parsed.data;
-  const now = Date.parse(clock.data);
-  if (Object.hasOwn(scope, "applicationRootId") || Object.hasOwn(context, "applicationRootId") ||
-    context.delegatedContext !== undefined || context.supportContext !== undefined ||
-    !sameId(context.tenantId, scope.tenantId) ||
-    !sameId(context.organizationId, scope.organizationId) ||
-    !sameId(context.organizationAccountId, scope.organizationAccountId) ||
-    context.accessVersion !== scope.accessVersion ||
-    !sameId(context.identityId, session.identityId) || !sameId(context.sessionId, session.sessionId) ||
-    context.authenticationStrength !== session.authenticationStrength ||
-    context.issuedAt !== issuedAt || context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !== (session.primaryAuthenticatedAt !== undefined ||
-      session.multiFactorAuthenticatedAt !== undefined ? session.accessTokenIssuedAt : undefined) ||
-    context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-    context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
-    Date.parse(context.issuedAt) > now || Date.parse(context.expiresAt) <= now ||
-    Date.parse(context.issuedAt) >= Date.parse(context.expiresAt))
-    throw new PublicationContextRefused("session_context_mismatch");
-  return context;
-};
-
 /** Recheck exact decisions after compilation/append and all returned-row verification. */
 const assertLiveCompletion = async (
-  transaction: RequestDatabaseTransaction, context: HumanContext, publishedAt?: string,
+  transaction: RequestDatabaseTransaction, context: LiveHumanContext, publishedAt?: string,
 ): Promise<void> => {
   let deadline = Date.parse(context.expiresAt);
   for (const key of ["platform.organization.definition_releases.manage"]) {
-    const permission = platformPermissionSource().declarations.find((entry) => entry.key === key);
-    if (permission === undefined) throw new PublicationContextRefused("release_permission_undeclared");
-    const declaration = organizationAccessDeclarationSchema.parse({
-      operationKey: key, action: { actionKind: permission.actionKind },
-      target: { kind: "organization" }, requiredPermission: {
-        ownerKind: "platform", ownerId: platformPermissionSource().ownerId, permissionId: permission.permissionId,
-      }, recentAuthentication: { kind: "none" }, authority: { kind: "permission" },
-    });
-    const rows = await transaction.query<DatabaseRow>`
-      select eligibility.*, pg_catalog.clock_timestamp() as completed_at
-      from vortex_access.evaluate_organization_permission_eligibility(
-        ${JSON.stringify(declaration)}::text::jsonb
-      ) as eligibility
-    `;
-    const row = rows[0];
-    const decision = organizationPermissionEligibilitySchema.safeParse({
-      outcome: row?.outcome, operationKey: row?.operation_key, target: { kind: row?.target_kind },
-      organizationId: row?.organization_id, organizationAccountId: row?.organization_account_id,
-      accessVersion: databaseRevision(row?.access_version), checkedAt: databaseTimestamp(row?.checked_at),
-      correlationId: row?.correlation_id,
-      ...(row?.outcome === "eligible" ? { validUntil: databaseTimestamp(row.valid_until) } :
-        { reasonCode: row?.reason_code }),
-    });
-    const clock = timestampSchema.safeParse(databaseTimestamp(row?.completed_at));
-    if (rows.length !== 1 || !decision.success || decision.data.outcome !== "eligible" ||
-      !clock.success || decision.data.operationKey !== key || decision.data.target.kind !== "organization" ||
-      row?.target_application_root_id !== null || row?.reason_code !== null ||
-      !sameId(decision.data.organizationId, context.organizationId) ||
-      !sameId(decision.data.organizationAccountId, context.organizationAccountId) ||
-      decision.data.accessVersion !== context.accessVersion ||
-      !sameId(decision.data.correlationId, context.correlationId) ||
-      Date.parse(decision.data.checkedAt) > Date.parse(clock.data) ||
-      Date.parse(decision.data.validUntil) <= Date.parse(clock.data))
-      throw new PublicationContextRefused("release_permission_not_eligible");
-    deadline = Math.min(deadline, Date.parse(decision.data.validUntil));
+    const decision = await assertLivePermission(
+      transaction, platformOrganizationPermissionDeclaration(key), context,
+    );
+    deadline = Math.min(deadline, decision.validUntil);
   }
-  const rows = await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as completed_at`;
-  const clock = timestampSchema.safeParse(databaseTimestamp(rows[0]?.completed_at));
-  if (rows.length !== 1 || !clock.success || Date.parse(clock.data) >= deadline ||
-    (publishedAt !== undefined && Date.parse(publishedAt) > Date.parse(clock.data)))
-    throw new PublicationContextRefused("request_deadline_passed");
+  const now = await assertBeforeLiveDeadline(transaction, deadline);
+  if (publishedAt !== undefined && Date.parse(publishedAt) > now)
+    throw new LiveContextRefused("request_deadline_passed");
 };
 
 const dependencyCodes = [
@@ -182,7 +109,8 @@ const classifyFailure = (error: unknown): Failure => {
     return { kind: "conflict", reason: "draft_stale_or_missing" };
   if (error instanceof DefinitionError && error.code === "DEFINITION_CONFIRMATION_MISMATCH")
     return { kind: "conflict", reason: "confirmation_mismatch" };
-  if (error instanceof PublicationContextRefused) return { kind: "refused", reason: error.reason };
+  if (error instanceof PublicationContextRefused || error instanceof LiveContextRefused)
+    return { kind: "refused", reason: error.reason };
   if (error instanceof BuilderAuthorityError) return {
     kind: "refused",
     reason: error.code === "BUILDER_PERMISSION_REFUSED" ? "release_permission_missing"
@@ -201,7 +129,8 @@ const causeSummary = (error: unknown): string => {
   let current: unknown = error;
   for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
     const code = (current as { readonly code?: unknown }).code;
-    const message = current.name === "DefinitionError" || current.name === "PublicationContextRefused"
+    const message = current.name === "DefinitionError" || current.name === "PublicationContextRefused" ||
+      current.name === "LiveContextRefused"
       ? "" : `:${current.message.slice(0, 160)}`;
     parts.push(`${current.name}/${typeof code === "string" ? code.slice(0, 64) : "none"}${message}`);
     current = current.cause;
@@ -246,7 +175,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
       scope: SelectedOrganizationScope, issuedAt: string): Promise<Value> => {
       try {
         if (!sameId(scope.organizationId, organization.data)) throw new PublicationContextRefused("organization_mismatch");
-        const context = await readHumanContext(transaction, scope, session, issuedAt);
+        const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         const authority = createBuilderAuthority({ transaction, scope,
           targetFacts: definitionKind === "application" ? targetFacts : moduleTargetFacts });
         await requireBuilderAuthority(authority, { kind: "publication", rootId: command.rootId });
@@ -307,7 +236,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         await (definitionKind === "application" ? targetFacts : moduleTargetFacts)(
           transaction, scope, command.rootId,
         );
-        const completion = await readHumanContext(transaction, scope, session, issuedAt);
+        const completion = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         if (canonicalJson(completion) !== canonicalJson(context)) throw new PublicationContextRefused("session_context_changed");
         await assertLiveCompletion(transaction, completion,
           value.kind === "published" ? value.publication.publishedAt : undefined);
@@ -349,7 +278,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
     ): Promise<HumanDefinitionPublicationDraft> => {
       try {
         if (!sameId(scope.organizationId, organization.data)) throw new PublicationContextRefused("organization_mismatch");
-        const context = await readHumanContext(transaction, scope, session, issuedAt);
+        const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         const facts = definitionKind === "application" ? targetFacts : moduleTargetFacts;
         const authority = createBuilderAuthority({ transaction, scope, targetFacts: facts });
         await requireBuilderAuthority(authority, { kind: "publication", rootId: root.data });
@@ -369,7 +298,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         if (canonicalJson(exact) !== canonicalJson(draft))
           throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         await facts(transaction, scope, root.data);
-        const completion = await readHumanContext(transaction, scope, session, issuedAt);
+        const completion = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         if (canonicalJson(completion) !== canonicalJson(context)) throw new PublicationContextRefused("session_context_changed");
         await assertLiveCompletion(transaction, completion);
         return draft;

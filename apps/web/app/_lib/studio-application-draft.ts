@@ -4,7 +4,6 @@ import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/plat
 import {
   applicationRootIdSchema,
   organizationIdSchema,
-  sessionContextSchema,
   sameId,
   canonicalJson,
   placementSlotSchema,
@@ -19,6 +18,7 @@ import type { DatabaseRow } from "@web/platform-server";
 import {
   BuilderAuthorityError,
   readApplicationDefinitionDraft,
+  readLiveHumanContext,
   requireBuilderAuthority,
   createDatabaseDefinitionPublicationService,
   createDatabaseDefinitionPublicationRepository,
@@ -278,31 +278,7 @@ export const loadStudioApplicationDraft = async (
         let searchMetadata: StudioApplicationSearchMetadata | null = null;
         let pageCompiledSlots: StudioApplicationCompiledPageSlots | null = null;
         try {
-          const readContext = async () => {
-            const contextRows = await transaction.query<DatabaseRow>`select vortex_access.validated_human_request_context() as context`;
-            const transport = contextRows[0]?.context;
-            if (contextRows.length !== 1 || transport === null || typeof transport !== "object" || Array.isArray(transport) ||
-                !("channel" in transport) || transport.channel !== "web") throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-            const context = sessionContextSchema.parse(Object.fromEntries(Object.entries(transport).filter(([key]) => key !== "channel")));
-            const now = Date.now();
-            const from = Date.parse(context.issuedAt);
-            const until = Date.parse(context.expiresAt);
-            if (context.callerKind !== "human" || Object.hasOwn(scope, "applicationRootId") || Object.hasOwn(context, "applicationRootId") ||
-                context.delegatedContext !== undefined || context.supportContext !== undefined ||
-                !sameId(context.organizationId, scope.organizationId) || !sameId(context.organizationAccountId, scope.organizationAccountId) ||
-                context.accessVersion !== scope.accessVersion || !sameId(context.tenantId, scope.tenantId) ||
-                !sameId(context.identityId, resolved.session.identityId) || !sameId(context.sessionId, resolved.session.sessionId) ||
-                context.authenticationStrength !== resolved.session.authenticationStrength || context.issuedAt !== issuedAt ||
-                context.expiresAt !== resolved.session.accessTokenExpiresAt || context.accessTokenIssuedAt !==
-                  (resolved.session.primaryAuthenticatedAt !== undefined || resolved.session.multiFactorAuthenticatedAt !== undefined
-                    ? resolved.session.accessTokenIssuedAt : undefined) ||
-                context.primaryAuthenticatedAt !== resolved.session.primaryAuthenticatedAt ||
-                context.multiFactorAuthenticatedAt !== resolved.session.multiFactorAuthenticatedAt ||
-                !Number.isFinite(now) || !Number.isFinite(from) || !Number.isFinite(until) || from > now || until <= now || from >= until)
-              throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-            return context;
-          };
-          const context = await readContext();
+          const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
           const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
             .compileApplicationDraft(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
           const envelope = compiled.compilation.canonical.envelope;
@@ -381,7 +357,7 @@ export const loadStudioApplicationDraft = async (
           const final = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data, expectedDraftRevision: draft.draftRevision });
           if (canonicalJson(final) !== canonicalJson(draft)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
-          if (canonicalJson(await readContext()) !== canonicalJson(context)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+          if (canonicalJson(await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt })) !== canonicalJson(context)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           if (JSON.stringify({ records, modules: [...modules.values()] }).length > 999_000)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,

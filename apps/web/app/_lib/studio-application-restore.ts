@@ -1,20 +1,14 @@
 import "server-only";
 
-import { z } from "zod";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
-  databaseTimestamp,
   organizationIdSchema,
   sameId,
-  sessionContextSchema,
-  timestampSchema,
-  type IdentitySession,
-  type SelectedOrganizationScope,
-  type SessionContext,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
-import { BuilderAuthorityError, createDatabaseDefinitionHistoryService, requireBuilderAuthority } from "@web/platform-server";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import { BuilderAuthorityError, createDatabaseDefinitionHistoryService, readLiveHumanContext, requireBuilderAuthority,
+  type LiveHumanContext } from "@web/platform-server";
+import type { DatabaseRow} from "@web/platform-server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -39,7 +33,6 @@ import {
 import { DefinitionError } from "@web/platform-server";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
-type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
 
 class RestoreRefused extends Error {}
@@ -54,48 +47,6 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
   if (rows.length !== 1 || rows[0]?.outcome !== "available" ||
     rows[0]?.application_origin_kind !== "ordinary") throw new RestoreRefused();
   return { isSystemApplication: false };
-};
-
-const readHumanContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-): Promise<HumanContext> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_access.validated_human_request_context() as request_context,
-      pg_catalog.clock_timestamp() as checked_at
-  `;
-  const row = rows[0];
-  const transport = z.record(z.string(), z.unknown()).safeParse(row?.request_context);
-  if (rows.length !== 1 || !transport.success || transport.data.channel !== "web")
-    throw new RestoreRefused();
-  const parsed = sessionContextSchema.safeParse(Object.fromEntries(
-    Object.entries(transport.data).filter(([key]) => key !== "channel"),
-  ));
-  const clock = timestampSchema.safeParse(databaseTimestamp(row?.checked_at));
-  if (!parsed.success || parsed.data.callerKind !== "human" || !clock.success)
-    throw new RestoreRefused();
-  const context = parsed.data;
-  const now = Date.parse(clock.data);
-  const configuredAuthority = getIdentityAuthorityConfiguration().authorityId;
-  const hasAuthenticationEvidence = session.primaryAuthenticatedAt !== undefined ||
-    session.multiFactorAuthenticatedAt !== undefined;
-  if (!Number.isFinite(now) || Object.hasOwn(scope, "applicationRootId") ||
-    Object.hasOwn(context, "applicationRootId") || context.delegatedContext !== undefined ||
-    context.supportContext !== undefined || !sameId(context.identityAuthorityId, configuredAuthority) ||
-    !sameId(context.tenantId, scope.tenantId) || !sameId(context.organizationId, scope.organizationId) ||
-    !sameId(context.organizationAccountId, scope.organizationAccountId) ||
-    context.accessVersion !== scope.accessVersion || !sameId(context.identityId, session.identityId) ||
-    !sameId(context.sessionId, session.sessionId) ||
-    context.authenticationStrength !== session.authenticationStrength || context.issuedAt !== issuedAt ||
-    context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !== (hasAuthenticationEvidence ? session.accessTokenIssuedAt : undefined) ||
-    context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-    context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
-    Date.parse(context.issuedAt) > now || Date.parse(context.expiresAt) <= now ||
-    Date.parse(context.issuedAt) >= Date.parse(context.expiresAt)) throw new RestoreRefused();
-  return context;
 };
 
 const currentExpected = (snapshot: {
@@ -202,7 +153,7 @@ export async function loadStudioApplicationRestore(
 const createReceipt = (
   draft: StoredDefinitionDraft,
   command: StudioApplicationRestoreCommand,
-  context: HumanContext,
+  context: LiveHumanContext,
 ): StudioApplicationRestoreReceipt => {
   if (draft.kind !== "application") throw new RestoreUnavailable();
   const applicationDraft: ApplicationDraft = draft;
@@ -277,7 +228,8 @@ export async function restoreStudioApplicationDraft(
         try {
           if (!sameId(scope.organizationId, command.data.selector.organizationId) ||
             Object.hasOwn(scope, "applicationRootId")) throw new RestoreRefused();
-          const context = await readHumanContext(transaction, scope, resolved.session, issuedAt);
+          const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt,
+            identityAuthorityId: getIdentityAuthorityConfiguration().authorityId });
           const authority = createBuilderAuthority({ transaction, scope, targetFacts });
           await requireBuilderAuthority(authority, {
             kind: "draft_change",

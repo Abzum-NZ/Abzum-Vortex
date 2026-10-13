@@ -7,17 +7,15 @@ import {
   canonicalJson,
   organizationIdSchema,
   storedDefinitionDraftSchema,
-  sessionContextSchema,
   sameId,
   type SessionContext,
   type StoredDefinitionSource,
-  type SelectedOrganizationScope,
-  type IdentitySession,
-} from "@vortex/platform/schema";
+  } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
 import {
   BuilderAuthorityError,
   createHumanApplicationDraftWriter,
+  readLiveHumanContext,
   createBuilderAuthority,
   requireBuilderAuthority,
   type BuilderTargetFactsReader,
@@ -62,56 +60,6 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
   )
     throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
   return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
-};
-
-type ContextRow = DatabaseRow & { context: unknown };
-const readCurrentHumanContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt?: string,
-): Promise<SessionContext> => {
-  const rows = await transaction.query<ContextRow>`
-    select vortex_access.validated_human_request_context() as context
-  `;
-  const raw = rows[0]?.context;
-  if (
-    rows.length !== 1 ||
-    raw === null ||
-    typeof raw !== "object" ||
-    Array.isArray(raw) ||
-    !("channel" in raw) ||
-    raw.channel !== "web"
-  )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const parsed = sessionContextSchema.safeParse(
-    Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "channel")),
-  );
-  if (!parsed.success) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const context = parsed.data;
-  if (
-    context.callerKind !== "human" ||
-    context.applicationRootId !== undefined ||
-    context.delegatedContext !== undefined ||
-    context.supportContext !== undefined ||
-    !sameId(context.organizationId, scope.organizationId) ||
-    !sameId(context.organizationAccountId, scope.organizationAccountId) ||
-    context.accessVersion !== scope.accessVersion ||
-    !sameId(context.tenantId, scope.tenantId) ||
-    !sameId(context.identityId, session.identityId) ||
-    !sameId(context.sessionId, session.sessionId) ||
-    context.authenticationStrength !== session.authenticationStrength ||
-    (issuedAt !== undefined && context.issuedAt !== issuedAt) ||
-    context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !==
-      (session.primaryAuthenticatedAt !== undefined || session.multiFactorAuthenticatedAt !== undefined
-        ? session.accessTokenIssuedAt
-        : undefined) ||
-    context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-    context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt
-  )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  return context;
 };
 
 const sameDraft = (
@@ -300,7 +248,7 @@ export const loadStudioStandardPageAdoption = async (
             value: { organizationId: scope.organizationId, rootId: String(draft.rootId), draftRevision: draft.draftRevision, choices: [] },
           };
         }
-        const context = await readCurrentHumanContext(transaction, scope, resolved.session, issuedAt);
+        const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
         const current = await createDatabaseDefinitionPublicationService(
           installedReleaseCatalogue,
           transaction,
@@ -325,7 +273,7 @@ export const loadStudioStandardPageAdoption = async (
           expectedDraftRevision: draft.draftRevision,
         });
         await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
-        const finalContext = await readCurrentHumanContext(transaction, scope, resolved.session, issuedAt);
+        const finalContext = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
         if (
           canonicalJson(finalDraft) !== canonicalJson(draft) ||
           canonicalJson(finalContext) !== canonicalJson(context)
@@ -379,7 +327,7 @@ export const saveStudioStandardPageAdoption = async (
       resolved.session,
       organizationId,
       command,
-      async ({ transaction, scope, session, draft, command: lockedCommand }) => {
+      async ({ transaction, scope, session, issuedAt, draft, command: lockedCommand }) => {
       if (
         draft.kind !== "application" ||
         !sameId(draft.rootId, lockedCommand.rootId) ||
@@ -387,7 +335,7 @@ export const saveStudioStandardPageAdoption = async (
         draft.publishedRevision !== lockedCommand.expectedPublicationAnchor
       )
         throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const context = await readCurrentHumanContext(transaction, scope, session);
+      const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
       const authority = createBuilderAuthority({ transaction, scope, targetFacts });
       const facts = await targetFacts(transaction, scope, draft.rootId);
       if (facts.isSystemApplication) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
@@ -425,11 +373,9 @@ export const saveStudioStandardPageAdoption = async (
             savedDraft.publishedRevision !== lockedCommand.expectedPublicationAnchor
           )
             throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-          const verifiedContext = await readCurrentHumanContext(
+          const verifiedContext = await readLiveHumanContext(
             verifyTransaction,
-            verifyScope,
-            session,
-            context.issuedAt,
+            { scope: verifyScope, session, issuedAt },
           );
           if (canonicalJson(verifiedContext) !== canonicalJson(context))
             throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
