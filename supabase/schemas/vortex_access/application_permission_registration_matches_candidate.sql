@@ -143,6 +143,6 @@ exception
 end
 $$;
 
-ALTER FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) OWNER TO vortex_owner;
+ALTER FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) FROM PUBLIC;

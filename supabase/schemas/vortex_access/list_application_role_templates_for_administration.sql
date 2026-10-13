@@ -107,7 +107,7 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.list_application_role_templates_for_administration(p_after_application_root_id uuid, p_after_source_role_id uuid, p_page_size integer) OWNER TO vortex_owner;
+ALTER FUNCTION vortex_access.list_application_role_templates_for_administration(p_after_application_root_id uuid, p_after_source_role_id uuid, p_page_size integer) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.list_application_role_templates_for_administration(p_after_application_root_id uuid, p_after_source_role_id uuid, p_page_size integer) IS 'Returns one bounded page of exact current registered application role templates.';
 

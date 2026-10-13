@@ -97,7 +97,7 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
+ALTER FUNCTION vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) OWNER TO postgres;
 
 COMMENT ON FUNCTION vortex_access.withdraw_application_permission_registration_v1_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) IS 'Legacy raw withdrawal writer retained privately for the coordinated application-access composition only.';
 
