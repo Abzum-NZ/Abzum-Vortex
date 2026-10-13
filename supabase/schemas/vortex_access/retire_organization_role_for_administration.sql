@@ -38,19 +38,11 @@ begin
     or p_expected_role_revision not between 1 and 9007199254740991
     or p_prepared_role_change is null
     or pg_catalog.jsonb_typeof(p_prepared_role_change) is distinct from 'object'
-    or p_prepared_role_change - array[
-      'contractVersion', 'candidate', 'roleCandidateFingerprint'
-    ]::text[] <> '{}'::jsonb
-    or not (p_prepared_role_change ?& array[
-      'contractVersion', 'candidate', 'roleCandidateFingerprint'
-    ])
+    or p_prepared_role_change - array['contractVersion', 'candidate']::text[] <> '{}'::jsonb
+    or not (p_prepared_role_change ?& array['contractVersion', 'candidate'])
     or p_prepared_role_change ->> 'contractVersion' is distinct from '1.0.0'
     or pg_catalog.jsonb_typeof(p_prepared_role_change -> 'candidate')
       is distinct from 'object'
-    or pg_catalog.jsonb_typeof(p_prepared_role_change -> 'roleCandidateFingerprint')
-      is distinct from 'string'
-    or p_prepared_role_change ->> 'roleCandidateFingerprint'
-      !~ '^sha256:[a-f0-9]{64}$'
     or p_activity_id is null
     or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
@@ -171,7 +163,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '87c96495-c806-4692-9bc2-250ddb10613c'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),

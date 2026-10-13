@@ -633,9 +633,7 @@ export const affectedRoleAssignmentManifestSchema = z
   .object({
     organizationId: organizationIdSchema,
     roleId: roleIdSchema,
-    roleCandidateFingerprint: fingerprintSchema,
     assignments: z.array(affectedRoleAssignmentSchema),
-    manifestFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine((value, context) => {

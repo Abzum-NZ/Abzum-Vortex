@@ -206,14 +206,6 @@ const normalizeCandidate = (
   }
 };
 
-const configuredCandidateProjection = (candidate: OrganizationRoleChangeCandidate): unknown => {
-  if (!hasTemplateEvidence(candidate)) return candidate;
-  const configuration = Object.fromEntries(
-    Object.entries(candidate).filter(([key]) => key !== "preparedTemplates"),
-  );
-  return { ...configuration, templateSource: templateSourceProjection(candidate) };
-};
-
 const newPolicy = (candidate: OrganizationRoleChangeCandidate) =>
   "assignmentPolicy" in candidate &&
   candidate.assignmentPolicy.kind === "activation_required" &&
@@ -276,13 +268,6 @@ const prepareParsed = (
 
   const newActivationPolicyFingerprint = policyFingerprint(candidate);
   const acceptedGrant = acceptedGrantFingerprint(candidate);
-  const candidateCore = {
-    contractVersion: "1.0.0" as const,
-    candidate: configuredCandidateProjection(candidate),
-    ...(newActivationPolicyFingerprint === undefined ? {} : { newActivationPolicyFingerprint }),
-    ...(acceptedGrant === undefined ? {} : { acceptedGrantFingerprint: acceptedGrant }),
-  };
-  const roleCandidateFingerprint = fingerprintCanonicalValue(candidateCore);
   const assignments = preparation.affectedAssignments
     ?.map(normalizeAssignment)
     .sort((left, right) => left.roleAssignmentId.localeCompare(right.roleAssignmentId));
@@ -292,22 +277,13 @@ const prepareParsed = (
       : {
           organizationId: normalizedUuid(candidate.organizationId),
           roleId: normalizedUuid(candidate.roleId),
-          roleCandidateFingerprint,
           assignments,
-          manifestFingerprint: fingerprintCanonicalValue({
-            contractVersion: "1.0.0",
-            organizationId: normalizedUuid(candidate.organizationId),
-            roleId: normalizedUuid(candidate.roleId),
-            roleCandidateFingerprint,
-            assignments,
-          }),
         };
   const prepared = {
     contractVersion: "1.0.0" as const,
     candidate,
     ...(newActivationPolicyFingerprint === undefined ? {} : { newActivationPolicyFingerprint }),
     ...(acceptedGrant === undefined ? {} : { acceptedGrantFingerprint: acceptedGrant }),
-    roleCandidateFingerprint,
     ...(affectedAssignmentManifest === undefined ? {} : { affectedAssignmentManifest }),
   };
   const result = preparedOrganizationRoleChangeSchema.safeParse(prepared);

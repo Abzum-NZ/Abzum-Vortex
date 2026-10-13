@@ -25,8 +25,6 @@ begin
   if p_prepared_evidence is null
     or pg_catalog.jsonb_typeof(p_prepared_evidence) is distinct from 'object'
     or pg_catalog.jsonb_typeof(p_prepared_evidence -> 'candidate') is distinct from 'object'
-    or pg_catalog.jsonb_typeof(p_prepared_evidence -> 'roleCandidateFingerprint')
-      is distinct from 'string'
     or p_activity_id is null
     or vortex_platform.is_non_nil_uuid(p_activity_id::text) is not true then
     raise exception using errcode = '22023',
