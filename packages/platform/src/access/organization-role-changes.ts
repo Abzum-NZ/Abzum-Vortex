@@ -326,7 +326,6 @@ export const preparedOrganizationRoleChangeSchema = z
     candidate: organizationRoleChangeCandidateSchema,
     newActivationPolicyFingerprint: fingerprintSchema.optional(),
     acceptedGrantFingerprint: fingerprintSchema.optional(),
-    roleCandidateFingerprint: fingerprintSchema,
     affectedAssignmentManifest: roleChangeManifestSchema.optional(),
   })
   .strict()
@@ -377,13 +376,12 @@ export const preparedOrganizationRoleChangeSchema = z
     if (
       manifest !== undefined &&
       (normalizedUuid(manifest.organizationId) !== normalizedUuid(candidate.organizationId) ||
-        normalizedUuid(manifest.roleId) !== normalizedUuid(candidate.roleId) ||
-        manifest.roleCandidateFingerprint !== value.roleCandidateFingerprint)
+        normalizedUuid(manifest.roleId) !== normalizedUuid(candidate.roleId))
     )
       context.addIssue({
         code: "custom",
         path: ["affectedAssignmentManifest"],
-        message: "The assignment manifest must bind the exact role candidate",
+        message: "The assignment manifest must name the role candidate's organization and role",
       });
   });
 

@@ -60,7 +60,6 @@ declare
   policy_reference jsonb;
   supplied_new_policy_fingerprint text;
   supplied_accepted_grant_fingerprint text;
-  supplied_role_candidate_fingerprint text;
   manifest jsonb;
   canonical_assignments jsonb;
   manifest_required boolean := false;
@@ -79,17 +78,11 @@ begin
     or pg_catalog.jsonb_typeof(p_evidence) is distinct from 'object'
     or p_evidence - array[
       'contractVersion', 'candidate', 'newActivationPolicyFingerprint',
-      'acceptedGrantFingerprint', 'roleCandidateFingerprint',
-      'affectedAssignmentManifest'
+      'acceptedGrantFingerprint', 'affectedAssignmentManifest'
     ]::text[] <> '{}'::jsonb
-    or not (p_evidence ?& array[
-      'contractVersion', 'candidate', 'roleCandidateFingerprint'
-    ])
+    or not (p_evidence ?& array['contractVersion', 'candidate'])
     or p_evidence ->> 'contractVersion' is distinct from '1.0.0'
     or pg_catalog.jsonb_typeof(p_evidence -> 'candidate') is distinct from 'object'
-    or pg_catalog.jsonb_typeof(p_evidence -> 'roleCandidateFingerprint')
-      is distinct from 'string'
-    or p_evidence ->> 'roleCandidateFingerprint' !~ '^sha256:[a-f0-9]{64}$'
     or (p_evidence ? 'newActivationPolicyFingerprint' and (
       pg_catalog.jsonb_typeof(p_evidence -> 'newActivationPolicyFingerprint')
         is distinct from 'string'
@@ -640,7 +633,6 @@ begin
       target_accepted_grant_fingerprint := supplied_accepted_grant_fingerprint;
     end if;
   end if;
-  supplied_role_candidate_fingerprint := p_evidence ->> 'roleCandidateFingerprint';
 
   manifest := p_evidence -> 'affectedAssignmentManifest';
 
@@ -1180,23 +1172,14 @@ begin
   if manifest_required then
     if manifest is null
       or manifest - array[
-        'organizationId', 'roleId', 'roleCandidateFingerprint',
-        'assignments', 'manifestFingerprint'
+        'organizationId', 'roleId', 'assignments'
       ]::text[] <> '{}'::jsonb
-      or not (manifest ?& array[
-        'organizationId', 'roleId', 'roleCandidateFingerprint',
-        'assignments', 'manifestFingerprint'
-      ])
+      or not (manifest ?& array['organizationId', 'roleId', 'assignments'])
       or pg_catalog.jsonb_typeof(manifest -> 'organizationId') <> 'string'
       or pg_catalog.jsonb_typeof(manifest -> 'roleId') <> 'string'
-      or pg_catalog.jsonb_typeof(manifest -> 'roleCandidateFingerprint') <> 'string'
       or pg_catalog.jsonb_typeof(manifest -> 'assignments') <> 'array'
-      or pg_catalog.jsonb_typeof(manifest -> 'manifestFingerprint') <> 'string'
       or (manifest ->> 'organizationId')::uuid <> target_organization_id
-      or (manifest ->> 'roleId')::uuid <> target_role_id
-      or manifest ->> 'roleCandidateFingerprint' <>
-        supplied_role_candidate_fingerprint
-      or manifest ->> 'manifestFingerprint' !~ '^sha256:[a-f0-9]{64}$' then
+      or (manifest ->> 'roleId')::uuid <> target_role_id then
       raise exception using errcode = '22023',
         message = 'Affected assignment manifest shape is invalid';
     end if;
