@@ -3,12 +3,11 @@ import "server-only";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/platform-server";
 import {
   applicationRootIdSchema, organizationIdSchema, revisionSchema,
-  sessionContextSchema, type IdentitySession, type SelectedOrganizationScope,
-  type SessionContext,
+  type IdentitySession,
 } from "@vortex/platform/schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import type { DatabaseRow } from "@web/platform-server";
 import { BuilderAuthorityError, createDatabaseDefinitionPublicationService, fingerprintCanonicalValue,
-  readApplicationDefinitionDraft, requireBuilderAuthority } from "@web/platform-server";
+  readApplicationDefinitionDraft, readLiveHumanContext, requireBuilderAuthority } from "@web/platform-server";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -17,8 +16,6 @@ import { DefinitionError } from "@web/platform-server";
 
 const requestSchema = z.object({ rootId: applicationRootIdSchema,
   draftRevision: revisionSchema, pageAlias: z.string().min(1).max(160).regex(/^[a-z][a-z0-9_]*$/) }).strict();
-type HumanContext = Extract<SessionContext, { callerKind: "human" }>;
-type ContextRow = DatabaseRow & { request_context: unknown };
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 
 class ContextRefused extends Error {}
@@ -39,48 +36,6 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
       row.application_origin_kind !== "platform_system_application"))
     throw new ContextRefused();
   return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
-};
-
-/** Reads the original database context; only its trusted transport channel is projected away. */
-const readHumanContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-): Promise<HumanContext> => {
-  const rows = await transaction.query<ContextRow>`
-    select vortex_access.validated_human_request_context() as request_context
-  `;
-  const row = rows[0];
-  if (rows.length !== 1 || row === undefined) throw new ContextRefused();
-  const transport = z.record(z.string(), z.unknown()).safeParse(row.request_context);
-  if (!transport.success || transport.data.channel !== "web") throw new ContextRefused();
-  const parsed = sessionContextSchema.safeParse(Object.fromEntries(
-    Object.entries(transport.data).filter(([key]) => key !== "channel"),
-  ));
-  if (!parsed.success || parsed.data.callerKind !== "human") throw new ContextRefused();
-  const context = parsed.data;
-  const now = Date.now();
-  const from = Date.parse(context.issuedAt);
-  const until = Date.parse(context.expiresAt);
-  if (Object.hasOwn(scope, "applicationRootId") || Object.hasOwn(context, "applicationRootId") ||
-    context.delegatedContext !== undefined || context.supportContext !== undefined ||
-    !sameUuid(context.tenantId, scope.tenantId) ||
-    !sameUuid(context.organizationId, scope.organizationId) ||
-    !sameUuid(context.organizationAccountId, scope.organizationAccountId) ||
-    context.accessVersion !== scope.accessVersion ||
-    !sameUuid(context.identityId, session.identityId) ||
-    !sameUuid(context.sessionId, session.sessionId) ||
-    context.authenticationStrength !== session.authenticationStrength ||
-    context.issuedAt !== issuedAt || context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !== (session.primaryAuthenticatedAt !== undefined ||
-      session.multiFactorAuthenticatedAt !== undefined ? session.accessTokenIssuedAt : undefined) ||
-    context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-    context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
-    !Number.isFinite(now) || !Number.isFinite(from) || !Number.isFinite(until) ||
-    from > now || until <= now || from >= until)
-    throw new ContextRefused();
-  return context;
 };
 
 const safeFailure = (error: unknown): StudioApplicationConditionContextResult => {
@@ -107,7 +62,7 @@ export const readSavedStudioApplicationConditionContext = async (
       async (transaction, scope, issuedAt): Promise<StudioApplicationConditionContextResult> => {
         try {
           if (!sameUuid(scope.organizationId, organization.data)) throw new ContextRefused();
-          const context = await readHumanContext(transaction, scope, session, issuedAt);
+          const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
           const authority = createBuilderAuthority({ transaction, scope, targetFacts });
           const operation = { kind: "draft_change" as const, rootId: request.rootId };
           await requireBuilderAuthority(authority, operation);
@@ -147,7 +102,7 @@ export const readSavedStudioApplicationConditionContext = async (
             final.updatedAt !== initial.updatedAt || !sameUuid(final.updatedBy, initial.updatedBy) ||
             fingerprintCanonicalValue(final.source) !== fingerprintCanonicalValue(initial.source)) return { kind: "conflict" };
           await requireBuilderAuthority(authority, operation);
-          const completion = await readHumanContext(transaction, scope, session, issuedAt);
+          const completion = await readLiveHumanContext(transaction, { scope, session, issuedAt });
           if (!sameUuid(completion.identityAuthorityId, context.identityAuthorityId) ||
             !sameUuid(completion.correlationId, context.correlationId)) throw new ContextRefused();
           return { kind: "available", context: {

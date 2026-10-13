@@ -2,7 +2,16 @@ import "server-only";
 
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "../access/builder-authority";
 import type { HumanOrganizationRequestDependencies } from "../access/human-organization-request";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import {
+  assertBeforeLiveDeadline,
+  assertLivePermission,
+  LiveContextRefused,
+  organizationPermissionDeclaration,
+  readDatabaseClock,
+  readLiveHumanContext,
+  type LiveHumanContext,
+} from "../access/live-context";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { requireBuilderAuthority } from "./builder-authority";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
@@ -14,16 +23,10 @@ import type { createDatabaseDefinitionPublicationService } from "./definition-pu
 import { createDefinitionStore } from "./definition-store";
 import {
   canonicalJson,
-  databaseRevision,
-  databaseTimestamp,
   moduleRootIdSchema,
-  organizationAccessDeclarationSchema,
-  organizationPermissionEligibilitySchema,
   platformIdSchema,
   sameId,
-  sessionContextSchema,
   storedModuleDefinitionDraftSchema,
-  timestampSchema,
   type IdentitySession,
   type ModuleSourceDocument,
   type SelectedOrganizationScope,
@@ -72,155 +75,30 @@ export const moduleTargetFacts: BuilderTargetFactsReader = async (
   return { isSystemApplication: false };
 };
 
-export const databaseClock = async (transaction: RequestDatabaseTransaction): Promise<number> => {
-  const rows =
-    await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as completed_at`;
-  const parsed = timestampSchema.safeParse(databaseTimestamp(rows[0]?.completed_at));
-  if (rows.length !== 1 || !parsed.success) return invalidResult();
-  return Date.parse(parsed.data);
-};
-
-export type HumanContext = Extract<
-  ReturnType<typeof sessionContextSchema.parse>,
-  { callerKind: "human" }
->;
-
-export const readLiveContext = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  session: IdentitySession,
-  issuedAt: string,
-): Promise<HumanContext> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select vortex_access.validated_human_request_context() as context
-  `;
-  const transport = rows[0]?.context;
-  if (
-    rows.length !== 1 ||
-    transport === null ||
-    typeof transport !== "object" ||
-    Array.isArray(transport) ||
-    !("channel" in transport) ||
-    transport.channel !== "web"
-  )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const parsed = sessionContextSchema.safeParse(
-    Object.fromEntries(Object.entries(transport).filter(([key]) => key !== "channel")),
-  );
-  const now = await databaseClock(transaction);
-  if (!parsed.success || parsed.data.callerKind !== "human")
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const context = parsed.data;
-  if (
-    Object.hasOwn(scope, "applicationRootId") ||
-    Object.hasOwn(context, "applicationRootId") ||
-    context.delegatedContext !== undefined ||
-    context.supportContext !== undefined ||
-    !sameUuid(context.tenantId, scope.tenantId) ||
-    !sameUuid(context.organizationId, scope.organizationId) ||
-    !sameUuid(context.organizationAccountId, scope.organizationAccountId) ||
-    context.accessVersion !== scope.accessVersion ||
-    !sameUuid(context.identityId, session.identityId) ||
-    !sameUuid(context.sessionId, session.sessionId) ||
-    context.authenticationStrength !== session.authenticationStrength ||
-    context.issuedAt !== issuedAt ||
-    context.expiresAt !== session.accessTokenExpiresAt ||
-    context.accessTokenIssuedAt !==
-      (session.primaryAuthenticatedAt !== undefined ||
-      session.multiFactorAuthenticatedAt !== undefined
-        ? session.accessTokenIssuedAt
-        : undefined) ||
-    context.primaryAuthenticatedAt !== session.primaryAuthenticatedAt ||
-    context.multiFactorAuthenticatedAt !== session.multiFactorAuthenticatedAt ||
-    Date.parse(context.issuedAt) > now ||
-    Date.parse(context.expiresAt) <= now ||
-    Date.parse(context.issuedAt) >= Date.parse(context.expiresAt)
-  )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  return context;
-};
-
 export const evaluateDraftPermission = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
   issuedAt: string,
-  originalContext: HumanContext,
+  originalContext: LiveHumanContext,
   draft: StoredModuleDefinitionDraft,
   access: ModuleDraftAccess,
   originalValidUntil?: string,
 ): Promise<string> => {
   await moduleTargetFacts(transaction, scope, draft.rootId);
   const permission = access.permission;
-  if (permission === undefined) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const declaration = organizationAccessDeclarationSchema.parse({
-    operationKey: permission.key,
-    action: { actionKind: permission.actionKind },
-    target: { kind: "organization" },
-    requiredPermission: {
-      ownerKind: "platform",
-      ownerId: access.ownerId,
-      permissionId: permission.permissionId,
-    },
-    recentAuthentication: { kind: "none" },
-    authority: { kind: "permission" },
-  });
-  const rows = await transaction.query<DatabaseRow>`
-    select eligibility.*, pg_catalog.clock_timestamp() as completed_at
-    from vortex_access.evaluate_organization_permission_eligibility(
-      ${JSON.stringify(declaration)}::text::jsonb
-    ) as eligibility
-  `;
-  const row = rows[0];
-  if (rows.length !== 1 || row === undefined) return invalidResult();
-  const decision = organizationPermissionEligibilitySchema.safeParse({
-    outcome: row.outcome,
-    operationKey: row.operation_key,
-    target: { kind: row.target_kind },
-    organizationId: row.organization_id,
-    organizationAccountId: row.organization_account_id,
-    accessVersion: databaseRevision(row.access_version),
-    checkedAt: databaseTimestamp(row.checked_at),
-    correlationId: row.correlation_id,
-    ...(row.outcome === "eligible"
-      ? { validUntil: databaseTimestamp(row.valid_until) }
-      : { reasonCode: row.reason_code }),
-  });
-  const completed = timestampSchema.safeParse(databaseTimestamp(row.completed_at));
-  const current = await readLiveContext(transaction, scope, session, issuedAt);
-  if (
-    !decision.success ||
-    decision.data.outcome !== "eligible" ||
-    !completed.success ||
-    canonicalJson(current) !== canonicalJson(originalContext)
-  )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const eligible = decision.data;
-  const now = Date.parse(completed.data);
+  if (permission === undefined) throw new LiveContextRefused("permission_undeclared");
+  const declaration = organizationPermissionDeclaration(permission, access.ownerId);
+  const current = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+  if (canonicalJson(current) !== canonicalJson(originalContext))
+    throw new LiveContextRefused("session_context_mismatch");
+  const decision = await assertLivePermission(transaction, declaration, current);
   const previousDeadline =
     originalValidUntil === undefined ? Number.POSITIVE_INFINITY : Date.parse(originalValidUntil);
-  if (
-    eligible.operationKey !== permission.key ||
-    eligible.target.kind !== "organization" ||
-    row.target_application_root_id !== null ||
-    row.reason_code !== null ||
-    !sameUuid(eligible.organizationId, scope.organizationId) ||
-    !sameUuid(eligible.organizationAccountId, scope.organizationAccountId) ||
-    eligible.accessVersion !== scope.accessVersion ||
-    !sameUuid(eligible.correlationId, current.correlationId) ||
-    Date.parse(eligible.checkedAt) > now ||
-    Date.parse(eligible.validUntil) <= now ||
-    previousDeadline <= now ||
-    Date.parse(draft.updatedAt) > now ||
-    (await databaseClock(transaction)) >=
-      Math.min(previousDeadline, Date.parse(eligible.validUntil), Date.parse(current.expiresAt))
-  )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  const deadline = Math.min(
-    previousDeadline,
-    Date.parse(eligible.validUntil),
-    Date.parse(current.expiresAt),
-  );
+  if (previousDeadline <= decision.completedAt || Date.parse(draft.updatedAt) > decision.completedAt)
+    throw new LiveContextRefused("request_deadline_passed");
+  const deadline = Math.min(previousDeadline, decision.validUntil, Date.parse(current.expiresAt));
+  await assertBeforeLiveDeadline(transaction, deadline);
   return new Date(deadline).toISOString();
 };
 
@@ -301,7 +179,7 @@ export const saveModuleDraftEdit = async (
 ): Promise<StoredModuleDefinitionDraft> => {
   const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
   await requireBuilderAuthority(authority, { kind: "draft_change", rootId: previous.rootId });
-  const startedAt = await databaseClock(transaction);
+  const startedAt = await readDatabaseClock(transaction);
   const returned = verifySavedDraft(
     await createDefinitionStore(transaction, authority).saveDraft({
       rootId: platformIdSchema.parse(previous.rootId),

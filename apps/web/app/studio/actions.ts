@@ -10,13 +10,16 @@ import {
   translateDefinitionRuleFailures,
   type ApplicationContent,
 } from "@vortex/platform/schema";
-import { PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0 } from "@vortex/platform/server";
-import { fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@web/platform-server";
+import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
+import { checkPlacementThemeOverrides, fingerprintCanonicalValue, materialiseApplicationTheme, validateDefinitionSource } from "@web/platform-server";
 import {
   parseStudioAppearanceRequest,
+  parseStudioPlacementThemeRequest,
   studioAppearanceFailureCodes,
   type StudioAppearanceFailure,
   type StudioAppearanceResult,
+  type StudioPlacementThemeFailure,
+  type StudioPlacementThemeResult,
   type StudioThemeTokenValue,
 } from "@vortex/ui/studio";
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
@@ -162,8 +165,7 @@ export async function validateStudioApplicationAppearance(
   try {
     const authored = draft.source.body.theme;
     const pin = authored.base;
-    const release = [PLATFORM_THEME_RELEASE_2_0_0, PLATFORM_THEME_RELEASE_3_0_0].find((item) =>
-      item.catalogueThemeId === pin.catalogue_theme_id && item.releaseVersion === pin.release_version);
+    const release = findPinnedPlatformThemeRelease(pin);
     if (release === undefined)
       return refuse("validate-appearance", "STUDIO_APPEARANCE_RELEASE_UNKNOWN", { kind: "refused" } as const);
     const inherited = materialiseApplicationTheme({ ...authored, token_overrides: {} }, draft.key, release);
@@ -210,5 +212,36 @@ export async function validateStudioApplicationAppearance(
       theme, tokens, publicAssetIds, valid: result.valid, failures };
   } catch (error) {
     return refuse("validate-appearance", "STUDIO_APPEARANCE_FAILED", { kind: "refused" } as const, error);
+  }
+}
+
+/** Judges placement theme overrides with the checks publication applies, before the person saves. */
+export async function validateStudioPlacementThemeOverrides(
+  organizationId: string,
+  candidate: unknown,
+): Promise<StudioPlacementThemeResult> {
+  const request = parseStudioPlacementThemeRequest(candidate);
+  if (request === undefined) return { kind: "refused" };
+  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId);
+  if (loaded.kind !== "available") return loaded;
+  const draft = loaded.draft;
+  if (draft.rootId !== request.rootId) return { kind: "refused" };
+  if (draft.draftRevision !== request.expectedDraftRevision) return { kind: "conflict" };
+  try {
+    const release = findPinnedPlatformThemeRelease(draft.source.body.theme.base);
+    if (release === undefined) return { kind: "refused" };
+    const failures: StudioPlacementThemeFailure[] = [];
+    for (const placement of request.placements)
+      for (const failure of checkPlacementThemeOverrides(
+        request.theme, placement.themeOverrides, draft.key, release,
+      )) {
+        const code = studioAppearanceFailureCodes.find((item) => item === failure.code) ?? "VALIDATION_FAILED";
+        failures.push({ alias: placement.alias, code,
+          ...(failure.tokenKey === undefined ? {} : { tokenKey: failure.tokenKey }) });
+      }
+    return { kind: "available", failures };
+  } catch (error) {
+    console.error("STUDIO_PLACEMENT_THEME_CHECK_FAILED", error);
+    return { kind: "temporarily_unavailable" };
   }
 }

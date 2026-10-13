@@ -134,7 +134,9 @@ const puckThemeOverrides = (values: SourcePlacement["theme_overrides"]) =>
 const sourceThemeOverrides = (candidate: unknown): SourcePlacement["theme_overrides"] => {
   const values = object(candidate);
   const source = Object.fromEntries(
-    Object.entries(values).map(([key, raw]) => {
+    Object.entries(values)
+      .filter(([, raw]) => raw !== undefined)
+      .map(([key, raw]) => {
       const value = object(raw);
       switch (value.kind) {
         case "typography":
@@ -700,6 +702,24 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             )
           ) {
             fields.responsive = sourceResponsive(renderMetadata.responsive);
+          }
+          // The same holds for theme overrides: only a changed Puck value replaces the authored one.
+          if (
+            authored !== undefined &&
+            renderMetadata.themeOverrides !== undefined &&
+            !sameJsonValue(
+              renderMetadata.themeOverrides,
+              puckThemeOverrides(
+                Object.fromEntries(
+                  Object.entries(object(fields.theme_overrides)).map(([key, value]) => [
+                    key,
+                    sourceThemeTokenValueSchema.parse(value),
+                  ]),
+                ) as SourcePlacement["theme_overrides"],
+              ),
+            )
+          ) {
+            fields.theme_overrides = sourceThemeOverrides(renderMetadata.themeOverrides);
           }
           // First parse the source fields without accepting any private Puck properties.
           const authoredBlock = object(fields.block);

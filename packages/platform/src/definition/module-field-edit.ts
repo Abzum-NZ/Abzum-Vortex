@@ -17,13 +17,12 @@ import {
   offeredFieldTypes,
   settingsForType,
 } from "./module-field-shape";
+import { readLiveHumanContext, type LiveHumanContext } from "../access/live-context";
 import {
   moduleTargetFacts,
   invalidResult,
-  readLiveContext,
   evaluateDraftPermission,
   saveModuleDraftEdit,
-  type HumanContext,
   type ModuleDraftEditDependencies,
 } from "./module-draft-edit";
 import {
@@ -371,7 +370,11 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
         { organizationId: organization.data },
         async (transaction, scope, issuedAt) => {
           try {
-            const context = await readLiveContext(transaction, scope, resolved.session, issuedAt);
+            const context = await readLiveHumanContext(transaction, {
+              scope,
+              session: resolved.session,
+              issuedAt,
+            });
             const draft = await readModuleDefinitionDraft(transaction, scope, { rootId: root.data });
             const authority = createBuilderAuthority({ transaction, scope, targetFacts: moduleTargetFacts });
             await requireBuilderAuthority(authority, { kind: "draft_change", rootId: draft.rootId });
@@ -416,7 +419,7 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
     session: IdentitySession,
     plan: (
       previous: StoredModuleDefinitionDraft,
-      context: HumanContext,
+      context: LiveHumanContext,
     ) => PlannedEdit,
     onSaved: (draft: StoredModuleDefinitionDraft) => Outcome,
     onFailure: (error: unknown) => Failure,
@@ -427,7 +430,7 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
       { organizationId },
       async (transaction: RequestDatabaseTransaction, scope: SelectedOrganizationScope, issuedAt: string) => {
         try {
-          const context = await readLiveContext(transaction, scope, session, issuedAt);
+          const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
           const previous = await readModuleDefinitionDraft(transaction, scope, {
             rootId: request.rootId,
             expectedDraftRevision: request.expectedDraftRevision,
@@ -477,7 +480,7 @@ export const moduleFieldEdits = (dependencies: ModuleDraftEditDependencies) => {
       expectedSavedSourceFingerprint: string;
     }>,
     sessionResolution: IdentitySessionResolution,
-    plan: (previous: StoredModuleDefinitionDraft, context: HumanContext) => PlannedEdit,
+    plan: (previous: StoredModuleDefinitionDraft, context: LiveHumanContext) => PlannedEdit,
     describe: (draft: StoredModuleDefinitionDraft) => readonly Descriptor[],
   ): Promise<FieldEditResult<Descriptor>> => {
     const organization = organizationIdSchema.safeParse(candidateOrganizationId);

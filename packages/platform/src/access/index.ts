@@ -32,6 +32,20 @@ export {
   type AccessVersionErrorCode,
 } from "./access-version";
 export {
+  assertBeforeLiveDeadline,
+  assertLivePermission,
+  LiveContextRefused,
+  organizationPermissionDeclaration,
+  platformOrganizationPermissionDeclaration,
+  readDatabaseClock,
+  readLiveHumanContext,
+  type LiveContextRefusalReason,
+  type LiveHumanContext,
+  type LiveHumanContextRequest,
+  type LiveOrganizationAccessDeclaration,
+  type LivePermissionDecision,
+} from "./live-context";
+export {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,

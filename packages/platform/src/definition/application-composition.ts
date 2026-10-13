@@ -1830,7 +1830,7 @@ const oklchColorPattern = new RegExp(
 );
 
 /** A theme colour is a six-digit hex value or an oklch() function, the two app-lightness forms. */
-const colorSchema = z
+export const themeColorSchema = z
   .string()
   .refine((value) => hexColorPattern.test(value) || oklchColorPattern.test(value), {
     message: "Use a six-digit hex or an oklch() colour value",
@@ -1848,8 +1848,8 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("color_pair")),
-      light: sourceProvenanceUnchanged(colorSchema),
-      dark: sourceProvenanceUnchanged(colorSchema),
+      light: sourceProvenanceUnchanged(themeColorSchema),
+      dark: sourceProvenanceUnchanged(themeColorSchema),
       role: sourceProvenanceUnchanged(themeColorRoleSchema.optional()),
     })
     .strict(),
@@ -1913,8 +1913,8 @@ export const sourceThemeTokenValueSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("color_pair")),
-      light: sourceProvenanceUnchanged(colorSchema),
-      dark: sourceProvenanceUnchanged(colorSchema),
+      light: sourceProvenanceUnchanged(themeColorSchema),
+      dark: sourceProvenanceUnchanged(themeColorSchema),
     })
     .strict(),
   z

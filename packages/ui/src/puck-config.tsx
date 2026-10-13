@@ -36,6 +36,7 @@ import {
   type ApplicationPuckRootShell,
   type PlatformBlockRelease,
   type ProjectedNavigation,
+  themeColorSchema,
 } from "@vortex/platform/schema";
 import { Checkbox } from "./components/checkbox";
 import { Input } from "./components/input";
@@ -719,31 +720,248 @@ const layoutAt = (
     : undefined;
 };
 
+type WidthValue = { kind?: string; startColumn?: number; span?: number };
+
+// Switching to grid writes an explicit full-width placement; nothing falls back at render time.
+const GRID_WIDTH_DEFAULT = Object.freeze({ kind: "grid", startColumn: 1, span: 12 });
+
+/** One breakpoint's width: the kind and, for grid, the start column and span as one value. */
+const widthField = (release: PlatformBlockRelease): Field => {
+  const kinds = release.capabilities.gridWidth ? ["content", "fill", "grid"] : ["content", "fill"];
+  return {
+    type: "custom",
+    label: "Width",
+    render: ({ id, name, value, onChange, readOnly }): ReactElement => {
+      const width = (value ?? {}) as WidthValue;
+      const column = (key: "startColumn" | "span", label: string): ReactElement => (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${id}-${key}`}>{label}</Label>
+          <Input
+            id={`${id}-${key}`}
+            name={`${name}.${key}`}
+            type="number"
+            min={1}
+            max={12}
+            disabled={readOnly}
+            value={width[key] ?? ""}
+            onChange={(event) => {
+              const next = event.target.valueAsNumber;
+              if (Number.isInteger(next)) onChange({ ...width, [key]: next });
+            }}
+          />
+        </div>
+      );
+      return (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={id}>Width</Label>
+          <NativeSelect
+            id={id}
+            name={name}
+            disabled={readOnly}
+            value={width.kind ?? ""}
+            onChange={(event) =>
+              onChange(
+                event.target.value === "grid"
+                  ? { ...GRID_WIDTH_DEFAULT }
+                  : { kind: event.target.value },
+              )
+            }
+          >
+            {kinds.map((kind) => (
+              <NativeSelectOption key={kind} value={kind}>
+                {kind}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+          {width.kind === "grid" ? (
+            <>
+              {column("startColumn", "Start column")}
+              {column("span", "Column span")}
+            </>
+          ) : null}
+        </div>
+      );
+    },
+  };
+};
+
+type OverrideValue = Record<string, unknown> & { kind: string };
+
+/**
+ * A colour text input that keeps its own draft while typing and reaches the page only once the
+ * draft is a colour the source accepts (committed as it becomes valid and again on blur).
+ */
+function ColorTextInput({
+  id,
+  name,
+  disabled,
+  value,
+  onCommit,
+}: {
+  id: string;
+  name: string;
+  disabled: boolean | undefined;
+  value: string;
+  onCommit: (value: string) => void;
+}): ReactElement {
+  const [draft, setDraft] = useState(value);
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(value);
+  }
+  const valid = themeColorSchema.safeParse(draft).success;
+  const commit = (next: string): void => {
+    if (themeColorSchema.safeParse(next).success && next !== value) onCommit(next);
+  };
+  return (
+    <Input
+      id={id}
+      name={name}
+      disabled={disabled}
+      value={draft}
+      aria-invalid={!valid}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        commit(event.target.value);
+      }}
+      onBlur={() => commit(draft)}
+    />
+  );
+}
+
+/** The platform token kinds a placement can override from the inspector, each with its editor. */
+const THEME_OVERRIDE_FIELDS: Readonly<
+  Record<
+    string,
+    ReadonlyArray<{
+      key: string;
+      label: string;
+      input: "text" | "rem" | "level" | "density";
+    }>
+  >
+> = Object.freeze({
+  color_pair: [
+    { key: "light", label: "Light", input: "text" },
+    { key: "dark", label: "Dark", input: "text" },
+  ],
+  spacing: [{ key: "rem", label: "Rem", input: "rem" }],
+  corners: [{ key: "rem", label: "Rem", input: "rem" }],
+  elevation: [{ key: "level", label: "Level", input: "level" }],
+  density: [{ key: "value", label: "Density", input: "density" }],
+});
+
+const tokenLabel = (key: string): string =>
+  key.replace(/_/gu, " ").replace(/^./u, (first) => first.toUpperCase());
+
+/**
+ * One theme token's override: off (no override) or an explicit value of the platform token's own
+ * kind, started from the platform value and then edited.
+ */
+const themeOverrideField = (tokenKey: string, platformToken: Record<string, unknown>): Field => {
+  const kind = String(platformToken.kind);
+  const inputs = THEME_OVERRIDE_FIELDS[kind] ?? [];
+  return {
+    type: "custom",
+    label: tokenLabel(tokenKey),
+    render: ({ id, name, value, onChange, readOnly }): ReactElement => {
+      const override = value as OverrideValue | undefined;
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={id}
+              name={name}
+              disabled={readOnly}
+              checked={override !== undefined}
+              onCheckedChange={(checked) =>
+                onChange(
+                  checked === true
+                    ? Object.fromEntries([
+                        ["kind", kind],
+                        ...inputs.map((input) => [input.key, platformToken[input.key]]),
+                      ])
+                    : undefined,
+                )
+              }
+            />
+            <Label htmlFor={id}>{tokenLabel(tokenKey)}</Label>
+          </div>
+          {override === undefined
+            ? null
+            : inputs.map((input) => {
+                const inputId = `${id}-${input.key}`;
+                const current = override[input.key];
+                const edit = (next: unknown): void => onChange({ ...override, [input.key]: next });
+                return (
+                  <div key={input.key} className="flex flex-col gap-1.5 pl-6">
+                    <Label htmlFor={inputId}>{input.label}</Label>
+                    {input.input === "density" ? (
+                      <NativeSelect
+                        id={inputId}
+                        name={`${name}.${input.key}`}
+                        disabled={readOnly}
+                        value={String(current ?? "")}
+                        onChange={(event) => edit(event.target.value)}
+                      >
+                        <NativeSelectOption value="compact">compact</NativeSelectOption>
+                        <NativeSelectOption value="comfortable">comfortable</NativeSelectOption>
+                      </NativeSelect>
+                    ) : input.input === "text" ? (
+                      <ColorTextInput
+                        id={inputId}
+                        name={`${name}.${input.key}`}
+                        disabled={readOnly}
+                        value={String(current ?? "")}
+                        onCommit={edit}
+                      />
+                    ) : (
+                      <Input
+                        id={inputId}
+                        name={`${name}.${input.key}`}
+                        type="number"
+                        min={0}
+                        step={input.input === "level" ? 1 : 0.0625}
+                        disabled={readOnly}
+                        value={typeof current === "number" ? current : ""}
+                        onChange={(event) => {
+                          const next = event.target.valueAsNumber;
+                          if (Number.isFinite(next)) edit(next);
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+        </div>
+      );
+    },
+  };
+};
+
+/** The theme override inspector: one typed field per overridable platform theme token. */
+const themeOverridesField = (platformThemeTokens: PlatformThemeTokens): Field => ({
+  type: "object",
+  label: "Theme overrides",
+  objectFields: Object.fromEntries(
+    Object.entries(platformThemeTokens)
+      .filter(([, token]) => THEME_OVERRIDE_FIELDS[token.kind] !== undefined)
+      .map(([key, token]) => [key, themeOverrideField(key, token as Record<string, unknown>)]),
+  ),
+});
+
 /** One breakpoint's visibility, width and height inspector, limited to what the release allows. */
 const layoutField = (
   release: PlatformBlockRelease,
   breakpoint: Breakpoint,
   layout: Record<string, unknown> | undefined,
 ): Field => {
-  const widthKind = (layout?.width as { kind?: unknown } | undefined)?.kind;
   const heightKind = (layout?.height as { kind?: unknown } | undefined)?.kind;
   const select = (label: string, values: readonly string[]): Field => ({
     type: "select",
     label,
     options: values.map((value) => ({ label: value, value })),
   });
-  const widthFields: Record<string, Field> = {
-    kind: select(
-      "Width",
-      release.capabilities.gridWidth ? ["content", "fill", "grid"] : ["content", "fill"],
-    ),
-    ...(widthKind === "grid"
-      ? {
-          startColumn: { type: "number", label: "Start column", min: 1, max: 12 } as Field,
-          span: { type: "number", label: "Column span", min: 1, max: 12 } as Field,
-        }
-      : {}),
-  };
   const heightFields: Record<string, Field> = {
     kind: select(
       "Height",
@@ -769,7 +987,7 @@ const layoutField = (
             } as Field,
           }
         : {}),
-      width: { type: "object", label: "Width", objectFields: widthFields },
+      width: widthField(release),
       height: { type: "object", label: "Height", objectFields: heightFields },
     },
   };
@@ -824,6 +1042,7 @@ export function createVortexPuckConfig(
         type: "object",
         label: "Layout",
         objectFields: {
+          themeOverrides: themeOverridesField(platformThemeTokens),
           responsive: {
             type: "object",
             label: "Responsive layout",

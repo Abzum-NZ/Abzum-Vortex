@@ -4,7 +4,6 @@ import { createBuilderAuthority, type BuilderTargetFactsReader } from "@web/plat
 import {
   applicationRootIdSchema,
   organizationIdSchema,
-  sessionContextSchema,
   sameId,
   canonicalJson,
   placementSlotSchema,
@@ -19,14 +18,17 @@ import type { DatabaseRow } from "@web/platform-server";
 import {
   BuilderAuthorityError,
   readApplicationDefinitionDraft,
+  readLiveHumanContext,
   requireBuilderAuthority,
   createDatabaseDefinitionPublicationService,
   createDatabaseDefinitionPublicationRepository,
   applicationSearchFieldIsSelectable,
   fingerprintCanonicalValue,
+  DefinitionCompilationError,
   type ModuleReleasePageCursor,
   type ResolvableModuleRelease,
 } from "@web/platform-server";
+import type { StudioCompileFailure } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
@@ -43,7 +45,7 @@ const isExpectedBuilderRefusal = (error: unknown): boolean =>
     error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED");
 
 type StudioApplicationLoadResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null }>
+  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; compileFailure: StudioCompileFailure | null }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -243,6 +245,23 @@ export const loadStudioCreateAccess = async (
   }
 };
 
+/** A compiler refusal names its rule, family and location; anything else is reported as unexpected. */
+const studioCompileFailure = (error: unknown): StudioCompileFailure => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    if (current instanceof DefinitionCompilationError) {
+      const segments = current.location?.segments ?? [];
+      const block = segments.find((segment) => segment.kind === "block");
+      const setting = segments.filter((segment) => segment.kind === "setting").at(-1);
+      return { reasonCode: current.ruleCode, family: current.family,
+        ...(block === undefined ? {} : { blockAlias: block.key }),
+        ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }) };
+    }
+    current = current.cause;
+  }
+  return { reasonCode: "STUDIO_DRAFT_COMPILE_UNEXPECTED", family: "unexpected" };
+};
+
 /** Classification, permission and detached draft read share one verified request transaction. */
 export const loadStudioApplicationDraft = async (
   candidateOrganizationId: string,
@@ -266,6 +285,7 @@ export const loadStudioApplicationDraft = async (
         draft: StoredApplicationDefinitionDraft;
         searchMetadata: StudioApplicationSearchMetadata | null;
         pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
+        compileFailure: StudioCompileFailure | null;
       }>>> => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts });
         try {
@@ -277,32 +297,9 @@ export const loadStudioApplicationDraft = async (
         const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
         let searchMetadata: StudioApplicationSearchMetadata | null = null;
         let pageCompiledSlots: StudioApplicationCompiledPageSlots | null = null;
+        let compileFailure: StudioCompileFailure | null = null;
         try {
-          const readContext = async () => {
-            const contextRows = await transaction.query<DatabaseRow>`select vortex_access.validated_human_request_context() as context`;
-            const transport = contextRows[0]?.context;
-            if (contextRows.length !== 1 || transport === null || typeof transport !== "object" || Array.isArray(transport) ||
-                !("channel" in transport) || transport.channel !== "web") throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-            const context = sessionContextSchema.parse(Object.fromEntries(Object.entries(transport).filter(([key]) => key !== "channel")));
-            const now = Date.now();
-            const from = Date.parse(context.issuedAt);
-            const until = Date.parse(context.expiresAt);
-            if (context.callerKind !== "human" || Object.hasOwn(scope, "applicationRootId") || Object.hasOwn(context, "applicationRootId") ||
-                context.delegatedContext !== undefined || context.supportContext !== undefined ||
-                !sameId(context.organizationId, scope.organizationId) || !sameId(context.organizationAccountId, scope.organizationAccountId) ||
-                context.accessVersion !== scope.accessVersion || !sameId(context.tenantId, scope.tenantId) ||
-                !sameId(context.identityId, resolved.session.identityId) || !sameId(context.sessionId, resolved.session.sessionId) ||
-                context.authenticationStrength !== resolved.session.authenticationStrength || context.issuedAt !== issuedAt ||
-                context.expiresAt !== resolved.session.accessTokenExpiresAt || context.accessTokenIssuedAt !==
-                  (resolved.session.primaryAuthenticatedAt !== undefined || resolved.session.multiFactorAuthenticatedAt !== undefined
-                    ? resolved.session.accessTokenIssuedAt : undefined) ||
-                context.primaryAuthenticatedAt !== resolved.session.primaryAuthenticatedAt ||
-                context.multiFactorAuthenticatedAt !== resolved.session.multiFactorAuthenticatedAt ||
-                !Number.isFinite(now) || !Number.isFinite(from) || !Number.isFinite(until) || from > now || until <= now || from >= until)
-              throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-            return context;
-          };
-          const context = await readContext();
+          const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
           const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
             .compileApplicationDraft(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
           const envelope = compiled.compilation.canonical.envelope;
@@ -381,7 +378,7 @@ export const loadStudioApplicationDraft = async (
           const final = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data, expectedDraftRevision: draft.draftRevision });
           if (canonicalJson(final) !== canonicalJson(draft)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
-          if (canonicalJson(await readContext()) !== canonicalJson(context)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+          if (canonicalJson(await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt })) !== canonicalJson(context)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           if (JSON.stringify({ records, modules: [...modules.values()] }).length > 999_000)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,
@@ -389,10 +386,12 @@ export const loadStudioApplicationDraft = async (
             resolutionFingerprint: compiled.compilation.resolutionFingerprint, records, modules: [...modules.values()] };
         } catch (error) {
           // A failed metadata refresh never makes old choices authoritative or changes the draft.
-          console.error("Failed to compile Studio application page settings", error);
+          // The draft stays open: the person sees the stable reason and can correct or remove the edit.
+          compileFailure = studioCompileFailure(error);
+          console.error("STUDIO_DRAFT_COMPILE_FAILED", compileFailure.reasonCode, compileFailure.family, error);
           searchMetadata = null;
         }
-        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, pageCompiledSlots } };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, pageCompiledSlots, compileFailure } };
       },
     );
     return result.kind === "available"

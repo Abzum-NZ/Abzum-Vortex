@@ -23,7 +23,7 @@ type PublishedRelease = ReturnType<typeof publishDefinitionResultSchema.parse>;
 const reasonMessages: Record<string, string> = {
   release_permission_missing:
     "You do not have the release permission (manage definition releases) for this organisation.",
-  release_permission_not_eligible:
+  permission_not_eligible:
     "You do not have the release permission (manage definition releases) for this organisation.",
   publication_authority_unavailable:
     "The database did not confirm your publication authority for this Module. Sign in again and retry; if it persists, check your release permission.",
