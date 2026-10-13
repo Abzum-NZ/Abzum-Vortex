@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import {
   canonicalJson,
+  describeFailure,
   fieldIdSchema,
   jsonValueSchema,
   recordIdSchema,
@@ -974,7 +975,10 @@ const isolated = async <Value>(
   let value: Value | undefined;
   try {
     value = await work();
-  } catch {
+  } catch (error) {
+    console.error(
+      `[query] shared cache step bypassed QUERY_CACHE_STEP_FAILED: ${describeFailure(error)}`,
+    );
     await transaction.query`rollback to savepoint protected_query_cache`;
     value = undefined;
   }
@@ -1105,8 +1109,11 @@ const planCache = async (
       recordTypeId: recordTypeId.data,
       referencedFieldIds: [...recheckedFieldIds],
     };
-  } catch {
+  } catch (error) {
     // Anything unresolved bypasses to the ordinary authorised query.
+    console.error(
+      `[query] shared cache decision bypassed QUERY_CACHE_DECISION_FAILED: ${describeFailure(error)}`,
+    );
     return undefined;
   }
 };
