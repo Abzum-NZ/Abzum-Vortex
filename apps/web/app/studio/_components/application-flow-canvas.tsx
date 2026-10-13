@@ -1,6 +1,6 @@
 "use client";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
@@ -195,10 +195,11 @@ type Adding = Readonly<{
 }>;
 
 /** The draft flow's task list as a canvas; every edit goes through the draft's revision-checked history. */
-export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, onRemove, onSetting }: Readonly<{
+export function ApplicationFlowCanvas({ context, selection, disabled, onSettingPendingChange, onInsert, onRemove, onSetting }: Readonly<{
   context: StudioFlowTextContext;
   selection: FlowSelection;
   disabled: boolean;
+  onSettingPendingChange: (pending: boolean) => void;
   onInsert: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowInsertCommand) => StudioFlowEditResult;
   onRemove: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowRemoveCommand) => StudioFlowEditResult;
   onSetting: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowSettingCommand) => StudioFlowEditResult;
@@ -210,6 +211,13 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
   // A selection belongs to one flow and one task id, so it cannot leak across flow switches or edits.
   const [selected, setSelected] = useState<Readonly<{ flowAlias: string; key: string; id: string }> | null>(null);
   const [adding, setAdding] = useState<Adding | null>(null);
+  // An unapplied setting edit is bound to its task and flow; nothing on the canvas may replace it silently.
+  const [settingPending, setSettingPending] = useState(false);
+  const reportSettingPending = useCallback((pending: boolean) => {
+    setSettingPending(pending);
+    onSettingPendingChange(pending);
+  }, [onSettingPendingChange]);
+  const holdMessage = "Apply or discard the unapplied setting edit first. It belongs to the selected task.";
   // A removal asks first, bound to the task and draft snapshot it was opened for.
   const [removing, setRemoving] = useState<Readonly<{ expected: StudioFlowTextContext; expectedSelection: FlowSelection;
     taskId: string; taskPath: readonly (string | number)[]; nested: number }> | null>(null);
@@ -263,6 +271,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
   } as CSSProperties;
 
   const beginAdding = (next: Omit<Adding, "expected" | "expectedSelection">) => {
+    if (settingPending) { setStatus(holdMessage); return; }
     setAdding({ ...next, expected: context, expectedSelection: selection });
     setTaskType("");
     setStatus("");
@@ -284,6 +293,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
   };
   const askRemove = () => {
     if (selectedOutline === undefined) return;
+    if (settingPending) { setStatus(holdMessage); return; }
     setRemoving({ expected: context, expectedSelection: selection, taskId: selectedOutline.id,
       taskPath: selectedOutline.path, nested: countNested(selectedOutline) });
   };
@@ -305,11 +315,18 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
         nodeTypes={nodeTypes} fitView nodesDraggable={false} nodesConnectable={false} edgesFocusable={false}
         elementsSelectable proOptions={{ hideAttribution: true }}
         onNodeClick={(_, node) => {
+          if (settingPending) {
+            if (node.id !== selectedKey) setStatus(holdMessage);
+            return;
+          }
           const outline = node.id.startsWith("[") ? findOutline(projection.lists, node.id) : undefined;
           setSelected(outline === undefined ? null : { flowAlias: selection.flowAlias, key: node.id, id: outline.id });
           setAdding(null);
         }}
-        onPaneClick={() => setSelected(null)}>
+        onPaneClick={() => {
+          if (settingPending) setStatus(holdMessage);
+          else setSelected(null);
+        }}>
         <Background />
         <Controls showInteractive={false} />
       </ReactFlow>
@@ -326,7 +343,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onInsert, 
         </div>
         {flowTask?.description !== undefined && <p className="text-sm"><span className="text-muted-foreground">Description:</span> {flowTask.description}</p>}
         <ApplicationFlowTaskSettings key={`${selection.flowAlias}:${selectedOutline.id}:${selectedKey}`} context={context}
-          selection={selection} outline={selectedOutline} disabled={disabled} onSetting={onSetting} />
+          selection={selection} outline={selectedOutline} disabled={disabled} onPendingChange={reportSettingPending} onSetting={onSetting} />
       </div>}
     <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-card-foreground">
       <h4 className="font-medium">Add a task to a list or branch</h4>

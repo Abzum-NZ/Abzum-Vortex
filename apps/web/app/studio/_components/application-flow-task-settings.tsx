@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
@@ -47,18 +47,28 @@ function SettingControl({ field, value, disabled, change }: Readonly<{
 }
 
 /** The selected task's settings, as a form generated from the task registry's own property declarations. */
-export function ApplicationFlowTaskSettings({ context, selection, outline, disabled, onSetting }: Readonly<{
+export function ApplicationFlowTaskSettings({ context, selection, outline, disabled, onPendingChange, onSetting }: Readonly<{
   context: StudioFlowTextContext;
   selection: FlowSelection;
   outline: StudioFlowTaskOutline;
   disabled: boolean;
+  onPendingChange: (pending: boolean) => void;
   onSetting: (expected: StudioFlowTextContext, selection: FlowSelection, command: StudioFlowSettingCommand) => StudioFlowEditResult;
 }>) {
   const projection = useMemo(() => projectStudioFlowTaskSettings(context, selection, outline.id, outline.path),
     [context, selection, outline.id, outline.path]);
   const [edits, setEdits] = useState<Readonly<Record<string, Edit>>>({});
+  const currentEdits = useRef<Readonly<Record<string, Edit>>>({});
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [status, setStatus] = useState("");
+
+  // The workspace must know about an unapplied edit before React renders, so Save, Reopen and selection changes cannot miss it.
+  const changeEdits = (next: Readonly<Record<string, Edit>>) => {
+    currentEdits.current = next;
+    onPendingChange(Object.keys(next).length > 0);
+    setEdits(next);
+  };
+  useEffect(() => () => onPendingChange(false), [onPendingChange]);
 
   useEffect(() => {
     if (projection.kind === "unavailable")
@@ -69,12 +79,13 @@ export function ApplicationFlowTaskSettings({ context, selection, outline, disab
   if (projection.kind === "unavailable") return <p role="alert" className="text-sm">{projection.reason}</p>;
 
   const begin = (key: string, value: StudioFlowSettingValue | null) => {
-    setEdits((previous) => ({ ...previous, [key]: { expected: previous[key]?.expected ?? context, value } }));
+    const previous = currentEdits.current;
+    changeEdits({ ...previous, [key]: { expected: previous[key]?.expected ?? context, value } });
     setErrors((previous) => without(previous, key));
     setStatus("");
   };
   const discard = (key: string) => {
-    setEdits((previous) => without(previous, key));
+    changeEdits(without(currentEdits.current, key));
     setErrors((previous) => without(previous, key));
   };
   const apply = (key: string) => {
