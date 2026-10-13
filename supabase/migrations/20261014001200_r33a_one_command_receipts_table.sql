@@ -435,6 +435,8 @@ as $function$
 declare
   action_context jsonb;
   receipt_claim jsonb;
+  digest_value bytea;
+  lifecycle_command_id uuid;
 begin
   action_context := vortex_record.resolve_named_action_context_internal(
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
@@ -448,8 +450,18 @@ begin
   ) then
     return null;
   end if;
+  -- The deleting action's lifecycle receipt carries the identity derived from
+  -- the action's command id; the two receipts cannot share one command id.
+  digest_value := pg_catalog.substring(pg_catalog.sha256(
+    pg_catalog.convert_to('record.delete:' || p_command_id::text, 'UTF8')
+  ), 1, 16);
+  lifecycle_command_id := pg_catalog.encode(
+    pg_catalog.set_byte(pg_catalog.set_byte(
+      digest_value, 6, (pg_catalog.get_byte(digest_value, 6) & 15) | 80
+    ), 8, (pg_catalog.get_byte(digest_value, 8) & 63) | 128), 'hex'
+  )::uuid;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, true
+    'record_lifecycle', lifecycle_command_id, true
   );
   if receipt_claim ->> 'status' is distinct from 'completed' then
     return null;
@@ -2039,6 +2051,21 @@ begin
         message = 'Protected record delete identities are invalid';
     end if;
 
+    -- The journaled effects prove the preflight that ran was this delete.
+    if exists (
+      select 1 from vortex_record.record_lifecycle_command_effects as effect
+      where effect.command_id = receipt.command_id and effect.effect_kind = 'restored'
+    ) or not exists (
+      select 1 from vortex_record.record_lifecycle_command_effects as effect
+      where effect.command_id = receipt.command_id
+        and effect.effect_kind = 'soft_deleted'
+        and effect.record_type_id = p_record_type_id
+        and effect.record_id = p_record_id
+    ) then
+      raise exception using errcode = '55000',
+        message = 'Protected record delete is not prepared';
+    end if;
+
     -- Closure identity and revisions are re-derived under the held locks rather
     -- than taken from the caller.
     preparation := vortex_record.prepare_record_lifecycle_totals_internal(
@@ -2125,6 +2152,21 @@ begin
     if p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid then
       raise exception using errcode = '22023',
         message = 'Protected record restore identities are invalid';
+    end if;
+
+    -- The journaled effects prove the preflight that ran was this restore.
+    if exists (
+      select 1 from vortex_record.record_lifecycle_command_effects as effect
+      where effect.command_id = receipt.command_id and effect.effect_kind <> 'restored'
+    ) or not exists (
+      select 1 from vortex_record.record_lifecycle_command_effects as effect
+      where effect.command_id = receipt.command_id
+        and effect.effect_kind = 'restored'
+        and effect.record_type_id = p_record_type_id
+        and effect.record_id = p_record_id
+    ) then
+      raise exception using errcode = '55000',
+        message = 'Protected record restore is not prepared';
     end if;
 
     preparation := vortex_record.prepare_record_lifecycle_totals_internal(

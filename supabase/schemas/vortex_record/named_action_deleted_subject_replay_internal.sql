@@ -15,6 +15,8 @@ as $function$
 declare
   action_context jsonb;
   receipt_claim jsonb;
+  digest_value bytea;
+  lifecycle_command_id uuid;
 begin
   action_context := vortex_record.resolve_named_action_context_internal(
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
@@ -28,8 +30,18 @@ begin
   ) then
     return null;
   end if;
+  -- The deleting action's lifecycle receipt carries the identity derived from
+  -- the action's command id; the two receipts cannot share one command id.
+  digest_value := pg_catalog.substring(pg_catalog.sha256(
+    pg_catalog.convert_to('record.delete:' || p_command_id::text, 'UTF8')
+  ), 1, 16);
+  lifecycle_command_id := pg_catalog.encode(
+    pg_catalog.set_byte(pg_catalog.set_byte(
+      digest_value, 6, (pg_catalog.get_byte(digest_value, 6) & 15) | 80
+    ), 8, (pg_catalog.get_byte(digest_value, 8) & 63) | 128), 'hex'
+  )::uuid;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'record_lifecycle', p_command_id, true
+    'record_lifecycle', lifecycle_command_id, true
   );
   if receipt_claim ->> 'status' is distinct from 'completed' then
     return null;
