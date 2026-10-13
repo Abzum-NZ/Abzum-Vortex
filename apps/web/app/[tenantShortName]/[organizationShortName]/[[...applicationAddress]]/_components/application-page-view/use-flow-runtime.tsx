@@ -175,21 +175,21 @@ export function useFlowRuntime({
       }
     };
     return {
-      startBinding: async (binding, callerInputs, clickId) => {
+      startBinding: async (binding, callerInputs, clickId, signal) => {
         const submission = submittedFormsRef.current.get(binding.bindingId);
         submittedFormsRef.current.delete(binding.bindingId);
         const inputs =
           submission?.choiceEvidence === undefined
             ? callerInputs
             : { ...callerInputs, choiceEvidence: submission.choiceEvidence };
-        const response = await client.startBinding(binding, inputs, clickId);
+        const response = await client.startBinding(binding, inputs, clickId, signal);
         recordResponse(response, submission);
         return response;
       },
-      resume: async (flowId, continuation, answer, evidence) => {
+      resume: async (flowId, continuation, answer, evidence, signal) => {
         const submission = continuingFormsRef.current.get(continuation);
         continuingFormsRef.current.delete(continuation);
-        const response = await client.resume(flowId, continuation, answer, evidence);
+        const response = await client.resume(flowId, continuation, answer, evidence, signal);
         recordResponse(response, submission);
         return response;
       },

@@ -46,6 +46,7 @@ export type FlowRuntime = Readonly<{
     binding: FlowBindingReference,
     callerInputs?: Readonly<Record<string, unknown>>,
     clickId?: string,
+    signal?: AbortSignal,
   ) => Promise<FlowDispatchResult>;
 }>;
 
@@ -80,15 +81,18 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     binding: FlowBindingReference,
     callerInputs: Readonly<Record<string, unknown>> = {},
     clickId?: string,
+    signal?: AbortSignal,
   ): Promise<FlowDispatchResult> => {
+    if (signal?.aborted) return { ranIn: "server", result: { kind: "abandoned" } };
     const first = await options.client.startBinding(
       { bindingId: binding.bindingId, flowId: binding.flowId },
       callerInputs,
       clickId ?? newId(),
+      signal,
     );
     return {
       ranIn: "server",
-      result: await driveServerFlow(options.client, binding.flowId, first, options.host),
+      result: await driveServerFlow(options.client, binding.flowId, first, options.host, signal),
     };
   };
   return Object.freeze({

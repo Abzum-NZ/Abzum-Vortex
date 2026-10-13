@@ -6,13 +6,7 @@ import type { FormContinuationAnswer, JsonValue } from "@vortex/platform/schema"
  */
 export type FlowIntent = Readonly<{
   kind:
-    | "show_message"
-    | "show_form"
-    | "confirm"
-    | "navigate"
-    | "refresh"
-    | "set_panel"
-    | "set_filter";
+    "show_message" | "show_form" | "confirm" | "navigate" | "refresh" | "set_panel" | "set_filter";
   taskId: string;
   properties: Readonly<Record<string, JsonValue>>;
 }>;
@@ -70,9 +64,7 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
 
 export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undefined => {
   const message = text(intent.properties.message);
-  return message === undefined
-    ? undefined
-    : { title: text(intent.properties.title), message };
+  return message === undefined ? undefined : { title: text(intent.properties.title), message };
 };
 
 export const readFormIntent = (intent: FlowIntent): FlowFormIntent | undefined => {
@@ -87,25 +79,31 @@ export const readFormIntent = (intent: FlowIntent): FlowFormIntent | undefined =
  * presentation intents are skipped when the shell does not supply them.
  */
 export type FlowIntentHost = Readonly<{
-  showMessage: (message: FlowMessageIntent) => void | Promise<void>;
+  showMessage: (message: FlowMessageIntent, signal?: AbortSignal) => void | Promise<void>;
   /** Resolves with the person's answer; a rejection abandons the run without answering. */
-  showForm: (form: FlowFormIntent) => Promise<FlowFormAnswer>;
-  confirm: (confirmation: FlowConfirmIntent) => Promise<boolean>;
+  showForm: (form: FlowFormIntent, signal?: AbortSignal) => Promise<FlowFormAnswer>;
+  confirm: (confirmation: FlowConfirmIntent, signal?: AbortSignal) => Promise<boolean>;
   navigate: (intent: FlowIntent) => boolean | Promise<boolean>;
   refresh?: (component: string | undefined) => void | Promise<void>;
   setPanel?: (panel: string, state: string) => void | Promise<void>;
-  setFilter?: (component: string, field: string, value: JsonValue | undefined) => void | Promise<void>;
+  setFilter?: (
+    component: string,
+    field: string,
+    value: JsonValue | undefined,
+  ) => void | Promise<void>;
 }>;
 
 /** Carries out one non-blocking intent (never a form or confirmation). */
 export async function performPresentationIntent(
   intent: FlowIntent,
   host: FlowIntentHost,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (signal?.aborted) return;
   switch (intent.kind) {
     case "show_message": {
       const message = readMessageIntent(intent);
-      if (message !== undefined) await host.showMessage(message);
+      if (message !== undefined) await host.showMessage(message, signal);
       return;
     }
     case "navigate":

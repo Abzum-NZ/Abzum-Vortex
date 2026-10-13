@@ -9,7 +9,8 @@ type RegisteredTool = Readonly<{
   name: string;
   description: string;
   inputSchema: object;
-  execute: (input: unknown) => Promise<unknown>;
+  annotations: Readonly<{ consequentialHint: true }>;
+  execute: (input: unknown, options?: Readonly<{ signal?: AbortSignal }>) => Promise<unknown>;
 }>;
 
 type ModelContext = Readonly<{
@@ -22,7 +23,7 @@ type ModelContext = Readonly<{
 type Props = Readonly<{
   contextKey: string;
   tools: readonly PageWebMcpTool[];
-  onInvoke: (tool: PageWebMcpTool, input: unknown) => Promise<unknown>;
+  onInvoke: (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal) => Promise<unknown>;
   onStatusChange: (runtime: ApplicationWebMcpRuntime | undefined) => void;
 }>;
 
@@ -107,14 +108,31 @@ export function WebMcpAdapter({ contextKey, tools, onInvoke, onStatusChange }: P
             name: tool.name,
             description: tool.description,
             inputSchema: tool.inputSchema,
-            execute: async (input) => {
-              if (controller.signal.aborted || disabled || !matchesToolInputKeys(tool, input))
-                return { outcome: "refused" };
+            annotations: { consequentialHint: true },
+            execute: async (input, options) => {
+              const signals = [
+                controller.signal,
+                ...(options?.signal === undefined ? [] : [options.signal]),
+              ];
+              const executionController = new AbortController();
+              const abortExecution = (): void => {
+                const aborted = signals.find((signal) => signal.aborted);
+                if (aborted !== undefined) executionController.abort(aborted.reason);
+              };
+              signals.forEach((signal) =>
+                signal.addEventListener("abort", abortExecution, { once: true }),
+              );
+              abortExecution();
               try {
-                return await onInvoke(tool, input);
+                if (executionController.signal.aborted) return { outcome: "cancelled" };
+                if (disabled || !matchesToolInputKeys(tool, input)) return { outcome: "refused" };
+                return await onInvoke(tool, input, executionController.signal);
               } catch (error) {
+                if (executionController.signal.aborted) return { outcome: "cancelled" };
                 console.error(`[webmcp] tool invocation failed: ${describeFailure(error)}`);
                 return { outcome: "unavailable" };
+              } finally {
+                signals.forEach((signal) => signal.removeEventListener("abort", abortExecution));
               }
             },
           },

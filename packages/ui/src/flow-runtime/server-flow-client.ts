@@ -67,12 +67,14 @@ export type FlowInvokeClient = Readonly<{
     binding: Readonly<{ bindingId: string; flowId: string }>,
     callerInputs: Readonly<Record<string, unknown>>,
     clickId: string,
+    signal?: AbortSignal,
   ) => Promise<ServerFlowResponse>;
   resume: (
     flowId: string,
     continuation: string,
     answer: FormContinuationAnswer,
     evidence?: FlowResumeEvidence,
+    signal?: AbortSignal,
   ) => Promise<ServerFlowResponse>;
 }>;
 
@@ -220,7 +222,11 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
  */
 export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowInvokeClient {
   const endpoint = options.endpoint ?? "/api/flows/invoke";
-  const send = async (invocation: FlowBindingInvocation): Promise<ServerFlowResponse> => {
+  const send = async (
+    invocation: FlowBindingInvocation,
+    signal?: AbortSignal,
+  ): Promise<ServerFlowResponse> => {
+    if (signal?.aborted) return unavailable;
     try {
       const parsedInvocation = flowBindingInvocationSchema.safeParse(invocation);
       if (!parsedInvocation.success) return refused;
@@ -229,6 +235,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         cache: "no-store",
+        ...(signal === undefined ? {} : { signal }),
         // Exactly the endpoint's strict request shape: the addressed page and the invocation.
         body: JSON.stringify({
           tenantShortName: options.address.tenantShortName,
@@ -242,6 +249,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         return refused;
       return parseServerFlowResponse(await response.json());
     } catch (error) {
+      if (signal?.aborted) return unavailable;
       console.error(`[flow] invoke request failed: ${describeFailure(error)}`);
       return unavailable;
     }
@@ -251,25 +259,31 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     releaseKey: options.installation.releaseKey,
   };
   return Object.freeze({
-    startBinding: (binding, callerInputs, clickId) =>
-      send({
-        kind: "binding",
-        ...context,
-        bindingId: binding.bindingId,
-        flowId: binding.flowId,
-        clickId,
-        callerInputs,
-        ...(options.subject === undefined ? {} : { subject: options.subject }),
-      }),
-    resume: (flowId, continuation, answer, evidence) =>
-      send({
-        kind: "continuation",
-        ...context,
-        flowId,
-        continuation,
-        answer,
-        ...(evidence?.target === undefined ? {} : { target: evidence.target }),
-        ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),
-      }),
+    startBinding: (binding, callerInputs, clickId, signal) =>
+      send(
+        {
+          kind: "binding",
+          ...context,
+          bindingId: binding.bindingId,
+          flowId: binding.flowId,
+          clickId,
+          callerInputs,
+          ...(options.subject === undefined ? {} : { subject: options.subject }),
+        },
+        signal,
+      ),
+    resume: (flowId, continuation, answer, evidence, signal) =>
+      send(
+        {
+          kind: "continuation",
+          ...context,
+          flowId,
+          continuation,
+          answer,
+          ...(evidence?.target === undefined ? {} : { target: evidence.target }),
+          ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),
+        },
+        signal,
+      ),
   });
 }

@@ -301,20 +301,27 @@ export function ApplicationPageViewContent({
   });
 
   const invokeWebMcpTool = useCallback(
-    async (tool: PageWebMcpTool, input: unknown): Promise<unknown> => {
+    async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
+      if (signal?.aborted) return { outcome: "cancelled" };
       if (currentBusyRef.current) return { outcome: "busy" };
       if (!isRecord(input)) return { outcome: "refused" };
       currentBusyRef.current = true;
       setBusy(true);
       setNotice(undefined);
       try {
-        const dispatch = await webMcpRuntime.dispatchReference(tool.binding, input);
+        const dispatch = await webMcpRuntime.dispatchReference(
+          tool.binding,
+          input,
+          undefined,
+          signal,
+        );
         await applyDispatch(
           Promise.resolve(dispatch),
           undefined,
           undefined,
           tool.binding.bindingId,
         );
+        if (signal?.aborted) return { outcome: "cancelled" };
         if (dispatch.ranIn !== "server") return { outcome: "unavailable" };
         const result = dispatch.result;
         if (result.kind === "finished")

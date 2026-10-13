@@ -26,7 +26,7 @@ export type ServerDrivenResult =
   /** Unknown, expired, foreign, tampered or not permitted: the one neutral refusal. */
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>
-  /** The surface went away before answering; no answer was sent. */
+  /** The intent surface or caller went away before answering; no continuation answer was sent. */
   | Readonly<{ kind: "abandoned" }>;
 
 const minimumContinuationLength = 16;
@@ -53,18 +53,23 @@ export async function driveServerFlow(
   flowId: string,
   first: ServerFlowResponse,
   host: FlowIntentHost,
+  signal?: AbortSignal,
 ): Promise<ServerDrivenResult> {
   let response = first;
   let awaitingSurface = false;
   try {
     for (let round = 0; round < maximumRounds; round += 1) {
+      if (signal?.aborted) return { kind: "abandoned" };
       switch (response.kind) {
         case "reload":
         case "refused":
         case "unavailable":
           return response;
         case "result": {
-          for (const intent of response.intents) await performPresentationIntent(intent, host);
+          for (const intent of response.intents) {
+            if (signal?.aborted) return { kind: "abandoned" };
+            await performPresentationIntent(intent, host, signal);
+          }
           return {
             kind: "finished",
             runId: response.runId,
@@ -85,7 +90,10 @@ export async function driveServerFlow(
           for (const intent of response.intents.slice(0, -1))
             if (intent.kind === "show_form" || intent.kind === "confirm")
               return refuseInvalidServerFlowState("unexpected_pause_intent");
-            else await performPresentationIntent(intent, host);
+            else {
+              if (signal?.aborted) return { kind: "abandoned" };
+              await performPresentationIntent(intent, host, signal);
+            }
 
           const continuation = response.continuation;
           // The exact evidence the server issued with this pause, sent back unchanged on resume; the
@@ -98,21 +106,24 @@ export async function driveServerFlow(
             const form = readFormIntent(waiting);
             if (form === undefined) return refuseInvalidServerFlowState("form_intent");
             awaitingSurface = true;
-            const answer = await host.showForm(form);
+            const answer = await host.showForm(form, signal);
             awaitingSurface = false;
-            response = await client.resume(flowId, continuation, answer, evidence);
+            if (signal?.aborted) return { kind: "abandoned" };
+            response = await client.resume(flowId, continuation, answer, evidence, signal);
           } else {
             const confirmation = readConfirmIntent(waiting);
             if (confirmation === undefined)
               return refuseInvalidServerFlowState("confirmation_intent");
             awaitingSurface = true;
-            const confirmed = await host.confirm(confirmation);
+            const confirmed = await host.confirm(confirmation, signal);
             awaitingSurface = false;
+            if (signal?.aborted) return { kind: "abandoned" };
             response = await client.resume(
               flowId,
               continuation,
               { kind: "confirm", confirmed },
               evidence,
+              signal,
             );
           }
           break;
@@ -121,6 +132,7 @@ export async function driveServerFlow(
     }
     return refuseInvalidServerFlowState("round_limit");
   } catch (error) {
+    if (signal?.aborted) return { kind: "abandoned" };
     if (awaitingSurface && isSurfaceCancellation(error)) return { kind: "abandoned" };
     console.error(`[flow] server-driven execution failed: ${describeFailure(error)}`);
     return { kind: "unavailable" };
