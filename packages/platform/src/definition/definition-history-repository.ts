@@ -1,8 +1,11 @@
 import "server-only";
 
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { platformPermissionSource } from "../access/platform-permissions";
 import {
+  organizationAccessDeclarationSchema,
   storedDefinitionDraftSchema,
+  type OrganizationAccessDeclaration,
   type SessionContext,
   type StoredDefinitionDraft,
 } from "../schema";
@@ -42,18 +45,27 @@ const asCandidate = (value: unknown): Record<string, unknown> | undefined =>
     ? (value as Record<string, unknown>)
     : undefined;
 
-const humanPermissionDeclaration = {
-  operationKey: "platform.organization.definition_drafts.manage",
-  action: { actionKind: "manage" },
-  target: { kind: "organization" },
-  requiredPermission: {
-    ownerKind: "platform",
-    ownerId: "cabe121e-0baf-4084-9471-cce915d460a8",
-    permissionId: "0548c061-b1a9-48e5-a04a-eb1d0dae0644",
-  },
-  recentAuthentication: { kind: "none" },
-  authority: { kind: "permission" },
-} as const;
+const humanPermissionDeclaration = (): OrganizationAccessDeclaration => {
+  const permissions = platformPermissionSource();
+  const operationKey = "platform.organization.definition_drafts.manage";
+  const permission = permissions.forKey(operationKey);
+  if (permission === undefined) throw new Error("DEFINITION_DRAFTS_MANAGE_PERMISSION_UNAVAILABLE");
+  return organizationAccessDeclarationSchema.parse({
+    operationKey,
+    action: {
+      actionKind: permission.actionKind,
+      ...(permission.namedAction === undefined ? {} : { namedAction: permission.namedAction }),
+    },
+    target: { kind: "organization" },
+    requiredPermission: {
+      ownerKind: "platform",
+      ownerId: permissions.ownerId,
+      permissionId: permission.permissionId,
+    },
+    recentAuthentication: { kind: "none" },
+    authority: { kind: "permission" },
+  });
+};
 
 const isHumanOrganizationOnlyContext = (
   context: SessionContext,
@@ -96,16 +108,17 @@ const assertHumanRestoreCompletion = async (
 ): Promise<void> => {
   if (restored.restoredAt === undefined) throw new DefinitionError("42501");
   const restoredAt = restored.restoredAt;
+  const declaration = humanPermissionDeclaration();
   const decisions = await transaction.query<PermissionDecisionRow>`
     select decision.*
     from vortex_access.evaluate_organization_permission_eligibility(
-      ${JSON.stringify(humanPermissionDeclaration)}::jsonb
+      ${JSON.stringify(declaration)}::jsonb
     ) as decision
   `;
   const decision = one(decisions, "DEFINITION_RESTORE_AUTHORITY_UNAVAILABLE");
   if (
     decision.outcome !== "eligible" ||
-    decision.operation_key !== humanPermissionDeclaration.operationKey ||
+    decision.operation_key !== declaration.operationKey ||
     decision.target_kind !== "organization" ||
     decision.target_application_root_id !== null ||
     decision.organization_id.toLowerCase() !== context.organizationId.toLowerCase() ||
