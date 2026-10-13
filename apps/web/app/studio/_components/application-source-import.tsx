@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
 import { Textarea } from "@vortex/ui/components/textarea";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { canonicalJson, sameId, type ApplicationSourceDocument,
@@ -43,6 +44,7 @@ const candidateFingerprint = async (source: ApplicationSourceDocument): Promise<
 };
 
 export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChange, onApply }: Props) {
+  const [confirm, confirmDialog] = useConfirm();
   const [text, setText] = useState("");
   const [operation, setOperation] = useState<"reading" | "reviewing" | null>(null);
   const [reviewed, setReviewed] = useState<ReviewedSource | null>(null);
@@ -221,7 +223,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     }
   };
 
-  const apply = () => {
+  const apply = async () => {
     const candidate = acceptedReview.current;
     const isCurrent = () => candidate !== null && active.current && !disabled && busy.current === null &&
       candidate.epoch === epoch.current && candidate.text === raw.current &&
@@ -234,7 +236,11 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       setMessage("This source already matches local history. No change was made.");
       return;
     }
-    if (!window.confirm("Replace this draft's current local source with the reviewed document? Unsaved local changes will be replaced. Save remains a separate action.")) return;
+    if (!await confirm({
+      title: "Replace the local source with the reviewed document?",
+      description: "Replace this draft's current local source with the reviewed document? Unsaved local changes will be replaced. Save remains a separate action.",
+      confirmLabel: "Replace local source",
+    })) return;
     if (!isCurrent()) { setMessage("The editor changed. No source was replaced."); return; }
     const result = onApply(candidate.snapshot, candidate.source);
     if (result === "applied") {
@@ -292,5 +298,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
         }}>Discard source input or response</Button>
     </div>
     <p role="status" aria-live="polite">{message}</p>
+    {confirmDialog}
   </section>;
 }

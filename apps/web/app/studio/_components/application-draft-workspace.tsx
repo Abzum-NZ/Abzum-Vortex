@@ -7,6 +7,7 @@ import { NativeSelect } from "@vortex/ui/components/native-select";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
@@ -220,6 +221,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const active = useRef(false);
   const lifetime = useRef(0);
   const reopening = useRef(false);
@@ -691,7 +693,11 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   const reopen = async () => {
     if (publicationPending.current || reopening.current || history.getState().isSaving) return;
     if ((history.getState().isDirty || (sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
-      !window.confirm("Discard unsaved changes and reopen the saved draft?")) return;
+      !await confirm({
+        title: "Reopen the saved draft?",
+        description: "Discard unsaved changes and reopen the saved draft?",
+        confirmLabel: "Reopen saved draft",
+      })) return;
     publicationEpoch.current += 1;
     setPreparedPublication(null);
     const requestLifetime = lifetime.current;
@@ -872,9 +878,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       ? "grid gap-6"
       : "grid gap-6 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_minmax(16rem,1fr)]"}>
       <nav aria-label="Application outline" className="space-y-3"><h2 className="font-semibold">Outline</h2>
-        <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={(node) => {
+        <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={async (node) => {
           if (publicationPending.current || reopening.current || history.getState().isSaving || (((sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
-            !window.confirm("Discard unapplied source import, inspector, appearance, composition, visibility, Flow and task setting edits and change selection?"))) return;
+            !await confirm({
+              title: "Change the selection?",
+              description: "Discard unapplied source import, inspector, appearance, composition, visibility, Flow and task setting edits and change selection?",
+              confirmLabel: "Discard and change selection",
+            }))) return;
           if (!selection.select(node.selection)) return;
           discardSourceImport();
           setConditionEpoch((value) => value + 1);
@@ -1125,5 +1135,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       platformBlockCatalogue={platformBlockCatalogue}
       fieldInputControlReleases={fieldInputControlReleases}
       platformThemeTokens={platformThemeTokens} />
+    {confirmDialog}
   </main>;
 }
