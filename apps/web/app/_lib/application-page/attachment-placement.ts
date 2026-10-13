@@ -28,6 +28,13 @@ import {
 } from "./placement-helpers";
 import type { PageSubjectType, PageDataState, SearchParameters } from "./types";
 
+const logRefusal = (placementId: string, reason: string, cause?: unknown): void => {
+  console.error(
+    `[page] attachment placement refused: placement=${placementId} reason=${reason}`,
+    ...(cause === undefined ? [] : [cause]),
+  );
+};
+
 export const readAttachmentListPlacement = async (input: {
   block: unknown;
   placement: ReturnType<typeof collectPlacements>[number]["placement"];
@@ -70,6 +77,7 @@ export const readAttachmentListPlacement = async (input: {
     subjectType?.state !== "resolved" ||
     pageSubjectRecordTypeId === undefined
   ) {
+    logRefusal(placementId, "placement_shape_mismatch");
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
@@ -90,6 +98,7 @@ export const readAttachmentListPlacement = async (input: {
       : subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ?? [];
   const attachmentField = matchingFields.length === 1 ? matchingFields[0] : undefined;
   if (fieldId === undefined || attachmentField?.type !== "attachment") {
+    logRefusal(placementId, "field_setting_not_attachment_field");
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
@@ -98,6 +107,10 @@ export const readAttachmentListPlacement = async (input: {
     : 1;
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   if (maximumFiles === undefined || !subjectId.success) {
+    logRefusal(
+      placementId,
+      maximumFiles === undefined ? "maximum_files_missing" : "page_subject_id_invalid",
+    );
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
@@ -132,12 +145,21 @@ export const readAttachmentListPlacement = async (input: {
         maximumFiles,
         readFile: async (candidateFileId): Promise<ReadOnlyAttachmentFileEvidence> => {
           const parsedFileId = fileIdSchema.safeParse(candidateFileId);
-          if (!parsedFileId.success) return { kind: "refused" };
+          if (!parsedFileId.success) {
+            logRefusal(placementId, "file_id_invalid");
+            return { kind: "refused" };
+          }
           try {
             const decision = await decideFileRead(transaction, parsedFileId.data);
-            if (decision.outcome !== "allowed") return { kind: "refused" };
+            if (decision.outcome !== "allowed") {
+              logRefusal(placementId, `file_read_decision_${String(decision.outcome)}`);
+              return { kind: "refused" };
+            }
             const file = await repository.readFile(parsedFileId.data);
-            if (file === null) return { kind: "refused" };
+            if (file === null) {
+              logRefusal(placementId, "file_record_missing");
+              return { kind: "refused" };
+            }
             return {
               kind: "read",
               decision,
@@ -163,7 +185,11 @@ export const readAttachmentListPlacement = async (input: {
                 sizeBytes: file.sizeBytes,
               },
             };
-          } catch {
+          } catch (cause) {
+            console.error(
+              `[page] attachment placement unavailable: placement=${placementId} reason=file_read_failed`,
+              cause,
+            );
             return { kind: "unavailable" };
           }
         },
@@ -172,14 +198,23 @@ export const readAttachmentListPlacement = async (input: {
     },
   );
   if (currentAttachments.kind === "temporarily_unavailable") {
+    console.error(
+      `[page] attachment placement unavailable: placement=${placementId} reason=request_temporarily_unavailable`,
+    );
     data[placementId] = { status: "error" };
   } else if (currentAttachments.kind === "unavailable") {
+    logRefusal(placementId, "request_scope_unavailable");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (currentAttachments.value.kind === "stale") {
+    logRefusal(placementId, "request_scope_stale");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (currentAttachments.value.subject.kind === "temporarily_unavailable") {
+    console.error(
+      `[page] attachment placement unavailable: placement=${placementId} reason=subject_read_temporarily_unavailable`,
+    );
     data[placementId] = { status: "error" };
   } else if (currentAttachments.value.kind === "subject") {
+    logRefusal(placementId, "subject_read_refused");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else {
     adoptSubjectRead(currentAttachments.value.subject);
@@ -191,6 +226,7 @@ export const readAttachmentListPlacement = async (input: {
           ? { status: "empty" }
           : projection.kind === "unavailable"
             ? { status: "error" }
-            : { status: "refused", reason: "not_permitted" };
+            : (logRefusal(placementId, `projection_${projection.reason}`),
+              { status: "refused", reason: "not_permitted" });
   }
 };
