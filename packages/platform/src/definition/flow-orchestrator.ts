@@ -948,6 +948,13 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   const isEmptyEffectOutput = (value: unknown): boolean =>
     isRecord(value) && Object.keys(value).length === 0;
 
+  /** A refused save stores only its located field keys and codes, so a replay reports them again. */
+  const storedCorrectionDiagnostic = (value: unknown): FlowRefusalFeedback | undefined => {
+    if (!isRecord(value) || Object.keys(value).length !== 1) return undefined;
+    const parsed = flowRefusalFeedbackSchema.safeParse(value.diagnostic);
+    return parsed.success ? parsed.data : undefined;
+  };
+
   /** Records a task the platform cannot run here: it fails as not available, never as refused. */
   const notAvailable = (run: Run, call: FlowProtectedTaskCall, requires: string): TaskResult => {
     run.unavailable.push({
@@ -1216,7 +1223,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             outcome: "validation",
             ...(diagnostic.success ? { diagnostic: diagnostic.data } : {}),
           },
-          stored: {},
+          stored: diagnostic.success
+            ? { diagnostic: { code: diagnostic.data.code, corrections: [...located] } }
+            : {},
         };
       }
       return { result: { outcome: refusalOutcome(value.error.code) }, stored: {} };
@@ -1406,10 +1415,18 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             return { outcome: "uncertain" };
           }
         }
+        const replayedDiagnostic =
+          claim.outcome === "validation" ? storedCorrectionDiagnostic(claim.outputs) : undefined;
+        if (replayedDiagnostic !== undefined)
+          return { outcome: "validation", diagnostic: replayedDiagnostic };
         return isEmptyEffectOutput(claim.outputs)
           ? { outcome: claim.outcome as FlowTaskOutcome }
           : { outcome: "refused" };
       }
+      const replayedDiagnostic =
+        claim.outcome === "validation" ? storedCorrectionDiagnostic(claim.outputs) : undefined;
+      if (replayedDiagnostic !== undefined)
+        return { outcome: "validation", diagnostic: replayedDiagnostic };
       return {
         outcome: claim.outcome as FlowTaskOutcome,
         outputs: isRecord(claim.outputs) ? (claim.outputs as Record<string, JsonValue>) : {},

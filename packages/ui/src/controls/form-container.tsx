@@ -147,6 +147,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
   const baselineRef = useRef<Readonly<Record<string, unknown>> | undefined>(undefined);
   const [, setFeedbackTick] = useState(0);
+  // The located corrections the person has edited past; a new submission shows them afresh.
+  const [editedPastCorrections, setEditedPastCorrections] = useState<string | undefined>();
+  useEffect(() => {
+    if (context.pending) setEditedPastCorrections(undefined);
+  }, [context.pending]);
   const validationAttemptedRef = useRef(false);
   const supply = props.draftFeedback;
   const supplied = supply !== undefined;
@@ -163,6 +168,8 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   // Rechecks settled feedback only while a result is supplied; without one a
   // keystroke must not re-render the whole form.
   const reportFieldChanged = useCallback(() => {
+    if (props.flowFeedback?.kind === "refusal" && props.flowFeedback.corrections !== undefined)
+      setEditedPastCorrections(JSON.stringify(props.flowFeedback.corrections));
     if (supplied) setFeedbackTick((current) => current + 1);
     if (validationAttemptedRef.current)
       setValidationErrors(registry.validationErrors());
@@ -172,7 +179,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         formId,
         !equalFormValue(registry.values(), baseline) || ownerGroupChoice !== undefined,
       );
-  }, [formId, ownerGroupChoice, registry, supplied, unsavedWorkRegistry]);
+  }, [formId, ownerGroupChoice, props.flowFeedback, registry, supplied, unsavedWorkRegistry]);
 
   // Applicability is decided once per render from the fields' current typed
   // values, and the scope changes with it, so every field clears or restores
@@ -190,12 +197,12 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       // A refusal from the server locates its corrections by the same field keys.
       const refused = props.flowFeedback;
       const correction =
-        refused?.kind === "refusal"
+        refused?.kind === "refusal" && JSON.stringify(refused.corrections) !== editedPastCorrections
           ? refused.corrections?.find((candidate) => candidate.field === fieldKey)
           : undefined;
       return correction === undefined ? undefined : fieldCorrectionText[correction.code];
     },
-    [validationErrors, props.flowFeedback],
+    [validationErrors, props.flowFeedback, editedPastCorrections],
   );
 
   const scope: FormScope = useMemo(
