@@ -19,6 +19,7 @@ import {
   applyStudioFlowPresentationMoveCommand,
   applyStudioFlowInsertCommand,
   applyStudioFlowRemoveCommand,
+  applyStudioFlowSettingCommand,
   applyStudioFlowCalculateCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
@@ -35,6 +36,7 @@ import {
   type StudioFlowEditResult,
   type StudioFlowInsertCommand,
   type StudioFlowRemoveCommand,
+  type StudioFlowSettingCommand,
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication,
@@ -950,7 +952,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
             onInsert={(expected, expectedSelection, command: StudioFlowInsertCommand) =>
               editFlowFromCanvas(applyStudioFlowInsertCommand, "Task added to local history. Save draft to persist it.", expected, expectedSelection, command)}
             onRemove={(expected, expectedSelection, command: StudioFlowRemoveCommand) =>
-              editFlowFromCanvas(applyStudioFlowRemoveCommand, "Task removed from local history. Save draft to persist it.", expected, expectedSelection, command)} />}
+              editFlowFromCanvas(applyStudioFlowRemoveCommand, "Task removed from local history. Save draft to persist it.", expected, expectedSelection, command)}
+            onSetting={(expected, expectedSelection, command: StudioFlowSettingCommand) =>
+              editFlowFromCanvas(applyStudioFlowSettingCommand, "Task setting applied to local history. Save draft to persist it.", expected, expectedSelection, command)} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
           <ApplicationFlowEditor key={flowEpoch} context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}
