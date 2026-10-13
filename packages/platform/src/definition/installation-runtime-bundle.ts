@@ -40,7 +40,7 @@ import { savedSharingConditionSchema } from "./module-contracts";
 export {
   resolvePageComposition,
   type ResolvedPageComposition,
-} from "../pages/runtime-bundle-page-composition";
+} from "../pages/page-composition-resolution";
 export const installationRuntimeBundleFormatVersion = 2 as const;
 export const installationRuntimeBundleMaximumPartBytes = 1_048_575;
 
