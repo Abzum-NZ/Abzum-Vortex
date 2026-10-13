@@ -286,8 +286,11 @@ export {
 } from "./organization-record-permission-availability";
 
 export {
-  createHumanApplicationPublisher,
-  type HumanApplicationPublicationPreparationResult,
-  type HumanApplicationPublicationResult,
-  type HumanApplicationPublisherDependencies,
-} from "./application-publication";
+  createHumanDefinitionPublisher,
+  type HumanDefinitionKind,
+  type HumanDefinitionPublicationDraft,
+  type HumanDefinitionPublicationDraftResult,
+  type HumanDefinitionPublicationPreparationResult,
+  type HumanDefinitionPublicationResult,
+  type HumanDefinitionPublisherDependencies,
+} from "./definition-publication";

@@ -228,8 +228,9 @@ begin
       message = 'Definition root does not belong to the context organization';
   end if;
 
-  if human_publication and (root_row.kind is distinct from 'application'
-    or root_row.application_origin_kind is distinct from 'ordinary') then
+  if human_publication and (root_row.kind not in ('application', 'module')
+    or (root_row.kind = 'application'
+      and root_row.application_origin_kind is distinct from 'ordinary')) then
     raise exception using errcode = '42501',
       message = 'Definition publication authority is unavailable';
   end if;
@@ -1092,4 +1093,4 @@ revoke execute on function vortex_definition.append_release(uuid, bigint, text, 
 grant execute on function vortex_definition.append_release(uuid, bigint, text, jsonb)
   to vortex_request;
 comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) is
-  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits ordinary human Application publication only under locked current draft/release permissions and original account attribution, then advances only its root pointer.';
+  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits ordinary human Application and Module publication only under locked current draft/release permissions and original account attribution, then advances only its root pointer.';
