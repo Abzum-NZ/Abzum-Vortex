@@ -7,7 +7,7 @@ import { NativeSelect } from "@vortex/ui/components/native-select";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { applicationSourceDocumentSchema, canonicalJson,
+import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
   type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
@@ -17,20 +17,25 @@ import {
   applyStudioFlowTextCommand,
   applyStudioFlowPresentationCommand,
   applyStudioFlowPresentationMoveCommand,
-  applyStudioFlowPresentationRemovalCommand,
+  applyStudioFlowInsertCommand,
+  applyStudioFlowRemoveCommand,
   applyStudioFlowCalculateCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
   ApplicationPagePuckEditor,
   projectStudioSemanticOutline,
   projectStudioFlowPresentationMoves,
-  projectStudioFlowPresentationRemoval,
+  projectStudioFlowInsertOptions,
   resolveStudioSelectionInspectorContext,
   studioSemanticSelectionKey,
   type StudioSemanticOutlineNode,
   type StudioStoredApplicationDraft,
   type StudioCompositionContext,
   type StudioFlowTextContext,
+  type StudioSemanticSelection,
+  type StudioFlowEditResult,
+  type StudioFlowInsertCommand,
+  type StudioFlowRemoveCommand,
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioApplication, reopenStudioApplication, saveStudioApplication,
@@ -405,6 +410,41 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
     localLifetime: workspaceLifetime, catalogue: platformBlockCatalogue, source: state.source,
   }), [organizationId, state.rootId, draft.key, state.draftRevision, workspaceLifetime,
     platformBlockCatalogue, state.source]);
+  // Canvas edits go through the same revision-checked local history as the text editor; the canvas re-projects from it.
+  const editFlowFromCanvas = <Command,>(
+    apply: (current: StudioFlowTextContext, expected: StudioFlowTextContext, selection: StudioSemanticSelection | null,
+      expectedSelection: Extract<StudioSemanticSelection, { kind: "flow" }>, command: Command) => StudioFlowEditResult,
+    done: string, expected: StudioFlowTextContext, expectedSelection: Extract<StudioSemanticSelection, { kind: "flow" }>,
+    command: Command): StudioFlowEditResult => {
+    const busy = (): boolean => !active.current || publicationPending.current || sourceImportPending.current || searchPending.current ||
+      reopening.current || history.getState().isSaving || conditionPending.current || labelsPending.current ||
+      appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current;
+    const refuse = (reason: string): StudioFlowEditResult => ({ kind: "stale", reason });
+    if (busy()) return refuse("Another change is being applied or is waiting for you. Apply or discard it, then retry.");
+    const current = history.getState();
+    const currentContext: StudioFlowTextContext = {
+      organizationId, rootId: current.rootId, key: draft.key,
+      draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+    };
+    const result = apply(currentContext, expected, selection.getSelection(), expectedSelection, command);
+    if (result.kind !== "applied") {
+      console.error(`[studio] flow canvas edit refused (${result.kind}): ${result.reason}`,
+        result.cause === undefined ? "" : describeFailure(result.cause));
+      return result;
+    }
+    const latest = history.getState();
+    const latestSelection = selection.getSelection();
+    if (busy() || latest.source !== current.source || latest.rootId !== current.rootId ||
+      latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
+      latestSelection?.kind !== "flow" || latestSelection.flowAlias !== expectedSelection.flowAlias)
+      return refuse("The draft changed while this edit was being checked. Retry.");
+    if (!history.edit(result.source)) {
+      console.error("[studio] flow canvas edit was not accepted by the draft history");
+      return { kind: "invalid", reason: "The draft history did not accept this change, so nothing was changed." };
+    }
+    setMessage(done);
+    return result;
+  };
   const inspector = resolveStudioSelectionInspectorContext({ rootId: state.rootId, source }, selected);
   const selectedPage = selected?.kind === "page"
     ? source.body.pages.find((page) => page.id === selected.pageAlias) : undefined;
@@ -906,7 +946,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
               return result;
             }} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
-          <ApplicationFlowCanvas context={compositionContext} selection={selected} />}
+          <ApplicationFlowCanvas context={compositionContext} selection={selected}
+            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
+            insertOptions={projectStudioFlowInsertOptions(compositionContext, selected)}
+            onInsert={(expected, expectedSelection, command: StudioFlowInsertCommand) =>
+              editFlowFromCanvas(applyStudioFlowInsertCommand, "Task added to local history. Save draft to persist it.", expected, expectedSelection, command)}
+            onRemove={(expected, expectedSelection, command: StudioFlowRemoveCommand) =>
+              editFlowFromCanvas(applyStudioFlowRemoveCommand, "Task removed from local history. Save draft to persist it.", expected, expectedSelection, command)} />}
         {selected?.kind === "flow" && inspector.status === "resolved" &&
           <ApplicationFlowEditor key={flowEpoch} context={compositionContext} selection={selected}
             disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}
@@ -1002,32 +1048,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
               if (!stillAdjacent) return "stale";
               if (!history.edit(result.source)) return "invalid";
               setMessage("Presentation task order applied to local history. Save to persist it.");
-              return "applied";
-            }} onRemove={(expected, expectedSelection, command, isCurrentTarget) => {
-              const current = history.getState();
-              const currentSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current ||
-                flowAppendPending.current || !isCurrentTarget()) return "stale";
-              const currentContext: StudioFlowTextContext = {
-                organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
-              };
-              const result = applyStudioFlowPresentationRemovalCommand(currentContext, expected,
-                currentSelection, expectedSelection, command);
-              if (result.kind !== "applied") return result.kind;
-              const latest = history.getState();
-              const latestSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current ||
-                flowAppendPending.current || !isCurrentTarget() || latest.source !== current.source ||
-                latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
-                lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
-                latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
-              if (!projectStudioFlowPresentationRemoval(currentContext, expectedSelection,
-                command.taskId, command.taskPath)) return "stale";
-              if (!history.edit(result.source)) return "invalid";
-              setMessage("Show message task removed from local history. Save to persist it.");
               return "applied";
             }} />}
         <p className="text-sm">The outline and inspector select the same authored alias. Other definition content is retained without alteration.</p>

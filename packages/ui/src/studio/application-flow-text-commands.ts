@@ -8,6 +8,7 @@ import {
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowTaskRegistry,
+  validateFlowTaskPlacement,
   organizationIdSchema,
   parseFlowReference,
   sourceFlowTaskSchema,
@@ -15,6 +16,8 @@ import {
   type ApplicationSourceDocument,
   type FlowFormula,
   type FlowRoundingMode,
+  type FlowTaskPropertyType,
+  type FlowTaskTypeDefinition,
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/platform/schema";
@@ -82,12 +85,6 @@ export type StudioFlowPresentationMoveOption = Readonly<{
 }>;
 export type StudioFlowPresentationMoveCommand = StudioFlowPresentationMoveOption &
   Readonly<{ kind: "move_presentation" }>;
-
-export type StudioFlowPresentationRemovalCommand = Readonly<{
-  kind: "remove_presentation";
-  taskId: string;
-  taskPath: readonly (string | number)[];
-}>;
 
 export type StudioFlowCalculateOperand =
   | Readonly<{ kind: "literal"; literal:
@@ -595,22 +592,6 @@ export const applyStudioFlowPresentationMoveCommand = (
   } catch { return { kind: "invalid" }; }
 };
 
-const removableMessageTask = (task: SourceFlowTask): boolean => {
-  if (task.type !== "interface.show_message" || !("version" in task) ||
-    !("properties" in task) || task.version !== "1.0.0" ||
-    Object.keys(task).some((key) => !["id", "type", "version", "properties", "description"].includes(key)))
-    return false;
-  const definition = Object.values(flowTaskRegistry).find((entry) => entry.type === task.type);
-  if (definition === undefined || definition.version !== task.version ||
-    definition.effect !== "interface" || !definition.runLocations.includes("browser") ||
-    definition.outputs.length !== 0 || definition.properties.message?.type !== "message_text" ||
-    !definition.properties.message.required || Object.keys(task.properties).length !== 1 ||
-    !Object.hasOwn(task.properties, "message")) return false;
-  const message = task.properties.message;
-  return message?.kind === "literal" && message.literal.type === "text" &&
-    validPresentationText(message.literal.value);
-};
-
 /** Refuse retained references; never turn deletion into an implicit reference repair. */
 const hasRetainedTaskReference = (source: Readonly<ApplicationSourceDocument>, taskId: string): boolean => {
   // The whole source has already passed its shared node, depth and cycle bounds in outline.
@@ -634,57 +615,182 @@ const hasRetainedTaskReference = (source: Readonly<ApplicationSourceDocument>, t
   return false;
 };
 
-const presentationRemoval = (context: StudioFlowTextContext, selection: FlowSelection,
-  taskId: string, taskPath: readonly (string | number)[]): boolean => {
-  const { flow } = outline(context, selection);
-  const index = directTaskIndex(taskPath);
-  if (flow.execution !== "interactive" || flow.runAs.kind !== "initiator" ||
-    flow.tasks.length <= 1 || index === undefined) return false;
-  const task = flow.tasks[index];
-  return task !== undefined && task.id === taskId && removableMessageTask(task) &&
-    !hasRetainedTaskReference(context.source, taskId);
+/** An edit the canvas asked for and the draft refused, with the reason the person can act on. */
+export type StudioFlowEditResult =
+  | Readonly<{ kind: "applied"; source: ApplicationSourceDocument; taskId: string }>
+  | Readonly<{ kind: "stale" | "unsupported" | "invalid"; reason: string; cause?: unknown }>;
+
+export type StudioFlowInsertOption = Readonly<{ type: string; title: string; summary: string }>;
+export type StudioFlowInsertCommand = Readonly<{
+  kind: "insert_task";
+  taskType: string;
+  /** The task list that receives the task, as listed by `projectStudioFlowTextEditor`. */
+  listPath: readonly (string | number)[];
+  /** Position inside that list: 0 puts the task first, the list length puts it last. */
+  index: number;
+}>;
+export type StudioFlowRemoveCommand = Readonly<{
+  kind: "remove_task";
+  taskId: string;
+  taskPath: readonly (string | number)[];
+}>;
+
+type SeededTask = Extract<SourceFlowTask, { properties: unknown }>;
+
+const staleEdit = (reason = "The draft or the selected task changed. Select the task again and retry."):
+  StudioFlowEditResult => ({ kind: "stale", reason });
+
+const sameContext = (current: StudioFlowTextContext, expected: StudioFlowTextContext,
+  selection: StudioSemanticSelection | null, expectedSelection: FlowSelection): boolean =>
+  current.organizationId === expected.organizationId && current.rootId === expected.rootId &&
+  current.key === expected.key && current.draftRevision === expected.draftRevision &&
+  current.localLifetime === expected.localLifetime && current.source === expected.source &&
+  selection?.kind === "flow" && selection.flowAlias === expectedSelection.flowAlias;
+
+/** The minimal valid literal for a required property type that has one; other required types cannot be seeded. */
+const insertSeeds: Readonly<Partial<Record<FlowTaskPropertyType, SeededTask["properties"][string]>>> = {
+  message_text: { kind: "literal", literal: { type: "text", value: "Edit this message" } },
 };
 
-/** Only one direct, unreferenced literal Show message can be removed through this inspector. */
-export const projectStudioFlowPresentationRemoval = (
+const seededTask = (definition: FlowTaskTypeDefinition, id: string): SeededTask | undefined => {
+  const properties: SeededTask["properties"] = {};
+  for (const [key, declaration] of Object.entries(definition.properties)) {
+    if (!declaration.required) continue;
+    const seed = insertSeeds[declaration.type];
+    if (seed === undefined) return undefined;
+    properties[key] = structuredClone(seed);
+  }
+  return { id, type: definition.type, version: definition.version, properties };
+};
+
+/** The registry's own placement rule, applied to a flow of this execution kind holding these tasks. */
+const placementIssues = (flow: SourceFlow, tasks: readonly SourceFlowTask[]): string[] =>
+  validateFlowTaskPlacement({ ...flow, tasks: [...tasks] } as never).map((issue) => issue.message);
+
+/** Registered task types the flow's execution kind accepts and that can start from registry seeds alone. */
+const insertOptions = (flow: SourceFlow): readonly StudioFlowInsertOption[] =>
+  Object.values(flowTaskRegistry).flatMap((definition): StudioFlowInsertOption[] => {
+    if (definition.category !== "registered") return [];
+    const task = seededTask(definition, "probe");
+    if (task === undefined || !sourceFlowTaskSchema.safeParse(task).success ||
+      placementIssues({ ...flow, errors: [], finally: [] }, [task]).length > 0) return [];
+    return [{ type: definition.type, title: definition.title, summary: definition.summary }];
+  });
+
+/** The task types this flow's execution kind allows, read from the registry and its placement rule. */
+export const projectStudioFlowInsertOptions = (
   context: StudioFlowTextContext,
   selection: FlowSelection,
-  taskId: string,
-  taskPath: readonly (string | number)[],
-): boolean => {
-  try { return presentationRemoval(context, selection, taskId, taskPath); }
-  catch { return false; }
+): readonly StudioFlowInsertOption[] => {
+  try {
+    const current = outline(context, selection);
+    return current.entries.length < flowMaximumTaskCount ? insertOptions(current.flow) : [];
+  } catch { return []; }
 };
 
-export const applyStudioFlowPresentationRemovalCommand = (
+const uniqueTaskId = (type: string, used: ReadonlySet<string>): string => {
+  const base = (type.split(".").pop() ?? type).replace(/[^a-z0-9_]/g, "_");
+  let candidate = base;
+  for (let n = 2; used.has(candidate); n += 1) candidate = `${base}_${n}`;
+  return candidate;
+};
+
+const listAt = (flow: SourceFlow, path: readonly (string | number)[]): SourceFlowTask[] | undefined => {
+  let cursor: unknown = flow;
+  for (const part of path) {
+    if (typeof cursor !== "object" || cursor === null) return undefined;
+    cursor = (cursor as Record<string | number, unknown>)[part];
+  }
+  return Array.isArray(cursor) ? cursor as SourceFlowTask[] : undefined;
+};
+
+/** Rechecks the edited source with the shared limits, the registry placement rule and the source schema. */
+const validatedEdit = (candidate: ApplicationSourceDocument, selection: FlowSelection, taskId: string,
+  context: StudioFlowTextContext): StudioFlowEditResult => {
+  let flow: SourceFlow;
+  try { flow = outline({ ...context, source: candidate }, selection).flow; }
+  catch (cause) {
+    return { kind: "invalid", cause,
+      reason: "This change would break the flow's limits: task count, nesting depth or unique task ids." };
+  }
+  const placement = placementIssues(flow, flow.tasks);
+  if (placement.length > 0) return { kind: "invalid", reason: placement[0]!, cause: placement };
+  const parsed = applicationSourceDocumentSchema.safeParse(candidate);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    return { kind: "invalid", cause: parsed.error,
+      reason: first === undefined ? "The draft is not valid after this change."
+        : `${first.message}${first.path.length === 0 ? "" : ` (${first.path.map(String).join(" > ")})`}` };
+  }
+  return { kind: "applied", source: candidate, taskId };
+};
+
+/** Inserts one registry-seeded task at a position of an authored task list. */
+export const applyStudioFlowInsertCommand = (
   current: StudioFlowTextContext,
   expected: StudioFlowTextContext,
   selection: StudioSemanticSelection | null,
   expectedSelection: FlowSelection,
-  command: StudioFlowPresentationRemovalCommand,
-): StudioFlowTextResult => {
-  if (current.organizationId !== expected.organizationId || current.rootId !== expected.rootId ||
-    current.key !== expected.key || current.draftRevision !== expected.draftRevision ||
-    current.localLifetime !== expected.localLifetime || current.source !== expected.source ||
-    selection?.kind !== "flow" || selection.flowAlias !== expectedSelection.flowAlias)
-    return { kind: "stale" };
+  command: StudioFlowInsertCommand,
+): StudioFlowEditResult => {
+  if (!sameContext(current, expected, selection, expectedSelection)) return staleEdit();
   try {
-    if (command.kind !== "remove_presentation" ||
-      Object.keys(command).some((key) => !["kind", "taskId", "taskPath"].includes(key)) ||
-      !builderKeySchema.safeParse(command.taskId).success) return { kind: "invalid" };
+    if (command.kind !== "insert_task") return { kind: "invalid", reason: "This is not an insert command." };
     const original = outline(current, expectedSelection);
-    const index = directTaskIndex(command.taskPath);
-    if (index === undefined) return { kind: "unsupported" };
-    const task = original.flow.tasks[index];
-    if (task === undefined || task.id !== command.taskId) return { kind: "stale" };
-    if (!presentationRemoval(current, expectedSelection, command.taskId, command.taskPath))
-      return { kind: "unsupported" };
+    const target = listAt(original.flow, command.listPath);
+    if (target === undefined || !Number.isInteger(command.index) || command.index < 0 || command.index > target.length)
+      return staleEdit("That position in the task list changed. Select a task again and retry.");
+    if (original.entries.length >= flowMaximumTaskCount)
+      return { kind: "invalid", reason: `A flow can hold at most ${flowMaximumTaskCount} tasks including nested tasks.` };
+    const option = insertOptions(original.flow).find((entry) => entry.type === command.taskType);
+    const definition = option === undefined ? undefined
+      : Object.values(flowTaskRegistry).find((entry) => entry.type === option.type);
+    if (definition === undefined)
+      return { kind: "unsupported", reason: "This flow's execution kind does not accept that task type, or it needs settings that cannot start from defaults." };
+    const task = seededTask(definition, uniqueTaskId(definition.type, new Set(original.entries.map((entry) => entry.task.id))));
+    if (task === undefined) return { kind: "unsupported", reason: "This task type needs settings that cannot start from defaults." };
     const candidate: ApplicationSourceDocument = structuredClone(current.source);
     const detached = outline({ ...current, source: candidate }, expectedSelection);
-    if (detached.flow.tasks[index]?.id !== command.taskId) return { kind: "stale" };
-    detached.flow.tasks.splice(index, 1);
-    outline({ ...current, source: candidate }, expectedSelection);
-    if (!applicationSourceDocumentSchema.safeParse(candidate).success) return { kind: "invalid" };
-    return { kind: "applied", source: candidate };
-  } catch { return { kind: "invalid" }; }
+    listAt(detached.flow, command.listPath)?.splice(command.index, 0, task);
+    return validatedEdit(candidate, expectedSelection, task.id, current);
+  } catch (cause) {
+    return { kind: "invalid", cause, reason: "The draft could not be read to insert this task." };
+  }
+};
+
+/** Removes one task and every task nested under it, unless another part of the draft refers to one of them. */
+export const applyStudioFlowRemoveCommand = (
+  current: StudioFlowTextContext,
+  expected: StudioFlowTextContext,
+  selection: StudioSemanticSelection | null,
+  expectedSelection: FlowSelection,
+  command: StudioFlowRemoveCommand,
+): StudioFlowEditResult => {
+  if (!sameContext(current, expected, selection, expectedSelection)) return staleEdit();
+  try {
+    if (command.kind !== "remove_task" || !builderKeySchema.safeParse(command.taskId).success)
+      return { kind: "invalid", reason: "This is not a valid remove command." };
+    const original = outline(current, expectedSelection);
+    const entry = original.entries.find(({ task, path }) => task.id === command.taskId && samePath(path, command.taskPath));
+    const index = command.taskPath[command.taskPath.length - 1];
+    if (entry === undefined || typeof index !== "number") return staleEdit("That task no longer exists in the draft.");
+    const parentPath = command.taskPath.slice(0, -1);
+    const removed = original.entries
+      .filter(({ path }) => path.length >= command.taskPath.length && samePath(path.slice(0, command.taskPath.length), command.taskPath))
+      .map(({ task }) => task.id);
+    if (listAt(original.flow, parentPath)?.length === 1 && parentPath[0] !== "errors" && parentPath[0] !== "finally")
+      return { kind: "unsupported", reason: parentPath.length === 1
+        ? "A flow must keep at least one task."
+        : "A branch must keep at least one task; remove the task that owns the branch instead." };
+    const candidate: ApplicationSourceDocument = structuredClone(current.source);
+    const list = listAt(outline({ ...current, source: candidate }, expectedSelection).flow, parentPath);
+    if (list?.[index]?.id !== command.taskId) return staleEdit();
+    list.splice(index, 1);
+    const referenced = removed.find((id) => hasRetainedTaskReference(candidate, id));
+    if (referenced !== undefined)
+      return { kind: "unsupported", reason: `Another part of the draft still refers to task ${referenced}. Remove or change that reference first.` };
+    return validatedEdit(candidate, expectedSelection, command.taskId, current);
+  } catch (cause) {
+    return { kind: "invalid", cause, reason: "The draft could not be read to remove this task." };
+  }
 };
