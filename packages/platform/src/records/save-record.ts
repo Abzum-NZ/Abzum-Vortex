@@ -222,11 +222,18 @@ const correctionsFor = (
     path: readonly (string | number)[];
   }>[],
   readableFieldIds: ReadonlySet<string>,
+  submittedFieldIds: ReadonlySet<string>,
 ): readonly RecordSaveFieldCorrection[] | undefined => {
   const corrections = new Map<string, RecordSaveFieldCorrection>();
   for (const issue of issues) {
-    if (issue.fieldId === undefined || !readableFieldIds.has(issue.fieldId)) return undefined;
+    if (issue.fieldId === undefined) return undefined;
     const code = correctionCode(issue.code);
+    // A create has no readable bounds before the row exists. The caller already sees every field
+    // they submitted, so naming a missing required value for one of those discloses nothing new.
+    const visible =
+      readableFieldIds.has(issue.fieldId) ||
+      (code === "required_value" && submittedFieldIds.has(issue.fieldId));
+    if (!visible) return undefined;
     const nested = issue.path.slice(2);
     const correction: RecordSaveFieldCorrection = {
       code,
@@ -712,15 +719,22 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                     path: issue.path,
                   })),
                 prepared.readableFieldIds,
+                command.data.operation === "create"
+                  ? new Set(Object.keys(command.data.submittedValues))
+                  : new Set(),
               );
-              return corrections === undefined || corrections.length === 0
-                ? safeRefusal(prepared.correlationId, "operation_refused")
-                : saveRecordResultSchema.parse({
-                    contractVersion: "2.0.0",
-                    outcome: "correction_required",
-                    correlationId: prepared.correlationId,
-                    corrections,
-                  });
+              if (corrections === undefined || corrections.length === 0) {
+                console.error(
+                  `[record] save refused RECORD_SAVE_VALUES_INVALID: ${values.issues.map((issue) => issue.code).join(",")}`,
+                );
+                return safeRefusal(prepared.correlationId, "operation_refused");
+              }
+              return saveRecordResultSchema.parse({
+                contractVersion: "2.0.0",
+                outcome: "correction_required",
+                correlationId: prepared.correlationId,
+                corrections,
+              });
             }
 
             const unsupportedChecks = values.pendingChecks.filter(
