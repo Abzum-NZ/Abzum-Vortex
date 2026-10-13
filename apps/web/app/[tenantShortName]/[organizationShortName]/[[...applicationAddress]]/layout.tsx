@@ -17,6 +17,7 @@ async function CurrentInstallGuidance({ route }: { route: Awaited<Props["params"
     ? await loadApplicationInstallMetadata(candidate.data) : undefined;
   return metadata?.kind === "available" ? <ApplicationInstallGuidance
     applicationPath={metadata.manifest.id} manifestUrl={metadata.manifestUrl}
+    initialManifest={JSON.stringify(metadata.manifest)}
     snapshot={metadata.snapshot} validUntil={metadata.validUntil} /> : null;
 }
 

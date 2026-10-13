@@ -1,4 +1,5 @@
-import { Render } from "@puckeditor/core";
+// The render-only entry: the main entry would also bundle the whole editor for every page view.
+import { Render } from "@puckeditor/core/rsc";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import {
   resolveShadcnIconLibrary,

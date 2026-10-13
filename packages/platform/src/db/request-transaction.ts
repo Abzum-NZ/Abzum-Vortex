@@ -189,15 +189,45 @@ const createResolvedRequestTransactionRunner =
       );
     });
 
+/** A request's abort signal and deadline, applied to pooled-runner queries made under it. */
+export type PooledRequestLifetime = Readonly<{ signal: AbortSignal; deadline: number }>;
+
+const pooledLifetimeStorage = new AsyncLocalStorage<PooledRequestLifetime>();
+
+/**
+ * Runs `operation` so that every pooled-runner query it starts honours the request's signal and
+ * deadline: a query is refused once either has ended, and a query in flight when the request is
+ * aborted or the deadline passes is cancelled on the server. The cancelled statement fails, its
+ * transaction rolls back and the pooled connection is released, so a hung read never holds it.
+ */
+export const withPooledRequestLifetime = <Result>(
+  lifetime: PooledRequestLifetime,
+  operation: () => Promise<Result>,
+): Promise<Result> => pooledLifetimeStorage.run(lifetime, operation);
+
 const createTransactionDriver = (
   transaction: TransactionSql,
+  lifetime: PooledRequestLifetime | undefined,
 ): SavepointRequestDatabaseTransaction => ({
   query: async <ResultRow extends DatabaseRow>(
     strings: TemplateStringsArray,
     ...values: readonly DatabaseValue[]
   ) => {
-    const rows = await transaction<ResultRow[] & Row[]>(strings, ...values);
-    return rows;
+    if (lifetime === undefined) return await transaction<ResultRow[] & Row[]>(strings, ...values);
+    if (lifetime.signal.aborted || Date.now() >= lifetime.deadline)
+      throw requestDatabaseError("DATABASE_REQUEST_STOPPED");
+    const pending = transaction<ResultRow[] & Row[]>(strings, ...values);
+    const cancel = () => {
+      void Promise.resolve(pending.cancel()).catch(() => undefined);
+    };
+    lifetime.signal.addEventListener("abort", cancel, { once: true });
+    const timer = setTimeout(cancel, Math.max(0, lifetime.deadline - Date.now()));
+    try {
+      return await pending;
+    } finally {
+      clearTimeout(timer);
+      lifetime.signal.removeEventListener("abort", cancel);
+    }
   },
   // Use postgres.js' child TransactionSql so rejected queries poison only that child's scope;
   // the native promise settles (including rollback failures) before this method settles.
@@ -206,15 +236,21 @@ const createTransactionDriver = (
   ): Promise<Result> => {
     // Box the callback value so postgres.js does not reinterpret an array result as query work.
     const settled = await transaction.savepoint(async (childSql) => ({
-      value: await operation(createTransactionDriver(childSql)),
+      value: await operation(createTransactionDriver(childSql, lifetime)),
     }));
     return settled.value;
   },
 });
 
 const createPostgresDriver = (client: Sql): DatabaseDriver => ({
-  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) =>
-    (await client.begin(async (sql) => operation(createTransactionDriver(sql)))) as Result,
+  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
+    // Captured in the caller's context: postgres.js may enter the callback from another one.
+    const lifetime = pooledLifetimeStorage.getStore();
+    if (lifetime !== undefined && (lifetime.signal.aborted || Date.now() >= lifetime.deadline))
+      throw requestDatabaseError("DATABASE_REQUEST_STOPPED");
+    return (await client.begin(async (sql) =>
+      operation(createTransactionDriver(sql, lifetime)))) as Result;
+  },
 });
 
 const MAXIMUM_QUEUED_DATABASE_WORK = 64;

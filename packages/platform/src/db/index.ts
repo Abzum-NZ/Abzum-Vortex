@@ -12,6 +12,8 @@ export {
 export {
   withRuntimeTransaction,
   withResolvedRequestTransaction,
+  withPooledRequestLifetime,
+  type PooledRequestLifetime,
   type DatabaseRow,
   type DatabaseValue,
   type RequestDatabaseTransaction,

@@ -302,14 +302,16 @@ export const createStoredNavigationProjectionService = (
       !sameId(candidate.applicationRootId, applicationRootId)
     )
       return { kind: "unavailable" };
-    // Prove the person's current authority over this exact application scope before projecting,
-    // so an unauthorised caller gets the same answer whatever the release declares.
-    const verified = await requests.run(session, candidate, async () => undefined);
-    if (verified.kind !== "available") return verified;
+    // An unauthorised caller gets the same answer whatever the release declares. The projection
+    // below runs the same HUMAN request over this exact application scope, so it proves the
+    // person's current authority itself; only a release that cannot be projected proves that
+    // authority first, on its own.
     let fixed: FixedAuthenticatedNavigationProjection;
     try {
       fixed = load();
     } catch {
+      const verified = await requests.run(session, candidate, async () => undefined);
+      if (verified.kind !== "available") return verified;
       return { kind: "temporarily_unavailable" };
     }
     const stored = fixed;

@@ -13,8 +13,8 @@ import {
   createHumanInstalledRuntimeContextLoader,
   type ApplicationInstallAddress, type ApplicationInstallManifest, type InstalledRuntimeContext,
 } from "@web/platform-server";
-import { withRequestDatabaseLifetime, type DatabaseRow, type RequestDatabaseLifetime,
-  type RequestDatabaseTransaction } from "@web/platform-server";
+import type { DatabaseRow, RequestDatabaseTransaction } from "@web/platform-server";
+import { withPooledRequestLifetime } from "@web/platform-server";
 import { createDatabaseApplicationBoundReleaseSetService } from "@web/platform-server";
 import { createActiveApplicationInstallationRepository } from "@web/platform-server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
@@ -33,9 +33,6 @@ type ApplicationInstallResult =
 class InstallRefused extends Error {}
 const refused = (): never => { throw new InstallRefused(); };
 const digest = (value: unknown): string => `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
-const sessionFacts = (session: IdentitySession) => [session.identityId, session.sessionId,
-  session.authenticationStrength, session.accessTokenIssuedAt, session.accessTokenExpiresAt,
-  session.primaryAuthenticatedAt ?? null, session.multiFactorAuthenticatedAt ?? null];
 
 const releaseFacts = (context: InstalledRuntimeContext) => ({
   organizationId: context.organizationId, applicationRootId: context.applicationRootId,
@@ -112,10 +109,14 @@ const readHuman = async (transaction: RequestDatabaseTransaction, scope: Selecte
   return context;
 };
 
-type ReleaseCache = { value?: { revision: number; releaseSet: InstalledRuntimeContext["releaseSet"] } };
+/**
+ * The request's own abort signal and deadline: checked between every step of the one read, and
+ * applied to its database work, which is cancelled (releasing the pooled connection) on either.
+ */
+type InstallReadLifetime = Readonly<{ signal: AbortSignal; deadline: number; checkpoint: () => void }>;
+class InstallReadEnded extends Error {}
 
-const readCurrent = async (address: ApplicationInstallAddress, lifetime: RequestDatabaseLifetime,
-  releaseCache: ReleaseCache) => {
+const readCurrent = async (address: ApplicationInstallAddress, lifetime: InstallReadLifetime) => {
   lifetime.checkpoint();
   const identity = await resolveIdentitySession();
   if (identity.kind !== "active") return { kind: identity.kind === "temporarily_unavailable"
@@ -129,7 +130,9 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
       resolved.read.organizationShortName !== address.organizationShortName) return refused();
   let explicitRefusal = false;
   const deny = (): never => { explicitRefusal = true; return refused(); };
-  const result = await humanOrganizationRequests().run(identity.session, {
+  // Identity and address reads are shared with the page of this render and keep their own
+  // lifetime; the install read below is bounded by this request's signal and deadline.
+  const result = await withPooledRequestLifetime(lifetime, () => humanOrganizationRequests().run(identity.session, {
     organizationId: resolved.read.organizationId, applicationRootId: resolved.application.applicationRootId,
   }, async (transaction, scope, issuedAt) => {
     try {
@@ -139,9 +142,7 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
       const releaseReader = createDatabaseApplicationBoundReleaseSetService(installedReleaseCatalogue, transaction);
       const load = () => createHumanInstalledRuntimeContextLoader({
         activeInstallationReader: installationReader,
-        releaseSetReader: { read: async (command) =>
-          releaseCache.value?.revision === command.applicationReleaseRevision
-            ? releaseCache.value.releaseSet : releaseReader.read(command) },
+        releaseSetReader: releaseReader,
         scope: { organizationId: resolved.read.organizationId,
           applicationRootId: resolved.application.applicationRootId },
       }).load().catch((error: unknown) => {
@@ -151,7 +152,6 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
         throw error;
       });
       const initial = await load();
-      releaseCache.value = { revision: initial.applicationReleaseRevision, releaseSet: initial.releaseSet };
       const initialRelease = digest(releaseFacts(initial));
       const installationFacts = JSON.stringify(initial.installation);
       const installationStillCurrent = async () =>
@@ -178,10 +178,7 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
                 Date.parse(completed.data) >= expiry) return deny();
             lifetime.checkpoint();
             return { manifest, snapshot: initialRelease, applicationReleaseRevision: initial.applicationReleaseRevision,
-              validUntil: new Date(expiry).toISOString(),
-              facts: digest([sessionFacts(identity.session), scope.tenantId, scope.organizationId,
-                scope.organizationAccountId, scope.applicationRootId, scope.accessVersion,
-                resolved.application.homePageKey, initialRelease]) };
+              validUntil: new Date(expiry).toISOString() };
           });
         if (completion.outcome !== "completed") return deny();
         return completion.value;
@@ -192,7 +189,7 @@ const readCurrent = async (address: ApplicationInstallAddress, lifetime: Request
       if (error instanceof InstallRefused) explicitRefusal = true;
       throw error;
     }
-  });
+  }));
   lifetime.checkpoint();
   if (result.kind !== "available") return { kind: explicitRefusal || result.kind === "unavailable"
     ? "unavailable" as const : "temporarily_unavailable" as const };
@@ -205,25 +202,25 @@ export const loadApplicationInstallMetadata = async (
   const address = applicationInstallAddressSchema.safeParse(candidate);
   const expected = expectedCandidate === undefined ? undefined : expectationSchema.safeParse(expectedCandidate);
   if (!address.success || (expected !== undefined && !expected.success)) return { kind: "unavailable" };
+  // One read on the pooled request runner. Every access decision is still made inside it (and
+  // re-evaluated after the manifest is derived); the request's signal and deadline end it early,
+  // cancelling any statement still in flight so its pooled connection is released.
+  const deadline = Date.now() + 15_000;
+  const lifetime: InstallReadLifetime = { signal, deadline, checkpoint: () => {
+    if (signal.aborted || Date.now() >= deadline) throw new InstallReadEnded();
+  } };
   try {
-    return await withRequestDatabaseLifetime({ signal, deadline: Date.now() + 15_000 }, async (lifetime) => {
-      const releaseCache: ReleaseCache = {};
-      const initial = await readCurrent(address.data, lifetime, releaseCache);
-      if (initial.kind !== "available") return initial;
-      if (expected?.success && (expected.data.snapshot !== initial.snapshot ||
-          expected.data.applicationReleaseRevision !== initial.applicationReleaseRevision)) return { kind: "unavailable" };
-      const final = await readCurrent(address.data, lifetime, releaseCache);
-      if (final.kind !== "available") return final;
-      if (final.facts !== initial.facts || final.snapshot !== initial.snapshot) return { kind: "unavailable" };
-      const validUntil = new Date(Math.min(Date.parse(initial.validUntil), Date.parse(final.validUntil))).toISOString();
-      if (Date.now() >= Date.parse(validUntil)) return { kind: "unavailable" };
-      const query = new URLSearchParams({ ...address.data,
-        applicationReleaseRevision: String(final.applicationReleaseRevision), snapshot: final.snapshot });
-      lifetime.checkpoint();
-      return { kind: "available", manifest: final.manifest, snapshot: final.snapshot,
-        applicationReleaseRevision: final.applicationReleaseRevision, validUntil,
-        manifestUrl: `/api/application-install/manifest?${query.toString()}` };
-    });
+    const current = await readCurrent(address.data, lifetime);
+    if (current.kind !== "available") return current;
+    if (expected?.success && (expected.data.snapshot !== current.snapshot ||
+        expected.data.applicationReleaseRevision !== current.applicationReleaseRevision)) return { kind: "unavailable" };
+    if (Date.now() >= Date.parse(current.validUntil)) return { kind: "unavailable" };
+    const query = new URLSearchParams({ ...address.data,
+      applicationReleaseRevision: String(current.applicationReleaseRevision), snapshot: current.snapshot });
+    lifetime.checkpoint();
+    return { kind: "available", manifest: current.manifest, snapshot: current.snapshot,
+      applicationReleaseRevision: current.applicationReleaseRevision, validUntil: current.validUntil,
+      manifestUrl: `/api/application-install/manifest?${query.toString()}` };
   } catch (error) {
     return { kind: error instanceof InstallRefused ? "unavailable" : "temporarily_unavailable" };
   }

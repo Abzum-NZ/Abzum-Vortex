@@ -14,6 +14,7 @@ import {
 } from "@web/platform-server";
 import { isAuthRefreshDiscardedError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
+import { cache } from "react";
 import {
   identitySessionCookieDeletions,
   type SessionCookie,
@@ -204,14 +205,21 @@ const resolveRequestIdentity = async (
   return { resolution, accessToken, email: verifiedPrimaryEmail };
 };
 
+/**
+ * The ordinary resolution, made once per server render: the layout, the page and their loaders in
+ * one request share it instead of verifying the same session again. A call that carries its own
+ * execution deadline (private invalidation) still resolves on its own.
+ */
+const resolveRenderIdentity = cache(() => resolveRequestIdentity());
+
 export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> =>
-  (await resolveRequestIdentity()).resolution;
+  (await resolveRenderIdentity()).resolution;
 
 /** The ordinary resolution plus the signed-in person's email, for pages that show who is signed in. */
 export const resolveIdentitySessionWithEmail = async (): Promise<
   Readonly<{ resolution: IdentitySessionResolution; email?: string }>
 > => {
-  const { resolution, email } = await resolveRequestIdentity();
+  const { resolution, email } = await resolveRenderIdentity();
   return email === undefined ? { resolution } : { resolution, email };
 };
 

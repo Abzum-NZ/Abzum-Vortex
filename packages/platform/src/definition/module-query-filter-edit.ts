@@ -31,16 +31,15 @@ import {
   type SelectedOrganizationScope,
 } from "../schema";
 import { z } from "zod";
+import { readLiveHumanContext, type LiveHumanContext } from "../access/live-context";
 import { encodeModuleQueryFilter } from "./module-query-filter-encoding";
 import {
   sameUuid,
   moduleTargetFacts,
-  readLiveContext,
   evaluateDraftPermission as evaluateModuleDraftPermission,
   snapshotFor,
   sameDraft,
   saveModuleDraftEdit,
-  type HumanContext,
   type ModuleDraftEditDependencies,
 } from "./module-draft-edit";
 
@@ -109,7 +108,7 @@ export const moduleQueryFilterEdits = (dependencies: ModuleDraftEditDependencies
     scope: SelectedOrganizationScope,
     session: IdentitySession,
     issuedAt: string,
-    context: HumanContext,
+    context: LiveHumanContext,
     draft: StoredModuleDefinitionDraft,
     originalValidUntil?: string,
   ) =>
@@ -246,7 +245,7 @@ export const moduleQueryFilterEdits = (dependencies: ModuleDraftEditDependencies
     request: z.infer<typeof loadRequestSchema>,
   ): Promise<StudioModuleQueryFilterResult> => {
     if (!sameUuid(scope.organizationId, organizationId)) return { kind: "refused" };
-    const liveContext = await readLiveContext(transaction, scope, session, issuedAt);
+    const liveContext = await readLiveHumanContext(transaction, { scope, session, issuedAt });
     const authority = createBuilderAuthority({
       transaction,
       scope,
@@ -381,12 +380,12 @@ export const moduleQueryFilterEdits = (dependencies: ModuleDraftEditDependencies
       source: StoredModuleDefinitionDraft["source"];
       sourceFingerprint: string;
       noChange: boolean;
-      liveContext: HumanContext;
+      liveContext: LiveHumanContext;
     }>
   > => {
     if (!sameUuid(scope.organizationId, organizationId))
       throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-    const liveContext = await readLiveContext(transaction, scope, session, issuedAt);
+    const liveContext = await readLiveHumanContext(transaction, { scope, session, issuedAt });
     const authority = createBuilderAuthority({
       transaction,
       scope,

@@ -736,15 +736,20 @@ export const createStoredPageCapabilityService = (
       !sameId(candidate.applicationRootId, applicationRootId)
     )
       return { kind: "unavailable" };
-    // Verify the session and application scope before projecting, so a caller without access
-    // gets the same answer whether or not the page exists. The context read is already done by
-    // App; the human request only proves the person's current authority over this scope.
-    const verified = await requests.run(session, candidate, async () => undefined);
-    if (verified.kind !== "available") return verified;
+    // A caller without access gets the same answer whether or not the page exists. The load below
+    // only reads the already-loaded context, and the projection runs the same HUMAN request over
+    // this exact scope, so a found page proves the person's current authority there. Only a page
+    // that cannot be projected (missing or unloadable) proves that authority first, on its own.
+    const verifiedRefusal = async () => {
+      const verified = await requests.run(session, candidate, async () => undefined);
+      return verified.kind === "available" ? undefined : verified;
+    };
     let fixed: FixedAuthenticatedPageCapability | undefined;
     try {
       fixed = await load(selectedPageId);
     } catch (error) {
+      const refusal = await verifiedRefusal();
+      if (refusal !== undefined) return refusal;
       const failure =
         error instanceof StoredPageCapabilityFailure
           ? error
@@ -753,7 +758,7 @@ export const createStoredPageCapabilityService = (
       console.error(`[page] stored capability load failed: ${cause}`);
       return { kind: "temporarily_unavailable", cause };
     }
-    if (fixed === undefined) return { kind: "unavailable" };
+    if (fixed === undefined) return (await verifiedRefusal()) ?? { kind: "unavailable" };
     return projectStored(session, candidate, fixed);
   };
 

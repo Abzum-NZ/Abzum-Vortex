@@ -23,7 +23,6 @@ import {
   applyStudioFlowCalculateCommand,
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
-  ApplicationPagePuckEditor,
   projectStudioSemanticOutline,
   projectStudioFlowPresentationMoves,
   resolveStudioSelectionInspectorContext,
@@ -60,6 +59,10 @@ import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 // The canvas pulls in @xyflow/react; load it only when a flow is open.
 const ApplicationFlowCanvas = dynamic(
   () => import("./application-flow-canvas").then((module) => module.ApplicationFlowCanvas), { ssr: false });
+// The Puck editor is the heaviest Studio dependency; load it only when a page is selected.
+const ApplicationPagePuckEditor = dynamic(
+  () => import("@vortex/ui/studio/page-puck-editor").then((module) => module.ApplicationPagePuckEditor),
+  { ssr: false });
 
 type WorkspaceProps = Readonly<{
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
