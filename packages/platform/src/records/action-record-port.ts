@@ -637,7 +637,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
               return safeRefusal(
                 preview.correlationId,
                 "operation_refused",
-                "the relationship totals preparation refused the change",
+                `the relationship totals preparation refused the change (${totalPreparation.reasonCode ?? "no reason code"})`,
               );
 
             const prepared = await prepare(transaction, command.data, activityId, false);

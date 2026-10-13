@@ -69,6 +69,8 @@ export type RelationshipTotalPreparationOutcome =
   | Readonly<{
       outcome: "restart" | "conflict" | "refused" | "refused_recorded" | "defer" | "not_required";
       correlationId?: string;
+      /** The database's own reason for a refusal, kept so the refusal can be logged with its cause. */
+      reasonCode?: string;
     }>;
 
 type StoredResult =
@@ -290,6 +292,7 @@ export const parseRelationshipTotalPreparation = (
       outcome: value.outcome as
         "restart" | "conflict" | "refused" | "refused_recorded" | "defer" | "not_required",
       ...(typeof value.correlationId === "string" ? { correlationId: value.correlationId } : {}),
+      ...(typeof value.reasonCode === "string" ? { reasonCode: value.reasonCode } : {}),
     };
   if (
     value.outcome !== "prepared" ||
