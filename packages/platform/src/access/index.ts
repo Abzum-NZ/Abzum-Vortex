@@ -4,6 +4,8 @@ export {
   createHumanApplicationDraftWriter,
   type HumanApplicationDraftWriterDependencies,
   type HumanApplicationDraftWriteResult,
+  type HumanApplicationDraftRefusalReason,
+  type HumanApplicationDraftConflictReason,
 } from "./definition-draft-write";
 
 export {

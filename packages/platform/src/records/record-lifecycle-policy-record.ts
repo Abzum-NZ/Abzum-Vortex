@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  describeFailure,
   sameId,
   activityIdSchema,
   applicationRootIdSchema,
@@ -864,7 +865,10 @@ export const createRecordTypeLifecyclePolicyService = (
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<ProvisionedLifecyclePolicySetupSnapshot>> => {
       const command = parseReadProvisionedLifecyclePolicySetupCommand(commandCandidate);
-      if (command === undefined) return { kind: "unavailable" };
+      if (command === undefined) {
+        console.error("[records] lifecycle policy setup read refused LIFECYCLE_POLICY_SETUP_READ_COMMAND_INVALID");
+        return { kind: "unavailable" };
+      }
       const selection: OrganizationSelectionCandidate = {
         organizationId: command.organizationId,
         applicationRootId: command.applicationRootId,
@@ -919,8 +923,12 @@ export const createRecordTypeLifecyclePolicyService = (
             installResult.outcome !== "completed" ||
             installScopeResult.outcome !== "completed" ||
             accessResult.outcome !== "completed"
-          )
+          ) {
+            console.error(
+              `[records] lifecycle policy setup read refused LIFECYCLE_POLICY_SETUP_ACCESS_NOT_COMPLETED: install=${installResult.outcome} installScope=${installScopeResult.outcome} read=${accessResult.outcome}`,
+            );
             return { kind: "unavailable" } as const;
+          }
           const completionRows = await transaction.query<ProvisionedSetupCompletionRow>`
             select vortex_access.validated_human_request_context() as request_context,
               pg_catalog.clock_timestamp() as completed_at
@@ -944,9 +952,9 @@ export const createRecordTypeLifecyclePolicyService = (
       );
 
       if (requestResult.kind !== "available") return requestResult;
-      return requestResult.value.kind === "snapshot"
-        ? { kind: "available", value: requestResult.value.value }
-        : { kind: "unavailable" };
+      if (requestResult.value.kind === "snapshot")
+        return { kind: "available", value: requestResult.value.value };
+      return { kind: "unavailable" };
     },
 
     save: async (
@@ -954,11 +962,17 @@ export const createRecordTypeLifecyclePolicyService = (
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<RecordTypeLifecyclePolicy>> => {
       const command = parseSaveRecordTypeLifecyclePolicyCommand(commandCandidate);
-      if (command === undefined) return { kind: "unavailable" };
+      if (command === undefined) {
+        console.error("[records] lifecycle policy save refused LIFECYCLE_POLICY_SAVE_COMMAND_INVALID");
+        return { kind: "unavailable" };
+      }
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(
+          `[records] lifecycle policy save failed LIFECYCLE_POLICY_ACTIVITY_ID_GENERATION_FAILED: ${describeFailure(error)}`,
+        );
         return { kind: "temporarily_unavailable" };
       }
 
@@ -1018,11 +1032,19 @@ export const createRecordTypeLifecyclePolicyService = (
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<RecordTypeLifecyclePolicy>> => {
       const command = parseSaveInitialPolicyForProvisionedSetupCommand(commandCandidate);
-      if (command === undefined) return { kind: "unavailable" };
+      if (command === undefined) {
+        console.error(
+          "[records] initial lifecycle policy save refused LIFECYCLE_POLICY_INITIAL_SAVE_COMMAND_INVALID",
+        );
+        return { kind: "unavailable" };
+      }
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(
+          `[records] initial lifecycle policy save failed LIFECYCLE_POLICY_INITIAL_ACTIVITY_ID_GENERATION_FAILED: ${describeFailure(error)}`,
+        );
         return { kind: "temporarily_unavailable" };
       }
 

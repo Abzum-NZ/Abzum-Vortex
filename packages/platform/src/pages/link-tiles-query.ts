@@ -108,6 +108,10 @@ const projectionError = (stage: string, cause: unknown): typeof ERROR => {
   );
   return ERROR;
 };
+const refusedBecause = (code: string): typeof REFUSED => {
+  console.error(`[page] link tile query refused LINK_TILES_${code}`);
+  return REFUSED;
+};
 const maximumPages = 50;
 const maximumRows = 10_000;
 
@@ -135,7 +139,10 @@ export const buildLinkTilesQueryBinding = (
   let context: InstalledRuntimeContext;
   try {
     context = requireInstalledRuntimeContext(candidateContext);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[page] link tile binding refused LINK_TILES_CONTEXT_NOT_INSTALLED: ${describeFailure(error)}`,
+    );
     return undefined;
   }
   if (validateComponentSettings(settings, LINK_TILES_BLOCK_RELEASE.properties).length !== 0)
@@ -259,11 +266,14 @@ export const createLinkTilesQueryResolver = (
         releaseVersion,
         readApplicationPageLink,
       );
-    if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion) return REFUSED;
+    if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion) return refusedBecause("RELEASE_NOT_SUPPORTED");
     let context: InstalledRuntimeContext;
     try {
       context = requireInstalledRuntimeContext(candidateContext);
-    } catch {
+    } catch (error) {
+      console.error(
+        `[page] link tile query refused LINK_TILES_CONTEXT_NOT_INSTALLED: ${describeFailure(error)}`,
+      );
       return REFUSED;
     }
     try {
@@ -272,9 +282,9 @@ export const createLinkTilesQueryResolver = (
         selection.applicationRootId === undefined ||
         !sameId(selection.applicationRootId, context.applicationRootId)
       )
-        return REFUSED;
+        return refusedBecause("SELECTION_NOT_CURRENT_APPLICATION");
       const binding = buildLinkTilesQueryBinding(context, queryId, settings, inputValues);
-      if (binding === undefined) return REFUSED;
+      if (binding === undefined) return refusedBecause("BINDING_NOT_RESOLVED");
       const requested = new Set(binding.command.requestedFieldIds.map((id) => id.toLowerCase()));
       const records = new Set<string>();
       const cursors = new Set<string>();
@@ -284,9 +294,9 @@ export const createLinkTilesQueryResolver = (
       for (let pageIndex = 0; pageIndex < maximumPages; pageIndex += 1) {
         const result = await runner.run(session, selection, command);
         if (result.kind === "temporarily_unavailable") return ERROR;
-        if (result.kind !== "available") return REFUSED;
+        if (result.kind !== "available") return refusedBecause("QUERY_NOT_AVAILABLE");
         const parsed = protectedQueryPageSchema.safeParse(result.value);
-        if (!parsed.success) return REFUSED;
+        if (!parsed.success) return refusedBecause("PAGE_SHAPE_INVALID");
         const page = parsed.data;
         rowCount += page.rows.length;
         if (
@@ -296,7 +306,7 @@ export const createLinkTilesQueryResolver = (
           page.rows.length > binding.command.pageSize ||
           rowCount > maximumRows
         )
-          return REFUSED;
+          return refusedBecause("PAGE_SIZE_EXCEEDED");
         for (const row of page.rows) {
           const recordId = row.recordId.toLowerCase();
           const keys = Object.keys(row.values);
@@ -306,7 +316,7 @@ export const createLinkTilesQueryResolver = (
             new Set(keys.map((id) => id.toLowerCase())).size !== keys.length ||
             Object.keys(row.systemValues ?? {}).length !== 0
           )
-            return REFUSED;
+            return refusedBecause("ROW_KEYS_INVALID");
           records.add(recordId);
           const value = (id: string | undefined): JsonValue | undefined =>
             id === undefined
@@ -316,14 +326,14 @@ export const createLinkTilesQueryResolver = (
           // Withheld or null addresses expose neither a tile nor its record metadata.
           if (address === undefined || address === null) continue;
           const safeAddress = safeHttpsUrlSchema.safeParse(address);
-          if (!safeAddress.success) return REFUSED;
+          if (!safeAddress.success) return refusedBecause("ADDRESS_NOT_HTTPS");
           const label = value(binding.mapping.label.fieldId);
           const description = value(binding.mapping.description?.fieldId);
           if (
             (label !== undefined && label !== null && typeof label !== "string") ||
             (description !== undefined && description !== null && typeof description !== "string")
           )
-            return REFUSED;
+            return refusedBecause("LABEL_OR_DESCRIPTION_INVALID");
           const cells: Record<string, TextCell | LinkCell> = {
             [binding.mapping.address.key]: Object.freeze({
               kind: "link",
@@ -363,18 +373,18 @@ export const createLinkTilesQueryResolver = (
             }),
           });
         if (next.trim() === "" || cursors.has(next) || pageIndex + 1 === maximumPages)
-          return REFUSED;
+          return refusedBecause("CURSOR_REPEATED_OR_EXHAUSTED");
         cursors.add(next);
         const continuation = protectedQueryCommandSchema.safeParse({
           ...binding.command,
           continuationToken: next,
         });
-        if (!continuation.success) return REFUSED;
+        if (!continuation.success) return refusedBecause("CONTINUATION_INVALID");
         command = continuation.data;
       }
-      return REFUSED;
-    } catch {
-      return ERROR;
+      return refusedBecause("PAGES_EXHAUSTED");
+    } catch (error) {
+      return projectionError("link-tiles-query", error);
     }
   },
 });
@@ -390,7 +400,10 @@ function buildRecordPinBinding(
   let context: InstalledRuntimeContext;
   try {
     context = requireInstalledRuntimeContext(candidateContext);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[page] link tile binding refused LINK_TILES_CONTEXT_NOT_INSTALLED: ${describeFailure(error)}`,
+    );
     return undefined;
   }
   const appPage = releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion;
@@ -543,11 +556,11 @@ async function resolveRecordPins(
       selection.applicationRootId === undefined ||
       !sameId(selection.applicationRootId, context.applicationRootId)
     )
-      return REFUSED;
+      return refusedBecause("RECORD_PIN_SELECTION_NOT_CURRENT_APPLICATION");
     const appPage = releaseVersion === APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion;
     const binding = buildRecordPinBinding(context, queryId, settings, inputValues, releaseVersion);
     if (binding === undefined || binding.pinFields === undefined || readRecordLink === undefined)
-      return REFUSED;
+      return refusedBecause("RECORD_PIN_BINDING_NOT_RESOLVED");
     const requested = new Set(binding.command.requestedFieldIds.map((id) => id.toLowerCase()));
     const records = new Set<string>();
     const cursors = new Set<string>();
@@ -557,9 +570,9 @@ async function resolveRecordPins(
     for (let index = 0; index < maximumPages; index += 1) {
       const result = await runner.run(session, selection, command);
       if (result.kind === "temporarily_unavailable") return ERROR;
-      if (result.kind !== "available") return REFUSED;
+      if (result.kind !== "available") return refusedBecause("RECORD_PIN_QUERY_NOT_AVAILABLE");
       const parsed = protectedQueryPageSchema.safeParse(result.value);
-      if (!parsed.success) return REFUSED;
+      if (!parsed.success) return refusedBecause("RECORD_PIN_PAGE_SHAPE_INVALID");
       const page = parsed.data;
       if (
         !sameId(page.moduleRootId, command.moduleRootId) ||
@@ -568,7 +581,7 @@ async function resolveRecordPins(
         page.rows.length > command.pageSize ||
         sourceRows.length + page.rows.length > maximumRows
       )
-        return REFUSED;
+        return refusedBecause("RECORD_PIN_PAGE_SIZE_EXCEEDED");
       for (const row of page.rows) {
         const keys = Object.keys(row.values);
         if (
@@ -577,7 +590,7 @@ async function resolveRecordPins(
           new Set(keys.map((id) => id.toLowerCase())).size !== keys.length ||
           Object.keys(row.systemValues ?? {}).length !== 0
         )
-          return REFUSED;
+          return refusedBecause("RECORD_PIN_ROW_KEYS_INVALID");
         records.add(row.recordId.toLowerCase());
         sourceRows.push(row);
       }
@@ -586,16 +599,16 @@ async function resolveRecordPins(
         complete = true;
         break;
       }
-      if (next.trim() === "" || cursors.has(next) || index + 1 === maximumPages) return REFUSED;
+      if (next.trim() === "" || cursors.has(next) || index + 1 === maximumPages) return refusedBecause("RECORD_PIN_CURSOR_REPEATED_OR_EXHAUSTED");
       cursors.add(next);
       const continuation = protectedQueryCommandSchema.safeParse({
         ...binding.command,
         continuationToken: next,
       });
-      if (!continuation.success) return REFUSED;
+      if (!continuation.success) return refusedBecause("RECORD_PIN_CONTINUATION_INVALID");
       command = continuation.data;
     }
-    if (!complete) return REFUSED;
+    if (!complete) return refusedBecause("RECORD_PIN_INCOMPLETE");
     type TargetReadReference =
       | Readonly<{
           kind: "application_page";
