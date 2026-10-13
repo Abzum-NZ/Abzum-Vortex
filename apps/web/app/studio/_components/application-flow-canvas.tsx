@@ -204,7 +204,8 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
   const flow = useMemo(() => context.source.body.flows.find((entry) => entry.id === selection.flowAlias), [context, selection]);
   const graph = useMemo(() => projection.kind === "available" && flow !== undefined
     ? buildGraph(flow, projection.lists) : null, [projection, flow]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // A selection belongs to one flow and one task id, so it cannot leak across flow switches or edits.
+  const [selected, setSelected] = useState<Readonly<{ flowAlias: string; key: string; id: string }> | null>(null);
 
   useEffect(() => {
     if (projection.kind !== "available" || flow === undefined)
@@ -214,7 +215,10 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
   if (graph === null || projection.kind !== "available" || flow === undefined)
     return <p role="status">This Flow canvas is unavailable because the flow could not be read.</p>;
 
-  const selectedOutline = selectedKey === null ? undefined : findOutline(projection.lists, selectedKey);
+  const candidate = selected !== null && selected.flowAlias === selection.flowAlias
+    ? findOutline(projection.lists, selected.key) : undefined;
+  const selectedOutline = candidate !== undefined && candidate.id === selected?.id ? candidate : undefined;
+  const selectedKey = selectedOutline === undefined ? null : selected?.key ?? null;
   const themed = {
     "--xy-edge-stroke-default": "var(--border)",
     "--xy-edge-label-color-default": "var(--muted-foreground)",
@@ -231,8 +235,11 @@ export function ApplicationFlowCanvas({ context, selection }: Readonly<{
       <ReactFlow nodes={graph.nodes.map((node) => ({ ...node, selected: node.id === selectedKey }))} edges={graph.edges}
         nodeTypes={nodeTypes} fitView nodesDraggable={false} nodesConnectable={false} edgesFocusable={false}
         elementsSelectable proOptions={{ hideAttribution: true }}
-        onNodeClick={(_, node) => setSelectedKey(node.id.startsWith("[") ? node.id : null)}
-        onPaneClick={() => setSelectedKey(null)}>
+        onNodeClick={(_, node) => {
+          const outline = node.id.startsWith("[") ? findOutline(projection.lists, node.id) : undefined;
+          setSelected(outline === undefined ? null : { flowAlias: selection.flowAlias, key: node.id, id: outline.id });
+        }}
+        onPaneClick={() => setSelected(null)}>
         <Background />
         <Controls showInteractive={false} />
       </ReactFlow>
