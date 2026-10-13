@@ -19,7 +19,7 @@ import {
   type StoredModuleDefinitionDraft,
 } from "./definition-draft-read";
 import { DefinitionError } from "./definition-error";
-import type { createDatabaseDefinitionPublicationService } from "./definition-publication-composition";
+import type { createDatabaseDefinitionPublicationService } from "./publication/publish";
 import { createDefinitionStore } from "./definition-store";
 import {
   canonicalJson,

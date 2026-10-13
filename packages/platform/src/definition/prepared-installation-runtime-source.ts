@@ -27,7 +27,7 @@ import {
 import {
   createImmutableDefinitionPublicationCatalogue,
   type ImmutableDefinitionPublicationCatalogueDefinition,
-} from "./definition-publication-catalogue";
+} from "./publication/read";
 
 const compareCanonical = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;

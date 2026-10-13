@@ -30,21 +30,21 @@ import {
   type PlatformThemeTokenRole,
   type PlatformServiceOperationRelease,
   type SemanticVersion,
-} from "../schema";
+} from "../../schema";
 import { compare } from "semver";
 import { z } from "zod";
-import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import {
   platformBlockReleaseContentHash,
   platformConnectionTypeReleaseContentHash,
   platformServiceOperationReleaseContentHash,
   platformThemeReleaseContentHash,
-} from "./catalogue-release-content-hashes";
-import { compileDefinitionSet } from "./validation";
+} from "../catalogue-release-content-hashes";
+import { compileDefinitionSet } from "../validation";
 import type {
   DefinitionPublicationCatalogue,
   ResolvableConnectionTypeRelease,
-} from "./definition-publication";
+} from "../definition-publication";
 
 export type PlatformConnectionTypeReleaseDefinition = Readonly<{
   source: ConnectionTypeSourceDocument;
@@ -64,10 +64,7 @@ export type PlatformBlockReleaseDefinition = Omit<
   "contentFingerprint" | "customComponent"
 >;
 
-export type PlatformThemeReleaseDefinition = Omit<
-  PlatformThemeRelease,
-  "contentFingerprint"
->;
+export type PlatformThemeReleaseDefinition = Omit<PlatformThemeRelease, "contentFingerprint">;
 
 export type CustomComponentReleaseDefinition = PlatformBlockReleaseDefinition &
   Readonly<{ customComponent: CustomComponentRelease }>;

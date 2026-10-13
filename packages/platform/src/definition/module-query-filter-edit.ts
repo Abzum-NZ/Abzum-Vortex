@@ -9,7 +9,7 @@ import {
   type StoredModuleDefinitionDraft,
 } from "./definition-draft-read";
 import { DefinitionError } from "./definition-error";
-import { createDatabaseDefinitionPublicationService } from "./definition-publication-composition";
+import { createDatabaseDefinitionPublicationService } from "./publication/publish";
 import {
   fingerprintModuleQueryFilterOperandBinding,
   type ModuleQueryFilterDraftContext,

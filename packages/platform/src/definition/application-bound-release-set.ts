@@ -31,7 +31,7 @@ import {
 import {
   createImmutableDefinitionPublicationCatalogue,
   type ImmutableDefinitionPublicationCatalogueDefinition,
-} from "./definition-publication-catalogue";
+} from "./publication/read";
 import type { DefinitionPublicationCatalogue } from "./definition-publication";
 import { DefinitionError } from "./definition-error";
 
