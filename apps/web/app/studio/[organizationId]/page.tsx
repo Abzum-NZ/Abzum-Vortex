@@ -48,21 +48,25 @@ function RootTable({
                 <span className="block text-sm text-muted-foreground">{root.key}</span>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                Draft {root.draftRevision} ·{" "}
+                {root.draftRevision === null
+                  ? "No draft yet"
+                  : `Draft revision ${root.draftRevision}`} ·{" "}
                 {root.currentReleaseRevision === null
-                  ? "Not published"
-                  : `Release ${root.currentReleaseRevision}`}
+                  ? "Not released yet"
+                  : `Release revision ${root.currentReleaseRevision}`}
               </TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                  <Link className="underline underline-offset-4" href={base}>
-                    Draft workspace
-                  </Link>
+                  {root.draftRevision !== null && (
+                    <Link className="underline underline-offset-4" href={base}>
+                      Draft workspace
+                    </Link>
+                  )}
                   {root.kind === "application" ? (
                     <Link className="underline underline-offset-4" href={`${base}/history`}>
                       Release history
                     </Link>
-                  ) : (
+                  ) : root.draftRevision !== null ? (
                     <>
                       <Link className="underline underline-offset-4" href={`${base}/fields`}>
                         Fields
@@ -74,7 +78,7 @@ function RootTable({
                         Publish
                       </Link>
                     </>
-                  )}
+                  ) : null}
                 </div>
               </TableCell>
             </TableRow>
@@ -128,7 +132,7 @@ export default async function StudioOrganizationPage({
       <Card>
         <CardHeader>
           <CardTitle>Applications</CardTitle>
-          <CardDescription>Open a draft or review its releases.</CardDescription>
+          <CardDescription>Open a draft when available or review its releases.</CardDescription>
         </CardHeader>
         <CardContent>
           {applications.length === 0 ? (
@@ -141,7 +145,7 @@ export default async function StudioOrganizationPage({
       <Card>
         <CardHeader>
           <CardTitle>Modules</CardTitle>
-          <CardDescription>Open a draft, fields, queries, or publication.</CardDescription>
+          <CardDescription>Open available module drafts, fields, queries, or publication.</CardDescription>
         </CardHeader>
         <CardContent>
           {modules.length === 0 ? (

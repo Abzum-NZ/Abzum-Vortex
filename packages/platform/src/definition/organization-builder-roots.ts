@@ -16,7 +16,7 @@ const rowSchema = z
     kind: z.enum(["application", "module"]),
     definition_key: namespacedKeySchema,
     display_name: z.string().nullable(),
-    draft_revision: revisionSchema,
+    draft_revision: revisionSchema.nullable(),
     current_release_revision: revisionSchema.nullable(),
     application_origin_kind: z.enum(["ordinary", "platform_system_application"]).nullable(),
   })
@@ -27,7 +27,7 @@ export type OrganizationBuilderRoot = Readonly<{
   kind: "application" | "module";
   key: string;
   name: string;
-  draftRevision: number;
+  draftRevision: number | null;
   currentReleaseRevision: number | null;
   isSystemApplication: boolean;
 }>;
@@ -45,7 +45,8 @@ export const listOrganizationBuilderRoots = async (
   return rows.map((row) => {
     const parsed = rowSchema.parse({
       ...row,
-      draft_revision: databaseRevision(row.draft_revision),
+      draft_revision:
+        row.draft_revision === null ? null : databaseRevision(row.draft_revision),
       current_release_revision:
         row.current_release_revision === null
           ? null

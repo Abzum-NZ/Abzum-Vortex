@@ -32,32 +32,30 @@ begin
       message = 'Definition builder root listing requires a human organization context';
   end if;
 
-  if exists (
-    select 1
-    from vortex_definition.roots as root
-    left join vortex_definition.drafts as draft on draft.root_id = root.root_id
-    where root.organization_id = (checked_context ->> 'organizationId')::uuid
-      and root.kind in ('application', 'module')
-      and draft.root_id is null
-  ) then
-    raise exception using errcode = '23503',
-      message = 'A Definition root requires its current draft';
-  end if;
-
   return query
   select
     root.root_id,
     root.kind,
     root.key,
-    nullif(pg_catalog.btrim(draft.draft_source -> 'body' ->> 'name'), ''),
+    coalesce(
+      nullif(pg_catalog.btrim(draft.draft_source -> 'body' ->> 'name'), ''),
+      nullif(pg_catalog.btrim(release.authored_source -> 'body' ->> 'name'), '')
+    ),
     draft.draft_revision,
     root.current_release_revision,
     root.application_origin_kind
   from vortex_definition.roots as root
-  join vortex_definition.drafts as draft on draft.root_id = root.root_id
+  left join vortex_definition.drafts as draft on draft.root_id = root.root_id
+  left join vortex_definition.releases as release
+    on release.root_id = root.root_id
+    and release.release_revision = root.current_release_revision
   where root.organization_id = (checked_context ->> 'organizationId')::uuid
     and root.kind in ('application', 'module')
-  order by coalesce(nullif(pg_catalog.btrim(draft.draft_source -> 'body' ->> 'name'), ''), root.key), root.key, root.root_id
+  order by coalesce(
+    nullif(pg_catalog.btrim(draft.draft_source -> 'body' ->> 'name'), ''),
+    nullif(pg_catalog.btrim(release.authored_source -> 'body' ->> 'name'), ''),
+    root.key
+  ), root.key, root.root_id
   limit 200;
 end
 $function$;
@@ -68,7 +66,7 @@ grant execute on function vortex_definition.list_organization_builder_roots()
   to vortex_request;
 
 comment on function vortex_definition.list_organization_builder_roots() is
-  'Lists at most 200 application and module drafts in the validated human request organization for a permitted builder.';
+  'Lists at most 200 application and module roots in the validated human request organization for a permitted builder.';
 
 alter function vortex_definition.list_organization_builder_roots() owner to vortex_owner;
 
