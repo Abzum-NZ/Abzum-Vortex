@@ -17,7 +17,7 @@ import type { ModuleQueryFilterDraftContext, ModuleQueryFilterQueryChoice } from
 import type {
   StudioModuleQueryFilterResult,
   StudioModuleQueryFilterSnapshot,
-} from "../../_lib/studio-module-query-filter";
+} from "@web/platform-server";
 import { moduleQueryFilterControlsContext, sameModuleQueryFilter } from "../_lib/module-query-filter-commands";
 import {
   loadModuleQueryFilter,

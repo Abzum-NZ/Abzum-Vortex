@@ -5,28 +5,16 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { recordIdSchema } from "@vortex/platform/schema";
 import {
-  ALL_UI_STYLES_CSS,
-  APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  ApplicationLauncher,
-  createThemeRootProps,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
   type DisplaySemanticEvent,
 } from "@vortex/ui";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
+import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import { ApplicationPageView } from "./_components/application-page-view";
 import { loadApplicationSearch } from "../../../_lib/application-search";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@vortex/ui/components/empty";
-import { Icon } from "@vortex/ui/icons";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { applicationHomeContinuationFromAddress } from "../../../auth/_lib/application-home-continuation";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
@@ -46,7 +34,14 @@ import {
   advanceGuidedFormStepAction,
   confirmGuidedFormAction,
 } from "./guided-form-actions";
-import { DefinitionError } from "@web/platform-server";
+import {
+  DefinitionError,
+  organizationLauncherPage,
+  organizationLauncherPlacementId,
+  organizationLauncherShell,
+  organizationLauncherStudioPage,
+  organizationLauncherStudioPlacementId,
+} from "@web/platform-server";
 
 export const dynamic = "force-dynamic";
 
@@ -68,9 +63,7 @@ const adoptionCoordinatorCode = (error: unknown): string => {
   try {
     if (!(error instanceof DefinitionError)) return "UNKNOWN";
     const code: unknown = Object.getOwnPropertyDescriptor(error, "code")?.value;
-    return typeof code === "string" && adoptionCoordinatorCodes.has(code)
-      ? code
-      : "UNKNOWN";
+    return typeof code === "string" && adoptionCoordinatorCodes.has(code) ? code : "UNKNOWN";
   } catch {
     return "UNKNOWN";
   }
@@ -109,10 +102,7 @@ export default async function ApplicationAddressPage({
     organizationShortName,
     applicationAddress,
   );
-  const identity = await continueSessionOrEnd(
-    await resolveIdentitySession(),
-    applicationHome,
-  );
+  const identity = await continueSessionOrEnd(await resolveIdentitySession(), applicationHome);
   const addressSegments = applicationAddress ?? [];
 
   /**
@@ -206,7 +196,9 @@ export default async function ApplicationAddressPage({
     // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
     // the prior release. Only a committed switch revalidates the address.
     if (refused)
-      redirect(`${back}?adoption=${recentAuthenticationRequired ? "recent_authentication_required" : "refused"}`);
+      redirect(
+        `${back}?adoption=${recentAuthenticationRequired ? "recent_authentication_required" : "refused"}`,
+      );
     revalidatePath(back);
     redirect(`${back}?adoption=adopted`);
   }
@@ -297,95 +289,32 @@ export default async function ApplicationAddressPage({
         ),
       );
 
+    const projection = parsePermittedApplicationsLauncherProjection(resolved.read);
+    if (projection.kind !== "available")
+      throw new Error("Available organisation launcher read produced an unavailable projection");
+    const launcherValues = permittedApplicationsToListValues(projection);
     const studioCreateAccess = await loadStudioCreateAccess(resolved.read.organizationId);
-    const studioCreateHref =
+    const studio =
       studioCreateAccess.kind === "available" &&
       studioCreateAccess.organizationId === resolved.read.organizationId
-        ? `/studio/${studioCreateAccess.organizationId}/new`
+        ? {
+            href: `/studio/${studioCreateAccess.organizationId}/new`,
+            placementId: organizationLauncherStudioPlacementId,
+          }
         : undefined;
 
-    const projection = parsePermittedApplicationsLauncherProjection(resolved.read);
-    const launcherValues =
-      projection.kind === "available" ? permittedApplicationsToListValues(projection) : undefined;
-
     return (
-      <main
-        className="flex min-h-svh w-full flex-col bg-background text-foreground"
-        {...createThemeRootProps(undefined)}
-      >
-        <style href="vortex-ui-styles" precedence="default">
-          {ALL_UI_STYLES_CSS}
-        </style>
-        <header className="sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur-sm">
-          <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/"
-                className="text-base font-bold tracking-tight text-foreground hover:text-primary transition-colors"
-              >
-                Vortex
-              </Link>
-              <Badge variant="outline" className="text-xs">
-                {resolved.read.organizationShortName}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              {studioCreateHref === undefined ? null : (
-                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={studioCreateHref} />}>
-                  Studio
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/signed-in" />}>
-                Switch organisation
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="w-fit text-xs uppercase">
-                {resolved.read.tenantShortName}
-              </Badge>
-            </div>
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              {resolved.read.organizationShortName}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Choose an application you can open.
-            </p>
-          </div>
-
-          {launcherValues === undefined || launcherValues.rows.length === 0 ? (
-            <Empty className="my-auto border border-dashed border-border py-12">
-              <EmptyMedia variant="icon">
-                <Icon name="grid" className="size-8 text-muted-foreground" />
-              </EmptyMedia>
-              <EmptyHeader>
-                <EmptyTitle>No applications available</EmptyTitle>
-                <EmptyDescription>
-                  No applications are available for this organisation.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <div className="w-full">
-              <ApplicationLauncher
-                placementId="organization-application-launcher"
-                settings={{ title: { kind: "text", value: "Available applications" } }}
-                slots={{}}
-                breakpoint="desktop"
-                metadata={APPLICATION_LAUNCHER_BLOCK_RELEASE}
-                availability="available"
-                data={{ status: "ready", values: launcherValues }}
-                events={{ row_action: openApplication }}
-              />
-            </div>
-          )}
-
-        </div>
-      </main>
+      <OrganizationLauncherPage
+        page={studio === undefined ? organizationLauncherPage : organizationLauncherStudioPage}
+        shell={organizationLauncherShell}
+        placementId={organizationLauncherPlacementId}
+        values={launcherValues}
+        organizationName={resolved.read.organizationShortName}
+        identityId={identity.session.identityId}
+        openApplication={openApplication}
+        launcherHref={launcherPath(tenantShortName, organizationShortName)}
+        {...(studio === undefined ? {} : { studio })}
+      />
     );
   }
 

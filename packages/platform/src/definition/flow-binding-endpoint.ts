@@ -31,7 +31,7 @@ import {
   type JsonValue,
   type OrganizationSelectionCandidate,
   type SafeFlowResultDescriptor,
-} from "@vortex/platform/schema";
+} from "../schema";
 import type {
   FlowNamedAction,
   FlowOrchestrator,
@@ -41,7 +41,7 @@ import type {
   FlowRunExpectation,
   FlowSubject,
   FlowUnavailableNotice,
-} from "@web/platform-server";
+} from "./flow-orchestrator";
 
 /**
  * The one server entry point that runs the flow bound to a component event (architecture decision
@@ -151,7 +151,7 @@ type FlowBindingEndpointDependencies = Readonly<{
 
 type SafeIntents = Extract<FlowOrchestratorResponse, { intents: unknown }>["intents"];
 
-type FlowBindingEndpointResult =
+export type FlowBindingEndpointResult =
   /** The request named a stale installation revision: reload the page, nothing was run. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
   /** The run ended. `descriptor` is the shared safe result; `outputs` only when it says available. */
@@ -228,7 +228,8 @@ const hasVisibleOwningFormField = (
   ): void => {
     if (!isRecord(candidate)) return;
     if (!isRecord(candidate.placements)) {
-      for (const child of Object.values(candidate)) visitSlotTree(child, currentFormId, ancestorsVisible);
+      for (const child of Object.values(candidate))
+        visitSlotTree(child, currentFormId, ancestorsVisible);
       return;
     }
     for (const [placementId, value] of Object.entries(candidate.placements)) {
@@ -288,9 +289,7 @@ const hasVisibleOwningFormField = (
   )
     return false;
   const ownerFormId = controls[0]!.formId;
-  const matchingFields = fields.filter(
-    (field) => field.formId === ownerFormId && field.visible,
-  );
+  const matchingFields = fields.filter((field) => field.formId === ownerFormId && field.visible);
   return matchingFields.length === 1;
 };
 
@@ -562,9 +561,7 @@ const finishedResult = (
       : {
           failure: {
             code: response.failure.code,
-            ...(response.failure.taskId === undefined
-              ? {}
-              : { taskId: response.failure.taskId }),
+            ...(response.failure.taskId === undefined ? {} : { taskId: response.failure.taskId }),
             ...(diagnostic === undefined ? {} : { diagnostic }),
           },
         }),
@@ -673,9 +670,7 @@ const continuationResult = (
           : {
               failure: {
                 code: outcome.failure.code,
-                ...(outcome.failure.taskId === undefined
-                  ? {}
-                  : { taskId: outcome.failure.taskId }),
+                ...(outcome.failure.taskId === undefined ? {} : { taskId: outcome.failure.taskId }),
                 ...(diagnostic === undefined ? {} : { diagnostic }),
               },
             }),
