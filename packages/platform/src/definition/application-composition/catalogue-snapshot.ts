@@ -1,10 +1,8 @@
 import { z } from "zod";
 import { sourceProvenanceUnchanged } from "../definition-source-common";
 import { fingerprintSchema } from "../../catalogue/identifiers";
-import {
-  immutablePlatformBlockCatalogueSchema,
-  deterministicDependencyList,
-} from "./platform-block-release";
+import { immutablePlatformBlockCatalogueSchema } from "./platform-block-release";
+import { deterministicDependencyList } from "./shared";
 import { platformThemeReleaseSchema } from "./theme";
 
 /**

@@ -10,7 +10,7 @@ import {
   namespacedKeySchema,
   semanticVersionSchema,
 } from "../../catalogue/identifiers";
-import { iconKeySchema } from "./block-property-values";
+import { deterministicDependencyList, iconKeySchema } from "./shared";
 import { type ComponentSettingValue, blockPropertySchema } from "./block-property-schema";
 import { customComponentReleaseSchema } from "./custom-components";
 
@@ -293,20 +293,6 @@ export const sourcePlatformBlockDependencySchema = z
     release_version: sourceProvenanceUnchanged(semanticVersionSchema),
   })
   .strict();
-
-export const deterministicDependencyList = <
-  Entry extends { blockId: string; releaseVersion: string },
->(
-  entries: Entry[],
-): boolean =>
-  entries.every((entry, index) => {
-    if (index === 0) return true;
-    const previous = entries[index - 1]!;
-    const previousBlock = String(previous.blockId);
-    const currentBlock = String(entry.blockId);
-    if (previousBlock !== currentBlock) return previousBlock < currentBlock;
-    return previous.releaseVersion < entry.releaseVersion;
-  });
 
 export const platformBlockDependenciesSchema = z
   .array(platformBlockDependencySchema)

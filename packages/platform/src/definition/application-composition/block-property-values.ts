@@ -24,15 +24,6 @@ import { richTextDocumentSchema } from "../../records/rich-text";
 
 export { richTextDocumentSchema, richTextElementKindSchema } from "../../records/rich-text";
 
-export const iconKeySchema = z
-  .string()
-  .min(1)
-  .max(120)
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
-
-export const nonNegativeFiniteSchema = z.number().finite().nonnegative();
-export const positiveFiniteSchema = z.number().finite().positive();
-
 export type BlockPropertyValueContract =
   | { kind: "text"; value: string }
   | { kind: "number"; value: number }

@@ -6,7 +6,7 @@ import {
   platformIdSchema,
   semanticVersionSchema,
 } from "../../catalogue/identifiers";
-import { nonNegativeFiniteSchema, positiveFiniteSchema } from "./block-property-values";
+import { nonNegativeFiniteSchema, positiveFiniteSchema } from "./shared";
 
 export const themeTokenKindSchema = z.enum([
   "color_pair",

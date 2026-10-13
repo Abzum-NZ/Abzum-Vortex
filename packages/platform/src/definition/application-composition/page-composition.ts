@@ -16,8 +16,8 @@ import {
   queryIdSchema,
   shellIdSchema,
 } from "../../catalogue/identifiers";
+import { positiveFiniteSchema } from "./shared";
 import {
-  positiveFiniteSchema,
   type BlockPropertyValueContract,
   blockPropertyValueSchema,
   type SourceBlockPropertyValueContract,
