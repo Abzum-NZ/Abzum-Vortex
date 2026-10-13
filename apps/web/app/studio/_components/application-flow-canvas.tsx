@@ -21,7 +21,17 @@ const columnGap = 32;
 const rowGap = 40;
 
 // Structure keys hold child task lists; they are drawn as branches, not as settings.
-const structureKeys = new Set(["id", "type", "description", "then", "else", "tasks", "cases", "default", "branches"]);
+const structureKeys = new Set(["id", "type", "description", "then", "else", "tasks", "default", "branches"]);
+
+// Switch cases keep their `when` predicate visible; only the nested task lists are drawn as branches.
+const withoutBranchTasks = (key: string, value: unknown): unknown =>
+  key === "cases" && Array.isArray(value)
+    ? value.map((entry) => {
+      if (typeof entry !== "object" || entry === null) return entry;
+      const { tasks: _tasks, ...rest } = entry as Record<string, unknown>;
+      return rest;
+    })
+    : value;
 
 const pathKey = (path: readonly (string | number)[]) => JSON.stringify(path);
 
@@ -37,10 +47,27 @@ function CanvasNode({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
 }
 const nodeTypes = { canvas: CanvasNode };
 
+const literalText = (value: unknown): string => {
+  if (typeof value === "object" && value !== null && "value" in value) {
+    const inner = (value as { value: unknown }).value;
+    return typeof inner === "string" || typeof inner === "number" || typeof inner === "boolean" ? String(inner) : JSON.stringify(inner);
+  }
+  return JSON.stringify(value);
+};
+
+/** A switch case edge carries the value the case matches, not only its key. */
+const branchLabel = (flow: SourceFlow, child: StudioFlowTaskListOutline): string => {
+  const caseIndex = child.path.length >= 2 && child.path[child.path.length - 3] === "cases" ? child.path[child.path.length - 2] : undefined;
+  if (caseIndex === undefined) return child.label;
+  const owner = taskAt(flow, child.path.slice(0, -3));
+  const when = owner !== undefined && "cases" in owner && Array.isArray(owner.cases) ? owner.cases[Number(caseIndex)]?.when : undefined;
+  return when === undefined ? child.label : `${child.label} = ${literalText(when)}`;
+};
+
 type Layout = Readonly<{ width: number; height: number; firstIds: readonly string[]; lastIds: readonly string[] }>;
 
 /** Computed positions only: lists run top to bottom, branches sit side by side below their task. */
-function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
+function layoutList(flow: SourceFlow, list: StudioFlowTaskListOutline, left: number, top: number,
   nodes: Node<CanvasNodeData>[], edges: Edge[]): Layout {
   let y = top;
   let width = nodeWidth;
@@ -53,7 +80,7 @@ function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
     let branchX = left;
     let branchHeight = 0;
     const branches = task.children.map((child) => {
-      const branch = layoutList(child, branchX, y, nodes, edges);
+      const branch = layoutList(flow, child, branchX, y, nodes, edges);
       branchX += branch.width + columnGap;
       branchHeight = Math.max(branchHeight, branch.height);
       return { child, branch };
@@ -66,7 +93,7 @@ function layoutList(list: StudioFlowTaskListOutline, left: number, top: number,
     });
     for (const { child, branch } of branches) {
       for (const first of branch.firstIds)
-        edges.push({ id: `${id}>${first}`, source: id, target: first, label: child.label });
+        edges.push({ id: `${id}>${first}`, source: id, target: first, label: branchLabel(flow, child) });
     }
     if (previous.length > 0) {
       for (const from of previous) edges.push({ id: `${from}>${id}`, source: from, target: id });
@@ -114,7 +141,7 @@ function buildGraph(flow: SourceFlow, lists: readonly StudioFlowTaskListOutline[
       });
     }
     if (hasHeader) top = nodeHeight + rowGap;
-    const layout = layoutList(list, left, top, nodes, edges);
+    const layout = layoutList(flow, list, left, top, nodes, edges);
     for (const header of headerIds) for (const first of layout.firstIds)
       edges.push({ id: `${header}>${first}`, source: header, target: first });
     left += Math.max(layout.width, headerIds.length * (nodeWidth + columnGap) - columnGap) + columnGap * 2;
@@ -163,7 +190,7 @@ function TaskSettings({ flow, outline }: Readonly<{ flow: SourceFlow; outline: S
     {settings.length === 0 ? <p className="text-muted-foreground">This task has no settings.</p>
       : settings.map(([key, value]) => <div key={key}>
         <dt className="text-muted-foreground">{key}</dt>
-        <dd><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 text-xs">{describeValue(value)}</pre></dd>
+        <dd><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 text-xs">{describeValue(withoutBranchTasks(key, value))}</pre></dd>
       </div>)}
   </dl>;
 }
