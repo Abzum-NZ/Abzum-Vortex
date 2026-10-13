@@ -1,9 +1,13 @@
 set local role vortex_owner;
 
+-- These three are owned by the restricted record adapter role, so they are dropped under it.
+set local role vortex_record_adapter;
 drop function vortex_record.adopt_storage_conversion(uuid,bigint,uuid,uuid);
-drop function vortex_record.allocate_storage_conversion_plan(uuid,bigint);
 drop function vortex_record.convert_record_storage_batch(uuid,integer,bigint);
 drop function vortex_record.read_storage_conversion_corrections(uuid,integer);
+set local role vortex_owner;
+
+drop function vortex_record.allocate_storage_conversion_plan(uuid,bigint);
 drop function vortex_record.register_storage_conversion_plan(uuid,uuid,uuid,bigint,bigint);
 drop function vortex_record.switch_storage_conversion_mappings_internal(uuid,boolean);
 drop function vortex_record.lock_storage_adoption_internal(uuid,uuid,uuid);
