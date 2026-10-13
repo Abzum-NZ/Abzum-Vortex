@@ -1,10 +1,9 @@
-CREATE FUNCTION vortex_access.protect_organization_delegation_authority() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_organization_delegation_authority() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 declare
   permissions_changed boolean;
-  fingerprint_changed boolean;
 begin
   if tg_op = 'DELETE' then
     raise exception using errcode = '23514',
@@ -39,15 +38,12 @@ begin
 
   permissions_changed := new.bounded_permissions is distinct from
     old.bounded_permissions;
-  fingerprint_changed := new.scope_fingerprint is distinct from
-    old.scope_fingerprint;
 
   if new.state = 'revoked' then
     if new.revoked_at is null
       or new.revoked_at < old.changed_at
       or new.scope_kind is distinct from old.scope_kind
-      or permissions_changed
-      or fingerprint_changed then
+      or permissions_changed then
       raise exception using errcode = '23514',
         message = 'Delegation revocation cannot alter scope or predate current evidence';
     end if;
@@ -58,12 +54,6 @@ begin
     or (
       new.scope_kind is not distinct from old.scope_kind
       and not permissions_changed
-      and not fingerprint_changed
-    )
-    or (
-      new.scope_kind = 'bounded'
-      and old.scope_kind = 'bounded'
-      and permissions_changed <> fingerprint_changed
     ) then
     raise exception using errcode = '23514',
       message = 'Delegation scope replacement must replace one exact whole scope';

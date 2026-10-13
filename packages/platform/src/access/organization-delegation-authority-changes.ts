@@ -11,23 +11,12 @@ import {
   accessAssigneeSchema,
   delegationAuthoritySchema,
   delegationScopeSchema,
-  rolePermissionEntrySchema,
 } from "./organization-access-catalogue";
 
 const trustedChangeFields = {
   changedBy: actorIdSchema,
   correlationId: correlationIdSchema,
 };
-
-export const organizationDelegationScopeCandidateSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("organization_catalogue") }).strict(),
-  z
-    .object({
-      kind: z.literal("bounded"),
-      permissions: z.array(rolePermissionEntrySchema).min(1),
-    })
-    .strict(),
-]);
 
 const grantDelegationCommandSchema = z
   .object({
@@ -135,9 +124,6 @@ export const organizationDelegationAuthorityChangeResultSchema = z
       });
   });
 
-export type OrganizationDelegationScopeCandidate = z.infer<
-  typeof organizationDelegationScopeCandidateSchema
->;
 export type OrganizationDelegationAuthorityChangeCommand = z.infer<
   typeof organizationDelegationAuthorityChangeCommandSchema
 >;

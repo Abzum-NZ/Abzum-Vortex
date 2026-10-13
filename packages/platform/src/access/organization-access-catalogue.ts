@@ -564,7 +564,6 @@ export const delegationScopeSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("bounded"),
       permissions: rolePermissionSetSchema.min(1),
-      scopeFingerprint: fingerprintSchema,
     })
     .strict(),
 ]);

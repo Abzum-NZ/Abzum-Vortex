@@ -50,7 +50,9 @@ begin
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object('ownerKind', 'platform',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'delegated_management',
@@ -95,7 +97,7 @@ begin
   end if;
   select result.* into strict changed from vortex_access.coordinate_organization_delegation_authority_change(
     'revoke_delegation', context_organization_id, p_delegation_authority_id,
-    p_expected_delegation_revision, null, null, null, null, null, null, null, null,
+    p_expected_delegation_revision, null, null, null, null, null, null, null,
     context_account_id, context_correlation_id) as result;
   summary := vortex_access.project_organization_delegation_summary(context_organization_id, p_delegation_authority_id);
   if summary is null then raise exception using errcode = '40001', message = 'Changed delegation projection is unavailable'; end if;

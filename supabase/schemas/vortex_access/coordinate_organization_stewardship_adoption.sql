@@ -23,6 +23,7 @@ security invoker
 set search_path = ''
 as $function$
 declare
+  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   stewardship vortex_access.organization_stewardship_requirements%rowtype;
   platform_registration vortex_access.permission_registrations%rowtype;
@@ -454,13 +455,13 @@ begin
   insert into vortex_access.organization_delegation_authorities (
     organization_id, delegation_authority_id, holder_kind,
     organization_account_id, group_id, scope_kind, bounded_permissions,
-    scope_fingerprint, revision, starts_at, expires_at, state, granted_by,
+    revision, starts_at, expires_at, state, granted_by,
     granted_at, grant_correlation_id, changed_by, changed_at,
     change_correlation_id, revoked_by, revoked_at,
     revocation_correlation_id
   ) values (
     p_organization_id, p_delegation_authority_id, 'organization_account',
-    p_organization_account_id, null, 'organization_catalogue', null, null, 1,
+    p_organization_account_id, null, 'organization_catalogue', null, 1,
     checked_at, null, 'live', p_changed_by, checked_at, p_correlation_id,
     p_changed_by, checked_at, p_correlation_id, null, null, null
   );
