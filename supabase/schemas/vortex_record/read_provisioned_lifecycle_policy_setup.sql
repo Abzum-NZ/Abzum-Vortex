@@ -31,6 +31,7 @@ declare
   install_decision record;
   install_scope_decision record;
   final_decision record;
+  platform_permission record;
   completed_at timestamptz;
   expected_binding_count integer := 0;
   target_ordinal integer := 0;
@@ -67,7 +68,7 @@ begin
       or not expected_item ?& array['moduleRootId', 'bindingRevision']
       or expected_item - array['moduleRootId', 'bindingRevision'] <> '{}'::jsonb
       or pg_catalog.jsonb_typeof(expected_item -> 'moduleRootId') <> 'string'
-      or not vortex_record.is_lifecycle_uuid_text(expected_item ->> 'moduleRootId')
+      or not vortex_platform.is_non_nil_uuid(expected_item ->> 'moduleRootId')
       or (expected_item ->> 'moduleRootId') <> pg_catalog.lower(expected_item ->> 'moduleRootId')
       or not vortex_record.is_lifecycle_revision_value(expected_item -> 'bindingRevision') then
       raise exception using errcode = '22023',
@@ -122,8 +123,8 @@ begin
       'organizationId', 'applicationRootId', 'applicationReleaseRevision',
       'registrationRevision', 'moduleBindings', 'storageContractIds'
     ] <> '{}'::jsonb
-    or not vortex_record.is_lifecycle_uuid_text(projection ->> 'organizationId')
-    or not vortex_record.is_lifecycle_uuid_text(projection ->> 'applicationRootId')
+    or not vortex_platform.is_non_nil_uuid(projection ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(projection ->> 'applicationRootId')
     or pg_catalog.lower(projection ->> 'organizationId') <> authority.organization_id::text
     or pg_catalog.lower(projection ->> 'applicationRootId') <> p_application_root_id::text
     or not vortex_record.is_lifecycle_revision_value(projection -> 'applicationReleaseRevision')
@@ -153,7 +154,7 @@ begin
         'moduleRootId', 'moduleReleaseRevision', 'bindingRevision', 'state', 'storageContractIds'
       ] <> '{}'::jsonb
       or pg_catalog.jsonb_typeof(projection_item -> 'moduleRootId') <> 'string'
-      or not vortex_record.is_lifecycle_uuid_text(projection_item ->> 'moduleRootId')
+      or not vortex_platform.is_non_nil_uuid(projection_item ->> 'moduleRootId')
       or (projection_item ->> 'moduleRootId') <> pg_catalog.lower(projection_item ->> 'moduleRootId')
       or not vortex_record.is_lifecycle_revision_value(projection_item -> 'moduleReleaseRevision')
       or not vortex_record.is_lifecycle_revision_value(projection_item -> 'bindingRevision')
@@ -189,7 +190,7 @@ begin
       order by storage_item.ordinal
     loop
       if pg_catalog.jsonb_typeof(projection_storage_item) <> 'string'
-        or not vortex_record.is_lifecycle_uuid_text(projection_storage_item #>> '{}')
+        or not vortex_platform.is_non_nil_uuid(projection_storage_item #>> '{}')
         or (projection_storage_item #>> '{}') <> pg_catalog.lower(projection_storage_item #>> '{}') then
         raise exception using errcode = '40001',
           message = 'Provisioned lifecycle setup source is incomplete';
@@ -228,7 +229,7 @@ begin
   loop
     target_ordinal := target_ordinal + 1;
     if pg_catalog.jsonb_typeof(projection_storage_item) <> 'string'
-      or not vortex_record.is_lifecycle_uuid_text(projection_storage_item #>> '{}')
+      or not vortex_platform.is_non_nil_uuid(projection_storage_item #>> '{}')
       or (projection_storage_item #>> '{}') <> pg_catalog.lower(projection_storage_item #>> '{}')
       or (projection_storage_item #>> '{}') <> storage_ids[target_ordinal]::text
       or (previous_union_storage is not null
@@ -358,6 +359,19 @@ begin
   -- installation delegation can expire without an Access-version change, so
   -- the request context alone is not sufficient completion evidence. The
   -- request-role caller repeats all three decisions after validating the DTO.
+  select entry.owner_id, entry.permission_id into strict platform_permission
+  from vortex_access.permission_catalogue_entries as entry
+  join vortex_access.permission_registrations as registration
+    on registration.organization_id = entry.organization_id
+    and registration.registration_kind = entry.registration_kind
+    and registration.registration_owner_id = entry.registration_owner_id
+    and registration.revision = entry.registration_revision
+    and registration.state = 'active'
+  where entry.organization_id = authority.organization_id
+    and entry.registration_kind = 'platform'
+    and entry.owner_kind = 'platform'
+    and entry.permission_key = 'platform.organization.applications.manage'
+    and entry.action_kind = 'manage';
   select evaluated.* into strict install_decision
   from vortex_access.evaluate_organization_permission_eligibility(
     pg_catalog.jsonb_build_object(
@@ -366,8 +380,8 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+        'ownerId', platform_permission.owner_id,
+        'permissionId', platform_permission.permission_id
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
@@ -381,8 +395,8 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+        'ownerId', platform_permission.owner_id,
+        'permissionId', platform_permission.permission_id
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object(
@@ -400,8 +414,8 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
+        'ownerId', platform_permission.owner_id,
+        'permissionId', platform_permission.permission_id
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
