@@ -14,6 +14,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -156,7 +157,9 @@ function OrganizationSwitcher({
         <SwitcherButton icon="building-2" label={organizationName} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
-        <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={actions === null}
@@ -207,7 +210,9 @@ function ApplicationSwitcher({
         <SwitcherButton icon="grid" label={applicationName} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
-        <DropdownMenuLabel>Applications</DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Applications</DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {(runtime?.applications ?? []).map((application) => (
           <DropdownMenuItem
