@@ -969,6 +969,9 @@ const loadApplicationPageJoined = async (
       })
       .catch((error: unknown): PageDataState => {
         logPlacementFailure(address, entry.placementId, "placement_read_failed", describeFailure(error));
+        // A defect in data the platform produced is surfaced in development; production degrades
+        // to the placement's error state.
+        if (process.env.NODE_ENV !== "production") throw error;
         return { status: "error" };
       })
       .finally(releaseStreamedSlot);
