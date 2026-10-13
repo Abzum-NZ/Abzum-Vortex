@@ -134,7 +134,6 @@ begin
       revision.authority_continuity_revision,
       revision.policy_continuity_revision, revision.activation_policy_id,
       revision.activation_policy_revision,
-      revision.activation_policy_fingerprint,
       policy.maximum_activation_duration_seconds,
       policy.required_caller_execution_binding_id
     into role_fact
@@ -148,7 +147,6 @@ begin
       and policy.role_id = revision.role_id
       and policy.activation_policy_id = revision.activation_policy_id
       and policy.revision = revision.activation_policy_revision
-      and policy.policy_fingerprint = revision.activation_policy_fingerprint
     where role.organization_id = p_organization_id
       and role.role_id = p_role_id
     for update of role;
@@ -349,7 +347,7 @@ begin
       organization_id, role_activation_id, organization_account_id, role_id,
       revision, historical_role_revision, authority_continuity_revision,
       policy_continuity_revision, activation_policy_id,
-      activation_policy_revision, activation_policy_fingerprint,
+      activation_policy_revision,
       eligibility_source_kind, role_assignment_id, role_assignment_revision,
       membership_id, membership_revision, state, activated_by, activated_at,
       expires_at, activation_correlation_id, changed_by, changed_at,
@@ -360,8 +358,7 @@ begin
       p_role_id, 1, p_expected_role_revision,
       role_fact.authority_continuity_revision,
       role_fact.policy_continuity_revision, role_fact.activation_policy_id,
-      role_fact.activation_policy_revision,
-      role_fact.activation_policy_fingerprint, p_eligibility_source_kind,
+      role_fact.activation_policy_revision, p_eligibility_source_kind,
       p_role_assignment_id, p_expected_role_assignment_revision,
       p_membership_id, p_expected_membership_revision, 'live', p_changed_by,
       checked_at, activation_expires_at, p_correlation_id, p_changed_by,
@@ -431,8 +428,7 @@ begin
       'policyContinuityRevision', activation_fact.policy_continuity_revision,
       'activationPolicy', pg_catalog.jsonb_build_object(
         'activationPolicyId', activation_fact.activation_policy_id,
-        'revision', activation_fact.activation_policy_revision,
-        'fingerprint', activation_fact.activation_policy_fingerprint
+        'revision', activation_fact.activation_policy_revision
       ),
       'eligibilitySource', case activation_fact.eligibility_source_kind
         when 'direct' then pg_catalog.jsonb_build_object(

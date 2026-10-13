@@ -491,15 +491,14 @@ begin
       revision.assignment_policy, revision.policy_continuity_revision,
       revision.authority_continuity_revision,
       revision.activation_policy_id, revision.activation_policy_revision,
-      revision.activation_policy_fingerprint, revision.role_key,
+      revision.role_key,
       revision.label, revision.description, revision.source_definition_key,
       revision.source_release_revision, revision.source_release_version,
       revision.source_validation_contract_version,
       revision.source_content_fingerprint, revision.source_resolution_fingerprint,
       revision.source_template_fingerprint, revision.source_catalogue_fingerprint,
       revision.accepted_registration_revision,
-      revision.template_continuity_revision,
-      revision.accepted_grant_fingerprint
+      revision.template_continuity_revision
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
       on revision.organization_id = role.organization_id
@@ -658,13 +657,13 @@ begin
       lifecycle, privilege_classification, assignment_policy,
       policy_continuity_revision, authority_continuity_revision,
       activation_policy_id,
-      activation_policy_revision, activation_policy_fingerprint, role_key,
+      activation_policy_revision, role_key,
       label, description, source_definition_key, source_release_revision,
       source_release_version, source_validation_contract_version,
       source_content_fingerprint, source_resolution_fingerprint,
       source_template_fingerprint, source_catalogue_fingerprint,
       accepted_registration_revision, template_continuity_revision,
-      accepted_grant_fingerprint, changed_by, changed_at, change_correlation_id
+      changed_by, changed_at, change_correlation_id
     ) values (
       p_organization_id, role_record.role_id, next_role_revision, 'application',
       p_application_root_id, target_lifecycle,
@@ -672,7 +671,7 @@ begin
       role_record.policy_continuity_revision,
       next_authority_continuity_revision, role_record.activation_policy_id,
       role_record.activation_policy_revision,
-      role_record.activation_policy_fingerprint, role_record.role_key,
+      role_record.role_key,
       role_record.label, role_record.description,
       role_record.source_definition_key, role_record.source_release_revision,
       role_record.source_release_version,
@@ -683,7 +682,7 @@ begin
       role_record.source_catalogue_fingerprint,
       role_record.accepted_registration_revision,
       role_record.template_continuity_revision,
-      role_record.accepted_grant_fingerprint, p_changed_by,
+      p_changed_by,
       pg_catalog.statement_timestamp(), p_correlation_id
     );
 

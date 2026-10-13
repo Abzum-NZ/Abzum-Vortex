@@ -164,8 +164,7 @@ begin
             'selection', 'existing',
             'reference', pg_catalog.jsonb_build_object(
               'activationPolicyId', current_revision.activation_policy_id,
-              'revision', current_revision.activation_policy_revision,
-              'fingerprint', current_revision.activation_policy_fingerprint
+              'revision', current_revision.activation_policy_revision
             )
           )
         )

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS bigint
+CREATE OR REPLACE FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS bigint
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -317,12 +317,12 @@ begin
       lifecycle, privilege_classification, assignment_policy,
       policy_continuity_revision, authority_continuity_revision,
       activation_policy_id, activation_policy_revision,
-      activation_policy_fingerprint, role_key, label, description,
+      role_key, label, description,
       source_definition_key, source_release_revision, source_release_version,
       source_validation_contract_version, source_content_fingerprint,
       source_resolution_fingerprint, source_template_fingerprint,
       source_catalogue_fingerprint, accepted_registration_revision,
-      template_continuity_revision, accepted_grant_fingerprint,
+      template_continuity_revision,
       changed_by, changed_at, change_correlation_id
     ) values (
       p_organization_id, administrator_role.role_id,
@@ -334,7 +334,6 @@ begin
       previous_revision.authority_continuity_revision + 1,
       previous_revision.activation_policy_id,
       previous_revision.activation_policy_revision,
-      previous_revision.activation_policy_fingerprint,
       previous_revision.role_key, previous_revision.label,
       previous_revision.description, previous_revision.source_definition_key,
       previous_revision.source_release_revision,
@@ -346,7 +345,6 @@ begin
       previous_revision.source_catalogue_fingerprint,
       previous_revision.accepted_registration_revision,
       previous_revision.template_continuity_revision,
-      previous_revision.accepted_grant_fingerprint,
       p_changed_by, operation_at, p_correlation_id
     );
 

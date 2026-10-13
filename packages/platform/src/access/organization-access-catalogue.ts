@@ -136,7 +136,6 @@ export const roleActivationPolicyReferenceSchema = z
   .object({
     activationPolicyId: roleActivationPolicyIdSchema,
     revision: revisionSchema,
-    fingerprint: fingerprintSchema,
   })
   .strict();
 
@@ -157,7 +156,6 @@ export const roleActivationPolicyRevisionSchema = z
     roleId: roleIdSchema,
     activationPolicyId: roleActivationPolicyIdSchema,
     revision: revisionSchema,
-    fingerprint: fingerprintSchema,
     maximumActivationDurationSeconds: javascriptSafeDurationSecondsSchema,
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
@@ -178,7 +176,6 @@ export const applicationRoleSourceReferenceSchema = z
     sourceCatalogueFingerprint: fingerprintSchema,
     acceptedRegistrationRevision: revisionSchema,
     templateContinuityRevision: revisionSchema,
-    acceptedGrantFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine((value, context) => {

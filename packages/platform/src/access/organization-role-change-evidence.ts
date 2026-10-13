@@ -7,11 +7,10 @@ import {
   type OrganizationRoleChangeCandidate,
   type OrganizationRoleChangePreparation,
   type OrganizationRolePolicyChoice,
-  type PreparedApplicationRoleTemplates,
   type PreparedOrganizationRoleChange,
   type RolePermissionEntry,
 } from "../schema";
-import { canonicalJson, fingerprintCanonicalValue } from "../definition/definition-index";
+import { canonicalJson } from "../definition/definition-index";
 import { verifyPreparedApplicationRoleTemplates } from "./application-role-template-adapter";
 
 export const organizationRoleChangeEvidenceErrorCodes = [
@@ -144,25 +143,6 @@ const selectedTemplate = (candidate: TemplateCandidate) => {
   return selected[0]!;
 };
 
-const normalizeSourceRelease = (
-  release: PreparedApplicationRoleTemplates["permissionRegistration"]["applicationRelease"],
-) => ({ ...release, rootId: normalizedUuid(release.rootId) });
-
-const templateSourceProjection = (candidate: TemplateCandidate) => {
-  const prepared = candidate.preparedTemplates;
-  const selected = selectedTemplate(candidate);
-  if (prepared.preparationBasis.kind !== "current_active_registration") throw evidenceError();
-  return {
-    applicationRootId: normalizedUuid(prepared.permissionRegistration.applicationRootId),
-    sourceRoleId: normalizedUuid(candidate.sourceRoleId),
-    sourceRelease: normalizeSourceRelease(prepared.permissionRegistration.applicationRelease),
-    sourceTemplateFingerprint: selected.sourceTemplateFingerprint,
-    sourceCatalogueFingerprint: prepared.permissionRegistration.applicationCatalogueFingerprint,
-    acceptedRegistrationRevision: prepared.preparationBasis.registrationRevision,
-    templateContinuityRevision: candidate.templateContinuityRevision,
-  };
-};
-
 const normalizeCandidate = (
   candidate: OrganizationRoleChangeCandidate,
 ): OrganizationRoleChangeCandidate => {
@@ -206,47 +186,6 @@ const normalizeCandidate = (
   }
 };
 
-const newPolicy = (candidate: OrganizationRoleChangeCandidate) =>
-  "assignmentPolicy" in candidate &&
-  candidate.assignmentPolicy.kind === "activation_required" &&
-  candidate.assignmentPolicy.activationPolicy.selection === "new"
-    ? candidate.assignmentPolicy.activationPolicy.policy
-    : undefined;
-
-const applicationAcceptance = (
-  candidate: OrganizationRoleChangeCandidate,
-): candidate is Extract<
-  TemplateCandidate,
-  { operation: "accept_new_application_role" | "accept_application_role_revision" }
-> =>
-  candidate.operation === "accept_new_application_role" ||
-  candidate.operation === "accept_application_role_revision";
-
-const policyFingerprint = (candidate: OrganizationRoleChangeCandidate): string | undefined => {
-  const policy = newPolicy(candidate);
-  if (policy === undefined) return undefined;
-  return fingerprintCanonicalValue({
-    contractVersion: "1.0.0",
-    organizationId: normalizedUuid(candidate.organizationId),
-    roleId: normalizedUuid(candidate.roleId),
-    ...policy,
-    activationPolicyId: normalizedUuid(policy.activationPolicyId),
-  });
-};
-
-const acceptedGrantFingerprint = (
-  candidate: OrganizationRoleChangeCandidate,
-): string | undefined =>
-  applicationAcceptance(candidate)
-    ? fingerprintCanonicalValue({
-        contractVersion: "1.0.0",
-        organizationId: normalizedUuid(candidate.organizationId),
-        roleId: normalizedUuid(candidate.roleId),
-        source: templateSourceProjection(candidate),
-        permissions: normalizePermissions(candidate.permissions),
-      })
-    : undefined;
-
 const evidenceError = (cause?: unknown): OrganizationRoleChangeEvidenceError =>
   new OrganizationRoleChangeEvidenceError(
     "ORGANIZATION_ROLE_CHANGE_EVIDENCE_INVALID",
@@ -266,8 +205,6 @@ const prepareParsed = (
     }
   }
 
-  const newActivationPolicyFingerprint = policyFingerprint(candidate);
-  const acceptedGrant = acceptedGrantFingerprint(candidate);
   const assignments = preparation.affectedAssignments
     ?.map(normalizeAssignment)
     .sort((left, right) => left.roleAssignmentId.localeCompare(right.roleAssignmentId));
@@ -282,8 +219,6 @@ const prepareParsed = (
   const prepared = {
     contractVersion: "1.0.0" as const,
     candidate,
-    ...(newActivationPolicyFingerprint === undefined ? {} : { newActivationPolicyFingerprint }),
-    ...(acceptedGrant === undefined ? {} : { acceptedGrantFingerprint: acceptedGrant }),
     ...(affectedAssignmentManifest === undefined ? {} : { affectedAssignmentManifest }),
   };
   const result = preparedOrganizationRoleChangeSchema.safeParse(prepared);

@@ -16,7 +16,6 @@ declare
   target_authority_continuity_revision bigint;
   target_activation_policy_id uuid;
   target_activation_policy_revision bigint;
-  target_activation_policy_fingerprint text;
   target_application_root_id uuid;
   target_catalogue_fingerprint text;
   target_registration_revision bigint;
@@ -26,7 +25,6 @@ declare
   previous_authority_continuity_revision bigint;
   previous_activation_policy_id uuid;
   previous_activation_policy_revision bigint;
-  previous_activation_policy_fingerprint text;
   policy_unchanged boolean;
   authority_broadened boolean;
   permission_count bigint;
@@ -41,13 +39,13 @@ begin
   select revision.role_kind, revision.lifecycle, revision.privilege_classification,
     revision.assignment_policy, revision.policy_continuity_revision,
     revision.authority_continuity_revision, revision.activation_policy_id,
-    revision.activation_policy_revision, revision.activation_policy_fingerprint,
+    revision.activation_policy_revision,
     revision.application_root_id, revision.source_catalogue_fingerprint,
     revision.accepted_registration_revision
   into target_role_kind, target_lifecycle, target_privilege_classification,
     target_assignment_policy, target_policy_continuity_revision,
     target_authority_continuity_revision, target_activation_policy_id,
-    target_activation_policy_revision, target_activation_policy_fingerprint,
+    target_activation_policy_revision,
     target_application_root_id, target_catalogue_fingerprint,
     target_registration_revision
   from vortex_access.organization_role_revisions as revision
@@ -72,11 +70,11 @@ begin
     select revision.lifecycle, revision.assignment_policy,
       revision.policy_continuity_revision,
       revision.authority_continuity_revision, revision.activation_policy_id,
-      revision.activation_policy_revision, revision.activation_policy_fingerprint
+      revision.activation_policy_revision
     into previous_lifecycle, previous_assignment_policy,
       previous_policy_continuity_revision,
       previous_authority_continuity_revision, previous_activation_policy_id,
-      previous_activation_policy_revision, previous_activation_policy_fingerprint
+      previous_activation_policy_revision
     from vortex_access.organization_role_revisions as revision
     where revision.organization_id = target_organization_id
       and revision.role_id = target_role_id
@@ -91,9 +89,7 @@ begin
       target_assignment_policy = previous_assignment_policy
       and target_activation_policy_id is not distinct from previous_activation_policy_id
       and target_activation_policy_revision is not distinct
-        from previous_activation_policy_revision
-      and target_activation_policy_fingerprint is not distinct
-        from previous_activation_policy_fingerprint;
+        from previous_activation_policy_revision;
 
     if policy_unchanged and
       target_policy_continuity_revision <> previous_policy_continuity_revision then
