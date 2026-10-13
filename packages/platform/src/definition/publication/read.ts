@@ -45,7 +45,7 @@ import { compileDefinitionSet } from "../validation";
 import type {
   DefinitionPublicationCatalogue,
   ResolvableConnectionTypeRelease,
-} from "../definition-publication";
+} from "../definition-publication-contracts";
 
 export type PlatformConnectionTypeReleaseDefinition = Readonly<{
   source: ConnectionTypeSourceDocument;

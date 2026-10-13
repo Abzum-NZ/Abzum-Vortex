@@ -37,7 +37,7 @@ import {
   type StoredConsumerReleaseEvidence,
 } from "./definition-consumer-read-definition";
 import { hasAuthenticStoredCustomerDefinitionRelease } from "./definition-release-integrity";
-import type { DefinitionPublicationCatalogue } from "./definition-publication";
+import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 import {
