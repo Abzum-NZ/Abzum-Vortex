@@ -67,11 +67,7 @@ import {
   type FieldInputControlReleaseMap,
   type RuntimeInputsByPlacement,
 } from "./registry";
-import {
-  resolvePlacementTheme,
-  type PlacementThemeScope,
-  type PlatformThemeTokens,
-} from "./theme";
+import { resolvePlacementTheme, type PlacementThemeScope, type PlatformThemeTokens } from "./theme";
 import { ApplicationLauncher } from "./launcher/application-launcher";
 import { LinkTiles } from "./launcher/link-tiles";
 import { ViewFilter } from "./launcher/view-filter";
@@ -707,6 +703,78 @@ const compareVersions = (first: string, second: string): number => {
   return 0;
 };
 
+const BREAKPOINT_TITLES: Readonly<Record<Breakpoint, string>> = Object.freeze({
+  desktop: "Desktop",
+  tablet: "Tablet",
+  phone: "Phone",
+});
+
+const layoutAt = (
+  responsive: unknown,
+  breakpoint: Breakpoint,
+): Record<string, unknown> | undefined => {
+  const layout = (responsive as Record<string, unknown> | undefined)?.[breakpoint];
+  return layout !== null && typeof layout === "object"
+    ? (layout as Record<string, unknown>)
+    : undefined;
+};
+
+/** One breakpoint's visibility, width and height inspector, limited to what the release allows. */
+const layoutField = (
+  release: PlatformBlockRelease,
+  breakpoint: Breakpoint,
+  layout: Record<string, unknown> | undefined,
+): Field => {
+  const widthKind = (layout?.width as { kind?: unknown } | undefined)?.kind;
+  const heightKind = (layout?.height as { kind?: unknown } | undefined)?.kind;
+  const select = (label: string, values: readonly string[]): Field => ({
+    type: "select",
+    label,
+    options: values.map((value) => ({ label: value, value })),
+  });
+  const widthFields: Record<string, Field> = {
+    kind: select(
+      "Width",
+      release.capabilities.gridWidth ? ["content", "fill", "grid"] : ["content", "fill"],
+    ),
+    ...(widthKind === "grid"
+      ? {
+          startColumn: { type: "number", label: "Start column", min: 1, max: 12 } as Field,
+          span: { type: "number", label: "Column span", min: 1, max: 12 } as Field,
+        }
+      : {}),
+  };
+  const heightFields: Record<string, Field> = {
+    kind: select(
+      "Height",
+      release.capabilities.height === "content" ? ["content"] : ["content", "bounded"],
+    ),
+    ...(heightKind === "bounded"
+      ? { units: { type: "number", label: "Height units", min: 1 } as Field }
+      : {}),
+  };
+  return {
+    type: "object",
+    label: BREAKPOINT_TITLES[breakpoint],
+    objectFields: {
+      ...(release.capabilities.responsiveVisibility
+        ? {
+            visible: {
+              type: "radio",
+              label: "Visible",
+              options: [
+                { label: "Shown", value: true },
+                { label: "Hidden", value: false },
+              ],
+            } as Field,
+          }
+        : {}),
+      width: { type: "object", label: "Width", objectFields: widthFields },
+      height: { type: "object", label: "Height", objectFields: heightFields },
+    },
+  };
+};
+
 const PALETTE_TITLES: Readonly<Record<string, string>> = Object.freeze({
   layout: "Layout",
   content: "Content",
@@ -746,8 +814,28 @@ export function createVortexPuckConfig(
     keysByCategory.set(release.paletteGroup, keys);
   }
 
-  const buildFields = (release: PlatformBlockRelease, settings: PlacementSettings) => {
+  const buildFields = (
+    release: PlatformBlockRelease,
+    settings: PlacementSettings,
+    responsive?: unknown,
+  ) => {
     const fields: Record<string, Field> = {
+      vortex: {
+        type: "object",
+        label: "Layout",
+        objectFields: {
+          responsive: {
+            type: "object",
+            label: "Responsive layout",
+            objectFields: Object.fromEntries(
+              RESPONSIVE_BREAKPOINT_ORDER.map((breakpoint) => [
+                breakpoint,
+                layoutField(release, breakpoint, layoutAt(responsive, breakpoint)),
+              ]),
+            ),
+          },
+        },
+      },
       settings: {
         type: "object",
         label: "Settings",
@@ -792,12 +880,12 @@ export function createVortexPuckConfig(
         },
       },
       fields: buildFields(release, defaults),
-      ...(hasRepeatableSlot
-        ? {
-            resolveFields: (data: { props: Record<string, unknown> }) =>
-              buildFields(release, (data.props.settings ?? {}) as PlacementSettings),
-          }
-        : {}),
+      resolveFields: (data: { props: Record<string, unknown> }) =>
+        buildFields(
+          release,
+          hasRepeatableSlot ? ((data.props.settings ?? {}) as PlacementSettings) : defaults,
+          (data.props.vortex as { responsive?: unknown } | undefined)?.responsive,
+        ),
       render: (componentProps) => (
         <PlacementBlock
           registry={registry}
