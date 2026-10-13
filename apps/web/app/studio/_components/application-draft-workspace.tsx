@@ -46,7 +46,7 @@ import { createStudioApplication, reopenStudioApplication, saveStudioApplication
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
 import { minimumApplicationSource, type MinimumApplicationInputs } from "../_lib/minimum-application-source";
-import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
+import { ApplicationDraftAgentTools, type StudioPublicationOutcome } from "./application-draft-agent-tools";
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
@@ -86,6 +86,7 @@ type PublicationSnapshot = Readonly<{
   sourceFingerprint: string; source: object; selectionKey: string;
   lifetime: number; generation: number;
 }>;
+type PreparedPublication = Readonly<{ confirmation: DefinitionPublicationConfirmation; snapshot: PublicationSnapshot }>;
 const samePublicationSnapshot = (left: PublicationSnapshot, right: PublicationSnapshot | null) =>
   right !== null && left.organizationId === right.organizationId && left.rootId === right.rootId &&
   left.key === right.key && left.draftRevision === right.draftRevision &&
@@ -245,9 +246,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   const [publicationNote, setPublicationNote] = useState("");
   const [publicationMessage, setPublicationMessage] = useState("");
   const [publishedPublication, setPublishedPublication] = useState<PublishDefinitionResult | null>(null);
-  const [preparedPublication, setPreparedPublication] = useState<Readonly<{
-    confirmation: DefinitionPublicationConfirmation; snapshot: PublicationSnapshot;
-  }> | null>(null);
+  const [preparedPublication, setPreparedState] = useState<PreparedPublication | null>(null);
+  // The agent tools read the confirmation between calls, so the latest value is kept outside render state.
+  const preparedRef = useRef<PreparedPublication | null>(null);
+  const setPreparedPublication = useCallback((next: PreparedPublication | null | ((current: PreparedPublication | null) => PreparedPublication | null)) => {
+    preparedRef.current = typeof next === "function" ? next(preparedRef.current) : next;
+    setPreparedState(preparedRef.current);
+  }, []);
   const [workspaceLifetime, setWorkspaceLifetime] = useState(0);
   const [history] = useState(() => createStudioApplicationDraftHistoryController(draft, {
     saveDraft: async (command) => {
@@ -527,76 +532,93 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       : "Publication confirmation cancelled. Local inputs are preserved.");
   };
 
-  const requestPublication = async (mode: "prepare" | "publish") => {
-    if (publicationPending.current || readPublicationSnapshot() === null) return;
-    const prepared = preparedPublication;
-    const note = publicationNote.trim();
+  const requestPublication = async (mode: "prepare" | "publish", suppliedNote?: string): Promise<StudioPublicationOutcome> => {
+    if (publicationPending.current) return { kind: "not_started", reason: "busy" };
+    if (readPublicationSnapshot() === null) return { kind: "not_started", reason: "not_saved" };
+    const prepared = preparedRef.current;
+    const note = (suppliedNote ?? publicationNote).trim();
     if (mode === "publish" && (prepared === null || note.length < 1 || note.length > 2000 ||
       !samePublicationSnapshot(prepared.snapshot, readPublicationSnapshot()))) {
       setPreparedPublication(null);
       setPublicationMessage("Prepare the current saved draft and enter a release note before confirming.");
-      return;
+      return { kind: "not_started", reason: prepared === null || note.length >= 1 && note.length <= 2000 ? "not_prepared" : "release_note_invalid" };
     }
     publicationPending.current = true;
     previewGeneration.current += 1;
     const snapshot = readPublicationSnapshot();
-    if (snapshot === null) { publicationPending.current = false; return; }
+    if (snapshot === null) { publicationPending.current = false; return { kind: "not_started", reason: "not_saved" }; }
     const request = { epoch: ++publicationEpoch.current, cancelled: false };
     publicationRequest.current = request;
     setPublishing(true);
     setPreparedPublication(null);
     setPublicationMessage(mode === "prepare" ? "Preparing the current saved draft…" : "Publishing the confirmed release…");
+    const superseded = () => !active.current || lifetime.current !== snapshot.lifetime || request.cancelled ||
+      publicationRequest.current !== request || publicationEpoch.current !== request.epoch ||
+      !samePublicationSnapshot(snapshot, readPublicationSnapshot());
     try {
       if (mode === "prepare") {
         const result = await prepareStudioApplicationPublication(organizationId, {
           rootId: snapshot.rootId, expectedDraftRevision: snapshot.draftRevision,
         });
-        if (!active.current || lifetime.current !== snapshot.lifetime || request.cancelled ||
-          publicationRequest.current !== request || publicationEpoch.current !== request.epoch ||
-          !samePublicationSnapshot(snapshot, readPublicationSnapshot())) return;
+        if (superseded()) return { kind: "discarded" };
         const parsed = result.kind === "available" ? prepareDefinitionPublicationResultSchema.safeParse(result.preparation) : null;
         if (parsed?.success && parsed.data.confirmation.rootId === snapshot.rootId &&
           parsed.data.confirmation.expectedDraftRevision === snapshot.draftRevision &&
           parsed.data.confirmation.sourceFingerprint === snapshot.sourceFingerprint) {
           setPreparedPublication({ confirmation: parsed.data.confirmation, snapshot });
           setPublicationMessage("Preparation verified. Review the complete confirmation before explicitly publishing.");
-        } else setPublicationMessage(result.kind === "no_change"
+          return { kind: "prepared", confirmation: parsed.data.confirmation };
+        }
+        setPublicationMessage(result.kind === "no_change"
           ? "The saved draft has no publication change. No release was appended."
           : result.kind === "dependency_unavailable"
           ? "An exact published dependency is unavailable or incompatible. No publication was prepared."
           : "The current saved draft, permission or dependencies could not be prepared. Local inputs are preserved.");
-      } else {
-        if (prepared === null) return;
-        const result = await publishStudioApplication(organizationId, {
-          confirmation: prepared.confirmation, releaseNote: note,
-        });
-        if (!active.current || lifetime.current !== snapshot.lifetime || request.cancelled ||
-          publicationRequest.current !== request || publicationEpoch.current !== request.epoch ||
-          !samePublicationSnapshot(snapshot, readPublicationSnapshot())) return;
-        const parsed = result.kind === "available" ? publishDefinitionResultSchema.safeParse(result.publication) : null;
-        const confirmation = prepared.confirmation;
-        if (parsed?.success && parsed.data.rootId === confirmation.rootId &&
-          parsed.data.releaseRevision === confirmation.expectedDraftRevision &&
-          parsed.data.releaseVersion === confirmation.assignedVersion &&
-          parsed.data.contentFingerprint === confirmation.contentFingerprint &&
-          parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
-          canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
-          previewGeneration.current += 1;
-          setPublishedPublication(parsed.data);
-          setPublicationMessage(`Published release ${parsed.data.releaseVersion} at revision ${parsed.data.releaseRevision}. Reopen explicitly before resolving new published metadata. No installation or adoption was requested.`);
-        } else setPublicationMessage(result.kind === "conflict"
-          ? "The saved draft or confirmation changed. Prepare again after explicitly reopening. Local inputs are preserved."
-          : result.kind === "dependency_unavailable"
-          ? "An exact dependency changed or became unavailable. Local inputs are preserved."
-          : result.kind === "refused"
-          ? "Current publication authority or source was refused. Local inputs are preserved."
-          : result.kind === "no_change"
-          ? "The saved draft has no publication change. No release was appended."
-          : "Publication could not be verified. It may have completed; reopen explicitly before preparing again. Local inputs are preserved.");
+        if (result.kind === "available") {
+          console.error("[studio] publication preparation did not match the saved draft: STUDIO_PUBLICATION_PREPARATION_MISMATCH");
+          return { kind: "unverified" };
+        }
+        return { kind: "declined", result: result.kind, reason: result.reason };
       }
-    } catch {
+      if (prepared === null) return { kind: "not_started", reason: "not_prepared" };
+      const result = await publishStudioApplication(organizationId, {
+        confirmation: prepared.confirmation, releaseNote: note,
+      });
+      if (superseded()) return { kind: "discarded" };
+      const parsed = result.kind === "available" ? publishDefinitionResultSchema.safeParse(result.publication) : null;
+      const confirmation = prepared.confirmation;
+      if (parsed?.success && parsed.data.rootId === confirmation.rootId &&
+        parsed.data.releaseRevision === confirmation.expectedDraftRevision &&
+        parsed.data.releaseVersion === confirmation.assignedVersion &&
+        parsed.data.contentFingerprint === confirmation.contentFingerprint &&
+        parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
+        canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
+        previewGeneration.current += 1;
+        setPublishedPublication(parsed.data);
+        setPublicationMessage(`Published release ${parsed.data.releaseVersion} at revision ${parsed.data.releaseRevision}. Reopen explicitly before resolving new published metadata. No installation or adoption was requested.`);
+        return { kind: "published", publication: parsed.data };
+      }
+      setPublicationMessage(result.kind === "conflict"
+        ? "The saved draft or confirmation changed. Prepare again after explicitly reopening. Local inputs are preserved."
+        : result.kind === "dependency_unavailable"
+        ? "An exact dependency changed or became unavailable. Local inputs are preserved."
+        : result.kind === "refused"
+        ? "Current publication authority or source was refused. Local inputs are preserved."
+        : result.kind === "no_change"
+        ? "The saved draft has no publication change. No release was appended."
+        : "Publication could not be verified. It may have completed; reopen explicitly before preparing again. Local inputs are preserved.");
+      if (result.kind === "available") {
+        console.error("[studio] publication result did not match the confirmation: STUDIO_PUBLICATION_RESULT_MISMATCH");
+        return { kind: "unverified" };
+      }
+      // A transient failure of the append may still have completed.
+      return result.kind === "temporarily_unavailable" ? { kind: "unverified" }
+        : { kind: "declined", result: result.kind, reason: result.reason };
+    } catch (error) {
+      console.error(`[studio] publication ${mode} request failed: ${describeFailure(error)}`);
       if (active.current && lifetime.current === snapshot.lifetime && !request.cancelled)
         setPublicationMessage("The request could not be verified. Reopen explicitly to inspect saved state. Local inputs are preserved.");
+      return { kind: "unverified" };
     } finally {
       // Cancellation never releases a potentially mutating request early or clears another owner.
       if (publicationRequest.current === request) {
@@ -808,7 +830,10 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
   return <main className="space-y-6 p-6" aria-busy={isPublishing || state.isSaving || isReopening}>
     <ApplicationDraftAgentTools organizationId={organizationId} history={history}
       catalogue={platformBlockCatalogue} readLifetime={() => lifetime.current} blockedReason={agentBlockedReason}
-      select={changeSelection} command={commandComposition} save={save} />
+      select={changeSelection} command={commandComposition} save={save}
+      readPreparedConfirmation={() => preparedRef.current?.confirmation}
+      prepare={() => requestPublication("prepare")} publish={(releaseNote) => requestPublication("publish", releaseNote)}
+      readPreview={readPreviewContext} />
     <header className="space-y-2"><h1 className="text-2xl font-semibold">Application draft: {source.body.name}</h1>
       <dl className="grid gap-1 break-all text-sm"><div><dt className="inline font-medium">Organization: </dt><dd className="inline">{draft.organizationId}</dd></div>
         <div><dt className="inline font-medium">Root: </dt><dd className="inline">{state.rootId}</dd></div>

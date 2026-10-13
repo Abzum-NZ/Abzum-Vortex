@@ -15,6 +15,7 @@ import {
   type PlatformThemeTokens,
 } from "@vortex/ui";
 import { previewStudioApplicationHomepage } from "../preview-actions";
+import type { StudioApplicationPreviewResult } from "../../_lib/studio-application-preview";
 
 export type SavedHomepagePreviewContext = Readonly<{
   organizationId: string;
@@ -66,6 +67,48 @@ const selectionFor = (
   if (page.type !== "guided_form") return { context, pageKey: page.key };
   const firstStep = page.steps[0];
   return firstStep === undefined ? null : { context, pageKey: page.key, stepAlias: firstStep.id };
+};
+
+export type SavedPagePreviewRequest = Readonly<{
+  breakpoint: ApplicationPreviewBreakpoint; pageKey: string; stepAlias?: string;
+}>;
+
+/** What a preview answer from the server means for the saved draft in the workspace, or why it cannot be shown. */
+export const checkSavedPagePreview = (
+  result: StudioApplicationPreviewResult, current: SavedHomepagePreviewContext, request: SavedPagePreviewRequest,
+): Readonly<{ kind: "available"; artifact: ApplicationPreviewArtifact; resolutionFingerprint: string }>
+  | Readonly<{ kind: "unavailable"; message: string }> => {
+  if (result.kind !== "available") {
+    return { kind: "unavailable", message: result.kind === "conflict"
+      ? "The saved draft changed. Reopen it explicitly before requesting another preview."
+      : result.kind === "refused"
+        ? result.reason === "dependency_unavailable"
+          ? "The saved draft's required release is unavailable. No substitute theme or component is used."
+          : "The selected saved page could not be previewed with the current permissions and source."
+        : "Preview is temporarily unavailable. Your editing inputs are preserved." };
+  }
+  const sourceFingerprint = fingerprintSchema.safeParse(result.sourceFingerprint);
+  const resolutionFingerprint = fingerprintSchema.safeParse(result.resolutionFingerprint);
+  if (!sourceFingerprint.success || !resolutionFingerprint.success ||
+    result.organizationId !== current.organizationId || result.key !== current.key ||
+    result.sourceFingerprint !== current.sourceFingerprint ||
+    result.selection.pageKey !== request.pageKey || result.selection.stepAlias !== request.stepAlias)
+    return { kind: "unavailable", message: "The preview did not match the saved draft. No preview is shown." };
+  const artifact = parseApplicationPreviewArtifact(result.artifact);
+  const page = artifact.composition.pages[0];
+  const sourcePage = current.source.body.pages.find((item) => item.key === request.pageKey);
+  const stepMatches = page?.steps?.filter((step) => step.id === artifact.activeStepId);
+  if (artifact.rootId !== current.rootId || artifact.draftRevision !== current.draftRevision ||
+    artifact.breakpoint !== request.breakpoint || artifact.pageId !== result.selection.pageId ||
+    artifact.activeStepId !== result.selection.activeStepId || sourcePage === undefined ||
+    artifact.composition.pages.length !== 1 || page === undefined || page.pageId !== artifact.pageId ||
+    (sourcePage.type === "guided_form" ? artifact.activeStepId === undefined || stepMatches?.length !== 1 ||
+      page.steps?.length !== sourcePage.steps.length || !("stepContent" in page.composition) ||
+      !Object.hasOwn(page.composition.stepContent, artifact.activeStepId)
+      : artifact.activeStepId !== undefined || page.steps !== undefined ||
+        !pageCompositionSchema.safeParse(page.composition).success))
+    return { kind: "unavailable", message: "The preview did not match the requested saved page, step, revision and size." };
+  return { kind: "available", artifact, resolutionFingerprint: resolutionFingerprint.data };
 };
 
 const buttonClass = "";
@@ -168,44 +211,13 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
         ...(request.stepAlias === undefined ? {} : { stepAlias: request.stepAlias }),
       });
       if (!isCurrent(request)) return;
-      if (result.kind !== "available") {
-        const message = result.kind === "conflict"
-          ? "The saved draft changed. Reopen it explicitly before requesting another preview."
-          : result.kind === "refused"
-            ? result.reason === "dependency_unavailable"
-              ? "The saved draft's required release is unavailable. No substitute theme or component is used."
-              : "The selected saved page could not be previewed with the current permissions and source."
-            : "Preview is temporarily unavailable. Your editing inputs are preserved.";
-        setState({ kind: "unavailable", request, message });
+      const checked = checkSavedPagePreview(result, current, request);
+      if (checked.kind === "unavailable") {
+        setState({ kind: "unavailable", request, message: checked.message });
         return;
       }
-      const sourceFingerprint = fingerprintSchema.safeParse(result.sourceFingerprint);
-      const resolutionFingerprint = fingerprintSchema.safeParse(result.resolutionFingerprint);
-      if (!sourceFingerprint.success || !resolutionFingerprint.success ||
-        result.organizationId !== current.organizationId || result.key !== current.key ||
-        result.sourceFingerprint !== current.sourceFingerprint ||
-        result.selection.pageKey !== request.pageKey || result.selection.stepAlias !== request.stepAlias) {
-        setState({ kind: "unavailable", request, message: "The preview did not match the saved draft. No preview is shown." });
-        return;
-      }
-      const artifact = parseApplicationPreviewArtifact(result.artifact);
-      const page = artifact.composition.pages[0];
-      const sourcePage = current.source.body.pages.find((item) => item.key === request.pageKey);
-      const stepMatches = page?.steps?.filter((step) => step.id === artifact.activeStepId);
-      if (artifact.rootId !== current.rootId || artifact.draftRevision !== current.draftRevision ||
-        artifact.breakpoint !== request.breakpoint || artifact.pageId !== result.selection.pageId ||
-        artifact.activeStepId !== result.selection.activeStepId || sourcePage === undefined ||
-        artifact.composition.pages.length !== 1 || page === undefined || page.pageId !== artifact.pageId ||
-        (sourcePage.type === "guided_form" ? artifact.activeStepId === undefined || stepMatches?.length !== 1 ||
-          page.steps?.length !== sourcePage.steps.length || !("stepContent" in page.composition) ||
-          !Object.hasOwn(page.composition.stepContent, artifact.activeStepId)
-          : artifact.activeStepId !== undefined || page.steps !== undefined ||
-            !pageCompositionSchema.safeParse(page.composition).success)) {
-        setState({ kind: "unavailable", request, message: "The preview did not match the requested saved page, step, revision and size." });
-        return;
-      }
-      if (isCurrent(request)) setState({ kind: "available", request, artifact,
-        resolutionFingerprint: resolutionFingerprint.data });
+      const { artifact, resolutionFingerprint } = checked;
+      if (isCurrent(request)) setState({ kind: "available", request, artifact, resolutionFingerprint });
     } catch {
       if (isCurrent(request)) setState({ kind: "unavailable", request,
         message: "The selected saved page preview could not be verified. Your editing inputs are preserved." });

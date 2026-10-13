@@ -1,7 +1,8 @@
 "use client";
 import { WebMcpStatus, type ApplicationWebMcpRuntime } from "@vortex/ui";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { applicationSourceDocumentSchema, describeFailure, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+import { applicationSourceDocumentSchema, describeFailure, type DefinitionPublicationConfirmation,
+  type ImmutablePlatformBlockCatalogue, type PublishDefinitionResult } from "@vortex/platform/schema";
 import {
   describeStudioCompositionPalette,
   describeStudioCompositionRemoval,
@@ -19,10 +20,13 @@ import {
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
-import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
+import { previewStudioApplicationHomepage } from "../preview-actions";
+import { checkSavedPagePreview, type SavedHomepagePreviewContext } from "./application-draft-preview";
+import { conflictMessage, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
 
 type ToolName = "read_application_draft" | "rename_application_item" | "add_placement" | "change_placement_settings"
-  | "remove_placement" | "save_application_draft";
+  | "remove_placement" | "save_application_draft" | "preview_saved_application_page" | "prepare_application_publication"
+  | "publish_application_release";
 type StudioApplicationTool = WebMcpToolDescriptor & Readonly<{ name: ToolName; input: z.ZodType }>;
 
 const alias = (what: string) => applicationSourceDocumentSchema.shape.root_alias.describe(what);
@@ -75,6 +79,21 @@ const applicationTools: readonly StudioApplicationTool[] = [
   tool("remove_placement", "Remove an unreferenced released placement, the same edit as the Remove placement control. It changes the workspace draft; call save_application_draft to persist it.",
     z.object({ placementAlias: alias("The placement alias from read_application_draft.") }).strict(), false),
   tool("save_application_draft", "Save the workspace draft into the saved Application draft, the same action as Save draft. Nothing is published.", z.object({}).strict(), false),
+  tool("preview_saved_application_page", "Render the preview of one saved page at one size, the same request as Preview saved page, and report whether it can be shown. Needs a saved draft with no unsaved or pending edits; name the exact draftRevision from read_application_draft. For a guided form give its stepAlias; give none for other pages. It changes nothing.",
+    z.object({
+      draftRevision: z.number().int().describe("The saved draft revision from read_application_draft."),
+      pageAlias: alias("The page alias from read_application_draft."),
+      stepAlias: z.string().min(1).optional().describe("The guided step alias; only for a guided form page."),
+      breakpoint: z.enum(["desktop", "tablet", "phone"]),
+    }).strict(), true),
+  tool("prepare_application_publication", "Check the saved draft against its published dependencies, permissions and version rules and propose the release, the same request as Prepare publication. Needs a saved draft with no unsaved edits; name the exact draftRevision. Nothing is published; the reply names the release version to confirm with publish_application_release.",
+    z.object({ draftRevision: z.number().int().describe("The saved draft revision from read_application_draft.") }).strict(), false),
+  tool("publish_application_release", "Publish the prepared release, the same action as Publish after Prepare publication. It appends a release that cannot be undone and installs nothing. Name the exact draftRevision and releaseVersion that prepare_application_publication proposed, and give the release note.",
+    z.object({
+      draftRevision: z.number().int().describe("The draft revision that was prepared."),
+      releaseVersion: z.string().min(1).describe("The release version that prepare_application_publication proposed."),
+      releaseNote: z.string().min(1).max(2000),
+    }).strict(), false),
 ];
 const descriptors = applicationTools.map(({ name, description, inputSchema: schema, readOnly }) => ({ name, description, inputSchema: schema, readOnly }));
 
@@ -92,8 +111,38 @@ const saveMessage = (outcome: StudioApplicationDraftSaveOutcome): string =>
       : outcome.kind === "busy" ? "A save is already in progress."
         : "The save could not be verified, so nothing is known to be saved. Call read_application_draft.";
 
+/** What one prepare or publish request came to, for the control's message and for the agent tools. */
+export type StudioPublicationOutcome =
+  | Readonly<{ kind: "not_started"; reason: "busy" | "not_saved" | "not_prepared" | "release_note_invalid" }>
+  | Readonly<{ kind: "prepared"; confirmation: DefinitionPublicationConfirmation }>
+  | Readonly<{ kind: "published"; publication: PublishDefinitionResult }>
+  | Readonly<{ kind: "declined"; result: "refused" | "conflict" | "dependency_unavailable" | "no_change" | "temporarily_unavailable"; reason: string | undefined }>
+  | Readonly<{ kind: "discarded" | "unverified" }>;
+const publicationUnknown = "The request did not complete, so the outcome is unknown.";
+const publicationFailure = (operation: "prepare" | "publish", outcome: StudioPublicationOutcome) => {
+  switch (outcome.kind) {
+    case "not_started":
+      return { outcome: outcome.reason, message: outcome.reason === "busy" ? "A publication request is already running. Try again in a moment."
+        : outcome.reason === "not_saved" ? "The workspace draft is not the saved draft: it has unsaved changes or a request is pending. Nothing was done. Call save_application_draft, then read_application_draft."
+          : outcome.reason === "not_prepared" ? "Nothing is prepared for the current saved draft. Call prepare_application_publication first. Nothing was published."
+            : "The release note must be between 1 and 2000 characters. Nothing was published." };
+    case "declined": {
+      console.error(`[studio] agent ${operation} refused: STUDIO_AGENT_PUBLICATION_${outcome.result.toUpperCase()}${outcome.reason === undefined ? "" : `:${outcome.reason}`}`);
+      return { outcome: outcome.result, ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+        message: `${unavailableMessage(outcome.result, outcome.reason)}${outcome.reason === undefined ? "" : ` (reason: ${outcome.reason})`} Nothing was ${operation === "publish" ? "published" : "prepared"}.` };
+    }
+    case "discarded":
+      return { outcome: "unavailable", message: `${publicationUnknown} The response was discarded because the workspace changed${operation === "publish" ? "; the release may have been published. Call read_application_draft and check the release history before publishing again" : "; nothing is published"}.` };
+    default:
+      return { outcome: "unavailable", message: operation === "publish"
+        ? `${publicationUnknown} The release may have been published. Call read_application_draft and check the release history before publishing again.`
+        : `${publicationUnknown} Nothing is published. Call prepare_application_publication again.` };
+  }
+};
+
 /** Registers the Application draft tools in the browser agent interface; each one runs the edit its workspace control runs. */
-export function ApplicationDraftAgentTools({ organizationId, history, catalogue, readLifetime, blockedReason, select, command, save }: {
+export function ApplicationDraftAgentTools({ organizationId, history, catalogue, readLifetime, blockedReason, select, command, save,
+  readPreparedConfirmation, prepare, publish, readPreview }: {
   organizationId: string;
   history: StudioApplicationDraftHistoryController;
   catalogue: ImmutablePlatformBlockCatalogue;
@@ -104,6 +153,12 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
   command: (expected: StudioCompositionContext, expectedSelection: StudioSemanticSelection,
     command: StudioCompositionCommand) => StudioCompositionCommandResult["kind"];
   save: () => Promise<StudioApplicationDraftSaveOutcome | undefined>;
+  /** The confirmation the last successful Prepare publication produced for the current saved draft, if still valid. */
+  readPreparedConfirmation: () => DefinitionPublicationConfirmation | undefined;
+  prepare: () => Promise<StudioPublicationOutcome>;
+  publish: (releaseNote: string) => Promise<StudioPublicationOutcome>;
+  /** The saved baseline the preview needs; null while edits or requests are pending. */
+  readPreview: () => SavedHomepagePreviewContext | null;
 }) {
   const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
@@ -122,6 +177,8 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
     return {
       draftRevision: state.draftRevision, unsavedChanges: state.isDirty,
       application: { name: state.source.body.name, description: state.source.body.description },
+      previewablePages: state.source.body.pages.map((page) => ({ pageAlias: page.id, name: page.name, type: page.type,
+        ...(page.type === "guided_form" ? { stepAliases: page.steps.map((step) => step.id) } : {}) })),
       outline: trimOutline(outline),
       pages: collect(outline, "page").flatMap((page) => {
         const palette = describeStudioCompositionPalette(context, page);
@@ -174,6 +231,64 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
           return { outcome: outcome.kind, ...("reason" in outcome && outcome.reason !== undefined ? { reason: outcome.reason } : {}), message: saveMessage(outcome) };
         }
         return { outcome: "saved", ...describeNow() };
+      }
+      if (found.name === "preview_saved_application_page") {
+        const input = parsed.data as { draftRevision: number; pageAlias: string; stepAlias?: string; breakpoint: "desktop" | "tablet" | "phone" };
+        const context = readPreview();
+        if (context === null) return { outcome: "blocked", message: "Preview needs the saved draft with no unsaved changes or pending requests. Call save_application_draft, then read_application_draft." };
+        if (input.draftRevision !== context.draftRevision) {
+          console.error("[studio] agent preview refused: STUDIO_AGENT_PREVIEW_STALE_REVISION");
+          return { outcome: "conflict", message: `The saved draft is at revision ${context.draftRevision}, not ${input.draftRevision}. Nothing was previewed. Call read_application_draft.` };
+        }
+        const page = context.source.body.pages.find((item) => item.id === input.pageAlias);
+        if (page === undefined) return { outcome: "not_found", message: "That page is not in the saved draft. Call read_application_draft." };
+        if (page.type === "guided_form" ? input.stepAlias === undefined || !page.steps.some((step) => step.id === input.stepAlias) : input.stepAlias !== undefined)
+          return { outcome: "validation_failed", issues: [{ path: "stepAlias", message: page.type === "guided_form"
+            ? "Give the alias of one of the page's guided steps." : "Only a guided form page has steps; leave stepAlias out." }], message: "Nothing was previewed." };
+        const request = { breakpoint: input.breakpoint, pageKey: page.key, ...(input.stepAlias === undefined ? {} : { stepAlias: input.stepAlias }) };
+        const result = await previewStudioApplicationHomepage(organizationId, {
+          rootId: context.rootId, draftRevision: context.draftRevision, breakpoint: request.breakpoint,
+          sourceFingerprint: context.sourceFingerprint, pageKey: request.pageKey,
+          ...(request.stepAlias === undefined ? {} : { stepAlias: request.stepAlias }),
+        });
+        const checked = checkSavedPagePreview(result, context, request);
+        if (checked.kind === "unavailable") {
+          const reason = result.kind === "refused" ? result.reason : undefined;
+          console.error(`[studio] agent preview unavailable: STUDIO_AGENT_PREVIEW_${result.kind.toUpperCase()}${reason === undefined ? "" : `:${reason}`}`);
+          return { outcome: result.kind === "conflict" ? "conflict" : "unavailable", ...(reason === undefined ? {} : { reason }), message: checked.message };
+        }
+        return { outcome: "previewed", draftRevision: context.draftRevision, pageAlias: input.pageAlias,
+          ...(input.stepAlias === undefined ? {} : { stepAlias: input.stepAlias }),
+          breakpoint: input.breakpoint, resolutionFingerprint: checked.resolutionFingerprint,
+          message: "The saved page preview was produced and verified against the saved draft. Nothing was changed." };
+      }
+      if (found.name === "prepare_application_publication" || found.name === "publish_application_release") {
+        const input = parsed.data as { draftRevision: number; releaseVersion?: string; releaseNote?: string };
+        const operation = found.name === "publish_application_release" ? "publish" : "prepare";
+        const current = history.getState();
+        if (input.draftRevision !== current.draftRevision) {
+          console.error(`[studio] agent ${operation} refused: STUDIO_AGENT_PUBLICATION_STALE_REVISION`);
+          return { outcome: "conflict", message: `The saved draft is at revision ${current.draftRevision}, not ${input.draftRevision}. Nothing was ${operation === "publish" ? "published" : "prepared"}. Call read_application_draft.` };
+        }
+        if (current.isDirty) return publicationFailure(operation, { kind: "not_started", reason: "not_saved" });
+        if (operation === "prepare") {
+          const outcome = await prepare();
+          if (outcome.kind !== "prepared") return publicationFailure("prepare", outcome);
+          const confirmation = outcome.confirmation;
+          return { outcome: "prepared", draftRevision: confirmation.expectedDraftRevision, releaseVersion: confirmation.assignedVersion,
+            releaseOutcome: confirmation.outcome, confirmation,
+            message: `Nothing is published yet. To publish, call publish_application_release with draftRevision ${confirmation.expectedDraftRevision}, releaseVersion ${confirmation.assignedVersion} and a release note.` };
+        }
+        const prepared = readPreparedConfirmation();
+        if (prepared === undefined) return publicationFailure("publish", { kind: "not_started", reason: "not_prepared" });
+        if (prepared.expectedDraftRevision !== input.draftRevision || prepared.assignedVersion !== input.releaseVersion) {
+          console.error("[studio] agent publish refused: STUDIO_AGENT_PUBLICATION_CONFIRMATION_DIFFERS");
+          return { outcome: "confirmation_differs", message: `The prepared release is version ${prepared.assignedVersion} of draft revision ${prepared.expectedDraftRevision}, not what you named. Nothing was published. Name those values, or call prepare_application_publication again.` };
+        }
+        const outcome = await publish(input.releaseNote ?? "");
+        if (outcome.kind !== "published") return publicationFailure("publish", outcome);
+        return { outcome: "published", releaseVersion: outcome.publication.releaseVersion, releaseRevision: outcome.publication.releaseRevision,
+          publication: outcome.publication, message: "The release was published. It is not installed or adopted." };
       }
       if (found.name === "rename_application_item") {
         const input = parsed.data as { target: "application" | "page"; pageAlias?: string; name: string; description?: string };
@@ -245,7 +360,8 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
     } finally {
       running.current = false;
     }
-  }, [applyCommand, blockedReason, commandOutcome, contextNow, describeNow, history, save, select]);
+  }, [applyCommand, blockedReason, commandOutcome, contextNow, describeNow, history, organizationId, prepare, publish,
+    readPreparedConfirmation, readPreview, save, select]);
 
   return <>
     <WebMcpAdapter contextKey={`${organizationId}:${history.getState().rootId}`} tools={tools} onInvoke={invoke} onStatusChange={setRuntime} />
