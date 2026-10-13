@@ -1,7 +1,6 @@
 import { loadStudioModuleFieldLabel } from "../../../../../_lib/studio-module-field-label";
 import { loadStudioModuleTextFieldSettings } from "../../../../../_lib/studio-module-text-field-settings";
-import { ModuleFieldsEditor } from "../../../../_components/module-fields-editor";
-import { ModuleTextFieldSettingsEditor } from "../../../../_components/module-text-field-settings-editor";
+import { ModuleFieldsWorkspace } from "../../../../_components/module-fields-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +18,5 @@ export default async function StudioModuleFieldsPage({ params }: {
       ? "The Module draft could not be read because of a platform problem. Try again in a moment."
       : "This Module draft is unavailable. Sign in with an account permitted to manage drafts and try again."}</p>
   </main>;
-  return <>
-    <ModuleFieldsEditor key={`fields:${fieldsResult.draft.organizationId}:${fieldsResult.draft.rootId}`} draft={fieldsResult.draft} />
-    <ModuleTextFieldSettingsEditor key={`${textResult.draft.organizationId}:${textResult.draft.rootId}`}
-      draft={textResult.draft} fields={textResult.fields} />
-  </>;
+  return <ModuleFieldsWorkspace key={`${fieldsResult.draft.organizationId}:${fieldsResult.draft.rootId}`} draft={fieldsResult.draft} />;
 }

@@ -35,8 +35,10 @@ const reasonText = (kind: "conflict" | "refused", reason: string) => {
   }
 };
 
-export function ModuleFieldsEditor({ draft }: { draft: StoredModuleDefinitionDraft }) {
-  const [baseline, setBaseline] = useState(draft);
+export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline }: {
+  draft: StoredModuleDefinitionDraft;
+  onDraftChange: (draft: StoredModuleDefinitionDraft) => void;
+}) {
   const first = baseline.source.body.record_types[0];
   const [selected, setSelected] = useState(first === undefined ? "" : selectionValue(first.id, ""));
   const [label, setLabel] = useState("");
@@ -54,10 +56,11 @@ export function ModuleFieldsEditor({ draft }: { draft: StoredModuleDefinitionDra
   const adding = existing === undefined;
   const typeChoices = existing !== undefined && !offered.some((item) => item.type === existing.type)
     ? [existing.type, ...offered.map((item) => item.type)] : offered.map((item) => item.type);
-  const needsMaxLength = existing?.type === type ? false : offered.find((item) => item.type === type)?.needsMaxLength === true;
+  const effectiveType = type === "" ? offered[0]?.type ?? "" : type;
+  const needsMaxLength = existing?.type === effectiveType ? false : offered.find((item) => item.type === effectiveType)?.needsMaxLength === true;
   const nextKey = adding && record !== undefined && label.trim() !== ""
     ? deriveFieldKey(label, new Set(record.fields.map((item) => item.key))) : undefined;
-  const dirty = existing === undefined ? label.trim() !== "" : label !== existing.label || type !== existing.type || required !== existing.required;
+  const dirty = existing === undefined ? label.trim() !== "" : label !== existing.label || effectiveType !== existing.type || required !== existing.required;
 
   const choose = (value: string) => {
     const [nextRecord, nextField] = JSON.parse(value) as [string, string];
@@ -71,8 +74,6 @@ export function ModuleFieldsEditor({ draft }: { draft: StoredModuleDefinitionDra
     setValidation(null);
     setMessage("");
   };
-
-  const effectiveType = type === "" ? offered[0]?.type ?? "" : type;
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
