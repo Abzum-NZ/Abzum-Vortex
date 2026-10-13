@@ -6,6 +6,7 @@ import {
   type CustomComponentRelease,
 } from "../schema";
 import { z } from "zod";
+import { logRefusal } from "../catalogue/runtime-primitives";
 import {
   createStorageSignerFromPrivateKey,
   type StorageKeySigner,
@@ -374,7 +375,8 @@ const readObjectOrRefuse = async (
 ): Promise<Uint8Array | undefined> => {
   try {
     return await store.readObject({ objectPath });
-  } catch {
+  } catch (error) {
+    logRefusal("files", "component bundle object read", "storage_unavailable", error);
     return refuse("storage_unavailable");
   }
 };
@@ -385,7 +387,8 @@ const writeObjectOrRefuse = async (
 ): Promise<void> => {
   try {
     await store.writeObject(input);
-  } catch {
+  } catch (error) {
+    logRefusal("files", "component bundle object write", "storage_unavailable", error);
     refuse("storage_unavailable");
   }
 };
@@ -483,7 +486,8 @@ export const publishComponentBundle = async (
     let decoded: ComponentBundleManifest;
     try {
       decoded = decodeComponentBundleManifest(existingManifest);
-    } catch {
+    } catch (error) {
+      logRefusal("files", "component bundle existing manifest decode", "bundle_conflict", error);
       return refuse("bundle_conflict");
     }
     if (!bytesEqual(encodeComponentBundleManifest(decoded), encodedManifest))

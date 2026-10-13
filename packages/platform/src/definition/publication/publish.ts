@@ -275,10 +275,10 @@ export type AuthenticatedApplicationPageAdoptionRelease = Readonly<{
   impactReasons: readonly VersionImpactReason[];
 }>;
 
-const invalidStorage = (cause: string | z.ZodError): never => {
+const invalidStorage = (cause: string | z.ZodError, underlying?: unknown): never => {
   throw unexpectedDefinitionFailure(
     "DEFINITION_PUBLICATION_FAILED",
-    typeof cause === "string" ? new Error(cause) : cause,
+    typeof cause === "string" ? new Error(cause, { cause: underlying }) : cause,
     "publication storage",
   );
 };
@@ -667,8 +667,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
           );
-        } catch {
-          return invalidStorage("materializeHistory found inconsistent stored evidence");
+        } catch (error) {
+          return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
         if (output.validationContractVersion !== "2.0.0" || resolution.contractVersion !== "3.0.0")
           return invalidStorage("materializeHistory found inconsistent stored evidence");
@@ -685,8 +685,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
           );
-        } catch {
-          return invalidStorage("materializeHistory found inconsistent stored evidence");
+        } catch (error) {
+          return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
         if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
           return invalidStorage("materializeHistory found inconsistent stored evidence");
@@ -777,8 +777,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const sourceContractVersion = validationContractVersion;
     try {
       assertModuleContractPair(sourceContractVersion, validationContractVersion);
-    } catch {
-      return invalidStorage("materializeModuleRelease found inconsistent stored evidence");
+    } catch (error) {
+      return invalidStorage("materializeModuleRelease found inconsistent stored evidence", error);
     }
     const ownResolution = snapshot.definitions.filter(
       (definition) =>

@@ -15,6 +15,7 @@ import {
   type ComponentBundleObjectStore,
   type ComponentBundleRefusalReason,
 } from "./component-bundle-storage";
+import { logRefusal } from "../catalogue/runtime-primitives";
 
 /**
  * The canonical HTTP status of each serving refusal. A missing bundle is 404; a
@@ -123,7 +124,8 @@ export const serveComponentBundle = async (
     manifestBytes = await store.readObject({
       objectPath: componentBundleManifestObjectPath(input.contentAddress),
     });
-  } catch {
+  } catch (error) {
+    logRefusal("files", "component bundle manifest read", "storage_unavailable", error);
     return refused("storage_unavailable");
   }
   if (manifestBytes === undefined) return refused("bundle_not_found");
@@ -136,7 +138,8 @@ export const serveComponentBundle = async (
       !isSafeComponentBundlePath(manifest.entryFile)
     )
       return refused("integrity_failure");
-  } catch {
+  } catch (error) {
+    logRefusal("files", "component bundle manifest decode", "integrity_failure", error);
     return refused("integrity_failure");
   }
 
@@ -150,7 +153,8 @@ export const serveComponentBundle = async (
     bytes = await store.readObject({
       objectPath: componentBundleFileObjectPath(input.contentAddress, requested),
     });
-  } catch {
+  } catch (error) {
+    logRefusal("files", "component bundle file read", "storage_unavailable", error);
     return refused("storage_unavailable");
   }
   if (bytes === undefined) return refused("bundle_not_found");
