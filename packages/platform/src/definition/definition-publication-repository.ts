@@ -59,7 +59,7 @@ import type {
 import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -909,11 +909,11 @@ const safeRepositoryOperation = async <Result>(
     return await operation();
   } catch (error) {
     if (error instanceof DefinitionError) throw error;
-    switch (databaseErrorCode(error)) {
-      case "40001":
-      case "23505":
+    switch (classifyDatabaseError(error)) {
+      case "conflict":
+      case "duplicate":
         throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING", { cause: error });
-      case "42501": {
+      case "refused": {
         // One SQLSTATE covers two refusals; the database message names which one.
         const message = error instanceof Error ? error.message : "";
         if (message.includes("does not belong to the context organization"))

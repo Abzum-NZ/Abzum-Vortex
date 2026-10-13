@@ -25,7 +25,7 @@ import {
 } from "./installation-runtime-bundle-repository";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -115,10 +115,10 @@ export type ActiveInstallationBundleErrorCode =
 
 const failure = (error: unknown): DefinitionError<ActiveInstallationBundleErrorCode> => {
   if (error instanceof DefinitionError) return error;
-  const code = databaseErrorCode(error);
-  if (code === "42501" || code === "22023")
+  const kind = classifyDatabaseError(error);
+  if (kind === "refused" || kind === "invalid")
     return new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_REFUSED", { cause: error });
-  if (code === "P0002")
+  if (kind === "not_found")
     return new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE", { cause: error });
   return unexpectedDefinitionFailure(
     "ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED",

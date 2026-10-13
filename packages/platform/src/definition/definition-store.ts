@@ -16,7 +16,7 @@ import { extractStoredSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSource } from "./validation";
 import {
   DefinitionError,
-  databaseErrorCode,
+  classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
@@ -162,27 +162,27 @@ const safeStoreOperation = async <Result>(
   } catch (error) {
     if (error instanceof DefinitionError) throw error;
     const cause = { cause: error };
-    switch (databaseErrorCode(error)) {
-      case "40001":
+    switch (classifyDatabaseError(error)) {
+      case "conflict":
         throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING", cause);
-      case "23505":
+      case "duplicate":
         throw new DefinitionError(
           operationKind === "create_root"
             ? "DEFINITION_ROOT_ALREADY_EXISTS"
             : "DEFINITION_IDENTITY_ALIAS_CONFLICT",
           cause,
         );
-      case "42501":
+      case "refused":
         throw new DefinitionError("DEFINITION_CONTEXT_REFUSED", cause);
-      case "23503":
+      case "reference_missing":
         throw new DefinitionError(
           operationKind === "create_root"
             ? "DEFINITION_CONTEXT_REFUSED"
             : "DEFINITION_ROOT_MISSING",
           cause,
         );
-      case "22023":
-      case "23514":
+      case "invalid":
+      case "constraint_failed":
         throw new DefinitionError("DEFINITION_STORAGE_VALIDATION_FAILED", cause);
       default:
         throw unexpectedDefinitionFailure(

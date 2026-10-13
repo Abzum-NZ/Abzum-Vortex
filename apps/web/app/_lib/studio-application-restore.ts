@@ -30,7 +30,7 @@ import {
   type StudioApplicationRestoreLoadResult,
   type StudioApplicationRestoreReceipt,
 } from "./studio-application-restore-contracts";
-import { DefinitionError } from "@web/platform-server";
+import { DefinitionError, classifyDatabaseError } from "@web/platform-server";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
@@ -66,26 +66,21 @@ const sameExpected = (
   left.sourceFingerprint === right.sourceFingerprint &&
   left.anchorReleaseRevision === right.anchorReleaseRevision;
 
-const codeOf = (error: unknown): string | undefined => {
-  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
-  return typeof error.code === "string" ? error.code : undefined;
-};
-
 const failureKind = (error: unknown): FailureKind => {
-  const code = codeOf(error);
+  const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";
     if (["DEFINITION_CONTEXT_REFUSED", "DEFINITION_RELEASE_NOT_FOUND", "DEFINITION_RELEASE_INTEGRITY_FAILED",
       "INVALID_DEFINITION_RESTORE_COMMAND"].includes(error.code)) return "refused";
   }
   if (error instanceof DefinitionError) {
-    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || code === "40001") return "conflict";
+    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || kind === "conflict") return "conflict";
     if (["DEFINITION_CONTEXT_REFUSED", "DEFINITION_ROOT_MISSING", "INVALID_DEFINITION_COMMAND"].includes(error.code))
       return "refused";
   }
-  if (error instanceof BuilderAuthorityError || error instanceof RestoreRefused || code === "42501")
+  if (error instanceof BuilderAuthorityError || error instanceof RestoreRefused || kind === "refused")
     return "refused";
-  if (code === "40001") return "conflict";
+  if (kind === "conflict") return "conflict";
   return "temporarily_unavailable";
 };
 
