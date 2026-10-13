@@ -1,5 +1,14 @@
 import "server-only";
-export { searchConfiguredApplication, type ApplicationSearchRecord, type ApplicationSearchMatch, type ApplicationSearchResult } from "./application-search";
+export {
+  searchConfiguredApplication,
+  type ApplicationSearchRecord,
+  type ApplicationSearchMatch,
+  type ApplicationSearchResult,
+} from "./application-search";
+export {
+  searchInstalledApplication,
+  type InstalledSearchModule,
+} from "./installed-application-search";
 
 export {
   buildSearchDocument,
