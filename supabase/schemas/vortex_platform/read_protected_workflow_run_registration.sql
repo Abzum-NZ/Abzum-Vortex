@@ -176,9 +176,11 @@ begin
 end
 $function$;
 
-alter function vortex_platform.read_protected_workflow_run_registration(uuid) owner to postgres;
+alter function vortex_platform.read_protected_workflow_run_registration(p_run_id uuid) owner to vortex_owner;
 revoke all on function vortex_platform.read_protected_workflow_run_registration(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_platform.read_protected_workflow_run_registration(uuid) to vortex_runtime;
 comment on function vortex_platform.read_protected_workflow_run_registration(uuid) is
   'Private registered-run metadata reader: validates the retained run against its exact stored candidate identity and immutable published durable Flow; no provider, viewer or candidate-body authority.';
+
+grant execute on function vortex_platform.read_protected_workflow_run_registration(p_run_id uuid) to postgres;

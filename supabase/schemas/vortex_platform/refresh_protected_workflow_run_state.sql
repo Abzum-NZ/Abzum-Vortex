@@ -58,3 +58,7 @@ grant execute on function vortex_platform.refresh_protected_workflow_run_state(u
   to vortex_runtime;
 comment on function vortex_platform.refresh_protected_workflow_run_state(uuid, text, timestamptz) is
   'Private protected workflow run refresh: caches a safe Kestra state and closes callback authority after a terminal state.';
+
+alter function vortex_platform.refresh_protected_workflow_run_state(p_run_id uuid, p_state text, p_refreshed_at timestamp with time zone) owner to vortex_owner;
+
+grant execute on function vortex_platform.refresh_protected_workflow_run_state(p_run_id uuid, p_state text, p_refreshed_at timestamp with time zone) to postgres;

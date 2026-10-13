@@ -205,3 +205,5 @@ comment on function vortex_platform.register_workflow_flow_candidate(
   text, uuid, uuid, text, bigint, bigint, jsonb
 ) is
   'Idempotently registers one inactive durable Flow candidate under its exact published Application release identity, refusing a changed candidate for an existing identity.';
+
+alter function vortex_platform.register_workflow_flow_candidate(p_environment text, p_organization_id uuid, p_application_root_id uuid, p_application_version text, p_installation_revision bigint, p_workflow_revision bigint, p_candidate jsonb) owner to vortex_owner;

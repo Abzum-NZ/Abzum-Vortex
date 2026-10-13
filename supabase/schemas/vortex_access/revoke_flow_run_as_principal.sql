@@ -168,3 +168,7 @@ comment on function vortex_access.revoke_flow_run_as_principal(
   uuid, uuid, uuid, uuid, uuid, bigint, uuid
 ) is
   'Revokes one exact current flow run-as principal at its next revision under the existing execution-binding administration authority.';
+
+alter function vortex_access.revoke_flow_run_as_principal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_duplicate_key uuid, p_execution_binding_id uuid, p_organization_id uuid, p_expected_revision bigint, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revoke_flow_run_as_principal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_duplicate_key uuid, p_execution_binding_id uuid, p_organization_id uuid, p_expected_revision bigint, p_activity_id uuid) to postgres;

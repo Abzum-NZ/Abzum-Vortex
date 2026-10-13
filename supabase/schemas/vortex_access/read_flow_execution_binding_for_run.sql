@@ -149,3 +149,7 @@ comment on function vortex_access.read_flow_execution_binding_for_run(
   uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid
 ) is
   'Runtime-only, share-locked read of one exact current flow execution binding and its effective actor state; a system actor is active only under an active system actor grant in an active organisation.';
+
+alter function vortex_access.read_flow_execution_binding_for_run(p_execution_binding_id uuid, p_organization_id uuid, p_application_root_id uuid, p_release_version text, p_flow_id uuid, p_node_id uuid, p_operation_owner_kind text, p_operation_owner_id uuid, p_operation_id uuid, p_actor_kind text, p_actor_account_id uuid, p_actor_system_actor_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.read_flow_execution_binding_for_run(p_execution_binding_id uuid, p_organization_id uuid, p_application_root_id uuid, p_release_version text, p_flow_id uuid, p_node_id uuid, p_operation_owner_kind text, p_operation_owner_id uuid, p_operation_id uuid, p_actor_kind text, p_actor_account_id uuid, p_actor_system_actor_id uuid) to postgres;

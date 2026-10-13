@@ -117,3 +117,7 @@ comment on function vortex_access.revoke_organization_direct_record_share(
   uuid, uuid, bigint, text, uuid, uuid, uuid
 ) is
   'Owner-only terminal direct-share revocation writer. It changes Access and appends Activity but grants no caller authority.';
+
+alter function vortex_access.revoke_organization_direct_record_share(p_organization_id uuid, p_direct_share_id uuid, p_expected_revision bigint, p_reason text, p_changed_by uuid, p_correlation_id uuid, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revoke_organization_direct_record_share(p_organization_id uuid, p_direct_share_id uuid, p_expected_revision bigint, p_reason text, p_changed_by uuid, p_correlation_id uuid, p_activity_id uuid) to postgres;

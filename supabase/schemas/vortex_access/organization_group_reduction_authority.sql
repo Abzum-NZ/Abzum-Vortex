@@ -138,3 +138,7 @@ comment on function
 
 revoke execute on function
   vortex_access.organization_group_reduction_authority(uuid, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+alter function vortex_access.organization_group_reduction_authority(p_organization_id uuid, p_group_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.organization_group_reduction_authority(p_organization_id uuid, p_group_id uuid) to postgres;

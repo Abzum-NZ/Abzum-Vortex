@@ -70,3 +70,7 @@ from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function
   vortex_access.project_organization_role_change_summary(uuid, uuid) is
   'Private safe current role projection for protected structural changes.';
+
+alter function vortex_access.project_organization_role_change_summary(p_organization_id uuid, p_role_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.project_organization_role_change_summary(p_organization_id uuid, p_role_id uuid) to postgres;

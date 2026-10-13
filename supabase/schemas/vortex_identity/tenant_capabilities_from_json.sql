@@ -16,4 +16,6 @@ revoke execute on function vortex_identity.tenant_capabilities_from_json(jsonb) 
 
 comment on function vortex_identity.tenant_capabilities_from_json(jsonb) is null;
 
-alter function vortex_identity.tenant_capabilities_from_json(jsonb) owner to postgres;
+alter function vortex_identity.tenant_capabilities_from_json(p_capabilities jsonb) owner to vortex_owner;
+
+grant execute on function vortex_identity.tenant_capabilities_from_json(p_capabilities jsonb) to postgres;

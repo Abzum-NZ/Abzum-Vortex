@@ -37,3 +37,7 @@ comment on function vortex_access.flow_run_as_principal_to_json_internal(
   vortex_access.flow_run_as_principals
 ) is
   'Projects one stored flow run-as principal revision into its canonical JSON form.';
+
+alter function vortex_access.flow_run_as_principal_to_json_internal(p_principal vortex_access.flow_run_as_principals) owner to vortex_owner;
+
+grant execute on function vortex_access.flow_run_as_principal_to_json_internal(p_principal vortex_access.flow_run_as_principals) to postgres;

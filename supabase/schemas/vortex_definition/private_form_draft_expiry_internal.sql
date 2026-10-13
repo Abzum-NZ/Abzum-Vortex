@@ -16,3 +16,7 @@ comment on function vortex_definition.private_form_draft_expiry_internal(timesta
 
 grant execute on function vortex_definition.private_form_draft_expiry_internal(timestamptz)
   to vortex_owner;
+
+alter function vortex_definition.private_form_draft_expiry_internal(p_touched_at timestamp with time zone) owner to vortex_owner;
+
+grant execute on function vortex_definition.private_form_draft_expiry_internal(p_touched_at timestamp with time zone) to postgres;

@@ -22,6 +22,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_identity.protect_identity_disablement_command() OWNER TO postgres;
+alter function vortex_identity.protect_identity_disablement_command() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_identity.protect_identity_disablement_command() FROM PUBLIC;
+
+grant execute on function vortex_identity.protect_identity_disablement_command() to postgres;

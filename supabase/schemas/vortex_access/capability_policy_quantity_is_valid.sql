@@ -10,6 +10,8 @@ CREATE FUNCTION vortex_access.capability_policy_quantity_is_valid(p_quantity num
     and p_quantity = (p_quantity::float8)::numeric;
 $$;
 
-ALTER FUNCTION vortex_access.capability_policy_quantity_is_valid(p_quantity numeric) OWNER TO postgres;
+alter function vortex_access.capability_policy_quantity_is_valid(p_quantity numeric) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.capability_policy_quantity_is_valid(p_quantity numeric) FROM PUBLIC;
+
+grant execute on function vortex_access.capability_policy_quantity_is_valid(p_quantity numeric) to postgres;

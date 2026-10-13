@@ -215,3 +215,7 @@ comment on function vortex_access.set_capability_limit_allocation(
   uuid, uuid, uuid, uuid, text, text, numeric, timestamptz, bigint, uuid
 ) is
   'Tenant capability-limits allocation permission command that allocates, or revises in place, a tenant-wide or organisation limit for one capability, refused above the live platform ceiling; it writes an accepted receipt, append-only change evidence and, for an organisation, content-free Activity.';
+
+alter function vortex_access.set_capability_limit_allocation(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_assignment_id uuid, p_capability_key text, p_unit text, p_quantity_limit numeric, p_expires_at timestamp with time zone, p_expected_revision bigint, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.set_capability_limit_allocation(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_assignment_id uuid, p_capability_key text, p_unit text, p_quantity_limit numeric, p_expires_at timestamp with time zone, p_expected_revision bigint, p_activity_id uuid) to postgres;

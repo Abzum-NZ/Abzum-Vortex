@@ -40,6 +40,8 @@ begin
 end;
 $$;
 
-ALTER FUNCTION vortex_access.protect_permission_continuity() OWNER TO postgres;
+alter function vortex_access.protect_permission_continuity() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_permission_continuity() FROM PUBLIC;
+
+grant execute on function vortex_access.protect_permission_continuity() to postgres;

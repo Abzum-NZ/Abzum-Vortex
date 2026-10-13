@@ -143,3 +143,7 @@ comment on function vortex_access.change_application_installation_access(
   uuid, uuid, text, jsonb
 ) is
   'Authority-checked Application permission registration change for installation; derives actor and correlation from validated human context and grants no access.';
+
+alter function vortex_access.change_application_installation_access(p_activity_id uuid, p_application_root_id uuid, p_change text, p_prepared_templates jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.change_application_installation_access(p_activity_id uuid, p_application_root_id uuid, p_change text, p_prepared_templates jsonb) to postgres;

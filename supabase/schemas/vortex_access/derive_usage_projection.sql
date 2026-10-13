@@ -32,6 +32,8 @@ CREATE FUNCTION vortex_access.derive_usage_projection(p_tenant_id uuid, p_period
   group by rollup_scope, scope_id, organization_id, bucket_start, capability_key, unit;
 $$;
 
-ALTER FUNCTION vortex_access.derive_usage_projection(p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) OWNER TO postgres;
+alter function vortex_access.derive_usage_projection(p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.derive_usage_projection(p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) FROM PUBLIC;
+
+grant execute on function vortex_access.derive_usage_projection(p_tenant_id uuid, p_period_start timestamp with time zone, p_period_end timestamp with time zone) to postgres;

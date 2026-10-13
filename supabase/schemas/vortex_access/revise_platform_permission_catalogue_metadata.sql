@@ -273,3 +273,7 @@ comment on function vortex_access.revise_platform_permission_catalogue_metadata(
   uuid, bigint, text, text, uuid, uuid
 ) is
   'Owner-only exact 1.0.0 to 1.0.1 platform catalogue display-metadata revision.';
+
+alter function vortex_access.revise_platform_permission_catalogue_metadata(p_organization_id uuid, p_expected_registration_revision bigint, p_source_catalogue_version text, p_target_catalogue_version text, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revise_platform_permission_catalogue_metadata(p_organization_id uuid, p_expected_registration_revision bigint, p_source_catalogue_version text, p_target_catalogue_version text, p_changed_by uuid, p_correlation_id uuid) to postgres;

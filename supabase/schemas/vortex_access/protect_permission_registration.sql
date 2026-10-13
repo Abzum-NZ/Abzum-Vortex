@@ -17,6 +17,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.protect_permission_registration() OWNER TO postgres;
+alter function vortex_access.protect_permission_registration() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_permission_registration() FROM PUBLIC;
+
+grant execute on function vortex_access.protect_permission_registration() to postgres;

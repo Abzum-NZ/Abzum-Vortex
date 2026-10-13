@@ -35,3 +35,7 @@ grant execute on function vortex_record.document_entries_are_valid(jsonb)
 
 comment on function vortex_record.document_entries_are_valid(jsonb) is
   'Storage check for search document entries: bounded array of unique field entries with the exact entry shape, types and text sizes; ranking weights are derived by the runtime producer.';
+
+alter function vortex_record.document_entries_are_valid(p_entries jsonb) owner to vortex_owner;
+
+grant execute on function vortex_record.document_entries_are_valid(p_entries jsonb) to postgres;

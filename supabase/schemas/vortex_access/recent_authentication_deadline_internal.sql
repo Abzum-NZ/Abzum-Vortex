@@ -55,3 +55,7 @@ comment on function
 
 revoke execute on function
   vortex_access.recent_authentication_deadline_internal(jsonb, timestamptz, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+
+alter function vortex_access.recent_authentication_deadline_internal(p_context jsonb, p_checked_at timestamp with time zone, p_requirement jsonb) owner to vortex_owner;
+
+grant execute on function vortex_access.recent_authentication_deadline_internal(p_context jsonb, p_checked_at timestamp with time zone, p_requirement jsonb) to postgres;

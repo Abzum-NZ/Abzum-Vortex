@@ -36,3 +36,7 @@ $function$;
 revoke all on function vortex_platform.enforce_grant_application_root() from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_platform.enforce_grant_application_root() is null;
+
+alter function vortex_platform.enforce_grant_application_root() owner to vortex_owner;
+
+grant execute on function vortex_platform.enforce_grant_application_root() to postgres;

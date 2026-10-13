@@ -12,9 +12,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_identity.require_identity_not_disabled(p_identity_id uuid) OWNER TO postgres;
+alter function vortex_identity.require_identity_not_disabled(p_identity_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_identity.require_identity_not_disabled(p_identity_id uuid) IS 'Runtime live check at named sensitive operations: refuses (42501) an identity whose disablement completed.';
 
 REVOKE ALL ON FUNCTION vortex_identity.require_identity_not_disabled(p_identity_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_identity.require_identity_not_disabled(p_identity_id uuid) TO vortex_runtime;
+
+grant execute on function vortex_identity.require_identity_not_disabled(p_identity_id uuid) to postgres;

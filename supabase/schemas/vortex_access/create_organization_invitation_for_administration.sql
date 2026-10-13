@@ -84,9 +84,11 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) OWNER TO postgres;
+alter function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) IS 'Protected no-intent invitation creation; replay returns receipt evidence and never secret material.';
 
 REVOKE ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) TO vortex_request;
+
+grant execute on function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) to postgres;

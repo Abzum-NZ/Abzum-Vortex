@@ -28,6 +28,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.lock_role_and_refuse_sealed_permission_append() OWNER TO postgres;
+alter function vortex_access.lock_role_and_refuse_sealed_permission_append() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.lock_role_and_refuse_sealed_permission_append() FROM PUBLIC;
+
+grant execute on function vortex_access.lock_role_and_refuse_sealed_permission_append() to postgres;

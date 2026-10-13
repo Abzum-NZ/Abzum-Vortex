@@ -93,3 +93,7 @@ grant execute on function vortex_definition.list_release_history(text, uuid, int
 
 comment on function vortex_definition.list_release_history(text, uuid, integer, bigint) is
   'Returns one bounded newest-first metadata page from a same-organization Definition release history.';
+
+alter function vortex_definition.list_release_history(p_kind text, p_root_id uuid, p_page_size integer, p_before_release_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_definition.list_release_history(p_kind text, p_root_id uuid, p_page_size integer, p_before_release_revision bigint) to postgres;

@@ -41,8 +41,10 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_platform.file_activity_id(p_action text, p_organization_id uuid, p_correlation_id uuid, p_subject_id uuid) OWNER TO postgres;
+alter function vortex_platform.file_activity_id(p_action text, p_organization_id uuid, p_correlation_id uuid, p_subject_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_platform.file_activity_id(p_action text, p_organization_id uuid, p_correlation_id uuid, p_subject_id uuid) IS 'The deterministic version-8 Activity identity of one File operation, derived from its action, organisation, correlation and subject.';
 
 REVOKE ALL ON FUNCTION vortex_platform.file_activity_id(p_action text, p_organization_id uuid, p_correlation_id uuid, p_subject_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_platform.file_activity_id(p_action text, p_organization_id uuid, p_correlation_id uuid, p_subject_id uuid) to postgres;

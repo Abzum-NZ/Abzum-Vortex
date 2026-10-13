@@ -59,3 +59,7 @@ grant execute on function vortex_access.list_organization_groups_projection(
 
 comment on function vortex_access.list_organization_groups_projection(uuid, integer) is
   'Registered group projection: returns every group of the current viewer''s organisation under the fixed platform.organization.groups.read decision, with the organisation, the group identity, the group revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer.';
+
+alter function vortex_access.list_organization_groups_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_groups_projection(p_record_id uuid, p_page_size integer) to postgres;

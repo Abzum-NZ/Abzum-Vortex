@@ -196,3 +196,7 @@ to vortex_request;
 
 comment on function vortex_access.remove_organization_group_membership_for_administration(uuid, bigint, uuid) is
   'Standalone request entry: performs remove_group_membership after fixed protected checks, records one atomic completed Activity or returns one content-free refused Activity row; no SQL function composes this result.';
+
+alter function vortex_access.remove_organization_group_membership_for_administration(p_membership_id uuid, p_expected_membership_revision bigint, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.remove_organization_group_membership_for_administration(p_membership_id uuid, p_expected_membership_revision bigint, p_activity_id uuid) to postgres;

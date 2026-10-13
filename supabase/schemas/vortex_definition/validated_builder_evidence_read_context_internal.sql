@@ -61,3 +61,7 @@ revoke all on function vortex_definition.validated_builder_evidence_read_context
 
 comment on function vortex_definition.validated_builder_evidence_read_context_internal() is
   'Returns the validated current system or human context for Definition evidence reads; human requests require definition-draft management permission.';
+
+alter function vortex_definition.validated_builder_evidence_read_context_internal() owner to vortex_owner;
+
+grant execute on function vortex_definition.validated_builder_evidence_read_context_internal() to postgres;

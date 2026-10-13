@@ -66,3 +66,7 @@ grant execute on function vortex_identity.list_vortex_super_administrator_assign
 
 comment on function vortex_identity.list_vortex_super_administrator_assignments(integer, uuid) is
   'Lists the immutable and revisioned named super-administrator assignment ledger to an active super administrator.';
+
+alter function vortex_identity.list_vortex_super_administrator_assignments(p_limit integer, p_after uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.list_vortex_super_administrator_assignments(p_limit integer, p_after uuid) to postgres;

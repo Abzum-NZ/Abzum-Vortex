@@ -46,3 +46,7 @@ revoke all on function vortex_access.flow_execution_binding_to_json_internal(vor
 
 comment on function vortex_access.flow_execution_binding_to_json_internal(vortex_access.flow_execution_bindings) is
   'Projects one stored flow execution binding into its canonical JSON form.';
+
+alter function vortex_access.flow_execution_binding_to_json_internal(b vortex_access.flow_execution_bindings) owner to vortex_owner;
+
+grant execute on function vortex_access.flow_execution_binding_to_json_internal(b vortex_access.flow_execution_bindings) to postgres;

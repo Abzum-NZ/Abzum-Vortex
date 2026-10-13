@@ -252,4 +252,6 @@ grant execute on function vortex_identity.apply_configured_cluster_identity_life
 
 comment on function vortex_identity.apply_configured_cluster_identity_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) is 'Private exact composition for the three configured-system cluster-local identity lifecycle commands.';
 
-alter function vortex_identity.apply_configured_cluster_identity_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) owner to postgres;
+alter function vortex_identity.apply_configured_cluster_identity_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_identity.apply_configured_cluster_identity_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_identity_id uuid, p_expected_revision bigint) to postgres;

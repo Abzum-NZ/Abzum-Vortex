@@ -23,6 +23,9 @@ revoke all on function vortex_platform.topic_organization_id(text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_platform.topic_organization_id(text)
   to vortex_request, vortex_runtime;
+grant execute on function vortex_platform.topic_organization_id(text) to postgres;
 
 comment on function vortex_platform.topic_organization_id(text) is
   'Extracts the organisation from a well-formed private topic, or null.';
+
+alter function vortex_platform.topic_organization_id(p_topic text) owner to vortex_owner;

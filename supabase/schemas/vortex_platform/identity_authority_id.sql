@@ -13,9 +13,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_platform.identity_authority_id(required boolean) OWNER TO postgres;
+alter function vortex_platform.identity_authority_id(required boolean) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_platform.identity_authority_id(required boolean) IS 'Returns the trusted Identity Authority for human/federated context, or fails when required and absent.';
 
 REVOKE ALL ON FUNCTION vortex_platform.identity_authority_id(required boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_platform.identity_authority_id(required boolean) TO vortex_request;
+
+grant execute on function vortex_platform.identity_authority_id(required boolean) to postgres;

@@ -23,8 +23,10 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.assert_organization_has_permanent_steward(p_organization_id uuid) OWNER TO postgres;
+alter function vortex_access.assert_organization_has_permanent_steward(p_organization_id uuid) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.assert_organization_has_permanent_steward(p_organization_id uuid) IS 'Refuses a completed owner mutation that would leave an adopted organisation without a qualifying permanent steward.';
 
 REVOKE ALL ON FUNCTION vortex_access.assert_organization_has_permanent_steward(p_organization_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.assert_organization_has_permanent_steward(p_organization_id uuid) to postgres;

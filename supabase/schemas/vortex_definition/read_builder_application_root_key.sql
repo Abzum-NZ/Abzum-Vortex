@@ -36,3 +36,7 @@ grant execute on function vortex_definition.read_builder_application_root_key(uu
   to vortex_request;
 comment on function vortex_definition.read_builder_application_root_key(uuid) is
   'Returns only the key of one same-organisation Application root for validated builder evidence reads.';
+
+alter function vortex_definition.read_builder_application_root_key(p_root_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_definition.read_builder_application_root_key(p_root_id uuid) to postgres;

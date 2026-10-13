@@ -108,10 +108,13 @@ flowchart LR
 
 ### Roles
 
-- `vortex_owner` owns every object.
+- `vortex_owner` owns the tables, sequences, types and functions in the five `vortex_*` schemas, except the record objects deliberately owned by `vortex_record_adapter` or `vortex_record_inventory` and four integration functions. `vortex_identity.complete_identity_disablement` deletes GoTrue-managed `auth.sessions` rows; `vortex_platform.may_receive_topic` calls `auth.uid()`; `vortex_platform.request_event_dispatch_wakeup` calls `net.http_post`; `vortex_platform.append_record_occurrences_for_resolved_installation_internal` sends through the postgres-owned PGmq extension. These retain `postgres` ownership so the integration privileges stay within their existing boundaries.
 - `vortex_runtime` is the application login and may only execute the API functions.
 - `vortex_record_adapter` is the role the record-data RLS policies are written for.
 - `vortex_record_inventory` is the second restricted role: the account-deletion inventory reads record data through organisation-scoped policies.
+
+The operational `postgres` role retains explicit privileges on the transferred objects for the local seed and controlled migrations; ownership remains with `vortex_owner`. The restricted record roles and their organisation-scoped grants and policies remain separate.
+
 
 Per-schema owner roles are removed. The provisioning defect of 12 October came from grants missing across them.
 

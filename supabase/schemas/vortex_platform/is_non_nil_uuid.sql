@@ -18,6 +18,7 @@ revoke execute on function vortex_platform.is_non_nil_uuid(text)
   from public, anon, authenticated, service_role;
 grant execute on function vortex_platform.is_non_nil_uuid(text)
   to vortex_runtime, vortex_request, vortex_owner, vortex_record_adapter;
+grant execute on function vortex_platform.is_non_nil_uuid(text) to postgres;
 grant execute on function vortex_platform.is_non_nil_uuid(text)
   to vortex_owner;
 grant execute on function vortex_platform.is_non_nil_uuid(text)
@@ -28,3 +29,5 @@ grant execute on function vortex_platform.is_non_nil_uuid(text)
 
 comment on function vortex_platform.is_non_nil_uuid(text) is
   'Accepts only a non-nil RFC UUID with a version nibble from 1 through 8 and an RFC variant nibble.';
+
+alter function vortex_platform.is_non_nil_uuid(candidate text) owner to vortex_owner;

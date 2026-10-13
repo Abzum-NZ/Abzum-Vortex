@@ -53,3 +53,5 @@ comment on function vortex_identity.assert_organization_runtime_settings_values(
 alter function vortex_identity.assert_organization_runtime_settings_values(
   text, text, text, text, text
 ) owner to postgres;
+
+alter function vortex_identity.assert_organization_runtime_settings_values(p_language text, p_time_zone text, p_currency text, p_date_format text, p_number_format text) owner to vortex_owner;

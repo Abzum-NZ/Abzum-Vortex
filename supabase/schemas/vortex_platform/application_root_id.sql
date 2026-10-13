@@ -13,8 +13,10 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_platform.application_root_id(required boolean) OWNER TO postgres;
+alter function vortex_platform.application_root_id(required boolean) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_platform.application_root_id(required boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_platform.application_root_id(required boolean) TO vortex_request;
 GRANT ALL ON FUNCTION vortex_platform.application_root_id(required boolean) TO vortex_record_adapter;
+
+grant execute on function vortex_platform.application_root_id(required boolean) to postgres;

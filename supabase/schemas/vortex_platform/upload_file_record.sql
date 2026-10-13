@@ -39,3 +39,7 @@ grant execute on function vortex_platform.upload_file_record(vortex_platform.fil
 
 comment on function vortex_platform.upload_file_record(vortex_platform.file_records) is
   'Returns the canonical FileRecord projection with UTC timestamp values.';
+
+alter function vortex_platform.upload_file_record(p_file vortex_platform.file_records) owner to vortex_owner;
+
+grant execute on function vortex_platform.upload_file_record(p_file vortex_platform.file_records) to postgres;

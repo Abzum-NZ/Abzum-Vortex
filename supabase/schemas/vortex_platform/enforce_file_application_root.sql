@@ -40,4 +40,6 @@ revoke all on function vortex_platform.enforce_file_application_root()
 comment on function vortex_platform.enforce_file_application_root() is
   'Keeps a file''s Application scope inside its own organisation and on a root of kind application.';
 
-alter function vortex_platform.enforce_file_application_root() owner to postgres;
+alter function vortex_platform.enforce_file_application_root() owner to vortex_owner;
+
+grant execute on function vortex_platform.enforce_file_application_root() to postgres;

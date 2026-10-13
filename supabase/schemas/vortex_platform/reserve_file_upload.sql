@@ -213,3 +213,5 @@ alter function vortex_platform.reserve_file_upload(
   uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, jsonb, bigint, integer, integer,
   uuid, uuid, uuid, text, timestamptz, timestamptz
 ) owner to postgres;
+
+alter function vortex_platform.reserve_file_upload(p_file_id uuid, p_organization_id uuid, p_application_root_id uuid, p_owner_record_type_id uuid, p_owner_record_id uuid, p_owner_field_id uuid, p_original_safe_display_name text, p_extension text, p_storage_key text, p_uploaded_by jsonb, p_maximum_bytes bigint, p_max_files integer, p_existing_attachment_count integer, p_replacing_file_id uuid, p_capability_reservation_id uuid, p_one_time_id uuid, p_policy_fingerprint text, p_grant_expires_at timestamp with time zone, p_upload_expires_at timestamp with time zone) owner to vortex_owner;

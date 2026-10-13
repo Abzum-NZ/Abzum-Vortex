@@ -28,6 +28,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_definition.validated_system_context() OWNER TO postgres;
+alter function vortex_definition.validated_system_context() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_definition.validated_system_context() FROM PUBLIC;
+
+grant execute on function vortex_definition.validated_system_context() to postgres;

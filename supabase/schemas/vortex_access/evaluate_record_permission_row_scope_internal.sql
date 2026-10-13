@@ -502,3 +502,7 @@ comment on function vortex_access.evaluate_record_permission_row_scope_internal(
   jsonb, timestamptz, timestamptz, uuid, jsonb, jsonb, uuid, jsonb, uuid[]
 ) is
   'Private row-scope composition for one already-eligible permission against one exact record; returns matched contributions only, never a final allow/refuse result.';
+
+alter function vortex_access.evaluate_record_permission_row_scope_internal(p_context jsonb, p_checked_at timestamp with time zone, p_auth_deadline timestamp with time zone, p_application_root_id uuid, p_action jsonb, p_candidate jsonb, p_record_id uuid, p_facts jsonb, p_path uuid[]) owner to vortex_owner;
+
+grant execute on function vortex_access.evaluate_record_permission_row_scope_internal(p_context jsonb, p_checked_at timestamp with time zone, p_auth_deadline timestamp with time zone, p_application_root_id uuid, p_action jsonb, p_candidate jsonb, p_record_id uuid, p_facts jsonb, p_path uuid[]) to postgres;

@@ -85,3 +85,7 @@ comment on function vortex_access.begin_organization_account_closing_for_adminis
 revoke all on function vortex_access.begin_organization_account_closing_for_administration(uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 grant execute on function vortex_access.begin_organization_account_closing_for_administration(uuid, bigint) to vortex_request;
+
+alter function vortex_access.begin_organization_account_closing_for_administration(p_organization_account_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.begin_organization_account_closing_for_administration(p_organization_account_id uuid, p_expected_revision bigint) to postgres;

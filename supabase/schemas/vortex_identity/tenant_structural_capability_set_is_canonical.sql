@@ -47,3 +47,7 @@ revoke all on function vortex_identity.tenant_structural_capability_set_is_canon
 
 comment on function vortex_identity.tenant_structural_capability_set_is_canonical(text[]) is
   'Validates a canonical nonempty set of tenant capability permissions against the single closed permission set.';
+
+alter function vortex_identity.tenant_structural_capability_set_is_canonical(p_capability_keys text[]) owner to vortex_owner;
+
+grant execute on function vortex_identity.tenant_structural_capability_set_is_canonical(p_capability_keys text[]) to postgres;

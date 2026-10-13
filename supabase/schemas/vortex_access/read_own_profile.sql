@@ -64,3 +64,7 @@ grant execute on function vortex_access.read_own_profile() to vortex_request;
 
 comment on function vortex_access.read_own_profile() is
   'Protected read of the current human request context account profile, limited to that active organisation account and refusing delegated or support contexts.';
+
+alter function vortex_access.read_own_profile() owner to vortex_owner;
+
+grant execute on function vortex_access.read_own_profile() to postgres;

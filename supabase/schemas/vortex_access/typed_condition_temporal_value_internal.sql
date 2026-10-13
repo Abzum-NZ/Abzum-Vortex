@@ -90,6 +90,8 @@ begin
 end
 $_$;
 
-ALTER FUNCTION vortex_access.typed_condition_temporal_value_internal(p_value text, p_kind text) OWNER TO postgres;
+alter function vortex_access.typed_condition_temporal_value_internal(p_value text, p_kind text) owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.typed_condition_temporal_value_internal(p_value text, p_kind text) FROM PUBLIC;
+
+grant execute on function vortex_access.typed_condition_temporal_value_internal(p_value text, p_kind text) to postgres;

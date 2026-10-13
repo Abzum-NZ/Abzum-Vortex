@@ -17,9 +17,11 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.list_organization_accounts_for_administration(p_after_organization_account_id uuid, p_page_size integer) OWNER TO postgres;
+alter function vortex_access.list_organization_accounts_for_administration(p_after_organization_account_id uuid, p_page_size integer) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.list_organization_accounts_for_administration(p_after_organization_account_id uuid, p_page_size integer) IS 'Protected bounded local-ID account page under the fixed accounts.read decision.';
 
 REVOKE ALL ON FUNCTION vortex_access.list_organization_accounts_for_administration(p_after_organization_account_id uuid, p_page_size integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.list_organization_accounts_for_administration(p_after_organization_account_id uuid, p_page_size integer) TO vortex_request;
+
+grant execute on function vortex_access.list_organization_accounts_for_administration(p_after_organization_account_id uuid, p_page_size integer) to postgres;

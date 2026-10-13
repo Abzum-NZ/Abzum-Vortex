@@ -286,3 +286,7 @@ comment on function
     jsonb, timestamptz, jsonb, jsonb, uuid
   ) is
   'Private current-permission and role-path evidence; null record type selects only non-record permissions. No row authority.';
+
+alter function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.evaluate_permission_role_path_internal(p_context jsonb, p_checked_at timestamp with time zone, p_permission jsonb, p_action jsonb, p_record_type_id uuid) to postgres;

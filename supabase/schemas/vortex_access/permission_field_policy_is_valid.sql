@@ -62,8 +62,10 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.permission_field_policy_is_valid(p_policy jsonb) OWNER TO postgres;
+alter function vortex_access.permission_field_policy_is_valid(p_policy jsonb) owner to vortex_owner;
 
 COMMENT ON FUNCTION vortex_access.permission_field_policy_is_valid(p_policy jsonb) IS 'Private strict validator for canonical unique field-policy UUID arrays and their subset rule.';
 
 REVOKE ALL ON FUNCTION vortex_access.permission_field_policy_is_valid(p_policy jsonb) FROM PUBLIC;
+
+grant execute on function vortex_access.permission_field_policy_is_valid(p_policy jsonb) to postgres;

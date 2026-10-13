@@ -89,3 +89,7 @@ to vortex_request;
 
 comment on function vortex_access.change_organization_role_authority_for_administration(jsonb, uuid) is
   'Standalone request entry: creates a custom role or accepts a supplied application role template through the existing owner-only role-authority composition, so the affected-assignment review, explicit acceptance evidence and permanent-steward safeguard are unchanged; returns the stored role summary and one Access version with no separate grant endpoint.';
+
+alter function vortex_access.change_organization_role_authority_for_administration(p_prepared_evidence jsonb, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.change_organization_role_authority_for_administration(p_prepared_evidence jsonb, p_activity_id uuid) to postgres;

@@ -47,3 +47,7 @@ grant execute on function vortex_access.resolve_event_dispatcher_actor()
 
 comment on function vortex_access.resolve_event_dispatcher_actor() is
   'Resolves the event dispatcher''s system actor from the single active platform-wide system actor grant for the dispatch_event_occurrences operation; refuses when none or more than one exists. A grant confined to an organisation, flow or scope never authorises dispatch. Runtime-only; the actor is never taken from the caller.';
+
+alter function vortex_access.resolve_event_dispatcher_actor() owner to vortex_owner;
+
+grant execute on function vortex_access.resolve_event_dispatcher_actor() to postgres;

@@ -197,4 +197,6 @@ grant execute on function vortex_identity.apply_configured_tenant_lifecycle(text
 
 comment on function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) is 'Private exact composition for configured-system tenant suspension and reactivation.';
 
-alter function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) owner to postgres;
+alter function vortex_identity.apply_configured_tenant_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_identity.apply_configured_tenant_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint) to postgres;

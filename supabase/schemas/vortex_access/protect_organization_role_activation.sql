@@ -50,6 +50,8 @@ begin
 end
 $$;
 
-ALTER FUNCTION vortex_access.protect_organization_role_activation() OWNER TO postgres;
+alter function vortex_access.protect_organization_role_activation() owner to vortex_owner;
 
 REVOKE ALL ON FUNCTION vortex_access.protect_organization_role_activation() FROM PUBLIC;
+
+grant execute on function vortex_access.protect_organization_role_activation() to postgres;

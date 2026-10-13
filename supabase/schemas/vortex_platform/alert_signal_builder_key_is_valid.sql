@@ -20,3 +20,5 @@ comment on function vortex_platform.alert_signal_builder_key_is_valid(text) is
 
 alter function vortex_platform.alert_signal_builder_key_is_valid(text)
   owner to postgres;
+
+alter function vortex_platform.alert_signal_builder_key_is_valid(p_key text) owner to vortex_owner;

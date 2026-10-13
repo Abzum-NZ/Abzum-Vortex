@@ -170,3 +170,7 @@ comment on function vortex_access.revoke_flow_execution_binding(
   uuid, uuid, uuid, uuid, uuid, bigint, uuid
 ) is
   'Revokes one exact current flow execution binding at its next revision; the recorded channel comes from the trusted request context.';
+
+alter function vortex_access.revoke_flow_execution_binding(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_duplicate_key uuid, p_execution_binding_id uuid, p_organization_id uuid, p_expected_revision bigint, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revoke_flow_execution_binding(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_duplicate_key uuid, p_execution_binding_id uuid, p_organization_id uuid, p_expected_revision bigint, p_activity_id uuid) to postgres;

@@ -87,3 +87,7 @@ revoke all on function vortex_platform.start_value_matches_type_internal(text, j
 
 comment on function vortex_platform.start_value_matches_type_internal(text, jsonb) is
   'Checks the stored JSON shape of one declared flow input or trigger value; only the start-intent writer calls this private helper.';
+
+alter function vortex_platform.start_value_matches_type_internal(p_type text, p_value jsonb) owner to vortex_owner;
+
+grant execute on function vortex_platform.start_value_matches_type_internal(p_type text, p_value jsonb) to postgres;

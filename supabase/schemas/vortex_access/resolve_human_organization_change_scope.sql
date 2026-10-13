@@ -112,3 +112,7 @@ grant execute on function vortex_access.resolve_human_organization_change_scope(
 
 comment on function vortex_access.resolve_human_organization_change_scope(uuid, uuid) is
   'Resolves one active account-bound change scope under its Access lock, provisioning missing local accounts only for assigned Vortex super administrators.';
+
+alter function vortex_access.resolve_human_organization_change_scope(p_identity_id uuid, p_organization_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.resolve_human_organization_change_scope(p_identity_id uuid, p_organization_id uuid) to postgres;

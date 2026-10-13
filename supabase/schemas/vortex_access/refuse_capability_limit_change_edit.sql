@@ -15,3 +15,7 @@ revoke all on function vortex_access.refuse_capability_limit_change_edit()
 
 comment on function vortex_access.refuse_capability_limit_change_edit() is
   'Refuses every update, delete or truncate of capability limit change evidence.';
+
+alter function vortex_access.refuse_capability_limit_change_edit() owner to vortex_owner;
+
+grant execute on function vortex_access.refuse_capability_limit_change_edit() to postgres;

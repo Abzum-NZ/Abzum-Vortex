@@ -46,3 +46,7 @@ grant execute on function vortex_access.organization_runtime_settings_manage_is_
 
 comment on function vortex_access.organization_runtime_settings_manage_is_current() is
   'Checks the verified request for the current platform.organization.runtime_settings.manage permission and returns only the exact eligibility result.';
+
+alter function vortex_access.organization_runtime_settings_manage_is_current() owner to vortex_owner;
+
+grant execute on function vortex_access.organization_runtime_settings_manage_is_current() to postgres;

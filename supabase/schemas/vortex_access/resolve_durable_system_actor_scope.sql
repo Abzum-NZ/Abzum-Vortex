@@ -101,3 +101,7 @@ comment on function vortex_access.resolve_durable_system_actor_scope(
   uuid, uuid, uuid, text
 ) is
   'Resolves the system actor and closed request scope of one durable workflow protected operation from the system actor grant registry. Refuses unless an active organisation holds an active application registration and exactly one active grant exists for this operation, organisation, flow and application source; an engine signature, run-as label or installation names no actor and confers nothing. Runtime-only.';
+
+alter function vortex_access.resolve_durable_system_actor_scope(p_organization_id uuid, p_application_root_id uuid, p_flow_id uuid, p_operation_key text) owner to vortex_owner;
+
+grant execute on function vortex_access.resolve_durable_system_actor_scope(p_organization_id uuid, p_application_root_id uuid, p_flow_id uuid, p_operation_key text) to postgres;

@@ -76,3 +76,7 @@ comment on function vortex_record.append_organization_activity_entry(
   uuid, uuid, timestamptz, text, uuid, text, uuid[], uuid[], text, uuid, text
 ) is
   'Private content-free Activity append over the one channel vocabulary; an exact retry replays and different evidence under one identity is refused.';
+
+alter function vortex_record.append_organization_activity_entry(p_organization_id uuid, p_activity_id uuid, p_occurred_at timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_subject_ids uuid[], p_changed_field_ids uuid[], p_source text, p_correlation_id uuid, p_outcome text) owner to vortex_owner;
+
+grant execute on function vortex_record.append_organization_activity_entry(p_organization_id uuid, p_activity_id uuid, p_occurred_at timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_subject_ids uuid[], p_changed_field_ids uuid[], p_source text, p_correlation_id uuid, p_outcome text) to postgres;
