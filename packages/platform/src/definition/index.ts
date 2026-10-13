@@ -81,6 +81,20 @@ export {
   type FirstInstallAppState,
   type FirstInstallEnvironment,
 } from "./installation-first-install-app";
+export { classifyInstallationFailure } from "./installation-failure";
+export {
+  activateUpgradeRelease,
+  readUpgradeActiveObservation,
+  readUpgradeAuthorizedState,
+  sameUpgradeSelectedSnapshot,
+  sameUpgradeSnapshotState,
+  type UpgradeAuthorizedState,
+  type UpgradeEnvironment,
+  type UpgradeReleaseIdentity,
+  type UpgradeSelector,
+  type UpgradeSnapshot,
+  type UpgradeState,
+} from "./installation-upgrade";
 export {
   ProvisionedSetupError,
   readProvisionedSetupInTransaction,
