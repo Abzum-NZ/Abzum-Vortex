@@ -1,4 +1,4 @@
-import { loadStudioModuleFieldLabel } from "../../../../../_lib/studio-module-field-label";
+import { loadHumanDefinitionPublicationDraft } from "../../../../../_lib/definition-publication";
 import { ModulePublicationEditor } from "../../../../_components/module-publication-editor";
 import { prepareStudioModulePublication, publishStudioModule } from "./actions";
 
@@ -10,8 +10,8 @@ export default async function StudioModulePublicationPage({
   params: Promise<{ organizationId: string; moduleRootId: string }>;
 }) {
   const { organizationId, moduleRootId } = await params;
-  const result = await loadStudioModuleFieldLabel(organizationId, moduleRootId);
-  if (result.kind !== "available")
+  const result = await loadHumanDefinitionPublicationDraft(organizationId, moduleRootId, "module");
+  if (result.kind !== "available" || result.draft.kind !== "module")
     return (
       <main className="mx-auto max-w-3xl space-y-3 p-6">
         <h1>Module publication unavailable</h1>

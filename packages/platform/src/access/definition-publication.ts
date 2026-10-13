@@ -17,6 +17,7 @@ import {
   BuilderAuthorityError, createDatabaseDefinitionPublicationService,
   readApplicationDefinitionDraft, readModuleDefinitionDraft, requireBuilderAuthority,
   type ImmutableDefinitionPublicationCatalogueDefinition,
+  type StoredApplicationDefinitionDraft, type StoredModuleDefinitionDraft,
 } from "../definition/definition-index";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
@@ -27,6 +28,9 @@ export type HumanDefinitionPublicationPreparationResult = Failure |
   Readonly<{ kind: "available"; preparation: PrepareDefinitionPublicationResult }>;
 export type HumanDefinitionPublicationResult = Failure |
   Readonly<{ kind: "available"; publication: PublishDefinitionResult }>;
+export type HumanDefinitionPublicationDraft = StoredApplicationDefinitionDraft | StoredModuleDefinitionDraft;
+export type HumanDefinitionPublicationDraftResult = Failure |
+  Readonly<{ kind: "available"; draft: HumanDefinitionPublicationDraft }>;
 export type HumanDefinitionPublisherDependencies = Readonly<{
   requests: ReturnType<typeof createHumanOrganizationRequestService>;
   catalogue: ImmutableDefinitionPublicationCatalogueDefinition;
@@ -110,8 +114,7 @@ const assertLiveCompletion = async (
   transaction: RequestDatabaseTransaction, context: HumanContext, publishedAt?: string,
 ): Promise<void> => {
   let deadline = Date.parse(context.expiresAt);
-  for (const key of ["platform.organization.definition_drafts.manage",
-    "platform.organization.definition_releases.manage"]) {
+  for (const key of ["platform.organization.definition_releases.manage"]) {
     const permission = platformPermissionSource().declarations.find((entry) => entry.key === key);
     if (permission === undefined) throw new PublicationContextRefused();
     const declaration = organizationAccessDeclarationSchema.parse({
@@ -206,7 +209,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         const context = await readHumanContext(transaction, scope, session, issuedAt);
         const authority = createBuilderAuthority({ transaction, scope,
           targetFacts: definitionKind === "application" ? targetFacts : moduleTargetFacts });
-        await requireBuilderAuthority(authority, { kind: "draft_change", rootId: command.rootId });
+        await requireBuilderAuthority(authority, { kind: "publication", rootId: command.rootId });
         const initial = definitionKind === "application"
           ? await readApplicationDefinitionDraft(transaction, scope, {
             rootId: applicationRootIdSchema.parse(root.data), expectedDraftRevision: command.expectedDraftRevision,
@@ -281,7 +284,63 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
     if (result.kind === "available") return { kind: "available", value: result.value };
     return failure ?? (result.kind === "unavailable" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
   };
+  const readDraft = async (
+    session: IdentitySession, candidateOrganizationId: string, candidateRootId: string,
+    definitionKind: HumanDefinitionKind,
+  ): Promise<HumanDefinitionPublicationDraftResult> => {
+    const organization = organizationIdSchema.safeParse(candidateOrganizationId);
+    const root = definitionKind === "application"
+      ? applicationRootIdSchema.safeParse(candidateRootId)
+      : moduleRootIdSchema.safeParse(candidateRootId);
+    if (!organization.success || !root.success) return { kind: "refused" };
+    let failure: Failure | undefined;
+    const read = async (
+      transaction: RequestDatabaseTransaction, scope: SelectedOrganizationScope, issuedAt: string,
+    ): Promise<HumanDefinitionPublicationDraft> => {
+      try {
+        if (!sameId(scope.organizationId, organization.data)) throw new PublicationContextRefused();
+        const context = await readHumanContext(transaction, scope, session, issuedAt);
+        const facts = definitionKind === "application" ? targetFacts : moduleTargetFacts;
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts: facts });
+        await requireBuilderAuthority(authority, { kind: "publication", rootId: root.data });
+        const readAtRevision = (expectedDraftRevision?: number) => definitionKind === "application"
+          ? readApplicationDefinitionDraft(transaction, scope, {
+            rootId: applicationRootIdSchema.parse(root.data),
+            ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+          })
+          : readModuleDefinitionDraft(transaction, scope, {
+            rootId: moduleRootIdSchema.parse(root.data),
+            ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+          });
+        const draft = await readAtRevision();
+        if (draft.kind !== definitionKind || !sameId(draft.rootId, root.data) ||
+          !sameId(draft.organizationId, organization.data)) throw new PublicationContextRefused();
+        const exact = await readAtRevision(draft.draftRevision);
+        if (canonicalJson(exact) !== canonicalJson(draft))
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        await facts(transaction, scope, root.data);
+        const completion = await readHumanContext(transaction, scope, session, issuedAt);
+        if (canonicalJson(completion) !== canonicalJson(context)) throw new PublicationContextRefused();
+        await assertLiveCompletion(transaction, completion);
+        return draft;
+      } catch (error) {
+        failure = safeFailure(error);
+        throw error;
+      }
+    };
+    const result = await dependencies.requests.run(
+      session, { organizationId: organization.data }, read,
+    );
+    return result.kind === "available"
+      ? { kind: "available", draft: result.value }
+      : failure ?? (result.kind === "unavailable" ? { kind: "refused" } : { kind: "temporarily_unavailable" });
+  };
   return Object.freeze({
+    readDraft: async (
+      session: IdentitySession, organizationId: string, rootId: string,
+      definitionKind: HumanDefinitionKind,
+    ): Promise<HumanDefinitionPublicationDraftResult> =>
+      readDraft(session, organizationId, rootId, definitionKind),
     prepare: async (session: IdentitySession, organizationId: string, candidate: unknown,
       definitionKind: HumanDefinitionKind): Promise<HumanDefinitionPublicationPreparationResult> => {
       const result = await execute(session, organizationId, candidate, "prepare", definitionKind);
