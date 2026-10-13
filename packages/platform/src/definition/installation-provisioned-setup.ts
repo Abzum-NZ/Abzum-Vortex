@@ -16,8 +16,12 @@ import {
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
 
-/** Stable reason codes of a refused provisioned-setup read; `detail` names the failed check. */
+/**
+ * Stable reason codes of a refused provisioned-setup read; `detail` names the failed check and is
+ * exposed as `code` because describeFailure logs the class and code, never the message.
+ */
 export class ProvisionedSetupError extends Error {
+  readonly code: string;
   constructor(
     readonly reason: "setup_unavailable" | "installation_incomplete" | "refused",
     readonly detail: string,
@@ -25,6 +29,7 @@ export class ProvisionedSetupError extends Error {
   ) {
     super(`${reason}: ${detail}`, options);
     this.name = "ProvisionedSetupError";
+    this.code = detail;
   }
 }
 
