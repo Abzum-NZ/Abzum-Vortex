@@ -26,3 +26,8 @@ export {
   type StudioModuleTextFieldSettingsResult,
 } from "./module-field-edit";
 export { evaluateDraftPermission as evaluateModuleDraftPermission } from "./module-draft-edit";
+export {
+  InstallationArchiveConnectionError,
+  readInstallationArchiveConnectionOptions,
+  readSelectedInstallationArchiveConnection,
+} from "./installation-archive-connections";
