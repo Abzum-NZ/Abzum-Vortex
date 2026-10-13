@@ -8,6 +8,7 @@ export {
 export {
   ApplicationAccountActionsBlock,
   ApplicationAccountActionsProvider,
+  type ApplicationAccount,
   type ApplicationAccountActions,
 } from "./account-actions";
 export {

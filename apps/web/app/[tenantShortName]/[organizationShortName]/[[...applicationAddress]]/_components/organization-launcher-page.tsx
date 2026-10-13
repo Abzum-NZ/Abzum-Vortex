@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ApplicationShell, PageDefinition, PlatformBlockRelease } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
+  type ApplicationAccount,
   createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FieldInputControlReleaseMap,
@@ -21,7 +22,7 @@ export function OrganizationLauncherPage({
   placementId,
   values,
   organizationName,
-  identityId,
+  account,
   openApplication,
   studio,
   launcherHref,
@@ -34,7 +35,7 @@ export function OrganizationLauncherPage({
   placementId: string;
   values: ReturnType<typeof permittedApplicationsToListValues>;
   organizationName: string;
-  identityId: string;
+  account: ApplicationAccount;
   openApplication: (event: DisplaySemanticEvent) => Promise<void>;
   studio?: Readonly<{ href: string; placementId: string }>;
   launcherHref: string;
@@ -50,7 +51,7 @@ export function OrganizationLauncherPage({
   return (
     <ApplicationAccountActionsProvider
       actions={{
-        identityId,
+        account,
         organizationName,
         chooseOrganization: () => router.push("/signed-in"),
         signOut,

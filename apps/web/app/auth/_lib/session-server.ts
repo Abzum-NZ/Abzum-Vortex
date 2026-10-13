@@ -134,6 +134,8 @@ type RequestIdentityResolution = Readonly<{
   resolution: IdentitySessionResolution;
   /** Present only when this exact token passed Identity resolution. Server request only. */
   accessToken?: string;
+  /** The signed-in person's email from the same provider session; present with `accessToken`. */
+  email?: string;
 }>;
 
 const resolveRequestIdentity = async (
@@ -173,11 +175,25 @@ const resolveRequestIdentity = async (
   const accessToken = current.data.session.access_token;
   const resolution = await sessionService(execution).resolve(accessToken);
   execution?.checkpoint();
-  return resolution.kind === "active" ? { resolution, accessToken } : { resolution };
+  if (resolution.kind !== "active") return { resolution };
+  const email = current.data.session.user.email;
+  if (email === undefined || email === "") {
+    console.error("[identity] active session has no email on the provider user");
+    return { resolution: unavailable() };
+  }
+  return { resolution, accessToken, email };
 };
 
 export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> =>
   (await resolveRequestIdentity()).resolution;
+
+/** The ordinary resolution plus the signed-in person's email, for pages that show who is signed in. */
+export const resolveIdentitySessionWithEmail = async (): Promise<
+  Readonly<{ resolution: IdentitySessionResolution; email?: string }>
+> => {
+  const { resolution, email } = await resolveRequestIdentity();
+  return email === undefined ? { resolution } : { resolution, email };
+};
 
 /**
  * Private delivery composition only. This shares every ordinary resolution guard

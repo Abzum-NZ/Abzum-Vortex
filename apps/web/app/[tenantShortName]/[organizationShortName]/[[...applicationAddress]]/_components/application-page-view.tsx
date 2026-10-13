@@ -12,6 +12,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ApplicationAccountActionsProvider,
+  type ApplicationAccount,
   createFlowInvokeClient,
   createFlowRuntime,
   createFormBlockRuntime,
@@ -791,7 +792,7 @@ export function ApplicationPageView({
   onOpenApplication,
   adoptReleaseAction,
   applicationSwitcherState,
-  identityId,
+  account,
   applicationSearch,
   applicationSearchPageSubject,
   pageFeedback,
@@ -804,7 +805,7 @@ export function ApplicationPageView({
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
-  identityId: string;
+  account: ApplicationAccount;
   applicationSearch?: PagePuckRendererProps["applicationSearch"];
   applicationSearchPageSubject?: string | undefined;
   pageFeedback?: ReactNode;
@@ -824,7 +825,7 @@ export function ApplicationPageView({
         onOpenApplication={onOpenApplication}
         adoptReleaseAction={adoptReleaseAction}
         applicationSwitcherState={applicationSwitcherState}
-        identityId={identityId}
+        account={account}
         applicationSearch={applicationSearch}
         applicationSearchPageSubject={applicationSearchPageSubject}
         pageFeedback={pageFeedback}
@@ -842,7 +843,7 @@ function ApplicationPageViewContent({
   onOpenApplication,
   adoptReleaseAction,
   applicationSwitcherState,
-  identityId,
+  account,
   applicationSearch,
   applicationSearchPageSubject,
   pageFeedback,
@@ -855,7 +856,7 @@ function ApplicationPageViewContent({
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
-  identityId: string;
+  account: ApplicationAccount;
   applicationSearch?: PagePuckRendererProps["applicationSearch"];
   applicationSearchPageSubject?: string | undefined;
   pageFeedback?: ReactNode;
@@ -2917,7 +2918,7 @@ function ApplicationPageViewContent({
   runtimeInputsRef.current = runtimeInputs;
   const releaseAdoption = model.adoption;
   const accountActions: ApplicationAccountActions = {
-    identityId,
+    account,
     organizationName: application.organizationShortName,
     ...(releaseAdoption === undefined || adoptReleaseAction === undefined
       ? {}

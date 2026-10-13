@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ApplicationShell, PageDefinition } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
+  type ApplicationAccount,
   createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FieldInputControlReleaseMap,
@@ -23,7 +24,7 @@ export function ApplicationExperiencePage({
   shells,
   theme,
   organizationName,
-  identityId,
+  account,
   platformBlockReleases,
   fieldInputControlReleases,
   platformThemeTokens,
@@ -33,7 +34,7 @@ export function ApplicationExperiencePage({
   /** The application's installed release theme; absent keeps the platform default. */
   theme?: ComponentProps<typeof PagePuckRenderer>["theme"];
   organizationName: string;
-  identityId: string;
+  account: ApplicationAccount;
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
@@ -46,7 +47,7 @@ export function ApplicationExperiencePage({
   return (
     <ApplicationAccountActionsProvider
       actions={{
-        identityId,
+        account,
         organizationName,
         chooseOrganization: () => router.push("/signed-in"),
         signOut,
