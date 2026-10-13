@@ -23,6 +23,9 @@ export default async function StudioModuleLayout({ children, params }: {
       <a className="rounded-lg border px-3 py-2 text-sm" href={`${base}/before-save`} target="_blank" rel="noopener noreferrer">
         Open BeforeSave conditions in a new tab
       </a>
+      <a className="rounded-lg border px-3 py-2 text-sm" href={`${base}/publish`} target="_blank" rel="noopener noreferrer">
+        Publish Module
+      </a>
       <span className="text-xs text-muted-foreground">Each editor rechecks current permissions when it loads and saves.</span>
     </nav> : <p className="border-b border-border px-6 py-3 text-sm" role="status">
       Module editor navigation is unavailable for this account or draft.
