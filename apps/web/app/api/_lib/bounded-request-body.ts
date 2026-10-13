@@ -1,5 +1,7 @@
 import "server-only";
 
+import { logRefusal } from "@vortex/platform/schema";
+
 type BoundedRequestText =
   | Readonly<{ kind: "read"; text: string }>
   | Readonly<{ kind: "too_large" }>
@@ -33,7 +35,8 @@ export const readBoundedRequestText = async (
       }
       chunks.push(value);
     }
-  } catch {
+  } catch (error) {
+    logRefusal("request-body", "bounded read", "body_unreadable", error);
     return { kind: "unreadable" };
   }
 

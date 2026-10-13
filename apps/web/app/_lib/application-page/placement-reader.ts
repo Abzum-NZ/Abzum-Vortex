@@ -612,7 +612,8 @@ export const readPlacement = async (
     let summaryResult: Awaited<ReturnType<typeof queries.summarise>>;
     try {
       summaryResult = await queries.summarise(session, selection, command.data);
-    } catch {
+    } catch (error) {
+      logPlacementFailure(address, placementId, "summary_query_threw", describeFailure(error));
       summaryResult = { kind: "temporarily_unavailable" };
     }
     if (summaryResult.kind === "temporarily_unavailable") {

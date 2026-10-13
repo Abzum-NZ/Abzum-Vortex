@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { applicationRootIdSchema, type ApplicationRootId } from "../schema";
+import { applicationRootIdSchema, logRefusal, type ApplicationRootId } from "../schema";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
@@ -185,7 +185,8 @@ export const createInstallationRuntimeBundleCleanupRepository = (
         if (rows.length !== 1 || rows[0] === undefined)
           throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
         return parseInstallationRemovalReport(rows[0].cleanup_result);
-      } catch {
+      } catch (error) {
+        logRefusal("runtime-bundles", "cleanup", "RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE", error);
         throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
       }
     },

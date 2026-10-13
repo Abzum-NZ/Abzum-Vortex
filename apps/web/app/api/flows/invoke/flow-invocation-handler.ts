@@ -2,6 +2,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   flowBindingInvocationSchema,
+  logRefusal,
   type ProtectedOperationChannel,
 } from "@vortex/platform/schema";
 import { invokeInstalledFlow } from "@vortex/platform/server";
@@ -75,7 +76,8 @@ export const createFlowInvocationHandler =
       let parsedBody: z.ZodSafeParseResult<z.infer<typeof requestSchema>>;
       try {
         parsedBody = requestSchema.safeParse(JSON.parse(read.text));
-      } catch {
+      } catch (error) {
+        logRefusal(route, "request body", "body_not_json", error);
         return refusedResponse();
       }
       if (!parsedBody.success) return refusedResponse();

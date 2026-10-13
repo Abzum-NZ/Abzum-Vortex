@@ -205,6 +205,7 @@ export const logPlacementFailure = (
   placementId: string,
   reason:
     | "query_not_bound"
+    | "summary_query_threw"
     | "subject_unavailable"
     | "detail_record_type_unavailable"
     | "detail_command_invalid"

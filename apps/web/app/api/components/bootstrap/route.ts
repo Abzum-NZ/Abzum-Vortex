@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logRefusal } from "@vortex/platform/schema";
 import { parseComponentBootstrapTarget, renderComponentBootstrapDocument } from "@vortex/platform/server";
 import {
   configuredComponentOrigin,
@@ -37,7 +38,8 @@ export async function GET(request: Request): Promise<Response> {
   try {
     componentOrigin = configuredComponentOrigin();
     siteOrigin = configuredSiteOrigin();
-  } catch {
+  } catch (error) {
+    logRefusal("components", "bootstrap", "component_origin_unconfigured", error);
     return refusal(404);
   }
 
