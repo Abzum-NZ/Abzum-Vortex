@@ -422,11 +422,28 @@ export const createViewerSafeRecordLinkService = (
                 page !== undefined &&
                 (await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page));
               if (recordType.systemProjection?.protectedView === "groups") {
+                const titleIsGroupName = recordType.fields.some(
+                  (field) => sameId(field.fieldId, recordType.titleFieldId) && field.key === "label",
+                );
                 for (let start = 0; start < recordIds.length; start += titleReadBatchSize) {
                   const batch = recordIds.slice(start, start + titleReadBatchSize);
+                  const read = await records.readTitles(transaction, scope, {
+                    identity,
+                    applicationReleaseRevision: context.applicationReleaseRevision,
+                    titleFieldId: recordType.titleFieldId,
+                    recordIds: batch,
+                  });
+                  if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
                   const visible = await readVisibleGroupLabels(transaction, batch);
                   for (const recordId of batch) {
-                    const label = visible.get(recordId.toLowerCase());
+                    const title = read.titles.get(recordId.toLowerCase());
+                    const titleText = title === undefined ? undefined : labelText(title);
+                    if (title !== undefined && titleText === undefined)
+                      console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
+                    const groupName = visible.get(recordId.toLowerCase());
+                    let label: string | undefined;
+                    if (groupName !== undefined && titleText !== undefined)
+                      label = titleIsGroupName ? groupName : titleText;
                     labels.set(
                       `${typeKey}:${recordId.toLowerCase()}`,
                       label === undefined
