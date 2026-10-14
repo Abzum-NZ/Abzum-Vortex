@@ -293,7 +293,7 @@
         "standard_actions": ["read"],
         "custom_actions": [],
         "system_projection": {
-          "protected_view": "landing_zone_applications",
+          "protected_view": "installed_applications",
           "organization_field": "organization_id",
           "revision_field": "revision",
           "filterable_fields": [],

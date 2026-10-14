@@ -18,7 +18,6 @@ export const protectedReadModelKeys = [
   "tenants",
   "tenant_administrators",
   "installed_applications",
-  "landing_zone_applications",
   "application_role_templates",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
