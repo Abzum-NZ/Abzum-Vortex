@@ -441,6 +441,28 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             settings.filter === undefined ||
             (fieldReferencesValid(settings.filter, aggregateFields) &&
               typedConditionTypesValid(settings.filter, aggregateFieldMap));
+          let filterFieldsFilterable = true;
+          if (settings.filter !== undefined)
+            walkValues(settings.filter, (operand) => {
+              if (
+                operand.source === "field" &&
+                aggregateFieldMap.get(String(operand.fieldId))?.filterable !== true
+              )
+                filterFieldsFilterable = false;
+            });
+          if (!filterFieldsFilterable)
+            failures.push({
+              ruleCode: "vortex.definition.total_filter_fields",
+              family: "broken_reference",
+              location: {
+                ...rootLocation(output),
+                segments: [
+                  ...rootLocation(output).segments,
+                  { kind: "record_type", key: String(record.key) },
+                  { kind: "field", key: String(field.key) },
+                ],
+              },
+            });
           const currencyValid =
             settings.currency === undefined ||
             (settings.operation === "sum" && aggregateResultType === "money");

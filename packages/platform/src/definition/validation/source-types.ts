@@ -15,6 +15,27 @@ import {
 } from "./field-types";
 import { actionValueCompatible } from "./action-values";
 
+function totalFilterFieldsFilterable(
+  value: unknown,
+  fields: ReadonlyMap<string, JsonObject>,
+): boolean {
+  const condition = object(value);
+  if (condition.all)
+    return array(condition.all).every((entry) => totalFilterFieldsFilterable(entry, fields));
+  if (condition.any)
+    return array(condition.any).every((entry) => totalFilterFieldsFilterable(entry, fields));
+  if (condition.not) return totalFilterFieldsFilterable(condition.not, fields);
+  const operands = condition.field === undefined ? [condition.left, condition.right] : [];
+  const fieldKeys = [
+    ...(condition.field === undefined ? [] : [String(condition.field)]),
+    ...operands
+      .map((operand) => object(operand ?? {}))
+      .filter((operand) => operand.source === "field")
+      .map((operand) => String(operand.field)),
+  ];
+  return fieldKeys.every((fieldKey) => fields.get(fieldKey)?.filterable === true);
+}
+
 export function sourceTypeCompatibilityRule(
   context: PreparedValidationContext,
 ): DefinitionRuleFailure[] {
@@ -52,6 +73,23 @@ export function sourceTypeCompatibilityRule(
           continue;
         }
         const aggregateFields = fieldsFor(aggregateRecord);
+        if (
+          settings.filter !== undefined &&
+          !totalFilterFieldsFilterable(settings.filter, aggregateFields)
+        )
+          failures.push({
+            ruleCode: "vortex.definition.total_filter_fields",
+            family: "broken_reference",
+            location: {
+              documentKind: "module",
+              documentKey: source.key,
+              segments: [
+                { kind: "module", key: source.key },
+                { kind: "record_type", key: recordKey },
+                { kind: "field", key: String(field.key) },
+              ],
+            },
+          });
         const relationship = array(aggregateRecord.relationships).find(
           (candidate) =>
             String(candidate.key) === relationshipReference.slice(relationshipSeparator + 1),
