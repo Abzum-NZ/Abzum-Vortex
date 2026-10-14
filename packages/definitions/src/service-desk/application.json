@@ -3782,7 +3782,7 @@
     },
     {
       "id": "event_new_case_customer",
-      "key": "vortex.app.events.vortex_app_service_desk_new_case_customer",
+      "key": "vortex.app.events.vortex_app_service_desk_customer_case",
       "record_type": "vortex.crm.organisations:company",
       "carries": [],
       "personal_or_sensitive_values_allowed": false
