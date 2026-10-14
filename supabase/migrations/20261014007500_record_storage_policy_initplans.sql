@@ -128,8 +128,9 @@ grant execute on function vortex_record.create_record_storage_table_internal(uui
 comment on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text) is
   'Creates one generated Record storage table with its fixed scope checks and request-adapter policies.';
 
--- Process eight storage tables per loop iteration. ALTER POLICY is idempotent and
--- leaves each policy's command, role, and permissive mode unchanged.
+-- Process eight regular record storage tables per loop iteration. Companion
+-- projection tables use cp_* names and different policies, so exclude them.
+-- ALTER POLICY is idempotent and leaves each policy's command, role, and mode unchanged.
 do $migration$
 declare
   batch_size constant integer := 8;
@@ -148,6 +149,7 @@ begin
       from pg_catalog.pg_class as c
       join pg_catalog.pg_namespace as n on n.oid = c.relnamespace
       where n.nspname = 'record_data' and c.relkind = 'r'
+        and c.relname ~ '^rt_[0-9a-f]{32}$'
       order by c.relname
       limit batch_size offset batch_start
     ) as batch;
