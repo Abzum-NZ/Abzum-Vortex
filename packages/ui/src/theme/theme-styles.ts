@@ -83,6 +83,13 @@ const SHARED_COMPONENT_STYLES_CSS = `
   border-radius: 999px;
 }
 
+.vortex-cell-text,
+.vortex-cell-link,
+.vortex-cell-rich-text {
+  /* A long unbroken value (a code, an address) wraps inside its block; a table cell still scrolls. */
+  overflow-wrap: break-word;
+}
+
 .vortex-cell-empty {
   color: var(--vortex-text-muted);
 }

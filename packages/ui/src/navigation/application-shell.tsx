@@ -44,7 +44,10 @@ export type ApplicationShellRuntime = Readonly<{
   webMcp?: ApplicationWebMcpRuntime;
 }>;
 
+// The icon-only collapse is a tablet and desktop form: on a phone the navigation block supplies its own
+// disclosure, so the collapse (and its trigger) never narrows the menu region below 641 px.
 const shellFrameCss = `
+@media (min-width: 641px) {
 [data-vortex-sidebar-state="collapsed"] [data-vortex-container-region="menu"]:has([data-vortex-shell-navigation]) {
   width: var(--sidebar-width-icon) !important;
   max-width: var(--sidebar-width-icon) !important;
@@ -62,6 +65,7 @@ const shellFrameCss = `
 }
 [data-vortex-sidebar-state="collapsed"] [data-vortex-shell-navigation] [data-sidebar="menu-sub"] {
   display: none;
+}
 }
 `;
 
@@ -271,7 +275,7 @@ export function ApplicationShellRoot({
         <style>{shellFrameCss}</style>
         <header className="sticky top-0 z-20 flex min-h-14 w-full shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b py-1 sm:h-14 sm:flex-nowrap sm:py-0 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           {presentation.sidebar.collapsible === "icon" ? (
-            <SidebarTrigger className="max-sm:size-[44px]" />
+            <SidebarTrigger className="max-sm:hidden" />
           ) : null}
           {presentation.topBar.breadcrumbs ? (
             <Breadcrumbs shellName={shell.name} runtime={runtime} />
