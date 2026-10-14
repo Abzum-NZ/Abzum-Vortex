@@ -1,6 +1,12 @@
 import "server-only";
 
 export {
+  organizationChooserEmptyPage,
+  organizationChooserPage,
+  organizationChooserPlacementId,
+  organizationChooserShell,
+} from "./organization-chooser-page";
+export {
   organizationLauncherPage,
   organizationLauncherPlacementId,
   organizationLauncherShell,
