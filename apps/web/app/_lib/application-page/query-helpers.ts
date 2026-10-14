@@ -158,11 +158,15 @@ export const fieldDateTypesOf = (
 ): Record<string, "date" | "date_time"> =>
   Object.fromEntries(
     module.content.recordTypes.flatMap((recordType) =>
-      recordType.fields.flatMap((field) =>
-        field.type === "date" || field.type === "date_time"
-          ? [[String(field.fieldId).toLowerCase(), field.type] as const]
-          : [],
-      ),
+      recordType.fields.flatMap((field) => {
+        const valueType =
+          field.type === "calculation" || field.type === "total"
+            ? field.settings.resultType
+            : field.type;
+        return valueType === "date" || valueType === "date_time"
+          ? [[String(field.fieldId).toLowerCase(), valueType] as const]
+          : [];
+      }),
     ),
   );
 

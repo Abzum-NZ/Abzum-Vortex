@@ -90,13 +90,19 @@ const empty: ProjectedCellValue = Object.freeze({ kind: "empty" as const });
 const hasOwn = (record: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, key);
 
+/** A calendar date whose day exists in its month; `Date.parse` alone rolls 2026-02-31 over to March. */
+const isRealCalendarDate = (value: string): boolean => {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
+};
+
 /**
  * A stored value of a date or date-time column. One that is not an ISO date or offset timestamp is
  * logged with a stable code and shown as an explicit invalid-value text, never as the raw stored text.
  */
 const projectDate = (value: string): ProjectedCellValue => {
   if (
-    (ISO_CALENDAR_DATE.test(value) && !Number.isNaN(Date.parse(value))) ||
+    (ISO_CALENDAR_DATE.test(value) && isRealCalendarDate(value)) ||
     timestampSchema.safeParse(value).success
   )
     return { kind: "date", iso: value };
