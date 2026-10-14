@@ -413,6 +413,14 @@
                                                              "permission":  "application.service_desk.case.read"
                                                          },
                                                          {
+                                                             "id":  "nav_sd_case_board",
+                                                             "type":  "page",
+                                                             "label":  "Case board",
+                                                             "icon":  "life-buoy",
+                                                             "page":  "service_desk_case_board",
+                                                             "permission":  "application.service_desk.case.read"
+                                                         },
+                                                         {
                                                              "id":  "nav_sd_new",
                                                              "type":  "page",
                                                              "label":  "New case",
@@ -3300,6 +3308,112 @@
                                      }
                                    }
                                  }
+                               },
+                               {
+                                 "id": "page_sd_case_board",
+                                 "key": "service_desk_case_board",
+                                 "name": "Case board",
+                                 "type": "list",
+                                 "record_type": "vortex.service_desk.cases:case",
+                                 "permission": "application.service_desk.case.read",
+                                 "query": "vortex.service_desk.cases:service_desk_case_board",
+                                 "composition": {
+                                   "shell_kind": "application",
+                                   "shell": "shell_service_desk",
+                                   "content": {
+                                     "slot_primary": {
+                                       "placements": {
+                                         "board_sd_cases": {
+                                           "block": {
+                                             "block_id": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
+                                             "release_version": "1.0.0"
+                                           },
+                                           "query": "vortex.service_desk.cases:service_desk_case_board",
+                                           "settings": {
+                                             "title": {
+                                               "kind": "text",
+                                               "value": "Case board"
+                                             },
+                                             "choice_field": {
+                                               "kind": "field_reference",
+                                               "field": "vortex.service_desk.cases:case.status"
+                                             },
+                                             "card_title_field": {
+                                               "kind": "field_reference",
+                                               "field": "vortex.service_desk.cases:case.subject"
+                                             },
+                                             "detail_fields": {
+                                               "kind": "list",
+                                               "items": [
+                                                 {
+                                                   "kind": "group",
+                                                   "properties": {
+                                                     "field": {
+                                                       "kind": "field_reference",
+                                                       "field": "vortex.service_desk.cases:case.case_number"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Case number"
+                                                     }
+                                                   }
+                                                 },
+                                                 {
+                                                   "kind": "group",
+                                                   "properties": {
+                                                     "field": {
+                                                       "kind": "field_reference",
+                                                       "field": "vortex.service_desk.cases:case.priority"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Priority"
+                                                     }
+                                                   }
+                                                 },
+                                                 {
+                                                   "kind": "group",
+                                                   "properties": {
+                                                     "field": {
+                                                       "kind": "field_reference",
+                                                       "field": "vortex.service_desk.cases:case.resolution_due_at"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Resolution due"
+                                                     }
+                                                   }
+                                                 }
+                                               ]
+                                             },
+                                             "empty_message": {
+                                               "kind": "text",
+                                               "value": "No cases in this status."
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": true,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
+                                               }
+                                             }
+                                           },
+                                           "slots": {}
+                                         }
+                                       },
+                                       "order": {
+                                         "desktop": [
+                                           "board_sd_cases"
+                                         ]
+                                       }
+                                     }
+                                   }
+                                 }
                                }
                            ],
                  "pipelines":  [
@@ -3623,6 +3737,13 @@
     {
         "id": "event_sd_open_case",
         "key": "vortex.app.events.vortex_app_service_desk_open_case",
+        "record_type": "vortex.service_desk.cases:case",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_sd_case_board_open_case",
+        "key": "vortex.app.events.vortex_app_service_desk_board_open_case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -5436,6 +5557,19 @@
                          "control": "content_1",
                          "event_id": "event_sd_open_case",
                          "event": "row_clicked",
+                         "flow": "sd_open_case",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_sd_case_board_open_case",
+                         "control": "board_sd_cases",
+                         "event_id": "event_sd_case_board_open_case",
+                         "event": "row_action",
                          "flow": "sd_open_case",
                          "inputs": {
                              "record_id": {
