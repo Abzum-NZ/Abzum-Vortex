@@ -11,6 +11,10 @@ const infoVariant =
   "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-info-text)] " +
   "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-info-text)] " +
   "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
+const successVariant =
+  "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-success-text)] " +
+  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-success-text)] " +
+  "[&_[data-slot=alert-description]]:text-[var(--vortex-text)]";
 const warningVariant =
   "border-l-4 bg-[var(--vortex-surface)] border-l-[var(--vortex-warning-text)] " +
   "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-[var(--vortex-warning-text)] " +
@@ -28,8 +32,7 @@ const alertVariants = cva(
         default: "cn-alert-variant-default",
         destructive: "cn-alert-variant-destructive",
         info: infoVariant,
-        // The theme vocabulary has no separate success text role; success reads the info role.
-        success: infoVariant,
+        success: successVariant,
         warning: warningVariant,
         critical: `cn-alert-variant-destructive ${dangerVariant}`,
       },

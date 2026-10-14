@@ -89,6 +89,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -363,6 +369,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -641,6 +653,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -915,6 +933,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -1193,6 +1217,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -1467,6 +1497,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -1745,6 +1781,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -2019,6 +2061,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -2297,6 +2345,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -2571,6 +2625,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -2849,6 +2909,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -3123,6 +3189,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -3401,6 +3473,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -3675,6 +3753,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -3953,6 +4037,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -4227,6 +4317,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -4505,6 +4601,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -4779,6 +4881,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -5057,6 +5165,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -5331,6 +5445,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -5609,6 +5729,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -5883,6 +6009,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -6161,6 +6293,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -6435,6 +6573,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -6713,6 +6857,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -6987,6 +7137,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -7265,6 +7421,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -7539,6 +7701,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -7817,6 +7985,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -8091,6 +8265,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -8369,6 +8549,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -8643,6 +8829,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -8921,6 +9113,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -9195,6 +9393,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -9473,6 +9677,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -9747,6 +9957,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -10025,6 +10241,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -10299,6 +10521,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -10577,6 +10805,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -10851,6 +11085,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -11129,6 +11369,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -11403,6 +11649,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -11681,6 +11933,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -11955,6 +12213,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -12233,6 +12497,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -12507,6 +12777,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -12785,6 +13061,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -13059,6 +13341,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -13337,6 +13625,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -13611,6 +13905,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -13889,6 +14189,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -14163,6 +14469,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -14441,6 +14753,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -14715,6 +15033,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -14993,6 +15317,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -15267,6 +15597,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -15545,6 +15881,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -15819,6 +16161,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -16097,6 +16445,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -16371,6 +16725,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {
@@ -16649,6 +17009,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -16925,6 +17291,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
@@ -17199,6 +17571,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {

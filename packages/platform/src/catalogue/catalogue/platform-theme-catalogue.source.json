@@ -89,6 +89,12 @@
         "dark": "#60A5FA",
         "role": "foreground"
       },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
       "focus": {
         "kind": "focus",
         "colorToken": "primary",
@@ -238,6 +244,12 @@
         "kind": "color_pair",
         "light": "#1D4ED8",
         "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
         "role": "foreground"
       },
       "card": {

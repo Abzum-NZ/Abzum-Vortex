@@ -371,6 +371,7 @@ export const platformThemeTokenRoles = [
   { key: "danger_text", kind: "color_pair", colorRole: "foreground" },
   { key: "warning_text", kind: "color_pair", colorRole: "foreground" },
   { key: "info_text", kind: "color_pair", colorRole: "foreground" },
+  { key: "success_text", kind: "color_pair", colorRole: "foreground" },
   // The shadcn CSS variables the shared components read. Each card, popover, accent and sidebar
   // surface carries its own foreground role, so the readability checks judge each painted pair.
   { key: "card", kind: "color_pair", colorRole: "background" },

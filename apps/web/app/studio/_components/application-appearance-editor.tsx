@@ -23,7 +23,6 @@ type Props = Readonly<{
   onApply: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) => boolean;
 }>;
 const inputClass = "w-full";
-const buttonClass = "";
 
 function TokenControls({ value, disabled, colors, assets, change }: {
   value: StudioThemeTokenValue; disabled: boolean; colors: readonly string[];
@@ -250,7 +249,7 @@ export function ApplicationAppearanceEditor(props: Props) {
           disabled={props.disabled || !overridden} colors={colors} assets={descriptors.publicAssetIds}
           change={(next) => update({ ...values, [token.key]: next })} />
           : <p role="alert">The stored override has an invalid kind. Reset it to the inherited token.</p>}
-        <Button className={buttonClass} type="button" disabled={props.disabled || !overridden} onClick={() => {
+        <Button type="button" disabled={props.disabled || !overridden} onClick={() => {
           const next = { ...values }; delete next[token.key]; update(next);
         }}>Reset override</Button>
         {errors.length > 0 && <ul id={errorId} role="alert" className="list-disc pl-5">
@@ -259,11 +258,11 @@ export function ApplicationAppearanceEditor(props: Props) {
       </fieldset>;
     })}
     <div className="flex flex-wrap gap-2">
-      <Button className={buttonClass} type="button" disabled={props.disabled || busy}
+      <Button type="button" disabled={props.disabled || busy}
         onClick={validate}>Validate appearance</Button>
-      <Button className={buttonClass} type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true || feedbackEpoch.current !== props.validationEpoch}
+      <Button type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true || feedbackEpoch.current !== props.validationEpoch}
         onClick={apply}>Apply appearance</Button>
-      <Button className={buttonClass} type="button" disabled={props.disabled || (!changed && !busy)}
+      <Button type="button" disabled={props.disabled || (!changed && !busy)}
         onClick={() => update(structuredClone(props.source.body.theme.token_overrides))}>Discard appearance edits</Button>
     </div>
     <p className="text-sm">Applying affects local history only. Save persists through the current protected writer; publication and installation remain separate.</p>
