@@ -1226,3 +1226,45 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
     },
   });
 };
+
+/** Whether a named action can run on one record for the viewer, as a page asks before it shows a control. */
+export type NamedActionAvailability =
+  | Readonly<{ kind: "available" }>
+  | Readonly<{ kind: "refused"; cause: "precondition" | "permission" }>
+  /** The preview cannot decide without the inputs the person has yet to supply; submit decides. */
+  | Readonly<{ kind: "undecided"; reason: string }>;
+
+/**
+ * Asks the action's own preview whether it would run on the record, inside a transaction the caller
+ * already verified, and writes nothing: the preview only reads (its receipt lookup is replay-only,
+ * it appends no Activity and bumps no revision), and a refusal is never recorded here, unlike an
+ * attempt to run the action. The precondition is decided by the same flow run the action itself
+ * uses, with no inputs supplied: a precondition that reads an input leaves the run unable to
+ * decide, which is reported as undecided, never as a refusal.
+ */
+export const previewNamedActionAvailability = async (
+  transaction: RequestDatabaseTransaction,
+  command: ExecuteNamedActionCommand,
+  issuedAt: string,
+  run: ActionFlowRunner,
+): Promise<NamedActionAvailability> => {
+  let preview: ActionPreparation;
+  try {
+    preview = await prepare(transaction, command, randomUUID(), true);
+  } finally {
+    await transaction.query`set local role vortex_request`;
+  }
+  if (preview.outcome === "permission_refused") return { kind: "refused", cause: "permission" };
+  if (preview.outcome !== "previewed") {
+    const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
+    return {
+      kind: "undecided",
+      reason: `the preview was ${preview.outcome}, not previewed (${reasonCode ?? "no reason code"})`,
+    };
+  }
+  const outcome = run(actionFlowSeed(preview, {}, issuedAt));
+  if (outcome.kind === "refused") return { kind: "refused", cause: "precondition" };
+  return outcome.kind === "collected"
+    ? { kind: "available" }
+    : { kind: "undecided", reason: outcome.reason };
+};
