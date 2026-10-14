@@ -1577,7 +1577,7 @@
                     "kind": "literal",
                     "literal": {
                       "type": "text",
-                      "value": "case_status_move_refused_from_in_progress"
+                      "value": "case_status_refused_from_in_progress"
                     }
                   },
                   "message": {
@@ -1691,7 +1691,7 @@
                     "kind": "literal",
                     "literal": {
                       "type": "text",
-                      "value": "case_status_move_refused_from_waiting_customer"
+                      "value": "case_status_refused_from_waiting"
                     }
                   },
                   "message": {
