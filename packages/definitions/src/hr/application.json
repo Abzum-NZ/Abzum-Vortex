@@ -3553,7 +3553,7 @@
                   "settings": {
                     "title": {
                       "kind": "text",
-                      "value": "Approved leave days taken by employee"
+                      "value": "Approved leave days taken (all employees you can see, all years)"
                     },
                     "empty_message": {
                       "kind": "text",

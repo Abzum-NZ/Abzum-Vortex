@@ -604,7 +604,8 @@
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ],
           "changeable_fields": []
         }
@@ -630,14 +631,16 @@
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ],
           "changeable_fields": [
             "employee_number",
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ]
         }
       },
@@ -662,14 +665,16 @@
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ],
           "changeable_fields": [
             "employee_number",
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ]
         }
       },
@@ -692,6 +697,7 @@
           "readable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -718,6 +724,7 @@
           "readable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -725,6 +732,7 @@
           "changeable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -750,6 +758,7 @@
           "readable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -757,6 +766,7 @@
           "changeable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -974,8 +984,8 @@
       {
         "id": "qry_hr_leave_taken_by_employee",
         "key": "hr_leave_taken_by_employee",
-        "label": "Approved leave taken by employee",
-        "description": "Total approved leave days for each employee",
+        "label": "Approved leave days taken",
+        "description": "Total of approved leave days across the leave requests the viewer can read",
         "record_type": "leave_request",
         "inputs": [],
         "select": [
@@ -997,11 +1007,11 @@
           }
         ],
         "sort": [
-        {
-          "field": "employee",
-          "direction": "ascending"
-        }
-      ],
+          {
+            "field": "employee",
+            "direction": "ascending"
+          }
+        ],
         "page_size": 50,
         "relationship_hops": 0
       }
