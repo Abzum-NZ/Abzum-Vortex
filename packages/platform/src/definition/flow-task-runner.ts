@@ -369,11 +369,19 @@ export const createFlowTaskRunner = (
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
       if (value.outcome === "correction_required") {
-        // Only the form field key and the correction code leave the save: never a value.
+        // Only the form field key, the correction code and a rule's authored message leave the save: never a value.
         const located = dedupeFieldCorrections(
           value.corrections.flatMap((correction) => {
             const field = plan.submittedNames.get(correction.fieldId.toLowerCase());
-            return field === undefined ? [] : [{ field, code: correction.code }];
+            return field === undefined
+              ? []
+              : [
+                  {
+                    field,
+                    code: correction.code,
+                    ...(correction.message === undefined ? {} : { message: correction.message }),
+                  },
+                ];
           }),
         );
         const diagnostic = flowRefusalFeedbackSchema.safeParse({
@@ -390,7 +398,16 @@ export const createFlowTaskRunner = (
             ...(diagnostic.success ? { diagnostic: diagnostic.data } : {}),
           },
           stored: diagnostic.success
-            ? { diagnostic: { code: diagnostic.data.code, corrections: [...located] } }
+            ? {
+                diagnostic: {
+                  code: diagnostic.data.code,
+                  corrections: located.map((correction) => ({
+                    field: correction.field,
+                    code: correction.code,
+                    ...(correction.message === undefined ? {} : { message: correction.message }),
+                  })),
+                },
+              }
             : {},
         };
       }
