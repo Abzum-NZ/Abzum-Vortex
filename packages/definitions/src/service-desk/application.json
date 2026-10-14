@@ -533,11 +533,15 @@
                                                                                                          "slots":  {
 
                                                                                                                    }
-                                                                                                     }
+                                                                                                     },
+                                                                                     "content_kpi": {"block": {"block_id": "b00f7a0f-9094-4186-b8c4-066b1df6c395", "release_version": "1.1.0"}, "query": "vortex.service_desk.cases:service_desk_open_cases_by_status", "settings": {"title": {"kind": "text", "value": "Workload totals"}, "empty_message": {"kind": "text", "value": "No open cases to show."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
+                                                                                     "content_chart": {"block": {"block_id": "5e7d5839-04fe-4b33-93c7-a382521a74b8", "release_version": "1.0.0"}, "query": "vortex.service_desk.cases:service_desk_open_cases_by_status", "settings": {"title": {"kind": "text", "value": "Open cases by status"}, "category_field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.status"}, "measure": {"kind": "text", "value": "open_case_count"}, "measure_label": {"kind": "text", "value": "Open cases"}, "empty_message": {"kind": "text", "value": "No open cases to show."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_0"
+                                                                                                  "content_0",
+                                                                                                  "content_kpi",
+                                                                                                  "content_chart"
                                                                                               ]
                                                                               }
                                                                     }

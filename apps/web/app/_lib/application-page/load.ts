@@ -1,4 +1,6 @@
+import { cache } from "react";
 import {
+  type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   createHumanInstalledPageBundleContextLoader,
   createStoredPageCapabilityService,
@@ -13,9 +15,11 @@ import {
   createLinkTilesQueryResolver,
   createPageSubjectReader,
   type PageSubjectReadResult,
+  type ProjectedRecordLink,
+  type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
 } from "@vortex/platform/server";
-import { FORM_CONTAINER_BLOCK_RELEASE } from "@vortex/platform/server";
+import { FORM_CONTAINER_BLOCK_RELEASE, runtimeDatabasePoolSize } from "@vortex/platform/server";
 import {
   describeFailure,
   type IdentitySession,
@@ -115,6 +119,42 @@ export const loadInstalledContext = (
   );
 
 /**
+ * The viewer's projection of one page and of the application menu, read once per server render:
+ * the application frame layout and the page of one request share them instead of deciding the same
+ * access twice. The next request reads again, so no access decision outlives its request.
+ */
+export const readPageProjections = cache(
+  (
+    session: IdentitySession,
+    context: InstalledRuntimeContext,
+    pageId: string,
+    subjectRecordId: string | undefined,
+  ) => {
+    const dependencies = requestDependencies();
+    const selection: OrganizationSelectionCandidate = {
+      organizationId: context.organizationId,
+      applicationRootId: context.applicationRootId,
+    };
+    const projectedPageRead = createStoredPageCapabilityService({
+      ...dependencies,
+      context,
+      permissions: platformPermissionSource,
+      selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
+    }).project(session, selection);
+    const navigationRead = createStoredNavigationProjectionService({
+      ...dependencies,
+      context,
+      permissions: platformPermissionSource,
+    }).project(session, selection);
+    // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
+    // every reader joins both reads before it returns on any path (early returns included).
+    void projectedPageRead.catch(() => undefined);
+    void navigationRead.catch(() => undefined);
+    return { projectedPageRead, navigationRead };
+  },
+);
+
+/**
  * Loads one page. Reads the loader starts ahead of where their results are consulted are joined
  * before it returns or throws, whichever path it takes, so no HUMAN request outlives the loader.
  */
@@ -203,28 +243,15 @@ const loadApplicationPageJoined = async (
   }
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
-  const pageService = createStoredPageCapabilityService({
-    ...dependencies,
-    context,
-    permissions: platformPermissionSource,
-    selection: {
-      pageId: pageDefinition.pageId,
-      ...(conditionSubjectId === undefined ? {} : { subjectRecordId: conditionSubjectId }),
-    },
-  });
   // The adoption read, the page projection and the navigation projection are independent reads of
   // the same installed context, each under its own HUMAN request; they run together and their
   // results are still consulted in the original order.
-  const projectedPageRead = pageService.project(session, selection);
-  const navigationRead = createStoredNavigationProjectionService({
-    ...dependencies,
+  const { projectedPageRead, navigationRead } = readPageProjections(
+    session,
     context,
-    permissions: platformPermissionSource,
-  }).project(session, selection);
-  // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
-  // both reads are joined before the loader returns on any path (early returns included).
-  void projectedPageRead.catch(() => undefined);
-  void navigationRead.catch(() => undefined);
+    pageDefinition.pageId,
+    conditionSubjectId,
+  );
   startedReads.push(projectedPageRead, navigationRead);
   const adoptionTarget = await adoptionRead;
   const projectedPage = await projectedPageRead;
@@ -470,7 +497,7 @@ const loadApplicationPageJoined = async (
         }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(8, candidates.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(runtimeDatabasePoolSize(), candidates.length) }, worker));
     if (failed) throw failure;
     return Object.freeze(results);
   };
@@ -641,6 +668,28 @@ const loadApplicationPageJoined = async (
   const adoptSubjectRead = (read: PageSubjectReadResult): void => {
     subjectRead ??= Promise.resolve(read);
   };
+  // One labelled read per page and link target: a link shows its target's name as the viewer may
+  // read it, and a detail address only where the viewer may open that page.
+  const resolveRecordLinks: RecordLinkResolver = async (links) => {
+    const read = await recordLinks.readLabels(session, selection, context, links);
+    if (read.outcome !== "read") return undefined;
+    return new Map(
+      [...read.labels].map(([key, label]): [string, ProjectedRecordLink] => [
+        key,
+        label.outcome === "restricted"
+          ? { kind: "restricted" }
+          : {
+              kind: "record_link",
+              label: label.label,
+              ...(label.detail === undefined
+                ? {}
+                : {
+                    href: `/${encodeURIComponent(address.tenantShortName)}/${encodeURIComponent(address.organizationShortName)}/${encodeURIComponent(label.detail.applicationKey)}/${encodeURIComponent(label.detail.pageKey)}?${new URLSearchParams({ record_id: label.detail.recordId })}`,
+                  }),
+            },
+      ]),
+    );
+  };
   const placementReaderInput = {
     application,
     recordTypeByPlacement,
@@ -671,6 +720,7 @@ const loadApplicationPageJoined = async (
     queries,
     readCalendarSettings,
     tables,
+    resolveRecordLinks,
     tableContinuation,
     adoptSubjectRead,
     markSubjectUnreadable,
@@ -948,9 +998,10 @@ const loadApplicationPageJoined = async (
   // state and is logged with its cause; it never fails the page or goes unobserved.
   const streamedData: Record<string, Promise<PageDataState>> = {};
   const streamedSlots = new Array<() => void>();
+  const streamedLimit = runtimeDatabasePoolSize();
   let streamedRunning = 0;
   const nextStreamedSlot = (): Promise<void> =>
-    streamedRunning < 8
+    streamedRunning < streamedLimit
       ? ((streamedRunning += 1), Promise.resolve())
       : new Promise<void>((resolve) => streamedSlots.push(resolve));
   const releaseStreamedSlot = (): void => {

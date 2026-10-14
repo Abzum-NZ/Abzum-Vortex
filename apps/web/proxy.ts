@@ -9,12 +9,15 @@ import {
   type IdentitySessionProxyState,
 } from "./app/auth/_lib/session-request-state";
 import { privateResponse } from "./app/_lib/private-response";
+import { requestAddressHeader, requestAddressOf } from "./app/_lib/request-address";
 
 export async function proxy(request: NextRequest) {
-  const responseFor = (state: IdentitySessionProxyState): NextResponse =>
-    NextResponse.next({
-      request: { headers: forwardedIdentitySessionHeaders(request.headers, state) },
-    });
+  const responseFor = (state: IdentitySessionProxyState): NextResponse => {
+    const headers = forwardedIdentitySessionHeaders(request.headers, state);
+    // The application frame layout projects the frame of the page this request addresses.
+    headers.set(requestAddressHeader, requestAddressOf(request.nextUrl));
+    return NextResponse.next({ request: { headers } });
+  };
 
   // A sign-in submission supersedes whatever session the browser still holds. Contacting the
   // provider with that old pair would try to refresh a token that no longer exists (for example

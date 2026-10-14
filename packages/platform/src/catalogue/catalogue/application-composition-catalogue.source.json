@@ -6293,5 +6293,93 @@
       "refresh"
     ],
     "supportedStateOperations": []
+  },
+  "CHART_BLOCK_RELEASE": {
+    "blockId": "5e7d5839-04fe-4b33-93c7-a382521a74b8",
+    "key": "platform.display.chart",
+    "releaseVersion": "1.0.0",
+    "name": "Bar chart",
+    "icon": "chart-bar",
+    "paletteGroup": "figures",
+    "rendererKey": "platform.renderer.chart",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "title",
+        "label": "Title",
+        "help": "Accessible name shown as the chart heading",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "field_reference",
+        "key": "category_field",
+        "label": "Category field",
+        "help": "The one field the bound query groups by; each group is one bar",
+        "required": true
+      },
+      {
+        "kind": "text",
+        "key": "measure",
+        "label": "Measure",
+        "help": "Alias of a declared aggregate in the bound query, read for every group",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 80
+      },
+      {
+        "kind": "text",
+        "key": "measure_label",
+        "label": "Measure label",
+        "help": "Safe display label for the measure",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "label": "Empty message",
+        "help": "Text shown when the query returns no groups",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "refused_message",
+        "label": "Unavailable message",
+        "help": "Neutral text shown when the chart is unavailable",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "error_message",
+        "label": "Error message",
+        "help": "Text shown when the chart could not be loaded",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content_or_bounded",
+      "publicSurface": "refused",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": [
+        "title"
+      ]
+    },
+    "supportedEvents": [
+      "refresh"
+    ],
+    "supportedStateOperations": []
   }
 }

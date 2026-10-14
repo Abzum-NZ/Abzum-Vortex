@@ -40,6 +40,12 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Canonical SQL functions that differ from their latest migration",
   },
+  "migration-version-duplicate": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description: "Migration files that share a version; a fresh reset fails on the duplicate key",
+  },
   "migration-orphan": {
     tier: "warning",
     owner: "lead",
@@ -144,6 +150,7 @@ export const scannedRuleIds = new Set([
   "business-name",
   "layering",
   "migration-mismatch",
+  "migration-version-duplicate",
   "migration-orphan",
   "function-uuid",
   "migration-owner-role",

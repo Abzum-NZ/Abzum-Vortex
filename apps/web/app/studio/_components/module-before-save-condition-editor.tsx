@@ -25,7 +25,6 @@ const sameIdentity = (left: ModuleBeforeSaveConditionDraftContext, right: Module
     flow: left.flow, trigger: left.trigger, task: left.task, fields: left.fields }) ===
   canonicalJson({ org: right.organizationId, root: right.rootId, key: right.definitionKey, resolution: right.resolutionFingerprint,
     flow: right.flow, trigger: right.trigger, task: right.task, fields: right.fields });
-const buttonClass = "";
 
 /** Existing top-level predicates only. Apply and history are local; Save is an explicit Human operation. */
 export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, initial }: Props) {
@@ -206,17 +205,17 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
         {localValidation!.issues.map((issue, index) => <li key={`${issue.code}:${index}`}>{issue.pointer || "Condition"}: {issue.message}</li>)}
       </ul>}
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={apply} disabled={busy || !staged || !valid}>Apply</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={undo} disabled={busy || (!staged && undoStack.length === 0)}>Undo</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={redo} disabled={busy || staged || redoStack.length === 0}>Redo</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void submit(false)} disabled={busy || staged || !valid}>Validate</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void submit(true)} disabled={busy || staged || !dirty || !valid}>Save</Button>
+        <Button type="button" variant="outline" size="sm" onClick={apply} disabled={busy || !staged || !valid}>Apply</Button>
+        <Button type="button" variant="outline" size="sm" onClick={undo} disabled={busy || (!staged && undoStack.length === 0)}>Undo</Button>
+        <Button type="button" variant="outline" size="sm" onClick={redo} disabled={busy || staged || redoStack.length === 0}>Redo</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => void submit(false)} disabled={busy || staged || !valid}>Validate</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => void submit(true)} disabled={busy || staged || !dirty || !valid}>Save</Button>
       </div>
       <p>{dirty ? "Applied changes are not saved." : "The applied condition matches the saved draft."}</p>
     </section>}
     {validationErrors}
     <p aria-live="polite" role="status">{message}</p>
-    <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void load(selectedRef.current, true)} disabled={busy}>Reopen</Button>
+    <Button type="button" variant="outline" size="sm" onClick={() => void load(selectedRef.current, true)} disabled={busy}>Reopen</Button>
     {confirmDialog}
   </main>;
 }

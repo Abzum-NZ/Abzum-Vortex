@@ -242,6 +242,9 @@ export const logPlacementFailure = (
     | "summary_query_refused"
     | "summary_dataset_limit_exceeded"
     | "summary_result_invalid"
+    | "chart_settings_invalid"
+    | "chart_group_invalid"
+    | "chart_measure_invalid"
     | "placement_read_failed"
     | BoardPlacementFailureCause
     | "board_payload_invalid",

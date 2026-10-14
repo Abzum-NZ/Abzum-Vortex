@@ -124,7 +124,7 @@ An interrupted `pnpm setup:local` run resumes from the identifiers recorded in `
 | `VORTEX_IDENTITY_AUTHORITY_ID` | `<uuid>` | Pins the local identity authority. Generate a UUID, keep it stable for this local stack, and use it for both `pnpm dev` and setup. |
 | `VORTEX_QUERY_CONTINUATION_KEY` | `<base64 of exactly 32 random bytes>` | Makes Query continuation tokens opaque; the generation command is in the env example. |
 | `VORTEX_RUNTIME_DATABASE_URL` | `postgresql://vortex_runtime:vortex-runtime-local-only@127.0.0.1:54322/postgres` | The restricted runtime connection to the local database. Required by `pnpm dev`; `pnpm setup:local` defaults to this address when unset. |
-| `VORTEX_RUNTIME_DATABASE_POOL_SIZE` | `<1-20>` | Optional runtime connection-pool cap; 5 applies when unset. |
+| `VORTEX_RUNTIME_DATABASE_POOL_SIZE` | `<1-20>` | Optional runtime connection-pool cap; 10 applies when unset locally, 5 elsewhere. |
 | `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` | not set locally | Trusted root certificate for a hosted runtime connection; not needed for the local loopback database. |
 | `VORTEX_DEMO_OWNER_EMAIL` | `owner@vortex.test` | Local email address created as the first owner by `pnpm demo:setup`. |
 | `VORTEX_DEMO_OWNER_PASSWORD` | set locally | Local-only password for the demo owner. Use at least 12 characters with a letter and a number. |

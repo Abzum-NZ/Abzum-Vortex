@@ -15,7 +15,6 @@ import { reopenModuleFieldLabel, saveModuleFieldLabel } from "../module-field-la
 import { moduleSaveRefusal } from "./studio-refusal-messages";
 
 const inputClass = "w-full";
-const buttonClass = "";
 const selectionKey = (field: StudioModuleFieldDescriptor) => JSON.stringify([field.recordAlias, field.fieldAlias]);
 const descriptorsFor = (draft: StoredModuleDefinitionDraft): readonly StudioModuleFieldDescriptor[] =>
   draft.source.body.record_types.flatMap((record) => record.fields.map((field) => ({
@@ -186,8 +185,8 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
           }} /></label>
       </> : <p role="status">No authored field is available.</p>}
       <div className="flex flex-wrap gap-2">
-        <Button className={buttonClass} type="submit" disabled={busy || !dirty || selected === undefined}>Save field label</Button>
-        <Button className={buttonClass} type="button" disabled={busy} onClick={reopen}>Reopen saved Module draft</Button>
+        <Button type="submit" disabled={busy || !dirty || selected === undefined}>Save field label</Button>
+        <Button type="button" disabled={busy} onClick={reopen}>Reopen saved Module draft</Button>
       </div>
       <p role="status" aria-live="polite">{dirty ? "Pending label changes. " : "The label matches the saved Module draft. "}{message}</p>
       {validation !== null && <ul className="space-y-2" aria-label="Module validation feedback">

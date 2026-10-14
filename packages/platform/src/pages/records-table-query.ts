@@ -20,9 +20,11 @@ import {
   type ProtectedQueryRow,
 } from "../queries/index";
 import {
+  collectRecordLinks,
   projectRecordsTableData,
   type ProjectedComponentData,
   type ProjectedTableValues,
+  type RecordLinkResolver,
 } from "./component-data-projection";
 
 /**
@@ -60,6 +62,8 @@ export type RecordsTableQueryRequest = Readonly<{
   >;
   /** The date and date-time fields of the installed definition (field identity to field type). */
   fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
+  /** Reads the labels of the linked records the page's rows carry, once per page. */
+  resolveRecordLinks?: RecordLinkResolver;
   /**
    * The viewer's chosen sort, from a `sort_changed` data event. It must be a declared sortable
    * field; `null` or absent uses the bound query's declared sort.
@@ -306,9 +310,15 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
         return { kind: "refused", reasonCode: result.value.reasonCode };
+      const links = collectRecordLinks(result.value.rows);
+      const recordLinks =
+        links.length === 0 || request.resolveRecordLinks === undefined
+          ? undefined
+          : await request.resolveRecordLinks(links);
       const projected = projectRecordsTableData(
         {
           settings: request.settings,
+          ...(recordLinks === undefined ? {} : { recordLinks }),
           ...(request.fieldLabels === undefined ? {} : { fieldLabels: request.fieldLabels }),
           ...(request.fieldChoiceLabels === undefined
             ? {}

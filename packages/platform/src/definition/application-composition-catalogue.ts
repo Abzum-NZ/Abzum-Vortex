@@ -86,6 +86,9 @@ export const ATTACHMENT_LIST_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.ATTACHMENT_LIST_BLOCK_RELEASE,
 );
 
+/** Exact immutable metadata release for the bar chart over a grouped query summary. */
+export const CHART_BLOCK_RELEASE: PlatformBlockRelease = release(sources.CHART_BLOCK_RELEASE);
+
 /** Exact immutable release for ordinary installed-query notices. */
 export const QUERY_NOTICE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.QUERY_NOTICE_BLOCK_RELEASE);
 
@@ -408,6 +411,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   TABLE_BLOCK_RELEASE_1_4_0,
   CALENDAR_BLOCK_RELEASE,
   BOARD_BLOCK_RELEASE,
+  CHART_BLOCK_RELEASE,
 ]);
 
 /** All sixteen immutable form, layout and action block releases. */

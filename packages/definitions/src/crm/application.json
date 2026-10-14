@@ -568,11 +568,15 @@
                                                                                                          "slots":  {
 
                                                                                                                    }
-                                                                                                     }
+                                                                                                     },
+                                                                                     "content_kpi": {"block": {"block_id": "b00f7a0f-9094-4186-b8c4-066b1df6c395", "release_version": "1.1.0"}, "query": "vortex.crm.opportunities:crm_pipeline_by_stage", "settings": {"title": {"kind": "text", "value": "Pipeline totals"}, "empty_message": {"kind": "text", "value": "No opportunities to show."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
+                                                                                     "content_chart": {"block": {"block_id": "5e7d5839-04fe-4b33-93c7-a382521a74b8", "release_version": "1.0.0"}, "query": "vortex.crm.opportunities:crm_pipeline_by_stage", "settings": {"title": {"kind": "text", "value": "Opportunities by stage"}, "category_field": {"kind": "field_reference", "field": "vortex.crm.opportunities:opportunity.stage"}, "measure": {"kind": "text", "value": "opportunity_count"}, "measure_label": {"kind": "text", "value": "Opportunities"}, "empty_message": {"kind": "text", "value": "No opportunities to show."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "content_0"
+                                                                                                  "content_0",
+                                                                                                  "content_kpi",
+                                                                                                  "content_chart"
                                                                                               ]
                                                                               }
                                                                     }

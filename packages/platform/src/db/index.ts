@@ -13,6 +13,7 @@ export {
   withRuntimeTransaction,
   withResolvedRequestTransaction,
   withPooledRequestLifetime,
+  runtimeDatabasePoolSize,
   type PooledRequestLifetime,
   type DatabaseRow,
   type DatabaseValue,
