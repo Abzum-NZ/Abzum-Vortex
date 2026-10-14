@@ -159,7 +159,12 @@ export const decideOrganizationAccessBatch = async (
   scope: SelectedOrganizationScope,
   declarationCandidates: readonly OrganizationAccessDeclaration[],
 ): Promise<
-  readonly Readonly<{ allowed: boolean; correlationId: string; validUntil?: string }>[]
+  readonly Readonly<{
+    allowed: boolean;
+    correlationId: string;
+    validUntil?: string;
+    reasonCode?: string;
+  }>[]
 > => {
   const resolvedScope = selectedOrganizationScopeSchema.safeParse(scope);
   const declarations = declarationCandidates.map((candidate) =>
@@ -208,6 +213,10 @@ export const decideOrganizationAccessBatch = async (
           correlationId: eligibility.correlationId,
           validUntil: eligibility.validUntil,
         }
-      : { allowed: false, correlationId: eligibility.correlationId };
+      : {
+          allowed: false,
+          correlationId: eligibility.correlationId,
+          reasonCode: eligibility.reasonCode,
+        };
   });
 };

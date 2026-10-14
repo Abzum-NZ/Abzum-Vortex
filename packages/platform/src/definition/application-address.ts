@@ -10,6 +10,7 @@ import {
   builderKeySchema,
   identityAuthorityIdSchema,
   identitySessionSchema,
+  logRefusal,
   organizationLauncherEntrySchema,
   isPresentationOnlyApplicationExperience,
   namespacedKeySchema,
@@ -245,6 +246,19 @@ const mapWithConcurrency = async <Input, Output>(
   return results;
 };
 
+/**
+ * An addressed application the viewer may not open reads as "unavailable" to the browser, so the
+ * server log carries the real cause: the eligibility reason code of every page decision.
+ */
+const logApplicationRefusal = (applicationKey: string, reasonCodes: readonly string[]): void =>
+  logRefusal(
+    "application-address",
+    `application ${applicationKey}`,
+    reasonCodes.length === 0
+      ? "APPLICATION_HAS_NO_PAGE"
+      : `APPLICATION_ACCESS_${reasonCodes.join("+").toUpperCase()}`,
+  );
+
 const describeApplicationAddressFailure = (error: unknown): string => {
   const parts: string[] = [];
   let current: unknown = error;
@@ -454,6 +468,7 @@ const projectPermittedApplication = async (
   scope: SelectedOrganizationScope,
   candidate: ApplicationCandidate,
   remember?: (application: PermittedApplication | null, validUntil: string | undefined) => void,
+  refused?: (reasonCodes: readonly string[]) => void,
 ): Promise<Readonly<{
   application: PermittedApplication;
   experiences: ApplicationExperience[];
@@ -524,6 +539,7 @@ const projectPermittedApplication = async (
   const rememberable = allowedPageKeys.has(candidate.homePageKey) || allowedPageKeys.size === 0;
   if (homePageKey === undefined) {
     if (rememberable) remember?.(null, validUntil);
+    refused?.([...new Set(decisions.flatMap((decision) => decision.reasonCode ?? []))].sort());
     return null;
   }
 
@@ -571,6 +587,7 @@ const permittedApplication = async (
     application: PermittedApplication | null,
     validUntil: string | undefined,
   ) => void,
+  refused?: (reasonCodes: readonly string[]) => void,
 ): Promise<
   | Readonly<{ application: PermittedApplication; experiences: ApplicationExperience[] }>
   | null
@@ -580,8 +597,13 @@ const permittedApplication = async (
     session,
     { organizationId, applicationRootId: candidate.applicationRootId },
     (transaction, scope) =>
-      projectPermittedApplication(permissions, transaction, scope, candidate, (application, validUntil) =>
-        remember?.(scope, application, validUntil),
+      projectPermittedApplication(
+        permissions,
+        transaction,
+        scope,
+        candidate,
+        (application, validUntil) => remember?.(scope, application, validUntil),
+        refused,
       ),
   );
   if (result.kind === "temporarily_unavailable")
@@ -717,6 +739,8 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           transaction,
           scope,
           applicationCandidateFromInstalledContext(context),
+          undefined,
+          (reasonCodes) => logApplicationRefusal(application.definitionKey, reasonCodes),
         );
         return permitted === null ? undefined : { context, permitted };
       },
@@ -862,7 +886,13 @@ export const readAddressedApplicationIdentityAtAddress = async (
         : { accountDisplayName: address.accountDisplayName }),
       identity,
     });
-  } catch {
+  } catch (error) {
+    logRefusal(
+      "application-address",
+      `application ${applicationKey.data} identity`,
+      "APPLICATION_IDENTITY_READ_FAILED",
+      error,
+    );
     return undefined;
   }
 };
@@ -953,6 +983,8 @@ const readPermittedApplications = async (
         parsedSession.data,
         read.organizationId,
         candidate,
+        undefined,
+        (reasonCodes) => logApplicationRefusal(candidate.key, reasonCodes),
       );
       if (isTemporarilyUnavailableApplicationRead(permitted))
         return permittedApplicationsReadSchema.parse(permitted);
