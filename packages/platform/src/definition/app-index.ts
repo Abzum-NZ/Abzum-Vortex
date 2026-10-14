@@ -10,14 +10,15 @@ export { resolveInstalledPageIdentity } from "./standard-page-resolution";
 
 export { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 
+export { createApplicationInstallationCoordinator } from "./installation-coordinator";
+
 export {
   applicationInstallationActivationRequestSchema,
   applicationInstallationPreparationRequestSchema,
-  createApplicationInstallationCoordinator,
   type ApplicationInstallationActivationResult,
   type ApplicationInstallationCoordinatorDependencies,
   type HumanInstallationDefinitionAccess,
-} from "./installation-coordinator";
+} from "./installation-coordinator-contracts";
 
 export { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
 

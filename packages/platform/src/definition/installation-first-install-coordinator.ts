@@ -20,11 +20,11 @@ import {
 } from "../schema";
 import { DefinitionError } from "./definition-error";
 import { resolveModuleContributions } from "./extension-contributions";
-import {
-  createApplicationInstallationCoordinator,
-  type ApplicationInstallationActivationResult,
-  type HumanInstallationDefinitionAccess,
-} from "./installation-coordinator";
+import { createApplicationInstallationCoordinator } from "./installation-coordinator";
+import type {
+  ApplicationInstallationActivationResult,
+  HumanInstallationDefinitionAccess,
+} from "./installation-coordinator-contracts";
 import {
   firstInstallConferredPermissions,
   installationOperation,
