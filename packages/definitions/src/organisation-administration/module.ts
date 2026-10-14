@@ -5,6 +5,7 @@ import {
   organizationRuntimeSettingsNumberFormatOptions,
   type ModuleSourceDocument,
 } from "@vortex/platform/schema";
+import { activityQuery, activityReadPermission, activityRecordType } from "./activity";
 
 /** Platform permissions protected by Organisation Administration's system records and operations. */
 export const organisationAdministrationPlatformPermissions = [
@@ -905,8 +906,10 @@ export const organisationAdministrationModule: ModuleSourceDocument =
           ],
           relationships: [],
         },
+        activityRecordType,
       ],
       permissions: [
+        activityReadPermission,
         {
           id: "perm_notice_create",
           key: "vortex.organisation_administration.organisation_notice.create",
@@ -1342,6 +1345,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
       extension_points: [],
       sharing_conditions: [],
       queries: [
+        activityQuery,
         {
           "id": "qry_organisation_notices",
           "key": "organisation_notices",
