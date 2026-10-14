@@ -107,6 +107,20 @@ export const createFlowTaskRunner = (
     return parsed.success ? parsed.data : undefined;
   };
 
+  /** The rule's authored refusal of a protected record path, when its safe error carries one. */
+  const ruleRefusalResult = (
+    error: Readonly<{ code: string; reason?: Readonly<{ code: string; message: string }> | undefined }>,
+  ): Pick<TaskResult, "diagnostic"> => {
+    if (error.reason === undefined) return {};
+    const diagnostic = flowRefusalFeedbackSchema.safeParse({
+      code: "invalid_command",
+      ruleRefusal: error.reason,
+    });
+    if (diagnostic.success) return { diagnostic: diagnostic.data };
+    console.error(`[flows] rule refusal not carried: ${describeFailure(diagnostic.error)}`);
+    return {};
+  };
+
   /** Records a task the platform cannot run here: it fails as not available, never as refused. */
   const notAvailable = (run: Run, call: FlowProtectedTaskCall, requires: string): TaskResult => {
     run.unavailable.push({
@@ -380,7 +394,13 @@ export const createFlowTaskRunner = (
             : {},
         };
       }
-      return { result: { outcome: refusalOutcome(value.error.code) }, stored: {} };
+      return {
+        result: {
+          outcome: refusalOutcome(value.error.code),
+          ...ruleRefusalResult(value.error),
+        },
+        stored: {},
+      };
     }
 
     if (plan.kind === "action") {
@@ -397,7 +417,13 @@ export const createFlowTaskRunner = (
       }
       // The action port logged this refusal with its reason; the run-ended line must not repeat it.
       run.refusalLoggedTaskIds.push(call.taskId);
-      return { result: { outcome: refusalOutcome(value.error.code) }, stored: {} };
+      return {
+        result: {
+          outcome: refusalOutcome(value.error.code),
+          ...ruleRefusalResult(value.error),
+        },
+        stored: {},
+      };
     }
 
     const executed = await dependencies.executor.execute({

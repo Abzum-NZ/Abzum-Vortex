@@ -122,10 +122,16 @@ export function useApplyDispatch({
                   ...(diagnostic.corrections === undefined
                     ? {}
                     : { corrections: diagnostic.corrections }),
+                  ...(diagnostic.ruleRefusal === undefined
+                    ? {}
+                    : { ruleMessage: diagnostic.ruleRefusal.message }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
-            const reason = refusalNotices[diagnostic.code];
+            const reason: Notice =
+              diagnostic.ruleRefusal === undefined
+                ? refusalNotices[diagnostic.code]
+                : { tone: "problem", text: diagnostic.ruleRefusal.message };
             resultNotice = {
               ...reason,
               text: recovery === undefined ? reason.text : `${reason.text} ${resultNotice.text}`,
