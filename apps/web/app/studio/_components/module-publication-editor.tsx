@@ -230,11 +230,7 @@ export function ModulePublicationEditor({
       {release !== null ? (
         <section className="space-y-2 rounded-lg border p-4" aria-label="Published Module release">
           <h2 className="text-lg font-semibold">Published release identity</h2>
-          <TechnicalDetails><dl className="break-all text-sm">
-            <div>
-              <dt className="inline font-medium">Module root: </dt>
-              <dd className="inline">{release.rootId}</dd>
-            </div>
+          <dl className="text-sm">
             <div>
               <dt className="inline font-medium">Release version: </dt>
               <dd className="inline">{release.releaseVersion}</dd>
@@ -246,6 +242,12 @@ export function ModulePublicationEditor({
             <div>
               <dt className="inline font-medium">Published at: </dt>
               <dd className="inline">{release.publishedAt}</dd>
+            </div>
+          </dl>
+          <TechnicalDetails><dl className="break-all text-sm">
+            <div>
+              <dt className="inline font-medium">Module root: </dt>
+              <dd className="inline">{release.rootId}</dd>
             </div>
           </dl></TechnicalDetails>
           <ViewSource title="Published dependency manifest" value={release.dependencyManifest} />
