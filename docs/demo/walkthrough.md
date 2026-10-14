@@ -64,6 +64,6 @@ Lead conversion is not available yet: the **Qualify lead** page (`crm_qualify_le
 These show in the walkthrough and are product issues, not seed issues:
 
 - Link fields (Customer company, Requester, Company) show `—` in lists and on detail pages, although the relationship is stored and the picker lists the records.
-- Person fields (Owner, Relationship owner) cannot be set by the record save path, so seeded cases have no owner.
+- Person fields save on cases, contacts and activities, but their names are not yet projected in lists or detail pages; the stored value currently shows as an empty cell.
 - Date-time columns show the raw timestamp.
 - Lead conversion answers "This is not available yet."
