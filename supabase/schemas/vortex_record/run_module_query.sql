@@ -53,6 +53,7 @@ declare
   parameter_types jsonb := '{}'::jsonb;
   parameter_values jsonb := '{}'::jsonb;
   after_sort_key text[];
+  after_phase text;
   after_record_id uuid;
   sort_index integer;
   column_sql text;
@@ -61,6 +62,8 @@ declare
   after_terms text[] := array[]::text[];
   equal_prefix text := '';
   keyset_sql text := '';
+  segment_predicates text[];
+  segment_sql text;
   order_terms text[] := array[]::text[];
   sort_key_terms text[] := array[]::text[];
   order_by_sql text;
@@ -738,10 +741,11 @@ begin
   -- carries a hidden field value.
   if p_after is not null and p_after <> 'null'::jsonb then
     if pg_catalog.jsonb_typeof(p_after) <> 'object'
-      or p_after - array['sortKey', 'recordId']::text[] <> '{}'::jsonb
+      or p_after - array['sortKey', 'phase', 'recordId']::text[] <> '{}'::jsonb
       or pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
       or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> pg_catalog.cardinality(sort_ids)
       or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
+      or p_after ->> 'phase' not in ('null', 'value')
       or pg_catalog.lower(p_after ->> 'recordId') !~ uuid_pattern
       or exists (
         select 1 from pg_catalog.jsonb_array_elements(p_after -> 'sortKey') as item(value)
@@ -753,6 +757,12 @@ begin
     into after_sort_key
     from pg_catalog.jsonb_array_elements(p_after -> 'sortKey') with ordinality as item(value, ordinality);
     after_record_id := (p_after ->> 'recordId')::uuid;
+    after_phase := p_after ->> 'phase';
+    if after_phase is distinct from (case
+      when pg_catalog.cardinality(sort_ids) > 0 and after_sort_key[1] is null then 'null'
+      else 'value' end) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'cursor_invalid');
+    end if;
     for sort_index in 1 .. pg_catalog.cardinality(sort_ids) loop
       if after_sort_key[sort_index] is not null
         and not pg_catalog.pg_input_is_valid(after_sort_key[sort_index], sort_sql_types[sort_index]) then
@@ -813,6 +823,27 @@ begin
     order_by_sql := order_by_sql || ', stored.record_id asc';
   end if;
 
+  if pg_catalog.cardinality(sort_ids) = 1
+    and sort_directions[1] = 'ascending' then
+    -- Each segment has one contiguous range in the aligned index. A NULL
+    -- cursor finishes its record-id range before the value range begins.
+    if after_record_id is null or after_phase = 'null' then
+      segment_predicates := array[
+        pg_catalog.format(' and %s is null%s', sort_value_sql[1],
+          case when after_record_id is null then '' else ' and stored.record_id > $4' end),
+        pg_catalog.format(' and %s is not null', sort_value_sql[1])
+      ];
+    else
+      segment_predicates := array[pg_catalog.format(
+        ' and %s is not null and (%s, stored.record_id) > (%s, $4)',
+        sort_value_sql[1], column_sql, value_sql
+      )];
+    end if;
+  else
+    segment_predicates := array[keyset_sql];
+  end if;
+
+  foreach segment_sql in array segment_predicates loop
   scan_sql := pg_catalog.format(
     'select stored.record_id,
        array[%s]::text[] as sort_key,
@@ -823,7 +854,7 @@ begin
        and stored.lifecycle_state = ''active''
        and %s
        and (%s)
-       and (%s)%s
+        and (case when (%s) then true else false end)%s
      order by %s
      limit $5',
     pg_catalog.array_to_string(sort_key_terms, ', '),
@@ -846,7 +877,7 @@ begin
       then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
     access_sql,
     filter_predicate,
-    keyset_sql,
+    segment_sql,
     order_by_sql
   );
 
@@ -1033,6 +1064,8 @@ begin
     last_examined_sort_key := scan_record.sort_key;
     last_examined_record_id := scan_record.record_id;
   end loop;
+  exit when more_rows or budget_exhausted;
+  end loop;
   if row_count > 0 then
     page_capabilities := vortex_record.read_record_capabilities_page_internal(
       record_type_id_value, pg_catalog.to_jsonb(capability_rows)
@@ -1055,11 +1088,15 @@ begin
   if more_rows then
     next_value := pg_catalog.jsonb_build_object(
       'sortKey', pg_catalog.to_jsonb(last_returned_sort_key),
+      'phase', case when pg_catalog.cardinality(last_returned_sort_key) > 0
+        and last_returned_sort_key[1] is null then 'null' else 'value' end,
       'recordId', last_returned_record_id
     );
   elsif budget_exhausted then
     next_value := pg_catalog.jsonb_build_object(
       'sortKey', pg_catalog.to_jsonb(last_examined_sort_key),
+      'phase', case when pg_catalog.cardinality(last_examined_sort_key) > 0
+        and last_examined_sort_key[1] is null then 'null' else 'value' end,
       'recordId', last_examined_record_id
     );
   end if;

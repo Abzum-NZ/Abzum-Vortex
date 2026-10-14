@@ -38,6 +38,7 @@ const queryContinuationSchema = z
      * text; never parsed as numbers here. Empty when none may be pushed.
      */
     sortKey: z.array(z.string().max(16_384).nullable()).max(20),
+    phase: z.enum(["null", "value"]),
     recordId: recordIdSchema,
   })
   .strict();
