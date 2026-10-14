@@ -11,7 +11,8 @@ type ExpiryRow = DatabaseRow & { readonly expired_count: unknown };
 export const runScheduledPreviewInstallationExpiry = async (): Promise<number> => {
   let totalExpired = 0;
   try {
-    for (let batch = 0; batch < previewExpiryLimits.maximumBatches; batch += 1) {
+    // One batch past the limit tells a drained backlog (it finds nothing) from a real remainder.
+    for (let batch = 0; batch <= previewExpiryLimits.maximumBatches; batch += 1) {
       const rows = await withRuntimeTransaction(
         (transaction) =>
           transaction.query<ExpiryRow>`
@@ -31,6 +32,7 @@ export const runScheduledPreviewInstallationExpiry = async (): Promise<number> =
         throw new DefinitionError("PREVIEW_EXPIRY_RESULT_INVALID");
 
       totalExpired += expiredCount;
+      if (batch === previewExpiryLimits.maximumBatches && expiredCount > 0) break;
       if (expiredCount < previewExpiryLimits.batchSize) return totalExpired;
     }
     throw new DefinitionError("PREVIEW_EXPIRY_BATCH_LIMIT_REACHED");
