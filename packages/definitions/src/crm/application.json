@@ -1213,43 +1213,6 @@
                                                                                                                                                  "slots":  {
                                                                                                                                                                "content":  {
                                                                                                                                                                                "placements":  {
-                                                                                                                                                                                                  "form_field_6_3":  {
-                                                                                                                                                                                                                         "block":  {
-                                                                                                                                                                                                                                       "block_id":  "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                                                                                                                                                                                                                                       "release_version":  "1.0.0"
-                                                                                                                                                                                                                                   },
-                                                                                                                                                                                                                         "settings":  {
-                                                                                                                                                                                                                                          "name":  {
-                                                                                                                                                                                                                                                       "kind":  "text",
-                                                                                                                                                                                                                                                       "value":  "lead_name"
-                                                                                                                                                                                                                                                   },
-                                                                                                                                                                                                                                          "label":  {
-                                                                                                                                                                                                                                                        "kind":  "text",
-                                                                                                                                                                                                                                                        "value":  "Summary"
-                                                                                                                                                                                                                                                    },
-                                                                                                                                                                                                                                          "required":  {
-                                                                                                                                                                                                                                                           "kind":  "boolean",
-                                                                                                                                                                                                                                                           "value":  true
-                                                                                                                                                                                                                                                       }
-                                                                                                                                                                                                                                      },
-                                                                                                                                                                                                                         "theme_overrides":  {
-
-                                                                                                                                                                                                                                             },
-                                                                                                                                                                                                                         "responsive":  {
-                                                                                                                                                                                                                                            "desktop":  {
-                                                                                                                                                                                                                                                            "visible":  true,
-                                                                                                                                                                                                                                                            "width":  {
-                                                                                                                                                                                                                                                                          "kind":  "fill"
-                                                                                                                                                                                                                                                                      },
-                                                                                                                                                                                                                                                            "height":  {
-                                                                                                                                                                                                                                                                           "kind":  "content"
-                                                                                                                                                                                                                                                                       }
-                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                        },
-                                                                                                                                                                                                                         "slots":  {
-
-                                                                                                                                                                                                                                   }
-                                                                                                                                                                                                                     },
                                                                                                                                                                                                   "form_field_6_3_first_name":  {
                                                                                                                                                                                                                          "block":  {
                                                                                                                                                                                                                                        "block_id":  "15b2d6f6-228d-4248-84be-1f8f45e204fc",
@@ -1324,6 +1287,21 @@
 
                                                                                                                                                                                                                                    }
                                                                                                                                                                                                                      },
+                                                                                                                                                                                                  "form_field_6_3_company": {
+                                                                                                                                                                                                    "block": {"block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87", "release_version": "1.1.0"},
+                                                                                                                                                                                                    "settings": {
+                                                                                                                                                                                                      "name": {"kind": "text", "value": "company"},
+                                                                                                                                                                                                      "label": {"kind": "text", "value": "Company"},
+                                                                                                                                                                                                      "required": {"kind": "boolean", "value": false},
+                                                                                                                                                                                                      "choice_source": {"kind": "group", "properties": {
+                                                                                                                                                                                                        "query": {"kind": "query_reference", "query": "vortex.crm.organisations:crm_companies"},
+                                                                                                                                                                                                        "label_field": {"kind": "field_reference", "field": "vortex.crm.organisations:company.name"}
+                                                                                                                                                                                                      }}
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    "theme_overrides": {},
+                                                                                                                                                                                                    "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}},
+                                                                                                                                                                                                    "slots": {}
+                                                                                                                                                                                                  },
                                                                                                                                                                                                   "form_submit_6_3":  {
                                                                                                                                                                                                                           "block":  {
                                                                                                                                                                                                                                         "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1360,9 +1338,9 @@
                                                                                                                                                                                               },
                                                                                                                                                                                "order":  {
                                                                                                                                                                                              "desktop":  [
-                                                                                                                                                                                                             "form_field_6_3",
                                                                                                                                                                                                              "form_field_6_3_first_name",
                                                                                                                                                                                                              "form_field_6_3_last_name",
+                                                                                                                                                                                                             "form_field_6_3_company",
                                                                                                                                                                                                              "form_submit_6_3"
                                                                                                                                                                                                          ]
                                                                                                                                                                                          }
@@ -3088,13 +3066,11 @@
 
                                                                                                                          }
                                                                                                            },
-        "button_edit_lead": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.lead.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
+        "button_edit_lead": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.lead.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
+        "button_qualify_lead": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.lead.convert", "settings": {"label": {"kind": "text", "value": "Qualify lead"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "primary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
-                                                                                  "desktop":  [
-                                                                                                  "detail_crm_lead",
-            "button_edit_lead"
-                                                                                              ]
+                                                                                  "desktop": ["detail_crm_lead", "button_edit_lead", "button_qualify_lead"]
                                                                               }
                                                                     }
                                                                 }
@@ -4563,6 +4539,7 @@
       "carries": [],
       "personal_or_sensitive_values_allowed": false
     },
+    {"id": "event_qualify_lead", "key": "vortex.app.events.vortex_app_crm_qualify_lead", "record_type": "vortex.crm.people:lead", "carries": [], "personal_or_sensitive_values_allowed": false},
                                 {
                                   "id": "form_submit_10",
                                   "key": "vortex.app.events.vortex_app_crm_form_submit_10",
@@ -5924,6 +5901,51 @@
       ],
       "outputs": {}
     },
+    {
+      "contractVersion": "1.0.0",
+      "id": "navigate_qualify_lead",
+      "key": "navigate_qualify_lead",
+      "description": "Opens the Qualify lead form for the current lead.",
+      "labels": {
+        "name": "Qualify lead"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {
+        "record_id": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": [
+            "vortex.crm.people:lead"
+          ]
+        }
+      },
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_qualify_lead"
+              }
+            },
+            "parameters": {
+              "kind": "map",
+              "entries": {
+                "record_id": "{{ inputs.record_id }}"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
                      {
                        "contractVersion": "1.0.0",
                        "id": "crm_form_flow_10",
@@ -6210,6 +6232,10 @@
                              "last_name": {
                                  "kind": "caller",
                                  "name": "last_name"
+                             },
+                             "company": {
+                                 "kind": "caller",
+                                 "name": "company"
                              }
                          }
                      },
@@ -6448,6 +6474,19 @@
       "event_id": "event_edit_lead",
       "event": "action",
       "flow": "navigate_edit_lead",
+      "inputs": {
+        "record_id": {
+          "kind": "caller",
+          "name": "record_id"
+        }
+      }
+    },
+    {
+      "id": "binding_qualify_lead",
+      "control": "button_qualify_lead",
+      "event_id": "event_qualify_lead",
+      "event": "action",
+      "flow": "navigate_qualify_lead",
       "inputs": {
         "record_id": {
           "kind": "caller",

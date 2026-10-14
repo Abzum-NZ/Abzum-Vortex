@@ -316,9 +316,13 @@ const writtenValue = (
     // This collector cannot pause for a form answer or read intermediate task results.
     if (reference.source === "task_output") return undefined;
     if (reference.source === "input" && typeof reference.name === "string") {
-      if (reference.name === subjectInput)
+      const inputKey = reference.name;
+      if (inputKey === subjectInput)
         value = { recordTypeId: prepared.recordType.recordTypeId, recordId: prepared.recordId };
-      else if (hasOwn(normalizedInputs, reference.name)) value = normalizedInputs[reference.name];
+      else if (hasOwn(normalizedInputs, inputKey)) value = normalizedInputs[inputKey];
+      // An omitted optional input is an empty field value, not an invalid flow reference.
+      else if (prepared.action.inputs.some((input) => input.key === inputKey && !input.required))
+        value = null;
       else return undefined;
     } else if (reference.source === "trigger_record" && typeof reference.field === "string") {
       const subjectField = prepared.recordType.fields.find((item) => item.key === reference.field);

@@ -1,5 +1,6 @@
 "use client";
 
+import { PublicationSummary } from "./publication-summary";
 import { useState } from "react";
 import {
   canonicalJson,
@@ -206,26 +207,7 @@ export function ModulePublicationEditor({
       {confirmation !== null ? (
         <section className="space-y-4 rounded-lg border p-4" aria-label="Prepared Module release">
           <h2 className="text-lg font-semibold">Prepared release for review</h2>
-          <dl className="break-all text-sm">
-            <div>
-              <dt className="inline font-medium">Outcome: </dt>
-              <dd className="inline">{confirmation.outcome}</dd>
-            </div>
-            <div>
-              <dt className="inline font-medium">Assigned release version: </dt>
-              <dd className="inline">{confirmation.assignedVersion}</dd>
-            </div>
-            <div>
-              <dt className="inline font-medium">Module revision: </dt>
-              <dd className="inline">{confirmation.expectedDraftRevision}</dd>
-            </div>
-          </dl>
-          <details>
-            <summary className="cursor-pointer font-medium">Exact dependency manifest</summary>
-            <pre className="mt-2 overflow-auto rounded bg-muted p-3 text-xs">
-              {JSON.stringify(confirmation.dependencyManifest, null, 2)}
-            </pre>
-          </details>
+          <PublicationSummary confirmation={confirmation} />
           <label className="block space-y-1 text-sm font-medium">
             Release note
             <Input
