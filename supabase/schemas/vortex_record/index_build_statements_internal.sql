@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -155,9 +155,10 @@ begin
         scope_columns, mapping_row.physical_column_token
       )
       else pg_catalog.format(
-        'create index concurrently %I on record_data.%I (%s, %I)',
+        'create index concurrently %I on record_data.%I (%s, %I%s asc nulls first, record_id asc) where lifecycle_state = ''active''',
         catalogue_row.physical_index_token, storage_row.physical_table_token,
-        scope_columns, mapping_row.physical_column_token
+        scope_columns, mapping_row.physical_column_token,
+        case when mapping_row.database_value_type = 'text' then ' collate "C"' else '' end
       )
     end
   );

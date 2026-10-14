@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.ensure_field_index_internal(p_storage_contract_id uuid, p_field_id uuid, p_purpose text, p_storage_scope text, p_table_token text, p_scope_index_columns text, p_column_token text) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_record.ensure_field_index_internal(p_storage_contract_id uuid, p_field_id uuid, p_purpose text, p_storage_scope text, p_table_token text, p_scope_index_columns text, p_column_token text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -7,6 +7,7 @@ declare
   canonical_scope_columns text;
   definition_fingerprint text;
   observed text;
+  text_column boolean;
 begin
   canonical_scope_columns := vortex_record.index_scope_columns(p_storage_scope);
   if p_storage_contract_id is null
@@ -34,9 +35,20 @@ begin
       index_token, p_table_token, p_scope_index_columns, p_column_token
     );
   else
+    select attribute.atttypid = 'pg_catalog.text'::pg_catalog.regtype
+      into text_column
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid = pg_catalog.to_regclass(
+      pg_catalog.format('record_data.%I', p_table_token)
+    ) and attribute.attname = p_column_token and attribute.attnum > 0
+      and not attribute.attisdropped;
+    if text_column is null then
+      raise exception using errcode = '55000', message = 'Record field index column is missing';
+    end if;
     execute pg_catalog.format(
-      'create index if not exists %I on record_data.%I (%s, %I)',
-      index_token, p_table_token, p_scope_index_columns, p_column_token
+      'create index if not exists %I on record_data.%I (%s, %I%s asc nulls first, record_id asc) where lifecycle_state = ''active''',
+      index_token, p_table_token, p_scope_index_columns, p_column_token,
+      case when text_column then ' collate "C"' else '' end
     );
   end if;
 

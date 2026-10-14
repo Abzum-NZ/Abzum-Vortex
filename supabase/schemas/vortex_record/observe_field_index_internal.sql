@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.observe_field_index_internal(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) RETURNS text
+CREATE OR REPLACE FUNCTION vortex_record.observe_field_index_internal(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) RETURNS text
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $_$
@@ -8,6 +8,9 @@ declare
   index_row record;
   expected_columns text[];
   key_position integer;
+  sort_position integer;
+  expected_attnum smallint;
+  text_column boolean;
 begin
   if p_purpose is null or p_purpose not in ('uniqueness', 'performance')
     or p_table_token is null or p_table_token !~ '^rt_[a-f0-9]{32}$'
@@ -17,6 +20,9 @@ begin
 
   expected_columns := pg_catalog.string_to_array(p_scope_index_columns, ', ')
     || p_column_token;
+  if p_purpose = 'performance' then
+    expected_columns := expected_columns || array['record_id'];
+  end if;
   if pg_catalog.cardinality(expected_columns) < 2 then
     return 'invalid';
   end if;
@@ -51,8 +57,13 @@ begin
 
   for key_position in 1 .. index_row.indnkeyatts
   loop
-    if pg_catalog.pg_get_indexdef(index_relation, key_position, false)
-      is distinct from expected_columns[key_position] then
+    select attribute.attnum into expected_attnum
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid = table_relation
+      and attribute.attname = expected_columns[key_position]
+      and attribute.attnum > 0 and not attribute.attisdropped;
+    if expected_attnum is null
+      or index_row.indkey[key_position - 1] is distinct from expected_attnum then
       return 'invalid';
     end if;
   end loop;
@@ -64,8 +75,22 @@ begin
     if index_row.indpred is null then
       return 'invalid';
     end if;
-  elsif index_row.indpred is not null then
-    return 'invalid';
+  else
+    sort_position := pg_catalog.cardinality(expected_columns) - 1;
+    select attribute.atttypid = 'pg_catalog.text'::pg_catalog.regtype
+      into text_column
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid = table_relation and attribute.attname = p_column_token;
+    if index_row.indpred is null
+      or pg_catalog.pg_get_expr(index_row.indpred, table_relation)
+        is distinct from '(lifecycle_state = ''active''::text)'
+      or (index_row.indoption[sort_position - 1]::integer & 2) <> 2
+      or (index_row.indoption[sort_position - 1]::integer & 1) <> 0
+      or index_row.indoption[sort_position]::integer <> 0
+      or (text_column and index_row.indcollation[sort_position - 1]
+        is distinct from 'pg_catalog."C"'::pg_catalog.regcollation) then
+      return 'invalid';
+    end if;
   end if;
 
   return 'present';

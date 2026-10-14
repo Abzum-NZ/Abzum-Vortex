@@ -1,5 +1,5 @@
-CREATE FUNCTION vortex_record.index_definition_fingerprint(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) RETURNS text
-    LANGUAGE sql IMMUTABLE
+CREATE OR REPLACE FUNCTION vortex_record.index_definition_fingerprint(p_purpose text, p_table_token text, p_scope_index_columns text, p_column_token text) RETURNS text
+    LANGUAGE sql STABLE
     SET search_path TO ''
     AS $$
   select 'sha256:' || pg_catalog.encode(
