@@ -577,6 +577,8 @@ declare
   keyset_sql text := '';
   segment_predicates text[];
   segment_sql text;
+  -- Whether each sort key has the aligned field index (stored and sortable or unique).
+  sort_index_backed boolean[] := array[]::boolean[];
   order_terms text[] := array[]::text[];
   sort_key_terms text[] := array[]::text[];
   order_by_sql text;
@@ -1184,6 +1186,7 @@ begin
       sort_directions := pg_catalog.array_append(sort_directions, sort_item ->> 'direction');
       sort_value_sql := pg_catalog.array_append(sort_value_sql, read_time_sql);
       sort_sql_types := pg_catalog.array_append(sort_sql_types, 'boolean');
+      sort_index_backed := pg_catalog.array_append(sort_index_backed, false);
       continue;
     end if;
     -- JSON-valued fields (money, links, choice sets, documents) have no total
@@ -1201,6 +1204,9 @@ begin
     sort_value_sql := pg_catalog.array_append(
       sort_value_sql, pg_catalog.format('stored.%I', mapping_row.physical_column_token)
     );
+    sort_index_backed := pg_catalog.array_append(sort_index_backed,
+      coalesce((fields_by_id -> field_key ->> 'sortable')::boolean, false)
+        or coalesce((fields_by_id -> field_key ->> 'unique')::boolean, false));
     sort_sql_types := pg_catalog.array_append(sort_sql_types, case mapping_row.database_value_type
       when 'integer' then 'bigint'
       when 'decimal' then 'numeric'
@@ -1337,7 +1343,8 @@ begin
   end if;
 
   if pg_catalog.cardinality(sort_ids) = 1
-    and sort_directions[1] = 'ascending' then
+    and sort_directions[1] = 'ascending'
+    and sort_index_backed[1] then
     -- Each segment has one contiguous range in the aligned index. A NULL
     -- cursor finishes its record-id range before the value range begins.
     if after_record_id is null or after_phase = 'null' then
