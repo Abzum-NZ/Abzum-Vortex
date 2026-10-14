@@ -94,14 +94,9 @@ const locateLinkTarget = (context: InstalledRuntimeContext, recordTypeId: string
   return undefined;
 };
 
-const labelText = (title: ViewerSafeRecordLinkTitle): string => {
-  const text =
-    typeof title === "string"
-      ? title.trim()
-      : typeof title === "number" && Number.isFinite(title)
-        ? String(title)
-        : undefined;
-  if (text === undefined || text.length === 0) throw new Error("RECORD_LINK_TITLE_NOT_TEXT");
+const labelText = (title: ViewerSafeRecordLinkTitle): string | undefined => {
+  const text = (typeof title === "string" ? title : JSON.stringify(title))?.trim();
+  if (text === undefined || text.length === 0) return undefined;
   return text.length > MAXIMUM_LABEL_LENGTH ? `${text.slice(0, MAXIMUM_LABEL_LENGTH - 1)}…` : text;
 };
 
@@ -387,13 +382,16 @@ export const createViewerSafeRecordLinkService = (
                 if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
                 for (const recordId of batch) {
                   const title = read.titles.get(recordId.toLowerCase());
+                  const text = title === undefined ? undefined : labelText(title);
+                  if (title !== undefined && text === undefined)
+                    console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
                   labels.set(
                     `${typeKey}:${recordId.toLowerCase()}`,
-                    title === undefined
+                    text === undefined
                       ? { outcome: "restricted" }
                       : {
                           outcome: "available",
-                          label: labelText(title),
+                          label: text,
                           ...(openable && page !== undefined
                             ? {
                                 detail: {
