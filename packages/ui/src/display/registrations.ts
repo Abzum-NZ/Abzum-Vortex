@@ -94,6 +94,11 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE,
       parsePayload: noRuntimeInputs,
     }),
+    // Release 1.1.0 adds authored defaults only; the same parser serves both releases.
+    Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE_1_1_0,
+      parsePayload: noRuntimeInputs,
+    }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.QUERY_NOTICE_BLOCK_RELEASE,
       parsePayload: QUERY_NOTICE_PAYLOAD_PARSER,
