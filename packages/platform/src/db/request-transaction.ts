@@ -83,6 +83,7 @@ type ResolvedRequestOperation<Scope, Result> = (
 ) => Promise<Result>;
 
 const DEFAULT_POOL_SIZE = 5;
+const DEFAULT_LOCAL_POOL_SIZE = 10;
 const MAXIMUM_POOL_SIZE = 20;
 
 const databaseError = (code: string): Error => {
@@ -647,9 +648,9 @@ const currentOwnedDriver = (): RequestOwnedPostgresDriver | undefined => {
   return driver;
 };
 
-const parsePoolSize = (candidate: string | undefined): number => {
+const parsePoolSize = (candidate: string | undefined, environmentName: string): number => {
   const value = candidate?.trim();
-  if (!value) return DEFAULT_POOL_SIZE;
+  if (!value) return environmentName === "local" ? DEFAULT_LOCAL_POOL_SIZE : DEFAULT_POOL_SIZE;
   if (!/^[0-9]{1,2}$/.test(value)) throw databaseError("DATABASE_POOL_SIZE_INVALID");
   const size = Number(value);
   if (size < 1 || size > MAXIMUM_POOL_SIZE) throw databaseError("DATABASE_POOL_SIZE_INVALID");
@@ -663,7 +664,7 @@ const parseRuntimeDatabaseConfiguration = (
   const rootCertificate = environment.VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT;
   const environmentName = environment.VORTEX_ENVIRONMENT;
   if (!connectionString || !environmentName) throw databaseError("DATABASE_CONFIGURATION_MISSING");
-  const poolSize = parsePoolSize(environment.VORTEX_RUNTIME_DATABASE_POOL_SIZE);
+  const poolSize = parsePoolSize(environment.VORTEX_RUNTIME_DATABASE_POOL_SIZE, environmentName);
 
   let address: URL;
   try {
@@ -708,6 +709,13 @@ const parseRuntimeDatabaseConfiguration = (
     transport: { kind: "hosted_tls", rootCertificate },
   };
 };
+
+/**
+ * The runtime connection-pool size of this instance: the one number every concurrent database
+ * reader caps its parallelism at, so work never queues behind a pool smaller than its fan-out.
+ */
+export const runtimeDatabasePoolSize = (): number =>
+  parseRuntimeDatabaseConfiguration(process.env).poolSize;
 
 const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration): Sql =>
   postgres(configuration.connectionString, {

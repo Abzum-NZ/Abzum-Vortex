@@ -15,7 +15,7 @@ import {
   type PageSubjectReadResult,
   readCurrentRecordOwnerGroupsAfterAuthorization,
 } from "@vortex/platform/server";
-import { FORM_CONTAINER_BLOCK_RELEASE } from "@vortex/platform/server";
+import { FORM_CONTAINER_BLOCK_RELEASE, runtimeDatabasePoolSize } from "@vortex/platform/server";
 import {
   describeFailure,
   type IdentitySession,
@@ -470,7 +470,7 @@ const loadApplicationPageJoined = async (
         }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(8, candidates.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(runtimeDatabasePoolSize(), candidates.length) }, worker));
     if (failed) throw failure;
     return Object.freeze(results);
   };
@@ -948,9 +948,10 @@ const loadApplicationPageJoined = async (
   // state and is logged with its cause; it never fails the page or goes unobserved.
   const streamedData: Record<string, Promise<PageDataState>> = {};
   const streamedSlots = new Array<() => void>();
+  const streamedLimit = runtimeDatabasePoolSize();
   let streamedRunning = 0;
   const nextStreamedSlot = (): Promise<void> =>
-    streamedRunning < 8
+    streamedRunning < streamedLimit
       ? ((streamedRunning += 1), Promise.resolve())
       : new Promise<void>((resolve) => streamedSlots.push(resolve));
   const releaseStreamedSlot = (): void => {

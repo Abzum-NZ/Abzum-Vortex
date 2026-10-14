@@ -129,7 +129,6 @@ export {
 export {
   DisplayCellView,
   DisplayStateContainer,
-  GroupedDataDisplay,
   ListDisplay,
   NoticeBlock,
   QueryNoticeDisplay,
