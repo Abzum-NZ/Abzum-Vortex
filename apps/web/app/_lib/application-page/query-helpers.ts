@@ -153,6 +153,19 @@ export const fieldLabelsOf = (module: ModuleRelease): Record<string, string> =>
     ),
   );
 
+export const fieldDateTypesOf = (
+  module: ModuleRelease,
+): Record<string, "date" | "date_time"> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.fields.flatMap((field) =>
+        field.type === "date" || field.type === "date_time"
+          ? [[String(field.fieldId).toLowerCase(), field.type] as const]
+          : [],
+      ),
+    ),
+  );
+
 export const isApplicationLauncherPlacement = (placement: unknown): boolean => {
   if (!isRecord(placement) || !isRecord(placement.block)) return false;
   return (

@@ -1,8 +1,8 @@
 import type { ReactElement } from "react";
 import { safeHttpsUrlSchema } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
-import { formatIsoDate, type DateFormatOptions } from "./date-format";
-import { FormattedDate } from "./date-format-context";
+import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
+import { FormattedTime } from "./date-format-context";
 import type { DisplayCellValue } from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 
@@ -19,7 +19,7 @@ export function cellValueToText(value: DisplayCellValue, options?: DateFormatOpt
     case "boolean":
       return value.value ? "Yes" : "No";
     case "date":
-      return formatIsoDate(value.iso, options);
+      return formatIsoDate(value.iso, options) ?? INVALID_DATE_TEXT;
     case "choice":
       return value.label;
     case "link":
@@ -54,11 +54,7 @@ export function DisplayCellView({
         </span>
       );
     case "date":
-      return (
-        <time className="vortex-cell-date" dateTime={value.iso}>
-          <FormattedDate iso={value.iso} />
-        </time>
-      );
+      return <FormattedTime className="vortex-cell-date" iso={value.iso} />;
     case "choice":
       return (
         <span className="vortex-cell-choice" data-vortex-choice-key={value.key}>
