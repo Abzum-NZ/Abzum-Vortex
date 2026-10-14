@@ -22,6 +22,7 @@ alter function vortex_record.read_record(uuid,uuid) owner to vortex_record_adapt
 revoke all on function vortex_record.read_record(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_record.read_record(uuid, uuid) to vortex_request;
+grant execute on function vortex_record.read_record(uuid, uuid) to vortex_owner;
 
 comment on function vortex_record.read_record(uuid, uuid) is
   'Fixed record read adapter: returns the readable field projection of one live record under the caller''s current authority or one preview record for its validated preview owner, or an identical refusal for a missing, foreign or unreachable record.';

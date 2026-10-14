@@ -218,15 +218,13 @@ for (const file of codeFiles) {
         .map((line) => line.replace(/--.*$/, (comment) => " ".repeat(comment.length)))
         .join("\n");
       const events = [
-        ...[
-          ...code.matchAll(
-            /\bset\s+(?:local\s+)?role\s+([\w"]+)\s*;|\breset\s+role\s*;/gi,
-          ),
-        ].map((match) => ({
-          index: match.index,
-          role: match[1]?.replace(/"/g, "").toLowerCase(),
-          ddl: false,
-        })),
+        ...[...code.matchAll(/\bset\s+(?:local\s+)?role\s+([\w"]+)\s*;|\breset\s+role\s*;/gi)].map(
+          (match) => ({
+            index: match.index,
+            role: match[1]?.replace(/"/g, "").toLowerCase(),
+            ddl: false,
+          }),
+        ),
         ...[
           ...code.matchAll(
             /\b(?:create\s+(?:or\s+replace\s+|unique\s+)?|alter\s+|drop\s+)(?:function|table|(?:materialized\s+)?view|index|type|sequence|trigger)\b/gi,
@@ -460,7 +458,9 @@ for (const file of codeFiles) {
         hasReturn = true;
       if (
         ts.isCallExpression(value) &&
-        /^(?:(?:console|logger)\.|log$|logRefusal$|captureException$)/i.test(value.expression.getText(source))
+        /^(?:(?:console|logger)\.|log$|logRefusal$|captureException$)/i.test(
+          value.expression.getText(source),
+        )
       )
         hasLog = true;
       ts.forEachChild(value, scan);
@@ -708,7 +708,9 @@ const withoutSqlCommentsAndStrings = (sql: string) =>
   sql.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/gu, (text) => text.replace(/[^\n]/g, " "));
 const identifierBytes = (identifier: string) =>
   Buffer.byteLength(
-    identifier.startsWith('"') ? identifier.slice(1, -1).replaceAll('""', '"') : identifier.toLowerCase(),
+    identifier.startsWith('"')
+      ? identifier.slice(1, -1).replaceAll('""', '"')
+      : identifier.toLowerCase(),
     "utf8",
   );
 for (const file of files.filter(
@@ -721,7 +723,12 @@ for (const file of files.filter(
   for (const match of content.matchAll(createdIdentifierPattern)) {
     const bytes = identifierBytes(match[1]);
     if (bytes > 63)
-      add("sql-identifier-length", file, lineAt(content, match.index), `${match[1]} (${bytes} bytes)`);
+      add(
+        "sql-identifier-length",
+        file,
+        lineAt(content, match.index),
+        `${match[1]} (${bytes} bytes)`,
+      );
   }
 }
 const latest = new Map<string, { definition: string; file: string }>();
@@ -897,6 +904,35 @@ for (const issue of report.issues ?? []) {
     add("unused-export", normalize(issue.file), item.line ?? 1, item.name);
   for (const item of issue.dependencies ?? [])
     add("unused-dependency", normalize(issue.file), item.line ?? 1, item.name);
+}
+// Every shipped definition must compile offline as publication compiles it; each failure is an
+// ordinary finding, so allowances and the baseline apply to it like to any other rule.
+const definitionValidation = spawnSync(
+  process.execPath,
+  [
+    "--conditions=react-server",
+    "--import",
+    "tsx",
+    "scripts/definition-validation/validate-definitions.ts",
+    "--json",
+  ],
+  { cwd: resolve(root, "apps/web"), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+);
+if (definitionValidation.status === 0 || definitionValidation.status === 1) {
+  const failures = JSON.parse(definitionValidation.stdout) as Array<{
+    path: string;
+    line: number;
+    detail: string;
+  }>;
+  for (const failure of failures)
+    add("definition-validation", failure.path, failure.line, failure.detail);
+} else {
+  add(
+    "definition-validation",
+    "apps/web/scripts/definition-validation/validate-definitions.ts",
+    1,
+    `the definition validation step failed to run (status ${definitionValidation.status ?? "none"}${definitionValidation.error ? `, ${definitionValidation.error.message}` : ""}): ${definitionValidation.stderr.slice(0, 500)}`,
+  );
 }
 type Allowance = { file: string; line: number; rule: string; reason: string; used: boolean };
 const allowances: Allowance[] = [];
@@ -1339,6 +1375,6 @@ if (process.argv.includes("--refresh-from-main")) {
   );
 } else if (blocking.length || growth.length) {
   process.exitCode = 1;
-} else {
+} else if (definitionValidation.status === 0) {
   console.log(`Guard passed (${baseline.length} blocking baseline entries).`);
 }

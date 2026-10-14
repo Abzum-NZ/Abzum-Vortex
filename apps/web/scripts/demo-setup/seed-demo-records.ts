@@ -560,6 +560,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         employee_number: employee.number,
         employment_status: employee.status,
         start_date: employee.startDate,
+        annual_leave_days: employee.annualLeaveDays,
         person: {
           recordTypeId: personType.recordTypeId,
           recordId: facts.stewardOrganizationAccountId,
@@ -574,6 +575,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
     await save(hrRootId, leaveRequestType, `hr/leave-request/${index + 1}`, {
       start_date: leave.startDate,
       end_date: leave.endDate,
+      days: leave.days,
       reason: leave.reason,
       status: leave.status,
       employee: {
