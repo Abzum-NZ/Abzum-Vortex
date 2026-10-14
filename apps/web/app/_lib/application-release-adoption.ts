@@ -9,11 +9,12 @@ import {
   createApplicationInstallationCoordinator,
   type HumanInstallationDefinitionAccess,
 } from "@vortex/platform/server";
-import type {
-  ApplicationRootId,
-  IdentitySession,
-  OrganizationId,
-  SystemApplicationBoundReleaseSetResult,
+import {
+  logRefusal,
+  type ApplicationRootId,
+  type IdentitySession,
+  type OrganizationId,
+  type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
 import {
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
@@ -101,26 +102,48 @@ const coordinator = () =>
 
 /**
  * The published-current release offered for adoption, or undefined when the caller may not manage
- * installations, the application is not installed, or no target can be proven. A refusal is
- * indistinguishable from "nothing to adopt", so nothing is disclosed.
+ * installations, the application is not installed, or no target can be proven. The caller's
+ * `applications.manage` decision is made first in the same request, so a person without it never
+ * reaches the admin-only read; a refusal is indistinguishable from "nothing to adopt", so nothing
+ * is disclosed. An unreadable target is logged with its code and offers nothing.
  */
 export const readApplicationReleaseAdoption = async (
   session: IdentitySession,
   scope: Readonly<{ organizationId: OrganizationId; applicationRootId: ApplicationRootId }>,
 ): Promise<ApplicationReleaseAdoptionTarget | undefined> => {
-  try {
-    const result = await requests().run(
-      session,
-      { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
-      (transaction) =>
-        createDatabaseApplicationReleaseAdoptionTargetService(transaction).read({
-          applicationRootId: scope.applicationRootId,
-        }),
-    );
-    return result.kind === "available" ? result.value : undefined;
-  } catch {
+  const result = await requests().run(
+    session,
+    { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+    async (transaction, requestScope) => {
+      const authority = createBuilderAuthority({
+        transaction,
+        scope: requestScope,
+        targetFacts: async () => ({ isSystemApplication: false }),
+        permissions: platformPermissionSource,
+      });
+      const decision = await authority.require({
+        kind: "installation",
+        applicationRootId: scope.applicationRootId,
+        change: "install_or_upgrade",
+        containsCustomComponents: false,
+        acceptedPermissions: [],
+      });
+      if (decision.outcome !== "allowed") return undefined;
+      return createDatabaseApplicationReleaseAdoptionTargetService(transaction).read({
+        applicationRootId: scope.applicationRootId,
+      });
+    },
+  );
+  if (result.kind !== "available") {
+    if (result.kind === "temporarily_unavailable")
+      logRefusal(
+        "application-release-adoption",
+        `application ${scope.applicationRootId} target read`,
+        "APPLICATION_RELEASE_ADOPTION_TARGET_READ_FAILED",
+      );
     return undefined;
   }
+  return result.value;
 };
 
 type AdoptApplicationReleaseRequest = Readonly<{
