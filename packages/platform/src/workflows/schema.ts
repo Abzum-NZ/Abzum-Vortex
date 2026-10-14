@@ -1,4 +1,5 @@
 export * from "./flow-contracts";
+export * from "./flow-values";
 export * from "./flow-run-as-principal";
 export * from "./form-continuation-contracts";
 export * from "./flow-invocation-contracts";
