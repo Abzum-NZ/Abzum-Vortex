@@ -111,10 +111,6 @@ begin
     operation_at
   );
 
-  if human_write then
-    perform vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
-  end if;
-
   return query
   select
     root.root_id,
