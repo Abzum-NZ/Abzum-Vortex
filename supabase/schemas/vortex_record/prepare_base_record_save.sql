@@ -18,7 +18,6 @@ declare
   meta jsonb;
   loaded jsonb;
   installation jsonb;
-  module_content jsonb;
   application_content jsonb;
   unsupported boolean := false;
   context_value jsonb;
@@ -123,14 +122,8 @@ begin
     then vortex_definition.read_current_active_installation()
     else preview_installation end;
 
-  select release.compilation_output #> '{canonical,content}'
-  into strict module_content
-  from vortex_definition.releases as release
-  where release.root_id = (meta ->> 'moduleRootId')::uuid
-    and release.release_revision = (meta ->> 'moduleReleaseRevision')::bigint;
-
   if preview_installation is null then
-    select release.compilation_output #> '{canonical,content}'
+    select release.record_content
     into strict application_content
     from vortex_definition.releases as release
     where release.root_id = (meta -> 'context' ->> 'applicationRootId')::uuid

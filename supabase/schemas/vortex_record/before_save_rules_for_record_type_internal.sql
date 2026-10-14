@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.before_save_rules_for_record_type_internal(p_module_root_id uuid, p_module_release_revision bigint, p_record_type_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.before_save_rules_for_record_type_internal(p_module_root_id uuid, p_module_release_revision bigint, p_record_type_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -9,7 +9,7 @@ begin
     or p_record_type_id is null then
     raise exception using errcode = '22023', message = 'Before-save rule selector is invalid';
   end if;
-  select release.compilation_output #> '{canonical,content}'
+  select release.record_content
   into strict release_content
   from vortex_definition.releases as release
   where release.root_id = p_module_root_id

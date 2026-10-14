@@ -53,6 +53,7 @@ declare
   compilation_output_value jsonb;
   application_address_value jsonb;
   application_experience_value jsonb;
+  record_content_value jsonb;
   resolution_snapshot_value jsonb;
   content_fingerprint_value text;
   resolution_fingerprint_value text;
@@ -950,19 +951,27 @@ begin
     );
   end if;
 
+  select coalesce(pg_catalog.jsonb_object_agg(item.key, item.value), '{}'::jsonb)
+  into record_content_value
+  from pg_catalog.jsonb_each(
+    compilation_output_value #> '{canonical,content}'
+  ) as item(key, value)
+  where item.key in ('recordTypes', 'permissions', 'rules', 'actions', 'events');
+
   insert into vortex_definition.releases (
     root_id, release_revision, release_version, authored_source,
     authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,
     content_fingerprint, resolution_fingerprint, validation_contract_version,
     impact_reasons, release_note, published_at, published_by,
-    application_address, application_experience
+    application_address, application_experience, record_content
   ) values (
     p_root_id, draft_row.draft_revision, release_version_value, draft_row.draft_source,
     draft_row.source_fingerprint, draft_row.source_contract_version, compilation_output_value,
     resolution_snapshot_value,
     content_fingerprint_value, resolution_fingerprint_value, validation_contract_version_value,
     impact_reasons_value, release_note_value, operation_at,
-    context_actor_id, application_address_value, application_experience_value
+    context_actor_id, application_address_value, application_experience_value,
+    record_content_value
   );
 
   for supplied_dependency in
