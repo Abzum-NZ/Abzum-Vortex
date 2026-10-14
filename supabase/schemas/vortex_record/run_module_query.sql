@@ -70,6 +70,7 @@ declare
   page_declaration jsonb;
   page_eligibility jsonb;
   page_eligibility_checked boolean := false;
+  validated_record_types jsonb;
   readable_field_ids text[] := array[]::text[];
   access_sql text;
   access_parameters jsonb := '[]'::jsonb;
@@ -849,11 +850,8 @@ begin
     order_by_sql
   );
 
-  -- The access evaluator validates this query's installed record-type set on
-  -- its first row. Later decisions reuse that exact set while still checking
-  -- every row's own facts, permissions and field bounds.
-  perform pg_catalog.set_config('vortex_access.validated_record_types', '', true);
-  perform pg_catalog.set_config('vortex_access.record_types_validation_cache_enabled', 'true', true);
+  -- A validated type set stays local to this invocation and is passed only to
+  -- the fixed record adapter's private evaluator.
   for scan_record in execute scan_sql
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
@@ -906,10 +904,18 @@ begin
         end if;
       end if;
       select row_read.* into read_row
-      from vortex_record.read_record_projection_with_eligibility_internal(
-        record_type_id_value, scan_record.record_id, page_declaration, page_eligibility
+      from vortex_record.read_record_projection_with_validated_types_internal(
+        record_type_id_value, scan_record.record_id, page_declaration, page_eligibility,
+        validated_record_types
       ) as row_read;
       projection := read_row.projection;
+      if validated_record_types is null then
+        validated_record_types := coalesce(
+          read_row.read_facts -> 'validatedRecordTypes',
+          case when projection ->> 'outcome' = 'allowed'
+            then read_row.read_facts #> '{facts,recordTypes}' end
+        );
+      end if;
       if projection ->> 'outcome' = 'allowed' then
         readable_values := projection -> 'values';
         if not exists (
@@ -917,8 +923,6 @@ begin
           where not (readable_values ? referenced.id)
         ) then
           if needs_refusal_check then
-            perform pg_catalog.set_config('vortex_access.record_types_validation_cache_enabled', '', true);
-            perform pg_catalog.set_config('vortex_access.validated_record_types', '', true);
             return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
           end if;
           -- A search term matches only through a searchable field this row exposes
@@ -1047,8 +1051,6 @@ begin
       );
     end loop;
   end if;
-  perform pg_catalog.set_config('vortex_access.record_types_validation_cache_enabled', '', true);
-  perform pg_catalog.set_config('vortex_access.validated_record_types', '', true);
 
   if more_rows then
     next_value := pg_catalog.jsonb_build_object(
