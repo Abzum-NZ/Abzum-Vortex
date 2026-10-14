@@ -69,8 +69,15 @@ begin
       'organization_id', entry.organization_id::text,
       'revision', 1,
       'occurred_at', entry.occurred_at,
-      'actor_kind', entry.actor_kind,
-      'actor_id', entry.actor_id::text,
+      'actor_kind', case entry.actor_kind
+        when 'organization_account' then 'Person'
+        when 'identity' then 'Platform operator'
+        when 'system' then 'System'
+        when 'public_session' then 'Public visitor'
+        else 'Other' end,
+      'actor', case when entry.actor_kind = 'organization_account'
+        then pg_catalog.jsonb_build_object('organizationAccountId', entry.actor_id::text)
+        else null end,
       'action', entry.action,
       'subject_count', pg_catalog.cardinality(entry.subject_ids),
       'changed_field_count', case when audit_projection

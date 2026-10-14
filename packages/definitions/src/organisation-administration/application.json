@@ -565,7 +565,7 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
-                              "field": "vortex.organisation_administration:activity_entry.actor_id"
+                              "field": "vortex.organisation_administration:activity_entry.actor"
                             },
                             "label": {
                               "kind": "text",
