@@ -206,6 +206,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       if (correction === undefined) return undefined;
       // A required value the server found missing is named by the field's own located message.
       return (
+        correction.message ??
         (correction.code === "required_value" ? registry.validationErrors()[fieldKey] : undefined) ??
         fieldCorrectionText[correction.code]
       );

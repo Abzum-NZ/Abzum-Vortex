@@ -16,9 +16,13 @@ export const flowFieldCorrectionCodeSchema = z.enum([
   "field_refused",
 ]);
 
-/** One submitted form field that needs correcting: its form field key and why, never a value. */
+/** One submitted form field that needs correcting: its form field key and why, never a value. A rule's authored message may accompany it. */
 export const flowFieldCorrectionSchema = z
-  .object({ field: builderKeySchema, code: flowFieldCorrectionCodeSchema })
+  .object({
+    field: builderKeySchema,
+    code: flowFieldCorrectionCodeSchema,
+    message: z.string().min(1).max(300).optional(),
+  })
   .strict();
 
 export type FlowFieldCorrection = z.infer<typeof flowFieldCorrectionSchema>;

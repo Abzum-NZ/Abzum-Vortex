@@ -221,6 +221,7 @@ const correctionsFor = (
     code: string;
     fieldId?: string;
     path: readonly (string | number)[];
+    requirement?: Readonly<{ code: string; message: string }>;
   }>[],
   readableFieldIds: ReadonlySet<string>,
   operation: "create" | "update",
@@ -243,6 +244,10 @@ const correctionsFor = (
       ...(nested.length === 0
         ? {}
         : { nestedPath: nested as RecordSaveFieldCorrection["nestedPath"] }),
+      // A rule's authored message is the one text that leaves with a located correction.
+      ...(issue.code === beforeSaveRuleRefusedIssueCode && issue.requirement !== undefined
+        ? { message: issue.requirement.message }
+        : {}),
     };
     corrections.set(
       `${correction.fieldId}:${correction.code}:${JSON.stringify(nested)}`,
