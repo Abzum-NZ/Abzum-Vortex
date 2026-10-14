@@ -33,6 +33,8 @@ declare
   projection jsonb;
   decision jsonb;
   bounds jsonb;
+  failure_sqlstate text;
+  failure_message text;
 begin
   if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -172,12 +174,8 @@ begin
       or not coalesce(
         (meta #> '{recordType,standardActions}') ? 'update', false
       )
-      or not exists (
-        select 1
-        from vortex_definition.roots as root
-        where root.root_id = (meta ->> 'moduleRootId')::uuid
-          and root.kind = 'module'
-          and root.key = 'vortex.organisation_administration'
+      or not vortex_definition.is_system_projection_module_internal(
+        (meta ->> 'moduleRootId')::uuid, organization_id_value
       )
       or p_record_id is distinct from
         (meta -> 'context' ->> 'organizationId')::uuid then
@@ -197,9 +195,8 @@ begin
       );
     end if;
 
-    -- The one writable system projection is prepared through its protected
-    -- read model. The final write still goes only through the closed settings
-    -- writer registered by Record; ordinary projected records remain refused.
+    -- The writable system projection is prepared through its protected read
+    -- model. Its final write remains inside apply_record_changes.
     loaded := vortex_record.load_record_access_facts_internal(
       p_record_type_id, 'read', p_record_id, null
     );
@@ -323,6 +320,10 @@ begin
 exception
   when no_data_found or too_many_rows or insufficient_privilege
     or object_not_in_prerequisite_state or check_violation then
+    get stacked diagnostics
+      failure_sqlstate = returned_sqlstate,
+      failure_message = message_text;
+    raise log 'Record save preparation refused: % (%)', failure_message, failure_sqlstate;
     return pg_catalog.jsonb_build_object('outcome', 'refused');
 end
 $function$;
