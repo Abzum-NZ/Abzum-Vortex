@@ -97,6 +97,8 @@ begin
     where preview.expires_at <= pg_catalog.statement_timestamp()
     order by preview.expires_at, preview.preview_installation_id
     limit p_limit
+    -- Overlapping runs (a recovered schedule and the nightly one) never purge the same preview.
+    for update of preview skip locked
     for update skip locked
   loop
     perform vortex_record.drop_preview_installation_storage(
