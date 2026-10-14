@@ -82,6 +82,9 @@ declare
   projection jsonb;
   readable_values jsonb;
   row_capabilities jsonb;
+  capability_rows jsonb[] := array[]::jsonb[];
+  page_capabilities jsonb;
+  capability_index integer;
   rows_value jsonb := '[]'::jsonb;
   row_count integer := 0;
   last_examined_sort_key text[];
@@ -968,36 +971,33 @@ begin
             more_rows := true;
             exit;
           end if;
-          -- Every returned row carries the record's concurrency number from
-          -- read_record and its per-row capabilities, each action decided exactly
-          -- as its own writer decides it and only for a row read_record admits.
-          -- The capabilities are computed only for a returned row; a row whose
-          -- capabilities cannot be computed is withheld rather than exposed
-          -- without them.
-          row_capabilities := vortex_record.read_record_capabilities_internal(
-            record_type_id_value, scan_record.record_id,
-            read_row.read_facts, read_row.read_bounds
-          );
-          if row_capabilities is not null then
-            rows_value := rows_value || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          -- Keep the read facts and field bounds for one page-level capability
+          -- decision after the readable page has been selected.
+          capability_rows := pg_catalog.array_append(
+            capability_rows,
+            pg_catalog.jsonb_build_object(
               'recordId', scan_record.record_id,
-              'revision', projection -> 'concurrencyNumber',
-              'capabilities', row_capabilities,
-              'values', coalesce((
-                select pg_catalog.jsonb_object_agg(requested.id, readable_values -> requested.id)
-                from pg_catalog.unnest(requested_ids) as requested(id)
-                where readable_values ? requested.id
-              ), '{}'::jsonb)
-            ));
-            row_count := row_count + 1;
-            if pg_catalog.cardinality(system_field_keys) > 0 then
-              rows_value := pg_catalog.jsonb_set(
-                rows_value, array[(row_count - 1)::text, 'systemValues'], scan_record.system_values
-              );
-            end if;
-            last_returned_sort_key := scan_record.sort_key;
-            last_returned_record_id := scan_record.record_id;
+              'readFacts', read_row.read_facts,
+              'readBounds', read_row.read_bounds
+            )
+          );
+          rows_value := rows_value || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+            'recordId', scan_record.record_id,
+            'revision', projection -> 'concurrencyNumber',
+            'values', coalesce((
+              select pg_catalog.jsonb_object_agg(requested.id, readable_values -> requested.id)
+              from pg_catalog.unnest(requested_ids) as requested(id)
+              where readable_values ? requested.id
+            ), '{}'::jsonb)
+          ));
+          row_count := row_count + 1;
+          if pg_catalog.cardinality(system_field_keys) > 0 then
+            rows_value := pg_catalog.jsonb_set(
+              rows_value, array[(row_count - 1)::text, 'systemValues'], scan_record.system_values
+            );
           end if;
+          last_returned_sort_key := scan_record.sort_key;
+          last_returned_record_id := scan_record.record_id;
         end if;
       end if;
     end if;
@@ -1005,6 +1005,24 @@ begin
     last_examined_sort_key := scan_record.sort_key;
     last_examined_record_id := scan_record.record_id;
   end loop;
+  if row_count > 0 then
+    page_capabilities := vortex_record.read_record_capabilities_page_internal(
+      record_type_id_value, pg_catalog.to_jsonb(capability_rows)
+    );
+    if pg_catalog.jsonb_typeof(page_capabilities) is distinct from 'array'
+      or pg_catalog.jsonb_array_length(page_capabilities) <> row_count then
+      raise exception using errcode = '55000', message = 'Page capabilities are unavailable';
+    end if;
+    for capability_index in 0..row_count - 1 loop
+      row_capabilities := page_capabilities -> capability_index;
+      if pg_catalog.jsonb_typeof(row_capabilities) is distinct from 'object' then
+        raise exception using errcode = '55000', message = 'Record capabilities are unavailable';
+      end if;
+      rows_value := pg_catalog.jsonb_set(
+        rows_value, array[capability_index::text, 'capabilities'], row_capabilities
+      );
+    end loop;
+  end if;
   perform pg_catalog.set_config('vortex_access.record_types_validation_cache_enabled', '', true);
   perform pg_catalog.set_config('vortex_access.validated_record_types', '', true);
 
