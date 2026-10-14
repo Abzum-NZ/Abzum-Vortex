@@ -15,7 +15,7 @@ as $function$
 declare
   summary_candidate_limit constant integer := 100000;
   uuid_pattern constant text :=
-    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   prepared_plan jsonb := p_prepared_plan;
   resolved jsonb;
   query_item jsonb;
