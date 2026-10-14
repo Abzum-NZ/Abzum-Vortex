@@ -1,4 +1,4 @@
-create or replace function vortex_access.evaluate_organization_record_access_with_validated_types_internal(
+create or replace function vortex_access.evaluate_record_access_with_validated_types_internal(
   p_declaration jsonb,
   p_target_record_id uuid,
   p_facts jsonb,
@@ -428,11 +428,11 @@ begin
 end
 $function$;
 
-alter function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) owner to vortex_owner;
-revoke all on function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
+alter function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) owner to vortex_owner;
+revoke all on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
+grant execute on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
   to vortex_record_adapter, postgres;
-comment on function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) is
+comment on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) is
   'Exact record access evaluation for the ordinary wrapper or page-local eligibility supplied by the fixed record adapter; validates each record fact set and composes each record scope independently.';
 

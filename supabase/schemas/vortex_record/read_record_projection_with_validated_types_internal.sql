@@ -61,7 +61,7 @@ begin
     if p_page_eligibility ->> 'outcome' = 'eligible'
       and loaded -> 'declaration' = p_page_declaration
       and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp() then
-      decision := vortex_access.evaluate_organization_record_access_with_validated_types_internal(
+      decision := vortex_access.evaluate_record_access_with_validated_types_internal(
         loaded -> 'declaration', p_record_id, loaded -> 'facts', p_page_eligibility,
         p_validated_record_types
       );

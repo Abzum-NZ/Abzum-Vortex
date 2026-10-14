@@ -1,6 +1,6 @@
 set local role vortex_owner;
 
-create or replace function vortex_access.evaluate_organization_record_access_with_validated_types_internal(
+create or replace function vortex_access.evaluate_record_access_with_validated_types_internal(
   p_declaration jsonb,
   p_target_record_id uuid,
   p_facts jsonb,
@@ -430,18 +430,18 @@ begin
 end
 $function$;
 
-alter function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) owner to vortex_owner;
-revoke all on function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
+alter function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) owner to vortex_owner;
+revoke all on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
+grant execute on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
   to vortex_record_adapter, postgres;
-comment on function vortex_access.evaluate_organization_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) is
+comment on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) is
   'Exact record access evaluation for the ordinary wrapper or page-local eligibility supplied by the fixed record adapter; validates each record fact set and composes each record scope independently.';
 
 create or replace function vortex_access.evaluate_organization_record_access_with_eligibility_internal(
   p_declaration jsonb, p_target_record_id uuid, p_facts jsonb, p_eligibility jsonb
 ) returns jsonb language sql volatile security definer set search_path = '' as $function$
-  select vortex_access.evaluate_organization_record_access_with_validated_types_internal(
+  select vortex_access.evaluate_record_access_with_validated_types_internal(
     p_declaration, p_target_record_id, p_facts, p_eligibility, null::jsonb
   )
 $function$;
@@ -514,7 +514,7 @@ begin
     if p_page_eligibility ->> 'outcome' = 'eligible'
       and loaded -> 'declaration' = p_page_declaration
       and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp() then
-      decision := vortex_access.evaluate_organization_record_access_with_validated_types_internal(
+      decision := vortex_access.evaluate_record_access_with_validated_types_internal(
         loaded -> 'declaration', p_record_id, loaded -> 'facts', p_page_eligibility,
         p_validated_record_types
       );
