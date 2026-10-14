@@ -19,7 +19,6 @@ declare
   action_loaded jsonb;
   action_decision jsonb;
   read_declaration jsonb;
-  access_plan jsonb;
   permission_by_id jsonb;
   target_meta jsonb;
   required_permissions jsonb;
@@ -50,7 +49,15 @@ begin
     );
   end if;
 
-  meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+  if pg_catalog.jsonb_typeof(p_read_facts -> 'isSystemProjection') is distinct from 'boolean' then
+    raise exception using errcode = '55000',
+      message = 'Record capability metadata is unavailable';
+  end if;
+  -- Ordinary stored rows already passed the read loader's catalogue checks.
+  -- Only a protected projection needs the extra action-context lookup.
+  if (p_read_facts ->> 'isSystemProjection')::boolean then
+    meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+  end if;
   if meta #>> '{recordType,key}' = 'organization_settings'
     and meta #>> '{recordType,systemProjection,protectedView}' =
       'organization_runtime_settings'
@@ -85,15 +92,14 @@ begin
     );
   end if;
 
+  -- The read loader has already checked this installation's access plan and
+  -- pinned record type; use those exact permissions for the action declarations.
   -- An action whose routes use only this target row can reuse the read facts.
   -- Relationship routes and inherited ownership still use the action's own
   -- fact closure, so no source row or edge needed by the writer is omitted.
   read_declaration := p_read_facts -> 'declaration';
-  access_plan := vortex_record.resolve_installation_access_plan_internal(
-    vortex_definition.read_current_active_installation()
-  );
-  permission_by_id := access_plan -> 'permissions';
-  target_meta := access_plan -> 'recordTypes' -> pg_catalog.lower(p_record_type_id::text);
+  permission_by_id := p_read_facts -> 'accessPermissions';
+  target_meta := p_read_facts -> 'recordTypeMeta';
   if pg_catalog.jsonb_typeof(read_declaration) is distinct from 'object'
     or pg_catalog.jsonb_typeof(permission_by_id) is distinct from 'object'
     or pg_catalog.jsonb_typeof(target_meta) is distinct from 'object'
