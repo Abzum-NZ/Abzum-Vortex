@@ -92,6 +92,7 @@ type ActionPreparation =
   | Readonly<{
       outcome: "conflict" | "permission_refused" | "refused" | "refused_recorded" | "unsupported";
       correlationId?: string;
+      reasonCode?: string;
     }>;
 
 const restart = Symbol("restartNamedAction");
@@ -120,6 +121,17 @@ const safeRefusal = (
       ...(ruleReason === undefined ? {} : { reason: ruleReason }),
     },
   });
+};
+
+const preparationReason = (reasonCode: string | undefined): RuleReason | undefined => {
+  if (reasonCode === undefined) return undefined;
+  const message =
+    reasonCode === "create_target_owner_unavailable"
+      ? "You must belong to an active owner Group to create this record."
+      : reasonCode === "create_target_owner_ambiguous"
+        ? "The action requires one owner Group, but you belong to more than one."
+        : `The action could not prepare its record change (${reasonCode}).`;
+  return { code: reasonCode, message };
 };
 
 const completedResult = (candidate: Record<string, unknown>) => {
@@ -230,7 +242,11 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     value.outcome === "refused_recorded" ||
     value.outcome === "unsupported"
   )
-    return { outcome: value.outcome, ...(correlationId ? { correlationId } : {}) };
+    return {
+      outcome: value.outcome,
+      ...(correlationId ? { correlationId } : {}),
+      ...(typeof value.reasonCode === "string" ? { reasonCode: value.reasonCode } : {}),
+    };
   if (value.outcome !== "prepared" && value.outcome !== "previewed")
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
   const singleRequiredPermissionId =
@@ -720,14 +736,17 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                     )
                   : recordedRefusal;
             }
-            if (preview.outcome !== "previewed")
+            if (preview.outcome !== "previewed") {
+              const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
               return preview.correlationId
                 ? safeRefusal(
                     preview.correlationId,
                     "operation_refused",
-                    `the preview was ${preview.outcome}, not previewed`,
+                    `the preview was ${preview.outcome}, not previewed (${reasonCode ?? "no reason code"})`,
+                    preparationReason(reasonCode),
                   )
                 : recordedRefusal;
+            }
             const previewRun = composeFromFlow(preview, command.data.inputs, issuedAt, run);
             if (previewRun.kind === "invalid")
               return safeRefusal(preview.correlationId, "invalid_request", previewRun.reason);
@@ -779,14 +798,17 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                     "the subject record's revision moved before the locked preparation",
                   )
                 : recordedRefusal;
-            if (prepared.outcome !== "prepared")
+            if (prepared.outcome !== "prepared") {
+              const reasonCode = "reasonCode" in prepared ? prepared.reasonCode : undefined;
               return prepared.correlationId
                 ? safeRefusal(
                     prepared.correlationId,
                     "operation_refused",
-                    `the locked preparation was ${prepared.outcome}, not prepared`,
+                    `the locked preparation was ${prepared.outcome}, not prepared (${reasonCode ?? "no reason code"})`,
+                    preparationReason(reasonCode),
                   )
                 : recordedRefusal;
+            }
             const preparedRun = composeFromFlow(prepared, command.data.inputs, issuedAt, run);
             if (preparedRun.kind === "invalid")
               return safeRefusal(prepared.correlationId, "invalid_request", preparedRun.reason);

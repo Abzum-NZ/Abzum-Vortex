@@ -31,7 +31,7 @@ $function$;
 revoke all on function vortex_access.list_current_record_owner_groups()
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_access.list_current_record_owner_groups()
-  to vortex_request;
+  to vortex_request, vortex_record_adapter;
 
 comment on function vortex_access.list_current_record_owner_groups() is
   'Returns only the active Groups of which the verified current organisation account is a current member, for an explicit initial record ownership choice. The protected Record writer rechecks the selected Group under its own transaction lock.';

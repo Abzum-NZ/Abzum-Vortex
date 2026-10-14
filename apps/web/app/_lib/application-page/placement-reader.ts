@@ -7,6 +7,8 @@ import type {
 import {
   projectReferenceChoiceInputValues,
   projectRecordDetailData,
+  collectRecordLinks,
+  type RecordLinkResolver,
   protectedQueryCommandSchema,
   type ProtectedQueryRow,
   protectedQuerySummaryCommandSchema,
@@ -28,6 +30,7 @@ import {
   QUERY_NOTICE_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
+  CHART_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   projectBoardPlacement,
@@ -56,6 +59,7 @@ import {
   first
 } from "./placement-helpers";
 import { readCalendarPlacement } from "./calendar";
+import { projectChartPlacement } from "./chart";
 import {
   logPlacementFailure,
   isApplicationLauncherPlacement,
@@ -83,6 +87,15 @@ import type {
 } from "./types";
 import type { ReferenceChoiceFirstPage } from "./reference-choice";
 import { readAttachmentListPlacement } from "./attachment-placement";
+
+/** The labels of the linked records the rows carry, read once; undefined when none or unreadable. */
+const readRecordLinks = async (
+  resolve: RecordLinkResolver,
+  rows: readonly ProtectedQueryRow[],
+): ReturnType<RecordLinkResolver> => {
+  const links = collectRecordLinks(rows);
+  return links.length === 0 ? undefined : resolve(links);
+};
 
 /** The flow bindings one placement holds, projected for the browser by placement identity. */
 export const projectPlacementBindings = (
@@ -173,6 +186,7 @@ export const isStreamablePlacement = (
     blockIs(QUERY_NOTICE_BLOCK_RELEASE) ||
     blockIs(LINK_TILES_BLOCK_RELEASE) ||
     blockIs(SUMMARY_VALUES_BLOCK_RELEASE) ||
+    blockIs(CHART_BLOCK_RELEASE) ||
     isApplicationLauncherPlacement(placement) ||
     isBoardPlacement(placement)
   );
@@ -205,6 +219,7 @@ export const readPlacement = async (
     queries: ReturnType<typeof createProtectedQueryService>;
     readCalendarSettings: Parameters<typeof readCalendarPlacement>[0]["readCalendarSettings"];
     tables: ReturnType<typeof createRecordsTableQueryResolver>;
+    resolveRecordLinks: RecordLinkResolver;
     tableContinuation: TableContinuationTarget | undefined;
     adoptSubjectRead: (subject: PageSubjectReadResult) => void;
     markSubjectUnreadable: () => void;
@@ -237,6 +252,7 @@ export const readPlacement = async (
     queries,
     readCalendarSettings,
     tables,
+    resolveRecordLinks,
     tableContinuation,
     adoptSubjectRead,
     markSubjectUnreadable,
@@ -262,6 +278,10 @@ export const readPlacement = async (
     isRecord(block) &&
     typeof block.blockId === "string" &&
     sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
+  const isChartBlock =
+    isRecord(block) &&
+    typeof block.blockId === "string" &&
+    sameId(block.blockId, CHART_BLOCK_RELEASE.blockId);
   const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
   if (isLinkTilesBlock && (
     !isRecord(block) || (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
@@ -359,7 +379,7 @@ export const readPlacement = async (
   }
   const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
   const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
-  const queryBoundSummary = isSummaryValuesBlock && queryId !== undefined;
+  const queryBoundSummary = (isSummaryValuesBlock || isChartBlock) && queryId !== undefined;
   const queryBoundBoard = isBoardBlock && queryId !== undefined;
   if (
     tableContract === undefined &&
@@ -402,9 +422,11 @@ export const readPlacement = async (
       data[placementId] = { status: "refused", reason: "not_found" };
       return;
     }
+    const subjectLinks = await readRecordLinks(resolveRecordLinks, [subject.row]);
     const display = projectRecordDetailData(
       {
         settings,
+        ...(subjectLinks === undefined ? {} : { recordLinks: subjectLinks }),
         ...(subjectModule === undefined
           ? {}
           : {
@@ -676,6 +698,35 @@ export const readPlacement = async (
       return;
     }
 
+    if (isChartBlock) {
+      const chartRecordType = bound.query.recordType;
+      const chartFields = new Map(
+        (chartRecordType.state === "resolved"
+          ? context.releaseSet.modules
+              .find((module) => sameId(String(module.rootId), String(chartRecordType.moduleRootId)))
+              ?.content.recordTypes.find((recordType) =>
+                sameId(String(recordType.recordTypeId), String(chartRecordType.recordTypeId)),
+              )?.fields ?? []
+          : []
+        ).map((field) => [String(field.fieldId).toLowerCase(), field] as const),
+      );
+      const projection = projectChartPlacement({
+        settings,
+        query: bound.query,
+        fields: chartFields,
+        summary: summaryResult.value,
+      });
+      if (!projection.ok) {
+        logPlacementFailure(address, placementId, projection.code);
+        data[placementId] = { status: "error" };
+        return;
+      }
+      data[placementId] = projection.chart.points.length === 0
+        ? { status: "empty" }
+        : { status: "ready", values: projection.chart };
+      return;
+    }
+
     const declaredAggregates = bound.query.aggregates;
     const projectedAggregates = summaryResult.value.aggregates;
     const aliases = declaredAggregates.map((aggregate) => aggregate.alias);
@@ -777,6 +828,7 @@ export const readPlacement = async (
       fieldLabels,
       fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
       fieldDateTypes: fieldDateTypesOf(bound.module),
+      resolveRecordLinks,
       page:
         tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
           ? tableContinuation.request.page
@@ -860,9 +912,11 @@ export const readPlacement = async (
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else {
     const rows: readonly ProtectedQueryRow[] = result.value.rows;
+    const detailLinks = await readRecordLinks(resolveRecordLinks, rows);
     const display = projectRecordDetailData(
       {
         settings,
+        ...(detailLinks === undefined ? {} : { recordLinks: detailLinks }),
         fieldLabels: fieldLabelsOf(detailModule),
         fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
         fieldDateTypes: fieldDateTypesOf(detailModule),

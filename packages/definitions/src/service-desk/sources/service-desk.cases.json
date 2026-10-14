@@ -1362,6 +1362,42 @@
         ],
         "page_size": 50,
         "relationship_hops": 0
+      },
+      {
+        "id": "qry_sd_open_cases_by_status",
+        "key": "service_desk_open_cases_by_status",
+        "label": "Open cases by status",
+        "description": "Open case count for each unresolved status",
+        "record_type": "case",
+        "inputs": [],
+        "select": [
+          "status"
+        ],
+        "filter": {
+          "field": "status",
+          "operator": "not_in",
+          "value": [
+            "resolved",
+            "closed"
+          ]
+        },
+        "group_by": [
+          "status"
+        ],
+        "aggregates": [
+          {
+            "operation": "count",
+            "alias": "open_case_count"
+          }
+        ],
+        "sort": [
+          {
+            "field": "status",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
       }
     ]
   }
