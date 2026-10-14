@@ -892,20 +892,6 @@
                 "release_version": "1.0.0"
             },
             "view_permission": "application.service_desk.case.resolve",
-            "visibility_condition": {
-                "any": [
-                    {
-                        "field": "vortex.service_desk.cases:case.status",
-                        "operator": "equals",
-                        "value": "in_progress"
-                    },
-                    {
-                        "field": "vortex.service_desk.cases:case.status",
-                        "operator": "equals",
-                        "value": "waiting_customer"
-                    }
-                ]
-            },
             "settings": {
                 "title": {
                     "kind": "text",
