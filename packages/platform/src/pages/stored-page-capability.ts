@@ -491,12 +491,26 @@ export const createStoredPageCapabilityService = (
       ...requestDependencies,
       validateAccessEligibilityUntil: async (transaction, scope, validUntil) => {
         try {
-          if (isTrustedInstalledPageBundleContext(context)) {
-            const bundleRows = await transaction.query<{
-              readonly bundle_state: unknown;
-            }>`
-              select vortex_definition.read_active_installation_bundle_identity() as bundle_state
-            `;
+          // The installed bundle identity, the request context and the database clock are
+          // independent reads of this one transaction, so they are sent together (one round trip
+          // instead of three) and still checked in their original order.
+          const bundleRead = isTrustedInstalledPageBundleContext(context)
+            ? transaction.query<{
+                readonly bundle_state: unknown;
+              }>`
+                select vortex_definition.read_active_installation_bundle_identity() as bundle_state
+              `
+            : undefined;
+          const contextRead = transaction.query<{
+            readonly request_context: unknown;
+            readonly observed_at: unknown;
+          }>`
+            select
+              vortex_access.validated_human_request_context() - 'channel' as request_context,
+              clock_timestamp() as observed_at
+          `;
+          const [bundleRows, contextRows] = await Promise.all([bundleRead, contextRead]);
+          if (bundleRows !== undefined) {
             const bundleState = activeInstallationBundleStateSchema.safeParse(
               bundleRows[0]?.bundle_state,
             );
@@ -518,11 +532,6 @@ export const createStoredPageCapabilityService = (
               return false;
           }
 
-          const contextRows = await transaction.query<{
-            readonly request_context: unknown;
-          }>`
-            select vortex_access.validated_human_request_context() - 'channel' as request_context
-          `;
           if (contextRows.length !== 1 || contextRows[0] === undefined)
             throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CONTEXT_MISSING");
           const current = sessionContextSchema.safeParse(contextRows[0].request_context);
@@ -532,14 +541,7 @@ export const createStoredPageCapabilityService = (
             });
           if (current.data.callerKind !== "human")
             throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CONTEXT_CALLER_INVALID");
-          const clockRows = await transaction.query<{
-            readonly observed_at: unknown;
-          }>`
-            select clock_timestamp() as observed_at
-          `;
-          if (clockRows.length !== 1 || clockRows[0] === undefined)
-            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CLOCK_MISSING");
-          const observedAt = databaseTimestamp(clockRows[0].observed_at);
+          const observedAt = databaseTimestamp(contextRows[0].observed_at);
           if (typeof observedAt !== "string")
             throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CLOCK_INVALID");
           const observedMilliseconds = Date.parse(observedAt);
