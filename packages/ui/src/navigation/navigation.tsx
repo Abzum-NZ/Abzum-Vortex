@@ -257,7 +257,7 @@ export function ApplicationNavigation({
       {...(compact ? { "data-vortex-navigation-compact": "true" as const } : {})}
       className={cn("w-full min-w-0", className)}
     >
-      <Sidebar className="min-h-svh">
+      <Sidebar className="md:min-h-svh">
         <SidebarContent>
           <SidebarGroup>
             {navigation.length === 0 ? (

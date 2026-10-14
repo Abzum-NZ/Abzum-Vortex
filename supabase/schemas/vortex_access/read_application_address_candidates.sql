@@ -15,6 +15,7 @@ declare
   application_row record;
   application_values jsonb := '[]'::jsonb;
   page_values jsonb;
+  experience_page_values jsonb;
   experience_values jsonb;
   role_values jsonb;
   permission_values jsonb;
@@ -63,7 +64,9 @@ begin
   -- The organisation scope above is the viewer's only scope check: every
   -- candidate below is already an active registration of this organisation.
   for application_row in
-    select root.root_id, root.key as application_key, release.compilation_output,
+    select root.root_id, root.key as application_key, release.application_address,
+      case when p_include_experiences then release.compilation_output else null end
+        as compilation_output,
       registration.source_revision as release_revision
     from vortex_access.permission_registrations as registration
     join vortex_definition.roots as root
@@ -87,13 +90,13 @@ begin
           and binding.application_release_revision = registration.source_revision
           and binding.state = 'active'
       )
-      and release.compilation_output ->> 'kind' = 'application'
+      and release.application_address ->> 'kind' = 'application'
     order by root.key collate "C", root.root_id
   loop
     -- Published release data is platform-produced: a malformed field is a
     -- defect of that application's release, so it fails loudly with the
     -- application named instead of dropping the application from the list.
-    page_values := application_row.compilation_output #> '{canonical,content,pages}';
+    page_values := application_row.application_address -> 'pages';
     if pg_catalog.jsonb_typeof(page_values) is distinct from 'array' then
       raise exception using errcode = 'XX001',
         message = pg_catalog.format(
@@ -104,7 +107,7 @@ begin
     into home_page_key
     from pg_catalog.jsonb_array_elements(page_values) as page(value)
     where page.value ->> 'pageId' =
-      application_row.compilation_output #>> '{canonical,content,homePageId}';
+      application_row.application_address ->> 'homePageId';
 
     if home_page_key is null then
       raise exception using errcode = 'XX001',
@@ -118,6 +121,7 @@ begin
     -- page and a missing page both resolve to the same not_found experience. Experiences are an
     -- optional release field: an absent one declares none, a present one must be an array.
     if p_include_experiences then
+      experience_page_values := application_row.compilation_output #> '{canonical,content,pages}';
       experience_values := application_row.compilation_output #> '{canonical,content,experiences}';
       if experience_values is null then
         experience_values := '[]'::jsonb;
@@ -128,7 +132,7 @@ begin
       end if;
     end if;
 
-    role_values := application_row.compilation_output #> '{canonical,content,roles}';
+    role_values := application_row.application_address -> 'roles';
     if pg_catalog.jsonb_typeof(role_values) is distinct from 'array' then
       raise exception using errcode = 'XX001',
         message = pg_catalog.format(
@@ -170,8 +174,8 @@ begin
         'applicationRootId', application_row.root_id,
         'releaseRevision', application_row.release_revision,
         'key', application_row.application_key,
-        'name', application_row.compilation_output #>> '{canonical,content,name}',
-        'icon', application_row.compilation_output #>> '{canonical,content,icon}',
+        'name', application_row.application_address ->> 'name',
+        'icon', application_row.application_address ->> 'icon',
         'homePageKey', home_page_key,
         'pages', (
           select pg_catalog.jsonb_agg(
@@ -201,7 +205,7 @@ begin
             order by experience.value ->> 'state' collate "C"
           )
           from pg_catalog.jsonb_array_elements(experience_values) as experience(value)
-          join pg_catalog.jsonb_array_elements(page_values) as page(value)
+          join pg_catalog.jsonb_array_elements(experience_page_values) as page(value)
             on page.value ->> 'pageId' = experience.value ->> 'pageId'
         ), '[]'::jsonb),
         'shells', case

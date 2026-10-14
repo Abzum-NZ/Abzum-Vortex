@@ -325,7 +325,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       {...(title === undefined ? {} : { "aria-labelledby": titleId })}
       data-vortex-control="form-container"
       data-vortex-placement-id={props.placementId}
-      className="flex flex-col gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-xs"
+      className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:p-6 text-card-foreground shadow-xs"
     >
       {title === undefined ? null : (
         <h2 id={titleId} className="font-heading text-lg font-semibold tracking-tight">

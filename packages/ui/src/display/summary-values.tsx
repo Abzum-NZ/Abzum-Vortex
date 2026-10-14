@@ -36,16 +36,16 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-          <dl className="m-0 grid gap-3 sm:grid-cols-3">
+          <dl className="m-0 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {values.values.map((item) => (
               <Card
                 key={item.key}
                 size="sm"
                 data-vortex-summary-key={item.key}
-                className="gap-1 px-(--card-spacing)"
+                className="min-w-0 gap-1 px-(--card-spacing)"
               >
                 <dt className="text-sm text-muted-foreground">{item.label}</dt>
-                <dd className="font-heading text-base font-medium">
+                <dd className="break-words font-heading text-base font-medium">
                   {item.value.kind === "unavailable" ? (
                     <span role="status" data-vortex-summary-value-state="unavailable">
                       Unavailable

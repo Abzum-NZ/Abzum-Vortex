@@ -30,7 +30,7 @@ export default async function StudioModuleLayout({ children, params }: {
           Open text field settings in a new tab
         </a>
         <a className="rounded-lg border px-3 py-2 text-sm" href={`${base}/before-save`} target="_blank" rel="noopener noreferrer">
-          Open BeforeSave conditions in a new tab
+          Open the conditions that run before save in a new tab
         </a>
       </> : null}
       {canPublish ? <a className="rounded-lg border px-3 py-2 text-sm" href={`${base}/publish`} target="_blank" rel="noopener noreferrer">

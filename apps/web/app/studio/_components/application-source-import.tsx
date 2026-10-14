@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
+import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-details";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { StudioField } from "./studio-field";
@@ -268,13 +269,13 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
         }} />}
     </StudioField>
     {reviewed !== null && <div className="space-y-2">
-      <p className="break-all">Reviewed source fingerprint: {reviewed.fingerprint}</p>
       <p>Applying replaces the complete current local source, including permissions, roles, dependencies, pages and flows.
         This review does not establish publication eligibility or installed permissions.</p>
-      <details><summary>Current local source</summary>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(reviewed.snapshot.source, null, 2)}</pre></details>
-      <details open><summary>Complete reviewed replacement source</summary>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(reviewed.source, null, 2)}</pre></details>
+      <TechnicalDetails title="View source and technical details">
+        <p className="break-all">Reviewed source fingerprint: <code>{reviewed.fingerprint}</code></p>
+        <ViewSource value={reviewed.snapshot.source} title="Current local source" />
+        <ViewSource value={reviewed.source} title="Complete reviewed replacement source" />
+      </TechnicalDetails>
     </div>}
     {diagnosticsCurrent && diagnostics !== null && <div role="status" aria-live="polite" className="space-y-2">
       <h3 className="font-semibold">Source validation issues</h3>
