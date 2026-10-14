@@ -6,7 +6,7 @@ import { platformPermissionSource } from "../../app/_lib/platform-permission-sou
 
 /**
  * Compiles every shipped definition source the way publication does, without a database, and
- * prints one line per failure naming the source file, the definition, the located part and the
+ * prints (or, with `--json`, returns as data for `pnpm guard`) one entry per failure naming the source file, the definition, the located part and the
  * reason. It exits non-zero on any failure; `pnpm guard` runs it.
  */
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
@@ -24,18 +24,36 @@ const files = sourceFiles(definitionsRoot).map((path) => ({
   text: readFileSync(path, "utf8"),
 }));
 
-/** The file that declares a source: the one holding its `key` property with that exact value. */
-const fileDeclaring = (definitionKey: string): string =>
-  files.find(
-    (file) =>
-      file.text.includes(`"key": "${definitionKey}"`) ||
-      file.text.includes(`key: "${definitionKey}"`),
-  )?.path ?? "packages/definitions/src";
+/** The file and line that declare a source: the one holding its `key` property with that exact value. */
+const declaration = (definitionKey: string): { path: string; line: number } => {
+  for (const file of files) {
+    const match = [`"key": "${definitionKey}"`, `key: "${definitionKey}"`]
+      .map((needle) => file.text.indexOf(needle))
+      .find((index) => index >= 0);
+    if (match !== undefined)
+      return { path: file.path, line: file.text.slice(0, match).split("\n").length };
+  }
+  return { path: "packages/definitions/src", line: 1 };
+};
 
 const failures = validateSourcesOffline(shippedModuleSources, platformPermissionSource);
-for (const failure of failures)
-  console.error(
-    `${fileDeclaring(failure.definitionKey)}:1: blocking definition-validation: ${failure.definitionKey} ${failure.stage} ${failure.code} at ${failure.location}${failure.detail === undefined ? "" : `: ${failure.detail}`}`,
+const describe = (failure: (typeof failures)[number]): string =>
+  `${failure.definitionKey} ${failure.stage} ${failure.code} at ${failure.location}${failure.detail === undefined ? "" : `: ${failure.detail}`}`;
+if (process.argv.includes("--json"))
+  console.log(
+    JSON.stringify(
+      failures.map((failure) => ({
+        ...declaration(failure.definitionKey),
+        detail: describe(failure),
+      })),
+    ),
   );
+else {
+  for (const failure of failures) {
+    const { path, line } = declaration(failure.definitionKey);
+    console.error(`${path}:${line}: blocking definition-validation: ${describe(failure)}`);
+  }
+  if (failures.length === 0)
+    console.log(`Definition validation passed (${shippedModuleSources.length} Modules).`);
+}
 if (failures.length > 0) process.exitCode = 1;
-else console.log(`Definition validation passed (${shippedModuleSources.length} Modules).`);

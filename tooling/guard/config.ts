@@ -176,4 +176,5 @@ export const scannedRuleIds = new Set([
   "unused-dependency",
   "process-artifact",
   "silent-parse",
+  "definition-validation",
 ]);
