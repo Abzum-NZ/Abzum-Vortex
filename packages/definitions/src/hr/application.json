@@ -1061,6 +1061,19 @@
                               "value": "Title"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.department"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department"
+                            }
+                          }
                         }
                       ]
                     },
@@ -1178,6 +1191,19 @@
                             "label": {
                               "kind": "text",
                               "value": "Title"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:position.department"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Department"
                             }
                           }
                         }
@@ -1709,6 +1735,32 @@
                               "value": "Start date"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.person"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Person"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.position"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position"
+                            }
+                          }
                         }
                       ]
                     },
@@ -1839,6 +1891,32 @@
                             "label": {
                               "kind": "text",
                               "value": "Start date"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.person"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Person"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.position"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Position"
                             }
                           }
                         }
@@ -2524,6 +2602,19 @@
                               "value": "Status"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            }
+                          }
                         }
                       ]
                     },
@@ -2667,6 +2758,19 @@
                             "label": {
                               "kind": "text",
                               "value": "Status"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
                             }
                           }
                         }

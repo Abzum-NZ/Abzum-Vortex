@@ -14,7 +14,7 @@ export function RouteLoadingState({ region = "page" }: Readonly<{ region?: "page
       aria-live="polite"
     >
       <span className="sr-only">Loading</span>
-      <Skeleton className="h-8 w-64 rounded-md bg-muted" />
+      <Skeleton className="h-8 w-64 max-w-full rounded-md bg-muted" />
       <Skeleton className="h-32 w-full rounded-lg bg-muted" />
       <Skeleton className="h-64 w-full rounded-lg bg-muted" />
     </div>
