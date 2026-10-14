@@ -133,6 +133,7 @@ type InvocationDependencies = Readonly<{
       installationRevision: number;
       releaseKey: string;
       formId: string;
+      subjectRecordId?: string;
     }>,
   ) => Promise<ProjectedForm | undefined>;
   resolveFormValues: (
@@ -1185,6 +1186,7 @@ export async function invokeInstalledFlow(
           installationRevision: installation.installationRevision,
           releaseKey: installation.releaseKey,
           formId: binding.controlId,
+          ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
         });
         if (projectedForm === undefined) return undefined;
         const resolvedValues = await dependencies.resolveFormValues({

@@ -46,7 +46,7 @@ export type ReferenceChoiceAddress = Readonly<{
 export const projectReferenceChoicePage = async (
   session: IdentitySession,
   address: ReferenceChoiceAddress,
-  request: Readonly<{ installationRevision: number; releaseKey: string }>,
+  request: Readonly<{ installationRevision: number; releaseKey: string; subjectRecordId?: string }>,
 ): Promise<
   | Readonly<{
       kind: "available";
@@ -86,7 +86,10 @@ export const projectReferenceChoicePage = async (
     ...dependencies,
     context,
     permissions: platformPermissionSource,
-    selection: { pageId: pageDefinition.pageId },
+    selection: {
+      pageId: pageDefinition.pageId,
+      ...(request.subjectRecordId === undefined ? {} : { subjectRecordId: request.subjectRecordId }),
+    },
   }).project(session, selection);
   if (projected.kind === "temporarily_unavailable")
     return { kind: "temporarily_unavailable" };

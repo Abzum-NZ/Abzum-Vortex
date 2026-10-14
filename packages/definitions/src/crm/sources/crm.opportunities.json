@@ -987,6 +987,104 @@
             ]
           }
         ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_opp_stage_closed",
+        "key": "closed_opportunity_stage_locked",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "opportunity",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 50
+          }
+        ],
+        "tasks": [
+          {
+            "id": "closed_stage_changed",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "in",
+                  "value": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_previous",
+                      "field": "stage"
+                    }
+                  },
+                  "options": [
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "won"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "lost"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "eq",
+                    "left": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "stage"
+                      }
+                    },
+                    "right": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_previous",
+                        "field": "stage"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_closed_stage_change",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "opportunity_closed_stage_locked"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "This opportunity is closed and its stage can't change."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
       }
     ],
     "extension_points": [
