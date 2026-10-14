@@ -97,11 +97,11 @@ begin
       from vortex_access.organization_direct_record_shares as share
       where share.organization_id = decision_organization_id
         and share.storage_scope = binding ->> 'storageScope'
-        and share.application_root_id is not distinct from case
+        and share.application_scope_id = coalesce(case
           when binding ->> 'storageScope' = 'application_contained'
             then (p_declaration -> 'target' ->> 'applicationRootId')::uuid
           else null::uuid
-        end
+        end, '00000000-0000-0000-0000-000000000000'::uuid)
         and share.module_root_id = (binding ->> 'moduleRootId')::uuid
         and share.record_type_id = (binding ->> 'recordTypeId')::uuid
         and share.storage_contract_id = (binding ->> 'storageContractId')::uuid
