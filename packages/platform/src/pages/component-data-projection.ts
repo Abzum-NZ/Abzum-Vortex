@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  isSafeLinkAddress,
   readRecordDetailContract,
   readRecordsTableContract,
   richTextDocumentSchema,
@@ -21,6 +22,7 @@ export type ProjectedCellValue =
   | Readonly<{ kind: "number"; value: number }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
+  | Readonly<{ kind: "link"; address: string; label: string }>
   | Readonly<{ kind: "rich_text"; document: ReturnType<typeof richTextDocumentSchema.parse> }>
   | ProjectedRecordLink
   | Readonly<{ kind: "unavailable" }>
@@ -50,6 +52,8 @@ const asRecordLink = (value: JsonValue): RecordLinkReference | undefined => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
   const keys = Object.keys(value);
   const { recordTypeId, recordId } = value;
+  if (keys.length === 1 && typeof value.organizationAccountId === "string")
+    return { organizationAccountId: value.organizationAccountId };
   return keys.length === 2 &&
     typeof recordTypeId === "string" &&
     typeof recordId === "string"
@@ -130,9 +134,14 @@ export type ComponentDataProjectionInput = Readonly<{
   readableFieldIds?: readonly string[];
   /** The date or date-time fields of the installed definition (field identity to field type), so a column declared "automatic" shows them as dates. */
   fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
+  /** The web, email and phone fields of the installed definition (field identity to field type), so their values show as links. */
+  fieldLinkTypes?: Readonly<Record<string, LinkFieldType>>;
   /** The labels of the linked records the rows carry; absent when they could not be read. */
   recordLinks?: ProjectedRecordLinks;
 }>;
+
+/** The field types whose stored text is an address a viewer can follow. */
+export type LinkFieldType = "web_address" | "email_address" | "phone_number";
 
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 const empty: ProjectedCellValue = Object.freeze({ kind: "empty" as const });
@@ -161,6 +170,24 @@ const projectDate = (value: string): ProjectedCellValue => {
 };
 
 /**
+ * A stored web, email or phone value as a link: its own text is the label and the address uses the
+ * scheme of its field type. A value that cannot form a safe address is logged with a stable code
+ * and shown as plain text, never as a link.
+ */
+const projectLink = (value: string, linkType: LinkFieldType): ProjectedCellValue => {
+  const text = value.trim();
+  const address =
+    linkType === "web_address"
+      ? text
+      : linkType === "email_address"
+        ? `mailto:${text}`
+        : `tel:${text.replace(/[\s]/g, "")}`;
+  if (isSafeLinkAddress(address)) return { kind: "link", address, label: text };
+  console.error(`[page] link value refused LINK_VALUE_INVALID type=${linkType}`);
+  return { kind: "text", text: value };
+};
+
+/**
  * Maps one stored value to a closed display value by the declared format. A value that does not
  * fit its declared format is shown as plain text, and a formatted-text document is shown as rich text,
  * and a structured value that is not a display value at all is shown as empty; neither ever reaches the component as raw JSON.
@@ -171,9 +198,12 @@ const projectCell = (
   choiceLabels?: readonly Readonly<{ value: string; label: string }>[],
   dateType?: "date" | "date_time",
   recordLinks?: ProjectedRecordLinks,
+  linkType?: LinkFieldType,
 ): ProjectedCellValue => {
   const format = declaredFormat === "automatic" && dateType !== undefined ? dateType : declaredFormat;
   if (value === null) return empty;
+  if (linkType !== undefined && typeof value === "string" && value.trim().length > 0)
+    return projectLink(value, linkType);
   // A link shows its target's label as the viewer may read it; one that could not be resolved is
   // an explicit unavailable state, never a blank and never the stored identity.
   const link = asRecordLink(value);
@@ -332,6 +362,7 @@ export const projectRecordsTableData = (
               input.fieldChoiceLabels?.[column.key.toLowerCase()],
               input.fieldDateTypes?.[column.key.toLowerCase()],
               input.recordLinks,
+              input.fieldLinkTypes?.[column.key.toLowerCase()],
             ),
           ]),
         ),
@@ -377,6 +408,7 @@ export const projectRecordDetailData = (
         choiceLabels,
         input.fieldDateTypes?.[declared.field.toLowerCase()],
         input.recordLinks,
+        input.fieldLinkTypes?.[declared.field.toLowerCase()],
       ),
     });
   }

@@ -25,6 +25,7 @@ import {
   type ProjectedComponentData,
   type ProjectedTableValues,
   type RecordLinkResolver,
+  type LinkFieldType,
 } from "./component-data-projection";
 
 /**
@@ -62,6 +63,8 @@ export type RecordsTableQueryRequest = Readonly<{
   >;
   /** The date and date-time fields of the installed definition (field identity to field type). */
   fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
+  /** The web, email and phone fields of the installed definition (field identity to field type). */
+  fieldLinkTypes?: Readonly<Record<string, LinkFieldType>>;
   /** Reads the labels of the linked records the page's rows carry, once per page. */
   resolveRecordLinks?: RecordLinkResolver;
   /**
@@ -324,6 +327,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             ? {}
             : { fieldChoiceLabels: request.fieldChoiceLabels }),
           ...(request.fieldDateTypes === undefined ? {} : { fieldDateTypes: request.fieldDateTypes }),
+          ...(request.fieldLinkTypes === undefined ? {} : { fieldLinkTypes: request.fieldLinkTypes }),
         },
         result.value.rows,
         (request.page ?? 1) > 1,

@@ -53,11 +53,11 @@ begin
     and (membership.expires_at is null or membership.expires_at > p_checked_at)
   where share.organization_id = p_binding_organization_id
     and share.storage_scope = p_binding_storage_scope
-    and share.application_root_id is not distinct from case
+    and share.application_scope_id = coalesce(case
       when p_binding_storage_scope = 'application_contained'
         then p_binding_application_root_id
       else null::uuid
-    end
+    end, '00000000-0000-0000-0000-000000000000'::uuid)
     and share.module_root_id = p_binding_module_root_id
     and share.record_type_id = p_binding_record_type_id
     and share.storage_contract_id = p_binding_storage_contract_id

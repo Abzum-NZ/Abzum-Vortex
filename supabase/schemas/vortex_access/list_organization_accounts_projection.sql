@@ -1,6 +1,7 @@
 create or replace function vortex_access.list_organization_accounts_projection(
   p_record_id uuid,
-  p_page_size integer
+  p_page_size integer,
+  p_record_ids uuid[]
 )
 returns table (
   organization_id uuid,
@@ -63,10 +64,31 @@ begin
       'time_zone', projected.time_zone
     )
   from vortex_identity.list_organization_accounts_projection_internal(
-    visible_organization_id, active_members_only
+    visible_organization_id, active_members_only,
+    case when p_record_ids is not null then p_record_ids
+      when p_record_id is not null then array[p_record_id] end
   ) as projected
   where p_record_id is null or p_record_id = projected.organization_account_id;
 end
+$function$;
+
+create or replace function vortex_access.list_organization_accounts_projection(
+  p_record_id uuid,
+  p_page_size integer
+)
+returns table (
+  organization_id uuid,
+  record_id uuid,
+  revision bigint,
+  attribute_values jsonb
+)
+language sql
+volatile
+security definer
+set search_path = ''
+as $function$
+  select projected.*
+  from vortex_access.list_organization_accounts_projection(p_record_id, p_page_size, null) as projected
 $function$;
 
 revoke all on function vortex_access.list_organization_accounts_projection(uuid, integer)
@@ -82,3 +104,16 @@ comment on function vortex_access.list_organization_accounts_projection(uuid, in
 alter function vortex_access.list_organization_accounts_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
 
 grant execute on function vortex_access.list_organization_accounts_projection(p_record_id uuid, p_page_size integer) to postgres;
+
+revoke all on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[])
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[])
+  to vortex_owner, vortex_record_adapter;
+
+comment on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) is
+  'The registered organisation-account projection with the same visibility as the two-argument form, optionally narrowed to the given account identities inside the scan.';
+
+alter function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) owner to vortex_owner;
+
+grant execute on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) to postgres;

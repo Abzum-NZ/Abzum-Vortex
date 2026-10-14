@@ -1,9 +1,9 @@
 import type { ReactElement } from "react";
-import { safeHttpsUrlSchema } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
 import { FormattedTime } from "./date-format-context";
-import { isInternalAddress, type DisplayCellValue } from "./projected-data";
+import { isSafeLinkAddress } from "@vortex/platform/schema";
+import { isInternalAddress, isWebLinkAddress, type DisplayCellValue } from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 
 const RESTRICTED_TEXT = "Restricted";
@@ -72,12 +72,12 @@ export function DisplayCellView({
       );
     case "link":
       // Re-checked here because this view is exported and may receive unparsed values.
-      if (!safeHttpsUrlSchema.safeParse(value.address).success)
+      if (!isSafeLinkAddress(value.address))
         throw new DefinitionRenderError(
           "INVALID_COMPOSITION",
-          "A link display value requires a safe HTTPS address",
+          "A link display value requires a safe web, mail or telephone address",
         );
-      return (
+      return isWebLinkAddress(value.address) ? (
         <a
           className="vortex-cell-link"
           href={value.address}
@@ -87,6 +87,10 @@ export function DisplayCellView({
           {value.label}
           <span aria-hidden="true"> ↗</span>
           <span className="vortex-sr-only"> (external link, opens in a new page)</span>
+        </a>
+      ) : (
+        <a className="vortex-cell-link" href={value.address} rel="noopener noreferrer">
+          {value.label}
         </a>
       );
     case "rich_text":
