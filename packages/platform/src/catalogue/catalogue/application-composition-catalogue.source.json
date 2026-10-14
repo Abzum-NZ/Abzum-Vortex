@@ -1119,7 +1119,7 @@
         "maximum": 200,
         "defaultValue": {
           "kind": "number",
-          "value": 25
+          "value": 40
         }
       },
       {
@@ -1520,7 +1520,7 @@
         "maximum": 200,
         "defaultValue": {
           "kind": "number",
-          "value": 25
+          "value": 40
         }
       },
       {
@@ -5112,7 +5112,7 @@
         "maximum": 200,
         "defaultValue": {
           "kind": "number",
-          "value": 25
+          "value": 40
         }
       },
       {

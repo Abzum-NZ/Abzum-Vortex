@@ -232,6 +232,8 @@ export const readRecordsTableContract = (
   const sort = settingGroup(settings["default_sort"]);
   const sortField = sort === undefined ? undefined : settingField(sort["field"]);
   const pageSize = settings["page_size"];
+  // The catalogue default is the only source of the page size; a table without one is not read.
+  if (pageSize?.kind !== "number") return undefined;
   const parameters = (settingItems(settings["query_parameters"]) ?? []).flatMap(
     (item): RecordsTableParameterContract[] => {
       const parameter = settingGroup(item);
@@ -267,7 +269,7 @@ export const readRecordsTableContract = (
     filterableFields: fieldList(settings["filterable_fields"]),
     search: settingFlag(settings["search"]),
     savedViews: settingFlag(settings["saved_views"]),
-    pageSize: pageSize?.kind === "number" ? pageSize.value : 25,
+    pageSize: pageSize.value,
     selectionMode: settingChoice(settings["selection_mode"], recordsTableSelectionModes, "none"),
     parameters,
     messages: displayMessages(settings),

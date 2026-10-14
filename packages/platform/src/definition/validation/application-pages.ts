@@ -286,6 +286,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
             table.columns.map((column) => column.field),
             selected,
           ) ||
+            // A table never asks for a larger page than its bound query allows.
+            table.pageSize > Number(bound.pageSize) ||
             !mapped(table.sortableFields, orderable) ||
             !mapped(table.filterableFields, orderable) ||
             (table.defaultSort !== undefined &&
