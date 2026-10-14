@@ -85,6 +85,7 @@ function BoardColumn({
   failed,
   onContinue,
   mover,
+  choiceFieldId,
 }: Readonly<{
   bucket: BoardBucket;
   cardFieldIds: readonly string[];
@@ -95,6 +96,7 @@ function BoardColumn({
   failed: boolean;
   onContinue: (bucket: BoardBucket, continuationToken: string) => Promise<void>;
   mover: BoardMover | undefined;
+  choiceFieldId: string;
 }>): ReactElement {
   const page = bucket.values.page;
   const canContinue =
@@ -154,7 +156,15 @@ function BoardColumn({
                 bucketKey: bucket.key,
               };
               const moving = mover?.movingRecordId === row.recordId;
-              const idle = mover !== undefined && mover.movingRecordId === undefined;
+              // Only a card whose row capabilities let the viewer change the choice field can move;
+              // the server still refuses any other move.
+              const movable =
+                mover !== undefined &&
+                row.capabilities.actions.includes("update") &&
+                row.capabilities.changeableFieldIds.some(
+                  (changeable) => changeable.toLowerCase() === choiceFieldId.toLowerCase(),
+                );
+              const idle = movable && mover.movingRecordId === undefined;
               return (
                 <li key={row.recordId}>
                   <Card
@@ -184,7 +194,7 @@ function BoardColumn({
                           <DisplayCellView value={titleField.value} />
                         )}
                       </CardTitle>
-                      {events?.row_action === undefined && mover === undefined ? null : (
+                      {events?.row_action === undefined && !movable ? null : (
                         <CardAction className="flex gap-1">
                           <RowActionControl
                             recordId={row.recordId}
@@ -192,7 +202,7 @@ function BoardColumn({
                             name={accessibleTitle}
                             events={events}
                           />
-                          {mover === undefined ? null : (
+                          {!movable ? null : (
                             <CardMoveMenu
                               card={card}
                               name={accessibleTitle}
@@ -456,6 +466,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
                   failed={failedKey === bucket.key}
                   onContinue={continueBucket}
                   mover={mover}
+                  choiceFieldId={values.choiceFieldId}
                 />
               ))}
             </div>
