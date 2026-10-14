@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.claim_record_index_build(p_lease_seconds integer DEFAULT 300) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.claim_record_index_build(p_lease_seconds integer DEFAULT 300) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -15,7 +15,7 @@ begin
   end if;
 
   for candidate in
-    select catalogue.storage_contract_id, catalogue.field_id
+    select catalogue.index_contract_id, catalogue.purpose
     from vortex_record.index_catalogue as catalogue
     join vortex_record.storage_catalogue as storage
       on storage.storage_contract_id = catalogue.storage_contract_id
@@ -28,12 +28,11 @@ begin
     where catalogue.observed_state <> 'present'
       and (catalogue.lease_expires_at is null
         or catalogue.lease_expires_at <= pg_catalog.statement_timestamp())
-    order by catalogue.changed_at asc, catalogue.storage_contract_id asc,
-      catalogue.field_id asc
+    order by catalogue.changed_at asc, catalogue.index_contract_id asc
     for update of catalogue skip locked
   loop
     derivation := vortex_record.index_build_statements_internal(
-      candidate.storage_contract_id, candidate.field_id
+      candidate.index_contract_id
     );
     if derivation ->> 'outcome' = 'claimed' then
       claim_value := pg_catalog.gen_random_uuid();
@@ -43,10 +42,14 @@ begin
         claimed_at = pg_catalog.statement_timestamp(),
         lease_expires_at = pg_catalog.statement_timestamp()
           + pg_catalog.make_interval(secs => p_lease_seconds)
-      where catalogue.storage_contract_id = candidate.storage_contract_id
-        and catalogue.field_id = candidate.field_id;
+      where catalogue.index_contract_id = candidate.index_contract_id;
       return derivation || pg_catalog.jsonb_build_object('claimId', claim_value);
     elsif derivation ->> 'outcome' = 'settled' then
+      if candidate.purpose = 'published_sort_drop' then
+        delete from vortex_record.index_catalogue as catalogue
+        where catalogue.index_contract_id = candidate.index_contract_id;
+        continue;
+      end if;
       -- The live index already matches but the recorded observation is stale
       -- (for example the runner recorded before a crash). Converge the row and
       -- clear any expired lease without rebuilding anything.
@@ -58,8 +61,7 @@ begin
         claimed_at = null,
         lease_expires_at = null,
         changed_at = pg_catalog.statement_timestamp()
-      where catalogue.storage_contract_id = candidate.storage_contract_id
-        and catalogue.field_id = candidate.field_id;
+      where catalogue.index_contract_id = candidate.index_contract_id;
     elsif derivation ->> 'outcome' = 'refused' and refusal_reason is null then
       refusal_reason := derivation ->> 'reasonCode';
     end if;

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.index_build_statements_internal(p_index_contract_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -17,12 +17,13 @@ declare
   physical_unique boolean;
   sortable_only boolean := false;
   target_index_token text;
+  sort_definition jsonb;
+  create_statement text;
   statements jsonb := '[]'::jsonb;
 begin
   select catalogue.* into catalogue_row
   from vortex_record.index_catalogue as catalogue
-  where catalogue.storage_contract_id = p_storage_contract_id
-    and catalogue.field_id = p_field_id;
+  where catalogue.index_contract_id = p_index_contract_id;
   if catalogue_row.index_contract_id is null then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'index_unknown'
@@ -31,22 +32,12 @@ begin
 
   select storage.* into storage_row
   from vortex_record.storage_catalogue as storage
-  where storage.storage_contract_id = p_storage_contract_id;
+  where storage.storage_contract_id = catalogue_row.storage_contract_id;
   if storage_row.storage_contract_id is null
     or storage_row.state <> 'active'
     or storage_row.physical_schema_token <> 'record_data' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'storage_contract_unavailable'
-    );
-  end if;
-
-  select stored.* into mapping_row
-  from vortex_record.field_storage_mappings as stored
-  where stored.storage_contract_id = p_storage_contract_id
-    and stored.field_id = p_field_id;
-  if mapping_row.storage_contract_id is null or mapping_row.state <> 'active' then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'refused', 'reasonCode', 'field_unavailable'
     );
   end if;
 
@@ -57,6 +48,35 @@ begin
   if scope_columns is null or table_relation is null then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'storage_contract_unavailable'
+    );
+  end if;
+
+  if catalogue_row.purpose in ('published_sort', 'published_sort_drop') then
+    sort_definition := vortex_record.published_sort_index_definition_internal(
+      catalogue_row.storage_contract_id, catalogue_row.sort_shape);
+    if sort_definition ->> 'outcome' <> 'valid'
+      or catalogue_row.physical_index_token is distinct from sort_definition ->> 'indexToken'
+      or catalogue_row.desired_definition_fingerprint
+        is distinct from sort_definition ->> 'fingerprint' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'index_definition_drifted');
+    end if;
+    observed := sort_definition ->> 'observedState';
+    if (catalogue_row.purpose = 'published_sort' and observed = 'present')
+      or (catalogue_row.purpose = 'published_sort_drop' and observed = 'missing') then
+      return pg_catalog.jsonb_build_object('outcome', 'settled');
+    end if;
+    expected_fingerprint := sort_definition ->> 'fingerprint';
+    target_index_token := sort_definition ->> 'indexToken';
+    create_statement := sort_definition ->> 'createStatement';
+  else
+  select stored.* into mapping_row
+  from vortex_record.field_storage_mappings as stored
+  where stored.storage_contract_id = catalogue_row.storage_contract_id
+    and stored.field_id = catalogue_row.field_id;
+  if mapping_row.storage_contract_id is null or mapping_row.state <> 'active' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'field_unavailable'
     );
   end if;
 
@@ -102,6 +122,7 @@ begin
   target_index_token := case when sortable_only
     then 'ix_' || pg_catalog.substr(mapping_row.physical_column_token, 3)
     else catalogue_row.physical_index_token end;
+  end if;
 
   -- A concurrent index build or cleanup holds SHARE UPDATE EXCLUSIVE on the
   -- table for its whole duration, including one orphaned by a worker that
@@ -158,7 +179,9 @@ begin
     );
   end if;
 
+  if catalogue_row.purpose <> 'published_sort_drop' then
   statements := statements || pg_catalog.jsonb_build_array(
+    case when catalogue_row.purpose = 'published_sort' then create_statement else
     case catalogue_row.purpose
       when 'uniqueness' then case when not sortable_only then pg_catalog.format(
         'create unique index concurrently %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
@@ -176,8 +199,9 @@ begin
         scope_columns, mapping_row.physical_column_token,
         case when mapping_row.database_value_type = 'text' then ' collate "C"' else '' end
       )
-    end
+    end end
   );
+  end if;
 
   return pg_catalog.jsonb_build_object(
     'outcome', 'claimed',
@@ -190,9 +214,9 @@ begin
   );
 end
 $$;
-alter function vortex_record.index_build_statements_internal(uuid,uuid) owner to vortex_owner;
+alter function vortex_record.index_build_statements_internal(uuid) owner to vortex_owner;
 
 
-COMMENT ON FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) IS 'Private derivation of the ordered drop/create statements one catalogue row needs; never granted above vortex_owner.';
+COMMENT ON FUNCTION vortex_record.index_build_statements_internal(p_index_contract_id uuid) IS 'Private derivation of the ordered drop/create statements one catalogue row needs; never granted above vortex_owner.';
 
-REVOKE ALL ON FUNCTION vortex_record.index_build_statements_internal(p_storage_contract_id uuid, p_field_id uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vortex_record.index_build_statements_internal(p_index_contract_id uuid) FROM PUBLIC;
