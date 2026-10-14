@@ -317,7 +317,7 @@
             "required": true,
             "unique": false,
             "filterable": true,
-            "sortable": true,
+            "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
             "type": "calculation",

@@ -57,6 +57,7 @@ export const definitionValidationErrorCodes = [
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
+  "definition_sortable_field_limit",
   "definition_duplicate_key",
   "definition_broken_reference",
   "definition_unresolved_reference",
@@ -118,6 +119,11 @@ const definitionValidationErrorCatalogueSource = {
     order: 60,
     message: "The definition contains too many items.",
     guidance: "Remove excess items and validate the definition again.",
+  },
+  definition_sortable_field_limit: {
+    order: 65,
+    message: "A record type may declare at most eight sortable fields.",
+    guidance: "Choose up to eight sortable fields for this record type, then publish again.",
   },
   definition_duplicate_key: {
     order: 70,
@@ -287,6 +293,7 @@ export type ProtectedValidationDiagnosticSink = (diagnostic: ProtectedValidation
 
 type RawIssue = Readonly<{
   code?: unknown;
+  message?: unknown;
   origin?: unknown;
   path?: unknown;
 }>;
@@ -337,6 +344,11 @@ function schemaIssueCode(
   path: readonly (string | number)[],
   requiredPaths: ReadonlySet<string>,
 ): DefinitionValidationErrorCode {
+  if (
+    issue.code === "custom" &&
+    issue.message === "A record type may declare at most eight sortable fields"
+  )
+    return "definition_sortable_field_limit";
   if (issue.code === "invalid_type") {
     return requiredPaths.has(JSON.stringify(path))
       ? "definition_required_value"
@@ -490,6 +502,10 @@ export function translateDefinitionSchemaError(
         resolveLocation(path, pathMap, context.rootLocation),
       );
     });
+    if (errors.some((entry) => entry.code === "definition_sortable_field_limit"))
+      console.error(
+        `[definition] definition_sortable_field_limit ${context.correlationId}: a record type declares more than eight sortable fields`,
+      );
     return finishResult(errors, context.correlationId);
   } catch {
     return finishResult(
