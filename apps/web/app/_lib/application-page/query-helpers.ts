@@ -285,6 +285,9 @@ export const logPlacementFailure = (
     | "chart_group_invalid"
     | "chart_measure_invalid"
     | "placement_read_failed"
+    | "choice_settings_invalid"
+    | "choice_initial_value_invalid"
+    | "choice_initial_value_unavailable"
     | BoardPlacementFailureCause
     | "board_payload_invalid",
   detail?: string,
