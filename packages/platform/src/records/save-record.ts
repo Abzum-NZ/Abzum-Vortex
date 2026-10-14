@@ -253,6 +253,7 @@ const correctionsFor = (
 const safeRefusal = (
   correlationId: string,
   code: "invalid_request" | "operation_refused" | "conflict",
+  ruleReason?: Readonly<{ code: string; message: string }>,
 ): SaveRecordResult =>
   saveRecordResultSchema.parse({
     contractVersion: "2.0.0",
@@ -261,6 +262,7 @@ const safeRefusal = (
       code,
       messageKey: `errors.${code}`,
       correlationId,
+      ...(ruleReason === undefined ? {} : { reason: ruleReason }),
     },
   });
 
@@ -727,7 +729,18 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 console.error(
                   `[record] save refused RECORD_SAVE_VALUES_INVALID: ${values.issues.map((issue) => issue.code).join(",")}`,
                 );
-                return safeRefusal(prepared.correlationId, "operation_refused");
+                // A rule's authored refusal is the one reason safe to show; every other cause stays in the log.
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  values.issues.flatMap((issue) =>
+                    issue.code === beforeSaveRuleRefusedIssueCode &&
+                    "requirement" in issue &&
+                    issue.requirement !== undefined
+                      ? [issue.requirement]
+                      : [],
+                  )[0],
+                );
               }
               return saveRecordResultSchema.parse({
                 contractVersion: "2.0.0",
