@@ -763,46 +763,83 @@
         ],
         "tasks": [
           {
-            "id": "end_before_start",
+            "id": "both_dates_present",
             "type": "if",
             "condition": {
-              "op": "lt",
-              "left": {
-                "op": "reference",
-                "reference": {
-                  "source": "trigger_record",
-                  "field": "end_date"
-                }
-              },
-              "right": {
-                "op": "reference",
-                "reference": {
-                  "source": "trigger_record",
-                  "field": "start_date"
-                }
-              }
-            },
-            "then": [
-              {
-                "id": "refuse_end_before_start",
-                "type": "rule.refuse",
-                "version": "1.0.0",
-                "properties": {
-                  "reason": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": "end_date_before_start_date"
+              "op": "and",
+              "args": [
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "is_empty",
+                    "arg": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "start_date"
+                      }
                     }
-                  },
-                  "message": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": "End date must be on or after the start date."
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "is_empty",
+                    "arg": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "end_date"
+                      }
                     }
                   }
                 }
+              ]
+            },
+            "then": [
+              {
+                "id": "end_before_start",
+                "type": "if",
+                "condition": {
+                  "op": "lt",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "end_date"
+                    }
+                  },
+                  "right": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "start_date"
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "id": "refuse_end_before_start",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "end_date_before_start_date"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "End date must be on or after the start date."
+                        }
+                      }
+                    }
+                  }
+                ]
               }
             ]
           }
