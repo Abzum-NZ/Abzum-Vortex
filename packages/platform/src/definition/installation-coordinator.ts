@@ -829,11 +829,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           );
           requireNotDraining(state);
           const mode = requireExpectedActive(request, activeRelease(state));
-          if (
-            mode === "switch" &&
-            request.expectedActiveReleaseRevision === null &&
-            preparedRuntimeSource === undefined
-          )
+          if (mode === "switch" && preparedRuntimeSource === undefined)
             throw fail("APPLICATION_INSTALLATION_FAILED");
           if (mode === "already_active") {
             const installation = activeSummary(request, state);
@@ -948,28 +944,31 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             const provisioned = await provisionPins(transaction, request, pins, current);
             await changeContributions(transaction, request, exact.contributionGroups,
               provisioned, "attach");
-            if (active === null && request.expectedActiveReleaseRevision === null) {
-              if (preparedRuntimeSource === undefined)
-                throw fail("APPLICATION_INSTALLATION_FAILED");
-              const preparedBindings = provisioned.map((result) => ({
-                moduleRootId: result.moduleRootId,
-                moduleReleaseRevision: result.moduleReleaseRevision,
-                bindingRevision: result.bindingRevision,
-                state: "provisioned" as const,
-              }));
-              const preparedSource = await preparedRuntimeSource(transaction, {
-                organizationId: request.organizationId,
-                applicationRootId: request.applicationRootId,
-                applicationReleaseRevision: request.applicationReleaseRevision,
-                moduleBindings: preparedBindings,
-              });
+            if (preparedRuntimeSource === undefined)
+              throw fail("APPLICATION_INSTALLATION_FAILED");
+            const preparedBindings = provisioned.map((result) => ({
+              moduleRootId: result.moduleRootId,
+              moduleReleaseRevision: result.moduleReleaseRevision,
+              bindingRevision: result.bindingRevision,
+              state: "provisioned" as const,
+            }));
+            const preparedSource = await preparedRuntimeSource(transaction, {
+              organizationId: request.organizationId,
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.applicationReleaseRevision,
+              moduleBindings: preparedBindings,
+            });
+            // A first installation was prepared earlier, so its bundle is only checked. An upgrade
+            // has no preparation step: its bundle is written here, inside the switch, so a failed
+            // switch keeps the previous release and a committed one always has its bundle.
+            if (active === null && request.expectedActiveReleaseRevision === null)
               await assertPreparedInstallationRuntimeBundleMatches(
                 transaction,
                 preparedSource,
                 preparedBindings,
               );
-              await requireBuilderAuthority(authority, installOperation(request.applicationRootId, exact, false));
-            }
+            else await writePreparedInstallationRuntimeBundle(transaction, preparedSource);
+            await requireBuilderAuthority(authority, installOperation(request.applicationRootId, exact, false));
             const activated = requireLifecycleResult(
               await lifecycle.activate({
                 applicationRootId: request.applicationRootId,

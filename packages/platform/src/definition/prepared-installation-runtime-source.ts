@@ -24,6 +24,7 @@ import {
   projectStoredConsumerRelease,
   storedConsumerReleaseEvidenceSchema,
 } from "./definition-consumer-read-definition";
+import type { PreparedInstallationRuntimeSourceReader } from "./installation-runtime-bundle-app";
 import {
   createImmutableDefinitionPublicationCatalogue,
   type ImmutableDefinitionPublicationCatalogueDefinition,
@@ -322,3 +323,19 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
 
 
 
+
+/** The reader the installation coordinator uses to build or check a release's runtime bundle. */
+export const createPreparedInstallationRuntimeSourceReader = (
+  catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
+): PreparedInstallationRuntimeSourceReader =>
+  (transaction, input) => {
+    const moduleBindings = input.moduleBindings.map((binding) => {
+      const moduleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);
+      if (!moduleRootId.success) throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
+      return { ...binding, moduleRootId: moduleRootId.data };
+    });
+    return createDatabasePreparedInstallationRuntimeSourceService(
+      catalogueDefinition,
+      transaction,
+    ).read({ ...input, moduleBindings });
+  };
