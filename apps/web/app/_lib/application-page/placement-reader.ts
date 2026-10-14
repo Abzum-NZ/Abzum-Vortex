@@ -66,6 +66,7 @@ import {
   fieldLabelsOf,
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
+  fieldLinkTypesOf,
   findModuleQuery,
   noticeQueryInput,
   coerceInput,
@@ -433,6 +434,7 @@ export const readPlacement = async (
               fieldLabels: fieldLabelsOf(subjectModule),
               fieldChoiceLabels: fieldChoiceLabelsOf(subjectModule, allowedPermissions),
               fieldDateTypes: fieldDateTypesOf(subjectModule),
+              fieldLinkTypes: fieldLinkTypesOf(subjectModule),
             }),
         ...(subjectFieldIds === undefined ? {} : { readableFieldIds: subjectFieldIds }),
       },
@@ -828,6 +830,7 @@ export const readPlacement = async (
       fieldLabels,
       fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
       fieldDateTypes: fieldDateTypesOf(bound.module),
+      fieldLinkTypes: fieldLinkTypesOf(bound.module),
       resolveRecordLinks,
       page:
         tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
@@ -920,6 +923,7 @@ export const readPlacement = async (
         fieldLabels: fieldLabelsOf(detailModule),
         fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
         fieldDateTypes: fieldDateTypesOf(detailModule),
+        fieldLinkTypes: fieldLinkTypesOf(detailModule),
       },
       rows,
     );

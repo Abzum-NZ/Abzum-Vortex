@@ -62,6 +62,7 @@ export {
   projectRecordsTableData,
   collectRecordLinks,
   type ComponentDataProjectionInput,
+  type LinkFieldType,
   type ProjectedCellValue,
   type ProjectedComponentData,
   type ProjectedRecordDetailValues,
