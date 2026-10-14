@@ -36,9 +36,8 @@ import {
   projectBoardPlacement,
   readCalendarPlacementContract,
 } from "@vortex/platform/server";
-import type {
-  recordIdSchema} from "@vortex/platform/schema";
 import {
+  recordIdSchema,
   type BlockPropertyValueContract,
   readRecordsTableContract,
   readRecordDetailContract,
@@ -86,7 +85,7 @@ import type {
   BoardContinuationTarget,
   TableContinuationTarget,
 } from "./types";
-import type { ReferenceChoiceFirstPage } from "./reference-choice";
+import { projectInitialReferenceChoice, type ReferenceChoiceFirstPage } from "./reference-choice";
 import { readAttachmentListPlacement } from "./attachment-placement";
 
 /** The labels of the linked records the rows carry, read once; undefined when none or unreadable. */
@@ -351,6 +350,24 @@ export const readPlacement = async (
           : { nextContinuationToken: result.value.nextContinuationToken },
       ),
     };
+    const initialRaw =
+      field.initialValue === undefined ? undefined : first(parameters[field.initialValue.pageParameter]);
+    if (initialRaw !== undefined) {
+      const initialRecordId = recordIdSchema.safeParse(initialRaw);
+      if (!initialRecordId.success) {
+        logPlacementFailure(address, placementId, "choice_initial_value_invalid");
+        return;
+      }
+      const initial = await projectInitialReferenceChoice({
+        firstPage: referenceChoiceFirstPages.get(placementId)!,
+        recordId: initialRecordId.data,
+        service: referenceChoices,
+        session,
+        selection,
+      });
+      if (initial === undefined) logPlacementFailure(address, placementId, "choice_initial_value_unavailable");
+      else data[placementId] = initial;
+    }
     return;
   }
   if (isAttachmentListBlock) {

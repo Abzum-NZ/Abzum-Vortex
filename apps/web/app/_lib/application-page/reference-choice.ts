@@ -18,6 +18,7 @@ import {
   timestampSchema,
   richTextDocumentSchema,
   recordLinkValueSchema,
+  type RecordTypeReference,
   type ReferenceChoiceSelectionEvidence,
   sameId,
   isRecord,
@@ -295,10 +296,27 @@ export type ReferenceChoiceFirstPage = Readonly<{
   nextContinuationToken?: string;
 }>;
 
-/** Projects a saved record link only when the exact value is still offered by its declared Query. */
+/** The record types a link field may point at; a selected value must be one of them. */
+export type SelectedReferenceChoiceField = Readonly<{
+  key: string;
+  required: boolean;
+  targets: readonly RecordTypeReference[];
+}>;
+
+/** Reads the targets of a link field; any other field type has no record choice to project. */
+export const selectedReferenceChoiceField = (
+  field: ModuleField | undefined,
+): SelectedReferenceChoiceField | undefined =>
+  field?.type === "link"
+    ? { key: field.key, required: field.required, targets: [field.settings.target] }
+    : field?.type === "link_to_one_of_several"
+      ? { key: field.key, required: field.required, targets: field.settings.targets }
+      : undefined;
+
+/** Projects a record link only when the exact value is still offered by its declared Query. */
 export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   firstPage: ReferenceChoiceFirstPage | undefined;
-  field: ModuleField | undefined;
+  field: SelectedReferenceChoiceField | undefined;
   stored: JsonValue | undefined;
   service: ReturnType<typeof createReferenceChoiceService>;
   session: IdentitySession;
@@ -307,11 +325,8 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   const first = args.firstPage;
   const field = args.field;
   if (first === undefined || field === undefined || args.stored === undefined) return undefined;
-  if (field.type !== "link" && field.type !== "link_to_one_of_several") return undefined;
-
-  const fieldTargets = field.type === "link" ? [field.settings.target] : field.settings.targets;
-  const resolvedFieldTargets = fieldTargets.filter((target) => target.state === "resolved");
-  if (resolvedFieldTargets.length !== fieldTargets.length || resolvedFieldTargets.length === 0)
+  const resolvedFieldTargets = field.targets.filter((target) => target.state === "resolved");
+  if (resolvedFieldTargets.length !== field.targets.length || resolvedFieldTargets.length === 0)
     return undefined;
   const command = first.field.command;
   if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
@@ -446,4 +461,31 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
       ),
     },
   };
+};
+
+/**
+ * The record a form opens with selected, named by the page address and offered by the Choice's own
+ * Query under the viewer's authority. A value that is not a record id, or is not offered, selects
+ * nothing: the person still sees the ordinary empty Choice.
+ */
+export const projectInitialReferenceChoice = async (args: Readonly<{
+  firstPage: ReferenceChoiceFirstPage;
+  recordId: string;
+  service: ReturnType<typeof createReferenceChoiceService>;
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+}>): Promise<PageDataState | undefined> => {
+  const command = args.firstPage.field.command;
+  if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
+    return undefined;
+  const target = command.source.query.recordType;
+  const projected = await projectSelectedReferenceChoiceEditField({
+    firstPage: args.firstPage,
+    field: { key: args.firstPage.field.fieldKey, required: false, targets: [target] },
+    stored: { recordTypeId: String(target.recordTypeId), recordId: args.recordId },
+    service: args.service,
+    session: args.session,
+    selection: args.selection,
+  });
+  return projected?.data;
 };

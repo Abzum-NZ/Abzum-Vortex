@@ -70,7 +70,7 @@ export type ApplicationPageModel = Readonly<{
     placementId: string;
     formId: string;
     fieldKey: string;
-    releaseVersion: "1.1.0" | "1.2.0";
+    releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
     dependency?: Readonly<{ fieldKey: string; placementId: string }>;
   }>[];
   guidedForm?: Readonly<{
