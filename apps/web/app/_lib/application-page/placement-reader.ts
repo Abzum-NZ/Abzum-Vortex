@@ -455,8 +455,8 @@ export const readPlacement = async (
     data[placementId] = { status: "error" };
     return;
   }
-  const inputType = (input: string): string | undefined =>
-    bound.query.inputs.find((declared) => declared.key === input)?.type;
+  const declaredInput = (input: string) =>
+    bound.query.inputs.find((declared) => declared.key === input);
   const fieldLabels = fieldLabelsOf(bound.module);
 
   if (isLinkTilesBlock) {
@@ -464,7 +464,7 @@ export const readPlacement = async (
     let invalidInput = false;
     for (const declared of bound.query.inputs) {
       const raw = first(parameters[declared.key]);
-      const value = raw === undefined ? undefined : noticeQueryInput(raw, declared.type);
+      const value = raw === undefined ? undefined : noticeQueryInput(raw, declared);
       if (raw !== undefined && value === undefined) invalidInput = true;
       if (value !== undefined) inputValues[declared.key] = value;
     }
@@ -491,7 +491,7 @@ export const readPlacement = async (
     let invalidInput = false;
     for (const declared of bound.query.inputs) {
       const raw = first(parameters[declared.key]);
-      const value = raw === undefined ? undefined : noticeQueryInput(raw, declared.type);
+      const value = raw === undefined ? undefined : noticeQueryInput(raw, declared);
       if (raw !== undefined && value === undefined) invalidInput = true;
       if (value !== undefined) inputValues[declared.key] = value;
     }
@@ -567,7 +567,7 @@ export const readPlacement = async (
     const inputValues: Record<string, JsonValue> = {};
     for (const declared of bound.query.inputs) {
       const raw = first(parameters[declared.key]);
-      const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
+      const value = raw === undefined ? undefined : coerceInput(raw, declared);
       if (value !== undefined) inputValues[declared.key] = value;
     }
     const command = protectedQueryCommandSchema.safeParse({
@@ -659,7 +659,7 @@ export const readPlacement = async (
     const inputValues: Record<string, JsonValue> = {};
     for (const declared of bound.query.inputs) {
       const raw = first(parameters[declared.key]);
-      const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
+      const value = raw === undefined ? undefined : coerceInput(raw, declared);
       if (value !== undefined) inputValues[declared.key] = value;
     }
     const command = protectedQuerySummaryCommandSchema.safeParse({
@@ -816,8 +816,8 @@ export const readPlacement = async (
         parameter.pageParameter === undefined
           ? undefined
           : first(parameters[parameter.pageParameter]);
-      const type = inputType(parameter.input);
-      const value = raw === undefined || type === undefined ? undefined : coerceInput(raw, type);
+      const declared = declaredInput(parameter.input);
+      const value = raw === undefined || declared === undefined ? undefined : coerceInput(raw, declared);
       if (parameter.pageParameter !== undefined && value !== undefined)
         pageParameters[parameter.pageParameter] = value;
     }
@@ -885,7 +885,7 @@ export const readPlacement = async (
   const inputValues: Record<string, JsonValue> = {};
   for (const declared of bound.query.inputs) {
     const raw = first(parameters[declared.key]);
-    const value = raw === undefined ? undefined : coerceInput(raw, declared.type);
+    const value = raw === undefined ? undefined : coerceInput(raw, declared);
     if (value !== undefined) inputValues[declared.key] = value;
   }
   const fieldIds = [...new Set(detailContract!.fields.map((field) => field.field))];

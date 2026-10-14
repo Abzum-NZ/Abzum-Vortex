@@ -17,29 +17,54 @@ import {
   type BlockPropertyValueContract,
   sameId,
   isRecord,
+  recordIdSchema,
 } from "@vortex/platform/schema";
 import type { ModuleRelease, ModuleField, SearchParameters } from "./types";
 import { first } from "./placement-helpers";
 
+type ModuleQueryInput = ModuleRelease["content"]["queries"][number]["inputs"][number];
+
 /**
  * A query-string value typed to the declared input it fills. A value the type cannot hold is
- * dropped, so the Query engine refuses the request instead of receiving a guess.
+ * dropped, so the Query engine refuses the request instead of receiving a guess. A record
+ * reference is built from the one record type the input declares; an input that declares several
+ * cannot be filled from a bare record id, and a value that is not a record id is refused with a
+ * logged reason.
  */
-export const coerceInput = (raw: string, type: string): JsonValue | undefined => {
-  switch (type) {
+export const coerceInput = (raw: string, declared: ModuleQueryInput): JsonValue | undefined => {
+  switch (declared.type) {
     case "number": {
       const value = Number(raw);
       return raw.trim() !== "" && Number.isFinite(value) ? value : undefined;
     }
     case "boolean":
       return raw === "true" ? true : raw === "false" ? false : undefined;
+    case "record_reference": {
+      const targets = declared.recordTypes.filter((target) => target.state === "resolved");
+      const target = targets.length === 1 ? targets[0] : undefined;
+      if (target === undefined || target.state !== "resolved") {
+        console.error(
+          `[page] query input refused: input=${declared.key} reason=record_reference_target_ambiguous`,
+        );
+        return undefined;
+      }
+      const recordId = recordIdSchema.safeParse(raw);
+      if (!recordId.success) {
+        console.error(
+          `[page] query input refused: input=${declared.key} reason=record_reference_not_a_record_id`,
+        );
+        return undefined;
+      }
+      return { recordTypeId: String(target.recordTypeId), recordId: recordId.data };
+    }
     default:
       return raw;
   }
 };
 
 /** Structured Notice-query inputs are plain JSON; the Query service validates their declared type. */
-export const noticeQueryInput = (raw: string, type: string): JsonValue | undefined => {
+export const noticeQueryInput = (raw: string, declared: ModuleQueryInput): JsonValue | undefined => {
+  const type = declared.type;
   if (
     type === "formatted_text" || type === "money" ||
     type === "record_reference" || type === "organization_account_reference"
@@ -51,7 +76,7 @@ export const noticeQueryInput = (raw: string, type: string): JsonValue | undefin
       return undefined;
     }
   }
-  return coerceInput(raw, type);
+  return coerceInput(raw, declared);
 };
 
 type ModuleQuery = ModuleRelease["content"]["queries"][number];

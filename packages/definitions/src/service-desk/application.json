@@ -2350,11 +2350,13 @@
                                                                                                                   "slots":  {
 
                                                                                                                             }
-                                                                                                              }
+                                                                                                              },
+                                                                                       "cases_sd_customer": {"block": {"block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff", "release_version": "1.3.0"}, "settings": {"title": {"kind": "text", "value": "Cases"}, "empty_message": {"kind": "text", "value": "This company has no cases."}, "columns": {"kind": "list", "items": [{"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.case_number"}, "label": {"kind": "text", "value": "Case number"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.subject"}, "label": {"kind": "text", "value": "Subject"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.status"}, "label": {"kind": "text", "value": "Status"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.priority"}, "label": {"kind": "text", "value": "Priority"}}}]}, "query_parameters": {"kind": "list", "items": [{"kind": "group", "properties": {"input": {"kind": "text", "value": "company"}, "source": {"kind": "choice", "value": "page"}, "page_parameter": {"kind": "text", "value": "record_id"}}}]}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}, "query": "vortex.service_desk.cases:service_desk_company_cases"}
                                                                                    },
                                                                     "order":  {
                                                                                   "desktop":  [
-                                                                                                  "detail_sd_customer"
+                                                                                                  "detail_sd_customer",
+                                                                                                  "cases_sd_customer"
                                                                                               ]
                                                                               }
                                                                     }
