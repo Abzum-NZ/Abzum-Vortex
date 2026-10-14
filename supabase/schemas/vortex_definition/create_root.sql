@@ -32,6 +32,7 @@ declare
   operation_at timestamptz := pg_catalog.statement_timestamp();
   actor_id uuid;
   human_write boolean;
+  system_projection_value boolean;
 begin
   human_write := vortex_platform.current_context() ->> 'callerKind' = 'human';
   if human_write then
@@ -67,8 +68,17 @@ begin
     exit when new_root_id <> '00000000-0000-0000-0000-000000000000'::uuid;
   end loop;
 
+  system_projection_value := p_kind = 'module' and exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(
+      coalesce(p_draft_source #> '{body,record_types}', '[]'::jsonb)
+    ) as record_type(value)
+    where record_type.value ? 'system_projection'
+  );
+
   insert into vortex_definition.roots (
-    root_id, organization_id, kind, key, created_at, created_by, application_origin_kind
+    root_id, organization_id, kind, key, created_at, created_by,
+    application_origin_kind, system_projection
   ) values (
     new_root_id,
     (checked_context ->> 'organizationId')::uuid,
@@ -76,7 +86,8 @@ begin
     p_key,
     operation_at,
     actor_id,
-    p_application_origin_kind
+    p_application_origin_kind,
+    system_projection_value
   );
 
   perform vortex_definition.record_source_identities(

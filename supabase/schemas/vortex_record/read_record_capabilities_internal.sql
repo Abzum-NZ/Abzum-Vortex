@@ -62,12 +62,9 @@ begin
     and meta #>> '{recordType,systemProjection,protectedView}' =
       'organization_runtime_settings'
     and coalesce((meta #> '{recordType,standardActions}') ? 'update', false)
-    and exists (
-      select 1
-      from vortex_definition.roots as root
-      where root.root_id = (meta ->> 'moduleRootId')::uuid
-        and root.kind = 'module'
-        and root.key = 'vortex.organisation_administration'
+    and vortex_definition.is_system_projection_module_internal(
+      (meta ->> 'moduleRootId')::uuid,
+      (meta -> 'context' ->> 'organizationId')::uuid
     ) then
     if vortex_access.organization_runtime_settings_manage_is_current() then
       select coalesce(

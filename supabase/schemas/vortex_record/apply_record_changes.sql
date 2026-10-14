@@ -136,7 +136,7 @@ begin
   end if;
   if preview_installation is not null
     and (p_action is not null
-      or p_operation in ('delete', 'restore', 'transfer_ownership')) then
+      or p_operation in ('delete', 'restore', 'transfer_ownership', 'settings')) then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'preview_effect_refused'
     );
@@ -160,6 +160,29 @@ begin
     return vortex_record.apply_lifecycle_record_changes_internal(
       p_operation, p_command_id, p_record_type_id, p_record_id,
       p_expected_concurrency_number, p_mutations, p_activity_id, p_occurrence_id
+    );
+  end if;
+
+  -- Settings use the same command entry and one settings mutation. Their
+  -- physical row belongs to Identity, so the protected implementation below
+  -- performs the specialised write and the common Record effects once.
+  if p_operation = 'settings' then
+    if p_action is not null
+      or p_selected_group_id is not null
+      or pg_catalog.jsonb_typeof(p_mutations) is distinct from 'array'
+      or pg_catalog.jsonb_array_length(p_mutations) <> 1
+      or pg_catalog.jsonb_typeof(p_mutations -> 0) is distinct from 'object'
+      or (p_mutations -> 0 ->> 'kind') is distinct from 'settings'
+      or (p_mutations -> 0) - array['kind', 'values']::text[] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(p_mutations -> 0 -> 'values') is distinct from 'object' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'command_invalid'
+      );
+    end if;
+    return vortex_record.apply_settings_record_changes_internal(
+      p_command_id, p_record_type_id, p_record_id,
+      p_expected_concurrency_number, p_submitted_values,
+      p_mutations -> 0 -> 'values', p_activity_id, p_occurrence_id
     );
   end if;
 

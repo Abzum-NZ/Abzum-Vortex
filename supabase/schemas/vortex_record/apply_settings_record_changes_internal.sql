@@ -1,4 +1,4 @@
-create or replace function vortex_record.save_organization_settings_record(
+create or replace function vortex_record.apply_settings_record_changes_internal(
   p_command_id uuid,
   p_record_type_id uuid,
   p_record_id uuid,
@@ -35,6 +35,8 @@ declare
   projection jsonb;
   event_result jsonb;
   correlation_id_value uuid;
+  application_root_id_value uuid;
+  notice_sequence bigint;
   failure_sqlstate text;
   failure_message text;
 begin
@@ -63,18 +65,16 @@ begin
     or record_type_value #>> '{systemProjection,protectedView}' is distinct from
       'organization_runtime_settings'
     or not coalesce((record_type_value -> 'standardActions') ? 'update', false)
-    or not exists (
-      select 1
-      from vortex_definition.roots as root
-      where root.root_id = (meta ->> 'moduleRootId')::uuid
-        and root.kind = 'module'
-        and root.key = 'vortex.organisation_administration'
+    or not vortex_definition.is_system_projection_module_internal(
+      (meta ->> 'moduleRootId')::uuid,
+      (meta -> 'context' ->> 'organizationId')::uuid
     ) then
     perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
 
   correlation_id_value := (meta -> 'context' ->> 'correlationId')::uuid;
+  application_root_id_value := (meta -> 'context' ->> 'applicationRootId')::uuid;
   if p_record_id is distinct from (meta -> 'context' ->> 'organizationId')::uuid then
     perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
     return pg_catalog.jsonb_build_object(
@@ -302,7 +302,7 @@ begin
     );
   end if;
 
-  access_result := vortex_access.save_organization_settings_record_for_administration(
+  access_result := vortex_access.change_organization_settings_record_internal(
     p_record_id, p_expected_concurrency_number, core_values, extension_values
   );
   if access_result ->> 'outcome' = 'conflict' then
@@ -351,6 +351,19 @@ begin
     raise exception using errcode = '55000',
       message = 'Saved organisation settings projection is unavailable';
   end if;
+  begin
+    notice_sequence := pg_catalog.nextval(
+      'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+    );
+    perform vortex_platform.publish_change_notice(
+      p_record_id, application_root_id_value, p_record_type_id,
+      p_record_id, (access_result ->> 'concurrencyNumber')::bigint, 'changed',
+      notice_sequence, notice_sequence, correlation_id_value
+    );
+  exception when others then
+    -- Invalidation is advisory after the protected settings change completes.
+    null;
+  end;
   return pg_catalog.jsonb_build_object(
     'outcome', 'saved',
     'recordId', projection -> 'recordId',
@@ -384,21 +397,21 @@ exception
     );
 end
 $function$;
-alter function vortex_record.save_organization_settings_record(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid) owner to vortex_record_adapter;
+alter function vortex_record.apply_settings_record_changes_internal(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid) owner to vortex_record_adapter;
 
 
-revoke all on function vortex_record.save_organization_settings_record(
+revoke all on function vortex_record.apply_settings_record_changes_internal(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.save_organization_settings_record(
+grant execute on function vortex_record.apply_settings_record_changes_internal(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
-) to vortex_runtime;
+) to vortex_record_adapter;
 
-comment on function vortex_record.save_organization_settings_record(
+comment on function vortex_record.apply_settings_record_changes_internal(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
 ) is
-  'Closed Record save writer for the organisation_settings system projection: rechecks its installed definition, delegates protected settings authorization and persistence to Access, and records one receipt, Activity and Event.';
+  'Internal settings change reached only through apply_record_changes: rechecks the installed system projection, protected permission and revision, then writes once with one Activity, Event and change notice.';
 
-alter function vortex_record.save_organization_settings_record(
+alter function vortex_record.apply_settings_record_changes_internal(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
 ) owner to vortex_record_adapter;
