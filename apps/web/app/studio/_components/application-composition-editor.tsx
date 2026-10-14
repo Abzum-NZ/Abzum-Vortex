@@ -185,10 +185,10 @@ function ApplicationCompositionPalette(props: Props) {
             </option>)}
           </NativeSelect></label>
         {choices.length === 0 && <p role="status">No supported releases match this search. Any selected release and its inputs are preserved.</p>}
-        <label className="block space-y-1"><span>Placement alias</span>
+        <label className="block space-y-1"><span>Placement name</span>
           <Input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
             value={inputs.alias} onChange={(event) => update({ ...inputs, alias: event.target.value })} /></label>
-        <p className="text-sm">Enter a unique authored alias beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
+        <p className="text-sm">Enter a unique name beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
         {chosen !== undefined && chosen.slots.length > 0 && <p className="text-sm">
           Declared slots start empty: {chosen.slots.map((slot) => slot.label).join(", ")}. Move existing placements into them separately.
         </p>}

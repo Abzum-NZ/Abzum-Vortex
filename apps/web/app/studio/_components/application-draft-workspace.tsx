@@ -52,6 +52,8 @@ import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
 import { ApplicationFlowEditor } from "./application-flow-editor";
 import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./application-draft-preview";
+import { PublicationSummary } from "./publication-summary";
+import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-details";
 import { ApplicationSourceImport } from "./application-source-import";
 import { ApplicationSearchEditor } from "./application-search-editor";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
@@ -177,13 +179,13 @@ function NewApplicationWorkspace({ organizationId }: { organizationId: string })
       <p className="break-all text-sm">Organization: {organizationId}</p>
       <p>This creates an unpublished draft with one empty home page. It does not publish or install anything.</p></header>
     <form onSubmit={create} className="grid gap-4" aria-busy={isCreating}>
-      {textInput("key", "Application key", 120, "Use lowercase namespaced segments, for example team.workspace. The derived .home.view permission must also fit the 120-character key limit.")}
+      {textInput("key", "Application identifier", 120, "Use lowercase namespaced segments, for example team.workspace. The derived .home.view permission must also fit the 120-character key limit.")}
       {textInput("name", "Application name", 120)}
       <label className="block space-y-1"><span>Description</span>
         <Textarea className={inputClass} required maxLength={1000} value={inputs.description}
           disabled={isCreating} onChange={(event) => setInputs({ ...inputs, description: event.target.value })} /></label>
       <fieldset className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4"><legend>Authored Module dependency</legend>
-        {textInput("moduleKey", "Module key", 120)}
+        {textInput("moduleKey", "Module (identifier)", 120)}
         <label className="block space-y-1"><span>Version requirement</span>
           <NativeSelect className={inputClass} value={inputs.moduleVersionSelection} disabled={isCreating}
             onChange={(event) => setInputs({ ...inputs, moduleVersionSelection:
@@ -941,10 +943,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         <Textarea className={inputClass} value={publicationNote} maxLength={2000} disabled={isPublishing || pendingSearch || pendingSourceImport}
           onChange={(event) => { if (!publicationPending.current && !sourceImportPending.current && !searchPending.current) setPublicationNote(event.target.value); }} /></label>
       {preparedPublication !== null && <div className="space-y-2">
-        <p>Proposed version: {preparedPublication.confirmation.assignedVersion}. Outcome: {preparedPublication.confirmation.outcome}.</p>
-        <details open><summary>Complete publication confirmation</summary>
-          <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(preparedPublication.confirmation, null, 2)}</pre>
-        </details>
+        <PublicationSummary confirmation={preparedPublication.confirmation} />
       </div>}
       <div className="flex flex-wrap gap-2">
         <Button className={buttonClass} type="button" disabled={isPublishing || readPublicationSnapshot() === null}
@@ -956,9 +955,17 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
           onClick={cancelPublication}>Cancel confirmation or response</Button>
       </div>
       <p role="status" aria-live="polite">{publicationMessage}</p>
-      {publishedPublication !== null && <details><summary>Verified publication result</summary>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(publishedPublication, null, 2)}</pre>
-      </details>}
+      {publishedPublication !== null && <div className="space-y-2">
+        <p>Published as version {publishedPublication.releaseVersion} on <time dateTime={publishedPublication.publishedAt}>{publishedPublication.publishedAt}</time>.</p>
+        <TechnicalDetails>
+          <dl className="space-y-1">
+            <div><dt className="font-semibold">Release revision</dt><dd>{publishedPublication.releaseRevision}</dd></div>
+            <div><dt className="font-semibold">Content fingerprint</dt><dd className="break-all"><code>{publishedPublication.contentFingerprint}</code></dd></div>
+            <div><dt className="font-semibold">Resolution fingerprint</dt><dd className="break-all"><code>{publishedPublication.resolutionFingerprint}</code></dd></div>
+          </dl>
+          <ViewSource value={publishedPublication} title="View complete result" />
+        </TechnicalDetails>
+      </div>}
     </form>
     <div className={selected?.kind === "page"
       ? "grid gap-6"

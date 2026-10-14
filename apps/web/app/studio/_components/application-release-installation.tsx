@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
+import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -189,13 +190,15 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
       <section aria-label="Selected release and active installation" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <dl className="space-y-2">
           <div><dt className="font-semibold">Application</dt><dd>{snapshot.definitionKey}</dd></div>
-          <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
-          <div><dt className="font-semibold">Application root</dt><dd className="break-all">{snapshot.rootId}</dd></div>
           <div><dt className="font-semibold">Selected published release</dt><dd>Version {snapshot.selected.releaseVersion} · revision {snapshot.selected.releaseRevision}</dd></div>
           <div><dt className="font-semibold">Currently active release</dt><dd>Version {snapshot.active.releaseVersion} · revision {snapshot.active.releaseRevision}</dd></div>
+        </dl>
+        <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
+          <div><dt className="font-semibold">Application root</dt><dd className="break-all">{snapshot.rootId}</dd></div>
           <div><dt className="font-semibold">Selected content fingerprint</dt><dd className="break-all"><code>{snapshot.selected.contentFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Selected resolution fingerprint</dt><dd className="break-all"><code>{snapshot.selected.resolutionFingerprint}</code></dd></div>
-        </dl>
+        </dl></TechnicalDetails>
         <p>This partial supports an explicit upgrade of an existing Application only when every Module release is unchanged. First installation, older releases and Module changes are unavailable here.</p>
       </section>
       {expired && <p className="rounded-xl border bg-card text-card-foreground p-3">This access snapshot expired. Reload before continuing.</p>}

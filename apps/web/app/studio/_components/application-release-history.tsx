@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
+import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState } from "react";
 import type { DefinitionReleaseMetadata } from "@vortex/platform/schema";
@@ -164,12 +165,14 @@ export function ApplicationReleaseHistory({ initialPage }: {
     {page !== null && <section aria-label="Saved application context" className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
       <dl className="space-y-2">
         <div><dt className="font-semibold">Application</dt><dd>{displayedSnapshot.definitionKey}</dd></div>
-        <div><dt className="font-semibold">Organization</dt><dd className="break-all">{displayedSnapshot.organizationId}</dd></div>
-        <div><dt className="font-semibold">Application root</dt><dd className="break-all">{displayedSnapshot.rootId}</dd></div>
         <div><dt className="font-semibold">Saved draft revision</dt><dd>{displayedSnapshot.draftRevision}</dd></div>
-        <div><dt className="font-semibold">Saved source fingerprint</dt><dd className="break-all"><code>{displayedSnapshot.sourceFingerprint}</code></dd></div>
         <div><dt className="font-semibold">Current release revision</dt><dd>{displayedSnapshot.anchorReleaseRevision ?? "No published release"}</dd></div>
       </dl>
+      <TechnicalDetails><dl className="space-y-2">
+        <div><dt className="font-semibold">Organization</dt><dd className="break-all">{displayedSnapshot.organizationId}</dd></div>
+        <div><dt className="font-semibold">Application root</dt><dd className="break-all">{displayedSnapshot.rootId}</dd></div>
+        <div><dt className="font-semibold">Saved source fingerprint</dt><dd className="break-all"><code>{displayedSnapshot.sourceFingerprint}</code></dd></div>
+      </dl></TechnicalDetails>
     </section>}
     <div className="flex flex-wrap gap-3">
       <Button type="button" variant="outline" size="sm" name="application.release_history.reload" disabled={pending !== null}
@@ -208,10 +211,9 @@ export function ApplicationReleaseHistory({ initialPage }: {
     </section>
     <section aria-labelledby="release-inspect-heading" aria-busy={pending === "inspect"} className="space-y-3">
       <h2 id="release-inspect-heading" className="text-xl font-semibold">Exact selected release</h2>
-      {metadata !== null && failure !== "conflict" ? <dl className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
+      {metadata !== null && failure !== "conflict" ? <><dl className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
         <div><dt className="font-semibold">Version and revision</dt><dd>{metadata.releaseVersion} · revision {metadata.releaseRevision}</dd></div>
         <div><dt className="font-semibold">Current release</dt><dd>{metadata.isCurrent ? "Yes" : "No"}</dd></div>
-        <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{metadata.sourceFingerprint}</code></dd></div>
         <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{metadata.publishedAt}</time></dd></div>
         <div><dt className="font-semibold">Published by</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
@@ -239,7 +241,10 @@ export function ApplicationReleaseHistory({ initialPage }: {
           </nav>
           <p className="mt-2">These links open separate pages. Restore, first installation, and upgrades require an explicit review; none runs from the history list.</p>
         </div>}
-      </dl> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
+      </dl>
+      <TechnicalDetails><dl className="space-y-2">
+        <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{metadata.sourceFingerprint}</code></dd></div>
+      </dl></TechnicalDetails></> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
     </section>
     <section aria-label="Unavailable release commands" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
       <p id="history-unavailable-commands">To restore a release, inspect it and open its separate restore review page. Publish is unavailable here; installation never runs from the history list.</p>
