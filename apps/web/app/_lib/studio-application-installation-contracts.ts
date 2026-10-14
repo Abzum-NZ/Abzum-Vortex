@@ -97,7 +97,7 @@ const postCommitObservationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 
-export const studioApplicationInstallationCommandResultSchema = z.discriminatedUnion("kind", [
+export const studioApplicationInstallationCommandResultSchema = z.union([
   z
     .object({
       kind: z.literal("completed"),
