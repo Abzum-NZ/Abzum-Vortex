@@ -28,6 +28,7 @@ import type {
   ApplicationInstallationActivationResult,
   HumanInstallationDefinitionAccess,
 } from "./installation-coordinator-contracts";
+import { createPreparedInstallationRuntimeSourceReader } from "./prepared-installation-runtime-source";
 import { classifyInstallationFailure } from "./installation-failure";
 import {
   InstallationProblem,
@@ -692,6 +693,7 @@ const coordinatorFor = (
       }),
     containsCustomComponents: environment.containsCustomComponents,
     humanDefinitionAccess: humanDefinitionAccess(environment),
+    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(environment.catalogue),
   });
 };
 
