@@ -421,13 +421,12 @@ const persist = async (
     if (
       command.operation !== "update" ||
       registration === undefined ||
-      registration.writer !== "save_organization_settings_record" ||
       command.recordId === undefined ||
       command.expectedConcurrencyNumber === undefined
     )
       return { outcome: "refused", reasonCode: "field_refused" };
     const rows = await transaction.query<SaveRow>`
-      select vortex_record.save_organization_settings_record(
+      select vortex_record.apply_settings_record_changes(
         ${command.commandId}::uuid,
         ${command.recordTypeId}::uuid,
         ${command.recordId}::uuid,

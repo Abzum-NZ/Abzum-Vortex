@@ -44,7 +44,6 @@ export const writableSystemProjectionRegistrations = Object.freeze({
   organization_settings: Object.freeze({
     moduleKey: "vortex.organisation_administration",
     protectedView: "organization_runtime_settings",
-    writer: "save_organization_settings_record",
   }),
 } as const);
 
