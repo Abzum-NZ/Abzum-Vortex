@@ -615,6 +615,7 @@ const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
   "email_address",
   "phone_number",
   "web_address",
+  "link",
 ]);
 
 /**

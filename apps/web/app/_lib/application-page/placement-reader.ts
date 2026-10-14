@@ -8,6 +8,7 @@ import {
   projectReferenceChoiceInputValues,
   projectRecordDetailData,
   collectRecordLinks,
+  collectRecordLinkValues,
   type RecordLinkResolver,
   protectedQueryCommandSchema,
   type ProtectedQueryRow,
@@ -714,6 +715,9 @@ export const readPlacement = async (
         address,
         placementId,
         isDatasetLimitExceeded ? "summary_dataset_limit_exceeded" : "summary_query_refused",
+        summaryResult.kind === "available" && summaryResult.value.outcome === "refused"
+          ? summaryResult.value.reasonCode
+          : summaryResult.kind,
       );
       data[placementId] = { status: "refused", reason: "not_permitted" };
       return;
@@ -731,11 +735,18 @@ export const readPlacement = async (
           : []
         ).map((field) => [String(field.fieldId).toLowerCase(), field] as const),
       );
+      // One labelled read per chart for the linked groups, never one per bar.
+      const groupLinks = collectRecordLinkValues(
+        summaryResult.value.groups.flatMap((group) => Object.values<JsonValue>(group.groupValues)),
+      );
+      const groupLabels =
+        groupLinks.length === 0 ? undefined : await resolveRecordLinks(groupLinks);
       const projection = projectChartPlacement({
         settings,
         query: bound.query,
         fields: chartFields,
         summary: summaryResult.value,
+        ...(groupLabels === undefined ? {} : { recordLinks: groupLabels }),
       });
       if (!projection.ok) {
         logPlacementFailure(address, placementId, projection.code);
@@ -824,6 +835,7 @@ export const readPlacement = async (
       queries,
       session,
       selection,
+      resolveRecordLinks,
     });
     return;
   }

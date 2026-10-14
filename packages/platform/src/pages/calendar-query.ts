@@ -15,6 +15,11 @@ import type { HumanOrganizationRequestResult } from "../access/index";
 import { arrangeDataset, protectedQueryCommandSchema } from "../queries/index";
 import type { ProtectedQueryCommand, ProtectedQueryResult } from "../queries/index";
 import type { InstalledRuntimeContext } from "../definition/index";
+import {
+  collectRecordLinkValues,
+  recordLinkPlainText,
+  type RecordLinkResolver,
+} from "./component-data-projection";
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
@@ -263,6 +268,8 @@ export type CalendarPlacementProjectionInput = Readonly<{
   queries: CalendarQueryRunner;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
+  /** Reads the labels of the linked records the events show, once per placement. */
+  resolveRecordLinks: RecordLinkResolver;
 }>;
 
 export type CalendarPlacementFailureCause =
@@ -421,15 +428,29 @@ export const projectCalendarPlacement = async (
     return refused("calendar_arrangement_refused");
   }
 
+  const titleValueOf = (values: Readonly<Record<string, JsonValue>>): JsonValue | undefined =>
+    Object.entries(values).find(([key]) => sameId(key, calendarContract.itemTitleFieldId))?.[1];
+  // A link title is one batched label read for every event on screen, never one per event.
+  const titleLinks =
+    titleField.type === "link"
+      ? collectRecordLinkValues(
+          arranged.items.flatMap((item) => {
+            const value = titleValueOf(item.values);
+            return value === undefined ? [] : [value];
+          }),
+        )
+      : [];
+  const recordLinks = titleLinks.length === 0 ? undefined : await input.resolveRecordLinks(titleLinks);
   const items = arranged.items.map((item) => {
-    const titleValue = Object.entries(item.values).find(([key]) =>
-      sameId(key, calendarContract.itemTitleFieldId),
-    )?.[1];
+    const titleValue = titleValueOf(item.values);
     return {
       recordId: item.recordId,
       start: item.start,
       end: item.end,
-      title: calendarTitle(titleValue, titleField),
+      title:
+        titleField.type === "link"
+          ? (recordLinkPlainText(titleValue, recordLinks) ?? "")
+          : calendarTitle(titleValue, titleField),
     };
   });
   const truncated = queryResult.value.nextContinuationToken !== undefined;

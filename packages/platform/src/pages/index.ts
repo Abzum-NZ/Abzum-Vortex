@@ -62,6 +62,8 @@ export {
   projectRecordDetailData,
   projectRecordsTableData,
   collectRecordLinks,
+  collectRecordLinkValues,
+  recordLinkPlainText,
   type ComponentDataProjectionInput,
   type LinkFieldType,
   type ProjectedCellValue,
