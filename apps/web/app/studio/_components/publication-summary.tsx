@@ -55,7 +55,9 @@ export function PublicationSummary({ confirmation }: { confirmation: DefinitionP
         <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>What changed</TableHead><TableHead>Effect</TableHead></TableRow></TableHeader>
         <TableBody>
           {confirmation.reasons.map((reason, index) => <TableRow key={`${reason.code}:${reason.location.componentId ?? ""}:${index}`}>
-            <TableCell>{kindLabels[reason.location.componentKind] ?? reason.location.componentKind} ({propertyLabels[reason.location.property] ?? reason.location.property})</TableCell>
+            <TableCell>{kindLabels[reason.location.componentKind] ?? reason.location.componentKind} ({propertyLabels[reason.location.property] ?? reason.location.property})
+              {reason.location.componentId === undefined ? null : <code className="block break-all text-xs text-muted-foreground">{reason.location.componentId}</code>}
+            </TableCell>
             <TableCell>{reasonLabels[reason.code]}</TableCell>
             <TableCell>{impactLabels[reason.impact]}</TableCell>
           </TableRow>)}
