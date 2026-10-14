@@ -10,6 +10,8 @@ export type PlacementCapabilityState = Readonly<{
   operationRequired?: boolean;
   operationBound: boolean;
   conditionAllowed?: boolean;
+  /** The placement's bound action cannot run on the page's subject for the viewer when false. */
+  actionAvailable?: boolean;
 }>;
 
 export type PageCapabilityState = Readonly<{
@@ -88,7 +90,8 @@ const projectSlot = (
       const placement = object(candidate);
       if (
         (placement.viewPermissionKey !== undefined && state?.viewAllowed !== true) ||
-        (placement.visibilityCondition !== undefined && state?.conditionAllowed !== true)
+        (placement.visibilityCondition !== undefined && state?.conditionAllowed !== true) ||
+        state?.actionAvailable === false
       )
         return [];
       const effectiveState: PlacementCapabilityState = {
