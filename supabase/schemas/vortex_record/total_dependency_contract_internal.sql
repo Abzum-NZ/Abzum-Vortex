@@ -16,6 +16,7 @@ declare
   source_type_value jsonb;
   source_type_id uuid;
   source_ids jsonb := '[]'::jsonb;
+  filter_field_ids jsonb;
   source_field_id text;
 begin
   if p_target_record_type_id is null
@@ -71,7 +72,7 @@ begin
   -- Condition leaves are field operands.  The compiler has already validated
   -- their shape; repeat only the exact extraction here so malformed facts
   -- cannot widen a projection.
-  source_ids := source_ids || coalesce((
+  filter_field_ids := coalesce((
     with recursive nodes(value) as (
       select p_total_field -> 'settings' -> 'filter'
       union all
@@ -91,6 +92,20 @@ begin
     where value ->> 'source' = 'field'
       and pg_catalog.pg_input_is_valid(value ->> 'fieldId', 'uuid')
   ), '[]'::jsonb);
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements_text(filter_field_ids) as selected(field_id)
+    where not exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(source_type_value -> 'fields') as field(value)
+      where pg_catalog.lower(field.value ->> 'fieldId') = selected.field_id
+        and field.value ->> 'filterable' = 'true'
+    )
+  ) then
+    raise exception using errcode = '55000',
+      message = 'Published total filter refers to an unavailable field';
+  end if;
+  source_ids := source_ids || filter_field_ids;
 
   return pg_catalog.jsonb_build_object(
     'relationshipId', relationship_id_value,
