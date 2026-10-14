@@ -56,6 +56,7 @@ import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./app
 import { PublicationSummary } from "./publication-summary";
 import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-details";
 import { ApplicationSourceImport } from "./application-source-import";
+import { StudioThreePaneShell } from "./studio-three-pane-shell";
 import { ApplicationSearchEditor } from "./application-search-editor";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
 import type { StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
@@ -221,10 +222,11 @@ function Outline({ node, selectedKey, choose, disabled = false }: {
   disabled?: boolean;
 }) {
   return <li className="space-y-1">
-    {node.selection === null ? <span className="text-sm text-muted-foreground">{node.label}</span>
-      : <Button type="button" variant="outline" size="sm" disabled={disabled} className="w-full text-left"
+    {node.selection === null ? <span className="block break-words text-sm text-muted-foreground" title={node.label}>{node.label}</span>
+      : <Button type="button" variant="outline" size="sm" disabled={disabled} title={node.label}
+        className="h-auto w-full justify-start whitespace-normal py-1 text-left"
         aria-pressed={selectedKey === studioSemanticSelectionKey(node.selection)} onClick={() => choose(node)}>
-        {node.label} <span className="text-xs text-muted-foreground">({node.kind})</span>
+        <span className="min-w-0 break-words">{node.label} <span className="text-xs text-muted-foreground">({node.kind})</span></span>
       </Button>}
     {node.children.length > 0 && <ul className="space-y-1 border-l border-border pl-3">
       {node.children.map((child) => <Outline key={child.key} node={child} selectedKey={selectedKey} choose={choose} disabled={disabled} />)}
@@ -838,6 +840,16 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
 
   const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source }),
     [state.rootId, source]);
+  const savedStateLabel = state.isSaving ? "Saving…" : state.isDirty ? "Unsaved changes" : "Saved";
+  const pendingNote = pendingSearch
+    ? "Apply or discard Search edits before saving or changing other editor content." : pendingSourceImport
+    ? "Apply or discard source import inputs before saving or changing other editor content." : pendingCondition
+    ? "Apply or discard visibility edits before saving or undoing." : pendingFlowText
+    ? "Apply or discard Flow text, Calculate inputs or a task setting edit before saving or undoing." : pendingFlowAppend
+    ? "Apply or discard Flow insertion inputs before saving or undoing." : pendingComposition
+    ? "Apply or discard composition inputs before saving or undoing." : pendingAppearance
+    ? "Apply or discard appearance edits before saving or undoing." : pendingLabels
+    ? "Apply or discard the inspector text before saving or undoing." : "";
   return <main className="space-y-6 p-6" aria-busy={isPublishing || state.isSaving || isReopening}>
     <ApplicationDraftAgentTools organizationId={organizationId} history={history}
       catalogue={platformBlockCatalogue} readLifetime={() => lifetime.current} blockedReason={agentBlockedReason}
@@ -845,33 +857,245 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
       readPreparedConfirmation={() => preparedRef.current?.confirmation}
       prepare={() => requestPublication("prepare")} publish={(releaseNote) => requestPublication("publish", releaseNote)}
       readPreview={readPreviewContext} />
-    <header className="space-y-2"><h1 className="text-2xl font-semibold">Application draft: {source.body.name}</h1>
-      <dl className="grid gap-1 break-all text-sm"><div><dt className="inline font-medium">Organization: </dt><dd className="inline">{draft.organizationId}</dd></div>
-        <div><dt className="inline font-medium">Root: </dt><dd className="inline">{state.rootId}</dd></div>
-        <div><dt className="inline font-medium">Key: </dt><dd className="inline">{draft.key}</dd></div>
-        <div><dt className="inline font-medium">Draft revision: </dt><dd className="inline">{state.draftRevision}</dd></div></dl>
-      <p>Save draft changes before preparing a release. Publishing does not install or adopt it.</p>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" size="sm" disabled={!state.canUndo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
-          if (!publicationPending.current && !sourceImportPending.current && !searchPending.current && !reopening.current && !conditionPending.current && !pendingLabels && !appearancePending.current && !compositionPending.current && !flowTextPending.current && !flowAppendPending.current) history.undo();
-        }}>Undo</Button>
-        <Button type="button" variant="outline" size="sm" disabled={!state.canRedo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
-          if (!publicationPending.current && !sourceImportPending.current && !searchPending.current && !reopening.current && !conditionPending.current && !pendingLabels && !appearancePending.current && !compositionPending.current && !flowTextPending.current && !flowAppendPending.current) history.redo();
-        }}>Redo</Button>
-        <Button type="button" size="sm" disabled={!state.isDirty || themeOverrideProblems || state.isSaving || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={save}>Save draft</Button>
-        <Button type="button" variant="outline" size="sm" disabled={isPublishing || state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</Button>
-      </div>
-      <p role="status" aria-live="polite">{state.isSaving ? "Saving… Local history remains editable." : pendingSearch
-        ? "Apply or discard Search edits before saving or changing other editor content." : pendingSourceImport
-        ? "Apply or discard source import inputs before saving or changing other editor content." : pendingCondition
-        ? "Apply or discard visibility edits before saving or undoing." : pendingFlowText
-        ? "Apply or discard Flow text, Calculate inputs or a task setting edit before saving or undoing." : pendingFlowAppend
-        ? "Apply or discard Flow insertion inputs before saving or undoing." : pendingComposition
-        ? "Apply or discard composition inputs before saving or undoing." : pendingAppearance
-        ? "Apply or discard appearance edits before saving or undoing." : pendingLabels
-        ? "Apply or discard the inspector text before saving or undoing." : state.isDirty
-          ? "Unsaved local changes." : "Local history matches the saved baseline."} {message}</p>
-    </header>
+    <StudioThreePaneShell
+      topBar={<>
+        <h1 className="mr-2 truncate text-lg font-semibold">{source.body.name}</h1>
+        <span className="text-sm text-muted-foreground">{savedStateLabel}</span>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" size="sm" disabled={!state.canUndo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
+            if (!publicationPending.current && !sourceImportPending.current && !searchPending.current && !reopening.current && !conditionPending.current && !pendingLabels && !appearancePending.current && !compositionPending.current && !flowTextPending.current && !flowAppendPending.current) history.undo();
+          }}>Undo</Button>
+          <Button type="button" variant="outline" size="sm" disabled={!state.canRedo || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={() => {
+            if (!publicationPending.current && !sourceImportPending.current && !searchPending.current && !reopening.current && !conditionPending.current && !pendingLabels && !appearancePending.current && !compositionPending.current && !flowTextPending.current && !flowAppendPending.current) history.redo();
+          }}>Redo</Button>
+          <Button type="button" variant="outline" size="sm" disabled={isPublishing || state.isSaving || isReopening} onClick={reopen}>Reopen saved draft</Button>
+          <Button type="button" size="sm" disabled={!state.isDirty || themeOverrideProblems || state.isSaving || isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingLabels || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onClick={save}>Save</Button>
+        </div>
+        <p role="status" aria-live="polite" className="w-full text-sm text-muted-foreground">{pendingNote} {message}</p>
+      </>}
+      outline={(closeOutline) => <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={async (node) => {
+            if (publicationPending.current || reopening.current || history.getState().isSaving || (((sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
+              !await confirm({
+                title: "Change the selection?",
+                description: "Discard unapplied source import, inspector, appearance, composition, visibility, Flow and task setting edits and change selection?",
+                confirmLabel: "Discard and change selection",
+              }))) return;
+            if (!changeSelection(node.selection)) return;
+            setLabel(currentLabel);
+            setDescription(source.body.description);
+            closeOutline();
+          }} /></ul>}
+      canvas={
+        <section className={selected?.kind === "page"
+          ? "space-y-3 bg-card text-card-foreground"
+          : "space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"} aria-label="Selected item">
+          <h2 className="font-semibold">{inspector.status === "resolved" ? inspector.descriptor.label : "Select an item"}</h2>
+          {selectedPage?.type === "dashboard" && <p>This page composition is rendered from its definition and can be edited visually below.</p>}
+          {selected?.kind === "application" && <p>{source.body.description}</p>}
+          {selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
+            <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}`} source={source}
+              compiledSource={draft.source}
+              platformBlockCatalogue={platformBlockCatalogue}
+              fieldInputControlReleases={fieldInputControlReleases}
+              platformThemeTokens={platformThemeTokens}
+              pageAlias={selectedPage.id} compiledSlots={pageCompiledSlots?.[selectedPage.id]}
+              disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening ||
+                state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition ||
+                pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
+              compileFailure={compileFailure}
+              validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
+                rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
+              onThemeOverrideProblems={setThemeOverrideProblems}
+              onChange={applyPuckPageEdit} />}
+          {selected?.kind === "placement" && inspector.status === "resolved" &&
+            <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
+              selection={selected} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingFlowText || pendingFlowAppend || pendingCondition || workspaceLifetime === 0}
+              onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
+          {selected?.kind === "placement" && inspector.status === "resolved" &&
+            <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
+              selection={selected} saved={savedPreviewDraft.current}
+              busy={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving}
+              disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition ||
+                pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
+              readSnapshot={readVisibilitySnapshot} onPendingChange={reportConditionPending}
+              onCommand={(expected, expectedSelection, metadata, condition, isCurrentResponse) => {
+                const current = history.getState();
+                const currentSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current ||
+                  currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
+                  currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
+                const currentContext: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
+                  draftRevision: current.draftRevision, localLifetime: lifetime.current,
+                  catalogue: platformBlockCatalogue, source: current.source };
+                const result = applyStudioVisibilityCondition(expected, currentContext, currentSelection, metadata, condition);
+                if (result.kind !== "applied") return result;
+                const latest = history.getState();
+                const latestSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current ||
+                  latest.source !== current.source || latest.rootId !== current.rootId ||
+                  latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
+                  latestSelection?.kind !== "placement" || latestSelection.placementAlias !== currentSelection.placementAlias ||
+                  !isCurrentResponse()) return { kind: "stale" };
+                if (!history.edit(result.source)) return { kind: "invalid", issues: [] };
+                setMessage("Visibility condition applied to local history. Save to persist it.");
+                return result;
+              }} />}
+          {selected?.kind === "flow" && inspector.status === "resolved" &&
+            <ApplicationFlowCanvas key={`canvas-${flowEpoch}`} context={compositionContext} selection={selected}
+              disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowTextEditor || pendingFlowAppend || workspaceLifetime === 0}
+              onSettingPendingChange={reportFlowSettingPending}
+              onInsert={(expected, expectedSelection, command: StudioFlowInsertCommand) =>
+                editFlowFromCanvas(applyStudioFlowInsertCommand, "Task added to local history. Save draft to persist it.", expected, expectedSelection, command)}
+              onRemove={(expected, expectedSelection, command: StudioFlowRemoveCommand) =>
+                editFlowFromCanvas(applyStudioFlowRemoveCommand, "Task removed from local history. Save draft to persist it.", expected, expectedSelection, command)}
+              onSetting={(expected, expectedSelection, command: StudioFlowSettingCommand) =>
+                editFlowFromCanvas(applyStudioFlowSettingCommand, "Task setting applied to local history. Save draft to persist it.", expected, expectedSelection, command)} />}
+          {selected?.kind === "flow" && inspector.status === "resolved" &&
+            <ApplicationFlowEditor key={`editor-${flowEpoch}`} context={compositionContext} selection={selected}
+              disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}
+              onPendingChange={reportFlowTextPending} onAppendPendingChange={reportFlowAppendPending}
+              onCommand={(expected, expectedSelection, command) => {
+                const current = history.getState();
+                const currentSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowAppendPending.current) return "stale";
+                const currentContext: StudioFlowTextContext = {
+                  organizationId, rootId: current.rootId, key: draft.key,
+                  draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+                };
+                const result = applyStudioFlowTextCommand(currentContext, expected, currentSelection, expectedSelection, command);
+                if (result.kind !== "applied") return result.kind;
+                const latest = history.getState();
+                const latestSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowAppendPending.current || latest.source !== current.source ||
+                  latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
+                  lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
+                  latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
+                if (!history.edit(result.source)) return "invalid";
+                setMessage("Flow text applied to local history. Save to persist it.");
+                return "applied";
+              }} onAppend={(expected, expectedSelection, command) => {
+                const current = history.getState();
+                const currentSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowTextPending.current) return "stale";
+                const currentContext: StudioFlowTextContext = {
+                  organizationId, rootId: current.rootId, key: draft.key,
+                  draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+                };
+                const result = applyStudioFlowPresentationCommand(currentContext, expected, currentSelection, expectedSelection, command);
+                if (result.kind !== "applied") return result.kind;
+                const latest = history.getState();
+                const latestSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowTextPending.current || latest.source !== current.source ||
+                  latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
+                  lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
+                  latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
+                if (!history.edit(result.source)) return "invalid";
+                setMessage("Presentation task appended to local history. Save to persist it.");
+                return "applied";
+              }} onCalculate={(expected, expectedSelection, command, isCurrentTarget) => {
+                const current = history.getState();
+                const currentSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowAppendPending.current ||
+                  !isCurrentTarget()) return "stale";
+                const currentContext: StudioFlowTextContext = {
+                  organizationId, rootId: current.rootId, key: draft.key,
+                  draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+                };
+                const result = applyStudioFlowCalculateCommand(currentContext, expected, currentSelection, expectedSelection, command);
+                if (result.kind !== "applied") return result.kind;
+                const latest = history.getState();
+                const latestSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowAppendPending.current ||
+                  !isCurrentTarget() || latest.source !== current.source || latest.rootId !== current.rootId ||
+                  latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
+                  latestSelection?.kind !== "flow" || latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
+                if (!history.edit(result.source)) return "invalid";
+                setMessage("Calculate applied to local history. Save to persist it.");
+                return "applied";
+              }} onMove={(expected, expectedSelection, command, isCurrentTarget) => {
+                const current = history.getState();
+                const currentSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowTextPending.current ||
+                  flowAppendPending.current || !isCurrentTarget()) return "stale";
+                const currentContext: StudioFlowTextContext = {
+                  organizationId, rootId: current.rootId, key: draft.key,
+                  draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
+                };
+                const result = applyStudioFlowPresentationMoveCommand(currentContext, expected, currentSelection, expectedSelection, command);
+                if (result.kind !== "applied") return result.kind;
+                const latest = history.getState();
+                const latestSelection = selection.getSelection();
+                if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
+                  appearancePending.current || compositionPending.current || flowTextPending.current ||
+                  flowAppendPending.current || !isCurrentTarget() || latest.source !== current.source ||
+                  latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
+                  lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
+                  latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
+                // Resolve both identities and adjacency again on the same source immediately at the edit.
+                const stillAdjacent = projectStudioFlowPresentationMoves(currentContext, expectedSelection, command.taskId, command.taskPath)
+                  .some((option) => option.direction === command.direction && option.neighborId === command.neighborId &&
+                    JSON.stringify(option.neighborPath) === JSON.stringify(command.neighborPath));
+                if (!stillAdjacent) return "stale";
+                if (!history.edit(result.source)) return "invalid";
+                setMessage("Presentation task order applied to local history. Save to persist it.");
+                return "applied";
+              }} />}
+          <p className="text-sm">The outline and inspector select the same authored alias. Other definition content is retained without alteration.</p>
+        </section>
+      }
+      inspector={<>
+          {inspector.status === "resolved" && <p className="break-all text-sm">{inspector.descriptor.kind}: {inspector.descriptor.alias}</p>}
+          {editable ? <form className="space-y-3" onSubmit={applyLabels}>
+            <label className="block space-y-1"><span>Selected item name</span>
+              <Input className={inputClass} required maxLength={selected?.kind === "application" ? 120 : 60}
+                disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} value={label} onChange={(event) => {
+                  if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
+                  labelsPending.current = true;
+                  previewGeneration.current += 1;
+                  setLabel(event.target.value);
+                }} /></label>
+            {selected?.kind === "application" && <label className="block space-y-1"><span>Application description</span>
+              <Textarea className={inputClass} required maxLength={1000} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition}
+                value={description} onChange={(event) => {
+                  if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
+                  labelsPending.current = true;
+                  previewGeneration.current += 1;
+                  setDescription(event.target.value);
+                }} /></label>}
+            <Button disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} type="submit">Apply labels</Button>
+            <Button disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || !pendingLabels} type="button" onClick={() => {
+              if (publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current) return;
+              setLabel(currentLabel); setDescription(source.body.description);
+            }}>Discard inspector text</Button>
+            <p className="text-sm">Apply records one local history entry. Save persists it through the current protected writer.</p>
+          </form> : <p>{selected?.kind === "flow"
+            ? "Select a task in the Flow outline to inspect supported presentation text or arithmetic."
+            : "This item is read-only in the minimum host."}</p>}
+          {selected?.kind === "application" && inspector.status === "resolved" &&
+            <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
+              rootId={state.rootId} draftRevision={state.draftRevision} source={source}
+              validationEpoch={appearanceValidationEpoch}
+              disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onPendingChange={reportAppearancePending}
+              onApply={(expected, next) => {
+                const current = history.getState();
+                if (!active.current || lifetime.current !== workspaceLifetime || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || pendingLabels || compositionPending.current || flowTextPending.current || flowAppendPending.current || current.rootId !== state.rootId ||
+                    current.draftRevision !== state.draftRevision || current.source !== state.source ||
+                    expected !== source) return false;
+                if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current) return false;
+                const applied = history.edit(next);
+                if (applied) setMessage("Appearance applied to local history. Save to persist it.");
+                return applied;
+              }} />}
+      </>} />
     <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Bound Module drafts">
       <h2 className="font-semibold">Bound Module drafts</h2>
       <p className="text-sm">Open a Module's own draft to edit a field label. Its draft revision is separate from this Application.</p>
@@ -976,231 +1200,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         </TechnicalDetails>
       </div>}
     </form>
-    <div className={selected?.kind === "page"
-      ? "grid gap-6"
-      : "grid gap-6 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_minmax(16rem,1fr)]"}>
-      <nav aria-label="Application outline" className="space-y-3"><h2 className="font-semibold">Outline</h2>
-        <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={async (node) => {
-          if (publicationPending.current || reopening.current || history.getState().isSaving || (((sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
-            !await confirm({
-              title: "Change the selection?",
-              description: "Discard unapplied source import, inspector, appearance, composition, visibility, Flow and task setting edits and change selection?",
-              confirmLabel: "Discard and change selection",
-            }))) return;
-          if (!changeSelection(node.selection)) return;
-          setLabel(currentLabel);
-          setDescription(source.body.description);
-        }} /></ul></nav>
-      <section className={selected?.kind === "page"
-        ? "space-y-3 bg-card text-card-foreground"
-        : "space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"} aria-label="Selected item">
-        <h2 className="font-semibold">{inspector.status === "resolved" ? inspector.descriptor.label : "Select an item"}</h2>
-        {selectedPage?.type === "dashboard" && <p>This page composition is rendered from its definition and can be edited visually below.</p>}
-        {selected?.kind === "application" && <p>{source.body.description}</p>}
-        {selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
-          <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}`} source={source}
-            compiledSource={draft.source}
-            platformBlockCatalogue={platformBlockCatalogue}
-            fieldInputControlReleases={fieldInputControlReleases}
-            platformThemeTokens={platformThemeTokens}
-            pageAlias={selectedPage.id} compiledSlots={pageCompiledSlots?.[selectedPage.id]}
-            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening ||
-              state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition ||
-              pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
-            compileFailure={compileFailure}
-            validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
-              rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
-            onThemeOverrideProblems={setThemeOverrideProblems}
-            onChange={applyPuckPageEdit} />}
-        {selected?.kind === "placement" && inspector.status === "resolved" &&
-          <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
-            selection={selected} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingFlowText || pendingFlowAppend || pendingCondition || workspaceLifetime === 0}
-            onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
-        {selected?.kind === "placement" && inspector.status === "resolved" &&
-          <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
-            selection={selected} saved={savedPreviewDraft.current}
-            busy={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving}
-            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition ||
-              pendingFlowText || pendingFlowAppend || workspaceLifetime === 0}
-            readSnapshot={readVisibilitySnapshot} onPendingChange={reportConditionPending}
-            onCommand={(expected, expectedSelection, metadata, condition, isCurrentResponse) => {
-              const current = history.getState();
-              const currentSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current ||
-                currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
-                currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
-              const currentContext: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current,
-                catalogue: platformBlockCatalogue, source: current.source };
-              const result = applyStudioVisibilityCondition(expected, currentContext, currentSelection, metadata, condition);
-              if (result.kind !== "applied") return result;
-              const latest = history.getState();
-              const latestSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current ||
-                latest.source !== current.source || latest.rootId !== current.rootId ||
-                latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
-                latestSelection?.kind !== "placement" || latestSelection.placementAlias !== currentSelection.placementAlias ||
-                !isCurrentResponse()) return { kind: "stale" };
-              if (!history.edit(result.source)) return { kind: "invalid", issues: [] };
-              setMessage("Visibility condition applied to local history. Save to persist it.");
-              return result;
-            }} />}
-        {selected?.kind === "flow" && inspector.status === "resolved" &&
-          <ApplicationFlowCanvas key={`canvas-${flowEpoch}`} context={compositionContext} selection={selected}
-            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || pendingFlowTextEditor || pendingFlowAppend || workspaceLifetime === 0}
-            onSettingPendingChange={reportFlowSettingPending}
-            onInsert={(expected, expectedSelection, command: StudioFlowInsertCommand) =>
-              editFlowFromCanvas(applyStudioFlowInsertCommand, "Task added to local history. Save draft to persist it.", expected, expectedSelection, command)}
-            onRemove={(expected, expectedSelection, command: StudioFlowRemoveCommand) =>
-              editFlowFromCanvas(applyStudioFlowRemoveCommand, "Task removed from local history. Save draft to persist it.", expected, expectedSelection, command)}
-            onSetting={(expected, expectedSelection, command: StudioFlowSettingCommand) =>
-              editFlowFromCanvas(applyStudioFlowSettingCommand, "Task setting applied to local history. Save draft to persist it.", expected, expectedSelection, command)} />}
-        {selected?.kind === "flow" && inspector.status === "resolved" &&
-          <ApplicationFlowEditor key={`editor-${flowEpoch}`} context={compositionContext} selection={selected}
-            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingAppearance || pendingComposition || pendingCondition || workspaceLifetime === 0}
-            onPendingChange={reportFlowTextPending} onAppendPendingChange={reportFlowAppendPending}
-            onCommand={(expected, expectedSelection, command) => {
-              const current = history.getState();
-              const currentSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowAppendPending.current) return "stale";
-              const currentContext: StudioFlowTextContext = {
-                organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
-              };
-              const result = applyStudioFlowTextCommand(currentContext, expected, currentSelection, expectedSelection, command);
-              if (result.kind !== "applied") return result.kind;
-              const latest = history.getState();
-              const latestSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowAppendPending.current || latest.source !== current.source ||
-                latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
-                lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
-                latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
-              if (!history.edit(result.source)) return "invalid";
-              setMessage("Flow text applied to local history. Save to persist it.");
-              return "applied";
-            }} onAppend={(expected, expectedSelection, command) => {
-              const current = history.getState();
-              const currentSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current) return "stale";
-              const currentContext: StudioFlowTextContext = {
-                organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
-              };
-              const result = applyStudioFlowPresentationCommand(currentContext, expected, currentSelection, expectedSelection, command);
-              if (result.kind !== "applied") return result.kind;
-              const latest = history.getState();
-              const latestSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current || latest.source !== current.source ||
-                latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
-                lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
-                latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
-              if (!history.edit(result.source)) return "invalid";
-              setMessage("Presentation task appended to local history. Save to persist it.");
-              return "applied";
-            }} onCalculate={(expected, expectedSelection, command, isCurrentTarget) => {
-              const current = history.getState();
-              const currentSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowAppendPending.current ||
-                !isCurrentTarget()) return "stale";
-              const currentContext: StudioFlowTextContext = {
-                organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
-              };
-              const result = applyStudioFlowCalculateCommand(currentContext, expected, currentSelection, expectedSelection, command);
-              if (result.kind !== "applied") return result.kind;
-              const latest = history.getState();
-              const latestSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowAppendPending.current ||
-                !isCurrentTarget() || latest.source !== current.source || latest.rootId !== current.rootId ||
-                latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
-                latestSelection?.kind !== "flow" || latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
-              if (!history.edit(result.source)) return "invalid";
-              setMessage("Calculate applied to local history. Save to persist it.");
-              return "applied";
-            }} onMove={(expected, expectedSelection, command, isCurrentTarget) => {
-              const current = history.getState();
-              const currentSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current ||
-                flowAppendPending.current || !isCurrentTarget()) return "stale";
-              const currentContext: StudioFlowTextContext = {
-                organizationId, rootId: current.rootId, key: draft.key,
-                draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source,
-              };
-              const result = applyStudioFlowPresentationMoveCommand(currentContext, expected, currentSelection, expectedSelection, command);
-              if (result.kind !== "applied") return result.kind;
-              const latest = history.getState();
-              const latestSelection = selection.getSelection();
-              if (!active.current || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || latest.isSaving || conditionPending.current || labelsPending.current ||
-                appearancePending.current || compositionPending.current || flowTextPending.current ||
-                flowAppendPending.current || !isCurrentTarget() || latest.source !== current.source ||
-                latest.rootId !== current.rootId || latest.draftRevision !== current.draftRevision ||
-                lifetime.current !== currentContext.localLifetime || latestSelection?.kind !== "flow" ||
-                latestSelection.flowAlias !== expectedSelection.flowAlias) return "stale";
-              // Resolve both identities and adjacency again on the same source immediately at the edit.
-              const stillAdjacent = projectStudioFlowPresentationMoves(currentContext, expectedSelection, command.taskId, command.taskPath)
-                .some((option) => option.direction === command.direction && option.neighborId === command.neighborId &&
-                  JSON.stringify(option.neighborPath) === JSON.stringify(command.neighborPath));
-              if (!stillAdjacent) return "stale";
-              if (!history.edit(result.source)) return "invalid";
-              setMessage("Presentation task order applied to local history. Save to persist it.");
-              return "applied";
-            }} />}
-        <p className="text-sm">The outline and inspector select the same authored alias. Other definition content is retained without alteration.</p>
-      </section>
-      <aside className="space-y-3" aria-label="Selection inspector"><h2 className="font-semibold">Inspector</h2>
-        {inspector.status === "resolved" && <p className="break-all text-sm">{inspector.descriptor.kind}: {inspector.descriptor.alias}</p>}
-        {editable ? <form className="space-y-3" onSubmit={applyLabels}>
-          <label className="block space-y-1"><span>Selected item name</span>
-            <Input className={inputClass} required maxLength={selected?.kind === "application" ? 120 : 60}
-              disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} value={label} onChange={(event) => {
-                if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
-                labelsPending.current = true;
-                previewGeneration.current += 1;
-                setLabel(event.target.value);
-              }} /></label>
-          {selected?.kind === "application" && <label className="block space-y-1"><span>Application description</span>
-            <Textarea className={inputClass} required maxLength={1000} disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition}
-              value={description} onChange={(event) => {
-                if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current || reopening.current) return;
-                labelsPending.current = true;
-                previewGeneration.current += 1;
-                setDescription(event.target.value);
-              }} /></label>}
-          <Button disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || pendingAppearance || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} type="submit">Apply labels</Button>
-          <Button disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || !pendingLabels} type="button" onClick={() => {
-            if (publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current) return;
-            setLabel(currentLabel); setDescription(source.body.description);
-          }}>Discard inspector text</Button>
-          <p className="text-sm">Apply records one local history entry. Save persists it through the current protected writer.</p>
-        </form> : <p>{selected?.kind === "flow"
-          ? "Select a task in the Flow outline to inspect supported presentation text or arithmetic."
-          : "This item is read-only in the minimum host."}</p>}
-        {selected?.kind === "application" && inspector.status === "resolved" &&
-          <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
-            rootId={state.rootId} draftRevision={state.draftRevision} source={source}
-            validationEpoch={appearanceValidationEpoch}
-            disabled={isPublishing || pendingSearch || pendingSourceImport || isReopening || state.isSaving || pendingLabels || pendingComposition || pendingFlowText || pendingFlowAppend || pendingCondition} onPendingChange={reportAppearancePending}
-            onApply={(expected, next) => {
-              const current = history.getState();
-              if (!active.current || lifetime.current !== workspaceLifetime || publicationPending.current || (sourceImportPending.current || searchPending.current) || reopening.current || current.isSaving || conditionPending.current || pendingLabels || compositionPending.current || flowTextPending.current || flowAppendPending.current || current.rootId !== state.rootId ||
-                  current.draftRevision !== state.draftRevision || current.source !== state.source ||
-                  expected !== source) return false;
-              if (publicationPending.current || (sourceImportPending.current || searchPending.current) || conditionPending.current) return false;
-              const applied = history.edit(next);
-              if (applied) setMessage("Appearance applied to local history. Save to persist it.");
-              return applied;
-            }} />}
-      </aside>
-    </div>
     <ApplicationDraftPreview context={readPreviewContext()} readContext={readPreviewContext}
       platformBlockCatalogue={platformBlockCatalogue}
       fieldInputControlReleases={fieldInputControlReleases}
