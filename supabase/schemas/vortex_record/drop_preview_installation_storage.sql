@@ -41,8 +41,6 @@ begin
       or edge.to_storage_contract_id = storage_row.storage_contract_id;
     delete from vortex_record.record_reference_counters as counter
     where counter.storage_contract_id = storage_row.storage_contract_id;
-    delete from vortex_record.record_data_versions as version
-    where version.storage_contract_id = storage_row.storage_contract_id;
     delete from vortex_record.index_catalogue as index_row
     where index_row.storage_contract_id = storage_row.storage_contract_id;
 
