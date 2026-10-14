@@ -52,6 +52,7 @@ declare
   release_version_value text;
   compilation_output_value jsonb;
   application_address_value jsonb;
+  application_experience_value jsonb;
   resolution_snapshot_value jsonb;
   content_fingerprint_value text;
   resolution_fingerprint_value text;
@@ -921,6 +922,32 @@ begin
         ) with ordinality as role(value, ordinality)
       ), '[]'::jsonb)
     );
+    application_experience_value := pg_catalog.jsonb_build_object(
+      'experiences', coalesce(
+        compilation_output_value #> '{canonical,content,experiences}', '[]'::jsonb
+      ),
+      'resolvedExperiences', case
+        when pg_catalog.jsonb_typeof(
+          compilation_output_value #> '{canonical,content,experiences}'
+        ) = 'array' then coalesce((
+          select pg_catalog.jsonb_agg(
+            pg_catalog.jsonb_build_object(
+              'state', experience.value ->> 'state', 'page', page.value
+            ) order by experience.value ->> 'state' collate "C"
+          )
+          from pg_catalog.jsonb_array_elements(
+            compilation_output_value #> '{canonical,content,experiences}'
+          ) as experience(value)
+          join pg_catalog.jsonb_array_elements(
+            compilation_output_value #> '{canonical,content,pages}'
+          ) as page(value)
+            on page.value ->> 'pageId' = experience.value ->> 'pageId'
+        ), '[]'::jsonb)
+        else '[]'::jsonb
+      end,
+      'shells', compilation_output_value #> '{canonical,content,shells}',
+      'theme', compilation_output_value #> '{canonical,content,theme}'
+    );
   end if;
 
   insert into vortex_definition.releases (
@@ -928,14 +955,14 @@ begin
     authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,
     content_fingerprint, resolution_fingerprint, validation_contract_version,
     impact_reasons, release_note, published_at, published_by,
-    application_address
+    application_address, application_experience
   ) values (
     p_root_id, draft_row.draft_revision, release_version_value, draft_row.draft_source,
     draft_row.source_fingerprint, draft_row.source_contract_version, compilation_output_value,
     resolution_snapshot_value,
     content_fingerprint_value, resolution_fingerprint_value, validation_contract_version_value,
     impact_reasons_value, release_note_value, operation_at,
-    context_actor_id, application_address_value
+    context_actor_id, application_address_value, application_experience_value
   );
 
   for supplied_dependency in
