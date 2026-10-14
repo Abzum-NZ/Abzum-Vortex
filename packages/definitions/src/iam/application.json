@@ -1820,7 +1820,7 @@
                           },
                           "required": {
                             "kind": "boolean",
-                            "value": true
+                            "value": false
                           }
                         },
                         "theme_overrides": {},
@@ -2352,7 +2352,7 @@
                           },
                           "required": {
                             "kind": "boolean",
-                            "value": true
+                            "value": false
                           }
                         },
                         "theme_overrides": {},
@@ -2566,7 +2566,7 @@
                           },
                           "required": {
                             "kind": "boolean",
-                            "value": true
+                            "value": false
                           }
                         },
                         "theme_overrides": {},

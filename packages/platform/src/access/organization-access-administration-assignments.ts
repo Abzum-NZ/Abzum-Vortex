@@ -125,7 +125,7 @@ export const createAccessAdministrationAssignmentOperations = ({
             ${command.data.organizationAccountId ?? null}::uuid,
             ${command.data.groupId ?? null}::uuid,
             ${command.data.assignmentKind}::text,
-            ${command.data.startsAt}::timestamptz,
+            ${command.data.startsAt ?? null}::timestamptz,
             ${command.data.expiresAt ?? null}::timestamptz,
             ${activityId}::uuid
           )
