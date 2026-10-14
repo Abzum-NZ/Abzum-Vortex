@@ -1,6 +1,15 @@
 "use client";
 
-import { useId, useState, type ReactElement } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { Icon } from "../icons/icon";
 import type { RecordsTableActionContract } from "@vortex/platform/schema";
 import { Button } from "../components/button";
@@ -25,6 +34,7 @@ import {
   PaginationPrevious,
 } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";
+import { TableRow } from "../components/table";
 import { cn } from "../lib/utils";
 import type {
   DisplayCellValue,
@@ -725,5 +735,94 @@ export function PaginationControl({
         )}
       </PaginationContent>
     </Pagination>
+  );
+}
+
+/** Controls inside a row keep their own meaning: a click or key on one never opens the row. */
+const INTERACTIVE_IN_ROW =
+  "a,button,input,select,textarea,label,summary,[role='button'],[role='checkbox'],[role='radio'],[role='menuitem'],[role='switch'],[contenteditable='true']";
+const isInteractiveTarget = (target: EventTarget, row: HTMLElement): boolean => {
+  if (!(target instanceof Element)) return false;
+  const control = target.closest(INTERACTIVE_IN_ROW);
+  return control !== null && control !== row && row.contains(control);
+};
+
+/**
+ * One list row. A row click handler may return the promise of the flow it started; the row stays
+ * busy until it settles, so a second click or Enter cannot start the same flow twice.
+ */
+export function ClickableRow(props: Readonly<{
+  recordId: string;
+  selected: boolean;
+  activate: ((recordId: string) => unknown) | undefined;
+  openAddress: string | undefined;
+  children: ReactNode;
+}>): ReactElement {
+  const { recordId, selected, activate, openAddress, children } = props;
+  const [pending, setPending] = useState(false);
+  const pendingNow = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const run = (): void => {
+    if (activate === undefined || pendingNow.current) return;
+    const outcome = activate(recordId);
+    if (
+      typeof outcome === "object" &&
+      outcome !== null &&
+      typeof (outcome as PromiseLike<unknown>).then === "function"
+    ) {
+      pendingNow.current = true;
+      setPending(true);
+      const settle = (): void => {
+        pendingNow.current = false;
+        if (mounted.current) setPending(false);
+      };
+      (outcome as PromiseLike<unknown>).then(settle, settle);
+    }
+  };
+  const interaction =
+    activate !== undefined
+      ? {
+          tabIndex: 0,
+          onClick: (event: MouseEvent<HTMLTableRowElement>) => {
+            if (isInteractiveTarget(event.target, event.currentTarget)) return;
+            run();
+          },
+          // Only a key pressed on the focused row itself opens it; Enter or Space on a row
+          // command, selection checkbox or inline editor keeps its own meaning.
+          onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              run();
+            }
+          },
+        }
+      : openAddress === undefined
+        ? {}
+        : {
+            onClick: (event: MouseEvent<HTMLTableRowElement>) => {
+              if (isInteractiveTarget(event.target, event.currentTarget)) return;
+              window.location.assign(openAddress);
+            },
+          };
+  return (
+    <TableRow
+      data-vortex-record-id={recordId}
+      data-state={selected ? "selected" : undefined}
+      aria-busy={pending ? true : undefined}
+      className={cn(
+        activate === undefined && openAddress === undefined ? undefined : "cursor-pointer",
+        pending && "cursor-progress opacity-60",
+      )}
+      {...interaction}
+    >
+      {children}
+    </TableRow>
   );
 }
