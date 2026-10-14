@@ -15,7 +15,7 @@ import {
 
 /**
  * What a continuation token carries: the exact actor, installation, query,
- * release and inputs it was issued for, and the last keyset position the
+ * release, inputs, declared sort and pushed fields it was issued for, and the last keyset position the
  * database reader reached. The sort key holds only values of fields the reader
  * is guaranteed to see, so it never carries a hidden field value; the record
  * identifier may still name a row the reader cannot read, so the whole payload
@@ -33,6 +33,17 @@ const queryContinuationSchema = z
     queryId: queryIdSchema,
     moduleReleaseRevision: revisionSchema,
     inputFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    sort: z
+      .array(
+        z
+          .object({
+            fieldId: z.string().uuid(),
+            direction: z.enum(["ascending", "descending"]),
+            pushed: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(20),
     /**
      * Exact typed values of the readable sort fields, as canonical database
      * text; never parsed as numbers here. Empty when none may be pushed.
