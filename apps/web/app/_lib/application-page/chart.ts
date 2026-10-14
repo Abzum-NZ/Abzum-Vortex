@@ -1,4 +1,8 @@
-import type { ProtectedQuerySummaryCompleted } from "@vortex/platform/server";
+import {
+  recordLinkPlainText,
+  type ProjectedRecordLinks,
+  type ProtectedQuerySummaryCompleted,
+} from "@vortex/platform/server";
 import {
   exactDecimalTextSchema,
   type BlockPropertyValueContract,
@@ -44,8 +48,16 @@ const groupValueOf = (
   fieldId: string,
 ): JsonValue | undefined => values[fieldId];
 
-/** A group value in its readable form: a choice's installed label, or the plain text of a scalar. */
-const groupLabel = (field: ModuleField, value: JsonValue | undefined): string | undefined => {
+/**
+ * A group value in its readable form: a choice's installed label, a link's viewer-safe target
+ * label (or its restricted state), or the plain text of a scalar.
+ */
+const groupLabel = (
+  field: ModuleField,
+  value: JsonValue | undefined,
+  recordLinks: ProjectedRecordLinks | undefined,
+): string | undefined => {
+  if (field.type === "link") return recordLinkPlainText(value, recordLinks);
   if (field.type === "choice") {
     const option = field.settings.options.find((candidate) => candidate.value === value);
     return option?.label;
@@ -65,8 +77,10 @@ export const projectChartPlacement = (input: {
   query: ModuleQuery;
   fields: ReadonlyMap<string, ModuleField>;
   summary: ProtectedQuerySummaryCompleted;
+  /** The labels of the linked records the groups carry; absent when none or unreadable. */
+  recordLinks?: ProjectedRecordLinks;
 }): Readonly<{ ok: true; chart: ChartPayload }> | Readonly<{ ok: false; code: ChartProjectionFailure }> => {
-  const { settings, query, fields, summary } = input;
+  const { settings, query, fields, summary, recordLinks } = input;
   const chartSettings = readChartSettings(settings);
   if (chartSettings === undefined) return { ok: false, code: "chart_settings_invalid" };
 
@@ -86,7 +100,11 @@ export const projectChartPlacement = (input: {
 
   const points: Array<ChartPayload["points"][number]> = [];
   for (const group of summary.groups) {
-    const label = groupLabel(categoryField, groupValueOf(group.groupValues, categoryId));
+    const label = groupLabel(
+      categoryField,
+      groupValueOf(group.groupValues, categoryId),
+      recordLinks,
+    );
     const result = group.aggregates[aggregate.alias];
     if (label === undefined || result === undefined) return { ok: false, code: "chart_group_invalid" };
     const cell = summaryAggregateCellValue(aggregate, measureField, result);

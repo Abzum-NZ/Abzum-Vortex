@@ -115,6 +115,14 @@
         "icon": "life-buoy",
         "page": "hr_leave_requests",
         "permission": "application.hr.open"
+      },
+      {
+        "id": "nav_hr_team_calendar",
+        "type": "page",
+        "label": "Team calendar",
+        "icon": "calendar",
+        "page": "hr_team_calendar",
+        "permission": "application.hr.open"
       }
     ],
     "queries": [],
@@ -3346,6 +3354,79 @@
               "order": {
                 "desktop": [
                   "hr_leave_request_edit_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_team_calendar",
+        "key": "hr_team_calendar",
+        "name": "Team calendar",
+        "type": "dashboard",
+        "permission": "application.hr.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_team_calendar_leave": {
+                  "block": {
+                    "block_id": "d1125b70-e83b-4fc6-bf60-7a6e36f5f56a",
+                    "release_version": "1.0.0"
+                  },
+                  "query": "vortex.hr:hr_leave_requests",
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Team leave"
+                    },
+                    "calendar_mapping": {
+                      "kind": "group",
+                      "properties": {
+                        "kind": {
+                          "kind": "choice",
+                          "value": "start_end"
+                        },
+                        "start_field": {
+                          "kind": "field_reference",
+                          "field": "vortex.hr:leave_request.start_date"
+                        },
+                        "end_field": {
+                          "kind": "field_reference",
+                          "field": "vortex.hr:leave_request.end_date"
+                        }
+                      }
+                    },
+                    "item_title_field": {
+                      "kind": "field_reference",
+                      "field": "vortex.hr:leave_request.employee"
+                    },
+                    "default_view": {
+                      "kind": "choice",
+                      "value": "month"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_team_calendar_leave"
                 ]
               }
             }
