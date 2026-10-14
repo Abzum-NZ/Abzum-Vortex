@@ -42,6 +42,7 @@ export type StudioModuleBeforeSaveConditionSnapshot = Readonly<{
   organizationId: string;
   rootId: string;
   key: string;
+  name: string;
   draftRevision: number;
   publishedRevision: number | null;
   sourceFingerprint: string;

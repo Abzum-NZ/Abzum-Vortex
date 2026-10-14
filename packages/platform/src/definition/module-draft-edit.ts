@@ -37,6 +37,7 @@ export type ModuleDraftSnapshot = Readonly<{
   organizationId: string;
   rootId: string;
   key: string;
+  name: string;
   draftRevision: number;
   publishedRevision: number | null;
   sourceFingerprint: string;
@@ -107,6 +108,7 @@ export const snapshotFor = (draft: StoredModuleDefinitionDraft): ModuleDraftSnap
   organizationId: draft.organizationId,
   rootId: draft.rootId,
   key: draft.key,
+  name: draft.source.body.name,
   draftRevision: draft.draftRevision,
   publishedRevision: draft.publishedRevision ?? null,
   sourceFingerprint: draft.sourceFingerprint,
