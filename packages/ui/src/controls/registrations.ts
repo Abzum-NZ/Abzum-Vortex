@@ -362,6 +362,10 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
     }),
     Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
+      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseDependentChoiceInputPayload),
+    }),
+    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<FieldInputPayload>(parseFieldInputPayload),
     }),
