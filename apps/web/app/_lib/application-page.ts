@@ -55,7 +55,12 @@ export type {
 export const loadProjectedReferenceChoiceForm = async (
   session: IdentitySession,
   address: ReferenceChoiceAddress,
-  request: Readonly<{ installationRevision: number; releaseKey: string; formId: string }>,
+  request: Readonly<{
+    installationRevision: number;
+    releaseKey: string;
+    formId: string;
+    subjectRecordId?: string;
+  }>,
 ): Promise<ProjectedReferenceChoiceForm | undefined> => {
   try {
     const projected = await projectReferenceChoicePage(session, address, request);
