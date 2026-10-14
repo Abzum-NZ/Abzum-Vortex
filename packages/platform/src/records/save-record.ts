@@ -223,19 +223,20 @@ const correctionsFor = (
     path: readonly (string | number)[];
   }>[],
   readableFieldIds: ReadonlySet<string>,
-  submittedFieldIds: ReadonlySet<string>,
+  operation: "create" | "update",
 ): readonly RecordSaveFieldCorrection[] | undefined => {
   const corrections = new Map<string, RecordSaveFieldCorrection>();
   for (const issue of issues) {
     if (issue.fieldId === undefined) return undefined;
     const code = correctionCode(issue.code);
-    // A create has no readable bounds before the row exists. The caller already sees every field
-    // they submitted, so naming a missing required value for one of those discloses nothing new.
+    // A create has no readable bounds before the row exists, and the caller is shown the whole
+    // form, so naming a required field whose value is missing discloses nothing new.
     const visible =
-      readableFieldIds.has(issue.fieldId) ||
-      (code === "required_value" && submittedFieldIds.has(issue.fieldId));
+      readableFieldIds.has(issue.fieldId) || (code === "required_value" && operation === "create");
     if (!visible) return undefined;
-    const nested = issue.path.slice(2);
+    // The nested path is whatever follows the field id, wherever the issue's path root puts it.
+    const fieldPosition = issue.path.indexOf(issue.fieldId);
+    const nested = fieldPosition < 0 ? [] : issue.path.slice(fieldPosition + 1);
     const correction: RecordSaveFieldCorrection = {
       code,
       fieldId: issue.fieldId as RecordSaveFieldCorrection["fieldId"],
@@ -722,9 +723,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                     path: issue.path,
                   })),
                 prepared.readableFieldIds,
-                command.data.operation === "create"
-                  ? new Set(Object.keys(command.data.submittedValues))
-                  : new Set(),
+                command.data.operation,
               );
               if (corrections === undefined || corrections.length === 0) {
                 console.error(

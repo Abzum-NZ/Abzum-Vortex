@@ -19,7 +19,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useRequiredFormField } from "./form-context";
 
 export type NumberInputProps = ControlRenderProps<NumberInputPayload>;
 
@@ -55,7 +55,7 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const error = context.values?.error;
+  const projectedError = context.values?.error;
   const note = inactiveNote(context);
 
   const projected = context.values?.value;
@@ -69,7 +69,12 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     if (integer) return Number.isSafeInteger(parsed) ? parsed : null;
     return text;
   };
-  useFormField(fieldKey, props.placementId, toTyped(raw));
+  const typed = toTyped(raw);
+  const validationError = useRequiredFormField(fieldKey, props.placementId, typed, {
+    label,
+    missing: required && !disabled && !readOnly && raw.trim() === "",
+  });
+  const error = projectedError ?? validationError;
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
