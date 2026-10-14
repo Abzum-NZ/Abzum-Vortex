@@ -10,8 +10,8 @@ import { argumentValue, openLane, personaEmails, postgres, type LaneFacts, type 
 /**
  * Captures the before numbers for the list-paging slices: for the validation owner, an ordinary
  * member and a restricted viewer, the timing, buffer counts and result hash of the list read for
- * page 1, page 50 and the last page of one CRM record type (opportunities) and one Service Desk
- * record type (cases), paged at the platform default of 40 rows.
+ * page 1, page 50 and the last page of the two seeded lists (opportunities and cases), paged at
+ * the platform default of 40 rows.
  *
  * The read is the one the application makes: a request transaction initialised with the person's
  * own request context, `set local role vortex_request`, then `vortex_record.run_module_query` with
@@ -19,17 +19,28 @@ import { argumentValue, openLane, personaEmails, postgres, type LaneFacts, type 
  * back from a real human request so it carries the person's current access version. The plan comes
  * from `auto_explain` (nested statements, analyze, buffers), which the lane's database already
  * preloads, so it is the plan of the statement `run_module_query` builds and executes, not of the
- * function call around it. Seed the rows first with `tooling/list-paging/seed-list-records.mjs`.
+ * function call around it; only statements slower than one second are logged.
+ *
+ * One list read costs time proportional to the number of rows, so the script does not walk to page
+ * 50 or to the last page. It computes the keyset position of the first row of each page from the
+ * storage table, in the query's own order and filter, and reads from that position. The position
+ * comes from every stored row; a person who sees fewer rows is positioned the same way, and the
+ * table reports how many rows their page returned. Seed the rows first with
+ * `tooling/list-paging/seed-list-records.mjs`.
  *
  * Usage: pnpm --filter @vortex/web list:baseline -- --lane 2 [--output baseline.md]
+ *          [--persona owner|member|viewer] [--kind opportunity|case]
  */
 
 const pageSize = 40;
-const timedRuns = 3;
+const timedRuns = 2;
+const explainThresholdMilliseconds = 1000;
 
 type Kind = Readonly<{ label: string; recordKey: string; queryKey: string }>;
 const kinds: readonly Kind[] = [
+  // guard-allow: business-name measurement script for two named shipped lists, not an engine
   { label: "CRM opportunities", recordKey: "opportunity", queryKey: "crm_pipeline" },
+  // guard-allow: business-name measurement script for two named shipped lists, not an engine
   { label: "Service Desk cases", recordKey: "case", queryKey: "service_desk_open_cases" },
 ];
 
@@ -38,14 +49,24 @@ type Page = Readonly<{
   outcome: "completed" | "refused";
   reasonCode?: string;
   rows: readonly unknown[];
-  next: Next | null;
+}>;
+
+type QueryDefinition = Readonly<{
+  queryId: string;
+  selectedFieldIds: readonly string[];
+  sort: readonly { fieldId: string; direction: "ascending" | "descending" }[];
+  filter?: {
+    kind: string;
+    operator: string;
+    left: { fieldId: string };
+    right: { value: readonly string[] };
+  } | null;
 }>;
 
 type Target = Readonly<{
   moduleRootId: string;
-  queryId: string;
-  releaseRevision: number;
-  fieldIds: readonly string[];
+  query: QueryDefinition;
+  table: string;
   organizationId: string;
   applicationRootId: string;
 }>;
@@ -71,29 +92,28 @@ const median = (values: readonly number[]): number =>
 
 const loadTarget = async (facts: LaneFacts, kind: Kind): Promise<Target> => {
   const [contract] = await facts.administration`
-    select module_root_id, storage_contract_id, physical_table_token
+    select module_root_id, physical_table_token
     from vortex_record.storage_catalogue
     where state = 'active' and record_type_definition ->> 'key' = ${kind.recordKey}
     order by first_compatible_release_revision desc limit 1`;
   if (contract === undefined) throw new Error(`No ${kind.recordKey} storage on this lane.`);
-  const [query] = await facts.administration`
+  const [published] = await facts.administration`
     select q.value as query
     from vortex_definition.releases as release,
       jsonb_array_elements(release.compilation_output #> '{canonical,content,queries}') as q(value)
-    where release.root_id = ${contract.module_root_id} and q.value ->> 'key' = ${kind.queryKey}
+    where release.root_id = ${contract.module_root_id as string}::uuid
+      and q.value ->> 'key' = ${kind.queryKey}
     order by release.release_revision desc limit 1`;
-  if (query === undefined) throw new Error(`No ${kind.queryKey} query was published.`);
+  if (published === undefined) throw new Error(`No ${kind.queryKey} query was published.`);
+  const table = contract.physical_table_token as string;
   const [scope] = await facts.administration.begin(async (transaction) => {
     await transaction`set local role vortex_owner`;
-    return transaction.unsafe(
-      `select application_root_id from record_data.${contract.physical_table_token as string} limit 1`,
-    );
+    return transaction.unsafe(`select application_root_id from record_data.${table} limit 1`);
   });
   return {
     moduleRootId: contract.module_root_id as string,
-    queryId: (query.query as { queryId: string }).queryId,
-    releaseRevision: 0,
-    fieldIds: (query.query as { selectedFieldIds: string[] }).selectedFieldIds,
+    query: published.query as QueryDefinition,
+    table,
     organizationId: facts.organizationId,
     applicationRootId: scope!.application_root_id as string,
   };
@@ -130,9 +150,6 @@ const requestContextOf = async (
 
 type Session = Readonly<{ context: string; target: Target }>;
 
-const planLines = (notices: readonly string[]): string[] =>
-  notices.filter((message) => message.includes("plan:"));
-
 const buffersOf = (plan: string): string =>
   plan
     .split("\n")
@@ -141,33 +158,35 @@ const buffersOf = (plan: string): string =>
     .map((line) => line.trim())
     .join("") || "n/a";
 
-/** Runs one list read as the person, optionally capturing its plan. */
+/** Runs one list read as the person, optionally capturing the plan of its scan statement. */
 const read = async (
   connection: Sql,
   notices: string[],
   session: Session,
   after: Next | null,
-  size: number,
   explain: boolean,
 ): Promise<{ page: Page; milliseconds: number; plan: string }> => {
   notices.length = 0;
   return connection.begin(async (transaction) => {
     await transaction`select vortex_platform.initialize(${session.context}::text::jsonb)`;
     if (explain) {
-      await transaction`set local auto_explain.log_min_duration = 0`;
+      await transaction.unsafe(
+        `set local auto_explain.log_min_duration = ${explainThresholdMilliseconds}`,
+      );
       await transaction`set local auto_explain.log_analyze = on`;
       await transaction`set local auto_explain.log_buffers = on`;
       await transaction`set local auto_explain.log_nested_statements = on`;
       await transaction`set local client_min_messages = log`;
     }
     await transaction`set local role vortex_request`;
+    const { moduleRootId, query } = session.target;
     const [declared] = await transaction`
       select vortex_record.read_module_query_inputs(
-        ${session.target.moduleRootId}::uuid, ${session.target.queryId}::uuid) as result`;
+        ${moduleRootId}::uuid, ${query.queryId}::uuid) as result`;
     const inputs = declared!.result as { outcome: string; moduleReleaseRevision?: number };
     if (inputs.outcome !== "resolved")
       return {
-        page: { outcome: "refused", reasonCode: "query_unavailable", rows: [], next: null },
+        page: { outcome: "refused" as const, reasonCode: "query_unavailable", rows: [] },
         milliseconds: 0,
         plan: "",
       };
@@ -175,12 +194,12 @@ const read = async (
     const started = performance.now();
     const [row] = await transaction`
       select vortex_record.run_module_query(
-        ${session.target.moduleRootId}::uuid,
-        ${session.target.queryId}::uuid,
+        ${moduleRootId}::uuid,
+        ${query.queryId}::uuid,
         ${inputs.moduleReleaseRevision as number}::bigint,
         '{}'::jsonb,
-        ${JSON.stringify(session.target.fieldIds)}::text::jsonb,
-        ${size}::integer,
+        ${JSON.stringify(query.selectedFieldIds)}::text::jsonb,
+        ${pageSize}::integer,
         ${after === null ? null : JSON.stringify(after)}::text::jsonb,
         '[]'::jsonb,
         ${JSON.stringify({
@@ -197,22 +216,112 @@ const read = async (
       outcome: "completed" | "refused";
       reasonCode?: string;
       rows?: unknown[];
-      next?: Next | null;
     };
-    const scan = planLines(notices)
-      .filter((message) => message.includes("record_data."))
+    const scan = notices
+      .filter((message) => message.includes("plan:") && message.includes("record_data."))
       .sort((left, right) => right.length - left.length)[0];
     return {
       page: {
         outcome: result.outcome,
         ...(result.reasonCode === undefined ? {} : { reasonCode: result.reasonCode }),
         rows: result.rows ?? [],
-        next: result.next ?? null,
       },
       milliseconds,
       plan: scan ?? "",
     };
   });
+};
+
+type SortColumn = Readonly<{ column: string; type: string; direction: "asc" | "desc" }>;
+
+/**
+ * The keyset position `run_module_query` uses for the row at an offset of the query's list: the
+ * same filter, the same order (nulls first ascending, last descending, text in the C collation,
+ * record identity last) and the same sort-key text, taken from every stored row of the application.
+ */
+const positionsOf = async (
+  facts: LaneFacts,
+  target: Target,
+): Promise<{ total: number; keyAfter: (offset: number) => Promise<Next | null> }> => {
+  const { query, table } = target;
+  const filter = query.filter;
+  if (
+    filter !== undefined &&
+    filter !== null &&
+    (filter.kind !== "comparison" || filter.operator !== "not_in")
+  )
+    throw new Error("The baseline positions only lists filtered by one not_in comparison.");
+  const columnOf = async (fieldId: string): Promise<{ column: string; type: string }> => {
+    const [mapping] = await facts.administration`
+      select m.physical_column_token, c.data_type
+      from vortex_record.field_storage_mappings as m
+      join information_schema.columns as c
+        on c.table_schema = 'record_data' and c.table_name = ${table}
+          and c.column_name = m.physical_column_token
+      where m.field_id = ${fieldId}::uuid and m.state = 'active'`;
+    if (mapping === undefined) throw new Error(`Field ${fieldId} has no storage column.`);
+    return { column: mapping.physical_column_token as string, type: mapping.data_type as string };
+  };
+  const sorts: SortColumn[] = [];
+  for (const sort of query.sort)
+    sorts.push({
+      ...(await columnOf(sort.fieldId)),
+      direction: sort.direction === "ascending" ? "asc" : "desc",
+    });
+  const keyTerm = (sort: SortColumn): string =>
+    sort.type === "timestamp with time zone"
+      ? `vortex_platform.format_timestamp_utc("${sort.column}")`
+      : sort.type === "date"
+        ? `pg_catalog.to_char("${sort.column}", 'YYYY-MM-DD')`
+        : `("${sort.column}")::text`;
+  const orderTerm = (sort: SortColumn): string =>
+    `"${sort.column}"${sort.type === "text" ? ' collate "C"' : ""} ${sort.direction}${sort.direction === "asc" ? " nulls first" : " nulls last"}`;
+  const filtered = filter === undefined || filter === null ? undefined : filter;
+  const where = [
+    "organisation_id = $1::uuid",
+    "lifecycle_state = 'active'",
+    "application_root_id = $2::uuid",
+    ...(filtered === undefined
+      ? []
+      : [
+          `not coalesce("${(await columnOf(filtered.left.fieldId)).column}" = any ($3::text[]), false)`,
+        ]),
+  ].join(" and ");
+  const parameters = [
+    target.organizationId,
+    target.applicationRootId,
+    ...(filtered === undefined ? [] : [`{${filtered.right.value.join(",")}}`]),
+  ];
+  const run = async (statement: string): Promise<readonly Record<string, unknown>[]> =>
+    facts.administration.begin(async (transaction) => {
+      await transaction`set local role vortex_owner`;
+      return (
+        transaction as unknown as {
+          unsafe(
+            statement: string,
+            parameters: readonly string[],
+          ): Promise<Record<string, unknown>[]>;
+        }
+      ).unsafe(statement, parameters);
+    });
+  const [counted] = await run(
+    `select count(*)::int as total from record_data.${table} where ${where}`,
+  );
+  return {
+    total: counted!.total as number,
+    keyAfter: async (offset) => {
+      if (offset === 0) return null;
+      const [row] = await run(
+        `select record_id, array[${sorts.map(keyTerm).join(", ")}]::text[] as sort_key
+         from record_data.${table} where ${where}
+         order by ${[...sorts.map(orderTerm), "record_id asc"].join(", ")}
+         offset ${offset - 1} limit 1`,
+      );
+      return row === undefined
+        ? null
+        : { sortKey: row.sort_key as (string | null)[], recordId: row.record_id as string };
+    },
+  };
 };
 
 const measureKind = async (
@@ -225,57 +334,43 @@ const measureKind = async (
 ): Promise<Measurement[]> => {
   const target = await loadTarget(facts, kind);
   const session: Session = { context: await requestContextOf(facts, email, target), target };
-  const first = await read(connection, notices, session, null, pageSize, false);
-  if (first.page.outcome === "refused")
-    return [
-      {
-        persona,
-        kind: kind.label,
-        page: "all",
-        rows: undefined,
-        refused: first.page.reasonCode ?? "refused",
-        milliseconds: [],
-        hash: "-",
-        buffers: "-",
-        plan: "",
-      },
-    ];
-
-  // One pass at the list page size records the continuation of every page and the visible total.
-  // (The query's own page size bounds a request, so there is no larger page to walk with.)
-  const afterOffset = new Map<number, Next | null>([[0, null]]);
-  let offset = 0;
-  let cursor: Next | null = null;
-  for (;;) {
-    const walked = await read(connection, notices, session, cursor, pageSize, false);
-    if (walked.page.outcome === "refused")
-      throw new Error(
-        `${persona} ${kind.label} was refused at row ${offset}: ${walked.page.reasonCode}`,
-      );
-    offset += walked.page.rows.length;
-    if (walked.page.next === null) break;
-    cursor = walked.page.next;
-    afterOffset.set(offset, cursor);
-  }
-  const total = offset;
-  log(`${persona} ${kind.label}: ${total} rows are visible`);
-  const lastStart = Math.floor(Math.max(total - 1, 0) / pageSize) * pageSize;
-  const targets: readonly (readonly [string, number])[] = [
+  const positions = await positionsOf(facts, target);
+  const lastStart = Math.floor(Math.max(positions.total - 1, 0) / pageSize) * pageSize;
+  log(`${persona} ${kind.label}: ${positions.total} rows pass the list filter`);
+  const pages: readonly (readonly [string, number])[] = [
     ["page 1", 0],
     ["page 50", 49 * pageSize],
     [`last page (${Math.floor(lastStart / pageSize) + 1})`, lastStart],
   ];
   const results: Measurement[] = [];
-  for (const [label, start] of targets) {
+  for (const [label, start] of pages) {
     if (start > lastStart) continue;
-    const after = afterOffset.get(start) ?? null;
+    const after = await positions.keyAfter(start);
     const timings: number[] = [];
-    let last = await read(connection, notices, session, after, pageSize, false);
-    for (let run = 0; run < timedRuns; run += 1) {
-      last = await read(connection, notices, session, after, pageSize, false);
+    let last = await read(connection, notices, session, after, false);
+    if (last.page.outcome === "refused") {
+      results.push({
+        persona,
+        kind: kind.label,
+        page: label,
+        rows: undefined,
+        refused: last.page.reasonCode ?? "refused",
+        milliseconds: [],
+        hash: "-",
+        buffers: "-",
+        plan: "",
+      });
+      break;
+    }
+    timings.push(last.milliseconds);
+    for (let run = 1; run < timedRuns; run += 1) {
+      last = await read(connection, notices, session, after, false);
       timings.push(last.milliseconds);
     }
-    const explained = await read(connection, notices, session, after, pageSize, true);
+    const explained = await read(connection, notices, session, after, true);
+    log(
+      `${persona} ${kind.label} ${label}: ${timings.map((value) => value.toFixed(0)).join(", ")} ms`,
+    );
     results.push({
       persona,
       kind: kind.label,
@@ -293,12 +388,12 @@ const measureKind = async (
 
 const table = (rows: readonly Measurement[]): string =>
   [
-    "| Persona | Record type | Page | Rows | Median ms (runs) | Top scan buffers | md5 of result page |",
+    "| Persona | Record type | Page | Rows | Median ms (runs) | Plan buffers (top node) | md5 of result page |",
     "| --- | --- | --- | --- | --- | --- | --- |",
     ...rows.map((row) =>
       row.refused === undefined
-        ? `| ${row.persona} | ${row.kind} | ${row.page} | ${row.rows} | ${median(row.milliseconds).toFixed(1)} (${row.milliseconds.map((value) => value.toFixed(1)).join(", ")}) | ${row.buffers} | ${row.hash} |`
-        : `| ${row.persona} | ${row.kind} | all | refused: ${row.refused} | - | - | - |`,
+        ? `| ${row.persona} | ${row.kind} | ${row.page} | ${row.rows} | ${median(row.milliseconds).toFixed(0)} (${row.milliseconds.map((value) => value.toFixed(0)).join(", ")}) | ${row.buffers} | ${row.hash} |`
+        : `| ${row.persona} | ${row.kind} | ${row.page} | refused: ${row.refused} | - | - | - |`,
     ),
   ].join("\n");
 
@@ -317,19 +412,27 @@ const main = async (): Promise<void> => {
   try {
     const measurements: Measurement[] = [];
     const personas = [
-      ["validation owner", personaEmails.owner()],
-      ["ordinary member", personaEmails.member()],
-      ["restricted viewer", personaEmails.viewer()],
+      ["owner", "validation owner", personaEmails.owner()],
+      ["member", "ordinary member", personaEmails.member()],
+      ["viewer", "restricted viewer", personaEmails.viewer()],
     ] as const;
-    for (const [persona, email] of personas)
+    const onlyPersona = argumentValue("persona");
+    const onlyKind = argumentValue("kind");
+    for (const [key, persona, email] of personas)
       for (const kind of kinds)
-        measurements.push(...(await measureKind(facts, connection, notices, persona, email, kind)));
+        if (
+          (onlyPersona === undefined || onlyPersona === key) &&
+          (onlyKind === undefined || onlyKind === kind.recordKey)
+        )
+          measurements.push(
+            ...(await measureKind(facts, connection, notices, persona, email, kind)),
+          );
     const output = [
       `# List read baseline (lane ${facts.lane}, page size ${pageSize})`,
       "",
       table(measurements),
       "",
-      "## Scan plans (auto_explain, analyze, buffers)",
+      "## Scan plans (auto_explain, analyze, buffers; statements over 1 s)",
       ...measurements
         .filter((row) => row.plan !== "")
         .flatMap((row) => [

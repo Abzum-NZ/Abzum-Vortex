@@ -17,8 +17,8 @@ import path from "node:path";
  *    advanced past the last number used, so the next saved record never collides.
  * Not written: activity entries, change notices and attachments (a list read does not touch them).
  *
- * Re-running replaces the previous seed (clone ids are derived from the record type and an ordinal)
- * and tops it up when `--count` grows. Lanes only: the main stack ports are refused.
+ * Re-running replaces the previous seed (clones are recognised by their "Seed <type> " name marker;
+ * `--count 0` only removes them). Lanes only: the main stack ports are refused.
  *
  * Usage: node tooling/list-paging/seed-list-records.mjs --lane 2 [--count 50000]
  */
@@ -40,7 +40,8 @@ if (![2, 3, 4, 5].includes(lane)) fail("Pass --lane 2, 3, 4 or 5. The main stack
 const port = 54322 + 1000 * (lane - 1);
 if (port === 54322) fail("Refusing to run against the main stack.");
 const count = Number(argument("count", "50000"));
-if (!Number.isInteger(count) || count < 1 || count > 500000) fail("--count must be 1 to 500000.");
+if (!Number.isInteger(count) || count < 0 || count > 500000)
+  fail("--count must be 0 to 500000 (0 only removes the seed).");
 
 const kinds = [
   { key: "opportunity", label: "CRM opportunities" },
@@ -79,14 +80,16 @@ const seedKind = async (transaction, kind) => {
     order by created_at, record_id limit 1`;
   if (template === undefined) fail(`No ${kind.key} record to clone; run pnpm demo:setup first.`);
 
-  // Replace the previous seed (same ordinals), then allocate fresh reference numbers.
+  // The first required text field carries the marker "Seed <key> ", so a re-run removes every
+  // earlier clone (whatever its ordinal), then allocates fresh reference numbers.
+  const markerField = fields.find((field) => field.type === "text" && field.required);
+  const markerColumn = columnOf.get(markerField?.fieldId.toLowerCase())?.physical_column_token;
+  if (markerColumn === undefined) fail(`The ${kind.key} type has no required text field to mark.`);
+  const clones = `select record_id from record_data.${table} where "${markerColumn}" like 'Seed ${kind.key} %'`;
   await transaction.unsafe(`
     delete from vortex_record.relationship_edges
-    where from_storage_contract_id = '${contractId}'
-      and from_record_id in (select ${seedId(contractId, "n")} from generate_series(1, ${count}) as g(n))`);
-  await transaction.unsafe(`
-    delete from record_data.${table}
-    where record_id in (select ${seedId(contractId, "n")} from generate_series(1, ${count}) as g(n))`);
+    where from_storage_contract_id = '${contractId}' and from_record_id in (${clones})`);
+  await transaction.unsafe(`delete from record_data.${table} where record_id in (${clones})`);
 
   const expressions = new Map();
   const textKeys = [];
