@@ -164,7 +164,24 @@ export const projectFlowBindingTargets = (input: {
     [
       ...application.content.actions,
       ...context.releaseSet.modules.flatMap((module) => module.content.actions),
-    ].map((action) => [String(action.key).toLowerCase(), String(action.subjectRecordTypeId)] as const),
+    ].map(
+      (action) =>
+        [
+          String(action.key).toLowerCase(),
+          [
+            String(action.subjectRecordTypeId),
+            ...(action.tasks as readonly unknown[]).flatMap((task) => {
+              const recordType =
+                isRecord(task) && isRecord(task.properties)
+                  ? task.properties.recordType
+                  : undefined;
+              return isRecord(task) && task.type === "record.create" && isRecord(recordType)
+                ? [String(recordType.recordTypeId)]
+                : [];
+            }),
+          ],
+        ] as const,
+    ),
   );
   const flowWrittenRecordTypes = (flowId: string): readonly string[] => {
     const types = new Set<string>();
@@ -201,9 +218,10 @@ export const projectFlowBindingTargets = (input: {
             if (recordType !== undefined) types.add(recordType);
           } else if (task.type === "operation.call") {
             const operation = literal(task, "operation");
-            const recordType =
-              operation === undefined ? undefined : actionRecordTypes.get(operation.toLowerCase());
-            if (recordType !== undefined) types.add(recordType);
+            for (const recordType of operation === undefined
+              ? []
+              : (actionRecordTypes.get(operation.toLowerCase()) ?? []))
+              types.add(recordType);
           }
           for (const child of flowTaskChildLists(task)) visitTasks(child.tasks);
         }
