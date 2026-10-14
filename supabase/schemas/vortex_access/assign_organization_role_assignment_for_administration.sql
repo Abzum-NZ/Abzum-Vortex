@@ -38,6 +38,8 @@ declare
   checked_at timestamptz;
   activity_result text;
 begin
+  p_starts_at := coalesce(p_starts_at, now());
+
   if p_role_assignment_id is null
     or p_role_assignment_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_role_id is null
@@ -48,7 +50,6 @@ begin
     or p_assignee_kind not in ('organization_account', 'group')
     or p_assignment_kind is null
     or p_assignment_kind not in ('standing', 'eligible')
-    or p_starts_at is null
     or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and p_expires_at <= p_starts_at)
