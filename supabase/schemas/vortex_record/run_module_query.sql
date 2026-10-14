@@ -66,6 +66,10 @@ declare
   order_by_sql text;
   scan_sql text;
   read_row record;
+  page_access_loaded jsonb;
+  page_declaration jsonb;
+  page_eligibility jsonb;
+  page_eligibility_checked boolean := false;
   readable_field_ids text[] := array[]::text[];
   access_sql text;
   access_parameters jsonb := '[]'::jsonb;
@@ -885,9 +889,25 @@ begin
     end if;
 
     if passes then
+      if not preview_mode and not page_eligibility_checked then
+        -- Keep the reusable decision in this invocation; the request role cannot
+        -- write it or pass it to the owner-only exact-record evaluator.
+        page_eligibility_checked := true;
+        page_access_loaded := vortex_record.load_record_access_facts_internal(
+          record_type_id_value, 'read', scan_record.record_id, null
+        );
+        if page_access_loaded ->> 'outcome' = 'loaded'
+          and pg_catalog.jsonb_typeof(page_access_loaded -> 'declaration') = 'object' then
+          page_declaration := page_access_loaded -> 'declaration';
+          page_eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+            page_declaration, vortex_access.validated_human_request_context(),
+            pg_catalog.clock_timestamp()
+          );
+        end if;
+      end if;
       select row_read.* into read_row
-      from vortex_record.read_record_projection_internal(
-        record_type_id_value, scan_record.record_id
+      from vortex_record.read_record_projection_with_eligibility_internal(
+        record_type_id_value, scan_record.record_id, page_declaration, page_eligibility
       ) as row_read;
       projection := read_row.projection;
       if projection ->> 'outcome' = 'allowed' then
