@@ -46,6 +46,7 @@ export type RecordFieldValuePendingCheck =
       kind: "choice_permission";
       fieldId: string;
       path: ValuePath;
+      optionValue: string;
       permissionId: PermissionId;
     }>
   | Readonly<{
@@ -229,6 +230,7 @@ const collectChoicePermission = (
       kind: "choice_permission",
       fieldId,
       path,
+      optionValue: value,
       permissionId: option.requiredPermissionId,
     });
 };
