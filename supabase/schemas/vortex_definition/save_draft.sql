@@ -111,8 +111,13 @@ begin
     operation_at
   );
 
-  if human_write then
-    perform vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
+  if human_write and (
+    checked_context ->> 'draftWriteDeadline' is null
+    or (checked_context ->> 'draftWriteDeadline')::timestamptz
+      <= pg_catalog.clock_timestamp()
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Definition draft write authority is unavailable';
   end if;
 
   return query
