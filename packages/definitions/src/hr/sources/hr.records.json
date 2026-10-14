@@ -122,6 +122,21 @@
               "reverse_key": "employees",
               "on_parent_delete": "refuse"
             }
+          },
+          {
+            "id": "fld_hr_employee_annual_leave_days",
+            "key": "annual_leave_days",
+            "label": "Annual leave entitlement (days)",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {
+              "minimum": 0
+            }
           }
         ],
         "relationships": [
@@ -318,6 +333,21 @@
             "public_display": "refused",
             "type": "date",
             "settings": {}
+          },
+          {
+            "id": "fld_hr_leave_request_days",
+            "key": "days",
+            "label": "Leave days",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {
+              "minimum": 1
+            }
           },
           {
             "id": "fld_hr_leave_request_reason",
@@ -574,7 +604,8 @@
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ],
           "changeable_fields": []
         }
@@ -600,14 +631,16 @@
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ],
           "changeable_fields": [
             "employee_number",
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ]
         }
       },
@@ -632,14 +665,16 @@
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ],
           "changeable_fields": [
             "employee_number",
             "employment_status",
             "start_date",
             "person",
-            "position"
+            "position",
+            "annual_leave_days"
           ]
         }
       },
@@ -662,6 +697,7 @@
           "readable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -688,6 +724,7 @@
           "readable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -695,6 +732,7 @@
           "changeable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -720,6 +758,7 @@
           "readable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -727,6 +766,7 @@
           "changeable_fields": [
             "start_date",
             "end_date",
+            "days",
             "reason",
             "status",
             "employee"
@@ -902,7 +942,8 @@
           "employment_status",
           "start_date",
           "person",
-          "position"
+          "position",
+          "annual_leave_days"
         ],
         "filter": null,
         "group_by": [],
@@ -924,6 +965,7 @@
         "select": [
           "start_date",
           "end_date",
+          "days",
           "status",
           "employee"
         ],
@@ -933,6 +975,40 @@
         "sort": [
           {
             "field": "start_date",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_hr_leave_taken_by_employee",
+        "key": "hr_leave_taken_by_employee",
+        "label": "Approved leave days taken",
+        "description": "Total of approved leave days across the leave requests the viewer can read",
+        "record_type": "leave_request",
+        "inputs": [],
+        "select": [
+          "employee"
+        ],
+        "filter": {
+          "field": "status",
+          "operator": "equals",
+          "value": "approved"
+        },
+        "group_by": [
+          "employee"
+        ],
+        "aggregates": [
+          {
+            "operation": "sum",
+            "field": "days",
+            "alias": "days_taken"
+          }
+        ],
+        "sort": [
+          {
+            "field": "employee",
             "direction": "ascending"
           }
         ],

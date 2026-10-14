@@ -117,6 +117,14 @@
         "permission": "application.hr.open"
       },
       {
+        "id": "nav_hr_leave_balance",
+        "type": "page",
+        "label": "Leave balance",
+        "icon": "calendar",
+        "page": "hr_leave_balance",
+        "permission": "application.hr.open"
+      },
+      {
         "id": "nav_hr_team_calendar",
         "type": "page",
         "label": "Team calendar",
@@ -1769,6 +1777,19 @@
                               "value": "Position"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.annual_leave_days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Annual leave entitlement (days)"
+                            }
+                          }
                         }
                       ]
                     },
@@ -1925,6 +1946,19 @@
                             "label": {
                               "kind": "text",
                               "value": "Position"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.annual_leave_days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Annual leave entitlement (days)"
                             }
                           }
                         }
@@ -2240,6 +2274,35 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "hr_employee_new_annual_leave_days": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.annual_leave_days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Annual leave entitlement (days)"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
@@ -2247,6 +2310,7 @@
                           "hr_employee_new_employee_number",
                           "hr_employee_new_employment_status",
                           "hr_employee_new_start_date",
+                          "hr_employee_new_annual_leave_days",
                           "hr_employee_new_person",
                           "hr_employee_new_position",
                           "hr_employee_new_submit"
@@ -2515,6 +2579,35 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "hr_employee_edit_annual_leave_days": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:employee.annual_leave_days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Annual leave entitlement (days)"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
@@ -2522,6 +2615,7 @@
                           "hr_employee_edit_employee_number",
                           "hr_employee_edit_employment_status",
                           "hr_employee_edit_start_date",
+                          "hr_employee_edit_annual_leave_days",
                           "hr_employee_edit_person",
                           "hr_employee_edit_position",
                           "hr_employee_edit_submit"
@@ -2595,6 +2689,19 @@
                             "label": {
                               "kind": "text",
                               "value": "End date"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Leave days"
                             }
                           }
                         },
@@ -2740,6 +2847,19 @@
                             "label": {
                               "kind": "text",
                               "value": "End date"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Leave days"
                             }
                           }
                         },
@@ -3077,12 +3197,42 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "hr_leave_request_new_days": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Leave days"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
                         "desktop": [
                           "hr_leave_request_new_start_date",
                           "hr_leave_request_new_end_date",
+                          "hr_leave_request_new_days",
                           "hr_leave_request_new_reason",
                           "hr_leave_request_new_status",
                           "hr_leave_request_new_employee",
@@ -3335,12 +3485,42 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "hr_leave_request_edit_days": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Leave days"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
                         "desktop": [
                           "hr_leave_request_edit_start_date",
                           "hr_leave_request_edit_end_date",
+                          "hr_leave_request_edit_days",
                           "hr_leave_request_edit_reason",
                           "hr_leave_request_edit_status",
                           "hr_leave_request_edit_employee",
@@ -3354,6 +3534,58 @@
               "order": {
                 "desktop": [
                   "hr_leave_request_edit_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_balance",
+        "key": "hr_leave_balance",
+        "name": "Leave balance",
+        "type": "dashboard",
+        "permission": "application.hr.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_balance_taken": {
+                  "block": {
+                    "block_id": "b00f7a0f-9094-4186-b8c4-066b1df6c395",
+                    "release_version": "1.1.0"
+                  },
+                  "query": "vortex.hr:hr_leave_taken_by_employee",
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Approved leave days taken (all employees you can see, all years)"
+                    },
+                    "empty_message": {
+                      "kind": "text",
+                      "value": "No approved leave to show."
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_balance_taken"
                 ]
               }
             }

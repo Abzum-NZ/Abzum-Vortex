@@ -24,6 +24,8 @@ type BeforeSaveLoweringRefusal = Readonly<{
   path: Path;
   /** The innermost task that cannot be lowered, when the refusal is inside one. */
   taskId?: string;
+  /** The rule graph field that failed and why, when the lowered graph itself was refused. */
+  detail?: string;
 }>;
 
 type BeforeSaveLowering =
@@ -58,7 +60,8 @@ export const isBeforeSaveFlow = (flow: SourceFlow): boolean =>
 
 const startNodeAlias = "start";
 const finishNodeAlias = "finish";
-const taskNodeAlias = (taskId: string): string => `task_${taskId}`;
+const taskNodePrefix = "task_";
+const taskNodeAlias = (taskId: string): string => `${taskNodePrefix}${taskId}`;
 
 // ─── Conditions ────────────────────────────────────────────────────────────────────────────────
 
@@ -393,7 +396,26 @@ export const lowerBeforeSaveFlow = (flow: SourceFlow): BeforeSaveLowering => {
       nodes: builder.nodes,
       edges: builder.edges,
     });
-    if (!graph.success) return invalidValue([]);
+    if (!graph.success) {
+      // The graph schema names the failing node and field; the node id leads back to its task.
+      const issue = graph.error.issues[0];
+      const nodeIndex = issue?.path[0] === "nodes" ? issue.path[1] : undefined;
+      const nodeId = typeof nodeIndex === "number" ? builder.nodes[nodeIndex]?.id : undefined;
+      const taskId = nodeId?.startsWith(taskNodePrefix) ? nodeId.slice(taskNodePrefix.length) : undefined;
+      const offending = (issue?.path ?? []).reduce<unknown>(
+        (value, key) => (value === null || typeof value !== "object" ? undefined : Reflect.get(value, key)),
+        { nodes: builder.nodes },
+      );
+      throw new Refused({
+        ruleCode: "vortex.definition.workflow_node_values",
+        family: "invalid_value",
+        path: [],
+        ...(taskId === undefined ? {} : { taskId }),
+        detail: `${(issue?.path ?? []).join(".")}: ${issue?.message ?? "invalid rule graph"}${
+          typeof offending === "string" ? ` (value "${offending}", ${offending.length} characters)` : ""
+        }`,
+      });
+    }
     return { ok: true, graph: graph.data };
   } catch (error) {
     if (error instanceof Refused) return { ok: false, refusal: error.refusal };
