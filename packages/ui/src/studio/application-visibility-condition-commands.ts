@@ -7,7 +7,7 @@ import {
   type ApplicationSourceDocument, type ConditionNode, type ModuleField,
 } from "@vortex/platform/schema";
 import { validateStudioCondition, type StudioConditionControlsContext,
-  type StudioConditionValidation, type StudioConditionValidationIssue } from "./condition-controls";
+  type StudioConditionValidation, type StudioConditionValidationIssue } from "./condition-model";
 import type { StudioCompositionContext } from "./application-composition-commands";
 import type { StudioSemanticSelection } from "./semantic-selection";
 

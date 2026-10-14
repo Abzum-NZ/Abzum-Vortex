@@ -58,6 +58,7 @@ type CalculatedFieldValues =
           code: string;
           fieldId?: string;
           path: readonly (string | number)[];
+          requirement?: Readonly<{ code: string; message: string }>;
         }>
       >;
     }>;
@@ -115,6 +116,7 @@ export const calculateAndFinalize = ({
                 code: beforeSaveRuleRefusedIssueCode,
                 ...(applied.fieldId === undefined ? {} : { fieldId: applied.fieldId }),
                 path: ["rules"],
+                requirement: { code: applied.code, message: applied.message },
               }
             : { code: beforeSaveRuleUnavailableIssueCode, path: ["rules"] },
         ],

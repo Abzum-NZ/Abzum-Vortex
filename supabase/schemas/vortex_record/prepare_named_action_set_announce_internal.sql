@@ -26,6 +26,12 @@ declare
   decision jsonb;
   bounds jsonb;
   projection jsonb;
+  copy_plan jsonb;
+  copy_targets jsonb := '[]'::jsonb;
+  copy_target record;
+  target_meta jsonb;
+  target_loaded jsonb;
+  target_decision jsonb;
 begin
   if p_preview is null or p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -148,6 +154,76 @@ begin
       bounds -> 'readableFieldIds'
     )
   );
+  -- Use the same locked copy plan the writer re-derives. Only rows with an
+  -- actual new edge are evaluated; a no-op copy does not save its target.
+  copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+    p_action_id, p_record_type_id, p_record_id, p_inputs
+  );
+  if copy_plan ->> 'outcome' = 'refused' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', copy_plan -> 'reasonCode',
+      'correlationId', context_value -> 'correlationId'
+    );
+  end if;
+  for copy_target in
+    select (item.value ->> 'targetRecordId')::uuid as record_id,
+      pg_catalog.jsonb_object_agg(
+        item.value ->> 'fromFieldId', item.value -> 'value'
+      ) as submitted_values
+    from pg_catalog.jsonb_array_elements(
+      coalesce(copy_plan -> 'copies', '[]'::jsonb)
+    ) item(value)
+    group by 1
+    order by 1
+  loop
+    target_meta := vortex_record.resolve_record_action_context_internal(
+      p_record_type_id, 'update'
+    );
+    target_loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'update', copy_target.record_id, null
+    );
+    if target_loaded ->> 'outcome' is distinct from 'loaded' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable',
+        'correlationId', context_value -> 'correlationId'
+      );
+    end if;
+    target_decision := vortex_access.evaluate_organization_record_access_internal(
+      target_meta -> 'declaration', copy_target.record_id,
+      (target_loaded -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', target_meta -> 'declaration' -> 'recordBinding'
+      )
+    );
+    if target_decision ->> 'outcome' is distinct from 'allowed' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'permission_refused',
+        'correlationId', context_value -> 'correlationId'
+      );
+    end if;
+    if exists (
+      select 1 from pg_catalog.jsonb_object_keys(copy_target.submitted_values) field_id
+      where not exists (
+        select 1 from pg_catalog.jsonb_array_elements_text(
+          vortex_access.resolve_record_field_bounds_internal(target_decision)
+            -> 'changeableFieldIds'
+        ) allowed(value)
+        where pg_catalog.lower(allowed.value) = pg_catalog.lower(field_id)
+      )
+    ) then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'permission_refused',
+        'correlationId', context_value -> 'correlationId'
+      );
+    end if;
+    copy_targets := copy_targets || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'recordId', copy_target.record_id,
+        'existingValues', target_loaded -> 'fieldValues',
+        'submittedValues', copy_target.submitted_values
+      )
+    );
+  end loop;
   return pg_catalog.jsonb_build_object(
     'outcome', case when p_preview then 'previewed' else 'prepared' end,
     'action', action_context -> 'action',
@@ -170,6 +246,7 @@ begin
       )
       from pg_catalog.jsonb_array_elements(creation_plan -> 'createTargets') item(value)
     ), '[]'::jsonb),
+    'copyTargets', copy_targets,
     'recordId', p_record_id,
     'existingValues', loaded -> 'fieldValues',
     -- A singleton required permission was decided by the named-action access

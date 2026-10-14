@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  describeFailure,
   ruleGraphSchema,
   type JsonValue,
   type ModuleDefinitionConsumerReadResult,
@@ -44,7 +45,9 @@ export type BeforeSaveRuleExecution = Readonly<{
   warnings: BeforeSaveRuleWarning[];
 }>;
 
-export const beginBeforeSaveRuleExecution = (ruleSet: BeforeSaveRuleSet): BeforeSaveRuleExecution => ({
+export const beginBeforeSaveRuleExecution = (
+  ruleSet: BeforeSaveRuleSet,
+): BeforeSaveRuleExecution => ({
   ruleSet,
   warnings: [],
 });
@@ -55,7 +58,13 @@ type BeforeSaveRuleApplication =
       candidateValues: Readonly<Record<string, JsonValue>>;
       requirements: readonly BeforeSaveRuleRequirement[];
     }>
-  | Readonly<{ success: false; reason: "refused"; fieldId?: string }>
+  | Readonly<{
+      success: false;
+      reason: "refused";
+      code: string;
+      message: string;
+      fieldId?: string;
+    }>
   | Readonly<{ success: false; reason: "unavailable" }>;
 
 const generatedFieldTypes = new Set<string>(["reference_number", "calculation", "total"]);
@@ -145,8 +154,10 @@ export const applyBeforeSaveRules = (input: {
         ? evaluateBeforeSaveRuleGraphs({ ...base, operation: "create" })
         : evaluateBeforeSaveRuleGraphs({ ...base, operation: "update", previousValues });
   } catch (error) {
-    if (error instanceof BeforeSaveRuleGraphEvaluationError)
+    if (error instanceof BeforeSaveRuleGraphEvaluationError) {
+      console.error(`[before-save-rules] graph evaluation unavailable: ${describeFailure(error)}`);
       return { success: false, reason: "unavailable" };
+    }
     throw error;
   }
 
@@ -154,6 +165,8 @@ export const applyBeforeSaveRules = (input: {
     return {
       success: false,
       reason: "refused",
+      code: result.refusal.code,
+      message: result.refusal.message,
       ...(result.refusal.fieldId === undefined ? {} : { fieldId: result.refusal.fieldId }),
     };
   }

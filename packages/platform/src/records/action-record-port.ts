@@ -10,6 +10,7 @@ import {
   executeNamedActionResultSchema,
   moduleValidationContractVersion,
   permissionIdSchema,
+  recordLinkValueSchema,
   recordTypeDefinitionSchema,
   saveRecordCommandSchema,
   type ExecuteNamedActionCommand,
@@ -59,6 +60,7 @@ import {
 import { calculateAndFinalize, operationClock } from "./field-candidate";
 
 type ResultRow = DatabaseRow & { readonly value: unknown };
+type RuleReason = Readonly<{ code: string; message: string }>;
 
 type PreparedAction = PreparedNamedAction &
   Readonly<{
@@ -70,6 +72,11 @@ type PreparedAction = PreparedNamedAction &
     singleRequiredPermissionId?: string;
     /** The exact release's compiled before-save rules for the subject, unparsed. */
     beforeSaveRules?: unknown;
+    copyTargets: readonly Readonly<{
+      recordId: string;
+      existingValues: Readonly<Record<string, unknown>>;
+      submittedValues: Readonly<Record<string, unknown>>;
+    }>[];
   }>;
 
 /**
@@ -100,12 +107,18 @@ const safeRefusal = (
   correlationId: string,
   code: "invalid_request" | "operation_refused" | "conflict",
   reason: string,
+  ruleReason?: RuleReason,
 ): ExecuteNamedActionResult => {
   console.error(`[named-action] refused (${code}) ${correlationId}: ${reason}`);
   return executeNamedActionResultSchema.parse({
     contractVersion: "2.0.0",
     outcome: "refused",
-    error: { code, messageKey: `errors.${code}`, correlationId },
+    error: {
+      code,
+      messageKey: `errors.${code}`,
+      correlationId,
+      ...(ruleReason === undefined ? {} : { reason: ruleReason }),
+    },
   });
 };
 
@@ -155,6 +168,51 @@ const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarge
     : undefined;
 };
 
+const parseCopyTargets = (candidate: unknown, recordType: PreparedNamedAction["recordType"]) => {
+  if (!Array.isArray(candidate)) return undefined;
+  const targets: Array<{
+    recordId: string;
+    existingValues: Record<string, unknown>;
+    submittedValues: Record<string, unknown>;
+  }> = [];
+  const fieldIds = new Set(recordType.fields.map((field) => field.fieldId.toLowerCase()));
+  for (const entry of candidate) {
+    if (typeof entry !== "object" || entry === null) return undefined;
+    const value = entry as Record<string, unknown>;
+    if (
+      typeof value.recordId !== "string" ||
+      typeof value.existingValues !== "object" ||
+      value.existingValues === null ||
+      Array.isArray(value.existingValues) ||
+      typeof value.submittedValues !== "object" ||
+      value.submittedValues === null ||
+      Array.isArray(value.submittedValues)
+    )
+      return undefined;
+    const recordId = value.recordId;
+    const existingValues = { ...(value.existingValues as Record<string, unknown>) };
+    const submittedValues = value.submittedValues as Record<string, unknown>;
+    if (
+      Object.keys(submittedValues).length === 0 ||
+      Object.keys(submittedValues).some((fieldId) => !fieldIds.has(fieldId.toLowerCase())) ||
+      targets.some((target) => target.recordId.toLowerCase() === recordId.toLowerCase())
+    )
+      return undefined;
+    for (const field of recordType.fields) {
+      if (
+        !field.required &&
+        field.type !== "reference_number" &&
+        field.type !== "calculation" &&
+        field.type !== "total" &&
+        existingValues[field.fieldId] === null
+      )
+        delete existingValues[field.fieldId];
+    }
+    targets.push({ recordId, existingValues, submittedValues });
+  }
+  return targets;
+};
+
 const parsePreparation = (candidate: unknown): ActionPreparation => {
   if (typeof candidate !== "object" || candidate === null) return { outcome: "refused" };
   const value = candidate as Record<string, unknown>;
@@ -184,6 +242,9 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
   const action = actionDefinitionSchema.safeParse(value.action);
   const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
   const createTargets = parseCreateTargets(value.createTargets);
+  const copyTargets = recordType.success
+    ? parseCopyTargets(value.copyTargets, recordType.data)
+    : undefined;
   // An action that targets a registered protected operation, and every action of a system
   // projection record type, runs through that operation's owning service, never through ordered
   // record tasks.
@@ -193,6 +254,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     !recordType.success ||
     recordType.data.systemProjection !== undefined ||
     createTargets === undefined ||
+    copyTargets === undefined ||
     value.validationContractVersion !== moduleValidationContractVersion ||
     typeof value.recordId !== "string" ||
     typeof value.existingValues !== "object" ||
@@ -227,6 +289,7 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
     existingValues,
     actorOrganizationAccountId: value.actorOrganizationAccountId,
     createTargets,
+    copyTargets,
     readableFieldIds: new Set(
       value.readableFieldIds.filter((item): item is string => typeof item === "string"),
     ),
@@ -277,7 +340,12 @@ const deleteLifecycleCommandId = (actionCommandId: string): string => {
 /** Issue codes, fields and paths only: never a record value. */
 const describeIssues = (
   issues: ReadonlyArray<
-    Readonly<{ code: string; fieldId?: string; path: readonly (string | number)[] }>
+    Readonly<{
+      code: string;
+      fieldId?: string;
+      path: readonly (string | number)[];
+      requirement?: Readonly<{ code: string; message: string }>;
+    }>
   >,
 ): string =>
   issues.length === 0
@@ -285,9 +353,18 @@ const describeIssues = (
     : issues
         .map(
           (value) =>
-            `${value.code}${value.fieldId === undefined ? "" : ` field ${value.fieldId}`} at ${value.path.join(".") || "(root)"}`,
+            `${value.code}${value.fieldId === undefined ? "" : ` field ${value.fieldId}`} at ${value.path.join(".") || "(root)"}${value.requirement === undefined ? "" : `: ${value.requirement.code}: ${value.requirement.message}`}`,
         )
         .join("; ");
+
+const ruleReasonFromIssues = (
+  issues: ReadonlyArray<Readonly<{ code: string; requirement?: RuleReason }>>,
+): RuleReason | undefined =>
+  issues.find(
+    (issue) =>
+      issue.requirement !== undefined &&
+      (issue.code === "before_save_rule_refused" || issue.code === "required_field_missing"),
+  )?.requirement;
 
 const creationFinalValues = (
   prepared: PreparedAction,
@@ -296,7 +373,10 @@ const creationFinalValues = (
   organizationCurrency: string | undefined,
   timeZone: string | undefined,
   ruleExecutions: BeforeSaveRuleExecution[],
-): Readonly<{ values: Record<number, Record<string, JsonValue | null>> } | { reason: string }> => {
+): Readonly<
+  | { values: Record<number, Record<string, JsonValue | null>> }
+  | { reason: string; ruleReason?: RuleReason }
+> => {
   const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
   const values: Record<number, Record<string, JsonValue | null>> = {};
   for (const creation of creations) {
@@ -329,10 +409,13 @@ const creationFinalValues = (
       timeZone,
       rules: execution,
     });
-    if (!calculated.success)
+    if (!calculated.success) {
+      const ruleReason = ruleReasonFromIssues(calculated.issues);
       return {
         reason: `the created record ${creation.ordinal} did not calculate: ${describeIssues(calculated.issues)}`,
+        ...(ruleReason === undefined ? {} : { ruleReason }),
       };
+    }
     if (
       calculated.pendingChecks.some(
         (check) =>
@@ -746,14 +829,62 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 "operation_refused",
                 "the subject's before-save rules are unavailable",
               );
-            // A copy writes another subject-type record. Until the copy target
-            // joins the locked evaluator inputs, refuse a copy that has rules.
-            if (subjectRuleSet.rules.length > 0 && composition.relationshipCopies.length > 0)
-              return safeRefusal(
-                prepared.correlationId,
-                "operation_refused",
-                "the relationship copy target has before-save rules",
-              );
+            const settings = await readOrganizationRuntimeSettings(transaction);
+            for (const target of prepared.copyTargets) {
+              const execution = beginBeforeSaveRuleExecution(subjectRuleSet);
+              const calculated = calculateAndFinalize({
+                operation: "update",
+                submittedValues: target.submittedValues,
+                recordType: prepared.recordType,
+                existingValues: target.existingValues,
+                issuedAt,
+                organizationCurrency: settings?.currency,
+                timeZone: settings?.timeZone,
+                rules: execution,
+              });
+              if (!calculated.success)
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  `the relationship copy target ${target.recordId} did not calculate: ${describeIssues(calculated.issues)}`,
+                  ruleReasonFromIssues(calculated.issues),
+                );
+              if (
+                calculated.pendingChecks.some(
+                  (check) =>
+                    !pendingCheckIsAuthorized(
+                      check,
+                      prepared.singleRequiredPermissionId,
+                      prepared.actorOrganizationAccountId,
+                    ),
+                )
+              )
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  `a pending check on relationship copy target ${target.recordId} is not authorised`,
+                );
+              if (
+                calculated.clearFieldIds.length > 0 ||
+                Object.entries(calculated.setValues).some(([fieldId, value]) => {
+                  const planned = recordLinkValueSchema.safeParse(target.submittedValues[fieldId]);
+                  const actual = recordLinkValueSchema.safeParse(value);
+                  return (
+                    !planned.success ||
+                    !actual.success ||
+                    planned.data.recordTypeId.toLowerCase() !==
+                      actual.data.recordTypeId.toLowerCase() ||
+                    planned.data.recordId.toLowerCase() !== actual.data.recordId.toLowerCase()
+                  );
+                })
+              )
+                return safeRefusal(
+                  prepared.correlationId,
+                  "operation_refused",
+                  `the relationship copy target ${target.recordId}'s rules changed values outside the copy plan`,
+                );
+              attempted.executions.push(execution);
+            }
             let closureRules: Map<string, BeforeSaveRuleExecution> | undefined;
             if (totalPreparation.outcome === "prepared") {
               closureRules = new Map();
@@ -797,7 +928,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
             // no creation can still leave a stale due row in place unless its
             // deadline transition is re-derived from the record's unchanged
             // existing values below.
-            const settings = await readOrganizationRuntimeSettings(transaction);
             if (
               Object.keys(composition.submittedValues).length > 0 ||
               composition.creations.length > 0
@@ -852,6 +982,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                   totalPreparation.outcome === "prepared" && clock === undefined
                     ? "the relationship totals have no operation clock for the records' time zone"
                     : `the subject values the action writes did not calculate: ${describeIssues(calculated.issues)}`,
+                  ruleReasonFromIssues(calculated.issues),
                 );
               if (totalPreparation.outcome === "prepared" && root === undefined)
                 return safeRefusal(
@@ -939,6 +1070,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                   prepared.correlationId,
                   "operation_refused",
                   createdFinalValues.reason,
+                  createdFinalValues.ruleReason,
                 );
               // `values` stays the composed authored field map, which the
               // database re-derives from the installed action; `finalValues`
