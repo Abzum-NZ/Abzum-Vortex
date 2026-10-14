@@ -200,7 +200,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   const inlineEventId = inlineEdit?.eventId;
   const onInlineEdit = inlineEdit === undefined ? undefined : events?.inline_edit;
   const inlineFields = inlineEdit?.fields ?? [];
-  // Only a text, number or yes/no cell of a field the row may change has a closed value the editor
+  // Only a text, link, number or yes/no cell of a field the row may change has a closed value the editor
   // can commit without guessing; any other cell stays read-only. The row revision travels with the
   // commit so the server refuses a stale change.
   const editable = (row: DisplayRow, columnKey: string, value: DisplayCellValue): boolean =>
@@ -210,7 +210,10 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     row.capabilities !== undefined &&
     row.capabilities.actions.includes("update") &&
     row.capabilities.changeableFieldIds.some((fieldId) => sameFieldKey(fieldId, columnKey)) &&
-    (value.kind === "text" || value.kind === "number" || value.kind === "boolean");
+    (value.kind === "text" ||
+      value.kind === "link" ||
+      value.kind === "number" ||
+      value.kind === "boolean");
   const showActionsColumn = events?.row_action !== undefined;
   const selectedRecordIds = values?.selectedRecordIds ?? [];
   const pageRecordIds = rows.map((row) => row.recordId);
@@ -435,7 +438,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                               {...(row.revision === undefined ? {} : { revision: row.revision })}
                               field={column.key}
                               label={column.label}
-                              value={cell}
+                              value={cell.kind === "link" ? { kind: "text", text: cell.label } : cell}
                               handler={onInlineEdit}
                             />
                           ) : (
