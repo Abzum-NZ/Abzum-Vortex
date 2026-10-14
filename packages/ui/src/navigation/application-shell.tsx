@@ -152,7 +152,7 @@ function OrganizationSwitcher({
       <DropdownMenuTrigger
         disabled={runtime === undefined && actions === null}
         aria-label={`Organisation: ${organizationName}`}
-        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center"
+        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-[44px] max-sm:min-w-[44px] max-sm:items-center max-sm:justify-center"
       >
         <SwitcherButton icon="building-2" label={organizationName} />
       </DropdownMenuTrigger>
@@ -205,7 +205,7 @@ function ApplicationSwitcher({
       <DropdownMenuTrigger
         disabled={runtime === undefined || runtime.applications.length === 0 || actions === null}
         aria-label={`Application: ${applicationName}`}
-        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center"
+        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-[44px] max-sm:min-w-[44px] max-sm:items-center max-sm:justify-center"
       >
         <SwitcherButton icon="grid" label={applicationName} />
       </DropdownMenuTrigger>
@@ -271,7 +271,7 @@ export function ApplicationShellRoot({
         <style>{shellFrameCss}</style>
         <header className="sticky top-0 z-20 flex min-h-14 w-full shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b py-1 sm:h-14 sm:flex-nowrap sm:py-0 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           {presentation.sidebar.collapsible === "icon" ? (
-            <SidebarTrigger className="max-sm:size-11" />
+            <SidebarTrigger className="max-sm:size-[44px]" />
           ) : null}
           {presentation.topBar.breadcrumbs ? (
             <Breadcrumbs shellName={shell.name} runtime={runtime} />
