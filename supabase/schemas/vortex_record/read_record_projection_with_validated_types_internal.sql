@@ -72,6 +72,11 @@ begin
     end if;
     if decision ->> 'outcome' <> 'allowed' then
       projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+      -- A decision, even a refusal, means the record types passed validation;
+      -- the page reuses them. Callers read read_facts only for allowed rows.
+      read_facts := pg_catalog.jsonb_build_object(
+        'validatedRecordTypes', loaded -> 'facts' -> 'recordTypes'
+      );
       return next;
       return;
     end if;

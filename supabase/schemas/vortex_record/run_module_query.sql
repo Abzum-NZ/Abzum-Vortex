@@ -909,10 +909,14 @@ begin
         validated_record_types
       ) as row_read;
       projection := read_row.projection;
+      if validated_record_types is null then
+        validated_record_types := coalesce(
+          read_row.read_facts -> 'validatedRecordTypes',
+          case when projection ->> 'outcome' = 'allowed'
+            then read_row.read_facts #> '{facts,recordTypes}' end
+        );
+      end if;
       if projection ->> 'outcome' = 'allowed' then
-        if validated_record_types is null then
-          validated_record_types := read_row.read_facts #> '{facts,recordTypes}';
-        end if;
         readable_values := projection -> 'values';
         if not exists (
           select 1 from pg_catalog.unnest(declared_sort_ids || filter_ids) as referenced(id)
