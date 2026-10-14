@@ -40,6 +40,12 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Canonical SQL functions that differ from their latest migration",
   },
+  "sql-identifier-length": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description: "SQL objects named past 63 characters, which Postgres silently truncates",
+  },
   "migration-version-duplicate": {
     tier: "blocking",
     owner: "lead",
@@ -151,6 +157,7 @@ export const scannedRuleIds = new Set([
   "layering",
   "migration-mismatch",
   "migration-version-duplicate",
+  "sql-identifier-length",
   "migration-orphan",
   "function-uuid",
   "migration-owner-role",

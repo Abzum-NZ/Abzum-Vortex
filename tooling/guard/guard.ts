@@ -695,6 +695,20 @@ for (const file of migrationFiles) {
   if (first) add("migration-version-duplicate", file, 1, `${version} also used by ${first}`);
   else migrationVersions.set(version, file);
 }
+// Postgres silently truncates identifiers past 63 bytes, so a longer name diverges from its file.
+const createdIdentifierPattern =
+  /create\s+(?:or\s+replace\s+)?(?:unique\s+)?(?:function|table|index|view|materialized\s+view|trigger|policy|type|sequence)\s+(?:if\s+not\s+exists\s+)?(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*)/gi;
+for (const file of files.filter(
+  (file) =>
+    (file.startsWith(paths.migrations) && !baselineMigrationFiles.has(file)) ||
+    file.startsWith(paths.canonical),
+)) {
+  if (!file.endsWith(".sql")) continue;
+  const content = read(file);
+  for (const match of content.matchAll(createdIdentifierPattern))
+    if (match[1].length > 63)
+      add("sql-identifier-length", file, lineAt(content, match.index), `${match[1]} (${match[1].length})`);
+}
 const latest = new Map<string, { definition: string; file: string }>();
 const latestLive = new Map<string, { file: string; line: number; key: string }>();
 for (const file of migrationFiles) {
