@@ -695,6 +695,35 @@ for (const file of migrationFiles) {
   if (first) add("migration-version-duplicate", file, 1, `${version} also used by ${first}`);
   else migrationVersions.set(version, file);
 }
+// Postgres silently truncates identifiers past 63 bytes, so a longer name diverges from its file.
+const sqlIdentifier = String.raw`(?:"(?:[^"]|"")+"|[\p{L}_][\p{L}\p{N}_$]*)`;
+const createdIdentifierPattern = new RegExp(
+  String.raw`\bcreate\s+(?:or\s+replace\s+)?(?:(?:temporary|temp|unlogged|constraint|unique|recursive)\s+)*` +
+    String.raw`(?:function|procedure|table|index|view|materialized\s+view|trigger|policy|type|sequence)\s+` +
+    String.raw`(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?(?:${sqlIdentifier}\s*\.\s*)?(${sqlIdentifier})`,
+  "giu",
+);
+// Comments and string literals create no objects; blank them while keeping line positions.
+const withoutSqlCommentsAndStrings = (sql: string) =>
+  sql.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/gu, (text) => text.replace(/[^\n]/g, " "));
+const identifierBytes = (identifier: string) =>
+  Buffer.byteLength(
+    identifier.startsWith('"') ? identifier.slice(1, -1).replaceAll('""', '"') : identifier.toLowerCase(),
+    "utf8",
+  );
+for (const file of files.filter(
+  (file) =>
+    (file.startsWith(paths.migrations) && !baselineMigrationFiles.has(file)) ||
+    file.startsWith(paths.canonical),
+)) {
+  if (!file.endsWith(".sql")) continue;
+  const content = withoutSqlCommentsAndStrings(read(file));
+  for (const match of content.matchAll(createdIdentifierPattern)) {
+    const bytes = identifierBytes(match[1]);
+    if (bytes > 63)
+      add("sql-identifier-length", file, lineAt(content, match.index), `${match[1]} (${bytes} bytes)`);
+  }
+}
 const latest = new Map<string, { definition: string; file: string }>();
 const latestLive = new Map<string, { file: string; line: number; key: string }>();
 for (const file of migrationFiles) {
