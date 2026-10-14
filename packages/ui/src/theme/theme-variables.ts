@@ -40,6 +40,7 @@ const THEME_VARIABLE_NAMES = [
   "--vortex-danger-text",
   "--vortex-warning-text",
   "--vortex-info-text",
+  "--vortex-success-text",
   "--vortex-focus-color",
   "--vortex-focus-width",
   "--vortex-font-family",
@@ -155,6 +156,7 @@ function platformDefaults(tokens: ThemeTokens): Readonly<{
   dangerText: ColorPair;
   warningText: ColorPair;
   infoText: ColorPair;
+  successText: ColorPair;
   focus: ColorPair;
 }> {
   const focus = tokens.focus;
@@ -173,6 +175,7 @@ function platformDefaults(tokens: ThemeTokens): Readonly<{
     dangerText: platformColor(tokens, "danger_text"),
     warningText: platformColor(tokens, "warning_text"),
     infoText: platformColor(tokens, "info_text"),
+    successText: platformColor(tokens, "success_text"),
     focus: platformColor(tokens, focus.colorToken as PlatformThemeTokenRoleKey),
   };
 }
@@ -289,7 +292,7 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * Token keys are the shared vocabulary's roles (one key per role, no aliases):
  * - colour: the #594-selected `background` with `text`; `muted_text`; `border_color`; `primary`
  *   (accent); the filled pairs `primary`, `secondary`, `danger` with `<key>_foreground`;
- *   `danger_text`, `warning_text`, `info_text`.
+ *   `danger_text`, `warning_text`, `info_text`, `success_text`.
  * - typography `body` and `heading`; spacing `space_xs`..`space_lg`; corners
  *   `radius_sm`..`radius_lg`; border `border`; elevation `elevation_low`, `elevation_high`;
  *   focus `focus`; density `density`.
@@ -417,6 +420,7 @@ function generateThemeCssVariables(
     "--vortex-danger-text": onSurface("danger_text", PLATFORM_DEFAULTS.dangerText),
     "--vortex-warning-text": onSurface("warning_text", PLATFORM_DEFAULTS.warningText),
     "--vortex-info-text": onSurface("info_text", PLATFORM_DEFAULTS.infoText),
+    "--vortex-success-text": onSurface("success_text", PLATFORM_DEFAULTS.successText),
     "--vortex-focus-color": colorValue(
       focusColor ?? (surfaceValidated ? text : PLATFORM_DEFAULTS.focus),
     ),
