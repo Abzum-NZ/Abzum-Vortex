@@ -291,6 +291,83 @@
         ]
       },
       {
+        "id": "rt_hr_leave_entitlement",
+        "key": "leave_entitlement",
+        "name": "Leave Entitlement",
+        "plural_name": "Leave Entitlements",
+        "title_field": "year",
+        "storage_contract_id": "srt_hr_leave_entitlement",
+        "storage_scope": "application_contained",
+        "ownership_mode": "none",
+        "standard_actions": [
+          "create",
+          "read",
+          "update",
+          "soft_delete",
+          "restore"
+        ],
+        "custom_actions": [],
+        "fields": [
+          {
+            "id": "fld_hr_entitlement_employee",
+            "key": "employee",
+            "label": "Employee",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.hr:employee",
+              "reverse_key": "leave_entitlements",
+              "on_parent_delete": "refuse"
+            }
+          },
+          {
+            "id": "fld_hr_entitlement_year",
+            "key": "year",
+            "label": "Year",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {
+              "minimum": 2000
+            }
+          },
+          {
+            "id": "fld_hr_entitlement_days",
+            "key": "days",
+            "label": "Entitlement (days)",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "whole_number",
+            "settings": {
+              "minimum": 0
+            }
+          }
+        ],
+        "relationships": [
+          {
+            "id": "rel_hr_leave_entitlement_employee",
+            "key": "employee",
+            "from_field": "employee",
+            "to_record_type": "vortex.hr:employee",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
+          }
+        ]
+      },
+      {
         "id": "rt_hr_leave_request",
         "key": "leave_request",
         "name": "Leave Request",
@@ -413,6 +490,23 @@
               "reverse_key": "leave_requests",
               "on_parent_delete": "refuse"
             }
+          },
+          {
+            "id": "fld_hr_leave_request_entitlement",
+            "key": "entitlement",
+            "label": "Entitlement",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": false,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.hr:leave_entitlement",
+              "reverse_key": "leave_requests",
+              "on_parent_delete": "refuse"
+            }
           }
         ],
         "relationships": [
@@ -421,6 +515,14 @@
             "key": "employee",
             "from_field": "employee",
             "to_record_type": "vortex.hr:employee",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "refuse"
+          },
+          {
+            "id": "rel_hr_leave_request_entitlement",
+            "key": "entitlement",
+            "from_field": "entitlement",
+            "to_record_type": "vortex.hr:leave_entitlement",
             "cardinality": "many_to_one",
             "on_parent_delete": "refuse"
           }
@@ -700,7 +802,8 @@
             "days",
             "reason",
             "status",
-            "employee"
+            "employee",
+            "entitlement"
           ],
           "changeable_fields": []
         }
@@ -727,7 +830,8 @@
             "days",
             "reason",
             "status",
-            "employee"
+            "employee",
+            "entitlement"
           ],
           "changeable_fields": [
             "start_date",
@@ -735,7 +839,8 @@
             "days",
             "reason",
             "status",
-            "employee"
+            "employee",
+            "entitlement"
           ]
         }
       },
@@ -761,7 +866,8 @@
             "days",
             "reason",
             "status",
-            "employee"
+            "employee",
+            "entitlement"
           ],
           "changeable_fields": [
             "start_date",
@@ -769,7 +875,88 @@
             "days",
             "reason",
             "status",
-            "employee"
+            "employee",
+            "entitlement"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_leave_entitlement_read",
+        "key": "vortex.hr.leave_entitlement.read",
+        "label": "Read leave entitlements",
+        "description": "Read leave entitlements in this private HR application.",
+        "record_type": "leave_entitlement",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee",
+            "year",
+            "days"
+          ],
+          "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_hr_leave_entitlement_create",
+        "key": "vortex.hr.leave_entitlement.create",
+        "label": "Create leave entitlements",
+        "description": "Create leave entitlements in this HR application.",
+        "record_type": "leave_entitlement",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee",
+            "year",
+            "days"
+          ],
+          "changeable_fields": [
+            "employee",
+            "year",
+            "days"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_leave_entitlement_update",
+        "key": "vortex.hr.leave_entitlement.update",
+        "label": "Update leave entitlements",
+        "description": "Update leave entitlements in this HR application.",
+        "record_type": "leave_entitlement",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "employee",
+            "year",
+            "days"
+          ],
+          "changeable_fields": [
+            "employee",
+            "year",
+            "days"
           ]
         }
       }
@@ -967,7 +1154,8 @@
           "end_date",
           "days",
           "status",
-          "employee"
+          "employee",
+          "entitlement"
         ],
         "filter": null,
         "group_by": [],
@@ -1009,6 +1197,28 @@
         "sort": [
           {
             "field": "employee",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
+        "id": "qry_hr_leave_entitlements",
+        "key": "hr_leave_entitlements",
+        "record_type": "leave_entitlement",
+        "inputs": [],
+        "select": [
+          "employee",
+          "year",
+          "days"
+        ],
+        "filter": null,
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "year",
             "direction": "ascending"
           }
         ],

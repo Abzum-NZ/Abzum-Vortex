@@ -79,7 +79,10 @@
           "application.hr.directory.person.read",
           "vortex.hr.leave_request.read",
           "vortex.hr.leave_request.create",
-          "vortex.hr.leave_request.update"
+          "vortex.hr.leave_request.update",
+          "vortex.hr.leave_entitlement.read",
+          "vortex.hr.leave_entitlement.create",
+          "vortex.hr.leave_entitlement.update"
         ]
       }
     ],
@@ -114,6 +117,14 @@
         "label": "Leave requests",
         "icon": "life-buoy",
         "page": "hr_leave_requests",
+        "permission": "application.hr.open"
+      },
+      {
+        "id": "nav_hr_leave_entitlements",
+        "type": "page",
+        "label": "Leave entitlements",
+        "icon": "life-buoy",
+        "page": "hr_leave_entitlements",
         "permission": "application.hr.open"
       },
       {
@@ -276,6 +287,41 @@
         "id": "event_hr_update_leave_request",
         "key": "vortex.app.hr.hr_update_leave_request",
         "record_type": "vortex.hr:leave_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_open_leave_entitlement",
+        "key": "vortex.app.hr.hr_open_leave_entitlement",
+        "record_type": "vortex.hr:leave_entitlement",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_new_leave_entitlement",
+        "key": "vortex.app.hr.hr_new_leave_entitlement",
+        "record_type": "vortex.hr:leave_entitlement",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_edit_leave_entitlement",
+        "key": "vortex.app.hr.hr_edit_leave_entitlement",
+        "record_type": "vortex.hr:leave_entitlement",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_create_leave_entitlement",
+        "key": "vortex.app.hr.hr_create_leave_entitlement",
+        "record_type": "vortex.hr:leave_entitlement",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_update_leave_entitlement",
+        "key": "vortex.app.hr.hr_update_leave_entitlement",
+        "record_type": "vortex.hr:leave_entitlement",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -2730,6 +2776,19 @@
                               "value": "Employee"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.entitlement"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement"
+                            }
+                          }
                         }
                       ]
                     },
@@ -2899,6 +2958,19 @@
                             "label": {
                               "kind": "text",
                               "value": "Employee"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.entitlement"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement"
                             }
                           }
                         }
@@ -3226,6 +3298,52 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "hr_leave_request_new_entitlement": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "entitlement"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_leave_entitlements"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:leave_entitlement.year"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
@@ -3236,6 +3354,7 @@
                           "hr_leave_request_new_reason",
                           "hr_leave_request_new_status",
                           "hr_leave_request_new_employee",
+                          "hr_leave_request_new_entitlement",
                           "hr_leave_request_new_submit"
                         ]
                       }
@@ -3514,6 +3633,52 @@
                             }
                           },
                           "slots": {}
+                        },
+                        "hr_leave_request_edit_entitlement": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "entitlement"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_leave_entitlements"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:leave_entitlement.year"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
                         }
                       },
                       "order": {
@@ -3524,6 +3689,7 @@
                           "hr_leave_request_edit_reason",
                           "hr_leave_request_edit_status",
                           "hr_leave_request_edit_employee",
+                          "hr_leave_request_edit_entitlement",
                           "hr_leave_request_edit_submit"
                         ]
                       }
@@ -3534,6 +3700,667 @@
               "order": {
                 "desktop": [
                   "hr_leave_request_edit_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_entitlements",
+        "key": "hr_leave_entitlements",
+        "name": "Leave entitlements",
+        "type": "list",
+        "record_type": "vortex.hr:leave_entitlement",
+        "permission": "application.hr.open",
+        "query": "vortex.hr:hr_leave_entitlements",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_entitlement_list": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.3.0"
+                  },
+                  "settings": {
+                    "row_click": {
+                      "kind": "group",
+                      "properties": {
+                        "event_id": {
+                          "kind": "text",
+                          "value": "event_hr_open_leave_entitlement"
+                        }
+                      }
+                    },
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.year"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Year"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement (days)"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "title": {
+                      "kind": "text",
+                      "value": "Leave entitlements"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.hr:hr_leave_entitlements"
+                },
+                "hr_new_leave_entitlement_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "New leave entitlement"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.leave_entitlement.create"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_entitlement_list",
+                  "hr_new_leave_entitlement_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_entitlement_detail",
+        "key": "hr_leave_entitlement_detail",
+        "name": "Leave entitlement",
+        "type": "detail",
+        "record_type": "vortex.hr:leave_entitlement",
+        "permission": "application.hr.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_entitlement_detail": {
+                  "block": {
+                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Leave entitlement"
+                    },
+                    "detail_fields": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.year"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Year"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement (days)"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {}
+                },
+                "hr_edit_leave_entitlement_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "Edit leave entitlement"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.leave_entitlement.update"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_entitlement_detail",
+                  "hr_edit_leave_entitlement_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_entitlement_new",
+        "key": "hr_leave_entitlement_new",
+        "name": "New leave entitlement",
+        "type": "form",
+        "record_type": "vortex.hr:leave_entitlement",
+        "permission": "application.hr.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_entitlement_new_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "New leave entitlement"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_leave_entitlement_new_employee": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_employees"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:employee.employee_number"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_entitlement_new_year": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.year"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Year"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_entitlement_new_days": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement (days)"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_entitlement_new_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Create leave entitlement"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_leave_entitlement_new_employee",
+                          "hr_leave_entitlement_new_year",
+                          "hr_leave_entitlement_new_days",
+                          "hr_leave_entitlement_new_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_entitlement_new_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_entitlement_edit",
+        "key": "hr_leave_entitlement_edit",
+        "name": "Edit leave entitlement",
+        "type": "form",
+        "record_type": "vortex.hr:leave_entitlement",
+        "permission": "application.hr.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_entitlement_edit_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Edit leave entitlement"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_leave_entitlement_edit_employee": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_employees"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:employee.employee_number"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_entitlement_edit_year": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.year"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Year"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_entitlement_edit_days": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement (days)"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_entitlement_edit_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Save leave entitlement"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_leave_entitlement_edit_employee",
+                          "hr_leave_entitlement_edit_year",
+                          "hr_leave_entitlement_edit_days",
+                          "hr_leave_entitlement_edit_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_entitlement_edit_form"
                 ]
               }
             }
@@ -3581,10 +4408,81 @@
                     }
                   },
                   "slots": {}
+                },
+                "hr_leave_balance_entitlements": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.3.0"
+                  },
+                  "settings": {
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.year"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Year"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Entitlement (days)"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "title": {
+                      "kind": "text",
+                      "value": "Leave entitlement by employee and year"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.hr:hr_leave_entitlements"
                 }
               },
               "order": {
                 "desktop": [
+                  "hr_leave_balance_entitlements",
                   "hr_leave_balance_taken"
                 ]
               }
@@ -4834,6 +5732,299 @@
         "triggers": [],
         "errors": [],
         "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_open_leave_entitlement",
+        "key": "hr_open_leave_entitlement",
+        "labels": {
+          "name": "Open leave entitlement"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_entitlement_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the clicked leave entitlement's own detail page with the record identity the clicked row carries."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_new_leave_entitlement",
+        "key": "hr_new_leave_entitlement",
+        "labels": {
+          "name": "New leave entitlement"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_entitlement_new"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the leave entitlement creation form."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_edit_leave_entitlement",
+        "key": "hr_edit_leave_entitlement",
+        "labels": {
+          "name": "Edit leave entitlement"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_entitlement_edit"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the selected leave entitlement edit form with its current record identity."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_create_leave_entitlement",
+        "key": "hr_create_leave_entitlement",
+        "labels": {
+          "name": "Submit leave entitlement"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:leave_entitlement"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_employees",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_entitlements"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "description": "Creates a Leave Request through the ordinary protected Record save path and returns to Leave entitlements.",
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_update_leave_entitlement",
+        "key": "hr_update_leave_entitlement",
+        "labels": {
+          "name": "Save leave entitlement"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:leave_entitlement"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_entitlement_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:leave_entitlement"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "description": "Updates the selected Leave Request through the ordinary protected Record save path and returns to its detail page.",
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -5082,6 +6273,70 @@
         "event_id": "event_hr_update_leave_request",
         "event": "form_submit",
         "flow": "flow_hr_update_leave_request",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_open_leave_entitlement",
+        "control": "hr_leave_entitlement_list",
+        "event_id": "event_hr_open_leave_entitlement",
+        "event": "row_clicked",
+        "flow": "flow_hr_open_leave_entitlement",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_new_leave_entitlement",
+        "control": "hr_new_leave_entitlement_button",
+        "event_id": "event_hr_new_leave_entitlement",
+        "event": "action",
+        "flow": "flow_hr_new_leave_entitlement",
+        "inputs": {}
+      },
+      {
+        "id": "binding_hr_edit_leave_entitlement",
+        "control": "hr_edit_leave_entitlement_button",
+        "event_id": "event_hr_edit_leave_entitlement",
+        "event": "action",
+        "flow": "flow_hr_edit_leave_entitlement",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_create_leave_entitlement",
+        "control": "hr_leave_entitlement_new_form",
+        "event_id": "event_hr_create_leave_entitlement",
+        "event": "form_submit",
+        "flow": "flow_hr_create_leave_entitlement",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_update_leave_entitlement",
+        "control": "hr_leave_entitlement_edit_form",
+        "event_id": "event_hr_update_leave_entitlement",
+        "event": "form_submit",
+        "flow": "flow_hr_update_leave_entitlement",
         "inputs": {
           "record": {
             "kind": "caller",

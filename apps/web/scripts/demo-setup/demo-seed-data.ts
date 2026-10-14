@@ -400,6 +400,9 @@ export const hrEmployees: readonly Readonly<{
   },
 ];
 
+/** The year of the demo leave entitlements; every demo leave request falls inside it. */
+export const hrEntitlementYear = 2026;
+
 /** `employeeIndex` refers to a position in `hrEmployees`. */
 export const hrLeaveRequests: readonly Readonly<{
   startDate: string;
