@@ -444,7 +444,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
     contactIds.push(contactId);
   }
 
-  const referenceDate = new Date("2026-10-13T12:00:00.000Z");
+  const referenceDate = new Date();
   for (const [index, opportunity] of opportunities.entries()) {
     const expectedCloseDate = new Date(referenceDate);
     expectedCloseDate.setUTCDate(expectedCloseDate.getUTCDate() + opportunity.days);
@@ -469,7 +469,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   for (const [index, lead] of leads.entries()) {
     const receivedAt = new Date(referenceDate);
     receivedAt.setUTCDate(receivedAt.getUTCDate() - lead.receivedDaysAgo);
-    receivedAt.setUTCHours(9 + (index % 6), 30, 0, 0);
+    receivedAt.setUTCHours(receivedAt.getUTCHours() - (index % 6), 0, 0, 0);
     await save(crmRootId, leadType, `lead/${index + 1}`, {
       display_name: lead.displayName,
       company_name: lead.companyName,
@@ -523,18 +523,14 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   );
 
   for (const [index, serviceCase] of cases.entries()) {
-    const openedAt = new Date(referenceDate);
-    openedAt.setUTCDate(openedAt.getUTCDate() - (index + 1) * 2);
-    openedAt.setUTCHours(8 + (index % 8), 15, 0, 0);
-    const firstResponseDueAt = new Date(openedAt);
-    firstResponseDueAt.setUTCHours(firstResponseDueAt.getUTCHours() + 4);
-    const resolutionDueAt = new Date(openedAt);
-    resolutionDueAt.setUTCDate(resolutionDueAt.getUTCDate() + 2);
+    const openedAt = new Date(referenceDate.getTime() - serviceCase.openedHoursAgo * 3_600_000);
+    const firstResponseDueAt = new Date(openedAt.getTime() + 4 * 3_600_000);
+    const resolutionDueAt = new Date(openedAt.getTime() + 48 * 3_600_000);
     const resolvedAt =
       serviceCase.status === "resolved" || serviceCase.status === "closed"
         ? new Date(openedAt)
         : undefined;
-    if (resolvedAt !== undefined) resolvedAt.setUTCHours(resolvedAt.getUTCHours() + 2);
+    if (resolvedAt !== undefined) resolvedAt.setUTCHours(resolvedAt.getUTCHours() + 6);
     await save(
       serviceDeskRootId,
       caseType,

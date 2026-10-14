@@ -3,6 +3,7 @@ import "server-only";
 import {
   readRecordDetailContract,
   readRecordsTableContract,
+  richTextDocumentSchema,
   timestampSchema,
   type BlockPropertyValueContract,
   type JsonValue,
@@ -19,6 +20,7 @@ export type ProjectedCellValue =
   | Readonly<{ kind: "number"; value: number }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
+  | Readonly<{ kind: "rich_text"; document: ReturnType<typeof richTextDocumentSchema.parse> }>
   | Readonly<{ kind: "empty" }>;
 
 /**
@@ -61,8 +63,7 @@ export type ProjectedRecordDetailValues = Readonly<{
  * caller cannot render data the projection did not authorise.
  */
 export type ProjectedComponentData<Values> =
-  | Readonly<{ status: "empty" }>
-  | Readonly<{ status: "ready"; values: Values }>;
+  Readonly<{ status: "empty" }> | Readonly<{ status: "ready"; values: Values }>;
 
 /**
  * What the projector combines with the component's declared contract. `settings` are the
@@ -96,8 +97,8 @@ const projectDate = (value: string): ProjectedCellValue =>
 
 /**
  * Maps one stored value to a closed display value by the declared format. A value that does not
- * fit its declared format is shown as plain text, and a structured value that is not a display
- * value at all is shown as empty; neither ever reaches the component as raw JSON.
+ * fit its declared format is shown as plain text, and a formatted-text document is shown as rich text,
+ * and a structured value that is not a display value at all is shown as empty; neither ever reaches the component as raw JSON.
  */
 const projectCell = (
   value: JsonValue,
@@ -128,6 +129,9 @@ const projectCell = (
     const option = choiceLabels.find((candidate) => candidate.value === value);
     return option === undefined ? empty : { kind: "text", text: option.label };
   }
+  // A formatted-text value is shown as its document, never flattened or dropped.
+  const document = richTextDocumentSchema.safeParse(value);
+  if (document.success) return { kind: "rich_text", document: document.data };
   // A money value is its exact amount with its currency code.
   if (
     typeof value === "object" &&
@@ -165,7 +169,8 @@ const projectCell = (
  * Field identities are UUIDs compared without regard to case: the Query engine keys row values by
  * the lowercase identity, while a declaration may spell it in either case.
  */
-const sameField = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+const sameField = (left: string, right: string): boolean =>
+  left.toLowerCase() === right.toLowerCase();
 
 /** The row's value for a declared field, or undefined when the engine withheld it (absent). */
 const valueOf = (row: ProtectedQueryRow, field: string): { value: JsonValue } | undefined => {
@@ -266,7 +271,12 @@ export const projectRecordDetailData = (
 ): ProjectedComponentData<ProjectedRecordDetailValues> | undefined => {
   const contract = readRecordDetailContract(input.settings);
   const row = rows[0];
-  if (contract === undefined || contract.fields.length === 0 || rows.length !== 1 || row === undefined)
+  if (
+    contract === undefined ||
+    contract.fields.length === 0 ||
+    rows.length !== 1 ||
+    row === undefined
+  )
     return undefined;
 
   const fields: { key: string; label: string; value: ProjectedCellValue }[] = [];
