@@ -2,7 +2,7 @@
 
 import { logRefusal } from "@vortex/platform/schema";
 
-const reportableRoutes: ReadonlySet<string> = new Set(["studio", "application-address"]);
+const reportableRoutes: ReadonlySet<string> = new Set(["app", "studio", "application-address"]);
 const digestPattern = /^[0-9A-Za-z_-]{1,32}$/;
 
 /**
