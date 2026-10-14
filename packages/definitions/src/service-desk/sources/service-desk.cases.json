@@ -998,6 +998,11 @@
             "type": "formatted_text"
           }
         ],
+        "precondition": {
+          "field": "status",
+          "operator": "in",
+          "value": ["in_progress", "waiting_customer"]
+        },
         "tasks": [
           {
             "id": "set_status",
