@@ -140,7 +140,8 @@
           "vortex.organisation_administration.privacy_request_case.refuse",
           "vortex.organisation_administration.person.read",
           "vortex.organisation_administration.organization_invitation.read",
-          "vortex.organisation_administration.organization_settings.read"
+          "vortex.organisation_administration.organization_settings.read",
+          "vortex.organisation_administration.activity_entry.read"
         ]
       }
     ],
@@ -151,6 +152,14 @@
         "label": "Organisation",
         "icon":  "building-2",
         "children": [
+        {
+          "id": "nav_activity",
+          "type": "page",
+          "label": "Activity",
+          "icon": "circle",
+          "page": "activity",
+          "permission": "application.organisation_administration.open"
+        },
           {
             "id": "nav_overview",
             "type": "page",
@@ -502,6 +511,139 @@
       }
     ],
     "pages": [
+      {
+        "id": "page_activity_entries",
+        "key": "activity",
+        "name": "Activity",
+        "type": "list",
+        "record_type": "vortex.organisation_administration:activity_entry",
+        "permission": "application.organisation_administration.open",
+        "query": "vortex.organisation_administration:activity_entries",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_organisation_administration",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "activity_table": {
+                  "block": {
+                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                    "release_version": "1.2.0"
+                  },
+                  "settings": {
+                    "columns": {
+                      "kind": "list",
+                      "items": [
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:activity_entry.occurred_at"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Occurred"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:activity_entry.actor_kind"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Actor kind"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:activity_entry.actor_id"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Actor"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:activity_entry.action"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Action"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:activity_entry.subject_count"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Subjects"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.organisation_administration:activity_entry.changed_field_count"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Changed fields"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "title": {
+                      "kind": "text",
+                      "value": "Activity (last 90 days)"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "query": "vortex.organisation_administration:activity_entries"
+                }
+              },
+              "order": {
+                "desktop": [
+                  "activity_table"
+                ]
+              }
+            }
+          }
+        }
+      },
       {
         "id": "page_organisation_overview",
         "key": "organisation_overview",
