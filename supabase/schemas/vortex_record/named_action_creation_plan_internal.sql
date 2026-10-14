@@ -20,6 +20,7 @@ declare
   target_meta jsonb;
   target_type jsonb;
   ownership_mode text;
+  owner_group_count integer;
   ownership_relationship jsonb;
   ownership_field jsonb;
   ownership_field_id text;
@@ -71,13 +72,19 @@ begin
     end if;
     ownership_mode := target_type ->> 'ownershipMode';
 
-    -- Refusal 1: #50 forbids a caller-supplied final owner, so
-    -- `p_selected_group_id` is permanently null and a `group` target could only
-    -- fail with `owner_unavailable` after its insert.
+    -- A named action has no owner Group selection. A single live Group
+    -- membership identifies its owner without trusting a caller-supplied ID.
+    -- The insert phase checks the same membership again under a lock.
     if ownership_mode = 'group' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'unsupported', 'reasonCode', 'create_target_owner_unsupported'
-      );
+      select pg_catalog.count(*) into owner_group_count
+      from vortex_access.list_current_record_owner_groups();
+      if owner_group_count <> 1 then
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'unsupported', 'reasonCode', case when owner_group_count = 0
+            then 'create_target_owner_unavailable'
+            else 'create_target_owner_ambiguous' end
+        );
+      end if;
     end if;
     -- Refusal 2: an `inherited` target derives its owner from one declared
     -- relationship. Authored values name its source field, not its identity.
