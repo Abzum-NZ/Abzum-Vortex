@@ -37,6 +37,8 @@ declare
   decision_valid_until text;
   validated_record_types text;
   validation_cache_enabled boolean;
+  cached_read_declaration text;
+  cached_read_eligibility text;
 begin
   -- Facts shape: a closed object with exactly the declared top-level keys.
   if p_facts is null or pg_catalog.jsonb_typeof(p_facts) <> 'object'
@@ -322,9 +324,43 @@ begin
   ctx := vortex_access.validated_human_request_context();
   checked_at := pg_catalog.clock_timestamp();
 
-  eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
-    p_declaration, ctx, checked_at
-  );
+  -- A module page uses the same READ declaration and request context for each
+  -- row. Its transaction-local cache is enabled only around that page. Keep
+  -- validating every row's facts and composing every row's own scope below.
+  if p_declaration -> 'action' ->> 'actionKind' = 'read'
+    and pg_catalog.current_setting('vortex_access.read_eligibility_cache_enabled', true) = 'true' then
+    cached_read_declaration := pg_catalog.current_setting(
+      'vortex_access.read_eligibility_declaration', true
+    );
+    cached_read_eligibility := pg_catalog.current_setting(
+      'vortex_access.read_eligibility_value', true
+    );
+    if cached_read_declaration = p_declaration::text
+      and cached_read_eligibility is not null and cached_read_eligibility <> '' then
+      eligibility := cached_read_eligibility::jsonb;
+      if eligibility ->> 'outcome' is distinct from 'eligible'
+        or (eligibility ->> 'validUntil')::timestamptz <= checked_at then
+        eligibility := null;
+      end if;
+    end if;
+  end if;
+  if eligibility is null then
+    eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+      p_declaration, ctx, checked_at
+    );
+    -- Near a validity boundary, keep the ordinary per-row time decision.
+    if p_declaration -> 'action' ->> 'actionKind' = 'read'
+      and pg_catalog.current_setting('vortex_access.read_eligibility_cache_enabled', true) = 'true'
+      and eligibility ->> 'outcome' = 'eligible'
+      and (eligibility ->> 'validUntil')::timestamptz > checked_at + interval '5 minutes' then
+      perform pg_catalog.set_config(
+        'vortex_access.read_eligibility_declaration', p_declaration::text, true
+      );
+      perform pg_catalog.set_config(
+        'vortex_access.read_eligibility_value', eligibility::text, true
+      );
+    end if;
+  end if;
 
   decision_evidence := (eligibility - 'outcome' - 'validUntil' - 'eligiblePermissions' - 'reasonCode')
     || pg_catalog.jsonb_build_object('recordId', p_target_record_id, 'action', p_declaration -> 'action');
