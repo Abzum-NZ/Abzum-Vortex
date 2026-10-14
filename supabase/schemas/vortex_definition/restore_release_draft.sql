@@ -63,7 +63,7 @@ begin
     end if;
 
     checked_context := vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
-    if checked_context is distinct from initial_human_context then
+    if checked_context - 'draftWriteDeadline' is distinct from initial_human_context then
       raise exception using
         errcode = '42501',
         message = 'Definition restore authority is unavailable';
@@ -278,7 +278,7 @@ begin
     end if;
 
     final_human_context := vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
-    if final_human_context is distinct from initial_human_context then
+    if final_human_context - 'draftWriteDeadline' is distinct from initial_human_context then
       raise exception using
         errcode = '42501',
         message = 'Definition restore authority is unavailable';
@@ -293,7 +293,9 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'permissionId', '0548c061-b1a9-48e5-a04a-eb1d0dae0644'
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -429,9 +431,6 @@ begin
   return restored_draft;
 end
 $function$;
-
-alter function vortex_definition.restore_release_draft(text, uuid, bigint, bigint, text, jsonb)
-  owner to postgres;
 
 revoke execute on function vortex_definition.restore_release_draft(text, uuid, bigint, bigint, text, jsonb) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 

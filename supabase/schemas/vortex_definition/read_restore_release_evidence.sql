@@ -48,7 +48,7 @@ begin
     end if;
 
     checked_context := vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
-    if checked_context is distinct from initial_human_context then
+    if checked_context - 'draftWriteDeadline' is distinct from initial_human_context then
       raise exception using
         errcode = '42501',
         message = 'Definition restore authority is unavailable';
@@ -239,7 +239,7 @@ begin
     );
 
     final_human_context := vortex_definition.validated_builder_draft_write_context_internal(p_root_id);
-    if final_human_context is distinct from initial_human_context then
+    if final_human_context - 'draftWriteDeadline' is distinct from initial_human_context then
       raise exception using
         errcode = '42501',
         message = 'Definition restore authority is unavailable';

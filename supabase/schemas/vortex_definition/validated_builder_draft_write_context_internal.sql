@@ -64,7 +64,9 @@ begin
   foreach permission_key in array permission_keys loop
     permission_id := case permission_key
       when 'platform.organization.definition_drafts.manage'
+        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
+      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
       else 'eaade6fd-7390-44d2-a7ef-343324c7384a'::uuid
     end;
     select evaluated.* into strict permission_decision
@@ -75,6 +77,7 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
+          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
           'permissionId', permission_id
         ),
@@ -112,7 +115,11 @@ begin
       message = 'Definition draft write authority is unavailable';
   end if;
 
-  return checked_context;
+  -- The caller can enforce this captured deadline after its writes without repeating permission
+  -- evaluation. Access-version and root locks prevent the underlying grants from changing.
+  return checked_context || pg_catalog.jsonb_build_object(
+    'draftWriteDeadline', permission_deadline
+  );
 end
 $function$;
 alter function vortex_definition.validated_builder_draft_write_context_internal(uuid) owner to vortex_owner;

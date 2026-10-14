@@ -111,6 +111,15 @@ begin
     operation_at
   );
 
+  if human_write and (
+    checked_context ->> 'draftWriteDeadline' is null
+    or (checked_context ->> 'draftWriteDeadline')::timestamptz
+      <= pg_catalog.clock_timestamp()
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Definition draft write authority is unavailable';
+  end if;
+
   return query
   select
     root.root_id,
