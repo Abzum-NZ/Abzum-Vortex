@@ -219,6 +219,34 @@ export const applicationInstallationLifecycleResultSchema = z
     applicationReleaseRevision: revisionSchema,
     state: z.enum(["active", "detached"]),
     changed: z.boolean(),
+    sortIndexes: z
+      .object({
+        outcome: z.literal("synchronized"),
+        selectedCount: z.number().int().nonnegative(),
+        skippedSorts: z.array(
+          z
+            .object({
+              storageContractId: storageContractIdSchema,
+              firstQuery: z.string(),
+              sort: z.array(
+                z
+                  .object({
+                    fieldId: fieldIdSchema,
+                    direction: z.enum(["ascending", "descending"]),
+                  })
+                  .strict(),
+              ),
+              reasonCode: z.enum([
+                "published_sort_index_budget_exceeded",
+                "sort_invalid",
+                "storage_contract_unavailable",
+              ]),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .nullable(),
     moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
   })
   .strict()

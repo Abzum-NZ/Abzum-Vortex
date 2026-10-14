@@ -23,6 +23,7 @@ declare
   all_active boolean;
   changed_value boolean;
   binding_evidence jsonb;
+  sort_index_status jsonb;
 begin
   if p_application_root_id is null
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -234,6 +235,7 @@ begin
       raise exception using errcode = '40001',
         message = 'Application installation bindings changed';
     end if;
+    sort_index_status := vortex_record.sync_published_sort_indexes_internal();
   end if;
 
   select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -258,6 +260,7 @@ begin
     'applicationRootId', p_application_root_id,
     'applicationReleaseRevision', p_application_release_revision,
     'state', 'active', 'changed', changed_value,
+    'sortIndexes', sort_index_status,
     'moduleBindings', binding_evidence
   );
 exception

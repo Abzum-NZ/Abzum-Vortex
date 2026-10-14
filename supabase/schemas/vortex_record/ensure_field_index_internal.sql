@@ -83,7 +83,8 @@ begin
     p_storage_contract_id, p_field_id, p_purpose, index_token,
     definition_fingerprint, observed, 1
   )
-  on conflict (storage_contract_id, field_id) do update
+  on conflict (storage_contract_id, field_id)
+    where purpose in ('uniqueness', 'performance') do update
   set purpose = excluded.purpose,
       physical_index_token = excluded.physical_index_token,
       desired_definition_fingerprint = excluded.desired_definition_fingerprint,
