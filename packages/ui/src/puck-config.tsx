@@ -90,6 +90,7 @@ import { QueryNoticeDisplay } from "./display/query-notice";
 import { RecordDetailDisplay } from "./display/record-detail";
 import { RichTextDisplay } from "./display/rich-text-component";
 import { SummaryValuesDisplay } from "./display/summary-values";
+import { ChartDisplay } from "./display/chart";
 import { TableDisplay } from "./display/table";
 import { PlainTextDisplay } from "./display/text";
 import { BooleanInput } from "./controls/boolean-input";
@@ -228,6 +229,7 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   ["platform.renderer.record_detail", RecordDetailDisplay],
   ["platform.renderer.grouped_data", GroupedDataDisplay],
   ["platform.renderer.summary_values", SummaryValuesDisplay],
+  ["platform.renderer.chart", ChartDisplay],
   ["platform.renderer.notice", NoticeBlock],
   ["platform.renderer.query_notice", QueryNoticeDisplay],
   ["platform.renderer.calendar", CalendarDisplay],

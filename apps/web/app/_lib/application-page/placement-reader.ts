@@ -28,6 +28,7 @@ import {
   QUERY_NOTICE_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
+  CHART_BLOCK_RELEASE,
   RECORD_PIN_LINK_TILES_BLOCK_RELEASE,
   APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE,
   projectBoardPlacement,
@@ -56,6 +57,7 @@ import {
   first
 } from "./placement-helpers";
 import { readCalendarPlacement } from "./calendar";
+import { projectChartPlacement } from "./chart";
 import {
   logPlacementFailure,
   isApplicationLauncherPlacement,
@@ -173,6 +175,7 @@ export const isStreamablePlacement = (
     blockIs(QUERY_NOTICE_BLOCK_RELEASE) ||
     blockIs(LINK_TILES_BLOCK_RELEASE) ||
     blockIs(SUMMARY_VALUES_BLOCK_RELEASE) ||
+    blockIs(CHART_BLOCK_RELEASE) ||
     isApplicationLauncherPlacement(placement) ||
     isBoardPlacement(placement)
   );
@@ -262,6 +265,10 @@ export const readPlacement = async (
     isRecord(block) &&
     typeof block.blockId === "string" &&
     sameId(block.blockId, SUMMARY_VALUES_BLOCK_RELEASE.blockId);
+  const isChartBlock =
+    isRecord(block) &&
+    typeof block.blockId === "string" &&
+    sameId(block.blockId, CHART_BLOCK_RELEASE.blockId);
   const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
   if (isLinkTilesBlock && (
     !isRecord(block) || (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
@@ -359,7 +366,7 @@ export const readPlacement = async (
   }
   const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
   const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
-  const queryBoundSummary = isSummaryValuesBlock && queryId !== undefined;
+  const queryBoundSummary = (isSummaryValuesBlock || isChartBlock) && queryId !== undefined;
   const queryBoundBoard = isBoardBlock && queryId !== undefined;
   if (
     tableContract === undefined &&
@@ -673,6 +680,35 @@ export const readPlacement = async (
         isDatasetLimitExceeded ? "summary_dataset_limit_exceeded" : "summary_query_refused",
       );
       data[placementId] = { status: "refused", reason: "not_permitted" };
+      return;
+    }
+
+    if (isChartBlock) {
+      const chartRecordType = bound.query.recordType;
+      const chartFields = new Map(
+        (chartRecordType.state === "resolved"
+          ? context.releaseSet.modules
+              .find((module) => sameId(String(module.rootId), String(chartRecordType.moduleRootId)))
+              ?.content.recordTypes.find((recordType) =>
+                sameId(String(recordType.recordTypeId), String(chartRecordType.recordTypeId)),
+              )?.fields ?? []
+          : []
+        ).map((field) => [String(field.fieldId).toLowerCase(), field] as const),
+      );
+      const projection = projectChartPlacement({
+        settings,
+        query: bound.query,
+        fields: chartFields,
+        summary: summaryResult.value,
+      });
+      if (!projection.ok) {
+        logPlacementFailure(address, placementId, projection.code);
+        data[placementId] = { status: "error" };
+        return;
+      }
+      data[placementId] = projection.chart.points.length === 0
+        ? { status: "empty" }
+        : { status: "ready", values: projection.chart };
       return;
     }
 

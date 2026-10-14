@@ -109,6 +109,7 @@ export {
   type BoardData,
   type BoardPage,
   type BoardPayload,
+  type ChartPayload,
   type GroupedData,
   type GroupedPayload,
   type ListData,
