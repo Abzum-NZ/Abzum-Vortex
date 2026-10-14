@@ -160,8 +160,7 @@ begin
         from vortex_access.organization_role_permission_entries as permission
         join vortex_access.permission_continuities as continuity
           on continuity.organization_id = permission.organization_id
-          and continuity.application_root_id is not distinct from
-            permission.application_root_id
+          and continuity.application_scope_id = coalesce(permission.application_root_id, '00000000-0000-0000-0000-000000000000'::uuid)
           and continuity.owner_kind = permission.owner_kind
           and continuity.owner_id = permission.owner_id
           and continuity.permission_id = permission.permission_id

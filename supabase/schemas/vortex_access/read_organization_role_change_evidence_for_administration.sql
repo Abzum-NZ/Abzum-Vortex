@@ -444,9 +444,9 @@ begin
   join vortex_access.permission_continuities as continuity
     on continuity.organization_id = context_organization_id
     and continuity.state = 'available'
-    and continuity.application_root_id is not distinct from
-      case when requested_permission.value ? 'applicationRootId'
-        then (requested_permission.value ->> 'applicationRootId')::uuid else null end
+    and continuity.application_scope_id = coalesce(case when requested_permission.value ? 'applicationRootId'
+        then (requested_permission.value ->> 'applicationRootId')::uuid else null end, '00000000-0000-0000-0000-000000000000'::uuid)
+      and (requested_permission.value ->> 'applicationRootId') is distinct from '00000000-0000-0000-0000-000000000000'
     and continuity.owner_kind = requested_permission.value ->> 'ownerKind'
     and continuity.owner_id = (requested_permission.value ->> 'ownerId')::uuid
     and continuity.permission_id = (requested_permission.value ->> 'permissionId')::uuid

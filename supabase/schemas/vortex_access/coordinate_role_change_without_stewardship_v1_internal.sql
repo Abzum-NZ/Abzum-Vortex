@@ -616,9 +616,9 @@ begin
     from vortex_access.permission_continuities as continuity
     join pg_catalog.jsonb_array_elements(candidate_permissions) as item(value)
       on continuity.organization_id = target_organization_id
-      and continuity.application_root_id is not distinct from
-        case when item.value ? 'applicationRootId'
-          then (item.value ->> 'applicationRootId')::uuid else null end
+      and continuity.application_scope_id = coalesce(case when item.value ? 'applicationRootId'
+          then (item.value ->> 'applicationRootId')::uuid else null end, '00000000-0000-0000-0000-000000000000'::uuid)
+      and (item.value ->> 'applicationRootId') is distinct from '00000000-0000-0000-0000-000000000000'
       and continuity.owner_kind = item.value ->> 'ownerKind'
       and continuity.owner_id = (item.value ->> 'ownerId')::uuid
       and continuity.permission_id = (item.value ->> 'permissionId')::uuid
@@ -630,9 +630,9 @@ begin
     from pg_catalog.jsonb_array_elements(candidate_permissions) as item(value)
     join vortex_access.permission_continuities as continuity
       on continuity.organization_id = target_organization_id
-      and continuity.application_root_id is not distinct from
-        case when item.value ? 'applicationRootId'
-          then (item.value ->> 'applicationRootId')::uuid else null end
+      and continuity.application_scope_id = coalesce(case when item.value ? 'applicationRootId'
+          then (item.value ->> 'applicationRootId')::uuid else null end, '00000000-0000-0000-0000-000000000000'::uuid)
+      and (item.value ->> 'applicationRootId') is distinct from '00000000-0000-0000-0000-000000000000'
       and continuity.owner_kind = item.value ->> 'ownerKind'
       and continuity.owner_id = (item.value ->> 'ownerId')::uuid
       and continuity.permission_id = (item.value ->> 'permissionId')::uuid
@@ -1196,9 +1196,9 @@ begin
       as item(value, ordinality)
     join vortex_access.permission_continuities as continuity
       on continuity.organization_id = target_organization_id
-      and continuity.application_root_id is not distinct from
-        case when item.value ? 'applicationRootId'
-          then (item.value ->> 'applicationRootId')::uuid else null end
+      and continuity.application_scope_id = coalesce(case when item.value ? 'applicationRootId'
+          then (item.value ->> 'applicationRootId')::uuid else null end, '00000000-0000-0000-0000-000000000000'::uuid)
+      and (item.value ->> 'applicationRootId') is distinct from '00000000-0000-0000-0000-000000000000'
       and continuity.owner_kind = item.value ->> 'ownerKind'
       and continuity.owner_id = (item.value ->> 'ownerId')::uuid
       and continuity.permission_id = (item.value ->> 'permissionId')::uuid

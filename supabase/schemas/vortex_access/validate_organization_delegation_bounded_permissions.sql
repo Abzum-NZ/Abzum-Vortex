@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.validate_organization_delegation_bounded_permissions(p_organization_id uuid, p_permissions jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_access.validate_organization_delegation_bounded_permissions(p_organization_id uuid, p_permissions jsonb) RETURNS void
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $_$
@@ -217,8 +217,7 @@ begin
           parsed.catalogue_fingerprint
       join vortex_access.permission_continuities as continuity
         on continuity.organization_id = entry.organization_id
-        and continuity.application_root_id is not distinct from
-          entry.application_root_id
+        and continuity.application_scope_id = coalesce(entry.application_root_id, '00000000-0000-0000-0000-000000000000'::uuid)
         and continuity.owner_kind = entry.owner_kind
         and continuity.owner_id = entry.owner_id
         and continuity.permission_id = entry.permission_id
