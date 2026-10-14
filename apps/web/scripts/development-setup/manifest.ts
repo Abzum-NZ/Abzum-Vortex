@@ -127,6 +127,7 @@ export const developmentSetupManifestFor = (
       "vortex.app.tenant_administration",
       "vortex.app.crm",
       "vortex.app.service_desk",
+      "vortex.app.tasks",
       "vortex.app.operations",
       "vortex.app.landing_zone",
     ],
