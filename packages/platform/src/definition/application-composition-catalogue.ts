@@ -81,6 +81,15 @@ export const SUMMARY_VALUES_BLOCK_RELEASE: PlatformBlockRelease = release(source
 /** Exact immutable metadata release for the authored Notice display block. */
 export const NOTICE_BLOCK_RELEASE: PlatformBlockRelease = release(sources.NOTICE_BLOCK_RELEASE);
 
+/**
+ * Release 1.1.0 of the Notice declares the authored defaults (information severity, one text
+ * part) a block dropped from the palette starts with. The 1.0.0 release stays published
+ * unchanged, so an application pinned to it keeps its exact published behaviour.
+ */
+export const NOTICE_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
+  sources.NOTICE_BLOCK_RELEASE_1_1_0,
+);
+
 /** Exact immutable metadata release for the protected read-only attachment list. */
 export const ATTACHMENT_LIST_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.ATTACHMENT_LIST_BLOCK_RELEASE,
@@ -240,6 +249,11 @@ export const CONTAINER_BLOCK_RELEASE_1_3_0: PlatformBlockRelease = release(
 /** Exact immutable metadata release for the heading block. */
 export const HEADING_BLOCK_RELEASE: PlatformBlockRelease = release(sources.HEADING_BLOCK_RELEASE);
 
+/** Release 1.1.0 of the heading block declares the authored default text; 1.0.0 is unchanged. */
+export const HEADING_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
+  sources.HEADING_BLOCK_RELEASE_1_1_0,
+);
+
 /**
  * Exact immutable metadata release for the application navigation block. Its renderer draws the
  * viewer's permission-filtered projected menu; the release refuses the public surface because the
@@ -396,6 +410,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   GROUPED_DATA_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE,
+  NOTICE_BLOCK_RELEASE_1_1_0,
   ATTACHMENT_LIST_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
@@ -451,6 +466,7 @@ export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fre
   CONTAINER_BLOCK_RELEASE_1_2_0,
   CONTAINER_BLOCK_RELEASE_1_3_0,
   HEADING_BLOCK_RELEASE,
+  HEADING_BLOCK_RELEASE_1_1_0,
 ]);
 
 /** Immutable application navigation and search releases, placed in a shell's layout. */

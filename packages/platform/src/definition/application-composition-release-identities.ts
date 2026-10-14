@@ -59,5 +59,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
   BOARD_BLOCK_RELEASE: { blockId: "626c1ff5-ae7b-47da-b0d4-370e3a262444", key: "platform.display.board", releaseVersion: "1.0.0" },
   CONTAINER_BLOCK_RELEASE_1_3_0: { blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff", key: "platform.layout.container", releaseVersion: "1.3.0" },
   ATTACHMENT_LIST_BLOCK_RELEASE: { blockId: "39217bcc-8fd1-4825-afca-e97598a13f0a", key: "platform.display.attachment_list", releaseVersion: "1.0.0" },
+  NOTICE_BLOCK_RELEASE_1_1_0: { blockId: "a7c95d9b-3fc2-4e6c-bebb-7a62fa912d84", key: "platform.display.notice", releaseVersion: "1.1.0" },
+  HEADING_BLOCK_RELEASE_1_1_0: { blockId: "78bfeead-a38d-424a-81b9-7cd553b92bcc", key: "platform.layout.heading", releaseVersion: "1.1.0" },
   CHART_BLOCK_RELEASE: { blockId: "5e7d5839-04fe-4b33-93c7-a382521a74b8", key: "platform.display.chart", releaseVersion: "1.0.0" },
 } as const);

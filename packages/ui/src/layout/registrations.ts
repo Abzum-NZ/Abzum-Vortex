@@ -35,6 +35,10 @@ export const LAYOUT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistrat
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE,
       parsePayload: noRuntimeInputs,
     }),
+    Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE_1_1_0,
+      parsePayload: noRuntimeInputs,
+    }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with all general layout components. */
