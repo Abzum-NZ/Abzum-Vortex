@@ -58,7 +58,9 @@ export type ViewerSafeRecordLinkServiceDependencies = HumanOrganizationRequestDe
 
 
 /** One linked record as a stored link value names it. */
-export type RecordLinkReference = Readonly<{ recordTypeId: string; recordId: string }>;
+export type RecordLinkReference =
+  | Readonly<{ recordTypeId: string; recordId: string }>
+  | Readonly<{ organizationAccountId: string }>;
 
 /**
  * What the viewer may see of one linked record: its display label and, when the viewer may open the
@@ -78,7 +80,9 @@ export type RecordLinkLabelsResult =
 
 /** The key a link's label is held under in a `RecordLinkLabelsResult`. */
 export const recordLinkLabelKey = (link: RecordLinkReference): string =>
-  `${link.recordTypeId.toLowerCase()}:${link.recordId.toLowerCase()}`;
+  "organizationAccountId" in link
+    ? `person:${link.organizationAccountId.toLowerCase()}`
+    : `${link.recordTypeId.toLowerCase()}:${link.recordId.toLowerCase()}`;
 
 const MAXIMUM_LABEL_LENGTH = 200;
 const titleReadBatchSize = 1_000;
@@ -334,7 +338,12 @@ export const createViewerSafeRecordLinkService = (
       if (links.length === 0) return { outcome: "read", labels };
       try {
         const byType = new Map<string, Map<string, RecordId>>();
+        const people = new Map<string, RecordId>();
         for (const link of links) {
+          if ("organizationAccountId" in link) {
+            people.set(link.organizationAccountId.toLowerCase(), recordIdSchema.parse(link.organizationAccountId));
+            continue;
+          }
           const typeKey = link.recordTypeId.toLowerCase();
           const ids = byType.get(typeKey) ?? new Map<string, RecordId>();
           ids.set(link.recordId.toLowerCase(), recordIdSchema.parse(link.recordId));
@@ -350,6 +359,21 @@ export const createViewerSafeRecordLinkService = (
               !sameId(scope.applicationRootId, context.applicationRootId)
             )
               throw new Error("RECORD_LINK_SCOPE_MISMATCH");
+            const personIds = [...people.values()];
+            for (let start = 0; start < personIds.length; start += titleReadBatchSize) {
+              const batch = personIds.slice(start, start + titleReadBatchSize);
+              const rows = await transaction.query<{ record_id: string; display_name: string }>`
+                select record_id::text, display_name
+                from vortex_access.list_visible_person_link_labels(
+                  array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(batch)}::text::jsonb)::uuid)
+                )
+              `;
+              const visible = new Map(rows.map((row) => [row.record_id.toLowerCase(), row.display_name]));
+              for (const id of batch)
+                labels.set(`person:${id.toLowerCase()}`, visible.has(id.toLowerCase())
+                  ? { outcome: "available", label: visible.get(id.toLowerCase())! }
+                  : { outcome: "restricted" });
+            }
             for (const [typeKey, ids] of byType) {
               const target = locateLinkTarget(context, typeKey);
               if (target === undefined) {
@@ -466,4 +490,3 @@ export const createViewerSafeRecordLinkService = (
     },
   });
 };
-
