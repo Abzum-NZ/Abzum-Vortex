@@ -72,6 +72,9 @@ export function usePlacementActions({
       binding: PlacementFlowBinding,
       supplied: Record<string, unknown>,
       selectedRecordId?: string,
+      /** The one record this gesture is about, when it is not the record the page shows. */
+      gestureSubject?: Readonly<{ recordId: string; revision: number }>,
+      afterAccepted?: () => Promise<Notice | undefined>,
     ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
@@ -94,9 +97,11 @@ export function usePlacementActions({
           Object.fromEntries(
             Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
           ),
+          undefined,
+          gestureSubject,
         ),
         formOwners[placementId],
-        undefined,
+        afterAccepted,
         binding.bindingId,
       );
     },

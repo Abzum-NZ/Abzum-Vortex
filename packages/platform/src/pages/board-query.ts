@@ -311,6 +311,8 @@ export type BoardPlacementValues = Readonly<{
   title?: string;
   plan: Extract<ProtectedBoardArrangementResult, { arrangement: "board" }>["plan"];
   choiceFieldId: string;
+  /** The key the record save names the choice field by when a card moves to another column. */
+  choiceFieldKey: string;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
   totalRowCount: number;
@@ -490,6 +492,9 @@ export const projectBoardPlacement = async (
     )
       return unavailable("board_metrics_invalid");
 
+    const choiceField = fieldsById.get(lower(String(contract.choiceField)));
+    if (choiceField === undefined) return unavailable("board_arrangement_mismatch");
+
     return {
       outcome: "ready",
       values: {
@@ -497,6 +502,7 @@ export const projectBoardPlacement = async (
         ...(contract.title === undefined ? {} : { title: contract.title }),
         plan: board.plan,
         choiceFieldId: contract.choiceField,
+        choiceFieldKey: String(choiceField.key),
         cardTitleFieldId: contract.cardTitleField,
         cardFieldIds: requestedFieldIds,
         totalRowCount: board.totalRowCount,

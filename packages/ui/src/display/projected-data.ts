@@ -208,6 +208,8 @@ export type BoardPayload = Readonly<{
     queryId: string;
   }>;
   choiceFieldId: string;
+  /** The key a card move names the choice field by when it asks for the record to be saved. */
+  choiceFieldKey: string;
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
@@ -254,6 +256,7 @@ export type DisplaySemanticEventName = Extract<
   | "page_changed"
   | "bulk_action"
   | "inline_edit"
+  | "card_moved"
 >;
 
 /**
@@ -308,6 +311,18 @@ export type DisplaySemanticEvent =
       revision?: number;
       field: string;
       value: DisplayCellValue;
+    }>
+  | Readonly<{
+      /**
+       * A board card dropped into another column. It carries the record, the revision the card was
+       * read at, the key of the board's choice field and the target column's option value; the
+       * bound flow saves that field through the normal record save.
+       */
+      event: "card_moved";
+      recordId: string;
+      revision?: number;
+      field: string;
+      value: string;
     }>;
 
 export type DisplayEventHandler = (event: DisplaySemanticEvent) => void;
@@ -335,6 +350,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "page_changed",
   "bulk_action",
   "inline_edit",
+  "card_moved",
 ]);
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
@@ -1304,6 +1320,7 @@ export const parseBoardPayload = (
       "title",
       "plan",
       "choiceFieldId",
+      "choiceFieldKey",
       "cardTitleFieldId",
       "cardFieldIds",
       "totalRowCount",
@@ -1332,6 +1349,9 @@ export const parseBoardPayload = (
 
   const choiceFieldId = fieldIdSchema.safeParse(record.choiceFieldId);
   const cardTitleFieldId = fieldIdSchema.safeParse(record.cardTitleFieldId);
+  const choiceFieldKey = builderKeySchema.safeParse(record.choiceFieldKey);
+  if (!choiceFieldKey.success)
+    fail("A board requires the key of its choice field", location);
   if (!choiceFieldId.success || !cardTitleFieldId.success)
     fail("A board requires valid choice and card-title field identities", location);
   const cardFieldCandidates = requireArray(
@@ -1418,6 +1438,7 @@ export const parseBoardPayload = (
       queryId: queryId.data,
     }),
     choiceFieldId: choiceFieldId.data,
+    choiceFieldKey: choiceFieldKey.data,
     cardTitleFieldId: cardTitleFieldId.data,
     cardFieldIds: Object.freeze(cardFieldIds),
     totalRowCount,

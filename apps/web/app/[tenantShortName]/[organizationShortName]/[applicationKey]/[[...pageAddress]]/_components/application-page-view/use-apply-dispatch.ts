@@ -128,10 +128,17 @@ export function useApplyDispatch({
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
+            // A rule's authored message is the one reason shown; a refusal that names a field
+            // carries it on the located correction instead of the rule refusal.
+            const correctionMessages = (diagnostic.corrections ?? []).flatMap((correction) =>
+              correction.message === undefined ? [] : [correction.message],
+            );
             const reason: Notice =
-              diagnostic.ruleRefusal === undefined
-                ? refusalNotices[diagnostic.code]
-                : { tone: "problem", text: diagnostic.ruleRefusal.message };
+              diagnostic.ruleRefusal !== undefined
+                ? { tone: "problem", text: diagnostic.ruleRefusal.message }
+                : correctionMessages.length > 0
+                  ? { tone: "problem", text: [...new Set(correctionMessages)].join(" ") }
+                  : refusalNotices[diagnostic.code];
             resultNotice = {
               ...reason,
               text: recovery === undefined ? reason.text : `${reason.text} ${resultNotice.text}`,
@@ -160,8 +167,14 @@ export function useApplyDispatch({
               server.descriptor.commit === "partial")
           )
             setCompletedGuidedNavigationKey(navigationKey);
+          // A refusal because the record changed under the person leaves their view stale, so the
+          // bound placements are re-read to show the record as it now is.
+          const changedUnderPerson =
+            server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";
           if (
-            (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial") &&
+            (server.descriptor.commit === "confirmed" ||
+              server.descriptor.commit === "partial" ||
+              changedUnderPerson) &&
             sourceBindingId !== undefined
           )
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId));

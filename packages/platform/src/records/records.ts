@@ -147,7 +147,7 @@ export const recordSaveFieldCorrectionSchema = z
       .array(z.union([builderKeySchema, z.number().int().nonnegative()]))
       .min(1)
       .optional(),
-    /** The authored message of the rule that refused this field: the one refusal text safe to show. */
+    /** The readable reason safe to show: a refusing rule's authored message, or the field and option labels of a permission-gated choice. */
     message: z.string().min(1).max(300).optional(),
   })
   .strict();

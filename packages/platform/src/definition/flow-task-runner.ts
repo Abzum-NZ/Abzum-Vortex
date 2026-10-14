@@ -68,6 +68,8 @@ export const createFlowTaskRunner = (
         command: SaveRecordCommand;
         /** The submitted form field key of each record field, by lower-case field id. */
         submittedNames: ReadonlyMap<string, string>;
+        /** The key of every field of the record type, by lower-case field id. */
+        fieldKeys: ReadonlyMap<string, string>;
       }>
     | Readonly<{ kind: "action"; command: ExecuteNamedActionCommand }>;
 
@@ -170,6 +172,9 @@ export const createFlowTaskRunner = (
         return { outcome: "validation" };
       const submittedValues: Record<string, JsonValue> = {};
       const submittedNames = new Map<string, string>();
+      const fieldKeys = new Map<string, string>();
+      for (const [name, fieldId] of recordType.fieldIds)
+        if (name !== fieldId.toLowerCase()) fieldKeys.set(fieldId.toLowerCase(), name);
       for (const [name, value] of Object.entries(values)) {
         const fieldId = recordType.fieldIds.get(name.toLowerCase());
         if (fieldId === undefined || Object.hasOwn(submittedValues, fieldId))
@@ -197,7 +202,7 @@ export const createFlowTaskRunner = (
           ...(selectedGroup === undefined ? {} : { selectedOwnerGroupId: selectedGroup.data }),
         });
         return command.success
-          ? { plan: { kind: "save", command: command.data, submittedNames } }
+          ? { plan: { kind: "save", command: command.data, submittedNames, fieldKeys } }
           : { outcome: "validation" };
       }
       const recordId = recordIdSchema.safeParse(call.properties.record?.value);
@@ -221,7 +226,7 @@ export const createFlowTaskRunner = (
         submittedValues,
       });
       return command.success
-        ? { plan: { kind: "save", command: command.data, submittedNames } }
+        ? { plan: { kind: "save", command: command.data, submittedNames, fieldKeys } }
         : { outcome: "validation" };
     }
 
@@ -372,7 +377,12 @@ export const createFlowTaskRunner = (
         // Only the form field key, the correction code and a rule's authored message leave the save: never a value.
         const located = dedupeFieldCorrections(
           value.corrections.flatMap((correction) => {
-            const field = plan.submittedNames.get(correction.fieldId.toLowerCase());
+            // A rule may refuse for another field than the one submitted; its authored message
+            // still names that field by key, so the caller can show the real reason.
+            const fieldId = correction.fieldId.toLowerCase();
+            const field =
+              plan.submittedNames.get(fieldId) ??
+              (correction.message === undefined ? undefined : plan.fieldKeys.get(fieldId));
             return field === undefined
               ? []
               : [

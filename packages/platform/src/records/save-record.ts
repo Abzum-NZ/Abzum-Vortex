@@ -257,6 +257,38 @@ const correctionsFor = (
   return [...corrections.values()];
 };
 
+/** The field and option labels are the only text a permission-gated choice refusal shows. */
+const choicePermissionRefusalMessage = (
+  recordType: Readonly<{
+    fields: readonly Readonly<{
+      fieldId: string;
+      label: string;
+      settings?: unknown;
+    }>[];
+  }>,
+  check: Readonly<{ fieldId: string; optionValue: string }>,
+): string | undefined => {
+  const field = recordType.fields.find((candidate) => candidate.fieldId === check.fieldId);
+  const options =
+    typeof field?.settings === "object" &&
+    field.settings !== null &&
+    "options" in field.settings &&
+    Array.isArray(field.settings.options)
+      ? (field.settings.options as readonly unknown[])
+      : [];
+  const option = options.find(
+    (candidate): candidate is { value: string; label: string } =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as { value?: unknown }).value === check.optionValue &&
+      typeof (candidate as { label?: unknown }).label === "string",
+  );
+  const fieldLabel = field?.label.trim() ?? "";
+  const optionLabel = option?.label.trim() ?? "";
+  if (fieldLabel === "" || optionLabel === "") return undefined;
+  return `${fieldLabel} can't be set to ${optionLabel} here. Use the action provided for it.`;
+};
+
 const safeRefusal = (
   correlationId: string,
   code: "invalid_request" | "operation_refused" | "conflict",
@@ -726,6 +758,9 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                     code: issue.code,
                     ...(issue.fieldId === undefined ? {} : { fieldId: issue.fieldId }),
                     path: issue.path,
+                    ...("requirement" in issue && issue.requirement !== undefined
+                      ? { requirement: issue.requirement }
+                      : {}),
                   })),
                 prepared.readableFieldIds,
                 command.data.operation,
@@ -767,10 +802,21 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             if (unsupportedChecks.length > 0) {
               if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
                 return safeRefusal(prepared.correlationId, "operation_refused");
-              const corrections = unsupportedChecks.map((check) => ({
-                code: "field_refused" as const,
-                fieldId: check.fieldId,
-              }));
+              const corrections = unsupportedChecks.map((check) => {
+                const message =
+                  check.kind === "choice_permission"
+                    ? choicePermissionRefusalMessage(prepared.recordType, check)
+                    : undefined;
+                if (check.kind === "choice_permission" && message === undefined)
+                  console.error(
+                    "[record] save refused RECORD_SAVE_CHOICE_LABEL_MISSING: no field or option label for a permission-gated choice",
+                  );
+                return {
+                  code: "field_refused" as const,
+                  fieldId: check.fieldId,
+                  ...(message === undefined ? {} : { message }),
+                };
+              });
               return saveRecordResultSchema.parse({
                 contractVersion: "2.0.0",
                 outcome: "correction_required",

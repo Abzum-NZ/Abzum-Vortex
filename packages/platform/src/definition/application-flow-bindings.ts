@@ -60,6 +60,7 @@ export const componentSemanticEventKindSchema = z.enum([
   "row_action",
   "bulk_action",
   "inline_edit",
+  "card_moved",
   "load",
   "refresh",
   "filter_changed",

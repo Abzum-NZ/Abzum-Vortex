@@ -3330,7 +3330,7 @@
                                          "board_sd_cases": {
                                            "block": {
                                              "block_id": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-                                             "release_version": "1.0.0"
+                                             "release_version": "1.1.0"
                                            },
                                            "query": "vortex.service_desk.cases:service_desk_case_board",
                                            "settings": {
@@ -3748,6 +3748,13 @@
     {
         "id": "event_sd_case_board_open_case",
         "key": "vortex.app.events.vortex_app_service_desk_board_open_case",
+        "record_type": "vortex.service_desk.cases:case",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_sd_case_board_move_case",
+        "key": "vortex.app.events.vortex_app_service_desk_board_move_case",
         "record_type": "vortex.service_desk.cases:case",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -4797,6 +4804,78 @@
                      },
                      {
                          "contractVersion": "1.0.0",
+                         "id": "sd_move_case_status",
+                         "key": "sd_move_case_status",
+                         "description": "Saves the status a moved case card was dropped into through the one Save record task, the same record save an edit form uses.",
+                         "labels": {
+                             "name": "Move case"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.cases:case"
+                                 ]
+                             },
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.service_desk.cases:case"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "record"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.service_desk.cases:case"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
                          "id": "sd_open_article",
                          "key": "sd_open_article",
                          "description": "Opens the clicked article's own detail page with the record identity the clicked row carries.",
@@ -5631,6 +5710,23 @@
                              "record_id": {
                                  "kind": "caller",
                                  "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "card_binding_sd_case_board_move_case",
+                         "control": "board_sd_cases",
+                         "event_id": "event_sd_case_board_move_case",
+                         "event": "card_moved",
+                         "flow": "sd_move_case_status",
+                         "inputs": {
+                             "record": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             },
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
                              }
                          }
                      },
