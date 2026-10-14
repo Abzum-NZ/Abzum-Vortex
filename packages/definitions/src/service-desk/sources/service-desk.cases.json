@@ -1235,6 +1235,675 @@
             ]
           }
         ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_case_status_from_new",
+        "key": "case_status_from_new",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "case",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 50
+          }
+        ],
+        "tasks": [
+          {
+            "id": "status_left_new",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_previous",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "new"
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "eq",
+                    "left": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "right": {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "new"
+                    }
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "in",
+                    "value": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "options": [
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "triage"
+                      },
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "in_progress"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_status_move_from_new",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "case_status_move_refused_from_new"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A new case can only move to Triage or In progress."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_case_status_from_triage",
+        "key": "case_status_from_triage",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "case",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 50
+          }
+        ],
+        "tasks": [
+          {
+            "id": "status_left_triage",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_previous",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "triage"
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "eq",
+                    "left": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "right": {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "triage"
+                    }
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "in",
+                    "value": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "options": [
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "new"
+                      },
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "in_progress"
+                      },
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "waiting_customer"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_status_move_from_triage",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "case_status_move_refused_from_triage"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A case in triage can only move to New, In progress or Waiting for customer."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_case_status_from_in_progress",
+        "key": "case_status_from_in_progress",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "case",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 50
+          }
+        ],
+        "tasks": [
+          {
+            "id": "status_left_in_progress",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_previous",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "in_progress"
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "eq",
+                    "left": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "right": {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "in_progress"
+                    }
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "in",
+                    "value": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "options": [
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "triage"
+                      },
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "waiting_customer"
+                      },
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "resolved"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_status_move_from_in_progress",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "case_status_move_refused_from_in_progress"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A case in progress can only move to Triage, Waiting for customer or Resolved."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_case_status_from_waiting_customer",
+        "key": "case_status_from_waiting_customer",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "case",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 50
+          }
+        ],
+        "tasks": [
+          {
+            "id": "status_left_waiting_customer",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_previous",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "waiting_customer"
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "eq",
+                    "left": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "right": {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "waiting_customer"
+                    }
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "in",
+                    "value": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "options": [
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "in_progress"
+                      },
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "resolved"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_status_move_from_waiting_customer",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "case_status_move_refused_from_waiting_customer"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A case waiting for the customer can only move to In progress or Resolved."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_case_status_from_resolved",
+        "key": "case_status_from_resolved",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "case",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 50
+          }
+        ],
+        "tasks": [
+          {
+            "id": "status_left_resolved",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_previous",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "resolved"
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "eq",
+                    "left": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "right": {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "resolved"
+                    }
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "in",
+                    "value": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "options": [
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "in_progress"
+                      },
+                      {
+                        "op": "literal",
+                        "type": "choice",
+                        "value": "closed"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_status_move_from_resolved",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "case_status_move_refused_from_resolved"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A resolved case can only be reopened (In progress) or closed."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_case_status_from_closed",
+        "key": "case_status_from_closed",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "case",
+            "operations": [
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 50
+          }
+        ],
+        "tasks": [
+          {
+            "id": "status_left_closed",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_previous",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "closed"
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "eq",
+                    "left": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "status"
+                      }
+                    },
+                    "right": {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "closed"
+                    }
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "refuse_status_move_from_closed",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "case_status_move_refused_from_closed"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "A closed case can't be moved."
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
       }
     ],
     "extension_points": [
