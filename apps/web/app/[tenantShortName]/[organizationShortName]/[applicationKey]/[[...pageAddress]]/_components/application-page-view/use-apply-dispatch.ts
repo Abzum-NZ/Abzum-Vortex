@@ -167,8 +167,14 @@ export function useApplyDispatch({
               server.descriptor.commit === "partial")
           )
             setCompletedGuidedNavigationKey(navigationKey);
+          // A refusal because the record changed under the person leaves their view stale, so the
+          // bound placements are re-read to show the record as it now is.
+          const changedUnderPerson =
+            server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";
           if (
-            (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial") &&
+            (server.descriptor.commit === "confirmed" ||
+              server.descriptor.commit === "partial" ||
+              changedUnderPerson) &&
             sourceBindingId !== undefined
           )
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
