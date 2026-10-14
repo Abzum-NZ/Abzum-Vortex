@@ -1,0 +1,69 @@
+"use client";
+
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  type MouseEvent,
+} from "react";
+import type { ProjectedApplicationFrame } from "@vortex/platform/schema";
+import type {
+  ApplicationWebMcpRuntime,
+  PagePuckRendererProps,
+  UnsavedWorkGuard,
+} from "@vortex/ui";
+
+/** What the current page tells the frame around it. Each part is absent until the page sets it. */
+export type ApplicationFramePageState = Readonly<{
+  /** The page's identity and its own name for the breadcrumb. */
+  page?: Readonly<{ pageId: string; name: string }>;
+  /** The page's browser agent tool state, shown in the header. */
+  webMcp?: ApplicationWebMcpRuntime;
+  /** The page's unsaved-work guard, consulted before the frame leaves the page. */
+  unsavedWork?: UnsavedWorkGuard;
+  /** The release the page offers to adopt, for the account menu. */
+  releaseAdoption?: Readonly<{ version: string; adopt: () => void | Promise<void> }>;
+  /** The frame projected with the page, which replaces the frame the layout projected. */
+  frame?: ProjectedApplicationFrame;
+}>;
+
+export type ApplicationFrameStateValue = Readonly<{
+  /** Sets one part of the page state; `undefined` clears it. */
+  setPageState: <Key extends keyof ApplicationFramePageState>(
+    key: Key,
+    value: ApplicationFramePageState[Key] | undefined,
+  ) => void;
+  /** A client-side page change that keeps the frame mounted. */
+  navigateToPage: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
+  /** The application search the header shows, also offered to a search block in the content. */
+  applicationSearch: PagePuckRendererProps["applicationSearch"];
+  applicationSearchPageSubject: string | undefined;
+}>;
+
+const ApplicationFrameStateContext = createContext<ApplicationFrameStateValue | null>(null);
+
+export const ApplicationFrameStateProvider = ApplicationFrameStateContext.Provider;
+
+/** The frame around the current page, when the page is shown in one. */
+export const useApplicationFrame = (): ApplicationFrameStateValue | null =>
+  useContext(ApplicationFrameStateContext);
+
+/**
+ * Registers one part of the page's state with the frame for as long as the page shows it. It is set
+ * before paint, so the frame never shows the previous page's value after the page has changed.
+ */
+export const useFramePageState = <Key extends keyof ApplicationFramePageState>(
+  key: Key,
+  value: ApplicationFramePageState[Key] | undefined,
+): void => {
+  const frame = useApplicationFrame();
+  const setPageState = frame?.setPageState;
+  useLayoutEffect(() => {
+    if (setPageState === undefined) return;
+    setPageState(key, value);
+  }, [key, setPageState, value]);
+  useLayoutEffect(() => {
+    if (setPageState === undefined) return;
+    return () => setPageState(key, undefined);
+  }, [key, setPageState]);
+};
