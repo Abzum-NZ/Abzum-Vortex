@@ -144,3 +144,23 @@ export function useFormField(
 /** The local field-specific submit error, when the enclosing form has one. */
 export const useFormFieldError = (fieldKey: string): string | undefined =>
   useFormScope()?.fieldErrorFor(fieldKey);
+
+/**
+ * Publishes one input's value like `useFormField`, and refuses a submit while a required value is
+ * missing with the located "<label> is required." message. Returns the field's current submit error.
+ * The caller decides when the value counts as missing, so a disabled or read-only input never blocks.
+ */
+export function useRequiredFormField(
+  fieldKey: string,
+  placementId: string,
+  value: TypedFieldValue,
+  requirement: Readonly<{ label: string; missing: boolean }>,
+): string | undefined {
+  useFormField(
+    fieldKey,
+    placementId,
+    value,
+    requirement.missing ? () => `${requirement.label} is required.` : undefined,
+  );
+  return useFormFieldError(fieldKey);
+}

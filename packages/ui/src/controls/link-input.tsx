@@ -17,7 +17,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useRequiredFormField } from "./form-context";
 import type { LinkInputPayload, TypedRecordReference } from "./projected-data";
 
 export type LinkInputProps = ControlRenderProps<LinkInputPayload>;
@@ -69,11 +69,16 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const allowedRecordTypeIds = settings.recordTypeIds("record_types");
-  const error = context.values?.error;
+  const projectedError = context.values?.error;
   const note = inactiveNote(context);
 
   const [value, setValue] = useSeededState(referenceKey(context.values?.value));
-  useFormField(fieldKey, props.placementId, parseReferenceKey(value, allowedRecordTypeIds));
+  const typedReference = parseReferenceKey(value, allowedRecordTypeIds);
+  const validationError = useRequiredFormField(fieldKey, props.placementId, typedReference, {
+    label,
+    missing: required && !disabled && !readOnly && typedReference === null,
+  });
+  const error = projectedError ?? validationError;
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;

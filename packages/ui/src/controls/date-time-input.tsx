@@ -18,7 +18,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useRequiredFormField } from "./form-context";
 
 type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
 
@@ -167,11 +167,14 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   const [raw, setRaw] = useSeededState(initialInput);
   const [initialRaw] = useSeededState(initialInput);
   const [typedValue, setTypedValue] = useSeededState(projected);
-  useFormField(fieldKey, props.placementId, typedValue);
+  const validationError = useRequiredFormField(fieldKey, props.placementId, typedValue, {
+    label,
+    missing: required && !disabled && !readOnly && typedValue === null,
+  });
   const invalidLocalTime = raw !== "" && raw !== initialRaw && toStoredInstant(raw, timeZone) === undefined;
   const error = invalidLocalTime
     ? "Enter a valid, unambiguous date and time in the shown time zone."
-    : projectedError;
+    : (projectedError ?? validationError);
 
   const commit = (next: string): void => {
     if (disabled || readOnly) return;

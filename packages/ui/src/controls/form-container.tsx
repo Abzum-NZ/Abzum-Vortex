@@ -203,9 +203,14 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         refused?.kind === "refusal" && JSON.stringify(refused.corrections) !== editedPastCorrections
           ? refused.corrections?.find((candidate) => candidate.field === fieldKey)
           : undefined;
-      return correction === undefined ? undefined : fieldCorrectionText[correction.code];
+      if (correction === undefined) return undefined;
+      // A required value the server found missing is named by the field's own located message.
+      return (
+        (correction.code === "required_value" ? registry.validationErrors()[fieldKey] : undefined) ??
+        fieldCorrectionText[correction.code]
+      );
     },
-    [validationErrors, props.flowFeedback, editedPastCorrections],
+    [validationErrors, props.flowFeedback, editedPastCorrections, registry],
   );
 
   const scope: FormScope = useMemo(

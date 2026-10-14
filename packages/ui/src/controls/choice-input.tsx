@@ -39,7 +39,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useRequiredFormField } from "./form-context";
 
 export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
 
@@ -72,7 +72,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     draftFeedback?.disabled === true ||
     (props.metadata.releaseVersion === "1.2.0" && context.values?.dependencyKey === null);
   const options = context.values?.options ?? settings.options("options");
-  const error = context.values?.error;
+  const projectedError = context.values?.error;
   const note = inactiveNote(context);
   const projected = context.values?.value;
 
@@ -121,7 +121,11 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const permittedSelected =
     selected !== null && options.some((option) => option.key === selected) ? selected : null;
   const selectedOption = options.find((option) => option.key === permittedSelected) ?? null;
-  useFormField(fieldKey, props.placementId, permittedSelected);
+  const validationError = useRequiredFormField(fieldKey, props.placementId, permittedSelected, {
+    label,
+    missing: required && !disabled && permittedSelected === null,
+  });
+  const error = projectedError ?? validationError;
 
   const change = (next: string | null): void => {
     if (disabled) return;

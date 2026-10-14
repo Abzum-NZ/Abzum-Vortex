@@ -17,7 +17,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useRequiredFormField } from "./form-context";
 import type { RichTextInputPayload, TypedRichTextDocument } from "./projected-data";
 
 export type RichTextInputProps = ControlRenderProps<RichTextInputPayload>;
@@ -72,7 +72,7 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const error = context.values?.error;
+  const projectedError = context.values?.error;
   const note = inactiveNote(context);
 
   const projected = context.values?.value;
@@ -85,7 +85,13 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
         : null;
   const seededText = documentText(seeded);
   const [value, setValue] = useSeededState(seededText);
-  useFormField(fieldKey, props.placementId, value === seededText ? seeded : toDocument(value));
+  const validationError = useRequiredFormField(
+    fieldKey,
+    props.placementId,
+    value === seededText ? seeded : toDocument(value),
+    { label, missing: required && !disabled && !readOnly && value.trim() === "" },
+  );
+  const error = projectedError ?? validationError;
 
   const onChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
     if (disabled || readOnly) return;

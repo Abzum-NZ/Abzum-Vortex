@@ -23,7 +23,7 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useRequiredFormField } from "./form-context";
 import { isIsoCalendarDate, type DateInputPayload } from "./projected-data";
 
 export type DateInputProps = ControlRenderProps<DateInputPayload>;
@@ -53,12 +53,17 @@ export function DateInput(props: DateInputProps): ReactElement {
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const error = context.values?.error;
+  const projectedError = context.values?.error;
   const note = inactiveNote(context);
 
   const [raw, setRaw] = useSeededState(context.values?.value ?? "");
   const toTyped = (text: string): string | null => (isIsoCalendarDate(text) ? text : null);
-  useFormField(fieldKey, props.placementId, toTyped(raw));
+  const typed = toTyped(raw);
+  const validationError = useRequiredFormField(fieldKey, props.placementId, typed, {
+    label,
+    missing: required && !disabled && !readOnly && typed === null,
+  });
+  const error = projectedError ?? validationError;
   const [open, setOpen] = useState(false);
 
   const commit = (next: string): void => {
