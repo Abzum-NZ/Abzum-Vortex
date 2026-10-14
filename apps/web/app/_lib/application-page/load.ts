@@ -90,6 +90,7 @@ import { isApplicationLauncherPlacement, logPlacementFailure } from "./query-hel
 import {
   type ReferenceChoiceFirstPage,
   projectSelectedReferenceChoiceEditField,
+  selectedReferenceChoiceField,
   projectEditField,
 } from "./reference-choice";
 import { projectPlacementRecordTypes, projectFlowBindingTargets } from "./flow-bindings";
@@ -956,7 +957,7 @@ const loadApplicationPageJoined = async (
             valueKey === undefined ? undefined : fieldIdSchema.safeParse(valueKey);
           projectedField = await projectSelectedReferenceChoiceEditField({
             firstPage,
-            field: definition,
+            field: selectedReferenceChoiceField(definition),
             stored:
               parsedValueFieldId !== undefined && parsedValueFieldId.success
                 ? subjectRow.row.values[parsedValueFieldId.data]

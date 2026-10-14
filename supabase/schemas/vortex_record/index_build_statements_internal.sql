@@ -15,6 +15,8 @@ declare
   physical_owner_relation oid;
   physical_valid boolean;
   physical_unique boolean;
+  sortable_only boolean := false;
+  target_index_token text;
   statements jsonb := '[]'::jsonb;
 begin
   select catalogue.* into catalogue_row
@@ -91,6 +93,15 @@ begin
   if observed = 'present' then
     return pg_catalog.jsonb_build_object('outcome', 'settled');
   end if;
+  sortable_only := catalogue_row.purpose = 'uniqueness'
+    and coalesce((mapping_row.field_definition ->> 'sortable')::boolean, false)
+    and vortex_record.observe_field_index_internal(
+      'uniqueness_base', storage_row.physical_table_token, scope_columns,
+      mapping_row.physical_column_token
+    ) = 'present';
+  target_index_token := case when sortable_only
+    then 'ix_' || pg_catalog.substr(mapping_row.physical_column_token, 3)
+    else catalogue_row.physical_index_token end;
 
   -- A concurrent index build or cleanup holds SHARE UPDATE EXCLUSIVE on the
   -- table for its whole duration, including one orphaned by a worker that
@@ -115,7 +126,7 @@ begin
   end if;
 
   physical_relation := pg_catalog.to_regclass(
-    pg_catalog.format('record_data.%I', catalogue_row.physical_index_token)
+    pg_catalog.format('record_data.%I', target_index_token)
   );
   if physical_relation is not null then
     select index_value.indrelid, index_value.indisvalid, index_value.indisunique
@@ -142,18 +153,23 @@ begin
     statements := statements || pg_catalog.jsonb_build_array(
       pg_catalog.format(
         'drop index concurrently if exists record_data.%I',
-        catalogue_row.physical_index_token
+        target_index_token
       )
     );
   end if;
 
   statements := statements || pg_catalog.jsonb_build_array(
     case catalogue_row.purpose
-      when 'uniqueness' then pg_catalog.format(
+      when 'uniqueness' then case when not sortable_only then pg_catalog.format(
         'create unique index concurrently %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
         catalogue_row.physical_index_token, storage_row.physical_table_token,
         scope_columns, mapping_row.physical_column_token
-      )
+      ) else pg_catalog.format(
+        'create index concurrently %I on record_data.%I (%s, %I%s asc nulls first, record_id asc) where lifecycle_state = ''active''',
+        target_index_token, storage_row.physical_table_token,
+        scope_columns, mapping_row.physical_column_token,
+        case when mapping_row.database_value_type = 'text' then ' collate "C"' else '' end
+      ) end
       else pg_catalog.format(
         'create index concurrently %I on record_data.%I (%s, %I%s asc nulls first, record_id asc) where lifecycle_state = ''active''',
         catalogue_row.physical_index_token, storage_row.physical_table_token,
