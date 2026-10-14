@@ -26,6 +26,22 @@ const refuse = (): never => {
   throw new TypeError("Invalid authored Puck composition");
 };
 
+/** A refusal whose reason is safe to show: it names the block and setting, never a value. */
+export class AuthoredPuckSettingRefusal extends TypeError {
+  readonly code = "AUTHORED_PUCK_SETTING_REFUSED";
+  constructor(
+    readonly blockName: string,
+    readonly settingPath: readonly (string | number)[],
+    readonly family: string,
+  ) {
+    super(
+      `${blockName}: setting '${settingPath.join(".")}' ${
+        family === "required_value" ? "needs a value" : `is not valid (${family})`
+      }`,
+    );
+  }
+}
+
 const object = (value: unknown): Record<string, unknown> => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return refuse();
   const prototype = Object.getPrototypeOf(value);
@@ -426,8 +442,9 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             refuse();
           for (const value of Object.values(placement.settings))
             sourceBlockPropertyValueSchema.parse(value);
-          if (validateComponentSettings(placement.settings, release.properties).length > 0)
-            refuse();
+          const failure = validateComponentSettings(placement.settings, release.properties)[0];
+          if (failure !== undefined)
+            throw new AuthoredPuckSettingRefusal(release.name, failure.path, failure.family);
 
           const desktop = placement.responsive.desktop;
           const tabletLayout = placement.responsive.tablet ?? desktop;
@@ -785,7 +802,8 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
     const safe = <Value>(operation: () => Value): Value => {
       try {
         return operation();
-      } catch {
+      } catch (error: unknown) {
+        if (error instanceof AuthoredPuckSettingRefusal) throw error;
         return refuse();
       }
     };

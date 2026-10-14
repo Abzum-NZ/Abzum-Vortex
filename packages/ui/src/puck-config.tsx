@@ -590,7 +590,10 @@ function PlacementBlock(props: {
     );
   const release = registration.metadata;
   const Implementation = implementationFor(release);
-  const settings = componentProps.settings ?? {};
+  // Puck writes `undefined` for untouched fields; a declared setting is either present or absent.
+  const settings = Object.fromEntries(
+    Object.entries(componentProps.settings ?? {}).filter(([, value]) => value !== undefined),
+  );
   validateAccessibleName(settings, release.capabilities, location);
 
   // A placement whose use is unavailable stays viewable but never receives an invocable callback,

@@ -33,7 +33,10 @@ import {
   type StudioPlacementThemeOverrides,
   type StudioPlacementThemeResult,
 } from "./placement-theme-overrides";
-import { createVortexAuthoredPuckAdapter } from "./vortex-authored-puck-adapter";
+import {
+  AuthoredPuckSettingRefusal,
+  createVortexAuthoredPuckAdapter,
+} from "./vortex-authored-puck-adapter";
 
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
 const record = (value: unknown): Record<string, unknown> => {
@@ -100,6 +103,32 @@ export type ApplicationPagePuckEditorProps = Readonly<{
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
+/** The dependency list must name exactly the releases the placements use; a Puck edit can add or drop one. */
+type PlatformBlockDependency = ApplicationSourceDocument["body"]["platform_block_dependencies"][number];
+const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void => {
+  const used = new Map<string, { block_id: string; release_version: string }>();
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(collect);
+    if (typeof value !== "object" || value === null) return;
+    const record = value as Record<string, unknown>;
+    const block = record.block as Record<string, unknown> | undefined;
+    if (typeof block?.block_id === "string" && typeof block.release_version === "string")
+      used.set(`${block.block_id}@${block.release_version}`,
+        { block_id: block.block_id, release_version: block.release_version });
+    Object.values(record).forEach(collect);
+  };
+  collect(source.body.pages);
+  collect(source.body.shells);
+  const kept = source.body.platform_block_dependencies.filter((dependency) =>
+    used.has(`${dependency.block_id}@${dependency.release_version}`));
+  for (const [identity, release] of used)
+    if (!kept.some((dependency) => `${dependency.block_id}@${dependency.release_version}` === identity))
+      kept.push({ kind: "platform_block", ...release } as PlatformBlockDependency);
+  kept.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
+    : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
+  source.body.platform_block_dependencies = kept;
+};
+
 export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps) {
   const page = props.source.body.pages.find((candidate) => candidate.id === props.pageAlias);
   const addresses = page === undefined ? [] : sourcePageSlotAddresses(page);
@@ -159,6 +188,7 @@ function ApplicationPageSlotPuckEditor({
   const runtimeAdapter = useMemo(() => createVortexPuckAdapter(catalogue), [catalogue]);
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
+  const [canvasGeneration, setCanvasGeneration] = useState(0);
   const sourceRef = useRef(source);
   sourceRef.current = source;
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
@@ -258,14 +288,19 @@ function ApplicationPageSlotPuckEditor({
         !setSourcePageSlot(nextPage, at, sourcePlacementSlotSchema.parse(editedSlot))
       )
         throw new TypeError("The selected page is unavailable.");
+      syncPlatformBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
       setMessage("");
       onChange(current, parsed.data);
     } catch (error: unknown) {
       console.error("Failed to apply Puck page changes", error);
+      // Puck keeps the refused block in its own state; remounting restores the accepted draft.
+      setCanvasGeneration((generation) => generation + 1);
       setMessage(
-        "This page change could not be applied. The saved draft and current edits are preserved.",
+        error instanceof AuthoredPuckSettingRefusal
+          ? `This page change could not be applied. ${error.message}. The saved draft and current edits are preserved.`
+          : "This page change could not be applied. The saved draft and current edits are preserved.",
       );
     }
   };
@@ -317,6 +352,7 @@ function ApplicationPageSlotPuckEditor({
         </div>
       )}
       <Puck
+        key={canvasGeneration}
         config={config}
         data={data}
         onChange={change}
