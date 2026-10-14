@@ -104,6 +104,7 @@ export type ApplicationPagePuckEditorProps = Readonly<{
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
 /** The dependency list must name exactly the releases the placements use; a Puck edit can add or drop one. */
+type PlatformBlockDependency = ApplicationSourceDocument["body"]["platform_block_dependencies"][number];
 const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void => {
   const used = new Map<string, { block_id: string; release_version: string }>();
   const collect = (value: unknown): void => {
@@ -122,7 +123,7 @@ const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void 
     used.has(`${dependency.block_id}@${dependency.release_version}`));
   for (const [identity, release] of used)
     if (!kept.some((dependency) => `${dependency.block_id}@${dependency.release_version}` === identity))
-      kept.push({ kind: "platform_block", ...release });
+      kept.push({ kind: "platform_block", ...release } as PlatformBlockDependency);
   kept.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
     : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
   source.body.platform_block_dependencies = kept;
