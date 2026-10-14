@@ -10,11 +10,11 @@ import {
   tenantIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
+import { tenantStructuralCapabilitySetSchema } from "../access/identity-access";
 import {
   organizationAccountLanguageSchema,
   organizationRuntimeSettingsSchema,
-  tenantStructuralCapabilitySetSchema,
-} from "../access/identity-access";
+} from "../access/organization-runtime-settings-schema";
 import type { tenantStructuralCapabilitySchema } from "../access/identity-access";
 
 const pageLimitSchema = z.number().int().min(1).max(100);
