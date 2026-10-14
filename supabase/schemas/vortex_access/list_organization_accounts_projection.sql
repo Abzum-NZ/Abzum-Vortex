@@ -1,7 +1,9 @@
 create or replace function vortex_access.list_organization_accounts_projection(
-  p_record_id uuid,
-  p_page_size integer,
-  p_record_ids uuid[]
+  p_record_ids uuid[],
+  p_sort_key text,
+  p_direction text,
+  p_after jsonb,
+  p_limit integer
 )
 returns table (
   organization_id uuid,
@@ -64,12 +66,27 @@ begin
       'time_zone', projected.time_zone
     )
   from vortex_identity.list_organization_accounts_projection_internal(
-    visible_organization_id, active_members_only,
-    case when p_record_ids is not null then p_record_ids
-      when p_record_id is not null then array[p_record_id] end
-  ) as projected
-  where p_record_id is null or p_record_id = projected.organization_account_id;
+    visible_organization_id, active_members_only, p_record_ids,
+    p_sort_key, p_direction, p_after, p_limit
+  ) as projected;
 end
+$function$;
+
+create or replace function vortex_access.list_organization_accounts_projection(
+  p_record_id uuid, p_page_size integer, p_record_ids uuid[]
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language sql volatile security definer set search_path = ''
+as $function$
+  select projected.*
+  from vortex_access.list_organization_accounts_projection(
+    case when p_record_ids is not null then p_record_ids
+      when p_record_id is not null then array[p_record_id] end,
+    'record_id', 'ascending', null, null
+  ) as projected
+  where p_record_id is null or p_record_id = projected.record_id
 $function$;
 
 create or replace function vortex_access.list_organization_accounts_projection(
@@ -117,3 +134,13 @@ comment on function vortex_access.list_organization_accounts_projection(uuid, in
 alter function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) owner to vortex_owner;
 
 grant execute on function vortex_access.list_organization_accounts_projection(uuid, integer, uuid[]) to postgres;
+
+revoke all on function vortex_access.list_organization_accounts_projection(
+  uuid[], text, text, jsonb, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_organization_accounts_projection(
+  uuid[], text, text, jsonb, integer
+) to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_organization_accounts_projection(
+  uuid[], text, text, jsonb, integer
+) owner to vortex_owner;

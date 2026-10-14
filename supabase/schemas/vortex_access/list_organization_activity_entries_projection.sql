@@ -1,6 +1,9 @@
 create or replace function vortex_access.list_organization_activity_entries_projection(
-  p_record_id uuid,
-  p_page_size integer
+  p_record_ids uuid[],
+  p_sort_key text,
+  p_direction text,
+  p_after jsonb,
+  p_limit integer
 )
 returns table (
   organization_id uuid,
@@ -22,11 +25,37 @@ declare
   decision_organization_id uuid;
   decision_account_id uuid;
   audit_projection boolean;
-  activity_projection_window constant interval := interval '90 days';
-  -- The generated projection view passes no page bound, so the reader caps itself: the
-  -- newest entries come straight off the recent index and the list pages within them.
-  activity_projection_row_ceiling constant integer := 1000;
+  after_occurred_at timestamptz;
+  after_record_id uuid;
+  keyset_sql text := '';
+  base_sql text;
+  source_sql text;
+  order_sql text;
+  scan_sql text;
 begin
+  if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
+    or p_sort_key is null or p_direction is null
+    or p_limit is null or p_limit < 1 then
+    raise exception using errcode = '22023', message = 'Activity projection bounds are invalid';
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) <> 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey') <> 'array'
+      or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) <> 'string'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') <> 'string' then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end if;
+    begin
+      after_occurred_at := (p_after -> 'sortKey' ->> 0)::timestamptz;
+      after_record_id := (p_after ->> 'recordId')::uuid;
+    exception when invalid_text_representation or datetime_field_overflow then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end;
+    keyset_sql := case when p_direction = 'descending'
+      then ' and (entry.occurred_at, entry.activity_id) < ($6, $7)'
+      else ' and (entry.occurred_at, entry.activity_id) > ($6, $7)' end;
+  end if;
   begin
     checked_context := vortex_access.validated_human_request_context();
     visible_organization_id := (checked_context ->> 'organizationId')::uuid;
@@ -61,8 +90,33 @@ begin
     false
   );
 
-  return query
-  select
+  order_sql := pg_catalog.format(
+    ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
+    case when p_direction = 'descending' then 'desc' else 'asc' end,
+    case when p_direction = 'descending' then 'desc' else 'asc' end
+  );
+  base_sql := $scan$select entry.*
+    from vortex_record.organization_activity_entries as entry
+    where entry.organization_id = $1
+      and entry.occurred_at >= pg_catalog.statement_timestamp() - interval '90 days'
+      and ($2 is null or entry.activity_id = any($2))$scan$;
+  if audit_projection then
+    source_sql := base_sql || keyset_sql || order_sql;
+  else
+    source_sql := 'select visible.* from (('
+      || base_sql
+      || ' and entry.actor_kind = ''organization_account'' and entry.actor_id = $4'
+      || keyset_sql || order_sql
+      || ') union all ('
+      || base_sql
+      || ' and entry.actor_kind = ''identity'' and entry.actor_id = $5'
+      || keyset_sql || order_sql
+      || ')) as visible'
+      || pg_catalog.format(' order by visible.occurred_at %s, visible.activity_id %s limit $8',
+        case when p_direction = 'descending' then 'desc' else 'asc' end,
+        case when p_direction = 'descending' then 'desc' else 'asc' end);
+  end if;
+  scan_sql := $scan$select
     entry.organization_id,
     entry.activity_id,
     1::bigint,
@@ -81,22 +135,43 @@ begin
         else null end,
       'action', entry.action,
       'subject_count', pg_catalog.cardinality(entry.subject_ids),
-      'changed_field_count', case when audit_projection
+      'changed_field_count', case when $3
         then pg_catalog.cardinality(entry.changed_field_ids) else null end
     )
-  from vortex_record.organization_activity_entries as entry
-  where entry.organization_id = visible_organization_id
-    and entry.occurred_at >= pg_catalog.statement_timestamp() - activity_projection_window
-    and (p_record_id is null or p_record_id = entry.activity_id)
-    and (
-      audit_projection
-      or (entry.actor_kind = 'organization_account' and entry.actor_id = actor_account_id)
-      or (entry.actor_kind = 'identity' and entry.actor_id = actor_identity_id)
-    )
-  order by entry.occurred_at desc, entry.activity_id desc
-  limit activity_projection_row_ceiling;
+  from ($scan$ || source_sql || $scan$) as entry$scan$
+    || pg_catalog.format(' order by entry.occurred_at %s, entry.activity_id %s',
+      case when p_direction = 'descending' then 'desc' else 'asc' end,
+      case when p_direction = 'descending' then 'desc' else 'asc' end);
+  return query execute scan_sql using visible_organization_id, p_record_ids,
+    audit_projection, actor_account_id, actor_identity_id,
+    after_occurred_at, after_record_id, p_limit;
 end
 $function$;
+
+create or replace function vortex_access.list_organization_activity_entries_projection(
+  p_record_id uuid, p_page_size integer
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language sql volatile security definer set search_path = ''
+as $function$
+  select projected.*
+  from vortex_access.list_organization_activity_entries_projection(
+    case when p_record_id is null then null else array[p_record_id] end,
+    'occurred_at', 'descending', null, 1000
+  ) as projected
+$function$;
+
+revoke all on function vortex_access.list_organization_activity_entries_projection(
+  uuid[], text, text, jsonb, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_organization_activity_entries_projection(
+  uuid[], text, text, jsonb, integer
+) to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_organization_activity_entries_projection(
+  uuid[], text, text, jsonb, integer
+) owner to vortex_owner;
 
 revoke all on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
