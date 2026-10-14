@@ -1,6 +1,7 @@
 create or replace function vortex_identity.list_organization_accounts_projection_internal(
   p_organization_id uuid,
-  p_active_members_only boolean
+  p_active_members_only boolean,
+  p_account_ids uuid[]
 )
 returns table (
   organization_account_id uuid,
@@ -35,6 +36,7 @@ as $function$
     and p_organization_id is not null
     and p_organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
     and p_active_members_only is not null
+    and (p_account_ids is null or account.organization_account_id = any(p_account_ids))
     and (
       not p_active_members_only
       or (
@@ -47,6 +49,29 @@ as $function$
   order by account.organization_account_id
 $function$;
 
+create or replace function vortex_identity.list_organization_accounts_projection_internal(
+  p_organization_id uuid,
+  p_active_members_only boolean
+)
+returns table (
+  organization_account_id uuid,
+  display_name text,
+  account_state text,
+  language text,
+  time_zone text,
+  revision bigint
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select projected.*
+  from vortex_identity.list_organization_accounts_projection_internal(
+    p_organization_id, p_active_members_only, null
+  ) as projected
+$function$;
+
 revoke all on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
@@ -55,3 +80,12 @@ comment on function vortex_identity.list_organization_accounts_projection_intern
 
 alter function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) owner to vortex_owner;
 grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean) to postgres;
+
+revoke all on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[])
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[]) is
+  'The organisation-account projection, optionally narrowed to the given account identities inside the scan so a label lookup never materialises the whole directory; visibility is identical to the two-argument form.';
+
+alter function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[]) owner to vortex_owner;
+grant execute on function vortex_identity.list_organization_accounts_projection_internal(uuid, boolean, uuid[]) to postgres;

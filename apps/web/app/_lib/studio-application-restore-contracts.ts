@@ -23,6 +23,13 @@ const studioApplicationRestoreExpectedSchema = z.object({
   anchorReleaseRevision: revisionSchema,
 }).strict();
 
+/** How the viewer may see one person: named, restricted by the directory permissions, or not readable right now. */
+export const studioPersonLabelSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("named"), name: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("restricted") }).strict(),
+  z.object({ kind: z.literal("unavailable") }).strict(),
+]);
+
 const studioApplicationRestoreSnapshotSchema = z.object({
   organizationId: organizationIdSchema,
   rootId: applicationRootIdSchema,
@@ -35,6 +42,7 @@ const studioApplicationRestoreAvailableSchema = z.object({
   selector: studioApplicationRestoreSelectorSchema,
   snapshot: studioApplicationRestoreSnapshotSchema,
   metadata: definitionReleaseMetadataSchema,
+  publishedBy: studioPersonLabelSchema,
 }).strict().superRefine((result, refinement) => {
   if (result.snapshot.organizationId.toLowerCase() !== result.selector.organizationId.toLowerCase() ||
     result.snapshot.rootId.toLowerCase() !== result.selector.rootId.toLowerCase()) {
@@ -75,6 +83,7 @@ export const studioApplicationRestoreReceiptSchema = z.object({
   sourceFingerprint: fingerprintSchema,
   publicationAnchor: revisionSchema,
   restoredBy: organizationAccountIdSchema,
+  restoredByLabel: studioPersonLabelSchema,
   restoredAt: timestampSchema,
   correlationId: correlationIdSchema,
 }).strict();
@@ -91,6 +100,7 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
   }).strict(),
 ]);
 
+export type StudioPersonLabel = z.infer<typeof studioPersonLabelSchema>;
 export type StudioApplicationRestoreSelector = z.infer<typeof studioApplicationRestoreSelectorSchema>;
 export type StudioApplicationRestoreAvailable = z.infer<typeof studioApplicationRestoreAvailableSchema>;
 export type StudioApplicationRestoreFailure = z.infer<typeof studioApplicationRestoreFailureSchema>;

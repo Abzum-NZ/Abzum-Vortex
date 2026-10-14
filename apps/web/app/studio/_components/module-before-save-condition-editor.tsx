@@ -184,7 +184,7 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
   return <main className="mx-auto max-w-4xl space-y-6 p-6" aria-busy={busy}>
     <header className="space-y-2"><h1 className="text-2xl font-semibold">Conditions that run before save</h1>
       <p>Edit the current-field condition of an existing If task. Its branches and actions stay fixed. Save updates the draft.</p>
-      {snapshot !== undefined && <p>Module {snapshot.key}, draft revision {snapshot.draftRevision}, published revision {snapshot.publishedRevision ?? "None"}.</p>}
+      {snapshot !== undefined && <p>Module {snapshot.name}, draft revision {snapshot.draftRevision}, published revision {snapshot.publishedRevision ?? "None"}.</p>}
     </header>
     <label className="block space-y-1"><span>Existing condition that runs before save</span>
       <NativeSelect value={selected} disabled={busy}

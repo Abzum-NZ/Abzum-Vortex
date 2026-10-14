@@ -32,6 +32,7 @@ import {
 } from "./studio-application-restore-contracts";
 import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
+import { readStudioPersonLabel } from "./studio-person-labels";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
@@ -139,6 +140,7 @@ export async function loadStudioApplicationRestore(
         anchorReleaseRevision: inspected.snapshot.anchorReleaseRevision,
       },
       metadata: inspected.metadata,
+      publishedBy: await readStudioPersonLabel(selector.data.organizationId, inspected.metadata.publishedBy),
     });
     return result ?? loadFailure("temporarily_unavailable");
   } catch (error) {
@@ -180,6 +182,7 @@ const createReceipt = (
     sourceFingerprint: applicationDraft.sourceFingerprint,
     publicationAnchor: applicationDraft.publishedRevision,
     restoredBy,
+    restoredByLabel: { kind: "unavailable" },
     restoredAt,
     correlationId: restoreCorrelationId,
   });
@@ -258,7 +261,13 @@ export async function restoreStudioApplicationDraft(
         }
       },
     );
-    if (result.kind === "available") return result.value;
+    if (result.kind === "available") {
+      if (result.value.kind !== "completed") return result.value;
+      // The label is read after the restore committed, so a failed read never undoes or hides it.
+      const { receipt } = result.value;
+      return { ...result.value, receipt: { ...receipt,
+        restoredByLabel: await readStudioPersonLabel(receipt.organizationId, receipt.restoredBy) } };
+    }
     const kind = callbackFailure ?? (result.kind === "unavailable"
       ? "refused" : "temporarily_unavailable");
     return failedCommand(kind, invocationStarted);

@@ -1398,6 +1398,21 @@
         ],
         "page_size": 50,
         "relationship_hops": 0
+      },
+      {
+        "id": "qry_sd_case_board",
+        "key": "service_desk_case_board",
+        "label": "Case board",
+        "description": "Cases grouped by status",
+        "record_type": "case",
+        "inputs": [],
+        "select": ["status", "subject", "case_number", "priority", "resolution_due_at"],
+        "filter": null,
+        "group_by": ["status"],
+        "aggregates": [{ "operation": "count", "alias": "case_count" }],
+        "sort": [{ "field": "status", "direction": "ascending" }],
+        "page_size": 50,
+        "relationship_hops": 0
       }
     ]
   }

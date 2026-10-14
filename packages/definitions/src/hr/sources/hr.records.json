@@ -348,24 +348,24 @@
             "settings": {
               "options": [
                 {
-                  "value": "pending",
-                  "label": "Pending"
+                  "value": "draft",
+                  "label": "Draft"
+                },
+                {
+                  "value": "submitted",
+                  "label": "Submitted"
                 },
                 {
                   "value": "approved",
                   "label": "Approved"
                 },
                 {
-                  "value": "refused",
-                  "label": "Refused"
-                },
-                {
-                  "value": "withdrawn",
-                  "label": "Withdrawn"
+                  "value": "rejected",
+                  "label": "Rejected"
                 }
               ]
             },
-            "default": "pending"
+            "default": "draft"
           },
           {
             "id": "fld_hr_leave_request_employee",
@@ -646,8 +646,8 @@
       {
         "id": "perm_hr_leave_request_read",
         "key": "vortex.hr.leave_request.read",
-        "label": "Read leave request dates and status",
-        "description": "Read leave request dates and status in this private HR application.",
+        "label": "Read leave requests",
+        "description": "Read leave requests in this private HR application.",
         "record_type": "leave_request",
         "action_kind": "read",
         "administrative": false,
@@ -662,15 +662,190 @@
           "readable_fields": [
             "start_date",
             "end_date",
-            "status"
+            "reason",
+            "status",
+            "employee"
           ],
           "changeable_fields": []
+        }
+      },
+      {
+        "id": "perm_hr_leave_request_create",
+        "key": "vortex.hr.leave_request.create",
+        "label": "Create leave requests",
+        "description": "Create leave requests in this HR application.",
+        "record_type": "leave_request",
+        "action_kind": "create",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "start_date",
+            "end_date",
+            "reason",
+            "status",
+            "employee"
+          ],
+          "changeable_fields": [
+            "start_date",
+            "end_date",
+            "reason",
+            "status",
+            "employee"
+          ]
+        }
+      },
+      {
+        "id": "perm_hr_leave_request_update",
+        "key": "vortex.hr.leave_request.update",
+        "label": "Update leave requests",
+        "description": "Update leave requests in this HR application.",
+        "record_type": "leave_request",
+        "action_kind": "update",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "start_date",
+            "end_date",
+            "reason",
+            "status",
+            "employee"
+          ],
+          "changeable_fields": [
+            "start_date",
+            "end_date",
+            "reason",
+            "status",
+            "employee"
+          ]
         }
       }
     ],
     "actions": [],
     "events": [],
-    "flows": [],
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_leave_request_dates",
+        "key": "end_date_not_before_start_date",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "leave_request",
+            "operations": [
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
+          {
+            "id": "both_dates_present",
+            "type": "if",
+            "condition": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "is_empty",
+                    "arg": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "start_date"
+                      }
+                    }
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "is_empty",
+                    "arg": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "end_date"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "id": "end_before_start",
+                "type": "if",
+                "condition": {
+                  "op": "lt",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "end_date"
+                    }
+                  },
+                  "right": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "start_date"
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "id": "refuse_end_before_start",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "end_date_before_start_date"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "End date must be on or after the start date."
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
     "extension_points": [],
     "sharing_conditions": [],
     "queries": [

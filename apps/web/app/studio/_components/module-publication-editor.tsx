@@ -2,6 +2,7 @@
 
 import { PublicationSummary } from "./publication-summary";
 import { useState } from "react";
+import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-details";
 import {
   canonicalJson,
   prepareDefinitionPublicationResultSchema,
@@ -19,6 +20,7 @@ import { Input } from "@vortex/ui/components/input";
 type PublicationConfirmation = ReturnType<
   typeof prepareDefinitionPublicationResultSchema.parse
 >["confirmation"];
+type ComponentLabels = ReturnType<typeof prepareDefinitionPublicationResultSchema.parse>["componentLabels"];
 type PublishedRelease = ReturnType<typeof publishDefinitionResultSchema.parse>;
 
 const reasonMessages: Record<string, string> = {
@@ -77,6 +79,7 @@ export function ModulePublicationEditor({
   ) => Promise<HumanDefinitionPublicationResult>;
 }) {
   const [confirmation, setConfirmation] = useState<PublicationConfirmation | null>(null);
+  const [componentLabels, setComponentLabels] = useState<ComponentLabels>([]);
   const [release, setRelease] = useState<PublishedRelease | null>(null);
   const [releaseNote, setReleaseNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -103,6 +106,7 @@ export function ModulePublicationEditor({
         parsed.data.confirmation.expectedDraftRevision === draft.draftRevision
       ) {
         setConfirmation(parsed.data.confirmation);
+        setComponentLabels(parsed.data.componentLabels);
         setMessage(
           "Preparation verified. Review the release identity and dependencies, then publish explicitly.",
         );
@@ -182,7 +186,7 @@ export function ModulePublicationEditor({
           A rejected publication rolls back, leaving the previous Module release current. Publishing
           does not change an Application binding or install or adopt anything.
         </p>
-        <dl className="break-all text-sm">
+        <TechnicalDetails><dl className="break-all text-sm">
           <div>
             <dt className="inline font-medium">Module root: </dt>
             <dd className="inline">{draft.rootId}</dd>
@@ -195,7 +199,7 @@ export function ModulePublicationEditor({
             <dt className="inline font-medium">Current published revision: </dt>
             <dd className="inline">{draft.publishedRevision ?? "No release"}</dd>
           </div>
-        </dl>
+        </dl></TechnicalDetails>
       </header>
 
       <div className="flex flex-wrap gap-3">
@@ -207,7 +211,7 @@ export function ModulePublicationEditor({
       {confirmation !== null ? (
         <section className="space-y-4 rounded-lg border p-4" aria-label="Prepared Module release">
           <h2 className="text-lg font-semibold">Prepared release for review</h2>
-          <PublicationSummary confirmation={confirmation} />
+          <PublicationSummary confirmation={confirmation} componentLabels={componentLabels} />
           <label className="block space-y-1 text-sm font-medium">
             Release note
             <Input
@@ -229,11 +233,7 @@ export function ModulePublicationEditor({
       {release !== null ? (
         <section className="space-y-2 rounded-lg border p-4" aria-label="Published Module release">
           <h2 className="text-lg font-semibold">Published release identity</h2>
-          <dl className="break-all text-sm">
-            <div>
-              <dt className="inline font-medium">Module root: </dt>
-              <dd className="inline">{release.rootId}</dd>
-            </div>
+          <dl className="text-sm">
             <div>
               <dt className="inline font-medium">Release version: </dt>
               <dd className="inline">{release.releaseVersion}</dd>
@@ -247,14 +247,13 @@ export function ModulePublicationEditor({
               <dd className="inline">{release.publishedAt}</dd>
             </div>
           </dl>
-          <details>
-            <summary className="cursor-pointer font-medium">
-              Exact published dependency manifest
-            </summary>
-            <pre className="mt-2 overflow-auto rounded bg-muted p-3 text-xs">
-              {JSON.stringify(release.dependencyManifest, null, 2)}
-            </pre>
-          </details>
+          <TechnicalDetails><dl className="break-all text-sm">
+            <div>
+              <dt className="inline font-medium">Module root: </dt>
+              <dd className="inline">{release.rootId}</dd>
+            </div>
+          </dl></TechnicalDetails>
+          <ViewSource title="Published dependency manifest" value={release.dependencyManifest} />
           <p>
             Application draft binding changes, Application publication, and adoption or installation
             remain separate deliberate actions.

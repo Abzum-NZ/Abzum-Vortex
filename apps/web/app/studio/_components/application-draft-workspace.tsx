@@ -90,7 +90,11 @@ type PublicationSnapshot = Readonly<{
   sourceFingerprint: string; source: object; selectionKey: string;
   lifetime: number; generation: number;
 }>;
-type PreparedPublication = Readonly<{ confirmation: DefinitionPublicationConfirmation; snapshot: PublicationSnapshot }>;
+type PreparedPublication = Readonly<{
+  confirmation: DefinitionPublicationConfirmation;
+  componentLabels: readonly Readonly<{ componentId: string; label: string }>[];
+  snapshot: PublicationSnapshot;
+}>;
 const samePublicationSnapshot = (left: PublicationSnapshot, right: PublicationSnapshot | null) =>
   right !== null && left.organizationId === right.organizationId && left.rootId === right.rootId &&
   left.key === right.key && left.draftRevision === right.draftRevision &&
@@ -578,7 +582,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         if (parsed?.success && parsed.data.confirmation.rootId === snapshot.rootId &&
           parsed.data.confirmation.expectedDraftRevision === snapshot.draftRevision &&
           parsed.data.confirmation.sourceFingerprint === snapshot.sourceFingerprint) {
-          setPreparedPublication({ confirmation: parsed.data.confirmation, snapshot });
+          setPreparedPublication({ confirmation: parsed.data.confirmation, componentLabels: parsed.data.componentLabels, snapshot });
           setPublicationMessage("Preparation verified. Review the complete confirmation before explicitly publishing.");
           return { kind: "prepared", confirmation: parsed.data.confirmation };
         }
@@ -1176,7 +1180,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         <Textarea className={inputClass} value={publicationNote} maxLength={2000} disabled={isPublishing || pendingSearch || pendingSourceImport}
           onChange={(event) => { if (!publicationPending.current && !sourceImportPending.current && !searchPending.current) setPublicationNote(event.target.value); }} /></label>
       {preparedPublication !== null && <div className="space-y-2">
-        <PublicationSummary confirmation={preparedPublication.confirmation} />
+        <PublicationSummary confirmation={preparedPublication.confirmation} componentLabels={preparedPublication.componentLabels} />
       </div>}
       <div className="flex flex-wrap gap-2">
         <Button type="button" disabled={isPublishing || readPublicationSnapshot() === null}

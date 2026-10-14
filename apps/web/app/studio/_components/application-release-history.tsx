@@ -197,7 +197,6 @@ export function ApplicationReleaseHistory({ initialPage }: {
               <p className="font-semibold">Version {entry.releaseVersion} · revision {entry.releaseRevision}
                 {entry.isCurrent && <span> · Current release</span>}</p>
               <p>Published <time dateTime={entry.publishedAt}>{entry.publishedAt}</time></p>
-              <p className="break-all">Published by {entry.publishedBy}</p>
               <p className="whitespace-pre-wrap break-words">{entry.releaseNote}</p>
               <Button type="button" variant="outline" size="sm" name="application.release_history.inspect" aria-pressed={selectedRevision === entry.releaseRevision}
                 disabled={blocked}
@@ -215,7 +214,6 @@ export function ApplicationReleaseHistory({ initialPage }: {
         <div><dt className="font-semibold">Version and revision</dt><dd>{metadata.releaseVersion} · revision {metadata.releaseRevision}</dd></div>
         <div><dt className="font-semibold">Current release</dt><dd>{metadata.isCurrent ? "Yes" : "No"}</dd></div>
         <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{metadata.publishedAt}</time></dd></div>
-        <div><dt className="font-semibold">Published by</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
         {selectedRevision === metadata.releaseRevision && <div className="pt-2">
           <nav aria-label="Selected release actions" className="flex flex-wrap gap-3">
@@ -243,6 +241,7 @@ export function ApplicationReleaseHistory({ initialPage }: {
         </div>}
       </dl>
       <TechnicalDetails><dl className="space-y-2">
+        <div><dt className="font-semibold">Published by (account id)</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
         <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{metadata.sourceFingerprint}</code></dd></div>
       </dl></TechnicalDetails></> : <p>Select Inspect on a release to read its exact persisted metadata.</p>}
     </section>
