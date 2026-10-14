@@ -8,6 +8,7 @@ import {
   type PageDefinition,
   type PageComposition,
   type ProjectedNavigation,
+  type ShellOutletLocation,
 } from "@vortex/platform/schema";
 import {
   ALL_UI_STYLES_CSS,
@@ -36,6 +37,12 @@ import {
   type VortexPuckMetadata,
 } from "./puck-config";
 import { createVortexPuckAdapter } from "./vortex-puck-adapter";
+import {
+  contentConfigFor,
+  frameConfigFor,
+  ShellOutletProvider,
+  withShellOutlet,
+} from "./shell-outlet";
 import {
   resolveRootPlacementSlotWithContext,
   validatePlacementDependencies,
@@ -218,6 +225,16 @@ export type PagePuckRendererProps = Readonly<{
    * the sandboxed host can frame the Vortex-owned bootstrap document on that origin.
    */
   componentBundleOrigin?: string | undefined;
+  /**
+   * Renders this composition as the application frame: the outlet at `location` shows `content`,
+   * which the host renders separately so the frame stays mounted while the content changes.
+   */
+  outlet?: Readonly<{ location: ShellOutletLocation; content: ReactNode }>;
+  /**
+   * Renders only the composition's placements, for a page shown inside a frame's outlet. The frame
+   * already supplies the theme root, the shell and the root slot gap.
+   */
+  contentRegion?: boolean;
 }>;
 
 export function PagePuckRenderer({
@@ -250,6 +267,8 @@ export function PagePuckRenderer({
   applicationSearch,
   applicationSearchPageSubject,
   componentBundleOrigin,
+  outlet,
+  contentRegion = false,
 }: PagePuckRendererProps): ReactElement {
   const { slot, data } = resolvedPageData({
     composition,
@@ -291,62 +310,85 @@ export function PagePuckRenderer({
       ? -1
       : (guidedSteps?.findIndex((step) => step.id === activeStepId) ?? -1);
   const step = stepIndex < 0 ? undefined : guidedSteps?.[stepIndex];
+  const baseConfig = getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens);
+  const guidedSummary =
+    step?.summary !== true || guidedSummaryValues === undefined ? null : (
+      <section aria-label="Review your answers" className="mt-6">
+        <h2 className="text-lg font-semibold">Review your answers</h2>
+        <dl className="mt-3 grid gap-3">
+          {Object.entries(guidedSummaryValues).map(([field, value]) => (
+            <div key={field} className="rounded-md border p-3">
+              <dt className="font-medium">{field}</dt>
+              <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                {value === null
+                  ? "Empty"
+                  : typeof value === "string"
+                    ? value
+                    : JSON.stringify(value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    );
+  const guidedNavigation =
+    guidedStepNavigation === undefined || stepIndex < 0 || guidedSteps === undefined ? null : (
+      <nav aria-label="Guided form steps" className="mt-6 flex items-center gap-3">
+        <span aria-live="polite" className="mr-auto text-sm text-muted-foreground">
+          <span className="block font-medium text-foreground">{step?.name}</span>
+          <span>
+            Step {stepIndex + 1} of {guidedSteps.length}
+          </span>
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={guidedStepNavigation.disabled || stepIndex === 0}
+          onClick={guidedStepNavigation.onBack}
+        >
+          Back
+        </Button>
+        <Button
+          type="button"
+          disabled={guidedStepNavigation.disabled}
+          onClick={guidedStepNavigation.onNext}
+        >
+          {step?.summary === true ? "Confirm" : "Next"}
+        </Button>
+      </nav>
+    );
+  if (contentRegion)
+    return (
+      <>
+        {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
+        <Render config={contentConfigFor(baseConfig)} data={data} metadata={metadata} />
+        {guidedSummary}
+        {guidedNavigation}
+        {overlay}
+      </>
+    );
+  const rendered =
+    outlet === undefined ? (
+      <Render config={baseConfig} data={data} metadata={metadata} />
+    ) : (
+      <ShellOutletProvider content={outlet.content}>
+        <Render
+          config={frameConfigFor(baseConfig)}
+          data={withShellOutlet(data, outlet.location)}
+          metadata={metadata}
+        />
+      </ShellOutletProvider>
+    );
   const screen = (
     <DateFormatProvider locale={locale} timeZone={timeZone}>
       {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
       <div className={className} style={style}>
         <VortexPuckThemeScopeProvider scope={{ application: tokens, inherited: tokens }}>
-          <Render
-            config={getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)}
-            data={data}
-            metadata={metadata}
-          />
+          {rendered}
         </VortexPuckThemeScopeProvider>
       </div>
-      {step?.summary !== true || guidedSummaryValues === undefined ? null : (
-        <section aria-label="Review your answers" className="mt-6">
-          <h2 className="text-lg font-semibold">Review your answers</h2>
-          <dl className="mt-3 grid gap-3">
-            {Object.entries(guidedSummaryValues).map(([field, value]) => (
-              <div key={field} className="rounded-md border p-3">
-                <dt className="font-medium">{field}</dt>
-                <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                  {value === null
-                    ? "Empty"
-                    : typeof value === "string"
-                      ? value
-                      : JSON.stringify(value)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      )}
-      {guidedStepNavigation === undefined || stepIndex < 0 || guidedSteps === undefined ? null : (
-        <nav aria-label="Guided form steps" className="mt-6 flex items-center gap-3">
-          <span aria-live="polite" className="mr-auto text-sm text-muted-foreground">
-            <span className="block font-medium text-foreground">{step?.name}</span>
-            <span>
-              Step {stepIndex + 1} of {guidedSteps.length}
-            </span>
-          </span>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={guidedStepNavigation.disabled || stepIndex === 0}
-            onClick={guidedStepNavigation.onBack}
-          >
-            Back
-          </Button>
-          <Button
-            type="button"
-            disabled={guidedStepNavigation.disabled}
-            onClick={guidedStepNavigation.onNext}
-          >
-            {step?.summary === true ? "Confirm" : "Next"}
-          </Button>
-        </nav>
-      )}
+      {guidedSummary}
+      {guidedNavigation}
     </DateFormatProvider>
   );
   return (
