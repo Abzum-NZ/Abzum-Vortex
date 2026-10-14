@@ -1287,6 +1287,21 @@
 
                                                                                                                                                                                                                                    }
                                                                                                                                                                                                                      },
+                                                                                                                                                                                                  "form_field_6_3_company": {
+                                                                                                                                                                                                    "block": {"block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87", "release_version": "1.1.0"},
+                                                                                                                                                                                                    "settings": {
+                                                                                                                                                                                                      "name": {"kind": "text", "value": "company"},
+                                                                                                                                                                                                      "label": {"kind": "text", "value": "Company"},
+                                                                                                                                                                                                      "required": {"kind": "boolean", "value": false},
+                                                                                                                                                                                                      "choice_source": {"kind": "group", "properties": {
+                                                                                                                                                                                                        "query": {"kind": "query_reference", "query": "vortex.crm.organisations:crm_companies"},
+                                                                                                                                                                                                        "label_field": {"kind": "field_reference", "field": "vortex.crm.organisations:company.name"}
+                                                                                                                                                                                                      }}
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    "theme_overrides": {},
+                                                                                                                                                                                                    "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}},
+                                                                                                                                                                                                    "slots": {}
+                                                                                                                                                                                                  },
                                                                                                                                                                                                   "form_submit_6_3":  {
                                                                                                                                                                                                                           "block":  {
                                                                                                                                                                                                                                         "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1325,6 +1340,7 @@
                                                                                                                                                                                              "desktop":  [
                                                                                                                                                                                                              "form_field_6_3_first_name",
                                                                                                                                                                                                              "form_field_6_3_last_name",
+                                                                                                                                                                                                             "form_field_6_3_company",
                                                                                                                                                                                                              "form_submit_6_3"
                                                                                                                                                                                                          ]
                                                                                                                                                                                          }
@@ -6216,6 +6232,10 @@
                              "last_name": {
                                  "kind": "caller",
                                  "name": "last_name"
+                             },
+                             "company": {
+                                 "kind": "caller",
+                                 "name": "company"
                              }
                          }
                      },
