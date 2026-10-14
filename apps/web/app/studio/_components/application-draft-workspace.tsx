@@ -211,10 +211,11 @@ function Outline({ node, selectedKey, choose, disabled = false }: {
   disabled?: boolean;
 }) {
   return <li className="space-y-1">
-    {node.selection === null ? <span className="text-sm text-muted-foreground">{node.label}</span>
-      : <Button type="button" variant="outline" size="sm" disabled={disabled} className={`${buttonClass} w-full text-left`}
+    {node.selection === null ? <span className="block break-words text-sm text-muted-foreground" title={node.label}>{node.label}</span>
+      : <Button type="button" variant="outline" size="sm" disabled={disabled} title={node.label}
+        className={`${buttonClass} h-auto w-full justify-start whitespace-normal py-1 text-left`}
         aria-pressed={selectedKey === studioSemanticSelectionKey(node.selection)} onClick={() => choose(node)}>
-        {node.label} <span className="text-xs text-muted-foreground">({node.kind})</span>
+        <span className="min-w-0 break-words">{node.label} <span className="text-xs text-muted-foreground">({node.kind})</span></span>
       </Button>}
     {node.children.length > 0 && <ul className="space-y-1 border-l border-border pl-3">
       {node.children.map((child) => <Outline key={child.key} node={child} selectedKey={selectedKey} choose={choose} disabled={disabled} />)}
@@ -861,7 +862,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
         </div>
         <p role="status" aria-live="polite" className="w-full text-sm text-muted-foreground">{pendingNote} {message}</p>
       </>}
-      outline={<ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={async (node) => {
+      outline={(closeOutline) => <ul><Outline node={outline} selectedKey={selectionKey} disabled={isPublishing} choose={async (node) => {
             if (publicationPending.current || reopening.current || history.getState().isSaving || (((sourceImportPending.current || searchPending.current) || pendingLabels || appearancePending.current || compositionPending.current || flowTextPending.current || flowAppendPending.current || conditionPending.current) &&
               !await confirm({
                 title: "Change the selection?",
@@ -871,6 +872,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialSearchMeta
             if (!changeSelection(node.selection)) return;
             setLabel(currentLabel);
             setDescription(source.body.description);
+            closeOutline();
           }} /></ul>}
       canvas={
         <section className={selected?.kind === "page"
