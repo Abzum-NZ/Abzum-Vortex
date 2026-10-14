@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactElement } from "react";
 import {
   readRecordsTableContract,
@@ -189,11 +190,41 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   const behaviours = contract?.rowBehaviours;
   const rowClickEventId = behaviours?.rowClick?.eventId;
   const onRowClick = rowClickEventId === undefined ? undefined : events?.row_clicked;
+  // A row click handler may return the promise of the flow it started; that row stays busy until it
+  // settles, so a second click or Enter cannot start the same flow twice.
+  const [pendingRecordId, setPendingRecordId] = useState<string | undefined>(undefined);
+  const pendingNow = useRef<string | undefined>(undefined);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const activateRow =
     onRowClick === undefined || rowClickEventId === undefined
       ? undefined
-      : (recordId: string) =>
-          onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId });
+      : (recordId: string) => {
+          if (pendingNow.current !== undefined) return;
+          const outcome: unknown = onRowClick({
+            event: "row_clicked",
+            eventId: rowClickEventId,
+            recordId,
+          });
+          if (
+            typeof outcome === "object" &&
+            outcome !== null &&
+            typeof (outcome as PromiseLike<unknown>).then === "function"
+          ) {
+            pendingNow.current = recordId;
+            setPendingRecordId(recordId);
+            const settle = (): void => {
+              pendingNow.current = undefined;
+              if (mounted.current) setPendingRecordId(undefined);
+            };
+            (outcome as PromiseLike<unknown>).then(settle, settle);
+          }
+        };
   const declaredRowActions = behaviours?.rowActions ?? [];
   const declaredBulkActions = behaviours?.bulkActions ?? [];
   const inlineEdit = behaviours?.inlineEdit;
@@ -404,7 +435,11 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                     key={row.recordId}
                     data-vortex-record-id={row.recordId}
                     data-state={selected ? "selected" : undefined}
-                    className={cn(activate === undefined && openAddress === undefined ? undefined : "cursor-pointer")}
+                    aria-busy={pendingRecordId === row.recordId ? true : undefined}
+                    className={cn(
+                      activate === undefined && openAddress === undefined ? undefined : "cursor-pointer",
+                      pendingRecordId === row.recordId && "cursor-progress opacity-60",
+                    )}
                     {...rowInteraction}
                   >
                     {!selectable ? null : (
