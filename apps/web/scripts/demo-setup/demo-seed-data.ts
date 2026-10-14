@@ -388,15 +388,23 @@ export const hrEmployees: readonly Readonly<{
   number: string;
   status: "active" | "inactive";
   startDate: string;
+  annualLeaveDays: number;
   positionIndex: number;
 }>[] = [
-  { number: "E-1001", status: "active", startDate: "2024-02-05", positionIndex: 0 },
+  {
+    number: "E-1001",
+    status: "active",
+    startDate: "2024-02-05",
+    annualLeaveDays: 25,
+    positionIndex: 0,
+  },
 ];
 
 /** `employeeIndex` refers to a position in `hrEmployees`. */
 export const hrLeaveRequests: readonly Readonly<{
   startDate: string;
   endDate: string;
+  days: number;
   reason: string;
   status: "draft" | "submitted" | "approved" | "rejected";
   employeeIndex: number;
@@ -404,6 +412,7 @@ export const hrLeaveRequests: readonly Readonly<{
   {
     startDate: "2026-11-02",
     endDate: "2026-11-06",
+    days: 5,
     reason: "Family holiday.",
     status: "submitted",
     employeeIndex: 0,
@@ -411,6 +420,7 @@ export const hrLeaveRequests: readonly Readonly<{
   {
     startDate: "2026-12-21",
     endDate: "2026-12-31",
+    days: 9,
     reason: "Summer break.",
     status: "approved",
     employeeIndex: 0,
@@ -418,8 +428,17 @@ export const hrLeaveRequests: readonly Readonly<{
   {
     startDate: "2026-10-26",
     endDate: "2026-10-26",
+    days: 1,
     reason: "Medical appointment.",
     status: "draft",
+    employeeIndex: 0,
+  },
+  {
+    startDate: "2026-03-09",
+    endDate: "2026-03-13",
+    days: 5,
+    reason: "Spring break.",
+    status: "approved",
     employeeIndex: 0,
   },
 ];
