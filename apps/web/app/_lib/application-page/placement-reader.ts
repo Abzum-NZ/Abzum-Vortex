@@ -7,6 +7,8 @@ import type {
 import {
   projectReferenceChoiceInputValues,
   projectRecordDetailData,
+  collectRecordLinks,
+  type RecordLinkResolver,
   protectedQueryCommandSchema,
   type ProtectedQueryRow,
   protectedQuerySummaryCommandSchema,
@@ -83,6 +85,15 @@ import type {
 } from "./types";
 import type { ReferenceChoiceFirstPage } from "./reference-choice";
 import { readAttachmentListPlacement } from "./attachment-placement";
+
+/** The labels of the linked records the rows carry, read once; undefined when none or unreadable. */
+const readRecordLinks = async (
+  resolve: RecordLinkResolver,
+  rows: readonly ProtectedQueryRow[],
+): ReturnType<RecordLinkResolver> => {
+  const links = collectRecordLinks(rows);
+  return links.length === 0 ? undefined : resolve(links);
+};
 
 /** The flow bindings one placement holds, projected for the browser by placement identity. */
 export const projectPlacementBindings = (
@@ -205,6 +216,7 @@ export const readPlacement = async (
     queries: ReturnType<typeof createProtectedQueryService>;
     readCalendarSettings: Parameters<typeof readCalendarPlacement>[0]["readCalendarSettings"];
     tables: ReturnType<typeof createRecordsTableQueryResolver>;
+    resolveRecordLinks: RecordLinkResolver;
     tableContinuation: TableContinuationTarget | undefined;
     adoptSubjectRead: (subject: PageSubjectReadResult) => void;
     markSubjectUnreadable: () => void;
@@ -237,6 +249,7 @@ export const readPlacement = async (
     queries,
     readCalendarSettings,
     tables,
+    resolveRecordLinks,
     tableContinuation,
     adoptSubjectRead,
     markSubjectUnreadable,
@@ -402,9 +415,11 @@ export const readPlacement = async (
       data[placementId] = { status: "refused", reason: "not_found" };
       return;
     }
+    const subjectLinks = await readRecordLinks(resolveRecordLinks, [subject.row]);
     const display = projectRecordDetailData(
       {
         settings,
+        ...(subjectLinks === undefined ? {} : { recordLinks: subjectLinks }),
         ...(subjectModule === undefined
           ? {}
           : {
@@ -777,6 +792,7 @@ export const readPlacement = async (
       fieldLabels,
       fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
       fieldDateTypes: fieldDateTypesOf(bound.module),
+      resolveRecordLinks,
       page:
         tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
           ? tableContinuation.request.page
@@ -860,9 +876,11 @@ export const readPlacement = async (
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else {
     const rows: readonly ProtectedQueryRow[] = result.value.rows;
+    const detailLinks = await readRecordLinks(resolveRecordLinks, rows);
     const display = projectRecordDetailData(
       {
         settings,
+        ...(detailLinks === undefined ? {} : { recordLinks: detailLinks }),
         fieldLabels: fieldLabelsOf(detailModule),
         fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
         fieldDateTypes: fieldDateTypesOf(detailModule),
