@@ -274,6 +274,7 @@ begin
           'storageContractId', storage_contract_value,
           'storageScope', record_type_item ->> 'storageScope',
           'ownershipMode', record_type_item ->> 'ownershipMode',
+          'isSystemProjection', record_type_item ? 'systemProjection',
           'releaseRevision', release_revision_value,
           'validationContractVersion', release_validation_contract_version,
           'table', catalogue_row.physical_table_token,
