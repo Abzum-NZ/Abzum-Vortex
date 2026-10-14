@@ -361,8 +361,10 @@ begin
       notice_sequence, notice_sequence, correlation_id_value
     );
   exception when others then
-    -- Invalidation is advisory after the protected settings change completes.
-    null;
+    -- Invalidation is advisory after the protected settings change completes,
+    -- but its failure is logged with the cause so a stale view can be diagnosed.
+    raise warning 'RECORD_INVALIDATION_FAILED settings record %: % %',
+      p_record_id, sqlstate, sqlerrm;
   end;
   return pg_catalog.jsonb_build_object(
     'outcome', 'saved',
