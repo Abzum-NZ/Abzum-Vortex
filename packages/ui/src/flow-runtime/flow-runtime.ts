@@ -4,7 +4,7 @@ import { runBrowserFlow, type BrowserFlowResult } from "./browser-flow-runner";
 import { flowRunsOnlyInBrowser } from "./browser-eligibility";
 import type { FlowIntentHost } from "./intents";
 import { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
-import type { FlowInvokeClient } from "./server-flow-client";
+import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
 
 export type FlowDispatchResult =
   | Readonly<{ ranIn: "browser"; result: BrowserFlowResult }>
@@ -40,6 +40,7 @@ export type FlowRuntime = Readonly<{
     binding: ComponentFlowBinding,
     callerInputs?: Readonly<Record<string, unknown>>,
     clickId?: string,
+    subject?: FlowSubjectContext,
   ) => Promise<FlowDispatchResult>;
   /** Starts one exact server binding and drives its normal intents and continuations. */
   dispatchReference: (
@@ -47,6 +48,7 @@ export type FlowRuntime = Readonly<{
     callerInputs?: Readonly<Record<string, unknown>>,
     clickId?: string,
     signal?: AbortSignal,
+    subject?: FlowSubjectContext,
   ) => Promise<FlowDispatchResult>;
 }>;
 
@@ -82,6 +84,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     callerInputs: Readonly<Record<string, unknown>> = {},
     clickId?: string,
     signal?: AbortSignal,
+    subject?: FlowSubjectContext,
   ): Promise<FlowDispatchResult> => {
     if (signal?.aborted) return { ranIn: "server", result: { kind: "abandoned" } };
     const first = await options.client.startBinding(
@@ -89,6 +92,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       callerInputs,
       clickId ?? newId(),
       signal,
+      subject,
     );
     return {
       ranIn: "server",
@@ -97,7 +101,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   };
   return Object.freeze({
     dispatchReference,
-    async dispatch(binding, callerInputs = {}, clickId): Promise<FlowDispatchResult> {
+    async dispatch(binding, callerInputs = {}, clickId, subject): Promise<FlowDispatchResult> {
       const flowId = binding.flow.flowId;
       const library = options.library;
       // A form submit carries the surface's own submission envelope; the server's form-submit
@@ -129,6 +133,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
         { bindingId: binding.bindingId, flowId, event: binding.event },
         callerInputs,
         clickId,
+        undefined,
+        subject,
       );
     },
   });

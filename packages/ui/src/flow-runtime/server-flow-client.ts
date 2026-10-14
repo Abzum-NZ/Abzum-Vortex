@@ -69,6 +69,8 @@ export type FlowInvokeClient = Readonly<{
     callerInputs: Readonly<Record<string, unknown>>,
     clickId: string,
     signal?: AbortSignal,
+    /** The one record this gesture is about, when it is not the record the page was rendered for. */
+    subject?: FlowSubjectContext,
   ) => Promise<ServerFlowResponse>;
   resume: (
     flowId: string,
@@ -257,7 +259,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     releaseKey: options.installation.releaseKey,
   };
   return Object.freeze({
-    startBinding: (binding, callerInputs, clickId, signal) =>
+    startBinding: (binding, callerInputs, clickId, signal, subject) =>
       send(
         {
           kind: "binding",
@@ -266,7 +268,9 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           flowId: binding.flowId,
           clickId,
           callerInputs,
-          ...(options.subject === undefined ? {} : { subject: options.subject }),
+          ...((subject ?? options.subject) === undefined
+            ? {}
+            : { subject: subject ?? options.subject }),
         },
         signal,
       ),

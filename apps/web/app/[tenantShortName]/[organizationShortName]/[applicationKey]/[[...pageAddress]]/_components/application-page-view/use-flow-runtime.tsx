@@ -176,14 +176,20 @@ export function useFlowRuntime({
       }
     };
     return {
-      startBinding: async (binding, callerInputs, clickId, signal) => {
+      startBinding: async (binding, callerInputs, clickId, signal, gestureSubject) => {
         const submission = submittedFormsRef.current.get(binding.bindingId);
         submittedFormsRef.current.delete(binding.bindingId);
         const inputs =
           submission?.choiceEvidence === undefined
             ? callerInputs
             : { ...callerInputs, choiceEvidence: submission.choiceEvidence };
-        const response = await client.startBinding(binding, inputs, clickId, signal);
+        const response = await client.startBinding(
+          binding,
+          inputs,
+          clickId,
+          signal,
+          gestureSubject,
+        );
         recordResponse(response, submission);
         return response;
       },

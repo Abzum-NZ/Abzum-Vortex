@@ -160,6 +160,11 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BOARD_BLOCK_RELEASE,
       parsePayload: BOARD_PAYLOAD_PARSER,
     }),
+    // Release 1.1.0 adds the card-moved event; the same parser reads the same payload.
+    Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BOARD_BLOCK_RELEASE_1_1_0,
+      parsePayload: BOARD_PAYLOAD_PARSER,
+    }),
   ]);
 
 /** Creates an immutable PlatformComponentRegistry populated with every display block release. */

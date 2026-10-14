@@ -128,10 +128,17 @@ export function useApplyDispatch({
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
+            // A rule's authored message is the one reason shown; a refusal that names a field
+            // carries it on the located correction instead of the rule refusal.
+            const correctionMessages = (diagnostic.corrections ?? []).flatMap((correction) =>
+              correction.message === undefined ? [] : [correction.message],
+            );
             const reason: Notice =
-              diagnostic.ruleRefusal === undefined
-                ? refusalNotices[diagnostic.code]
-                : { tone: "problem", text: diagnostic.ruleRefusal.message };
+              diagnostic.ruleRefusal !== undefined
+                ? { tone: "problem", text: diagnostic.ruleRefusal.message }
+                : correctionMessages.length > 0
+                  ? { tone: "problem", text: [...new Set(correctionMessages)].join(" ") }
+                  : refusalNotices[diagnostic.code];
             resultNotice = {
               ...reason,
               text: recovery === undefined ? reason.text : `${reason.text} ${resultNotice.text}`,

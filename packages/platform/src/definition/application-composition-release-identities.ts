@@ -57,6 +57,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
   CONTAINER_BLOCK_RELEASE_1_2_0: { blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff", key: "platform.layout.container", releaseVersion: "1.2.0" },
   CALENDAR_BLOCK_RELEASE: { blockId: "d1125b70-e83b-4fc6-bf60-7a6e36f5f56a", key: "platform.display.calendar", releaseVersion: "1.0.0" },
   BOARD_BLOCK_RELEASE: { blockId: "626c1ff5-ae7b-47da-b0d4-370e3a262444", key: "platform.display.board", releaseVersion: "1.0.0" },
+  BOARD_BLOCK_RELEASE_1_1_0: { blockId: "626c1ff5-ae7b-47da-b0d4-370e3a262444", key: "platform.display.board", releaseVersion: "1.1.0" },
   CONTAINER_BLOCK_RELEASE_1_3_0: { blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff", key: "platform.layout.container", releaseVersion: "1.3.0" },
   ATTACHMENT_LIST_BLOCK_RELEASE: { blockId: "39217bcc-8fd1-4825-afca-e97598a13f0a", key: "platform.display.attachment_list", releaseVersion: "1.0.0" },
   NOTICE_BLOCK_RELEASE_1_1_0: { blockId: "a7c95d9b-3fc2-4e6c-bebb-7a62fa912d84", key: "platform.display.notice", releaseVersion: "1.1.0" },

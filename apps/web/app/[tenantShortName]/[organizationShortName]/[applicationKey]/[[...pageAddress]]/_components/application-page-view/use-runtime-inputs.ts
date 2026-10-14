@@ -101,7 +101,7 @@ export function useRuntimeInputs({
   busy: boolean;
   unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  runBinding: (placementId: string, binding: PlacementFlowBinding, supplied: Record<string, unknown>, selectedRecordId?: string) => Promise<void>;
+  runBinding: (placementId: string, binding: PlacementFlowBinding, supplied: Record<string, unknown>, selectedRecordId?: string, gestureSubject?: Readonly<{ recordId: string; revision: number }>, afterAccepted?: () => Promise<Notice | undefined>) => Promise<void>;
   continueBoardColumn: (placementId: string, event: DisplaySemanticEvent) => Promise<boolean>;
   continueTablePage: (placementId: string, event: DisplaySemanticEvent, table: ReturnType<typeof parseTablePayload>) => Promise<void>;
   refreshPlacements: (placementIds: readonly string[], tableContinuation?: TableContinuationTarget) => Promise<void>;
@@ -211,6 +211,38 @@ export function useRuntimeInputs({
               suppliedValues(event),
               event.recordId,
             );
+          };
+        // A moved card saves the record's choice field through the bound flow. The handler reports
+        // whether the server accepted the move, so the board keeps the card pending until the
+        // refreshed columns arrive and releases it at once when the move was refused.
+        if (
+          boardData !== undefined &&
+          supportsEvent("card_moved") &&
+          bindings.some((binding) => binding.event === "card_moved")
+        )
+          events.card_moved = async (event: DisplaySemanticEvent): Promise<boolean> => {
+            if (event.event !== "card_moved" || busy) return false;
+            const binding = bindingFor(bindings, event);
+            if (binding === undefined || event.revision === undefined) {
+              console.error(
+                `[page] card move has no binding or revision: ${binding === undefined ? "BOARD_CARD_MOVE_BINDING_MISSING" : "BOARD_CARD_MOVE_REVISION_MISSING"}`,
+              );
+              setNotice(unavailableNotice);
+              return false;
+            }
+            let accepted = false;
+            await runBinding(
+              placementId,
+              binding,
+              suppliedValues(event),
+              event.recordId,
+              { recordId: event.recordId, revision: event.revision },
+              async () => {
+                accepted = true;
+                return undefined;
+              },
+            );
+            return accepted;
           };
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>

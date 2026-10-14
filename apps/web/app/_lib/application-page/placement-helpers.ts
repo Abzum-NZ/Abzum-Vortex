@@ -1,6 +1,7 @@
 import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import {
   BOARD_BLOCK_RELEASE,
+  BOARD_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
@@ -79,7 +80,8 @@ export const isBoardPlacement = (placement: unknown): boolean => {
   return (
     typeof placement.block.blockId === "string" &&
     sameId(placement.block.blockId, BOARD_BLOCK_RELEASE.blockId) &&
-    placement.block.releaseVersion === BOARD_BLOCK_RELEASE.releaseVersion
+    (placement.block.releaseVersion === BOARD_BLOCK_RELEASE.releaseVersion ||
+      placement.block.releaseVersion === BOARD_BLOCK_RELEASE_1_1_0.releaseVersion)
   );
 };
 

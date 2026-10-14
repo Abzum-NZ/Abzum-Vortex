@@ -376,8 +376,9 @@ const submittedFieldForDiagnostic = (
     : undefined;
 };
 
-// A located correction names a form field only when the failed save takes its whole `values` from
-// the binding's caller `values` input, which the form adapter fills from exactly those fields.
+// A located correction names a field only when the failed save takes its whole `values` from the
+// binding's caller `values` input, which the form adapter (or a moved board card) fills from exactly
+// those fields.
 const saveValuesComeFromForm = (
   taskId: string,
   flowId: string,
@@ -413,17 +414,20 @@ const surfaceDiagnostic = (
     binding,
     installation,
   );
-  // A located correction is kept only for a field this exact form submit binding visibly owns.
+  // A located correction is kept only for a field this exact form submit binding visibly owns. A
+  // moved board card names the one field it supplied itself, so its corrections are kept whole.
   const corrections =
     parsed.data.corrections === undefined ||
     binding === undefined ||
-    binding.event !== "form_submit" ||
+    (binding.event !== "form_submit" && binding.event !== "card_moved") ||
     taskId === undefined ||
     !saveValuesComeFromForm(taskId, flowId, binding, installation)
       ? []
-      : parsed.data.corrections.filter((correction) =>
-          hasVisibleOwningFormField(installation, binding.controlId, correction.field),
-        );
+      : binding.event === "card_moved"
+        ? parsed.data.corrections
+        : parsed.data.corrections.filter((correction) =>
+            hasVisibleOwningFormField(installation, binding.controlId, correction.field),
+          );
   return flowRefusalFeedbackSchema.parse({
     code: parsed.data.code,
     ...(submittedField === undefined ? {} : { submittedField }),
