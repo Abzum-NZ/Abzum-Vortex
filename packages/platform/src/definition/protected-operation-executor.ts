@@ -578,7 +578,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
     command: (inputs) => ({
       groupId: inputs.group_id,
       organizationAccountId: inputs.organization_account_id,
-      startsAt: inputs.starts_at,
+      startsAt: optionalText(inputs.starts_at),
       expiresAt: optionalText(inputs.expires_at),
     }),
     run: async (services, caller, command) =>
@@ -790,7 +790,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       organizationAccountId: optionalText(inputs.organization_account_id),
       groupId: optionalText(inputs.group_id),
       assignmentKind: inputs.assignment_kind,
-      startsAt: inputs.starts_at,
+      startsAt: optionalText(inputs.starts_at),
       expiresAt: optionalText(inputs.expires_at),
     }),
     run: async (services, caller, command) =>

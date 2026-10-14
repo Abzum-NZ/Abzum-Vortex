@@ -302,7 +302,7 @@ export const createAccessAdministrationGroupOperations = ({
               ${membershipId}::uuid,
               ${command.data.groupId}::uuid,
               ${command.data.organizationAccountId}::uuid,
-              ${command.data.startsAt}::timestamptz,
+              ${command.data.startsAt ?? null}::timestamptz,
               ${command.data.expiresAt ?? null}::timestamptz,
               ${activityId}::uuid
             )

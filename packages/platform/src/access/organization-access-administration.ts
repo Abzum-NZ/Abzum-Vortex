@@ -194,12 +194,16 @@ export const addOrganizationAdministrationMembershipCommandSchema = z
   .object({
     groupId: groupIdSchema,
     organizationAccountId: organizationAccountIdSchema,
-    startsAt: timestampSchema,
+    startsAt: timestampSchema.optional(),
     expiresAt: timestampSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+    if (
+      value.startsAt !== undefined &&
+      value.expiresAt !== undefined &&
+      Date.parse(value.expiresAt) <= Date.parse(value.startsAt)
+    )
       context.addIssue({
         code: "custom",
         path: ["expiresAt"],
@@ -667,7 +671,7 @@ export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
     organizationAccountId: organizationAccountIdSchema.optional(),
     groupId: groupIdSchema.optional(),
     assignmentKind: z.enum(["standing", "eligible"]),
-    startsAt: timestampSchema,
+    startsAt: timestampSchema.optional(),
     expiresAt: timestampSchema.optional(),
   })
   .strict()
@@ -685,7 +689,11 @@ export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
         path: ["groupId"],
         message: "Only a Group assignee names a Group",
       });
-    if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
+    if (
+      value.startsAt !== undefined &&
+      value.expiresAt !== undefined &&
+      Date.parse(value.expiresAt) <= Date.parse(value.startsAt)
+    )
       context.addIssue({
         code: "custom",
         path: ["expiresAt"],
