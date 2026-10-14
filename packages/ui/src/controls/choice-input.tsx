@@ -53,10 +53,11 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext<ChoiceInputPayload>(props, [
     "field_changed",
-    ...(["1.1.0", "1.2.0"].includes(props.metadata.releaseVersion)
+    ...(["1.1.0", "1.2.0", "1.3.0"].includes(props.metadata.releaseVersion)
       ? ["choices_requested" as const]
       : []),
   ]);
+  const dependentRelease = ["1.2.0", "1.3.0"].includes(props.metadata.releaseVersion);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -70,7 +71,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     context.inactive ||
     settings.boolean("disabled") ||
     draftFeedback?.disabled === true ||
-    (props.metadata.releaseVersion === "1.2.0" && context.values?.dependencyKey === null);
+    (dependentRelease && context.values?.dependencyKey === null);
   const options = context.values?.options ?? settings.options("options");
   const projectedError = context.values?.error;
   const note = inactiveNote(context);
@@ -98,7 +99,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const [previouslyOffered, setPreviouslyOffered] = useState(options.length > 0);
   const [previouslyInactive, setPreviouslyInactive] = useState(context.inactive);
   if (
-    props.metadata.releaseVersion === "1.2.0" &&
+    dependentRelease &&
     (context.values?.dependencyKey !== previousDependency ||
       (context.inactive && !previouslyInactive) ||
       (context.values?.dependencyKey !== undefined && previouslyOffered && options.length === 0))
@@ -112,9 +113,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     setRemoteLoading(false);
     choiceRequestGeneration.current += 1;
   }
-  if (props.metadata.releaseVersion === "1.2.0" && previouslyOffered !== options.length > 0)
+  if (dependentRelease && previouslyOffered !== options.length > 0)
     setPreviouslyOffered(options.length > 0);
-  if (props.metadata.releaseVersion === "1.2.0" && previouslyInactive !== context.inactive)
+  if (dependentRelease && previouslyInactive !== context.inactive)
     setPreviouslyInactive(context.inactive);
 
   // Only a currently offered option may be registered in the form or submitted.
@@ -142,7 +143,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   );
   requestChoices.current = (search, continuationToken) => {
     const handler = choicesRequested.current;
-    if (handler === undefined || (props.metadata.releaseVersion === "1.2.0" && disabled)) return;
+    if (handler === undefined || (dependentRelease && disabled)) return;
     const boundedSearch = search.trim().slice(0, 100);
     const selectedEvidence =
       permittedSelected === null ? undefined : context.values?.optionEvidence?.[permittedSelected];
@@ -160,7 +161,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     const request = ++choiceRequestGeneration.current;
     setRemoteLoading(true);
     void Promise.resolve(handler(event)).finally(() => {
-      if (props.metadata.releaseVersion !== "1.2.0" || choiceRequestGeneration.current === request)
+      if (!dependentRelease || choiceRequestGeneration.current === request)
         setRemoteLoading(false);
     });
   };
