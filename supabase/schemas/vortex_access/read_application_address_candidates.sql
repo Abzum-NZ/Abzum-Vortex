@@ -15,7 +15,6 @@ declare
   application_row record;
   application_values jsonb := '[]'::jsonb;
   page_values jsonb;
-  experience_page_values jsonb;
   experience_values jsonb;
   role_values jsonb;
   permission_values jsonb;
@@ -65,8 +64,8 @@ begin
   -- candidate below is already an active registration of this organisation.
   for application_row in
     select root.root_id, root.key as application_key, release.application_address,
-      case when p_include_experiences then release.compilation_output else null end
-        as compilation_output,
+      case when p_include_experiences then release.application_experience else null end
+        as application_experience,
       registration.source_revision as release_revision
     from vortex_access.permission_registrations as registration
     join vortex_definition.roots as root
@@ -121,8 +120,7 @@ begin
     -- page and a missing page both resolve to the same not_found experience. Experiences are an
     -- optional release field: an absent one declares none, a present one must be an array.
     if p_include_experiences then
-      experience_page_values := application_row.compilation_output #> '{canonical,content,pages}';
-      experience_values := application_row.compilation_output #> '{canonical,content,experiences}';
+      experience_values := application_row.application_experience -> 'experiences';
       if experience_values is null then
         experience_values := '[]'::jsonb;
       elsif pg_catalog.jsonb_typeof(experience_values) is distinct from 'array' then
@@ -199,19 +197,11 @@ begin
         ),
         'permissions', coalesce(permission_values, '[]'::jsonb)
       ) || case when p_include_experiences then pg_catalog.jsonb_build_object(
-        'experiences', coalesce((
-          select pg_catalog.jsonb_agg(
-            pg_catalog.jsonb_build_object('state', experience.value ->> 'state', 'page', page.value)
-            order by experience.value ->> 'state' collate "C"
-          )
-          from pg_catalog.jsonb_array_elements(experience_values) as experience(value)
-          join pg_catalog.jsonb_array_elements(experience_page_values) as page(value)
-            on page.value ->> 'pageId' = experience.value ->> 'pageId'
-        ), '[]'::jsonb),
+        'experiences', application_row.application_experience -> 'resolvedExperiences',
         'shells', case
           when pg_catalog.jsonb_array_length(experience_values) > 0
             then coalesce(
-              application_row.compilation_output #> '{canonical,content,shells}',
+              application_row.application_experience -> 'shells',
               '[]'::jsonb
             )
           else '[]'::jsonb
@@ -219,7 +209,7 @@ begin
       ) || case
         when p_include_experiences and pg_catalog.jsonb_array_length(experience_values) > 0
           then pg_catalog.jsonb_build_object(
-            'theme', application_row.compilation_output #> '{canonical,content,theme}'
+            'theme', application_row.application_experience -> 'theme'
           )
         else '{}'::jsonb
       end

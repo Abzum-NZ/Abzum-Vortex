@@ -48,7 +48,7 @@ begin
     where root.root_id = selected_application_root_id
       and root.kind = 'application'
       and root.organization_id = selected_organization_id
-      and release.compilation_output #>> '{kind}' = 'application'
+      and release.application_address ->> 'kind' = 'application'
   ) then
     raise exception using errcode = '23514', message = 'Active Application release evidence is invalid';
   end if;
