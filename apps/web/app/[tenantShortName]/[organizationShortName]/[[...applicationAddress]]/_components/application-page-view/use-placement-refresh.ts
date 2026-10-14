@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type Dispatch,
   type SetStateAction,
   type RefObject,
@@ -255,13 +256,32 @@ export function usePlacementRefresh({
     },
     [model.refreshPlacementsByBinding],
   );
-  const currentData = useMemo(
-    () =>
-      refreshedPlacementData?.navigationKey === navigationKey
-        ? { ...model.data, ...refreshedPlacementData.data }
-        : model.data,
-    [model.data, navigationKey, refreshedPlacementData],
-  );
+  // Placements the server sent before they had read: each settles on the response that carried
+  // the page, so it never costs a second request. A newer page drops the earlier page's results.
+  const [streamed, setStreamed] = useState<
+    Readonly<{ owner: ApplicationPageModel["data"]; data: Readonly<Record<string, PageDataState>> }>
+  >({ owner: model.data, data: {} });
+  useEffect(() => {
+    if (model.streamedData === undefined) return;
+    let current = true;
+    for (const [placementId, settled] of Object.entries(model.streamedData))
+      void settled.then((state) => {
+        if (!current) return;
+        setStreamed((prior) => ({
+          owner: model.data,
+          data: { ...(prior.owner === model.data ? prior.data : {}), [placementId]: state },
+        }));
+      });
+    return () => {
+      current = false;
+    };
+  }, [model.data, model.streamedData]);
+  const currentData = useMemo(() => {
+    const served = streamed.owner === model.data ? { ...model.data, ...streamed.data } : model.data;
+    return refreshedPlacementData?.navigationKey === navigationKey
+      ? { ...served, ...refreshedPlacementData.data }
+      : served;
+  }, [model.data, navigationKey, refreshedPlacementData, streamed]);
   const currentTileDataRef = useRef(currentData);
   currentTileDataRef.current = currentData;
   const compositionRootRef = useRef<HTMLDivElement>(null);

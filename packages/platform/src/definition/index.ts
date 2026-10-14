@@ -27,18 +27,6 @@ export {
 } from "./module-field-edit";
 export { evaluateDraftPermission as evaluateModuleDraftPermission } from "./module-draft-edit";
 export {
-  InstallationArchiveConnectionError,
-  readInstallationArchiveConnectionOptions,
-  readSelectedInstallationArchiveConnection,
-} from "./installation-archive-connections";
-export {
-  initialLifecyclePolicyMatches,
-  saveInitialArchiveWorkflowPolicy,
-  workflowIsInExactRelease,
-  type InitialLifecyclePolicyInput,
-  type InitialLifecyclePolicyTarget,
-} from "./installation-initial-lifecycle-policy";
-export {
   InstallationProblem,
   firstInstallConferredPermissions,
   installationOperation,
@@ -56,30 +44,14 @@ export {
   type InstallationProblemShape,
   type InstallationUnavailableReason,
 } from "./installation-authority";
+export { FirstInstallUnavailable } from "./installation-first-install";
 export {
-  FirstInstallUnavailable,
-  firstInstallHistory,
-  firstInstallHistoryMatchesDraft,
-  firstInstallSelectedIdentity,
-  firstInstallState,
-  firstInstallUnavailable,
-  firstInstallWorkflows,
-  readFirstInstallReleaseSet,
-  sameFirstInstallRelease,
-} from "./installation-first-install";
-export {
-  completeFirstInstallConnectionRead,
-  firstInstallAppCompletion,
-  readAppScopedFirstInstallReleaseSet,
-  readFirstInstallAppState,
-  readFirstInstallCandidateInTransaction,
-  readFirstInstallCurrentRelease,
-  readFirstInstallProvisionedSetupInTransaction,
-  requireFirstInstallSetupUnchanged,
-  visibleLifecyclePolicyBody,
-  visibleProvisionedSetup,
-  type FirstInstallAppState,
+  readCurrentFirstInstallCandidate,
+  readFirstInstallArchiveOptions,
+  saveFirstInstallInitialPolicy,
+  type FirstInstallCommandRun,
   type FirstInstallEnvironment,
+  type FirstInstallFlowEnvironment,
 } from "./installation-first-install-app";
 export {
   createFirstInstallCoordinator,

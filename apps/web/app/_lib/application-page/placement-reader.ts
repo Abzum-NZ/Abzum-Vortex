@@ -83,43 +83,18 @@ import type {
 import type { ReferenceChoiceFirstPage } from "./reference-choice";
 import { readAttachmentListPlacement } from "./attachment-placement";
 
-export const readPlacement = async (
-  input: {
+/** The flow bindings one placement holds, projected for the browser by placement identity. */
+export const projectPlacementBindings = (
+  input: Readonly<{
     application: InstalledRuntimeContext["releaseSet"]["application"];
     recordTypeByPlacement: Map<string, string>;
     bindings: Record<string, PlacementFlowBinding[]>;
     pageDefinition: PageDefinition;
     pageSubjectRecordTypeId: string | undefined;
     selectedReadTypesByFlow: Map<string, ReadonlyMap<string, string>>;
-    data: Record<string, PageDataState>;
-    page: Parameters<typeof collectPlacements>[0];
-    context: InstalledRuntimeContext;
-    referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]>;
-    referenceChoices: ReturnType<typeof createReferenceChoiceService>;
-    session: IdentitySession;
-    selection: OrganizationSelectionCandidate;
-    referenceChoiceFirstPages: Map<string, ReferenceChoiceFirstPage>;
-    address: ApplicationPageLoaderAddress;
-    subjectType: PageSubjectType | undefined;
-    parameters: SearchParameters;
-    dependencies: HumanOrganizationRequestDependencies;
-    subjectId: ReturnType<typeof recordIdSchema.safeParse>;
-    readSubject: (recordTypeId: string, recordId: string) => Promise<PageSubjectReadResult>;
-    allowedPermissions: Set<string>;
-    linkTiles: ReturnType<typeof createLinkTilesQueryResolver>;
-    queryNotices: ReturnType<typeof createQueryNoticeQueryResolver>;
-    boardContinuation: BoardContinuationTarget | undefined;
-    permittedApplicationKeys: string[] | undefined;
-    permittedApplicationsRead: PermittedApplicationsRead | undefined;
-    queries: ReturnType<typeof createProtectedQueryService>;
-    readCalendarSettings: Parameters<typeof readCalendarPlacement>[0]["readCalendarSettings"];
-    tables: ReturnType<typeof createRecordsTableQueryResolver>;
-    tableContinuation: TableContinuationTarget | undefined;
-    adoptSubjectRead: (subject: PageSubjectReadResult) => void;
-    markSubjectUnreadable: () => void;
-  },
-  { placementId, placement, formId }: ReturnType<typeof collectPlacements>[number],
-): Promise<void> => {
+  }>,
+  { placementId, formId }: ReturnType<typeof collectPlacements>[number],
+): void => {
   const {
     application,
     recordTypeByPlacement,
@@ -127,32 +102,6 @@ export const readPlacement = async (
     pageDefinition,
     pageSubjectRecordTypeId,
     selectedReadTypesByFlow,
-    data,
-    page,
-    context,
-    referenceChoiceInputs,
-    referenceChoices,
-    session,
-    selection,
-    referenceChoiceFirstPages,
-    address,
-    subjectType,
-    parameters,
-    dependencies,
-    subjectId,
-    readSubject,
-    allowedPermissions,
-    linkTiles,
-    queryNotices,
-    boardContinuation,
-    permittedApplicationKeys,
-    permittedApplicationsRead,
-    queries,
-    readCalendarSettings,
-    tables,
-    tableContinuation,
-    adoptSubjectRead,
-    markSubjectUnreadable,
   } = input;
   const held = application.content.flowBindings.filter((binding) =>
     sameId(binding.controlId, placementId),
@@ -201,7 +150,96 @@ export const readPlacement = async (
       };
     });
   }
+};
 
+/**
+ * Whether a placement's data comes only from its own bound query: nothing else on the page waits
+ * for it and it never decides the page's availability, so the page may stream it after the frame.
+ * Every placement this accepts writes its data entry in {@link readPlacement}.
+ */
+export const isStreamablePlacement = (
+  { placement }: ReturnType<typeof collectPlacements>[number],
+): boolean => {
+  if (typeof placement.queryId !== "string" || hasReferenceChoiceSource(placement)) return false;
+  const block = placement.block;
+  const blockIs = (release: Readonly<{ blockId: string }>): boolean =>
+    isRecord(block) && typeof block.blockId === "string" && sameId(block.blockId, release.blockId);
+  if (blockIs(ATTACHMENT_LIST_BLOCK_RELEASE) || blockIs(CALENDAR_BLOCK_RELEASE)) return false;
+  const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
+  return (
+    readRecordsTableContract(settings) !== undefined ||
+    readRecordDetailContract(settings) !== undefined ||
+    blockIs(QUERY_NOTICE_BLOCK_RELEASE) ||
+    blockIs(LINK_TILES_BLOCK_RELEASE) ||
+    blockIs(SUMMARY_VALUES_BLOCK_RELEASE) ||
+    isApplicationLauncherPlacement(placement) ||
+    isBoardPlacement(placement)
+  );
+};
+
+export const readPlacement = async (
+  input: {
+    pageDefinition: PageDefinition;
+    pageSubjectRecordTypeId: string | undefined;
+    data: Record<string, PageDataState>;
+    page: Parameters<typeof collectPlacements>[0];
+    context: InstalledRuntimeContext;
+    referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]>;
+    referenceChoices: ReturnType<typeof createReferenceChoiceService>;
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+    referenceChoiceFirstPages: Map<string, ReferenceChoiceFirstPage>;
+    address: ApplicationPageLoaderAddress;
+    subjectType: PageSubjectType | undefined;
+    parameters: SearchParameters;
+    dependencies: HumanOrganizationRequestDependencies;
+    subjectId: ReturnType<typeof recordIdSchema.safeParse>;
+    readSubject: (recordTypeId: string, recordId: string) => Promise<PageSubjectReadResult>;
+    allowedPermissions: Set<string>;
+    linkTiles: ReturnType<typeof createLinkTilesQueryResolver>;
+    queryNotices: ReturnType<typeof createQueryNoticeQueryResolver>;
+    boardContinuation: BoardContinuationTarget | undefined;
+    permittedApplicationKeys: string[] | undefined;
+    permittedApplicationsRead: PermittedApplicationsRead | undefined;
+    queries: ReturnType<typeof createProtectedQueryService>;
+    readCalendarSettings: Parameters<typeof readCalendarPlacement>[0]["readCalendarSettings"];
+    tables: ReturnType<typeof createRecordsTableQueryResolver>;
+    tableContinuation: TableContinuationTarget | undefined;
+    adoptSubjectRead: (subject: PageSubjectReadResult) => void;
+    markSubjectUnreadable: () => void;
+  },
+  { placementId, placement, formId }: ReturnType<typeof collectPlacements>[number],
+): Promise<void> => {
+  const {
+    pageDefinition,
+    pageSubjectRecordTypeId,
+    data,
+    page,
+    context,
+    referenceChoiceInputs,
+    referenceChoices,
+    session,
+    selection,
+    referenceChoiceFirstPages,
+    address,
+    subjectType,
+    parameters,
+    dependencies,
+    subjectId,
+    readSubject,
+    allowedPermissions,
+    linkTiles,
+    queryNotices,
+    boardContinuation,
+    permittedApplicationKeys,
+    permittedApplicationsRead,
+    queries,
+    readCalendarSettings,
+    tables,
+    tableContinuation,
+    adoptSubjectRead,
+    markSubjectUnreadable,
+  } = input;
   const block = placement.block;
   const isAttachmentListBlock =
     isRecord(block) &&
@@ -612,8 +650,10 @@ export const readPlacement = async (
     let summaryResult: Awaited<ReturnType<typeof queries.summarise>>;
     try {
       summaryResult = await queries.summarise(session, selection, command.data);
-    } catch {
-      summaryResult = { kind: "temporarily_unavailable" };
+    } catch (error) {
+      logPlacementFailure(address, placementId, "summary_query_threw", describeFailure(error));
+      data[placementId] = { status: "error" };
+      return;
     }
     if (summaryResult.kind === "temporarily_unavailable") {
       logPlacementFailure(address, placementId, "summary_query_unavailable");

@@ -576,7 +576,79 @@
         "personal_or_sensitive_values_allowed": false
       }
     ],
-    "flows": [],
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_company_name",
+        "key": "company_name_required",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "company",
+            "operations": [
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
+          {
+            "id": "name_missing",
+            "type": "if",
+            "condition": {
+              "op": "is_empty",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "name"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "refuse_without_name",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "company_name_required"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Enter the company name."
+                    }
+                  },
+                  "field": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "company.name"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
     "extension_points": [
       {
         "id": "ext_company_fields",

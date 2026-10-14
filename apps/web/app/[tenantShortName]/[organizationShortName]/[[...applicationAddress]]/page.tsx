@@ -431,6 +431,7 @@ export default async function ApplicationAddressPage({
         : { installedContext: resolved.installedContext }),
     },
     parameters,
+    { streamPlacementReads: true },
   ).catch(async (error: unknown) => {
     await switcherPrefetch?.catch(() => undefined);
     throw error;

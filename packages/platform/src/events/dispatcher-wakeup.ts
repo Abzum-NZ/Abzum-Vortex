@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logRefusal } from "../schema";
 import type { DatabaseRow } from "../db/index";
 import { withRuntimeTransaction } from "../db/index";
 import {
@@ -199,7 +200,8 @@ export const createEventDispatchBacklogReader = (
         const first = rows[0];
         if (rows.length !== 1 || first === undefined) return eventDispatcherUnavailableBacklog;
         return parseBacklog(first.result);
-      } catch {
+      } catch (error) {
+        logRefusal("events-dispatch", "backlog status", "backlog_read_failed", error);
         return eventDispatcherUnavailableBacklog;
       }
     },

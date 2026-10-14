@@ -30,7 +30,40 @@ export {
 export * from "./source-identities";
 export * from "./saved-condition-revisions";
 export * from "./installed-event-catalogue";
-export * from "./definition-publication";
+export {
+  type DefinitionPublicationFailureCode,
+  type DefinitionPublicationCandidate,
+  type ResolvableModuleRelease,
+  type ModuleReleasePageCursor,
+  type ResolvableModuleReleasePage,
+  type ResolvableConnectionTypeRelease,
+  type DefinitionPublicationReader,
+  type DefinitionPublicationCatalogue,
+  type DefinitionReleaseAppend,
+  type DefinitionPublicationTransaction,
+  type DefinitionPublicationRepository,
+  type PreparedDefinitionPublication,
+} from "./definition-publication-contracts";
+export {
+  type ModuleQueryFilterParameterType,
+  type ModuleQueryFilterDraftContext,
+  fingerprintModuleQueryFilterOperandBinding,
+  type ModuleQueryFilterQueryChoice,
+  type ModuleQueryFilterDraftResult,
+  type ModuleQueryFilterValidationResult,
+} from "./module-query-filter-draft";
+export {
+  type ApplicationDraftCompilation,
+  type ApplicationDraftConditionContext,
+  createDefinitionPublicationService,
+} from "./definition-publication";
+export {
+  type ModuleBeforeSaveConditionDraftContext,
+  type ModuleBeforeSaveConditionFlowChoice,
+  type ModuleBeforeSaveConditionDraftResult,
+  type ModuleBeforeSaveConditionValidationResult,
+  fingerprintModuleBeforeSaveConditionOperandBinding,
+} from "./module-before-save-condition-draft";
 export * from "./publication/publish";
 export * from "./publication/read";
 export * from "./application-bound-release-set";

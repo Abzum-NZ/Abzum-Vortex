@@ -8,7 +8,8 @@ import {
   revisionSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
-import { invitationSchema, organizationRuntimeSettingsSchema } from "./identity-access";
+import { invitationSchema } from "./identity-access";
+import { organizationRuntimeSettingsSchema } from "./organization-runtime-settings-schema";
 
 export const organizationAdministrationAccountSummarySchema = z
   .object({

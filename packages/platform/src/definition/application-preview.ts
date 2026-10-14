@@ -2,10 +2,8 @@ import "server-only";
 
 import { applicationContentSchema, applicationRootIdSchema, canonicalPlacementEntries, flowTaskChildLists, flowTaskRegistry, revisionSchema, type ApplicationContent, type ComponentFlowBinding, type ComponentSemanticEventKind, type FlowDefinition, type FlowEffectKind, type FlowTask, type SessionContext } from "../schema";
 import { z } from "zod";
-import type {
-  ApplicationDraftCompilation,
-  DefinitionPublicationFailureCode,
-} from "./definition-publication";
+import type { ApplicationDraftCompilation } from "./definition-publication";
+import type { DefinitionPublicationFailureCode } from "./definition-publication-contracts";
 import { DefinitionCompilationError } from "./compilation-error";
 import { DefinitionError } from "./definition-error";
 
