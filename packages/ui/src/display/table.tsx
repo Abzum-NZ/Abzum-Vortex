@@ -79,10 +79,12 @@ const columnAttributes = (
 
 /**
  * Declared column priority as a responsive utility: a low priority column hides first on a narrow
- * viewport, a medium priority one next, and an essential or high priority column never hides. The
+ * viewport, a medium priority one next, and an essential or high priority column never hides.
+ * The first column always shows, so a narrow table never loses every column. The
  * declared priority stays a data attribute for the platform's own styling hooks.
  */
-const priorityClass = (column: RenderedColumn): string | undefined => {
+const priorityClass = (column: RenderedColumn, first: boolean): string | undefined => {
+  if (first) return undefined;
   switch (column.declared?.priority) {
     case "low":
       return "max-lg:hidden";
@@ -301,7 +303,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                       key={column.key}
                       scope="col"
                       aria-sort={direction ?? "none"}
-                      className={cn(priorityClass(column))}
+                      className={cn(priorityClass(column, column.key === columns[0]?.key))}
                       {...columnAttributes(column)}
                     >
                       {onSort === undefined ? (
@@ -390,7 +392,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                       return (
                         <TableCell
                           key={column.key}
-                          className={cn(priorityClass(column))}
+                          className={cn(priorityClass(column, column.key === columns[0]?.key))}
                           {...columnAttributes(column)}
                         >
                           {editable(row, column.key, cell) &&

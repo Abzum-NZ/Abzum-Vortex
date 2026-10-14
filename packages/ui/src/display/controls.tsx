@@ -46,9 +46,9 @@ export function DisplayHeader({
   const refresh = events?.refresh;
   if (title === undefined && refresh === undefined) return null;
   return (
-    <div className="mb-4 flex items-center justify-between gap-2">
+    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-2">
       {title === undefined ? null : (
-        <h2 className="m-0 font-heading text-lg font-semibold text-foreground">{title}</h2>
+        <h2 className="m-0 min-w-0 break-words font-heading text-lg font-semibold text-foreground">{title}</h2>
       )}
       {refresh === undefined ? null : (
         <Button
@@ -537,7 +537,7 @@ export function SearchControl({
   if (onSearch === undefined) return null;
   return (
     <form
-      className="flex items-end gap-1.5"
+      className="flex w-full min-w-0 items-end gap-1.5 sm:w-auto"
       role="search"
       onSubmit={(event) => {
         event.preventDefault();
@@ -550,7 +550,7 @@ export function SearchControl({
       <Input
         id={inputId}
         type="search"
-        className="w-auto min-w-48"
+        className="min-w-0 flex-1 sm:w-auto sm:min-w-48 sm:flex-none"
         value={query}
         onChange={(event) => setQuery(event.currentTarget.value)}
       />
