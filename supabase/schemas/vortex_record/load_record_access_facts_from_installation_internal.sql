@@ -28,8 +28,6 @@ declare
   target_scope text;
   target_module_root_id uuid;
   target_release_revision bigint;
-  target_release_content jsonb;
-  target_record_type_definition jsonb;
   target_is_system_projection boolean;
   records_by_id jsonb := '{}'::jsonb;
   candidate_edges jsonb := '[]'::jsonb;
@@ -42,6 +40,8 @@ declare
   current_contract uuid;
   current_record uuid;
   current_permission uuid;
+  batch_record_ids uuid[];
+  loaded_row record;
   current_meta jsonb;
   current_scope jsonb;
   route_item jsonb;
@@ -102,33 +102,12 @@ begin
   target_scope := target_meta ->> 'storageScope';
   target_module_root_id := (target_meta ->> 'moduleRootId')::uuid;
   target_release_revision := (target_meta ->> 'releaseRevision')::bigint;
-
-  -- Read the record type from the exact immutable Module release already pinned
-  -- by the trusted installation access plan. Never infer its kind from the
-  -- current shared view or the latest published release.
-  select release.compilation_output #> '{canonical,content}'
-  into strict target_release_content
-  from vortex_definition.releases as release
-  where release.root_id = target_module_root_id
-    and release.release_revision = target_release_revision;
-
-  if pg_catalog.jsonb_typeof(target_release_content -> 'recordTypes')
-    is distinct from 'array' then
+  if pg_catalog.jsonb_typeof(target_meta -> 'isSystemProjection')
+    is distinct from 'boolean' then
     raise exception using errcode = '55000',
       message = 'Installed Module definition is unavailable';
   end if;
-
-  select item.value
-  into strict target_record_type_definition
-  from pg_catalog.jsonb_array_elements(target_release_content -> 'recordTypes') as item(value)
-  where pg_catalog.lower(item.value ->> 'recordTypeId')
-    = pg_catalog.lower(p_record_type_id::text);
-
-  if pg_catalog.jsonb_typeof(target_record_type_definition) is distinct from 'object' then
-    raise exception using errcode = '55000',
-      message = 'Installed Module definition is unavailable';
-  end if;
-  target_is_system_projection := target_record_type_definition ? 'systemProjection';
+  target_is_system_projection := (target_meta ->> 'isSystemProjection')::boolean;
 
   -- Step 4: the declaration. Every record-scoped permission of this action
   -- kind declared for this exact record type, owned by the context Application
@@ -262,11 +241,21 @@ begin
   loop
     if coalesce(pg_catalog.array_length(load_records, 1), 0) > 0 then
       current_contract := load_contracts[pg_catalog.array_length(load_contracts, 1)];
-      current_record := load_records[pg_catalog.array_length(load_records, 1)];
-      load_contracts := load_contracts[1:pg_catalog.array_length(load_contracts, 1) - 1];
-      load_records := load_records[1:pg_catalog.array_length(load_records, 1) - 1];
+      select coalesce(pg_catalog.array_agg(distinct queued.record_id), array[]::uuid[])
+      into batch_record_ids
+      from pg_catalog.unnest(load_contracts, load_records)
+        as queued(contract_id, record_id)
+      where queued.contract_id = current_contract
+        and not records_by_id ? pg_catalog.lower(queued.record_id::text);
 
-      if records_by_id ? pg_catalog.lower(current_record::text) then
+      select coalesce(pg_catalog.array_agg(queued.contract_id order by queued.ordinality), array[]::uuid[]),
+        coalesce(pg_catalog.array_agg(queued.record_id order by queued.ordinality), array[]::uuid[])
+      into load_contracts, load_records
+      from pg_catalog.unnest(load_contracts, load_records) with ordinality
+        as queued(contract_id, record_id, ordinality)
+      where queued.contract_id <> current_contract;
+
+      if pg_catalog.array_length(batch_record_ids, 1) is null then
         continue;
       end if;
 
@@ -279,7 +268,7 @@ begin
       end if;
 
       load_sql := pg_catalog.format(
-        'select pg_catalog.jsonb_build_object(
+        'select stored.record_id, pg_catalog.jsonb_build_object(
            ''recordScope'', pg_catalog.jsonb_build_object(
              ''storageScope'', %L,
              ''organizationId'', stored.organisation_id,
@@ -298,21 +287,20 @@ begin
                ''ownerOrganizationAccountId'', stored.owner_organisation_account_id)
            when stored.owner_group_id is not null
              then pg_catalog.jsonb_build_object(''ownerGroupId'', stored.owner_group_id)
-           else ''{}''::jsonb end
+           else ''{}''::jsonb end as fact
          from record_data.%I as stored
-         where stored.organisation_id = $1 and stored.record_id = $2',
+         where stored.organisation_id = $1 and stored.record_id = any($2)',
         current_meta ->> 'storageScope', (current_meta ->> 'moduleRootId')::uuid,
         (current_meta ->> 'recordTypeId')::uuid, current_contract,
         current_meta ->> 'storageScope', current_meta ->> 'valueExpression',
         current_meta ->> 'table'
       );
 
-      execute load_sql into record_fact using context_organization_id, current_record;
-      if record_fact is not null then
+      for loaded_row in execute load_sql using context_organization_id, batch_record_ids loop
         records_by_id := records_by_id || pg_catalog.jsonb_build_object(
-          pg_catalog.lower(current_record::text), record_fact
+          pg_catalog.lower(loaded_row.record_id::text), loaded_row.fact
         );
-      end if;
+      end loop;
       continue;
     end if;
 
@@ -454,8 +442,8 @@ begin
     'declaration', declaration,
     'facts', facts,
     'accessPermissions', permission_by_id,
-    'recordTypeMeta', target_meta,
-    'isSystemProjection', target_record_type_definition ? 'systemProjection',
+    'recordTypeMeta', target_meta - 'isSystemProjection',
+    'isSystemProjection', target_is_system_projection,
     'table', target_table,
     'columns', target_meta -> 'columns',
     'concurrencyNumber', target_concurrency_number,
