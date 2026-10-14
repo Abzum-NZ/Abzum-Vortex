@@ -75,6 +75,7 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
   code path draws a block.
 - No absent-setting behaviour: defaults live in definitions (Puck `defaultProps`), not in renderers.
 - One current version of every contract: no `V2`/`V3` copies.
+- New limits and stricter rules go in publish-time validation (source contracts, compiler). Schemas that read stored releases accept every release that was publishable when it was made; never add a rule there that an older release can fail.
 - One record write path (`apply_record_changes`), one activity append, one idempotency table.
 - No process artefacts in product code: no review receipts, fingerprints, continuity or evidence.
 - Fail loudly on platform-produced data: never turn a parse failure or database error into a silent
