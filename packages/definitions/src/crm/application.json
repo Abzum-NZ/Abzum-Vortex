@@ -504,6 +504,14 @@
                                                              "permission":  "application.crm.opportunity.read"
                                                          },
                                                          {
+                                                             "id":  "nav_crm_pipeline",
+                                                             "type":  "page",
+                                                             "label":  "Pipeline",
+                                                             "icon":  "grid",
+                                                             "page":  "crm_pipeline",
+                                                             "permission":  "application.crm.opportunity.read"
+                                                         },
+                                                         {
                                                              "id":  "nav_crm_activities",
                                                              "type":  "page",
                                                              "label":  "Activities",
@@ -4091,7 +4099,131 @@
                                    }
                                  }
                                }
-                             }
+                             },
+                               {
+                                 "id": "page_crm_pipeline",
+                                 "key": "crm_pipeline",
+                                 "name": "Pipeline",
+                                 "type": "list",
+                                 "record_type": "vortex.crm.opportunities:opportunity",
+                                 "permission": "application.crm.opportunity.read",
+                                 "query": "vortex.crm.opportunities:crm_pipeline_board",
+                                 "composition": {
+                                   "shell_kind": "application",
+                                   "shell": "shell_crm",
+                                   "content": {
+                                     "slot_primary": {
+                                       "placements": {
+                                         "board_crm_pipeline": {
+                                           "block": {
+                                             "block_id": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
+                                             "release_version": "1.0.0"
+                                           },
+                                           "query": "vortex.crm.opportunities:crm_pipeline_board",
+                                           "settings": {
+                                             "title": {
+                                               "kind": "text",
+                                               "value": "Pipeline"
+                                             },
+                                             "choice_field": {
+                                               "kind": "field_reference",
+                                               "field": "vortex.crm.opportunities:opportunity.stage"
+                                             },
+                                             "card_title_field": {
+                                               "kind": "field_reference",
+                                               "field": "vortex.crm.opportunities:opportunity.name"
+                                             },
+                                             "detail_fields": {
+                                               "kind": "list",
+                                               "items": [
+                                                 {
+                                                   "kind": "group",
+                                                   "properties": {
+                                                     "field": {
+                                                       "kind": "field_reference",
+                                                       "field": "vortex.crm.opportunities:opportunity.opportunity_number"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Opportunity number"
+                                                     }
+                                                   }
+                                                 },
+                                                 {
+                                                   "kind": "group",
+                                                   "properties": {
+                                                     "field": {
+                                                       "kind": "field_reference",
+                                                       "field": "vortex.crm.opportunities:opportunity.value"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Value"
+                                                     }
+                                                   }
+                                                 },
+                                                 {
+                                                   "kind": "group",
+                                                   "properties": {
+                                                     "field": {
+                                                       "kind": "field_reference",
+                                                       "field": "vortex.crm.opportunities:opportunity.expected_close_date"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Expected close date"
+                                                     }
+                                                   }
+                                                 }
+                                               ]
+                                             },
+                                             "aggregates": {
+                                               "kind": "list",
+                                               "items": [
+                                                 {
+                                                   "kind": "group",
+                                                   "properties": {
+                                                     "alias": {
+                                                       "kind": "text",
+                                                       "value": "pipeline_value"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Total amount"
+                                                     }
+                                                   }
+                                                 }
+                                               ]
+                                             },
+                                             "empty_message": {
+                                               "kind": "text",
+                                               "value": "No opportunities in this stage."
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": true,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
+                                               }
+                                             }
+                                           },
+                                           "slots": {}
+                                         }
+                                       },
+                                       "order": {
+                                         "desktop": [
+                                           "board_crm_pipeline"
+                                         ]
+                                       }
+                                     }
+                                   }
+                                 }
+                               }
                            ],
                  "pipelines":  [
                                    {
@@ -4486,6 +4618,13 @@
     {
         "id": "event_crm_open_opportunity",
         "key": "vortex.app.events.vortex_app_crm_open_opportunity",
+        "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_pipeline_open_opportunity",
+        "key": "vortex.app.events.vortex_app_crm_pipeline_open_opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -6397,6 +6536,19 @@
                          "control": "content_4",
                          "event_id": "event_crm_open_opportunity",
                          "event": "row_clicked",
+                         "flow": "crm_open_opportunity",
+                         "inputs": {
+                             "record_id": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "row_binding_crm_pipeline_open_opportunity",
+                         "control": "board_crm_pipeline",
+                         "event_id": "event_crm_pipeline_open_opportunity",
+                         "event": "row_action",
                          "flow": "crm_open_opportunity",
                          "inputs": {
                              "record_id": {

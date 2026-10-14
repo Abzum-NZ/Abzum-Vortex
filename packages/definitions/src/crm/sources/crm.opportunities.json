@@ -1069,6 +1069,40 @@
         ],
         "page_size": 50,
         "relationship_hops": 0
+      },
+      {
+        "id": "qry_crm_pipeline_board",
+        "key": "crm_pipeline_board",
+        "label": "Pipeline board",
+        "description": "Opportunities grouped by stage with the total value of each stage",
+        "record_type": "opportunity",
+        "inputs": [],
+        "select": [
+          "stage",
+          "name",
+          "opportunity_number",
+          "value",
+          "expected_close_date"
+        ],
+        "filter": null,
+        "group_by": [
+          "stage"
+        ],
+        "aggregates": [
+          {
+            "operation": "sum",
+            "field": "value",
+            "alias": "pipeline_value"
+          }
+        ],
+        "sort": [
+          {
+            "field": "stage",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
       }
     ]
   }
