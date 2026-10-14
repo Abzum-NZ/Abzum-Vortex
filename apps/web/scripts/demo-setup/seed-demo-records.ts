@@ -21,7 +21,16 @@ import {
   type SystemContextFacts,
 } from "../development-setup/development-authority";
 import { loadCurrentSetupState, type SetupState } from "../development-setup/state";
-import { additionalContacts, cases, leads, tasks } from "./demo-seed-data";
+import {
+  additionalContacts,
+  cases,
+  hrDepartments,
+  hrEmployees,
+  hrLeaveRequests,
+  hrPositions,
+  leads,
+  tasks,
+} from "./demo-seed-data";
 import { loadLocalWebEnvironment } from "./local-environment";
 
 const uuidNamespace = Buffer.from("6d1f0c523b7a4c4e8a510e1a7b0c9d00", "hex");
@@ -290,7 +299,8 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const crmRelease = requiredRelease(facts, "vortex.app.crm");
   const serviceDeskRelease = requiredRelease(facts, "vortex.app.service_desk");
   const tasksRelease = requiredRelease(facts, "vortex.app.tasks");
-  const [crm, serviceDesk, tasksSet] = await Promise.all([
+  const hrRelease = requiredRelease(facts, "vortex.app.hr");
+  const [crm, serviceDesk, tasksSet, hrSet] = await Promise.all([
     inSystemTransaction(context, (transaction) =>
       createDatabaseSystemApplicationBoundReleaseSetService(
         developmentPublicationCatalogue,
@@ -318,6 +328,15 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         applicationReleaseRevision: tasksRelease.releaseRevision,
       }),
     ),
+    inSystemTransaction(context, (transaction) =>
+      createDatabaseSystemApplicationBoundReleaseSetService(
+        developmentPublicationCatalogue,
+        transaction,
+      ).read(context, {
+        applicationRootId: applicationRootIdSchema.parse(hrRelease.rootId),
+        applicationReleaseRevision: hrRelease.releaseRevision,
+      }),
+    ),
   ]);
   const companyType = recordType(crm, "vortex.crm.organisations", "company");
   const contactType = recordType(crm, "vortex.crm.people", "contact");
@@ -331,6 +350,12 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const crmRootId = applicationRootIdSchema.parse(crmRelease.rootId);
   const serviceDeskRootId = applicationRootIdSchema.parse(serviceDeskRelease.rootId);
   const tasksRootId = applicationRootIdSchema.parse(tasksRelease.rootId);
+  const hrRootId = applicationRootIdSchema.parse(hrRelease.rootId);
+  const departmentType = recordType(hrSet, "vortex.hr", "department");
+  const positionType = recordType(hrSet, "vortex.hr", "position");
+  const employeeType = recordType(hrSet, "vortex.hr", "employee");
+  const leaveRequestType = recordType(hrSet, "vortex.hr", "leave_request");
+  const personType = recordType(hrSet, "vortex.system_directory", "person");
   const ownerSession = nominatedOwnerSession(facts.stewardIdentityId);
   const saveRecord = createRecordSaveService({ identityAuthorityId: facts.identityAuthorityId });
   const personOwner = { organizationAccountId: facts.stewardOrganizationAccountId };
@@ -508,6 +533,55 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       notes: task.notes,
     });
 
+  const departmentIds: string[] = [];
+  for (const [index, department] of hrDepartments.entries())
+    departmentIds.push(
+      await save(hrRootId, departmentType, `hr/department/${index + 1}`, {
+        department_code: department.code,
+        name: department.name,
+      }),
+    );
+  const positionIds: string[] = [];
+  for (const [index, position] of hrPositions.entries())
+    positionIds.push(
+      await save(hrRootId, positionType, `hr/position/${index + 1}`, {
+        position_code: position.code,
+        title: position.title,
+        department: {
+          recordTypeId: departmentType.recordTypeId,
+          recordId: departmentIds[position.departmentIndex]!,
+        },
+      }),
+    );
+  const employeeIds: string[] = [];
+  for (const [index, employee] of hrEmployees.entries())
+    employeeIds.push(
+      await save(hrRootId, employeeType, `hr/employee/${index + 1}`, {
+        employee_number: employee.number,
+        employment_status: employee.status,
+        start_date: employee.startDate,
+        person: {
+          recordTypeId: personType.recordTypeId,
+          recordId: facts.stewardOrganizationAccountId,
+        },
+        position: {
+          recordTypeId: positionType.recordTypeId,
+          recordId: positionIds[employee.positionIndex]!,
+        },
+      }),
+    );
+  for (const [index, leave] of hrLeaveRequests.entries())
+    await save(hrRootId, leaveRequestType, `hr/leave-request/${index + 1}`, {
+      start_date: leave.startDate,
+      end_date: leave.endDate,
+      reason: leave.reason,
+      status: leave.status,
+      employee: {
+        recordTypeId: employeeType.recordTypeId,
+        recordId: employeeIds[leave.employeeIndex]!,
+      },
+    });
+
   const calendarId = await save(
     serviceDeskRootId,
     calendarType,
@@ -577,7 +651,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   }
 
   process.stdout.write(
-    `[demo seed] ${setupKey}: ${companies.length} CRM companies, ${contactSeeds.length} contacts, ${opportunities.length} opportunities, ${leads.length} leads; ${cases.length} Service Desk cases, a service calendar and SLA; ${tasks.length} tasks.\n`,
+    `[demo seed] ${setupKey}: ${companies.length} CRM companies, ${contactSeeds.length} contacts, ${opportunities.length} opportunities, ${leads.length} leads; ${cases.length} Service Desk cases, a service calendar and SLA; ${tasks.length} tasks; ${hrEmployees.length} HR employees and ${hrLeaveRequests.length} leave requests.\n`,
   );
 };
 

@@ -362,3 +362,64 @@ export const tasks: readonly TaskSeed[] = [
     notes: "Highlight the new reporting filters and the winter support hours.",
   },
 ];
+
+export const hrDepartments: readonly Readonly<{ code: string; name: string }>[] = [
+  { code: "OPS", name: "Operations" },
+  { code: "PEO", name: "People and Culture" },
+  { code: "ENG", name: "Engineering" },
+];
+
+/** `departmentIndex` refers to a position in `hrDepartments`. */
+export const hrPositions: readonly Readonly<{
+  code: string;
+  title: string;
+  departmentIndex: number;
+}>[] = [
+  { code: "OPS-LEAD", title: "Operations lead", departmentIndex: 0 },
+  { code: "PEO-ADV", title: "People advisor", departmentIndex: 1 },
+  { code: "ENG-DEV", title: "Software engineer", departmentIndex: 2 },
+];
+
+/**
+ * One employee: an Employee links one-to-one to a directory Person and the demo organisation has
+ * a single person, its first owner. `positionIndex` refers to a position in `hrPositions`.
+ */
+export const hrEmployees: readonly Readonly<{
+  number: string;
+  status: "active" | "inactive";
+  startDate: string;
+  positionIndex: number;
+}>[] = [
+  { number: "E-1001", status: "active", startDate: "2024-02-05", positionIndex: 0 },
+];
+
+/** `employeeIndex` refers to a position in `hrEmployees`. */
+export const hrLeaveRequests: readonly Readonly<{
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: "draft" | "submitted" | "approved" | "rejected";
+  employeeIndex: number;
+}>[] = [
+  {
+    startDate: "2026-11-02",
+    endDate: "2026-11-06",
+    reason: "Family holiday.",
+    status: "submitted",
+    employeeIndex: 0,
+  },
+  {
+    startDate: "2026-12-21",
+    endDate: "2026-12-31",
+    reason: "Summer break.",
+    status: "approved",
+    employeeIndex: 0,
+  },
+  {
+    startDate: "2026-10-26",
+    endDate: "2026-10-26",
+    reason: "Medical appointment.",
+    status: "draft",
+    employeeIndex: 0,
+  },
+];
