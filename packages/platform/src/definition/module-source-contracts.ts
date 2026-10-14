@@ -431,6 +431,12 @@ const moduleSourceRecordTypeSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.fields.filter((field) => field.sortable).length > 8)
+      context.addIssue({
+        code: "custom",
+        path: ["fields"],
+        message: "A record type may declare at most eight sortable fields",
+      });
     if ((value.ownership_mode === "inherited") !== (value.ownership_relationship !== undefined))
       context.addIssue({
         code: "custom",
