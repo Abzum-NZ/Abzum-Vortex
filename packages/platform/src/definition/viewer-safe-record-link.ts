@@ -96,6 +96,20 @@ export const readVisiblePersonLabels = async (
   return new Map(rows.map((row) => [row.record_id.toLowerCase(), row.display_name]));
 };
 
+/** Group labels use the same fixed group-directory permission as the protected group projection. */
+const readVisibleGroupLabels = async (
+  transaction: RequestDatabaseTransaction,
+  groupIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> => {
+  const rows = await transaction.query<{ record_id: string; display_name: string }>`
+    select record_id::text, display_name
+    from vortex_access.list_visible_group_link_labels(
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(groupIds)}::text::jsonb)::uuid)
+    )
+  `;
+  return new Map(rows.map((row) => [row.record_id.toLowerCase(), row.display_name]));
+};
+
 /** The key a link's label is held under in a `RecordLinkLabelsResult`. */
 export const recordLinkLabelKey = (link: RecordLinkReference): string =>
   "organizationAccountId" in link
@@ -407,6 +421,34 @@ export const createViewerSafeRecordLinkService = (
               const openable =
                 page !== undefined &&
                 (await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page));
+              if (recordType.systemProjection?.protectedView === "groups") {
+                for (let start = 0; start < recordIds.length; start += titleReadBatchSize) {
+                  const batch = recordIds.slice(start, start + titleReadBatchSize);
+                  const visible = await readVisibleGroupLabels(transaction, batch);
+                  for (const recordId of batch) {
+                    const label = visible.get(recordId.toLowerCase());
+                    labels.set(
+                      `${typeKey}:${recordId.toLowerCase()}`,
+                      label === undefined
+                        ? { outcome: "restricted" }
+                        : {
+                            outcome: "available",
+                            label,
+                            ...(openable && page !== undefined
+                              ? {
+                                  detail: {
+                                    applicationKey: context.releaseSet.application.definitionKey,
+                                    pageKey: page.key,
+                                    recordId,
+                                  },
+                                }
+                              : {}),
+                          },
+                    );
+                  }
+                }
+                continue;
+              }
               for (let start = 0; start < recordIds.length; start += titleReadBatchSize) {
                 const batch = recordIds.slice(start, start + titleReadBatchSize);
                 const read = await records.readTitles(transaction, scope, {
