@@ -103,7 +103,7 @@ export const sourceAliasSchema = z
   .regex(/^[a-z][a-z0-9_]*$/);
 /**
  * A query an application binds is always one a bound Module exposes, named by that Module's key
- * and the query's own key ("vortex.crm.organisations:crm_companies"). An application never owns a
+ * and the query's own key ("vortex.example.organisations:example_companies"). An application never owns a
  * query the Query engine cannot run.
  */
 export const sourceQualifiedQueryReferenceSchema = z
