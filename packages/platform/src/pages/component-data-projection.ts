@@ -10,6 +10,7 @@ import {
   type RecordsDisplayFormat,
 } from "../schema";
 import type { ProtectedQueryRow } from "../queries/index";
+import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 
 /**
  * One closed display value. It is structurally the value the shared display components render, so
@@ -21,7 +22,53 @@ export type ProjectedCellValue =
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
   | Readonly<{ kind: "rich_text"; document: ReturnType<typeof richTextDocumentSchema.parse> }>
+  | ProjectedRecordLink
+  | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "empty" }>;
+
+/**
+ * A linked record as the viewer may see it: its label, with the address of its detail page only
+ * when the viewer may open that page, or a neutral `restricted` that carries nothing of the record.
+ */
+export type ProjectedRecordLink =
+  | Readonly<{ kind: "record_link"; label: string; href?: string }>
+  | Readonly<{ kind: "restricted" }>;
+
+/** The resolved links of one page, keyed by `recordLinkLabelKey`; absent when the read failed. */
+export type ProjectedRecordLinks = ReadonlyMap<string, ProjectedRecordLink>;
+
+/**
+ * Reads the labels of every linked record one page shows in one batched read per link target
+ * record type. Undefined when the read failed; the failure is already logged with its cause.
+ */
+export type RecordLinkResolver = (
+  links: readonly RecordLinkReference[],
+) => Promise<ProjectedRecordLinks | undefined>;
+
+/** A stored link value is exactly a record type identity and a record identity. */
+const asRecordLink = (value: JsonValue): RecordLinkReference | undefined => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const keys = Object.keys(value);
+  const { recordTypeId, recordId } = value;
+  return keys.length === 2 &&
+    typeof recordTypeId === "string" &&
+    typeof recordId === "string"
+    ? { recordTypeId, recordId }
+    : undefined;
+};
+
+/** The distinct linked records among every value of the rows the Query engine returned. */
+export const collectRecordLinks = (
+  rows: readonly ProtectedQueryRow[],
+): readonly RecordLinkReference[] => {
+  const links = new Map<string, RecordLinkReference>();
+  for (const row of rows)
+    for (const value of Object.values<JsonValue>(row.values)) {
+      const link = asRecordLink(value);
+      if (link !== undefined) links.set(recordLinkLabelKey(link), link);
+    }
+  return [...links.values()];
+};
 
 /**
  * One row addressed by the record identity the Query engine returned; cells are keyed by field.
@@ -83,6 +130,8 @@ export type ComponentDataProjectionInput = Readonly<{
   readableFieldIds?: readonly string[];
   /** The date or date-time fields of the installed definition (field identity to field type), so a column declared "automatic" shows them as dates. */
   fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
+  /** The labels of the linked records the rows carry; absent when they could not be read. */
+  recordLinks?: ProjectedRecordLinks;
 }>;
 
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
@@ -121,9 +170,19 @@ const projectCell = (
   declaredFormat: RecordsDisplayFormat,
   choiceLabels?: readonly Readonly<{ value: string; label: string }>[],
   dateType?: "date" | "date_time",
+  recordLinks?: ProjectedRecordLinks,
 ): ProjectedCellValue => {
   const format = declaredFormat === "automatic" && dateType !== undefined ? dateType : declaredFormat;
   if (value === null) return empty;
+  // A link shows its target's label as the viewer may read it; one that could not be resolved is
+  // an explicit unavailable state, never a blank and never the stored identity.
+  const link = asRecordLink(value);
+  if (link !== undefined) {
+    const resolved = recordLinks?.get(recordLinkLabelKey(link));
+    if (resolved !== undefined) return resolved;
+    console.error("[page] record link label missing: RECORD_LINK_LABEL_UNAVAILABLE");
+    return { kind: "unavailable" };
+  }
   if (Array.isArray(value) && choiceLabels !== undefined) {
     const selected = value.filter((entry): entry is string => typeof entry === "string");
     if (
@@ -272,6 +331,7 @@ export const projectRecordsTableData = (
               column.format,
               input.fieldChoiceLabels?.[column.key.toLowerCase()],
               input.fieldDateTypes?.[column.key.toLowerCase()],
+              input.recordLinks,
             ),
           ]),
         ),
@@ -316,6 +376,7 @@ export const projectRecordDetailData = (
         declared.format,
         choiceLabels,
         input.fieldDateTypes?.[declared.field.toLowerCase()],
+        input.recordLinks,
       ),
     });
   }

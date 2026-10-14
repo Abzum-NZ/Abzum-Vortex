@@ -54,10 +54,14 @@ export {
 export {
   projectRecordDetailData,
   projectRecordsTableData,
+  collectRecordLinks,
   type ComponentDataProjectionInput,
   type ProjectedCellValue,
   type ProjectedComponentData,
   type ProjectedRecordDetailValues,
+  type ProjectedRecordLink,
+  type ProjectedRecordLinks,
+  type RecordLinkResolver,
   type ProjectedTableRow,
   type ProjectedTableValues,
 } from "./component-data-projection";

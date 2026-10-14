@@ -2,7 +2,10 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
+  describeFailure,
+  recordIdSchema,
   sameId,
+  type RecordId,
   organizationSelectionCandidateSchema,
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkResultSchema,
@@ -23,6 +26,7 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "../access/index";
 import type { RequestDatabaseTransaction } from "../db/index";
+import type { ViewerSafeRecordLinkTitle } from "../schema";
 import {
   createViewerSafeRecordLinkReadService,
   type ViewerSafeRecordLinkTitleReadResult,
@@ -51,6 +55,52 @@ export type ViewerSafeRecordLinkServiceDependencies = HumanOrganizationRequestDe
       applicationKey: string,
     ) => Promise<OrganizationSelectionCandidate | undefined>;
   }>;
+
+
+/** One linked record as a stored link value names it. */
+export type RecordLinkReference = Readonly<{ recordTypeId: string; recordId: string }>;
+
+/**
+ * What the viewer may see of one linked record: its display label and, when the viewer may open the
+ * target's detail page, where that page is. A record the viewer may not read is only `restricted`.
+ */
+export type RecordLinkLabel =
+  | Readonly<{
+      outcome: "available";
+      label: string;
+      detail?: Readonly<{ applicationKey: string; pageKey: string; recordId: string }>;
+    }>
+  | Readonly<{ outcome: "restricted" }>;
+
+export type RecordLinkLabelsResult =
+  | Readonly<{ outcome: "read"; labels: ReadonlyMap<string, RecordLinkLabel> }>
+  | Readonly<{ outcome: "unavailable" }>;
+
+/** The key a link's label is held under in a `RecordLinkLabelsResult`. */
+export const recordLinkLabelKey = (link: RecordLinkReference): string =>
+  `${link.recordTypeId.toLowerCase()}:${link.recordId.toLowerCase()}`;
+
+const MAXIMUM_LABEL_LENGTH = 200;
+const titleReadBatchSize = 1_000;
+
+/** The installed module and record type a stored link value's record type identity names. */
+const locateLinkTarget = (context: InstalledRuntimeContext, recordTypeId: string) => {
+  for (const module of context.releaseSet.modules) {
+    const recordType = module.content.recordTypes.find((candidate) =>
+      sameId(candidate.recordTypeId, recordTypeId),
+    );
+    if (recordType !== undefined) return { module, recordType };
+  }
+  return undefined;
+};
+
+const labelText = (title: ViewerSafeRecordLinkTitle): string | undefined => {
+  const text = (typeof title === "string" ? title : JSON.stringify(title))?.trim();
+  if (text === undefined || text.length === 0) return undefined;
+  return text.length > MAXIMUM_LABEL_LENGTH ? `${text.slice(0, MAXIMUM_LABEL_LENGTH - 1)}…` : text;
+};
+
+const labelsUnavailable: RecordLinkLabelsResult = { outcome: "unavailable" };
 
 const unavailable: ViewerSafeRecordLinkResult = { outcome: "unavailable" };
 const pinUnavailable: ViewerSafeRecordPinAcquisitionResult = { outcome: "unavailable" };
@@ -265,6 +315,106 @@ export const createViewerSafeRecordLinkService = (
           : pinUnavailable;
       } catch {
         return pinUnavailable;
+      }
+    },
+    /**
+     * Reads the display label of every linked record a page shows, in one set read per target
+     * record type under the viewer's own authority. The installed context is the one this page
+     * request already resolved; the read checks it against the live installation again. A target
+     * the viewer may not read is `restricted` and carries nothing of the record, and the detail
+     * address is given only when the viewer may open the target's detail page.
+     */
+    async readLabels(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      context: InstalledRuntimeContext,
+      links: readonly RecordLinkReference[],
+    ): Promise<RecordLinkLabelsResult> {
+      const labels = new Map<string, RecordLinkLabel>();
+      if (links.length === 0) return { outcome: "read", labels };
+      try {
+        const byType = new Map<string, Map<string, RecordId>>();
+        for (const link of links) {
+          const typeKey = link.recordTypeId.toLowerCase();
+          const ids = byType.get(typeKey) ?? new Map<string, RecordId>();
+          ids.set(link.recordId.toLowerCase(), recordIdSchema.parse(link.recordId));
+          byType.set(typeKey, ids);
+        }
+        const request = await requests.run(
+          session,
+          selection,
+          async (transaction, scope): Promise<RecordLinkLabelsResult> => {
+            if (
+              !sameId(scope.organizationId, context.organizationId) ||
+              scope.applicationRootId === undefined ||
+              !sameId(scope.applicationRootId, context.applicationRootId)
+            )
+              throw new Error("RECORD_LINK_SCOPE_MISMATCH");
+            for (const [typeKey, ids] of byType) {
+              const target = locateLinkTarget(context, typeKey);
+              if (target === undefined) {
+                console.error("[page] record link target is not installed: RECORD_LINK_TARGET_NOT_INSTALLED");
+                for (const id of ids.keys()) labels.set(`${typeKey}:${id}`, { outcome: "restricted" });
+                continue;
+              }
+              const { module, recordType } = target;
+              const recordIds = [...ids.values()];
+              const identity = {
+                organizationId: context.organizationId,
+                applicationRootId: context.applicationRootId,
+                moduleRootId: module.rootId,
+                moduleReleaseRevision: module.releaseRevision,
+                recordTypeId: recordType.recordTypeId,
+                storageContractId: recordType.storageContractId,
+              };
+              const page = matchingDetailPage(context, { ...identity, recordId: recordIds[0]! });
+              const openable =
+                page !== undefined &&
+                (await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page));
+              for (let start = 0; start < recordIds.length; start += titleReadBatchSize) {
+                const batch = recordIds.slice(start, start + titleReadBatchSize);
+                const read = await records.readTitles(transaction, scope, {
+                  identity,
+                  applicationReleaseRevision: context.applicationReleaseRevision,
+                  titleFieldId: recordType.titleFieldId,
+                  recordIds: batch,
+                });
+                if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
+                for (const recordId of batch) {
+                  const title = read.titles.get(recordId.toLowerCase());
+                  const text = title === undefined ? undefined : labelText(title);
+                  if (title !== undefined && text === undefined)
+                    console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
+                  labels.set(
+                    `${typeKey}:${recordId.toLowerCase()}`,
+                    text === undefined
+                      ? { outcome: "restricted" }
+                      : {
+                          outcome: "available",
+                          label: text,
+                          ...(openable && page !== undefined
+                            ? {
+                                detail: {
+                                  applicationKey: context.releaseSet.application.definitionKey,
+                                  pageKey: page.key,
+                                  recordId,
+                                },
+                              }
+                            : {}),
+                        },
+                  );
+                }
+              }
+            }
+            return { outcome: "read", labels };
+          },
+        );
+        if (request.kind === "available") return request.value;
+        console.error(`[page] record link labels unavailable: RECORD_LINK_LABELS_${request.kind.toUpperCase()}`);
+        return labelsUnavailable;
+      } catch (error) {
+        console.error(`[page] record link labels unavailable: RECORD_LINK_LABELS_READ_FAILED ${describeFailure(error)}`);
+        return labelsUnavailable;
       }
     },
     async read(

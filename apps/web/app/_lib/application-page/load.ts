@@ -13,6 +13,8 @@ import {
   createLinkTilesQueryResolver,
   createPageSubjectReader,
   type PageSubjectReadResult,
+  type ProjectedRecordLink,
+  type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
 } from "@vortex/platform/server";
 import { FORM_CONTAINER_BLOCK_RELEASE, runtimeDatabasePoolSize } from "@vortex/platform/server";
@@ -641,6 +643,28 @@ const loadApplicationPageJoined = async (
   const adoptSubjectRead = (read: PageSubjectReadResult): void => {
     subjectRead ??= Promise.resolve(read);
   };
+  // One labelled read per page and link target: a link shows its target's name as the viewer may
+  // read it, and a detail address only where the viewer may open that page.
+  const resolveRecordLinks: RecordLinkResolver = async (links) => {
+    const read = await recordLinks.readLabels(session, selection, context, links);
+    if (read.outcome !== "read") return undefined;
+    return new Map(
+      [...read.labels].map(([key, label]): [string, ProjectedRecordLink] => [
+        key,
+        label.outcome === "restricted"
+          ? { kind: "restricted" }
+          : {
+              kind: "record_link",
+              label: label.label,
+              ...(label.detail === undefined
+                ? {}
+                : {
+                    href: `/${encodeURIComponent(address.tenantShortName)}/${encodeURIComponent(address.organizationShortName)}/${encodeURIComponent(label.detail.applicationKey)}/${encodeURIComponent(label.detail.pageKey)}?${new URLSearchParams({ record_id: label.detail.recordId })}`,
+                  }),
+            },
+      ]),
+    );
+  };
   const placementReaderInput = {
     application,
     recordTypeByPlacement,
@@ -671,6 +695,7 @@ const loadApplicationPageJoined = async (
     queries,
     readCalendarSettings,
     tables,
+    resolveRecordLinks,
     tableContinuation,
     adoptSubjectRead,
     markSubjectUnreadable,

@@ -45,6 +45,9 @@ export type DisplayCellValue =
   | Readonly<{ kind: "choice"; key: string; label: string }>
   | Readonly<{ kind: "link"; address: string; label: string }>
   | Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>
+  | Readonly<{ kind: "record_link"; label: string; href?: string }> // href is an address in this application
+  | Readonly<{ kind: "restricted" }> // a linked record the viewer may not read
+  | Readonly<{ kind: "unavailable" }> // a linked record whose label could not be read
   | Readonly<{ kind: "empty" }>;
 
 /** The record action kinds a row may report as available to the viewer. */
@@ -339,6 +342,12 @@ const LOADING_STATE: DisplayDataState<never> = Object.freeze({ status: "loading"
 const EMPTY_STATE: DisplayDataState<never> = Object.freeze({ status: "empty" });
 const ERROR_STATE: DisplayDataState<never> = Object.freeze({ status: "error" });
 const EMPTY_CELL: DisplayCellValue = Object.freeze({ kind: "empty" });
+const RESTRICTED_CELL: DisplayCellValue = Object.freeze({ kind: "restricted" });
+const UNAVAILABLE_CELL: DisplayCellValue = Object.freeze({ kind: "unavailable" });
+
+/** An address inside this application: an absolute path, never another origin or a script. */
+export const isInternalAddress = (value: unknown): value is string =>
+  typeof value === "string" && /^\/(?![/\\])\S*$/.test(value);
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 const isValidIsoCalendarDate = (text: string): boolean => {
@@ -529,6 +538,27 @@ const parseCellValue = (
         kind: "rich_text",
         document: parseRichTextDocument(record.document, location),
       });
+    case "record_link": {
+      const label = requireNonEmptyString(
+        record.label,
+        "A record link display value requires a label",
+        location,
+      );
+      if (record.href === undefined) {
+        requireExactKeys(record, ["kind", "label"], location);
+        return Object.freeze({ kind: "record_link", label });
+      }
+      requireExactKeys(record, ["kind", "label", "href"], location);
+      return isInternalAddress(record.href)
+        ? Object.freeze({ kind: "record_link", label, href: record.href })
+        : fail("A record link display value requires an address inside this application", location);
+    }
+    case "restricted":
+      requireExactKeys(record, ["kind"], location);
+      return RESTRICTED_CELL;
+    case "unavailable":
+      requireExactKeys(record, ["kind"], location);
+      return UNAVAILABLE_CELL;
     case "empty":
       requireExactKeys(record, ["kind"], location);
       return EMPTY_CELL;
