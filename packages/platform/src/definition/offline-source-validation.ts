@@ -23,7 +23,7 @@ import { validateDefinitionSet } from "./validation";
 /** One reason a shipped source would be refused at publication, located on the offending part. */
 export type OfflineSourceFailure = Readonly<{
   definitionKey: string;
-  stage: "source_schema" | "before_save_lowering" | "compile" | "validation";
+  stage: "source_schema" | "before_save_lowering" | "compile" | "validation" | "resolution";
   /** A stable reason code: a compiler rule code, or `offline_unexpected_failure`. */
   code: string;
   /** Where in the source the refusal is located, as readable keys. */
@@ -32,40 +32,40 @@ export type OfflineSourceFailure = Readonly<{
   detail?: string;
 }>;
 
-type Identity = DefinitionResolutionSnapshot["identities"][number];
-type ResolvedDefinition = DefinitionResolutionSnapshot["definitions"][number];
+export type Identity = DefinitionResolutionSnapshot["identities"][number];
+export type ResolvedDefinition = DefinitionResolutionSnapshot["definitions"][number];
 
 /** What a compiled Module contributes to the resolution of every Module that depends on it. */
-type CompiledModule = Readonly<{
+export type CompiledModule = Readonly<{
   output: DefinitionCompilationOutput;
   definitions: readonly ResolvedDefinition[];
   identities: readonly Identity[];
 }>;
 
 /** The rules that compare a candidate with the releases already published, which need a database. */
-const historyDependentCodes: ReadonlySet<string> = new Set([
+export const historyDependentCodes: ReadonlySet<string> = new Set([
   "vortex.definition.prior_published_version_required",
   "vortex.definition.prior_published_version_invalid",
   "vortex.definition.publication_change_required",
   "vortex.definition.candidate_version_binding",
 ]);
 
-const syntheticVersion = "1.0.0";
-const syntheticActor = "00000000-0000-4000-8000-000000000001";
+export const syntheticVersion = "1.0.0";
+export const syntheticActor = "00000000-0000-4000-8000-000000000001";
 
 /** A stable, well-formed identifier derived from a name, standing in for a database-issued one. */
-const syntheticId = (...parts: readonly string[]): string => {
+export const syntheticId = (...parts: readonly string[]): string => {
   const hex = createHash("sha256").update(JSON.stringify(parts)).digest("hex");
   const variant = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 };
 
-const renderLocation = (location: DefinitionValidationLocation | undefined): string =>
+export const renderLocation = (location: DefinitionValidationLocation | undefined): string =>
   location === undefined
     ? "(source)"
     : location.segments.map((segment) => `${segment.kind} ${segment.key}`).join(" > ");
 
-const unexpected = (
+export const unexpected = (
   definitionKey: string,
   stage: OfflineSourceFailure["stage"],
   error: unknown,
@@ -110,21 +110,19 @@ const compileModule = (
   });
   const dependencyOutputs = dependencies.map((dependency) => dependency.output);
   const own = extractModuleSourceIdentityRequirements(source).flatMap((requirement) =>
-    requirement.aliases.map(
-      (alias): Identity => ({
-        definitionKey: requirement.definitionKey,
-        scope: requirement.scope,
-        kind: requirement.kind,
-        componentOwner: requirement.componentOwner,
-        alias,
-        identifier: syntheticId(
-          requirement.definitionKey,
-          requirement.scope,
-          requirement.kind,
-          requirement.componentOwner,
-        ) as Identity["identifier"],
-      }),
-    ),
+    requirement.aliases.map((alias): Identity => ({
+      definitionKey: requirement.definitionKey,
+      scope: requirement.scope,
+      kind: requirement.kind,
+      componentOwner: requirement.componentOwner,
+      alias,
+      identifier: syntheticId(
+        requirement.definitionKey,
+        requirement.scope,
+        requirement.kind,
+        requirement.componentOwner,
+      ) as Identity["identifier"],
+    })),
   );
   const ownDefinition: ResolvedDefinition = {
     kind: "module",
@@ -206,24 +204,25 @@ const compileModule = (
     failures: validation.failures
       .filter((failure) => !historyDependentCodes.has(failure.ruleCode))
       .map((failure) => ({
-      definitionKey: source.key,
-      stage: "validation" as const,
-      code: failure.ruleCode,
-      location: renderLocation(failure.location),
-      detail: failure.family,
-    })),
+        definitionKey: source.key,
+        stage: "validation" as const,
+        code: failure.ruleCode,
+        location: renderLocation(failure.location),
+        detail: failure.family,
+      })),
   };
 };
 
 /**
  * Runs the publication checks that need no database over shipped Module sources and reports every
  * failure, not the first: the source schema, the lowering of every BeforeSave flow, the Module
- * compile and the publish-stage definition rules.
+ * compile and the publish-stage definition rules. The compiled Modules are returned so Applications
+ * that bind them compile against the same outputs.
  */
-export const validateSourcesOffline = (
+export const compileModulesOffline = (
   sources: readonly StoredDefinitionSource[],
   permissions: PlatformPermissionSource,
-): OfflineSourceFailure[] => {
+): { failures: OfflineSourceFailure[]; compiled: ReadonlyMap<string, CompiledModule> } => {
   const failures: OfflineSourceFailure[] = [];
   const modules = new Map<string, ModuleSourceDocument>();
   /** Modules whose lowering already failed: compiling them would only repeat the same refusal. */
@@ -268,5 +267,5 @@ export const validateSourcesOffline = (
     }
   };
   for (const key of [...modules.keys()].sort(compareCanonicalStrings)) visit(key);
-  return failures;
+  return { failures, compiled };
 };
