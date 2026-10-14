@@ -225,7 +225,11 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
           sort: z
             .array(
               z
-                .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
+                .object({
+                  fieldId: fieldIdSchema,
+                  direction: z.enum(["ascending", "descending"]),
+                  pushed: z.boolean(),
+                })
                 .strict(),
             )
             .max(20),
@@ -253,7 +257,11 @@ const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
           sort: z
             .array(
               z
-                .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
+                .object({
+                  fieldId: fieldIdSchema,
+                  direction: z.enum(["ascending", "descending"]),
+                  pushed: z.boolean(),
+                })
                 .strict(),
             )
             .max(20),
@@ -378,9 +386,7 @@ const summaryFilterInputRefusal = (
   const filterable = new Set(command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()));
   const referenced = new Set<string>();
   conditionFieldIds(command.filter, referenced);
-  return [...referenced].some((fieldId) => !filterable.has(fieldId))
-    ? "filter_invalid"
-    : undefined;
+  return [...referenced].some((fieldId) => !filterable.has(fieldId)) ? "filter_invalid" : undefined;
 };
 
 const boardSummaryFilterInputRefusal = (
@@ -706,8 +712,7 @@ const groupedMembersCommand = async (
   continuationKey: QueryContinuationKey,
 ): Promise<z.infer<typeof protectedQueryGroupedMembersResultSchema>> => {
   const applicationRootId = scope.applicationRootId;
-  if (applicationRootId === undefined)
-    return { outcome: "refused", reasonCode: "request_invalid" };
+  if (applicationRootId === undefined) return { outcome: "refused", reasonCode: "request_invalid" };
   const filterRefusal = groupedMembersFilterInputRefusal(command);
   if (filterRefusal !== undefined) return { outcome: "refused", reasonCode: filterRefusal };
 
@@ -810,7 +815,7 @@ const groupedMembersCommand = async (
       new Set(disclosedFieldIds).size !== disclosedFieldIds.length ||
       disclosedFieldIds.some((fieldId) => !requestedFieldIds.has(fieldId)) ||
       disclosedSystemKeys.some((key) => !declaredSystemKeys.has(key)) ||
-      (declaredSystemKeys.size > 0) !== (row.systemValues !== undefined) ||
+      declaredSystemKeys.size > 0 !== (row.systemValues !== undefined) ||
       declaredSystemKeys.size !== disclosedSystemKeys.length
     )
       throw new Error("PROTECTED_QUERY_RESULT_INVALID");
@@ -1370,8 +1375,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
       const command = protectedQuerySummaryCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return { kind: "available", value: summaryRefusal("request_invalid") };
+      if (!command.success) return { kind: "available", value: summaryRefusal("request_invalid") };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
         summariseCommand(transaction, scope, command.data),

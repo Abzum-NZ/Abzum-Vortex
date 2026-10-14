@@ -1,4 +1,4 @@
-﻿set local role vortex_owner;
+set local role vortex_owner;
 set local role vortex_record_adapter;
 
 create or replace function vortex_record.run_module_query(
@@ -650,12 +650,13 @@ begin
         message = 'Record storage disagrees with the installed definition';
     end if;
     declared_sort_ids := pg_catalog.array_append(declared_sort_ids, field_key);
+    pushed := field_key = any (readable_field_ids);
     cursor_sort := cursor_sort || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
-        'fieldId', field_key, 'direction', sort_item ->> 'direction'
+        'fieldId', field_key, 'direction', sort_item ->> 'direction',
+        'pushed', pushed
       )
     );
-    pushed := field_key = any (readable_field_ids);
     if effective_sort_is_user and not pushed then
       -- The user's order must actually be the scan order.
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
@@ -752,8 +753,9 @@ begin
   from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}') as item(value);
 
   -- The keyset position must fit this exact order. The cursor binds every
-  -- declared sort field and direction, but carries values only for readable
-  -- sort fields, so it never carries a hidden field value.
+  -- declared sort field, direction and whether it was pushed, but carries
+  -- values only for readable sort fields. A changed readable subset cannot
+  -- reinterpret an old key or put a hidden field value in a cursor.
   if p_after is not null and p_after <> 'null'::jsonb then
     if pg_catalog.jsonb_typeof(p_after) <> 'object'
       or p_after - array['sortKey', 'phase', 'recordId', 'sort']::text[] <> '{}'::jsonb
