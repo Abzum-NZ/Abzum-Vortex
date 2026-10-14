@@ -2038,6 +2038,45 @@
         "relationship_hops": 0
       },
       {
+        "id": "qry_sd_case_comments",
+        "key": "service_desk_case_comments",
+        "label": "Comments of one case",
+        "record_type": "case_comment",
+        "inputs": [
+          {
+            "key": "case",
+            "label": "Case",
+            "required": true,
+            "type": "record_reference",
+            "record_types": [
+              "vortex.service_desk.cases:case"
+            ]
+          }
+        ],
+        "select": [
+          "created_at",
+          "created_by",
+          "body",
+          "customer_visible",
+          "case"
+        ],
+        "filter": {
+          "field": "case",
+          "operator": "equals",
+          "parameter": "case"
+        },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "created_at",
+            "direction": "descending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
         "id": "qry_sd_open_cases",
         "key": "service_desk_open_cases",
         "record_type": "case",
