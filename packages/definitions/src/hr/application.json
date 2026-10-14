@@ -77,7 +77,9 @@
           "vortex.hr.employee.create",
           "vortex.hr.employee.update",
           "application.hr.directory.person.read",
-          "vortex.hr.leave_request.read"
+          "vortex.hr.leave_request.read",
+          "vortex.hr.leave_request.create",
+          "vortex.hr.leave_request.update"
         ]
       }
     ],
@@ -86,7 +88,7 @@
         "id": "nav_hr_departments",
         "type": "page",
         "label": "Departments",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "hr_departments",
         "permission": "application.hr.open"
       },
@@ -94,7 +96,7 @@
         "id": "nav_hr_positions",
         "type": "page",
         "label": "Positions",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "hr_positions",
         "permission": "application.hr.open"
       },
@@ -102,7 +104,7 @@
         "id": "nav_hr_employees",
         "type": "page",
         "label": "Employees",
-        "icon":  "users",
+        "icon": "users",
         "page": "hr_employees",
         "permission": "application.hr.open"
       },
@@ -110,7 +112,7 @@
         "id": "nav_hr_leave_requests",
         "type": "page",
         "label": "Leave requests",
-        "icon":  "life-buoy",
+        "icon": "life-buoy",
         "page": "hr_leave_requests",
         "permission": "application.hr.open"
       }
@@ -232,6 +234,34 @@
         "record_type": "vortex.hr:leave_request",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_new_leave_request",
+        "key": "vortex.app.hr.hr_new_leave_request",
+        "record_type": "vortex.hr:leave_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_edit_leave_request",
+        "key": "vortex.app.hr.hr_edit_leave_request",
+        "record_type": "vortex.hr:leave_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_create_leave_request",
+        "key": "vortex.app.hr.hr_create_leave_request",
+        "record_type": "vortex.hr:leave_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_hr_update_leave_request",
+        "key": "vortex.app.hr.hr_update_leave_request",
+        "record_type": "vortex.hr:leave_request",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -241,17 +271,17 @@
         "id": "shell_hr",
         "key": "hr_shell",
         "name": "HR shell",
-        "presentation":  {
-            "sidebar":  {
-                "collapsible":  "icon",
-                "default_collapsed":  false
-            },
-            "top_bar":  {
-                "breadcrumbs":  true,
-                "organization_switcher":  true,
-                "application_switcher":  true,
-                "account_menu":  true
-            }
+        "presentation": {
+          "sidebar": {
+            "collapsible": "icon",
+            "default_collapsed": false
+          },
+          "top_bar": {
+            "breadcrumbs": true,
+            "organization_switcher": true,
+            "application_switcher": true,
+            "account_menu": true
+          }
         },
         "layout": {
           "placements": {
@@ -291,7 +321,14 @@
                 }
               },
               "slots": {
-                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
+                "header": {
+                  "placements": {},
+                  "order": {
+                    "desktop": [],
+                    "tablet": [],
+                    "phone": []
+                  }
+                },
                 "content": {
                   "placements": {
                     "shell_body": {
@@ -2509,11 +2546,46 @@
                   },
                   "slots": {},
                   "query": "vortex.hr:hr_leave_requests"
+                },
+                "hr_new_leave_request_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "New leave request"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.leave_request.create"
                 }
               },
               "order": {
                 "desktop": [
-                  "hr_leave_request_list"
+                  "hr_leave_request_list",
+                  "hr_new_leave_request_button"
                 ]
               }
             }
@@ -2577,6 +2649,19 @@
                           "properties": {
                             "field": {
                               "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.reason"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Reason"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
                               "field": "vortex.hr:leave_request.status"
                             },
                             "label": {
@@ -2601,11 +2686,562 @@
                     }
                   },
                   "slots": {}
+                },
+                "hr_edit_leave_request_button": {
+                  "block": {
+                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "label": {
+                      "kind": "text",
+                      "value": "Edit leave request"
+                    },
+                    "action_kind": {
+                      "kind": "choice",
+                      "value": "action"
+                    },
+                    "variant": {
+                      "kind": "choice",
+                      "value": "secondary"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {},
+                  "view_permission": "vortex.hr.leave_request.update"
                 }
               },
               "order": {
                 "desktop": [
-                  "hr_leave_request_detail"
+                  "hr_leave_request_detail",
+                  "hr_edit_leave_request_button"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_request_new",
+        "key": "hr_leave_request_new",
+        "name": "New leave request",
+        "type": "form",
+        "record_type": "vortex.hr:leave_request",
+        "permission": "application.hr.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_request_new_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "New leave request"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_leave_request_new_start_date": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_new_end_date": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.end_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "End date"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_new_reason": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.reason"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Reason"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_new_status": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Status"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_new_employee": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_employees"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:employee.employee_number"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_new_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Create leave request"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_leave_request_new_start_date",
+                          "hr_leave_request_new_end_date",
+                          "hr_leave_request_new_reason",
+                          "hr_leave_request_new_status",
+                          "hr_leave_request_new_employee",
+                          "hr_leave_request_new_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_request_new_form"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "page_hr_leave_request_edit",
+        "key": "hr_leave_request_edit",
+        "name": "Edit leave request",
+        "type": "form",
+        "record_type": "vortex.hr:leave_request",
+        "permission": "application.hr.open",
+        "composition": {
+          "shell_kind": "application",
+          "shell": "shell_hr",
+          "content": {
+            "slot_primary": {
+              "placements": {
+                "hr_leave_request_edit_form": {
+                  "block": {
+                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                    "release_version": "1.0.0"
+                  },
+                  "settings": {
+                    "title": {
+                      "kind": "text",
+                      "value": "Edit leave request"
+                    }
+                  },
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "content": {
+                      "placements": {
+                        "hr_leave_request_edit_start_date": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.start_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Start date"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_edit_end_date": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.end_date"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "End date"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_edit_reason": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.reason"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Reason"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_edit_status": {
+                          "block": {
+                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_request.status"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Status"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_edit_employee": {
+                          "block": {
+                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                            "release_version": "1.1.0"
+                          },
+                          "settings": {
+                            "name": {
+                              "kind": "text",
+                              "value": "employee"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Employee"
+                            },
+                            "required": {
+                              "kind": "boolean",
+                              "value": true
+                            },
+                            "choice_source": {
+                              "kind": "group",
+                              "properties": {
+                                "query": {
+                                  "kind": "query_reference",
+                                  "query": "vortex.hr:hr_employees"
+                                },
+                                "label_field": {
+                                  "kind": "field_reference",
+                                  "field": "vortex.hr:employee.employee_number"
+                                }
+                              }
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        },
+                        "hr_leave_request_edit_submit": {
+                          "block": {
+                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                            "release_version": "1.0.0"
+                          },
+                          "settings": {
+                            "label": {
+                              "kind": "text",
+                              "value": "Save leave request"
+                            },
+                            "action_kind": {
+                              "kind": "choice",
+                              "value": "submit"
+                            },
+                            "variant": {
+                              "kind": "choice",
+                              "value": "primary"
+                            }
+                          },
+                          "theme_overrides": {},
+                          "responsive": {
+                            "desktop": {
+                              "visible": true,
+                              "width": {
+                                "kind": "fill"
+                              },
+                              "height": {
+                                "kind": "content"
+                              }
+                            }
+                          },
+                          "slots": {}
+                        }
+                      },
+                      "order": {
+                        "desktop": [
+                          "hr_leave_request_edit_start_date",
+                          "hr_leave_request_edit_end_date",
+                          "hr_leave_request_edit_reason",
+                          "hr_leave_request_edit_status",
+                          "hr_leave_request_edit_employee",
+                          "hr_leave_request_edit_submit"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "order": {
+                "desktop": [
+                  "hr_leave_request_edit_form"
                 ]
               }
             }
@@ -3533,6 +4169,254 @@
         ],
         "outputs": {},
         "description": "Opens the clicked leave request's own detail page with the record identity the clicked row carries."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_new_leave_request",
+        "key": "hr_new_leave_request",
+        "labels": {
+          "name": "New leave request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_request_new"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the leave request creation form."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_edit_leave_request",
+        "key": "hr_edit_leave_request",
+        "labels": {
+          "name": "Edit leave request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ]
+          }
+        },
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_request_edit"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "description": "Opens the selected leave request edit form with its current record identity."
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_create_leave_request",
+        "key": "hr_create_leave_request",
+        "labels": {
+          "name": "Submit leave request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:leave_request"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_employees",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_requests"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "description": "Creates a Leave Request through the ordinary protected Record save path and returns to Leave requests.",
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "flow_hr_update_leave_request",
+        "key": "hr_update_leave_request",
+        "labels": {
+          "name": "Save leave request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.hr:leave_request"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "return_to_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "hr_leave_request_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": [
+              "vortex.hr:leave_request"
+            ],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        },
+        "description": "Updates the selected Leave Request through the ordinary protected Record save path and returns to its detail page.",
+        "variables": {},
+        "triggers": [],
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -3738,6 +4622,57 @@
           "record_id": {
             "kind": "caller",
             "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_new_leave_request",
+        "control": "hr_new_leave_request_button",
+        "event_id": "event_hr_new_leave_request",
+        "event": "action",
+        "flow": "flow_hr_new_leave_request",
+        "inputs": {}
+      },
+      {
+        "id": "binding_hr_edit_leave_request",
+        "control": "hr_edit_leave_request_button",
+        "event_id": "event_hr_edit_leave_request",
+        "event": "action",
+        "flow": "flow_hr_edit_leave_request",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_create_leave_request",
+        "control": "hr_leave_request_new_form",
+        "event_id": "event_hr_create_leave_request",
+        "event": "form_submit",
+        "flow": "flow_hr_create_leave_request",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_hr_update_leave_request",
+        "control": "hr_leave_request_edit_form",
+        "event_id": "event_hr_update_leave_request",
+        "event": "form_submit",
+        "flow": "flow_hr_update_leave_request",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
           }
         }
       }
