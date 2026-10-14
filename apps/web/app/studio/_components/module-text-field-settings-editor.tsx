@@ -20,7 +20,6 @@ import { reopenModuleTextFieldSettings, saveModuleTextFieldSettings } from "../m
 import { moduleSaveRefusal } from "./studio-refusal-messages";
 
 const inputClass = "w-full";
-const buttonClass = "";
 const selectionKey = (field: StudioModuleTextFieldDescriptor) => JSON.stringify([field.recordAlias, field.fieldAlias]);
 const descriptorsFor = (draft: StoredModuleDefinitionDraft): readonly StudioModuleTextFieldDescriptor[] =>
   draft.source.body.record_types.flatMap((record) => record.fields.flatMap((field) => field.type === "text" ? [{
@@ -308,8 +307,8 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
         <p id="module-text-max-length-help" className="text-sm">Use a whole number supported by the current Module schema. The saved default and format are preserved and validated with this setting.</p>
       </> : <p role="status">No authored text field is available.</p>}
       <div className="flex flex-wrap gap-2">
-        <Button className={buttonClass} type="submit" disabled={busy || locked || !dirty || selected === undefined}>Save text setting</Button>
-        <Button className={buttonClass} type="button" disabled={busy || locked} onClick={reopen}>Reopen saved Module draft</Button>
+        <Button type="submit" disabled={busy || locked || !dirty || selected === undefined}>Save text setting</Button>
+        <Button type="button" disabled={busy || locked} onClick={reopen}>Reopen saved Module draft</Button>
       </div>
       <p role="status" aria-live="polite">{dirty ? "Pending text setting changes. " : "The setting matches the saved Module draft. "}{message}</p>
       {validation !== null ? <ul className="space-y-2" aria-label="Module validation feedback" role="alert">

@@ -19,7 +19,26 @@ export type MinimumApplicationInputs = Readonly<{
 
 type MinimumApplicationSourceResult =
   | Readonly<{ kind: "valid"; source: ApplicationSourceDocument }>
-  | Readonly<{ kind: "invalid"; message: string }>;
+  | Readonly<{
+      kind: "invalid";
+      message: string;
+      fieldErrors: Readonly<Partial<Record<keyof MinimumApplicationInputs, string>>>;
+    }>;
+
+/** The input each authored source path is edited in. */
+const inputForPath = (path: readonly PropertyKey[]): keyof MinimumApplicationInputs | undefined => {
+  const [head, section, index, leaf] = path.map(String);
+  if (head === "key") return "key";
+  if (head !== "body") return undefined;
+  if (section === "name" || section === "description") return section;
+  if (section === "module_bindings" && index === "0")
+    return leaf === "module" ? "moduleKey" : leaf === "version" ? "moduleVersion" : undefined;
+  if (section === "permissions" && index === "0") return "key";
+  if (section === "roles" && index === "0")
+    return leaf === "name" ? "roleName" : leaf === "key" ? "roleKey" : "key";
+  if (section === "pages" && index === "0") return leaf === "name" ? "homeName" : "key";
+  return undefined;
+};
 
 /** Authored aliases are local identities; permanent root identities come only from Definition. */
 export const minimumApplicationSource = (
@@ -94,7 +113,19 @@ export const minimumApplicationSource = (
       },
     },
   });
-  if (!parsed.success)
-    return { kind: "invalid", message: "Check the application key, labels and Module version requirement." };
+  if (!parsed.success) {
+    const fieldErrors: Partial<Record<keyof MinimumApplicationInputs, string>> = {};
+    for (const issue of parsed.error.issues) {
+      const input = inputForPath(issue.path);
+      if (input !== undefined && fieldErrors[input] === undefined) fieldErrors[input] = issue.message;
+    }
+    return {
+      kind: "invalid",
+      message: Object.keys(fieldErrors).length === 0
+        ? "The application could not be built from these inputs."
+        : "Fix the highlighted fields.",
+      fieldErrors,
+    };
+  }
   return { kind: "valid", source: parsed.data };
 };
