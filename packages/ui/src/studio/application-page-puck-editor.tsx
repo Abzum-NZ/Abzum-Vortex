@@ -33,7 +33,10 @@ import {
   type StudioPlacementThemeOverrides,
   type StudioPlacementThemeResult,
 } from "./placement-theme-overrides";
-import { createVortexAuthoredPuckAdapter } from "./vortex-authored-puck-adapter";
+import {
+  AuthoredPuckSettingRefusal,
+  createVortexAuthoredPuckAdapter,
+} from "./vortex-authored-puck-adapter";
 
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
 const record = (value: unknown): Record<string, unknown> => {
@@ -265,7 +268,9 @@ function ApplicationPageSlotPuckEditor({
     } catch (error: unknown) {
       console.error("Failed to apply Puck page changes", error);
       setMessage(
-        "This page change could not be applied. The saved draft and current edits are preserved.",
+        error instanceof AuthoredPuckSettingRefusal
+          ? `This page change could not be applied. ${error.message}. The saved draft and current edits are preserved.`
+          : "This page change could not be applied. The saved draft and current edits are preserved.",
       );
     }
   };
