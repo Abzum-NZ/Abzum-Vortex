@@ -879,7 +879,7 @@ const plainSettingValue = (kind: SettingKind, value: SettingValue): StudioFlowSe
 
 const readOnlyNote = (kind: SettingKind | undefined, present: boolean): string =>
   kind === undefined
-    ? "This setting points at other parts of the application or holds structured data, so it is shown here but edited in the source."
+    ? "This setting points at other parts of the application or holds structured data. It is shown here for reference; this editor cannot change it yet."
     : present ? "This setting is a reference or a calculation, not a plain value, so it is shown here but not edited."
       : "This setting cannot be edited here.";
 

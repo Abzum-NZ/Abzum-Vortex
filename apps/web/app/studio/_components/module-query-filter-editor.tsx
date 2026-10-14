@@ -2,6 +2,7 @@
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
+import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -494,7 +495,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
     error: DefinitionValidationResult["errors"][number],
     query: ModuleQueryFilterQueryChoice | undefined,
   ): string => {
-    if (query === undefined) return snapshot === undefined ? "Module" : `Module ${snapshot.key}`;
+    if (query === undefined) return snapshot === undefined ? "Module" : `Module ${snapshot.name}`;
     const label = query.label ?? query.key;
     let fieldKey: string | undefined;
     for (const segment of error.location?.segments ?? []) {
@@ -542,11 +543,12 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
         <h1 className="text-2xl font-semibold">Module query filters</h1>
         <p>Author a local Module Query filter in the saved draft. Saving does not publish, install, or run the query.</p>
         {snapshot !== undefined && (
-          <dl className="break-all text-sm">
+          <><p className="font-medium">Module: {snapshot.name}</p>
+          <TechnicalDetails><dl className="break-all text-sm">
             <div><dt className="inline font-medium">Module key: </dt><dd className="inline">{snapshot.key}</dd></div>
             <div><dt className="inline font-medium">Draft revision: </dt><dd className="inline">{snapshot.draftRevision}</dd></div>
             <div><dt className="inline font-medium">Published revision: </dt><dd className="inline">{snapshot.publishedRevision ?? "None"}</dd></div>
-          </dl>
+          </dl></TechnicalDetails></>
         )}
       </header>
 
