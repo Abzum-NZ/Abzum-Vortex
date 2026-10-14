@@ -9,6 +9,7 @@ import {
   restoreApplicationDraftFromRelease,
 } from "../[organizationId]/[applicationRootId]/history/[releaseRevision]/restore/actions";
 import type {
+  StudioPersonLabel,
   StudioApplicationRestoreAvailable,
   StudioApplicationRestoreCommandResult,
   StudioApplicationRestoreFailure,
@@ -40,8 +41,13 @@ const loadIdentity = (load: StudioApplicationRestoreAvailable | null): string | 
     load.metadata.sourceFingerprint,
     load.metadata.publishedAt,
     load.metadata.publishedBy,
+    load.publishedBy,
     load.metadata.releaseNote,
   ]);
+
+const personText = (person: StudioPersonLabel): string => person.kind === "named"
+  ? person.name
+  : person.kind === "restricted" ? "Restricted" : "Not available right now";
 
 const failureMessage = (failure: FailureKind): string => failure === "conflict"
   ? "The saved draft or current release changed. Reload the current saved draft before confirming again."
@@ -90,31 +96,18 @@ export function ApplicationReleaseRestore({
   const loadRef = useRef<StudioApplicationRestoreAvailable | null>(initialAvailable(initialResult));
   const currentRoute = useRef(route);
   currentRoute.current = route;
-  const currentInitial = useRef(initialResult);
-  currentInitial.current = initialResult;
 
+  // The page keys this component by route and load content, so a new route or load remounts it with fresh state.
+  // A refresh that only yields a new object for the same content must not reset the user's confirmation.
   useEffect(() => {
     mounted.current = true;
-    lifetime.current += 1;
-    generation.current += 1;
-    pendingRef.current = null;
-    loadRef.current = initialAvailable(initialResult);
-    setLoad(initialAvailable(initialResult));
-    setFailure(initialResult.kind === "available" ? null : initialResult.kind);
-    setRequiresReload(initialResult.kind !== "available");
-    setConfirmation(false);
-    setPending(null);
-    setReceipt(null);
-    setMessage(initialResult.kind === "available"
-      ? "The selected release and saved draft are ready for review."
-      : failureMessage(initialResult.kind));
     return () => {
       mounted.current = false;
       lifetime.current += 1;
       generation.current += 1;
       pendingRef.current = null;
     };
-  }, [route, initialResult]);
+  }, []);
 
   const matchingLoad = load !== null &&
     load.selector.organizationId.toLowerCase() === selector.organizationId.toLowerCase() &&
@@ -129,15 +122,13 @@ export function ApplicationReleaseRestore({
       lifetime: lifetime.current,
       generation: ++generation.current,
       route,
-      initial: initialResult,
       load: loadIdentity(currentLoad),
     };
     const current = () => mounted.current && lifetime.current === token.lifetime &&
       generation.current === token.generation && currentRoute.current === token.route &&
-      currentInitial.current === token.initial && loadIdentity(loadRef.current) === token.load;
+      loadIdentity(loadRef.current) === token.load;
     const active = () => mounted.current && lifetime.current === token.lifetime &&
-      generation.current === token.generation && currentRoute.current === token.route &&
-      currentInitial.current === token.initial;
+      generation.current === token.generation && currentRoute.current === token.route;
     pendingRef.current = "reload";
     setPending("reload");
     setConfirmation(false);
@@ -181,15 +172,13 @@ export function ApplicationReleaseRestore({
       lifetime: lifetime.current,
       generation: ++generation.current,
       route,
-      initial: initialResult,
       load: loadIdentity(currentLoad),
     };
     const current = () => mounted.current && lifetime.current === token.lifetime &&
       generation.current === token.generation && currentRoute.current === token.route &&
-      currentInitial.current === token.initial && loadIdentity(loadRef.current) === token.load;
+      loadIdentity(loadRef.current) === token.load;
     const active = () => mounted.current && lifetime.current === token.lifetime &&
-      generation.current === token.generation && currentRoute.current === token.route &&
-      currentInitial.current === token.initial;
+      generation.current === token.generation && currentRoute.current === token.route;
     const command = {
       selector,
       expected: {
@@ -256,6 +245,7 @@ export function ApplicationReleaseRestore({
           <div><dt className="font-semibold">Selected version and revision</dt><dd>{displayedLoad.metadata.releaseVersion} · revision {displayedLoad.metadata.releaseRevision}</dd></div>
           <div><dt className="font-semibold">Release status</dt><dd>{displayedLoad.metadata.isCurrent ? "Current published release" : "Earlier published release"}</dd></div>
           <div><dt className="font-semibold">Published</dt><dd><time dateTime={displayedLoad.metadata.publishedAt}>{displayedLoad.metadata.publishedAt}</time></dd></div>
+          <div><dt className="font-semibold">Published by</dt><dd>{personText(displayedLoad.publishedBy)}</dd></div>
           <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{displayedLoad.metadata.releaseNote}</dd></div>
           <div><dt className="font-semibold">Current saved draft revision</dt><dd>{displayedLoad.snapshot.draftRevision}</dd></div>
           <div><dt className="font-semibold">Current publication anchor</dt><dd>{displayedLoad.snapshot.anchorReleaseRevision}</dd></div>
@@ -298,11 +288,12 @@ export function ApplicationReleaseRestore({
         <div><dt className="font-semibold">New saved draft revision</dt><dd>{receipt.draftRevision}</dd></div>
         <div><dt className="font-semibold">Restored from release revision</dt><dd>{receipt.targetReleaseRevision}</dd></div>
         <div><dt className="font-semibold">Publication anchor</dt><dd>{receipt.publicationAnchor}</dd></div>
-        <div><dt className="font-semibold">Restored by organization account</dt><dd className="break-all">{receipt.restoredBy}</dd></div>
+        <div><dt className="font-semibold">Restored by</dt><dd>{personText(receipt.restoredByLabel)}</dd></div>
         <div><dt className="font-semibold">Database operation time</dt><dd><time dateTime={receipt.restoredAt}>{receipt.restoredAt}</time></dd></div>
-        <div><dt className="font-semibold">Request correlation</dt><dd className="break-all">{receipt.correlationId}</dd></div>
       </dl>
       <TechnicalDetails><dl className="space-y-2">
+        <div><dt className="font-semibold">Restored by (account id)</dt><dd className="break-all">{receipt.restoredBy}</dd></div>
+        <div><dt className="font-semibold">Request correlation</dt><dd className="break-all">{receipt.correlationId}</dd></div>
         <div><dt className="font-semibold">Restored source fingerprint</dt><dd className="break-all"><code>{receipt.sourceFingerprint}</code></dd></div>
       </dl></TechnicalDetails>
       <p>Reload the saved draft before another restore. No release was published or installed.</p>

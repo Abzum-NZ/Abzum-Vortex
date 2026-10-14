@@ -44,7 +44,11 @@ const propertyLabels: Record<string, string> = {
   address: "address", theme: "theme", icon: "icon", presentation: "presentation",
 };
 
-export function PublicationSummary({ confirmation }: { confirmation: DefinitionPublicationConfirmation }) {
+export function PublicationSummary({ confirmation, componentLabels }: {
+  confirmation: DefinitionPublicationConfirmation;
+  componentLabels: readonly Readonly<{ componentId: string; label: string }>[];
+}) {
+  const names = new Map(componentLabels.map((entry) => [entry.componentId.toLowerCase(), entry.label]));
   const intro = confirmation.outcome === "initial_release"
     ? `This is the first release. It will be published as version ${confirmation.assignedVersion}.`
     : `${impactLabels[confirmation.impact]}: this will be published as version ${confirmation.assignedVersion}.`;
@@ -56,7 +60,7 @@ export function PublicationSummary({ confirmation }: { confirmation: DefinitionP
         <TableBody>
           {confirmation.reasons.map((reason, index) => <TableRow key={`${reason.code}:${reason.location.componentId ?? ""}:${index}`}>
             <TableCell>{kindLabels[reason.location.componentKind] ?? reason.location.componentKind} ({propertyLabels[reason.location.property] ?? reason.location.property})
-              {reason.location.componentId === undefined ? null : <code className="block break-all text-xs text-muted-foreground">{reason.location.componentId}</code>}
+              {reason.location.componentId === undefined ? null : <span className="block text-sm font-medium">{names.get(reason.location.componentId.toLowerCase()) ?? "Unnamed item"}</span>}
             </TableCell>
             <TableCell>{reasonLabels[reason.code]}</TableCell>
             <TableCell>{impactLabels[reason.impact]}</TableCell>
@@ -65,6 +69,9 @@ export function PublicationSummary({ confirmation }: { confirmation: DefinitionP
       </Table>}
       <TechnicalDetails>
         <dl className="space-y-1">
+          {confirmation.reasons.some((reason) => reason.location.componentId !== undefined) &&
+            <div><dt className="font-semibold">Changed item identities</dt><dd className="break-all">{confirmation.reasons.flatMap((reason) =>
+              reason.location.componentId === undefined ? [] : [reason.location.componentId]).join(", ")}</dd></div>}
           <div><dt className="font-semibold">Draft revision</dt><dd>{confirmation.expectedDraftRevision}</dd></div>
           <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{confirmation.sourceFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Content fingerprint</dt><dd className="break-all"><code>{confirmation.contentFingerprint}</code></dd></div>

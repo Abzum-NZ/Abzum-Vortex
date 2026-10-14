@@ -1,5 +1,7 @@
 import "server-only";
 
+import { componentLabelsOf } from "./publication-component-labels";
+
 import {
   moduleSourceDocumentSchema,
   translateDefinitionSchemaError,
@@ -620,6 +622,7 @@ export const createDefinitionPublicationService = (
     );
     return prepareDefinitionPublicationResultSchema.parse({
       confirmation: state.confirmation,
+      componentLabels: componentLabelsOf(state.compilationOutput.canonical),
     });
   },
 
