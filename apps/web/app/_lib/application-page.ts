@@ -31,6 +31,7 @@ import type {
   TableContinuationTarget,
   ApplicationPagePlacementReadResult,
   PageDataState,
+  PageLoadOptions,
 } from "./application-page/types";
 import { loadApplicationPageInternal } from "./application-page/load";
 
@@ -192,8 +193,18 @@ export const loadApplicationPage = (
   session: IdentitySession,
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
+  options?: PageLoadOptions,
 ): Promise<ApplicationPageResult> =>
-  loadApplicationPageInternal(session, address, parameters).then((result) =>
+  loadApplicationPageInternal(
+    session,
+    address,
+    parameters,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    options,
+  ).then((result) =>
     result.kind === "reload" ? { kind: "unavailable" } : result,
   );
 

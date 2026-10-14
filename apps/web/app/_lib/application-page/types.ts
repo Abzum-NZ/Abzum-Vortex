@@ -54,6 +54,11 @@ export type ApplicationPageModel = Readonly<{
   webMcpTools: readonly PageWebMcpTool[];
   /** Ready display data per data placement, by stable placement identity. */
   data: Readonly<Record<string, PageDataState>>;
+  /**
+   * Placements whose read was not awaited before the page was sent: their `data` entry is loading
+   * and the settled state follows on the same response, by stable placement identity.
+   */
+  streamedData?: Readonly<Record<string, Promise<PageDataState>>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Data placements to re-read after a write from each installed flow binding. */
@@ -103,6 +108,11 @@ export type ApplicationPageModel = Readonly<{
     installationRevision: number;
     releaseKey: string;
   }>;
+}>;
+
+export type PageLoadOptions = Readonly<{
+  /** Send the page before the placements that only show their own query's rows have read. */
+  streamPlacementReads?: boolean;
 }>;
 
 export type ApplicationPageResult =

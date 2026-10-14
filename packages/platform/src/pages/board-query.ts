@@ -335,7 +335,8 @@ export type BoardPlacementFailureCause =
 
 /**
  * One board placement read. A refusal names its cause for the server log; `unavailable` is a
- * temporary or structural failure, `refused` a settled permission or request refusal.
+ * temporary, structural or malformed-request failure (a scope mismatch or a malformed continuation
+ * is never a permission refusal), `refused` a settled permission refusal.
  */
 export type BoardPlacementProjection =
   | Readonly<{ outcome: "ready"; values: BoardPlacementValues }>
@@ -377,7 +378,7 @@ export const projectBoardPlacement = async (
       input.selection.applicationRootId === undefined ||
       !sameId(String(input.selection.applicationRootId), String(context.applicationRootId))
     )
-      return refused("board_selection_mismatch");
+      return unavailable("board_selection_mismatch");
     if (input.placement.availability === "unavailable")
       return refused("board_placement_unavailable");
     if (input.placement.queryId === undefined) return unavailable("board_query_not_bound");
@@ -411,7 +412,7 @@ export const projectBoardPlacement = async (
         }> = { kind: "initial" };
     if (input.continuation !== undefined) {
       const continuation = boardColumnContinuationRequestSchema.safeParse(input.continuation);
-      if (!continuation.success) return refused("board_continuation_invalid");
+      if (!continuation.success) return unavailable("board_continuation_invalid");
       pageRequest = {
         kind: "continue",
         selector: {

@@ -51,17 +51,17 @@ import {
   createImmutableDefinitionPublicationCatalogue,
   type ImmutableDefinitionPublicationCatalogueDefinition,
 } from "./read";
-import {
-  createDefinitionPublicationService,
-  type DefinitionPublicationCandidate,
-  type DefinitionPublicationReader,
-  type DefinitionPublicationRepository,
-  type DefinitionPublicationTransaction,
-  type DefinitionReleaseAppend,
-  type ModuleReleasePageCursor,
-  type ResolvableModuleReleasePage,
-  type ResolvableModuleRelease,
-} from "../definition-publication";
+import { createDefinitionPublicationService } from "../definition-publication";
+import type {
+  DefinitionPublicationCandidate,
+  DefinitionPublicationReader,
+  DefinitionPublicationRepository,
+  DefinitionPublicationTransaction,
+  DefinitionReleaseAppend,
+  ModuleReleasePageCursor,
+  ResolvableModuleReleasePage,
+  ResolvableModuleRelease,
+} from "../definition-publication-contracts";
 import { extractStoredSourceIdentityRequirements } from "../source-identities";
 import {
   DefinitionError,

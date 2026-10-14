@@ -1457,7 +1457,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             organizationId: request.organizationId,
             applicationRootId: request.applicationRootId,
             applicationReleaseRevision: request.expectedActiveReleaseRevision,
-          }).catch(() => null);
+          }).catch((error: unknown) => {
+            logRefusal("installation", "prior release read", "prior_release_unreadable", error);
+            return null;
+          });
 
       // 1. Align Access with the exact target release. This must commit before the switch: it
       //    advances the Access version that the fixed lifecycle operations pin to. An already
@@ -1652,7 +1655,9 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             verifiedSession.data,
             request,
             request.expectedActiveReleaseRevision,
-          ).catch(() => undefined);
+          ).catch((restoreError: unknown) => {
+            logRefusal("installation", "access restore", "access_restore_failed", restoreError);
+          });
         throw error;
       }
       return { ...switched, installedEvents: installedEvents(releaseSet, switched.installation) };

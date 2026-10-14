@@ -205,6 +205,7 @@ export const logPlacementFailure = (
   placementId: string,
   reason:
     | "query_not_bound"
+    | "summary_query_threw"
     | "subject_unavailable"
     | "detail_record_type_unavailable"
     | "detail_command_invalid"
@@ -224,6 +225,7 @@ export const logPlacementFailure = (
     | "summary_query_refused"
     | "summary_dataset_limit_exceeded"
     | "summary_result_invalid"
+    | "placement_read_failed"
     | BoardPlacementFailureCause
     | "board_payload_invalid",
   detail?: string,

@@ -11,6 +11,7 @@ import {
   installationRuntimeBundleSections,
   installationRuntimeBundleWriteCommandSchema,
   jsonValueSchema,
+  logRefusal,
   type InstallationRuntimeBundleIndex,
   type InstallationRuntimeBundleKey,
   type InstallationRuntimeBundlePart,
@@ -242,7 +243,8 @@ export const createInstallationRuntimeBundleRepository = (
       let parts: InstallationRuntimeBundlePart[];
       try {
         parts = prepareParts(command);
-      } catch {
+      } catch (error) {
+        logRefusal("runtime-bundles", "prepare parts", "INVALID_INSTALLATION_RUNTIME_BUNDLE", error);
         throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       }
       try {
