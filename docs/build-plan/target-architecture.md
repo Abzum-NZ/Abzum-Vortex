@@ -152,18 +152,16 @@ Tables are private. The application calls `security definer` functions with `set
 
 ## 6. Guardrails that keep it this way
 
-Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. A check fails the build only on new violations: existing ones are listed in `tooling/guard/baseline.json`, which may only shrink.
+Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. Any blocking finding fails the build; an intentional exception carries a reviewed `guard-allow` comment. `tooling/guard/config.ts` is the current list of rules.
 
 | Check | Fails when |
 |---|---|
 | Business names | `packages/platform`, `packages/ui` or `apps/web` (outside development setup) contain a shipped application key or name |
 | Versioned contracts | A new exported identifier ends in `V2`/`V3`/… or a file name ends in `-v2`/`-v3` |
-| File size | A source file exceeds 1,500 lines |
-| Unused code | knip reports an unused export, file or dependency |
+| File size (warning) | A source or canonical SQL file exceeds 1,500 lines |
 | Layering | An import breaks the dependency direction in section 2 |
-| Process artefacts | New identifiers or SQL objects named `*receipt*` (other than `command_receipts`), `*fingerprint*`, `*continuity*` or `*evidence*` |
-| Migrations | A changed `supabase/schemas` function and the latest migration that defines it differ, or a function body hard-codes a non-nil UUID |
-| Silent parse | `.safeParse(` whose failure branch returns `null`/`undefined`/`false` without logging, in `packages/platform` |
+| Migrations | A `supabase/schemas` function and the latest migration that defines it differ, a forward migration leaves a function without a canonical file, two migrations share a version, an SQL name exceeds 63 bytes, forward-migration DDL runs without an owner role, or a function body hard-codes a non-nil UUID |
+| Definitions | A shipped Module or Application fails the offline compile and validation that publication runs |
 
 ### Running app as the gate
 

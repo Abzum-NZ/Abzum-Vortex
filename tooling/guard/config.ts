@@ -4,11 +4,8 @@ export const paths = {
   ui: ["packages/ui/src/"],
   definitions: ["packages/definitions/src/"],
   web: ["apps/web/"],
-  developmentSetup: [
-    "apps/web/scripts/development-setup/",
-    "apps/web/scripts/demo-setup/",
-    "apps/web/app/_lib/development-setup/",
-  ],
+  // Scripts and development setup name shipped applications on purpose; they are not engines.
+  scripts: ["apps/web/scripts/", "apps/web/app/_lib/development-setup/"],
   canonical: "supabase/schemas/",
   migrations: "supabase/migrations/",
   applicationSources: "packages/definitions/src/",
@@ -21,6 +18,11 @@ export const packageAreas: Record<string, string> = {
   "@vortex/web": "web",
 };
 
+/**
+ * Every rule protects a rule in AGENTS.md or a defect that has happened. A pull request that
+ * changes what a rule covers updates or removes the rule in the same pull request. Past its
+ * review-by date the guard prints a notice; the lead then keeps, changes or removes the rule.
+ */
 export const guardRules = {
   "business-name": {
     tier: "blocking",
@@ -40,6 +42,13 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Canonical SQL functions that differ from their latest migration",
   },
+  "migration-orphan": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "Functions a forward migration leaves live without a canonical file (the generated baseline is exempt)",
+  },
   "sql-identifier-length": {
     tier: "blocking",
     owner: "lead",
@@ -51,13 +60,6 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     description: "Migration files that share a version; a fresh reset fails on the duplicate key",
-  },
-  "migration-orphan": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2026-11-15",
-    reviewNote: "Decide canonical coverage after the migration baseline review",
-    description: "Latest migrated SQL functions without canonical definitions",
   },
   "function-uuid": {
     tier: "blocking",
@@ -88,43 +90,8 @@ export const guardRules = {
     tier: "warning",
     owner: "lead",
     reviewBy: "2026-11-15",
-    reviewNote: "Reconsider after #2235",
-    description: "Source files over 1,500 lines",
-  },
-  "unused-file": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2026-11-15",
-    reviewNote: "Reconsider after #2235",
-    description: "Files reported unused by Knip",
-  },
-  "unused-export": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2026-11-15",
-    reviewNote: "Reconsider after #2235",
-    description: "Exports reported unused by Knip",
-  },
-  "unused-dependency": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2026-11-15",
-    reviewNote: "Reconsider after #2235",
-    description: "Dependencies reported unused by Knip",
-  },
-  "process-artifact": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2026-11-15",
-    reviewNote: "Expires when #2238 merges",
-    description: "Process-only receipt, fingerprint, continuity, or evidence artefacts",
-  },
-  "silent-parse": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2027-01-15",
-    description:
-      "Silent handling of a failed safeParse result, a catch, or a refusal branch that neither logs nor rethrows",
+    reviewNote: "Reconsider once #2235 splits the two remaining files",
+    description: "Source and canonical SQL files over 1,500 lines",
   },
   "definition-validation": {
     tier: "blocking",
@@ -145,36 +112,19 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "A guard-allow directive that matches no finding",
   },
-  "stale-baseline": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2027-01-15",
-    description: "A blocking baseline entry with no current finding",
-  },
-  "baseline-growth": {
-    tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
-    description: "A blocking baseline entry added outside the main tree",
-  },
 } as const;
 
 export const scannedRuleIds = new Set([
   "business-name",
   "layering",
   "migration-mismatch",
+  "migration-orphan",
   "migration-version-duplicate",
   "sql-identifier-length",
-  "migration-orphan",
   "function-uuid",
   "migration-owner-role",
   "versioned-export",
   "versioned-file",
   "file-size",
-  "unused-file",
-  "unused-export",
-  "unused-dependency",
-  "process-artifact",
-  "silent-parse",
   "definition-validation",
 ]);

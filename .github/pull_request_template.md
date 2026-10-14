@@ -16,10 +16,10 @@ Pages exercised on a freshly reset local database (sign-in, then each affected p
 - [ ] Organisation isolation, current permission checks, atomic writes and revision checks preserved.
 - [ ] Schema changes ship as a new migration; changed functions keep the `supabase/schemas` file identical to the migration.
 - [ ] `pnpm guard` and `pnpm typecheck` pass.
-- [ ] New blocking guard findings are fixed or have an occurrence-specific `guard-allow` reason the reviewer agrees with; warnings have been reviewed.
+- [ ] Blocking guard findings are fixed or have an occurrence-specific `guard-allow` reason the reviewer agrees with; a changed feature that a guard rule covers updates or removes that rule.
 
 ## Guardrail review
 
-Blocking checks cover business names, layering, migration parity/function UUIDs, and versioned exports/files. File size, unused files/exports/dependencies, process artefacts and silent-parse checks are warnings and do not block CI. Warnings are not part of the baseline; the baseline covers blocking findings only.
+The rules, their tiers and review-by dates live in `tooling/guard/config.ts`. Any blocking finding fails CI; file size is a warning.
 
 For an intentional exception, add `// guard-allow: <rule> <reason>` on the offending line or the line directly above it. SQL supports `-- guard-allow: <rule> <reason>`; block comments support `/* guard-allow: <rule> <reason> */`. Use a real rule id and explain the reason in at least 10 characters. Each directive covers one occurrence and is reported by the guard. Exceptions are suitable only when the finding is intentional and a direct fix is not appropriate; the reviewer must agree with the reason.
