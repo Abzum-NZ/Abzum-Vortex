@@ -251,7 +251,7 @@ transaction. Package-boundary checks reserve context initialization to the datab
 resolved human-request composition to Access.
 
 Vercel's serverless database client disables prepared statements for transaction pooling and keeps
-a per-instance pool whose size comes from `VORTEX_RUNTIME_DATABASE_POOL_SIZE`: default 5, a whole
+a per-instance pool whose size comes from `VORTEX_RUNTIME_DATABASE_POOL_SIZE`: default 5 (10 in the local environment), a whole
 number from 1 to 20, and any other value fails closed without opening a connection. A protected
 operation keeps all context setup and work inside one transaction; it never expects a later
 statement or request to receive the same physical connection. Testing and Production runtime and operational database connections require full

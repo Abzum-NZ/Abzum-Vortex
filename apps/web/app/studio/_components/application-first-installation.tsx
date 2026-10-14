@@ -2,6 +2,7 @@
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Button } from "@vortex/ui/components/button";
+import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
@@ -506,14 +507,16 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
       <section aria-label="Exact published release" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <dl className="space-y-2">
           <div><dt className="font-semibold">Application</dt><dd>{snapshot.selected.definitionKey}</dd></div>
-          <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
-          <div><dt className="font-semibold">Application root</dt><dd className="break-all">{snapshot.rootId}</dd></div>
           <div><dt className="font-semibold">Published version and revision</dt><dd>{snapshot.selected.releaseVersion} · revision {snapshot.selected.releaseRevision}</dd></div>
           <div><dt className="font-semibold">Validation contract</dt><dd>{snapshot.selected.validationContractVersion}</dd></div>
-          <div><dt className="font-semibold">Selected content fingerprint</dt><dd className="break-all"><code>{snapshot.selected.contentFingerprint}</code></dd></div>
-          <div><dt className="font-semibold">Selected resolution fingerprint</dt><dd className="break-all"><code>{snapshot.selected.resolutionFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Registration state</dt><dd>{snapshot.registrationState.replaceAll("_", " ")}</dd></div>
         </dl>
+        <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
+          <div><dt className="font-semibold">Application root</dt><dd className="break-all">{snapshot.rootId}</dd></div>
+          <div><dt className="font-semibold">Selected content fingerprint</dt><dd className="break-all"><code>{snapshot.selected.contentFingerprint}</code></dd></div>
+          <div><dt className="font-semibold">Selected resolution fingerprint</dt><dd className="break-all"><code>{snapshot.selected.resolutionFingerprint}</code></dd></div>
+        </dl></TechnicalDetails>
         <p>The selection is pinned to this exact published revision. The browser snapshot is a compare-and-swap claim, never installation authority.</p>
       </section>
 

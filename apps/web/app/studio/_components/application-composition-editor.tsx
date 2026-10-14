@@ -85,7 +85,12 @@ const parseScalarInputs = (inputs: ScalarInputs): StudioCompositionScalarSetting
   return settings;
 };
 const fieldClass = "w-full";
-const buttonClass = "";
+
+/** Stable option key of a move destination: its closed descriptor, not a serialised object. */
+const destinationOptionKey = (destination: { readonly kind: string; readonly parentAlias?: string; readonly slotKey?: string }): string =>
+  destination.kind === "child"
+    ? `child:${encodeURIComponent(destination.parentAlias ?? "")}:${encodeURIComponent(destination.slotKey ?? "")}`
+    : destination.kind;
 
 /** Controls edit the native source through the same command for pointer and keyboard. */
 export function ApplicationCompositionEditor(props: Props) {
@@ -185,10 +190,10 @@ function ApplicationCompositionPalette(props: Props) {
             </option>)}
           </NativeSelect></label>
         {choices.length === 0 && <p role="status">No supported releases match this search. Any selected release and its inputs are preserved.</p>}
-        <label className="block space-y-1"><span>Placement alias</span>
+        <label className="block space-y-1"><span>Placement name</span>
           <Input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
             value={inputs.alias} onChange={(event) => update({ ...inputs, alias: event.target.value })} /></label>
-        <p className="text-sm">Enter a unique authored alias beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
+        <p className="text-sm">Enter a unique name beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
         {chosen !== undefined && chosen.slots.length > 0 && <p className="text-sm">
           Declared slots start empty: {chosen.slots.map((slot) => slot.label).join(", ")}. Move existing placements into them separately.
         </p>}
@@ -228,8 +233,8 @@ function ApplicationCompositionPalette(props: Props) {
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" className={buttonClass} disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add component</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || !addInputsPending(inputs)}
+        <Button type="submit" disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add component</Button>
+        <Button type="button" variant="outline" size="sm" disabled={props.disabled || !addInputsPending(inputs)}
           onClick={() => update(emptyAddInputs())}>Discard add inputs</Button>
       </div>
     </form>
@@ -402,7 +407,7 @@ function PlacementCompositionEditor(props: Props) {
     if (!movePending.current || pending.current) return;
     // Option values identify a current closed descriptor, never a source path or
     // an array index. The pure command resolves it again against its snapshot.
-    const chosen = destinations.find((item) => JSON.stringify(item.destination) === destinationKey);
+    const chosen = destinations.find((item) => destinationOptionKey(item.destination) === destinationKey);
     if (chosen === undefined) {
       setMessage("This destination is no longer available. Your inputs are preserved.");
       return;
@@ -492,10 +497,10 @@ function PlacementCompositionEditor(props: Props) {
         event.preventDefault();
         move(event.key === "ArrowUp" ? -1 : 1);
       }}>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={selectedIndex <= 0} onClick={() => move(-1)}>Move earlier</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={selectedIndex < 0 || selectedIndex >= model.order.length - 1}
+        <Button type="button" variant="outline" size="sm" disabled={selectedIndex <= 0} onClick={() => move(-1)}>Move earlier</Button>
+        <Button type="button" variant="outline" size="sm" disabled={selectedIndex < 0 || selectedIndex >= model.order.length - 1}
           onClick={() => move(1)}>Move later</Button>
-        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!model.explicitOrder}
+        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={!model.explicitOrder}
           onClick={() => { if (!pending.current) void run({ kind: "order", breakpoint, order: null }); }}>Inherit wider order</Button>}
       </div>
     </fieldset>
@@ -531,9 +536,9 @@ function PlacementCompositionEditor(props: Props) {
       </fieldset>
       <p className="text-sm">{model.explicitLayout ? "This layout is explicitly authored." : "This layout inherits from the wider breakpoint."} Applying size records one local history entry; Enter submits this same form.</p>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply size</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard size inputs</Button>
-        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !model.explicitLayout}
+        <Button type="submit" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply size</Button>
+        <Button type="button" variant="outline" size="sm" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard size inputs</Button>
+        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !model.explicitLayout}
           onClick={() => { if (!pending.current) void run({ kind: "resize", breakpoint, layout: null }); }}>Inherit wider size</Button>}
       </div>
     </form>
@@ -544,18 +549,18 @@ function PlacementCompositionEditor(props: Props) {
           <NativeSelect className={fieldClass} required value={destinationKey} onChange={(event) => {
             if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
             const key = event.target.value;
-            if (key !== "" && !destinations.some((item) => JSON.stringify(item.destination) === key)) return;
+            if (key !== "" && !destinations.some((item) => destinationOptionKey(item.destination) === key)) return;
             movePending.current = key !== "";
             setDestinationKey(key);
             props.onPendingChange(movePending.current || pending.current || settingsPending.current || scalarPending.current);
             setMessage("");
           }}>
             <option value="">Choose a destination</option>
-            {destinations.map((item) => <option key={JSON.stringify(item.destination)}
-              value={JSON.stringify(item.destination)}>{item.label}</option>)}
+            {destinations.map((item) => <option key={destinationOptionKey(item.destination)}
+              value={destinationOptionKey(item.destination)}>{item.label}</option>)}
           </NativeSelect></label>
-        <Button type="submit" className={buttonClass} disabled={!moveDirty}>Move placement</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={!moveDirty} onClick={() => {
+        <Button type="submit" disabled={!moveDirty}>Move placement</Button>
+        <Button type="button" variant="outline" size="sm" disabled={!moveDirty} onClick={() => {
           if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
           movePending.current = false;
           setDestinationKey("");
@@ -570,7 +575,7 @@ function PlacementCompositionEditor(props: Props) {
     </form>
     <section className="space-y-2" aria-label="Remove presentation placement">
       <p className="text-sm">Remove only an unreferenced released presentation placement. Flows and other source fields are retained. Save remains separate.</p>
-      <Button type="button" variant="outline" size="sm" className={buttonClass}
+      <Button type="button" variant="outline" size="sm"
         disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || removalModel.kind !== "available"}
         onClick={() => { void run({ kind: "remove" }); }}>Remove placement</Button>
       {removalModel.kind === "blocked" && <p role="status">{removalModel.reason === "required_slot"
@@ -605,8 +610,8 @@ function PlacementCompositionEditor(props: Props) {
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" className={buttonClass} disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}>Apply text settings</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}
+        <Button type="submit" disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}>Apply text settings</Button>
+        <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}
           onClick={() => updateSettings(settingsModel.settings)}>Discard text inputs</Button>
       </div>
       <p className="text-sm">Omitted text stays omitted until supplied. Apply and keyboard submission use one guarded command. Discard changes only these inputs; Save remains explicit.</p>
@@ -666,9 +671,9 @@ function PlacementCompositionEditor(props: Props) {
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" className={buttonClass}
+        <Button type="submit"
           disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply declared settings</Button>
-        <Button type="button" variant="outline" size="sm" className={buttonClass}
+        <Button type="button" variant="outline" size="sm"
           disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}
           onClick={() => updateScalars(scalarInputsFor(scalarModel.settings))}>Discard scalar inputs</Button>
       </div>

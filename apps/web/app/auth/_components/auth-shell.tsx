@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { organizationChooserShell } from "@vortex/platform/server";
 import { Badge } from "@vortex/ui/components/badge";
 import {
   Card,
@@ -28,9 +29,9 @@ export function AuthShell({ eyebrow, title, description, children, footer }: Aut
               <Link
                 className="text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
                 href="/"
-                aria-label="Vortex home"
+                aria-label={`${organizationChooserShell.name} home`}
               >
-                Vortex
+                {organizationChooserShell.name}
               </Link>
               {eyebrow ? (
                 <Badge variant="secondary" className="text-[11px] font-medium tracking-wide uppercase">

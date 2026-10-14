@@ -269,6 +269,7 @@ export type DemoSeedFacts = Readonly<{
   identityAuthorityId: ReturnType<typeof identityAuthorityIdSchema.parse>;
   system: SystemContextFacts;
   stewardIdentityId: string;
+  stewardOrganizationAccountId: string;
   releases: ReadonlyMap<string, Readonly<{ rootId: string; releaseRevision: number }>>;
   tenantShortName: string;
   organizationShortName: string;
@@ -326,11 +327,13 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const calendarType = recordType(serviceDesk, "vortex.service_desk.sla", "business_calendar");
   const serviceLevelType = recordType(serviceDesk, "vortex.service_desk.sla", "service_level");
   const caseType = recordType(serviceDesk, "vortex.service_desk.cases", "case");
+  const activityType = recordType(crm, "vortex.crm.activities", "activity");
   const crmRootId = applicationRootIdSchema.parse(crmRelease.rootId);
   const serviceDeskRootId = applicationRootIdSchema.parse(serviceDeskRelease.rootId);
   const tasksRootId = applicationRootIdSchema.parse(tasksRelease.rootId);
   const ownerSession = nominatedOwnerSession(facts.stewardIdentityId);
   const saveRecord = createRecordSaveService({ identityAuthorityId: facts.identityAuthorityId });
+  const personOwner = { organizationAccountId: facts.stewardOrganizationAccountId };
   const readOwnerGroup = async (applicationRootId: string): Promise<string> => {
     const result = await createHumanOrganizationRequestService({
       identityAuthorityId: facts.identityAuthorityId,
@@ -438,6 +441,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
           recordId: companyIds[contact.companyIndex]!,
         },
         email_consent: index % 3 !== 2,
+        relationship_owner: personOwner,
       },
       crmOwnerGroupId,
     );
@@ -482,6 +486,19 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         ? {}
         : { unqualified_reason: lead.unqualifiedReason }),
       received_at: receivedAt.toISOString(),
+    });
+  }
+
+  for (const [index, contactId] of contactIds.slice(0, 4).entries()) {
+    const dueAt = new Date(referenceDate);
+    dueAt.setUTCDate(dueAt.getUTCDate() + index + 1);
+    await save(crmRootId, activityType, `activity/${index + 1}`, {
+      subject: `Follow up with contact ${index + 1}`,
+      activity_type: index % 2 === 0 ? "call" : "email",
+      due_at: dueAt.toISOString(),
+      completed: false,
+      regarding: { recordTypeId: contactType.recordTypeId, recordId: contactId },
+      owner: personOwner,
     });
   }
 
@@ -548,6 +565,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         },
         status: serviceCase.status,
         priority: serviceCase.priority,
+        owner: personOwner,
         service_level: { recordTypeId: serviceLevelType.recordTypeId, recordId: serviceLevelId },
         opened_at: openedAt.toISOString(),
         first_response_due_at: firstResponseDueAt.toISOString(),
@@ -597,6 +615,7 @@ const readFactsFromCurrentSetup = (argv: readonly string[]): DemoSeedFacts => {
       accessVersion: state.metadata.accessVersion,
     },
     stewardIdentityId: state.metadata.stewardIdentityId,
+    stewardOrganizationAccountId: state.metadata.stewardOrganizationAccountId,
     releases: new Map(Object.entries(state.releases)),
     tenantShortName: state.metadata.tenantShortName,
     organizationShortName: state.metadata.organizationShortName,

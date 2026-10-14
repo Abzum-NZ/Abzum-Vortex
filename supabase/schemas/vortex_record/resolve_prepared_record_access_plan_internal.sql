@@ -70,6 +70,15 @@ begin
       message = 'Prepared Record access plan is unavailable';
   end if;
 
+  -- The projection kind is private access-loader metadata. Runtime bundles
+  -- retain their existing prepared plan contract and mapping fingerprint.
+  resolved_plan := pg_catalog.jsonb_set(
+    resolved_plan, '{recordTypes}', coalesce((
+      select pg_catalog.jsonb_object_agg(meta.key, meta.value - 'isSystemProjection')
+      from pg_catalog.jsonb_each(resolved_plan -> 'recordTypes') as meta(key, value)
+    ), '{}'::jsonb)
+  );
+
   mapping_fingerprint_value := 'sha256:' || pg_catalog.encode(
     pg_catalog.sha256(pg_catalog.convert_to(
       (pg_catalog.jsonb_build_object(

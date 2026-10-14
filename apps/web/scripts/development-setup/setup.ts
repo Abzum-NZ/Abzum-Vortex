@@ -369,6 +369,7 @@ export const runDevelopmentSetup = async (
       identityAuthorityId,
       system,
       stewardIdentityId,
+      stewardOrganizationAccountId: provisioned.organizationAccountId,
       releases,
       tenantShortName: manifest.provisioning.tenant.shortName,
       organizationShortName: manifest.provisioning.rootOrganization.shortName,

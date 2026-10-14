@@ -26,6 +26,8 @@ declare
   returned_created_by uuid;
   ownership_mode text;
   owner_account_id uuid;
+  owner_group_id uuid;
+  owner_group_count integer;
   field_item jsonb;
   field_id_value uuid;
   column_value jsonb;
@@ -117,8 +119,19 @@ begin
   if ownership_mode = 'organization_account' then
     owner_account_id := actor_id_value;
   elsif ownership_mode = 'group' then
-    raise exception using errcode = '42501',
-      message = 'Named action creation owner is unavailable';
+    select pg_catalog.count(*), (pg_catalog.array_agg(group_id))[1]
+    into owner_group_count, owner_group_id
+    from vortex_access.list_current_record_owner_groups();
+    if owner_group_count <> 1 then
+      raise exception using errcode = '42501',
+        message = case when owner_group_count = 0
+          then 'Named action creation owner is unavailable'
+          else 'Named action creation owner is ambiguous' end;
+    end if;
+    if not vortex_access.lock_current_record_owner_group_internal(owner_group_id) then
+      raise exception using errcode = '42501',
+        message = 'Named action creation owner is unavailable';
+    end if;
   end if;
 
   if exists (
@@ -198,8 +211,8 @@ begin
        record_id, application_root_id, definition_revision,
        owner_organisation_account_id, owner_group_id, lifecycle_state,
        concurrency_number, created_at, created_by, updated_at, updated_by%s
-     ) values ($1, $2, $3, $4, $5, $6, $7, $8, null, ''active'', 1,
-       pg_catalog.statement_timestamp(), $9, pg_catalog.statement_timestamp(), $9%s)
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, ''active'', 1,
+       pg_catalog.statement_timestamp(), $10, pg_catalog.statement_timestamp(), $10%s)
      returning record_id, concurrency_number, definition_revision, organisation_id, module_root_id,
        record_type_id, storage_contract_id, application_root_id, created_by',
     meta ->> 'table',
@@ -214,7 +227,7 @@ begin
     returned_storage_contract_id, returned_application_root_id, returned_created_by
   using organization_id_value, module_root_id_value, p_record_type_id,
     storage_contract_id_value, record_id_value, app_scope,
-    module_release_revision_value, owner_account_id, actor_id_value;
+    module_release_revision_value, owner_account_id, owner_group_id, actor_id_value;
   get diagnostics inserted_rows = row_count;
   if inserted_rows <> 1 or returned_record_id is null
     or returned_record_id = nil_uuid or returned_record_id is distinct from record_id_value
