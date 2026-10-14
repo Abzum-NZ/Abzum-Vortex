@@ -726,6 +726,9 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                     code: issue.code,
                     ...(issue.fieldId === undefined ? {} : { fieldId: issue.fieldId }),
                     path: issue.path,
+                    ...("requirement" in issue && issue.requirement !== undefined
+                      ? { requirement: issue.requirement }
+                      : {}),
                   })),
                 prepared.readableFieldIds,
                 command.data.operation,
