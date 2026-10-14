@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const contractPath = path.join(repositoryRoot, "packages/platform/src/access/identity-access.ts");
+const contractPath = path.join(repositoryRoot, "packages/platform/src/access/organization-runtime-settings-schema.ts");
 const initialMigrationPath = path.join(
   repositoryRoot,
   "supabase/migrations/20261014000400_baseline_system_data_and_storage.sql",
@@ -102,7 +102,7 @@ function replaceSeedBlock(migration, generatedSeed) {
 if (process.argv.length !== 3 || process.argv[2] !== "--check") {
   process.stderr.write(
     "Usage: node tooling/generate-organization-runtime-settings-reference-seed.mjs --check\n" +
-      "The versioned contract arrays in packages/platform/src/access/identity-access.ts are the source of the initial seed. " +
+      "The versioned contract arrays in packages/platform/src/access/organization-runtime-settings-schema.ts are the source of the initial seed. " +
       "This command is read-only; later list versions require a forward migration.\n",
   );
   process.exitCode = 2;

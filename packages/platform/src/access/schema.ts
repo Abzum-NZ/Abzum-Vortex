@@ -1,5 +1,6 @@
 export * from "./application-access-coordination";
 export * from "./identity-access";
+export * from "./organization-runtime-settings-schema";
 export * from "./organization-access-catalogue";
 export * from "./organization-access-administration";
 export * from "./organization-access-decision";

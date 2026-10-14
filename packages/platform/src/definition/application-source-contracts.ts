@@ -20,8 +20,8 @@ import {
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,
 } from "./definition-source-common";
+import { actionInputSchema } from "./module-source-action-inputs";
 import {
-  actionInputSchema,
   moduleSourcePermissionRecordScopeSchema,
   sourcePermissionFieldPolicySchema,
 } from "./module-source-contracts";
