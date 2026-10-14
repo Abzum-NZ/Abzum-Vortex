@@ -18,6 +18,7 @@ import type {
 import {
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createDatabaseApplicationReleaseAdoptionTargetService,
+  createPreparedInstallationRuntimeSourceReader,
   resolveModuleContributions,
   type ApplicationReleaseAdoptionTarget,
 } from "@vortex/platform/server";
@@ -95,6 +96,7 @@ const coordinator = () =>
     // requires `custom_code.manage` and a recent sign-in.
     containsCustomComponents: releaseSetContainsCustomComponents,
     humanDefinitionAccess: humanDefinitionAccess(),
+    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(installedReleaseCatalogue),
   });
 
 /**

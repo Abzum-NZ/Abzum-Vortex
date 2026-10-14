@@ -10,7 +10,6 @@ import {
 } from "../access/index";
 import {
   canonicalJson,
-  moduleRootIdSchema,
   sameId,
   type IdentitySession,
   type ModuleInstallationBindingEvidence,
@@ -54,7 +53,7 @@ import {
   type FirstInstallRegistrationState,
   type FirstInstallSelector,
 } from "./installation-first-install";
-import { createDatabasePreparedInstallationRuntimeSourceService } from "./prepared-installation-runtime-source";
+import { createPreparedInstallationRuntimeSourceReader } from "./prepared-installation-runtime-source";
 
 type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRoleTemplatesForHumanRequest>;
 
@@ -355,18 +354,7 @@ export const createFirstInstallCoordinator = (
       expectedReleaseSet,
       (prepared) => { preparedRegistration = prepared; },
     ),
-    preparedRuntimeSource: (transaction, input) => {
-      const moduleBindings = input.moduleBindings.map((binding) => {
-        const moduleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);
-        if (!moduleRootId.success)
-          throw new DefinitionError("APPLICATION_INSTALLATION_FAILED");
-        return { ...binding, moduleRootId: moduleRootId.data };
-      });
-      return createDatabasePreparedInstallationRuntimeSourceService(
-        environment.catalogue,
-        transaction,
-      ).read({ ...input, moduleBindings });
-    },
+    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(environment.catalogue),
   });
 };
 

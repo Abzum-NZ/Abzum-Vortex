@@ -10,12 +10,11 @@ import {
 } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
-  moduleRootIdSchema,
   type IdentityAuthorityId,
 } from "@vortex/platform/schema";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
-  createDatabasePreparedInstallationRuntimeSourceService,
+  createPreparedInstallationRuntimeSourceReader,
   resolveModuleContributions,
 } from "@vortex/platform/server";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
@@ -68,18 +67,7 @@ const coordinatorDependencies = (
   resolveModuleContributions,
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
   containsCustomComponents: releaseSetContainsCustomComponents,
-  preparedRuntimeSource: (transaction, input) => {
-    const moduleBindings = input.moduleBindings.map((binding) => {
-      const parsedModuleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);
-      if (!parsedModuleRootId.success)
-        throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
-      return { ...binding, moduleRootId: parsedModuleRootId.data };
-    });
-    return createDatabasePreparedInstallationRuntimeSourceService(
-      developmentPublicationCatalogue,
-      transaction,
-    ).read({ ...input, moduleBindings });
-  },
+  preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(developmentPublicationCatalogue),
 });
 
 const release = (facts: InstallFacts, key: string): PublishedRelease => {
