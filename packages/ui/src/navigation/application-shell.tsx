@@ -122,7 +122,7 @@ function Breadcrumbs({
   const applicationName = runtime?.applicationName ?? shellName;
   const pageName = runtime?.pageName ?? shellName;
   return (
-    <Breadcrumb className="min-w-0 flex-1 sm:flex-none">
+    <Breadcrumb className="min-w-0 max-sm:flex-1">
       <BreadcrumbList className="flex-nowrap">
         <BreadcrumbItem className="min-w-0 max-sm:hidden">
           {runtime === undefined ? (
@@ -276,7 +276,7 @@ export function ApplicationShellRoot({
           {presentation.topBar.breadcrumbs ? (
             <Breadcrumbs shellName={shell.name} runtime={runtime} />
           ) : null}
-          <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+          <div className="ms-auto flex min-w-0 items-center justify-end gap-1 max-sm:flex-wrap">
             {presentation.topBar.organizationSwitcher ? (
               <OrganizationSwitcher runtime={runtime} />
             ) : null}
