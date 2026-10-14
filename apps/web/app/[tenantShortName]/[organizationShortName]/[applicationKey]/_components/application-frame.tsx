@@ -151,6 +151,13 @@ export function ApplicationFrame({
     },
     [resolvePageHref, router],
   );
+  // Intent to open a menu page (the pointer rests on its link or focus reaches it) asks the router
+  // to prefetch that address, so the click does not start from nothing. Links never approached
+  // are never fetched; the page's data is still read on the server for the click's own request.
+  const prefetchPage = useCallback(
+    (pageId: string) => router.prefetch(resolvePageHref(pageId)),
+    [resolvePageHref, router],
+  );
 
   // The header search follows the address. The layout searched for the address it was rendered
   // for; a later query change without a new document searches again through the server.
@@ -281,6 +288,7 @@ export function ApplicationFrame({
           {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
           resolvePageHref={resolvePageHref}
           onNavigatePage={navigateToPage}
+          onPrefetchPage={prefetchPage}
           {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}
           outlet={{
             location: frame.outlet,

@@ -18,7 +18,6 @@ import {
   InlineEditCell,
   PaginationControl,
   RecordsEmptyState,
-  RecordsLoadingState,
   RowActionsMenu,
   SearchControl,
   SelectAllControl,
@@ -27,6 +26,7 @@ import {
 } from "./controls";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
+import { TableLoadingState, useLoadingReveal } from "./table-loading";
 import type {
   DisplayCellValue,
   DisplayColumn,
@@ -230,8 +230,16 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   // The table's own loading and no-rows presentations keep the state identity, role and accessible
   // name the standard state container gives them, and the container still owns the refused, error
   // and unavailable states of this placement.
+  const revealed = useLoadingReveal(state.status === "loading");
   if (state.status === "loading")
-    return <RecordsLoadingState accessibleName={accessibleName} />;
+    return (
+      <TableLoadingState
+        title={title}
+        accessibleName={accessibleName}
+        events={events}
+        contract={contract}
+      />
+    );
   if (state.status === "empty")
     return (
       <>
@@ -250,7 +258,11 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       {...(errorMessage === undefined ? {} : { errorMessage })}
     >
       {values === undefined ? null : (
-        <div data-vortex-display="table" data-vortex-placement-id={placementId}>
+        <div
+          data-vortex-display="table"
+          data-vortex-placement-id={placementId}
+          {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
+        >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
           {!showSearch && !showFilters ? null : (
             <div className="mb-2 flex flex-wrap items-start gap-4">
