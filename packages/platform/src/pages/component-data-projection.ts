@@ -132,6 +132,8 @@ const projectCell = (
   // A formatted-text value is shown as its document, never flattened or dropped.
   const document = richTextDocumentSchema.safeParse(value);
   if (document.success) return { kind: "rich_text", document: document.data };
+  if (typeof value === "object" && !Array.isArray(value) && "blocks" in value)
+    console.error(`[page] formatted text value is not a valid document: RICH_TEXT_DOCUMENT_INVALID issues=${document.error.issues.length}`);
   // A money value is its exact amount with its currency code.
   if (
     typeof value === "object" &&
