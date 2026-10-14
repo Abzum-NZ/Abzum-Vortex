@@ -1300,6 +1300,24 @@ const summaryText = `${summary.join("\n")}\n`;
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryText);
 else console.log(summaryText);
 
+// Every shipped definition must compile offline as publication compiles it; it prints its own findings.
+const definitionValidation = spawnSync(
+  process.execPath,
+  [
+    "--conditions=react-server",
+    "--import",
+    "tsx",
+    "scripts/definition-validation/validate-definitions.ts",
+  ],
+  { cwd: resolve(root, "apps/web"), stdio: "inherit" },
+);
+if (definitionValidation.status !== 0) {
+  console.error(
+    `blocking definition-validation: the definition validation step failed (status ${definitionValidation.status ?? "none"}${definitionValidation.error ? `, ${definitionValidation.error.message}` : ""}).`,
+  );
+  process.exitCode = 1;
+}
+
 if (process.argv.includes("--refresh-from-main")) {
   const diff = spawnSync(
     "git",
@@ -1339,6 +1357,6 @@ if (process.argv.includes("--refresh-from-main")) {
   );
 } else if (blocking.length || growth.length) {
   process.exitCode = 1;
-} else {
+} else if (definitionValidation.status === 0) {
   console.log(`Guard passed (${baseline.length} blocking baseline entries).`);
 }

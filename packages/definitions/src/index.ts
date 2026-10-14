@@ -10,3 +10,4 @@ export * from "./hr";
 export * from "./messages-preferences";
 export * from "./tasks";
 export * from "./platform-permissions";
+export * from "./shipped-sources";

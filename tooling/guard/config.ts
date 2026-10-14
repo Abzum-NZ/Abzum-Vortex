@@ -126,6 +126,13 @@ export const guardRules = {
     description:
       "Silent handling of a failed safeParse result, a catch, or a refusal branch that neither logs nor rethrows",
   },
+  "definition-validation": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "A shipped definition source that publication would refuse (offline compile and validation)",
+  },
   "invalid-guard-allow": {
     tier: "blocking",
     owner: "lead",
