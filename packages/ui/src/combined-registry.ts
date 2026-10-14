@@ -5,6 +5,7 @@ import {
 } from "./registry";
 import type { PlatformBlockRelease } from "@vortex/platform/schema";
 import { DISPLAY_COMPONENT_REGISTRATIONS } from "./display/registrations";
+import { CHART_COMPONENT_REGISTRATIONS } from "./display/chart";
 import { ATTACHMENT_COMPONENT_REGISTRATIONS } from "./search-attachment-blocks";
 import { CONTROL_COMPONENT_REGISTRATIONS } from "./controls/registrations";
 import { LAUNCHER_COMPONENT_REGISTRATIONS } from "./launcher/registrations";
@@ -16,6 +17,7 @@ export const ALL_PLATFORM_COMPONENT_REGISTRATIONS: readonly PlatformComponentReg
   Object.freeze([
     ...DISPLAY_COMPONENT_REGISTRATIONS,
     ...ATTACHMENT_COMPONENT_REGISTRATIONS,
+    ...CHART_COMPONENT_REGISTRATIONS,
     ...CONTROL_COMPONENT_REGISTRATIONS,
     ...LAUNCHER_COMPONENT_REGISTRATIONS,
     ...LAYOUT_COMPONENT_REGISTRATIONS,

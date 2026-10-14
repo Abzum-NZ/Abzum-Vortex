@@ -1,4 +1,5 @@
 // Per-Block Payload & Event Contracts
+export type { ChartPayload } from "./chart";
 export {
   DISPLAY_EVENT_NAMES,
   parseBoardPayload,
