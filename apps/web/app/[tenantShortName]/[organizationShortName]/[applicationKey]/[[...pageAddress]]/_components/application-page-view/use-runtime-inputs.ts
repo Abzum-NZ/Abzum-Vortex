@@ -187,7 +187,7 @@ export function useRuntimeInputs({
             events[kind] = (event: DisplaySemanticEvent) => {
               const binding = bindingFor(bindings, event);
               if (binding !== undefined && !busy)
-                void runBinding(
+                return runBinding(
                   placementId,
                   binding,
                   suppliedValues(event),

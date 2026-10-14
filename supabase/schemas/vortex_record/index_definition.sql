@@ -21,7 +21,31 @@ CREATE OR REPLACE FUNCTION vortex_record.index_definition(p_purpose text, p_tabl
     'predicate', case when p_purpose = 'uniqueness'
       then 'lifecycle_state in (active, soft_deleted, removal_pending)'
       else 'lifecycle_state = active' end
-  )
+  ) || case when p_purpose = 'uniqueness' and exists (
+    select 1
+    from vortex_record.storage_catalogue as storage
+    join vortex_record.field_storage_mappings as mapping
+      on mapping.storage_contract_id = storage.storage_contract_id
+    where storage.physical_table_token = p_table_token
+      and mapping.physical_column_token = p_column_token
+      and mapping.state = 'active'
+      and coalesce((mapping.field_definition ->> 'sortable')::boolean, false)
+  ) then pg_catalog.jsonb_build_object(
+    'orderedIndex', pg_catalog.jsonb_build_object(
+      'indexToken', 'ix_' || pg_catalog.substr(p_column_token, 3),
+      'columns', pg_catalog.string_to_array(p_scope_index_columns, ', ') || array[
+        p_column_token || case when exists (
+          select 1 from pg_catalog.pg_attribute as attribute
+          where attribute.attrelid = pg_catalog.to_regclass(
+            pg_catalog.format('record_data.%I', p_table_token)
+          ) and attribute.attname = p_column_token
+            and attribute.atttypid = 'pg_catalog.text'::pg_catalog.regtype
+        ) then ' COLLATE "C"' else '' end || ' NULLS FIRST',
+        'record_id'
+      ],
+      'predicate', 'lifecycle_state = active'
+    )
+  ) else '{}'::jsonb end
 $$;
 alter function vortex_record.index_definition(text,text,text,text) owner to vortex_owner;
 

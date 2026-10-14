@@ -1924,6 +1924,7 @@
                                                                                                                                                                                                      },
                                                                                                                                                                         "input_crm_contact_create_last_name": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:contact.last_name"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                         "input_crm_contact_create_email": {"block":{"block_id":"9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64","release_version":"1.0.0"},"settings":{"field":{"kind":"field_reference","field":"vortex.crm.people:contact.email"}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                   "input_crm_contact_create_company": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.3.0"},"settings":{"name":{"kind":"text","value":"company"},"label":{"kind":"text","value":"Company"},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.crm.organisations:crm_companies"},"label_field":{"kind":"field_reference","field":"vortex.crm.organisations:company.name"}}},"initial_value":{"kind":"group","properties":{"page_parameter":{"kind":"text","value":"company"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                         "submit_crm_contact_create":  {
                                                                                                                                                                                                           "block":  {
                                                                                                                                                                                                                         "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1963,6 +1964,7 @@
                                                                                                                                                                                    "input_crm_contact_create",
                                                                                                                                                                                    "input_crm_contact_create_last_name",
                                                                                                                                                                                    "input_crm_contact_create_email",
+                                                                                                                                                                                   "input_crm_contact_create_company",
                                                                                                                                                                                    "submit_crm_contact_create"
                                                                                                                                                                                ]
                                                                                                                                                                }
@@ -2815,6 +2817,7 @@
                                                                                                               },
         "attachments_crm_company": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Logo"}, "field": {"kind": "field_reference", "field": "vortex.crm.organisations:company.logo"}, "empty_message": {"kind": "text", "value": "No logo is attached to this company yet."}, "refused_message": {"kind": "text", "value": "Attachments on this company are not available to your account."}, "error_message": {"kind": "text", "value": "Attachments on this company could not be read."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
         "contacts_crm_company": {"block": {"block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff", "release_version": "1.3.0"}, "settings": {"title": {"kind": "text", "value": "Contacts"}, "empty_message": {"kind": "text", "value": "This company has no contacts yet."}, "columns": {"kind": "list", "items": [{"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.crm.people:contact.contact_number"}, "label": {"kind": "text", "value": "Contact number"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.crm.people:contact.full_name"}, "label": {"kind": "text", "value": "Full name"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.crm.people:contact.email"}, "label": {"kind": "text", "value": "Email"}}}]}, "query_parameters": {"kind": "list", "items": [{"kind": "group", "properties": {"input": {"kind": "text", "value": "company"}, "source": {"kind": "choice", "value": "page"}, "page_parameter": {"kind": "text", "value": "record_id"}}}]}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}, "query": "vortex.crm.people:crm_company_contacts"},
+        "button_new_contact_company": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.contact.create", "settings": {"label": {"kind": "text", "value": "New contact"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
         "button_edit_company": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.crm.company.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
@@ -2822,6 +2825,7 @@
                                                                             "detail_crm_company",
                                                                             "attachments_crm_company",
                                                                             "contacts_crm_company",
+                                                                            "button_new_contact_company",
                                                                             "form_crm_company_merge_frame",
                                                                             "button_edit_company"
                                                                         ]
@@ -4667,6 +4671,13 @@
       "personal_or_sensitive_values_allowed": false
     },
     {
+      "id": "event_new_contact_company",
+      "key": "vortex.app.events.vortex_app_crm_new_contact_company",
+      "record_type": "vortex.crm.organisations:company",
+      "carries": [],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
       "id": "event_edit_company",
       "key": "vortex.app.events.vortex_app_crm_edit_company",
       "record_type": "vortex.crm.organisations:company",
@@ -5988,6 +5999,51 @@
     },
     {
       "contractVersion": "1.0.0",
+      "id": "navigate_new_contact_for_company",
+      "key": "navigate_new_contact_for_company",
+      "description": "Opens the contact creation form with the current company selected.",
+      "labels": {
+        "name": "New contact"
+      },
+      "execution": "interactive",
+      "runAs": {
+        "kind": "initiator"
+      },
+      "inputs": {
+        "record_id": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": [
+            "vortex.crm.organisations:company"
+          ]
+        }
+      },
+      "tasks": [
+        {
+          "id": "open_page",
+          "type": "interface.navigate",
+          "version": "1.0.0",
+          "properties": {
+            "page": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "crm_contact_create"
+              }
+            },
+            "parameters": {
+              "kind": "map",
+              "entries": {
+                "company": "{{ inputs.record_id }}"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {}
+    },
+    {
+      "contractVersion": "1.0.0",
       "id": "navigate_edit_company",
       "key": "navigate_edit_company",
       "description": "Opens the current company in the edit form.",
@@ -6691,6 +6747,19 @@
       "event": "action",
       "flow": "navigate_new_lead",
       "inputs": {}
+    },
+    {
+      "id": "binding_new_contact_company",
+      "control": "button_new_contact_company",
+      "event_id": "event_new_contact_company",
+      "event": "action",
+      "flow": "navigate_new_contact_for_company",
+      "inputs": {
+        "record_id": {
+          "kind": "caller",
+          "name": "record_id"
+        }
+      }
     },
     {
       "id": "binding_edit_company",

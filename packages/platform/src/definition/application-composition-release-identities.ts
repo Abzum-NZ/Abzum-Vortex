@@ -32,6 +32,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
   CHOICE_INPUT_BLOCK_RELEASE: { blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87", key: "platform.form.choice_input", releaseVersion: "1.0.0" },
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0: { blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87", key: "platform.form.choice_input", releaseVersion: "1.1.0" },
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0: { blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87", key: "platform.form.choice_input", releaseVersion: "1.2.0" },
+  CHOICE_INPUT_BLOCK_RELEASE_1_3_0: { blockId: "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87", key: "platform.form.choice_input", releaseVersion: "1.3.0" },
   VALIDATION_MESSAGE_BLOCK_RELEASE: { blockId: "78acc234-87bc-4e8f-986f-4857369b41f8", key: "platform.form.validation_message", releaseVersion: "1.0.0" },
   BUTTON_BLOCK_RELEASE: { blockId: "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", key: "platform.action.button", releaseVersion: "1.0.0" },
   TABS_BLOCK_RELEASE: { blockId: "a3b7065b-47ef-4c92-93d1-59300f8b059c", key: "platform.layout.tabs", releaseVersion: "1.0.0" },

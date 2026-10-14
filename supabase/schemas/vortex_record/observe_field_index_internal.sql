@@ -12,7 +12,7 @@ declare
   expected_attnum smallint;
   text_column boolean;
 begin
-  if p_purpose is null or p_purpose not in ('uniqueness', 'performance')
+  if p_purpose is null or p_purpose not in ('uniqueness', 'uniqueness_base', 'performance')
     or p_table_token is null or p_table_token !~ '^rt_[a-f0-9]{32}$'
     or p_column_token is null or p_column_token !~ '^f_[a-f0-9]{32}$' then
     return 'invalid';
@@ -37,7 +37,7 @@ begin
   index_relation := pg_catalog.to_regclass(
     pg_catalog.format(
       'record_data.%I',
-      case p_purpose when 'uniqueness' then 'ux_' else 'ix_' end
+      case when p_purpose = 'performance' then 'ix_' else 'ux_' end
         || pg_catalog.substr(p_column_token, 3)
     )
   );
@@ -68,10 +68,10 @@ begin
     end if;
   end loop;
 
-  if (p_purpose = 'uniqueness') <> index_row.indisunique then
+  if (p_purpose <> 'performance') <> index_row.indisunique then
     return 'invalid';
   end if;
-  if p_purpose = 'uniqueness' then
+  if p_purpose <> 'performance' then
     if index_row.indpred is null then
       return 'invalid';
     end if;
@@ -91,6 +91,21 @@ begin
         is distinct from 'pg_catalog."C"'::pg_catalog.regcollation) then
       return 'invalid';
     end if;
+  end if;
+
+  if p_purpose = 'uniqueness' and exists (
+    select 1
+    from vortex_record.storage_catalogue as storage
+    join vortex_record.field_storage_mappings as mapping
+      on mapping.storage_contract_id = storage.storage_contract_id
+    where storage.physical_table_token = p_table_token
+      and mapping.physical_column_token = p_column_token
+      and mapping.state = 'active'
+      and coalesce((mapping.field_definition ->> 'sortable')::boolean, false)
+  ) then
+    return vortex_record.observe_field_index_internal(
+      'performance', p_table_token, p_scope_index_columns, p_column_token
+    );
   end if;
 
   return 'present';

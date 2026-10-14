@@ -11,7 +11,8 @@
     "demo:seed": "node --conditions=react-server --import tsx scripts/demo-setup/seed-demo-records.ts",
     "demo:owner": "node --conditions=react-server --import tsx scripts/demo-setup/local-demo-owner.ts",
     "list:personas": "node --conditions=react-server --import tsx scripts/list-paging/provision-personas.ts",
-    "list:baseline": "node --conditions=react-server --import tsx scripts/list-paging/capture-baseline.ts"
+    "list:baseline": "node --conditions=react-server --import tsx scripts/list-paging/capture-baseline.ts",
+    "list:page-timing": "node --conditions=react-server --import tsx scripts/list-paging/page-timing.ts"
   },
   "dependencies": {
     "@supabase/ssr": "catalog:",
