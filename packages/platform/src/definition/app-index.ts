@@ -8,7 +8,13 @@ export { createHumanInstalledPageBundleContextLoader, isTrustedInstalledPageBund
 
 export { resolveInstalledPageIdentity } from "./standard-page-resolution";
 
-export { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
+export {
+  createViewerSafeRecordLinkService,
+  recordLinkLabelKey,
+  type RecordLinkLabel,
+  type RecordLinkLabelsResult,
+  type RecordLinkReference,
+} from "./viewer-safe-record-link";
 
 export { createApplicationInstallationCoordinator } from "./installation-coordinator";
 

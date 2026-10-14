@@ -225,9 +225,10 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 }
 
 /* A Puck slot is always present, so a container region that holds no placement is not rendered. In
-   the editor an empty region stays, as the drop target an author fills. */
+   the editor an empty region stays, as the drop target an author fills. The region holding the
+   application frame's page outlet stays too, so a page's loading state shows there. */
 [data-vortex-puck-root]:not([data-vortex-editing])
-  [data-vortex-container-region]:not(:has([data-vortex-layout-wrapper])) {
+  [data-vortex-container-region]:not(:has([data-vortex-layout-wrapper], [data-vortex-shell-outlet])) {
   display: none;
 }
 
