@@ -222,6 +222,13 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
           // Only values of fields the reader is guaranteed to see; empty when
           // no declared sort field may be pushed, and the scan uses record identity.
           sortKey: z.array(z.string().nullable()).max(20),
+          sort: z
+            .array(
+              z
+                .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
+                .strict(),
+            )
+            .max(20),
           phase: z.enum(["null", "value"]),
           recordId: recordIdSchema,
         })
@@ -243,6 +250,13 @@ const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
       next: z
         .object({
           sortKey: z.array(z.string().nullable()).max(20),
+          sort: z
+            .array(
+              z
+                .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
+                .strict(),
+            )
+            .max(20),
           phase: z.enum(["null", "value"]),
           recordId: recordIdSchema,
         })
@@ -484,7 +498,7 @@ const readPage = async (
       ${JSON.stringify(inputValues)}::text::jsonb,
       ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
       ${command.pageSize}::integer,
-      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
+      ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
       ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
       ${JSON.stringify(userQueryInputs(command))}::text::jsonb
     ) as result
@@ -507,7 +521,7 @@ const readBoardMemberPage = async (
       ${JSON.stringify(inputValues)}::text::jsonb,
       ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
       ${command.pageSize}::integer,
-      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
+      ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
       ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
       ${JSON.stringify({
         sort: [],
@@ -539,7 +553,7 @@ const readGroupedMemberPage = async (
       ${JSON.stringify(inputValues)}::text::jsonb,
       ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
       ${command.pageSize}::integer,
-      ${after === undefined ? null : JSON.stringify({ sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
+      ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
       ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
       ${JSON.stringify({
         sort: [],
@@ -674,6 +688,7 @@ const boardMembersCommand = async (
               moduleReleaseRevision: page.moduleReleaseRevision,
               inputFingerprint,
               sortKey: page.next.sortKey,
+              sort: page.next.sort,
               phase: page.next.phase,
               recordId: page.next.recordId,
             },
@@ -826,6 +841,7 @@ const groupedMembersCommand = async (
       moduleReleaseRevision: page.moduleReleaseRevision,
       inputFingerprint,
       sortKey: page.next.sortKey,
+      sort: page.next.sort,
       phase: page.next.phase,
       recordId: page.next.recordId,
     },
@@ -938,6 +954,7 @@ const runCommand = async (
                 moduleReleaseRevision: page.moduleReleaseRevision,
                 inputFingerprint,
                 sortKey: page.next.sortKey,
+                sort: page.next.sort,
                 phase: page.next.phase,
                 recordId: page.next.recordId,
               },

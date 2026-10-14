@@ -39,6 +39,7 @@ declare
   sort_item jsonb;
   sort_ids text[] := array[]::text[];
   declared_sort_ids text[] := array[]::text[];
+  cursor_sort jsonb := '[]'::jsonb;
   sort_directions text[] := array[]::text[];
   sort_value_sql text[] := array[]::text[];
   sort_sql_types text[] := array[]::text[];
@@ -646,6 +647,11 @@ begin
         message = 'Record storage disagrees with the installed definition';
     end if;
     declared_sort_ids := pg_catalog.array_append(declared_sort_ids, field_key);
+    cursor_sort := cursor_sort || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'fieldId', field_key, 'direction', sort_item ->> 'direction'
+      )
+    );
     pushed := field_key = any (readable_field_ids);
     if effective_sort_is_user and not pushed then
       -- The user's order must actually be the scan order.
@@ -742,12 +748,13 @@ begin
   into filter_expressions
   from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}') as item(value);
 
-  -- The keyset position, which must fit this exact order. The cursor carries
-  -- only the readable sort fields' values and a record identity, so it never
-  -- carries a hidden field value.
+  -- The keyset position must fit this exact order. The cursor binds every
+  -- declared sort field and direction, but carries values only for readable
+  -- sort fields, so it never carries a hidden field value.
   if p_after is not null and p_after <> 'null'::jsonb then
     if pg_catalog.jsonb_typeof(p_after) <> 'object'
-      or p_after - array['sortKey', 'phase', 'recordId']::text[] <> '{}'::jsonb
+      or p_after - array['sortKey', 'phase', 'recordId', 'sort']::text[] <> '{}'::jsonb
+      or p_after -> 'sort' is distinct from cursor_sort
       or pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
       or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> pg_catalog.cardinality(sort_ids)
       or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
@@ -1094,6 +1101,7 @@ begin
 
   if more_rows then
     next_value := pg_catalog.jsonb_build_object(
+      'sort', cursor_sort,
       'sortKey', pg_catalog.to_jsonb(last_returned_sort_key),
       'phase', case when pg_catalog.cardinality(last_returned_sort_key) > 0
         and last_returned_sort_key[1] is null then 'null' else 'value' end,
@@ -1101,6 +1109,7 @@ begin
     );
   elsif budget_exhausted then
     next_value := pg_catalog.jsonb_build_object(
+      'sort', cursor_sort,
       'sortKey', pg_catalog.to_jsonb(last_examined_sort_key),
       'phase', case when pg_catalog.cardinality(last_examined_sort_key) > 0
         and last_examined_sort_key[1] is null then 'null' else 'value' end,

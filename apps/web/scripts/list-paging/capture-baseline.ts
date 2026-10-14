@@ -45,6 +45,7 @@ const kinds: readonly Kind[] = [
 ];
 
 type Next = Readonly<{
+  sort: readonly { fieldId: string; direction: "ascending" | "descending" }[];
   sortKey: readonly (string | null)[];
   phase: "null" | "value";
   recordId: string;
@@ -329,6 +330,7 @@ const positionsOf = async (
       return row === undefined
         ? null
         : {
+            sort: query.sort,
             sortKey: row.sort_key as (string | null)[],
             phase: (row.sort_key as (string | null)[])[0] === null ? "null" : "value",
             recordId: row.record_id as string,
