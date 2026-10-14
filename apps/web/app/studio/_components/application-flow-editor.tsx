@@ -103,7 +103,6 @@ type Props = Readonly<{
     command: StudioFlowCalculateCommand, isCurrentTarget: () => boolean) => StudioFlowTextResult["kind"];
 }>;
 
-const buttonClass = "";
 const inputClass = "w-full";
 const pathKey = (path: readonly (string | number)[]) => JSON.stringify(path);
 
@@ -155,7 +154,7 @@ function TaskList({ list, selected, disabled, choose }: {
     {list.tasks.length === 0 ? <p className="text-sm text-muted-foreground">No tasks.</p>
       : <ol className="space-y-2 border-l border-border pl-3">
         {list.tasks.map((task) => <li key={pathKey(task.path)} className="space-y-2">
-          <Button type="button" variant="outline" size="sm" className={`${buttonClass} w-full text-left`} disabled={disabled}
+          <Button type="button" variant="outline" size="sm" className="w-full text-left" disabled={disabled}
             aria-pressed={selected?.id === task.id && pathKey(selected.path) === pathKey(task.path)}
             onClick={() => choose(task)}>
             {task.title} <span className="text-xs text-muted-foreground">({task.id})</span>
@@ -423,18 +422,18 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
               onChange={(event) => changeInsert({ title: event.target.value })} /></label>}
         </>}
         <p className="text-sm">Append adds one task to the end of Tasks. It does not run the Flow. Enter applies; Shift+Enter adds a message line.</p>
-        <Button className={buttonClass} type="submit" disabled={!pendingInsert}>Append task</Button>
+        <Button type="submit" disabled={!pendingInsert}>Append task</Button>
       </fieldset>
-      <Button className={buttonClass} type="button" disabled={disabled || !pendingInsert} onClick={discardInsert}>Discard insertion inputs</Button>
+      <Button type="button" disabled={disabled || !pendingInsert} onClick={discardInsert}>Discard insertion inputs</Button>
     </form> : <p className="text-sm">No presentation task can be appended to this Flow under its current execution kind, registry or task limits.</p>}
-    {palette.length === 0 && pendingInsert && <Button type="button" variant="outline" size="sm" className={buttonClass}
+    {palette.length === 0 && pendingInsert && <Button type="button" variant="outline" size="sm"
       disabled={disabled} onClick={discardInsert}>Discard preserved insertion inputs</Button>}
     {calculate.kind === "available" && <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-3" aria-label="Calculate controls">
       <h3 className="font-semibold">Calculate</h3>
       <div className="flex gap-2">
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={disabled || !calculate.canAppend}
+        <Button type="button" variant="outline" size="sm" disabled={disabled || !calculate.canAppend}
           onClick={() => beginCalculate(false)}>Add Calculate task</Button>
-        {calculate.selected !== null && <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={disabled}
+        {calculate.selected !== null && <Button type="button" variant="outline" size="sm" disabled={disabled}
           onClick={() => beginCalculate(true)}>Edit selected calculation</Button>}
       </div>
       <p className="text-sm">Use two numeric operands with explicit precision and rounding. Other formulas remain read-only. These controls do not run the Flow.</p>
@@ -473,10 +472,10 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
             <option value="" disabled>Choose rounding</option>
             {flowRoundingModeSchema.options.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
           </NativeSelect></label>
-        <Button type="submit" className={buttonClass}>Apply calculation</Button>
+        <Button type="submit">Apply calculation</Button>
       </fieldset>
       <p className="text-sm">Apply or discard these inputs before saving, undoing or editing other items. Stale inputs are preserved until you discard them.</p>
-      <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={disabled} onClick={discardCalculate}>Discard Calculate inputs</Button>
+      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={discardCalculate}>Discard Calculate inputs</Button>
     </form>}
     {projection.kind !== "available" ? <p role="status">This Flow outline is unavailable or ambiguous. No source is changed.</p>
       : lists.map((list) => <TaskList key={pathKey(list.path)} list={list} selected={target}
@@ -484,7 +483,7 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     {task !== undefined && <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-3" aria-label="Task text inspector">
       <h3 className="font-semibold">{task.title}</h3>
       {moves.length > 0 ? <div className="flex gap-2" aria-label="Presentation task order">
-        {moves.map((option) => <Button key={option.direction} type="button" className={buttonClass}
+        {moves.map((option) => <Button key={option.direction} type="button"
           disabled={disabled || pending || pendingInsert || pendingCalculate} onClick={() => move(option)}>
           {option.direction === "up" ? "Move up" : "Move down"}
         </Button>)}
@@ -516,14 +515,14 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
             <span className="block text-sm text-muted-foreground">Enter applies; Shift+Enter adds a line.</span>
           </label>}
           <div className="flex gap-2">
-            <Button className={buttonClass} type="submit" disabled={disabled || pendingInsert || pendingCalculate || !pending}>Apply text</Button>
-            <Button className={buttonClass} type="button" disabled={disabled || !pending} onClick={discard}>Discard text</Button>
+            <Button type="submit" disabled={disabled || pendingInsert || pendingCalculate || !pending}>Apply text</Button>
+            <Button type="button" disabled={disabled || !pending} onClick={discard}>Discard text</Button>
           </div>
         </form>}
     </section>}
     {pending && <div className="space-y-2">
       <p className="text-sm">Apply or discard this text before saving, undoing or editing other items.</p>
-      {(task === undefined || property === undefined) && <Button type="button" variant="outline" size="sm" className={buttonClass}
+      {(task === undefined || property === undefined) && <Button type="button" variant="outline" size="sm"
         disabled={disabled} onClick={discard}>Discard preserved text</Button>}
     </div>}
     <p role="status" aria-live="polite">{message}</p>

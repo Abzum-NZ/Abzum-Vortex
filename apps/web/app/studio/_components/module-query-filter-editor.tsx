@@ -33,7 +33,6 @@ type Props = Readonly<{
   initial: StudioModuleQueryFilterResult;
 }>;
 
-const buttonClass = "";
 const choiceList = (result: StudioModuleQueryFilterResult): readonly ModuleQueryFilterQueryChoice[] =>
   result.kind === "available" || result.kind === "readonly" ? result.queryChoices : [];
 const initialAlias = (result: StudioModuleQueryFilterResult): string =>
@@ -594,16 +593,16 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
           )}
           {renderValidationErrors()}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={apply}
+            <Button type="button" variant="outline" size="sm" onClick={apply}
               disabled={busy || !staged || localValidation?.isValid !== true}>Apply</Button>
-            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={undo} disabled={busy || (!staged && undoStack.length === 0)}>Undo</Button>
-            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={redo} disabled={busy || staged || redoStack.length === 0}>Redo</Button>
-            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={clearFilter} disabled={busy || working === null}>Clear filter</Button>
-            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void validate()}
+            <Button type="button" variant="outline" size="sm" onClick={undo} disabled={busy || (!staged && undoStack.length === 0)}>Undo</Button>
+            <Button type="button" variant="outline" size="sm" onClick={redo} disabled={busy || staged || redoStack.length === 0}>Redo</Button>
+            <Button type="button" variant="outline" size="sm" onClick={clearFilter} disabled={busy || working === null}>Clear filter</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void validate()}
               disabled={busy || staged || localValidation?.isValid !== true}>Validate</Button>
-            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void save()}
+            <Button type="button" variant="outline" size="sm" onClick={() => void save()}
               disabled={busy || !dirty || staged || localValidation?.isValid !== true}>Save</Button>
-            <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void reopen()} disabled={busy}>Reopen</Button>
           </div>
           <p aria-live="polite" role="status">{message}</p>
           <p className="text-sm">{dirty ? "Applied filter changes are not saved." : "The applied filter matches the saved draft."}</p>
@@ -614,7 +613,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
         <section className="space-y-3" aria-label="Read-only filter status">
           <p role="status">{message}</p>
           {renderValidationErrors()}
-          <Button type="button" variant="outline" size="sm" className={buttonClass} onClick={() => void reopen()} disabled={busy}>Reopen</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => void reopen()} disabled={busy}>Reopen</Button>
         </section>
       )}
       {confirmDialog}

@@ -28,7 +28,6 @@ type Response = Readonly<{ metadata: StudioApplicationConditionContext;
   snapshot: StudioVisibilityWorkspaceSnapshot; generation: number }>;
 type Buffer = Readonly<{ value: ConditionNode | undefined; validation: StudioConditionValidation;
   response: Response }>;
-const buttonClass = "";
 const sameSnapshot = (left: StudioVisibilityWorkspaceSnapshot, right: StudioVisibilityWorkspaceSnapshot): boolean =>
   left.context.source === right.context.source && left.context.organizationId === right.context.organizationId &&
   left.context.rootId === right.context.rootId && left.context.key === right.context.key &&
@@ -156,7 +155,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
     {status && <p role="status">{status}</p>}
     {buffer !== null && !isCurrentResponse() &&
       <p role="status">Your unapplied condition remains visible. Apply is held until its saved context is current.</p>}
-    <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.busy}
+    <Button type="button" variant="outline" size="sm" disabled={props.busy}
       onClick={() => setReload((value) => value + 1)}>Reload field metadata</Button>
     {unsupported && <p role="status">This existing condition or placement is unsupported. Its source is preserved and read-only.</p>}
     {model?.kind === "stale" && <p role="status">The saved page or Module bindings changed. Save and reload field metadata before editing.</p>}
@@ -172,9 +171,9 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       }}>
         <StudioConditionControls key={controlsEpoch} {...(value === undefined ? {} : { value })} context={model.controls}
           label="Placement visibility controls" onChange={update} />
-        <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={value === undefined}
+        <Button type="button" variant="outline" size="sm" disabled={value === undefined}
           onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove condition</Button>
-        <Button type="submit" className={buttonClass} disabled={buffer === null || !buffer.validation.isValid}>Apply visibility condition</Button>
+        <Button type="submit" disabled={buffer === null || !buffer.validation.isValid}>Apply visibility condition</Button>
       </fieldset>
     </form>}
     {buffer !== null && <>
@@ -185,7 +184,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
               target?.placement.visibility_condition, buffer.response.metadata)].join("/")}: {issue.message}
         </li>)}
       </ul>}
-      <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={props.busy} onClick={discard}>Discard visibility edits</Button>
+      <Button type="button" variant="outline" size="sm" disabled={props.busy} onClick={discard}>Discard visibility edits</Button>
     </>}
     <p role="status" aria-live="polite">{message}</p>
   </section>;
