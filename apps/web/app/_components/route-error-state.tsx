@@ -14,13 +14,28 @@ export function RouteErrorState({
   route,
   error,
   reset,
-}: Readonly<{ route: string; error: Error & { digest?: string }; reset: () => void }>) {
+  region = "page",
+}: Readonly<{
+  route: string;
+  error: Error & { digest?: string };
+  reset: () => void;
+  /** An application page's error shows in the frame's content region, not as a whole page. */
+  region?: "page" | "content";
+}>) {
   useEffect(() => {
     void reportRouteFailure(route, error.digest);
   }, [route, error.digest]);
 
+  // The content region already sits inside the frame's main landmark.
+  const Region = region === "page" ? "main" : "section";
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
+    <Region
+      className={
+        region === "page"
+          ? "mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6"
+          : "flex w-full max-w-xl flex-col gap-4"
+      }
+    >
       <Alert variant="critical" role="alert">
         <AlertTitle>This page could not be shown</AlertTitle>
         <AlertDescription>
@@ -35,6 +50,6 @@ export function RouteErrorState({
           Try again
         </Button>
       </div>
-    </main>
+    </Region>
   );
 }

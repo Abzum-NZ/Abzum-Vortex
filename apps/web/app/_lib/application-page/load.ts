@@ -1,4 +1,6 @@
+import { cache } from "react";
 import {
+  type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   createHumanInstalledPageBundleContextLoader,
   createStoredPageCapabilityService,
@@ -117,6 +119,42 @@ export const loadInstalledContext = (
   );
 
 /**
+ * The viewer's projection of one page and of the application menu, read once per server render:
+ * the application frame layout and the page of one request share them instead of deciding the same
+ * access twice. The next request reads again, so no access decision outlives its request.
+ */
+export const readPageProjections = cache(
+  (
+    session: IdentitySession,
+    context: InstalledRuntimeContext,
+    pageId: string,
+    subjectRecordId: string | undefined,
+  ) => {
+    const dependencies = requestDependencies();
+    const selection: OrganizationSelectionCandidate = {
+      organizationId: context.organizationId,
+      applicationRootId: context.applicationRootId,
+    };
+    const projectedPageRead = createStoredPageCapabilityService({
+      ...dependencies,
+      context,
+      permissions: platformPermissionSource,
+      selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
+    }).project(session, selection);
+    const navigationRead = createStoredNavigationProjectionService({
+      ...dependencies,
+      context,
+      permissions: platformPermissionSource,
+    }).project(session, selection);
+    // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
+    // every reader joins both reads before it returns on any path (early returns included).
+    void projectedPageRead.catch(() => undefined);
+    void navigationRead.catch(() => undefined);
+    return { projectedPageRead, navigationRead };
+  },
+);
+
+/**
  * Loads one page. Reads the loader starts ahead of where their results are consulted are joined
  * before it returns or throws, whichever path it takes, so no HUMAN request outlives the loader.
  */
@@ -205,28 +243,15 @@ const loadApplicationPageJoined = async (
   }
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
-  const pageService = createStoredPageCapabilityService({
-    ...dependencies,
-    context,
-    permissions: platformPermissionSource,
-    selection: {
-      pageId: pageDefinition.pageId,
-      ...(conditionSubjectId === undefined ? {} : { subjectRecordId: conditionSubjectId }),
-    },
-  });
   // The adoption read, the page projection and the navigation projection are independent reads of
   // the same installed context, each under its own HUMAN request; they run together and their
   // results are still consulted in the original order.
-  const projectedPageRead = pageService.project(session, selection);
-  const navigationRead = createStoredNavigationProjectionService({
-    ...dependencies,
+  const { projectedPageRead, navigationRead } = readPageProjections(
+    session,
     context,
-    permissions: platformPermissionSource,
-  }).project(session, selection);
-  // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
-  // both reads are joined before the loader returns on any path (early returns included).
-  void projectedPageRead.catch(() => undefined);
-  void navigationRead.catch(() => undefined);
+    pageDefinition.pageId,
+    conditionSubjectId,
+  );
   startedReads.push(projectedPageRead, navigationRead);
   const adoptionTarget = await adoptionRead;
   const projectedPage = await projectedPageRead;

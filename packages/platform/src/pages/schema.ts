@@ -5,3 +5,4 @@ export * from "./projected-navigation";
 export * from "./shadcn-icon-libraries";
 export * from "./text-input-pattern";
 export * from "./placement-walk";
+export * from "./page-frame-projection";
