@@ -869,7 +869,7 @@ begin
            ''moduleRootId'', %L,
            ''moduleReleaseVersion'', %L,
            ''queryId'', %L,
-           ''groupByFieldIds'', %s::jsonb,
+           ''groupByFieldIds'', %L::jsonb,
            ''totalRowCount'', selected_count.value,
            ''groups'', %s,
            ''aggregates'', totals.aggregate_values
@@ -903,7 +903,7 @@ begin
            ''moduleRootId'', %L,
            ''moduleReleaseVersion'', %L,
            ''queryId'', %L,
-           ''groupByFieldIds'', %s::jsonb,
+           ''groupByFieldIds'', %L::jsonb,
            ''totalRowCount'', selected_count.value,
            ''groups'', ''[]''::jsonb,
            ''aggregates'', totals.aggregate_values
