@@ -17,8 +17,6 @@ as $function$
     from vortex_access.permission_registrations as registration
     where registration.organization_id = p_organization_id
       and registration.registration_kind = 'platform'
-      and registration.registration_owner_id =
-        'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
       and registration.state = 'active'
       and vortex_access.platform_permission_catalogue_revision_is_exact(
         p_organization_id, registration.revision
@@ -41,7 +39,6 @@ as $function$
       and required.meaning_fingerprint = entry.meaning_fingerprint
     where entry.application_root_id is null
       and entry.owner_kind = 'platform'
-      and entry.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
   ), candidate_steward as (
     select account.organization_account_id
     from vortex_identity.organization_accounts as account
@@ -85,7 +82,7 @@ as $function$
           from vortex_access.organization_role_permission_entries as permission
           join vortex_access.permission_continuities as continuity
             on continuity.organization_id = permission.organization_id
-            and continuity.application_root_id is not distinct from permission.application_root_id
+            and continuity.application_scope_id = coalesce(permission.application_root_id, '00000000-0000-0000-0000-000000000000'::uuid)
             and continuity.owner_kind = permission.owner_kind
             and continuity.owner_id = permission.owner_id
             and continuity.permission_id = permission.permission_id
@@ -133,7 +130,4 @@ revoke execute on function vortex_access.organization_has_permanent_steward(uuid
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_access.organization_has_permanent_steward(uuid, timestamptz) is
   'Checks the direct permanent steward and original platform-permission invariant for an adopted organisation.';
-alter function vortex_access.organization_has_permanent_steward(uuid, timestamptz)
-  owner to postgres;
-
 alter function vortex_access.organization_has_permanent_steward(p_organization_id uuid, p_checked_at timestamp with time zone) owner to vortex_owner;
