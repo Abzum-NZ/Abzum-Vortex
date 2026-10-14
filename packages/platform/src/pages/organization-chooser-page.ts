@@ -101,7 +101,11 @@ export const organizationChooserPage = chooserPage(
         blockId: APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId,
         releaseVersion: APPLICATION_LAUNCHER_BLOCK_RELEASE.releaseVersion,
       },
-      settings: { title: { kind: "text", value: "Available organisations" } },
+      settings: {
+        title: { kind: "text", value: "Available organisations" },
+        name_key: { kind: "text", value: "name" },
+        icon_key: { kind: "text", value: "icon" },
+      },
       themeOverrides: {},
       responsive,
       slots: { side_panel: emptySlot() },
