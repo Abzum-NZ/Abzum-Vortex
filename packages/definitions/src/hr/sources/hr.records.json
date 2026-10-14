@@ -736,7 +736,68 @@
     ],
     "actions": [],
     "events": [],
-    "flows": [],
+    "flows": [
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_leave_request_dates",
+        "key": "end_date_not_before_start_date",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "leave_request",
+            "operations": [
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
+          {
+            "id": "end_before_start",
+            "type": "if",
+            "condition": {
+              "op": "lt",
+              "left": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "end_date"
+                }
+              },
+              "right": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "start_date"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "refuse_end_before_start",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {"kind":"literal","literal":{"type":"text","value":"end_date_before_start_date"}},
+                  "message": {"kind":"literal","literal":{"type":"text","value":"End date must be on or after the start date."}},
+                  "field": {"kind":"literal","literal":{"type":"text","value":"leave_request.end_date"}}
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
     "extension_points": [],
     "sharing_conditions": [],
     "queries": [
