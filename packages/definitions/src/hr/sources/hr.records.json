@@ -877,7 +877,8 @@
         "inputs": [],
         "select": [
           "position_code",
-          "title"
+          "title",
+          "department"
         ],
         "filter": null,
         "group_by": [],
@@ -899,7 +900,9 @@
         "select": [
           "employee_number",
           "employment_status",
-          "start_date"
+          "start_date",
+          "person",
+          "position"
         ],
         "filter": null,
         "group_by": [],
@@ -921,7 +924,8 @@
         "select": [
           "start_date",
           "end_date",
-          "status"
+          "status",
+          "employee"
         ],
         "filter": null,
         "group_by": [],
