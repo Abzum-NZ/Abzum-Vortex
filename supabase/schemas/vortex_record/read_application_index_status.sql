@@ -103,6 +103,7 @@ begin
       from vortex_record.index_catalogue as stored_index
       where stored_index.storage_contract_id = target.storage_contract_id
         and stored_index.field_id = mapping.field_id
+        and stored_index.purpose in ('uniqueness', 'performance')
       for share;
 
       ready := observed = 'present'

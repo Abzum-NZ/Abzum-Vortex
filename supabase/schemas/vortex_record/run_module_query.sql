@@ -65,8 +65,14 @@ declare
   keyset_sql text := '';
   segment_predicates text[];
   segment_sql text;
+  segment_prefix text;
+  prefix_index integer;
+  composite_sort jsonb;
+  composite_index_ready boolean := false;
+  record_id_direction text := 'ascending';
   -- Whether each sort key has the aligned field index (stored and sortable or unique).
   sort_index_backed boolean[] := array[]::boolean[];
+  sort_stored boolean[] := array[]::boolean[];
   order_terms text[] := array[]::text[];
   sort_key_terms text[] := array[]::text[];
   order_by_sql text;
@@ -681,6 +687,7 @@ begin
       sort_value_sql := pg_catalog.array_append(sort_value_sql, read_time_sql);
       sort_sql_types := pg_catalog.array_append(sort_sql_types, 'boolean');
       sort_index_backed := pg_catalog.array_append(sort_index_backed, false);
+      sort_stored := pg_catalog.array_append(sort_stored, false);
       continue;
     end if;
     -- JSON-valued fields (money, links, choice sets, documents) have no total
@@ -701,6 +708,7 @@ begin
     sort_index_backed := pg_catalog.array_append(sort_index_backed,
       coalesce((fields_by_id -> field_key ->> 'sortable')::boolean, false)
         or coalesce((fields_by_id -> field_key ->> 'unique')::boolean, false));
+    sort_stored := pg_catalog.array_append(sort_stored, true);
     sort_sql_types := pg_catalog.array_append(sort_sql_types, case mapping_row.database_value_type
       when 'integer' then 'bigint'
       when 'decimal' then 'numeric'
@@ -713,6 +721,28 @@ begin
   if pg_catalog.cardinality(declared_sort_ids) = 0
     and not board_member_mode and not group_member_mode then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
+  end if;
+
+  -- The tie-break direction is a property of the declared order, independent
+  -- of whether its asynchronous physical index has finished building.
+  if pg_catalog.cardinality(sort_ids) > 1 then
+    record_id_direction := sort_directions[pg_catalog.cardinality(sort_ids)];
+  end if;
+
+  if pg_catalog.cardinality(sort_ids) > 1
+    and pg_catalog.cardinality(sort_ids) = pg_catalog.cardinality(declared_sort_ids)
+    and not (false = any (sort_stored)) then
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'fieldId', sort_ids[item.position],
+      'direction', sort_directions[item.position]) order by item.position)
+    into composite_sort
+    from pg_catalog.generate_series(1, pg_catalog.cardinality(sort_ids)) as item(position);
+    select coalesce(index_value.indisvalid, false) into composite_index_ready
+    from pg_catalog.pg_index as index_value
+    where index_value.indexrelid = pg_catalog.to_regclass(pg_catalog.format(
+      'record_data.%I', 'is_' || pg_catalog.md5(
+        v_storage_contract_id::text || ':' || composite_sort::text)));
+    composite_index_ready := coalesce(composite_index_ready, false);
   end if;
 
   prepared_plan := vortex_record.prepare_module_query_internal(
@@ -828,17 +858,86 @@ begin
     end if;
   end loop;
   if after_record_id is not null then
-    after_terms := pg_catalog.array_append(after_terms, equal_prefix || 'stored.record_id > $4');
+    after_terms := pg_catalog.array_append(after_terms, equal_prefix ||
+      'stored.record_id ' || case when record_id_direction = 'ascending' then '>' else '<' end || ' $4');
     keyset_sql := ' and ((' || pg_catalog.array_to_string(after_terms, ') or (') || '))';
   end if;
   order_by_sql := pg_catalog.array_to_string(order_terms, ', ');
   if order_by_sql = '' then
     order_by_sql := 'stored.record_id asc';
   else
-    order_by_sql := order_by_sql || ', stored.record_id asc';
+    order_by_sql := order_by_sql || ', stored.record_id ' ||
+      case when record_id_direction = 'ascending' then 'asc' else 'desc' end;
   end if;
 
-  if pg_catalog.cardinality(sort_ids) = 1
+  if composite_index_ready then
+    segment_predicates := array[]::text[];
+    if after_record_id is null then
+      segment_predicates := array[''];
+    else
+      -- A mixed-direction lexicographic comparison is one seek per first
+      -- differing key. Each scan has an equality prefix and one B-tree range,
+      -- including the NULL region in its own segment.
+      segment_prefix := '';
+      for prefix_index in 1 .. pg_catalog.cardinality(sort_ids) loop
+        column_sql := case when sort_sql_types[prefix_index] = 'text'
+          then sort_value_sql[prefix_index] || ' collate "C"'
+          else sort_value_sql[prefix_index] end;
+        if after_sort_key[prefix_index] is null then
+          segment_prefix := segment_prefix || pg_catalog.format(
+            ' and %s is null', sort_value_sql[prefix_index]);
+        else
+          value_sql := case when sort_sql_types[prefix_index] = 'text'
+            then pg_catalog.format('$3[%s] collate "C"', prefix_index)
+            else pg_catalog.format('($3[%s])::%s', prefix_index, sort_sql_types[prefix_index]) end;
+          segment_prefix := segment_prefix || pg_catalog.format(
+            ' and %s = %s', column_sql, value_sql);
+        end if;
+      end loop;
+      segment_predicates := pg_catalog.array_append(segment_predicates,
+        segment_prefix || ' and stored.record_id ' ||
+        case when record_id_direction = 'ascending' then '>' else '<' end || ' $4');
+      for sort_index in reverse pg_catalog.cardinality(sort_ids) .. 1 loop
+        segment_prefix := '';
+        for prefix_index in 1 .. sort_index - 1 loop
+          column_sql := case when sort_sql_types[prefix_index] = 'text'
+            then sort_value_sql[prefix_index] || ' collate "C"'
+            else sort_value_sql[prefix_index] end;
+          if after_sort_key[prefix_index] is null then
+            segment_prefix := segment_prefix || pg_catalog.format(
+              ' and %s is null', sort_value_sql[prefix_index]);
+          else
+            value_sql := case when sort_sql_types[prefix_index] = 'text'
+              then pg_catalog.format('$3[%s] collate "C"', prefix_index)
+              else pg_catalog.format('($3[%s])::%s', prefix_index, sort_sql_types[prefix_index]) end;
+            segment_prefix := segment_prefix || pg_catalog.format(
+              ' and %s = %s', column_sql, value_sql);
+          end if;
+        end loop;
+        column_sql := case when sort_sql_types[sort_index] = 'text'
+          then sort_value_sql[sort_index] || ' collate "C"'
+          else sort_value_sql[sort_index] end;
+        if after_sort_key[sort_index] is null then
+          if sort_directions[sort_index] = 'ascending' then
+            segment_predicates := pg_catalog.array_append(segment_predicates,
+              segment_prefix || pg_catalog.format(' and %s is not null', sort_value_sql[sort_index]));
+          end if;
+        else
+          value_sql := case when sort_sql_types[sort_index] = 'text'
+            then pg_catalog.format('$3[%s] collate "C"', sort_index)
+            else pg_catalog.format('($3[%s])::%s', sort_index, sort_sql_types[sort_index]) end;
+          segment_predicates := pg_catalog.array_append(segment_predicates,
+            segment_prefix || pg_catalog.format(' and %s %s %s', column_sql,
+              case when sort_directions[sort_index] = 'ascending' then '>' else '<' end,
+              value_sql));
+          if sort_directions[sort_index] = 'descending' then
+            segment_predicates := pg_catalog.array_append(segment_predicates,
+              segment_prefix || pg_catalog.format(' and %s is null', sort_value_sql[sort_index]));
+          end if;
+        end if;
+      end loop;
+    end if;
+  elsif pg_catalog.cardinality(sort_ids) = 1
     and sort_directions[1] = 'ascending'
     and sort_index_backed[1] then
     -- Each segment has one contiguous range in the aligned index. A NULL

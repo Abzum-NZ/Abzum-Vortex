@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.record_index_build_result(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_expected_definition_fingerprint text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.record_index_build_result(p_storage_contract_id uuid, p_field_id uuid, p_claim_id uuid, p_expected_definition_fingerprint text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -11,6 +11,7 @@ declare
   derived_fingerprint text;
   observed text;
   refusal_reason text;
+  sort_definition jsonb;
 begin
   if p_storage_contract_id is null
     or p_storage_contract_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -28,6 +29,8 @@ begin
   from vortex_record.index_catalogue as catalogue
   where catalogue.storage_contract_id = p_storage_contract_id
     and catalogue.field_id = p_field_id
+  order by (catalogue.claim_id = p_claim_id) desc nulls last, catalogue.index_contract_id
+  limit 1
   for update;
   if catalogue_row.index_contract_id is null then
     return pg_catalog.jsonb_build_object(
@@ -38,6 +41,42 @@ begin
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'lease_not_owned'
     );
+  end if;
+
+  if catalogue_row.purpose in ('published_sort', 'published_sort_drop') then
+    sort_definition := vortex_record.published_sort_index_definition_internal(
+      p_storage_contract_id, catalogue_row.sort_shape);
+    if catalogue_row.desired_definition_fingerprint
+        is distinct from p_expected_definition_fingerprint
+      or sort_definition ->> 'outcome' <> 'valid'
+      or sort_definition ->> 'fingerprint' is distinct from p_expected_definition_fingerprint
+      or sort_definition ->> 'indexToken' is distinct from catalogue_row.physical_index_token then
+      update vortex_record.index_catalogue as catalogue
+      set claim_id = null, claimed_by = null, claimed_at = null, lease_expires_at = null
+      where catalogue.index_contract_id = catalogue_row.index_contract_id;
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'desired_definition_changed');
+    end if;
+    observed := sort_definition ->> 'observedState';
+    if catalogue_row.purpose = 'published_sort_drop' and observed = 'missing' then
+      delete from vortex_record.index_catalogue as catalogue
+      where catalogue.index_contract_id = catalogue_row.index_contract_id;
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'dropped', 'indexContractId', catalogue_row.index_contract_id);
+    end if;
+    update vortex_record.index_catalogue as catalogue
+    set observed_state = observed,
+      observed_revision = case when observed is distinct from catalogue_row.observed_state
+        then catalogue_row.observed_revision + 1 else catalogue_row.observed_revision end,
+      claim_id = null, claimed_by = null, claimed_at = null, lease_expires_at = null,
+      changed_at = pg_catalog.statement_timestamp()
+    where catalogue.index_contract_id = catalogue_row.index_contract_id;
+    return pg_catalog.jsonb_build_object(
+      'outcome', observed, 'indexContractId', catalogue_row.index_contract_id,
+      'storageContractId', catalogue_row.storage_contract_id,
+      'fieldId', catalogue_row.field_id, 'purpose', catalogue_row.purpose,
+      'desiredDefinitionFingerprint', p_expected_definition_fingerprint,
+      'observedState', observed);
   end if;
 
   -- A newer or different desired definition superseded this build.
