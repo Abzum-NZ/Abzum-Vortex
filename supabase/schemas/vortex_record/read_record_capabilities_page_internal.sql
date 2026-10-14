@@ -205,4 +205,3 @@ revoke all on function vortex_record.read_record_capabilities_page_internal(uuid
 
 comment on function vortex_record.read_record_capabilities_page_internal(uuid,jsonb) is
   'Private list capability pass: evaluates simple action declarations across readable page rows together, while complex routes use their exact single-record path.';
-
