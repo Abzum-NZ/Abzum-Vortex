@@ -64,8 +64,8 @@ begin
       registration.revision,
       pg_catalog.jsonb_build_object(
         'key', root.key,
-        'name', release.compilation_output #>> '{canonical,content,name}',
-        'icon', release.compilation_output #>> '{canonical,content,icon}',
+        'name', release.application_address ->> 'name',
+        'icon', release.application_address ->> 'icon',
         'release_revision', registration.source_revision,
         'is_default', root.root_id is not distinct from default_application_root_id
       )
@@ -84,7 +84,7 @@ begin
       and registration.registration_kind = 'application'
       and registration.state = 'active'
       and (p_record_id is null or p_record_id = root.root_id)
-      and release.compilation_output ->> 'kind' = 'application'
+      and release.application_address ->> 'kind' = 'application'
       and exists (
         select 1
         from vortex_definition.installation_bindings as binding

@@ -51,6 +51,7 @@ declare
   expected_history_revision bigint;
   release_version_value text;
   compilation_output_value jsonb;
+  application_address_value jsonb;
   resolution_snapshot_value jsonb;
   content_fingerprint_value text;
   resolution_fingerprint_value text;
@@ -882,18 +883,59 @@ begin
     end if;
   end if;
 
+  if root_row.kind = 'application' then
+    if pg_catalog.jsonb_typeof(compilation_output_value #> '{canonical,content,pages}')
+        is distinct from 'array'
+      or pg_catalog.jsonb_typeof(compilation_output_value #> '{canonical,content,roles}')
+        is distinct from 'array' then
+      raise exception using errcode = 'XX001',
+        message = 'Published Application address metadata is malformed';
+    end if;
+    application_address_value := pg_catalog.jsonb_build_object(
+      'kind', compilation_output_value -> 'kind',
+      'name', compilation_output_value #> '{canonical,content,name}',
+      'icon', compilation_output_value #> '{canonical,content,icon}',
+      'homePageId', compilation_output_value #> '{canonical,content,homePageId}',
+      'pages', coalesce((
+        select pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object(
+            'pageId', page.value -> 'pageId',
+            'key', page.value -> 'key',
+            'accessPermissionKey', page.value -> 'accessPermissionKey'
+          ) order by page.ordinality
+        )
+        from pg_catalog.jsonb_array_elements(
+          compilation_output_value #> '{canonical,content,pages}'
+        ) with ordinality as page(value, ordinality)
+      ), '[]'::jsonb),
+      'roles', coalesce((
+        select pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object(
+            'roleId', role.value -> 'roleId',
+            'key', role.value -> 'key',
+            'homePageId', role.value -> 'homePageId'
+          ) order by role.ordinality
+        )
+        from pg_catalog.jsonb_array_elements(
+          compilation_output_value #> '{canonical,content,roles}'
+        ) with ordinality as role(value, ordinality)
+      ), '[]'::jsonb)
+    );
+  end if;
+
   insert into vortex_definition.releases (
     root_id, release_revision, release_version, authored_source,
     authored_source_fingerprint, source_contract_version, compilation_output, resolution_snapshot,
     content_fingerprint, resolution_fingerprint, validation_contract_version,
-    impact_reasons, release_note, published_at, published_by
+    impact_reasons, release_note, published_at, published_by,
+    application_address
   ) values (
     p_root_id, draft_row.draft_revision, release_version_value, draft_row.draft_source,
     draft_row.source_fingerprint, draft_row.source_contract_version, compilation_output_value,
     resolution_snapshot_value,
     content_fingerprint_value, resolution_fingerprint_value, validation_contract_version_value,
     impact_reasons_value, release_note_value, operation_at,
-    context_actor_id
+    context_actor_id, application_address_value
   );
 
   for supplied_dependency in
