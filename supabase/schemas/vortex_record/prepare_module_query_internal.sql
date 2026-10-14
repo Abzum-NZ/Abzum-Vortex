@@ -34,6 +34,7 @@ declare
   field_kind text;
   semantic_type text;
   filter_condition jsonb;
+  filter_exact boolean := false;
   filter_ids text[] := array[]::text[];
   filter_types jsonb := '{}'::jsonb;
   filter_nulls jsonb := '{}'::jsonb;
@@ -710,6 +711,9 @@ begin
       );
       filter_predicate := coalesce(filter_plan ->> 'predicate', 'true');
       filter_parameters := coalesce(filter_plan -> 'parameters', '[]'::jsonb);
+      -- An incomplete compiled predicate remains a candidate narrowing step.
+      filter_exact := filter_plan ->> 'predicate' is not null
+        and (filter_plan ->> 'exact')::boolean is true;
     exception when invalid_parameter_value then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
     end;
@@ -724,6 +728,7 @@ begin
       'residualInputs', parameter_values,
       'expressions', pg_catalog.to_jsonb(filter_expressions),
       'pushedPredicate', filter_predicate,
+      'pushedExact', filter_exact,
       'pushedParameters', filter_parameters
     )
   );

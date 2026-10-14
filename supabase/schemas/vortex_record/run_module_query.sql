@@ -48,6 +48,7 @@ declare
   filter_nulls jsonb := '{}'::jsonb;
   filter_expressions text[] := array[]::text[];
   filter_predicate text;
+  filter_exact boolean;
   filter_parameters jsonb := '[]'::jsonb;
   parameter_types jsonb := '{}'::jsonb;
   parameter_values jsonb := '{}'::jsonb;
@@ -718,6 +719,7 @@ begin
   parameter_types := coalesce(prepared_plan #> '{filter,residualInputTypes}', '{}'::jsonb);
   parameter_values := coalesce(prepared_plan #> '{filter,residualInputs}', '{}'::jsonb);
   filter_predicate := coalesce(prepared_plan #>> '{filter,pushedPredicate}', 'true');
+  filter_exact := (prepared_plan #>> '{filter,pushedExact}')::boolean is true;
   filter_parameters := coalesce(prepared_plan #> '{filter,pushedParameters}', '[]'::jsonb);
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
   into filter_ids
@@ -866,7 +868,9 @@ begin
     -- A value the condition engine refuses decides nothing until the row is
     -- known to be readable, so an unreadable row can never cause a refusal.
     needs_refusal_check := false;
-    if filter_condition is null then
+    -- Preparation has already validated the inputs. An exact SQL predicate
+    -- has decided this condition over fields every candidate reader can see.
+    if filter_condition is null or filter_exact then
       passes := true;
     else
       begin
