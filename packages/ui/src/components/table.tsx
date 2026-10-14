@@ -16,7 +16,7 @@ function Table({
     <div
       data-slot="table-container"
       className={cn(
-        "cn-table-container max-h-[70vh] rounded-lg border bg-card text-card-foreground",
+        "cn-table-container max-h-[70vh] max-w-full rounded-lg border bg-card text-card-foreground",
         containerClassName,
       )}
     >
