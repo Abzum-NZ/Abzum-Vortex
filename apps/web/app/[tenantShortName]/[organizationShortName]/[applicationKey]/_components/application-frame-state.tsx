@@ -7,7 +7,7 @@ import {
   useState,
   type MouseEvent,
 } from "react";
-import { useIsPresent } from "motion/react";
+import { usePagePresence } from "@vortex/ui";
 import type { ProjectedApplicationFrame, ProjectedNavigation } from "@vortex/platform/schema";
 import type {
   ApplicationWebMcpRuntime,
@@ -73,7 +73,7 @@ export const useFramePageState = <Key extends keyof ApplicationFramePageState>(
   const frame = useApplicationFrame();
   const setPageState = frame?.setPageState;
   const clearPageState = frame?.clearPageState;
-  const present = useIsPresent();
+  const present = usePagePresence();
   const [owner] = useState<FramePageStateOwner>(() => ({}));
   useLayoutEffect(() => {
     if (setPageState === undefined || !present) return;

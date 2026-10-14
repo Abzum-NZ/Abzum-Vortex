@@ -313,6 +313,7 @@ export {
   type ApplicationShellRuntime,
   type ApplicationWebMcpRuntime,
   ContentTransition,
+  usePagePresence,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   WebMcpStatus,
   createNavigationComponentRegistry,
