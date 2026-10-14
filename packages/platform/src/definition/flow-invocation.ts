@@ -48,11 +48,7 @@ import type { createDatabaseApplicationBoundReleaseSetService } from "./applicat
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
 import { createFlowOrchestrator } from "./flow-orchestrator";
-import type {
-  FlowNamedAction,
-  FlowRecordType,
-  FlowRelease,
-} from "./flow-orchestrator-types";
+import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
@@ -886,7 +882,8 @@ export async function invokeInstalledFlow(
     selection: OrganizationSelectionCandidate,
   ): Promise<InstalledFlowBindings | undefined> => {
     const read = await requests.run(session, selection, async (transaction, scope) => {
-      if (scope.applicationRootId === undefined) throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
+      if (scope.applicationRootId === undefined)
+        throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
       const installation = await createHumanInstalledPageBundleContextLoader({
         transaction,
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
@@ -934,19 +931,11 @@ export async function invokeInstalledFlow(
       );
       if (selectedReadContext === undefined)
         throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
-      // Each record type's fields by key and by identity, for the values of a Save record task.
-      const recordTypes = new Map<string, FlowRecordType>();
-      for (const recordType of releaseSet.modules.flatMap((module) => module.content.recordTypes)) {
-        const fieldIds = new Map<string, string>();
-        for (const field of recordType.fields) {
-          fieldIds.set(String(field.key).toLowerCase(), String(field.fieldId));
-          fieldIds.set(String(field.fieldId).toLowerCase(), String(field.fieldId));
-        }
-        recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds });
-      }
       // Each installed named action by its key, as the exact action a Call protected operation
       // task names. An ambiguous key names no action rather than a guessed one.
       const namedActions = new Map<string, FlowNamedAction>();
+      const namedActionsById = new Map<string, FlowNamedAction>();
+      const setsChoiceByActionId = new Map<string, Readonly<{ fieldId: string; option: string }>>();
       const ambiguousActionKeys = new Set<string>();
       const addActions = (
         owner: Readonly<{
@@ -959,6 +948,8 @@ export async function invokeInstalledFlow(
           key: string;
           subjectRecordTypeId: string;
           inputs: readonly ActionInputDefinition[];
+          setsChoiceFieldId?: string | undefined;
+          setsChoiceOption?: string | undefined;
         }>[],
       ) => {
         for (const action of actions) {
@@ -968,12 +959,7 @@ export async function invokeInstalledFlow(
             actionId: action.actionId,
           });
           if (!reference.success) continue;
-          if (namedActions.has(key) || ambiguousActionKeys.has(key)) {
-            namedActions.delete(key);
-            ambiguousActionKeys.add(key);
-            continue;
-          }
-          namedActions.set(key, {
+          const named: FlowNamedAction = {
             action: reference.data,
             subjectRecordTypeId: String(action.subjectRecordTypeId),
             referenceInputTypes: Object.fromEntries(
@@ -986,7 +972,19 @@ export async function invokeInstalledFlow(
                 return resolved.length === 1 ? [[input.key, resolved[0]!]] : [];
               }),
             ),
-          });
+          };
+          namedActionsById.set(String(action.actionId), named);
+          if (action.setsChoiceFieldId !== undefined && action.setsChoiceOption !== undefined)
+            setsChoiceByActionId.set(String(action.actionId), {
+              fieldId: String(action.setsChoiceFieldId),
+              option: action.setsChoiceOption,
+            });
+          if (namedActions.has(key) || ambiguousActionKeys.has(key)) {
+            namedActions.delete(key);
+            ambiguousActionKeys.add(key);
+            continue;
+          }
+          namedActions.set(key, named);
         }
       };
       addActions(
@@ -1006,6 +1004,30 @@ export async function invokeInstalledFlow(
           },
           module.content.actions,
         );
+      // Each record type's fields by key and by identity, for the values of a Save record task,
+      // and the named action that declares it sets each choice option.
+      const recordTypes = new Map<string, FlowRecordType>();
+      for (const recordType of releaseSet.modules.flatMap((module) => module.content.recordTypes)) {
+        const fieldIds = new Map<string, string>();
+        const optionActions = new Map<string, ReadonlyMap<string, FlowNamedAction>>();
+        for (const field of recordType.fields) {
+          fieldIds.set(String(field.key).toLowerCase(), String(field.fieldId));
+          fieldIds.set(String(field.fieldId).toLowerCase(), String(field.fieldId));
+        }
+        for (const [actionId, named] of namedActionsById) {
+          const setting = setsChoiceByActionId.get(actionId);
+          if (
+            setting === undefined ||
+            named.subjectRecordTypeId.toLowerCase() !==
+              String(recordType.recordTypeId).toLowerCase()
+          )
+            continue;
+          const linked = new Map(optionActions.get(setting.fieldId.toLowerCase()));
+          linked.set(setting.option, named);
+          optionActions.set(setting.fieldId.toLowerCase(), linked);
+        }
+        recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds, optionActions });
+      }
       const installed: InstalledFlowBindings = {
         organizationId: installation.organizationId,
         applicationRootId: address.application.applicationRootId,

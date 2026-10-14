@@ -649,6 +649,42 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
           failure(output, "vortex.definition.module_action_references", "unsupported_choice"),
         );
     }
+    // An action that names the choice option it sets: the field must be a choice of its own
+    // record type with that option, one of its tasks must set exactly that option, and no other
+    // action names the same option.
+    const namedOptions = new Set<string>();
+    for (const action of array(content.actions)) {
+      if (action.setsChoiceFieldId === undefined) continue;
+      const record = moduleRecords.get(String(action.subjectRecordTypeId));
+      const field = record
+        ? array(record.fields).find((candidate) => candidate.fieldId === action.setsChoiceFieldId)
+        : undefined;
+      const optionKey = `${String(action.setsChoiceFieldId)}:${String(action.setsChoiceOption)}`;
+      const valid =
+        field?.type === "choice" &&
+        array(object(field.settings).options).some(
+          (option) => option.value === action.setsChoiceOption,
+        ) &&
+        !namedOptions.has(optionKey) &&
+        array(action.tasks).some((task) => {
+          if (String(task.type) !== "record.set_fields") return false;
+          const assigned = object(
+            object(object(task.properties).values)[String(action.setsChoiceFieldId)],
+          );
+          return (
+            assigned.kind === "literal" &&
+            object(assigned.literal).value === action.setsChoiceOption
+          );
+        });
+      namedOptions.add(optionKey);
+      if (!valid)
+        failures.push(
+          failure(output, "vortex.definition.module_action_references", "broken_reference", {
+            kind: "action",
+            key: String(action.key),
+          }),
+        );
+    }
     for (const event of array(content.events)) {
       const record = moduleRecords.get(String(event.recordTypeId));
       const fields = new Map(
