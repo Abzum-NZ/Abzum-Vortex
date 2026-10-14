@@ -65,7 +65,7 @@ begin
   loop
     module_root_id_value := (binding_item ->> 'moduleRootId')::uuid;
     module_release_revision_value := (binding_item ->> 'moduleReleaseRevision')::bigint;
-    select release.compilation_output #> '{canonical,content}' into strict module_content
+    select release.record_content into strict module_content
     from vortex_definition.releases as release
     where release.root_id = module_root_id_value
       and release.release_revision = module_release_revision_value;
@@ -176,7 +176,7 @@ begin
   end loop;
 
   if preview_installation_id_value is null then
-    select release.compilation_output #> '{canonical,content}' into strict application_content
+    select release.record_content into strict application_content
     from vortex_definition.releases as release
     where release.root_id = application_root_id_value
       and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;

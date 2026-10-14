@@ -60,7 +60,7 @@ begin
         (installation ->> 'applicationReleaseRevision')::bigint then
       raise exception using errcode = '55000', message = 'Named action owner is not installed';
     end if;
-    select release.compilation_output #> '{canonical,content}',
+    select release.record_content,
       release.validation_contract_version
     into strict action_owner_content, release_validation_version
     from vortex_definition.releases as release
@@ -71,7 +71,7 @@ begin
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
     where (item.value ->> 'moduleRootId')::uuid = p_action_owner_id
       and (item.value ->> 'moduleReleaseRevision')::bigint = p_action_release_revision;
-    select release.compilation_output #> '{canonical,content}',
+    select release.record_content,
       release.validation_contract_version
     into strict action_owner_content, release_validation_version
     from vortex_definition.releases as release
@@ -100,7 +100,7 @@ begin
     select item.value
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
   loop
-    select release.compilation_output #> '{canonical,content}' into strict release_content
+    select release.record_content into strict release_content
     from vortex_definition.releases as release
     where release.root_id = (binding_value ->> 'moduleRootId')::uuid
       and release.release_revision = (binding_value ->> 'moduleReleaseRevision')::bigint;
@@ -132,7 +132,7 @@ begin
     end if;
   end loop;
 
-  select release.compilation_output #> '{canonical,content}' into strict application_content
+  select release.record_content into strict application_content
   from vortex_definition.releases as release
   where release.root_id = (context_value ->> 'applicationRootId')::uuid
     and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
