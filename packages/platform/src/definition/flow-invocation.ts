@@ -47,12 +47,12 @@ import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
-import {
-  createFlowOrchestrator,
-  type FlowNamedAction,
-  type FlowRecordType,
-  type FlowRelease,
-} from "./flow-orchestrator";
+import { createFlowOrchestrator } from "./flow-orchestrator";
+import type {
+  FlowNamedAction,
+  FlowRecordType,
+  FlowRelease,
+} from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";

@@ -23,7 +23,9 @@ export { createPreviewInstallationCoordinator } from "./preview-installation-coo
 
 export { createProtectedOperationExecutor } from "./protected-operation-executor";
 
-export { createFlowOrchestrator, type FlowOrchestrator, type FlowNamedAction, type FlowOrchestratorResponse, type FlowRecordType, type FlowRelease, type FlowRunExpectation, type FlowSubject, type FlowUnavailableNotice } from "./flow-orchestrator";
+export { createFlowOrchestrator, type FlowOrchestrator } from "./flow-orchestrator";
+export type { FlowNamedAction, FlowOrchestratorResponse, FlowRecordType, FlowRelease, FlowRunExpectation, FlowUnavailableNotice } from "./flow-orchestrator-types";
+export type { FlowSubject } from "../rules/index";
 
 export { createFlowTestRunner } from "./flow-test-run";
 

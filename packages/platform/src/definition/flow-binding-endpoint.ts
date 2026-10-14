@@ -39,16 +39,16 @@ import {
   FORM_CONTAINER_BLOCK_RELEASE,
   PLATFORM_BLOCK_RELEASES,
 } from "./application-composition-catalogue";
+import type { FlowOrchestrator } from "./flow-orchestrator";
 import type {
   FlowNamedAction,
-  FlowOrchestrator,
   FlowOrchestratorResponse,
   FlowRecordType,
   FlowRelease,
   FlowRunExpectation,
-  FlowSubject,
   FlowUnavailableNotice,
-} from "./flow-orchestrator";
+} from "./flow-orchestrator-types";
+import type { FlowSubject } from "../rules/index";
 
 /**
  * The one server entry point that runs the flow bound to a component event (architecture decision

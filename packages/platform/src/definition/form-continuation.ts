@@ -16,7 +16,8 @@ import {
   type OrganizationSelectionCandidate,
   type SafeFlowResultKind,
 } from "../schema";
-import type { FlowOrchestrator, FlowOrchestratorResponse } from "./flow-orchestrator";
+import type { FlowOrchestrator } from "./flow-orchestrator";
+import type { FlowOrchestratorResponse } from "./flow-orchestrator-types";
 
 /**
  * The App implementation of the web-independent form request and continuation contract
