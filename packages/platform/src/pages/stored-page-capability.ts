@@ -244,12 +244,28 @@ const placementNamedActions = (
     const placementId = binding.controlId.toLowerCase();
     const actions = called.get(placementId) ?? new Map<string, FlowNamedAction>();
     called.set(placementId, actions);
-    for (const task of flow.tasks) {
-      if (task.type !== "operation.call") continue;
-      const key = literal(task, "operation");
-      const action = key === undefined ? undefined : named.get(key);
-      if (key !== undefined && action !== undefined) actions.set(key, action);
-    }
+    const seen = new Set<string>();
+    const visit = (tasks: readonly FlowTask[]): void => {
+      for (const task of tasks) {
+        if (task.type === "operation.call") {
+          const key = literal(task, "operation");
+          const action = key === undefined ? undefined : named.get(key);
+          if (key !== undefined && action !== undefined) actions.set(key, action);
+        } else if (task.type === "run_flow") {
+          visitFlow(String((task as { flowId: string }).flowId));
+        }
+        for (const child of flowTaskChildLists(task)) visit(child.tasks);
+      }
+    };
+    const visitFlow = (id: string): void => {
+      const target = flows.get(id.toLowerCase());
+      if (target === undefined || seen.has(target.id)) return;
+      seen.add(target.id);
+      visit(target.tasks);
+      visit(target.errors);
+      visit(target.finally);
+    };
+    visitFlow(flow.id);
   }
   return new Map(
     [...called].flatMap(([placementId, actions]) =>
@@ -581,6 +597,9 @@ export const createStoredPageCapabilityService = (
               recordId: subjectRecordId,
             });
             const read = await subjectRead;
+            // A transient failure is not a decision: it fails the projection instead of hiding controls.
+            if (read.kind === "temporarily_unavailable")
+              throw new Error("PAGE_SUBJECT_READ_UNAVAILABLE");
             // A subject the viewer cannot read shows no control that acts on it.
             if (read.kind !== "read") return false;
             const command = executeNamedActionCommandSchema.parse({
