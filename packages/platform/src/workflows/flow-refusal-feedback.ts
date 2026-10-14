@@ -23,10 +23,17 @@ export const flowFieldCorrectionSchema = z
 
 export type FlowFieldCorrection = z.infer<typeof flowFieldCorrectionSchema>;
 
+/** The authored code and message of the rule that refused the change: the one refusal text safe to show. */
+export const flowRuleRefusalSchema = z
+  .object({ code: z.string().min(1).max(100), message: z.string().min(1).max(300) })
+  .strict();
+
+export type FlowRuleRefusal = z.infer<typeof flowRuleRefusalSchema>;
+
 /**
  * Closed feedback carried by a protected flow. Producers may attach a declared operation input;
  * the installation endpoint may replace it with a submitted field only after proving the pinned
- * flow and binding provenance. No service message, submitted value or private path is carried.
+ * flow and binding provenance. The only message carried is a rule's authored refusal; no service message, submitted value or private path is.
  */
 export const flowRefusalFeedbackSchema = z
   .object({
@@ -34,6 +41,7 @@ export const flowRefusalFeedbackSchema = z
     operationInput: builderKeySchema.optional(),
     submittedField: builderKeySchema.optional(),
     corrections: z.array(flowFieldCorrectionSchema).min(1).max(100).optional(),
+    ruleRefusal: flowRuleRefusalSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -46,13 +54,14 @@ export const flowRefusalFeedbackSchema = z
     if (
       (value.operationInput !== undefined ||
         value.submittedField !== undefined ||
-        value.corrections !== undefined) &&
+        value.corrections !== undefined ||
+        value.ruleRefusal !== undefined) &&
       value.code !== "invalid_command"
     )
       context.addIssue({
         code: "custom",
         path: ["code"],
-        message: "Only invalid command feedback may identify an input or a field correction",
+        message: "Only invalid command feedback may identify an input, a field correction or a rule refusal",
       });
   });
 

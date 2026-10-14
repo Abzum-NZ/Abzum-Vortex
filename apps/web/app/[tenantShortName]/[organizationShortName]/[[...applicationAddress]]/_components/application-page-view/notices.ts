@@ -2,8 +2,8 @@ import type { FormFlowFeedback } from "@vortex/ui";
 import type { Notice } from "./types";
 
 /**
- * The fixed sentence for each safe flow outcome. The endpoint returns only the outcome, never a
- * server message, so what a person reads is the same whatever the flow did.
+ * The fixed sentence for each safe flow outcome. The endpoint returns the outcome and, for a rule
+ * refusal, the rule's own authored message (shown instead of the sentence here); never a service message.
  */
 export const outcomeNotices: Readonly<Record<string, Notice>> = {
   completed: { tone: "info", text: "Done." },
