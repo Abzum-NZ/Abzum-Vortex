@@ -3,7 +3,11 @@ import type {
   createProtectedQueryService,
   HumanOrganizationRequestResult,
 } from "@vortex/platform/server";
-import { projectCalendarPlacement, type CalendarPlacementContract } from "@vortex/platform/server";
+import {
+  projectCalendarPlacement,
+  type CalendarPlacementContract,
+  type RecordLinkResolver,
+} from "@vortex/platform/server";
 import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
 import type { collectPlacements } from "./placement-helpers";
 import { first } from "./placement-helpers";
@@ -30,6 +34,7 @@ export const readCalendarPlacement = async (input: {
   queries: ReturnType<typeof createProtectedQueryService>;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
+  resolveRecordLinks: RecordLinkResolver;
 }): Promise<void> => {
   const {
     readCalendarSettings,
@@ -43,6 +48,7 @@ export const readCalendarPlacement = async (input: {
     queries,
     session,
     selection,
+    resolveRecordLinks,
   } = input;
   let organizationSettings: Awaited<ReturnType<typeof readCalendarSettings>>;
   try {
@@ -79,6 +85,7 @@ export const readCalendarPlacement = async (input: {
     queries,
     session,
     selection,
+    resolveRecordLinks,
   });
   if (projection.outcome === "ready") {
     data[placementId] = { status: "ready", values: projection.values };

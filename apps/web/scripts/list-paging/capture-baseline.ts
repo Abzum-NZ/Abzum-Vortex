@@ -38,9 +38,7 @@ const explainThresholdMilliseconds = 1000;
 
 type Kind = Readonly<{ label: string; recordKey: string; queryKey: string }>;
 const kinds: readonly Kind[] = [
-  // guard-allow: business-name measurement script for two named shipped lists, not an engine
   { label: "CRM opportunities", recordKey: "opportunity", queryKey: "crm_pipeline" },
-  // guard-allow: business-name measurement script for two named shipped lists, not an engine
   { label: "Service Desk cases", recordKey: "case", queryKey: "service_desk_open_cases" },
 ];
 

@@ -61,17 +61,37 @@ const asRecordLink = (value: JsonValue): RecordLinkReference | undefined => {
     : undefined;
 };
 
+/** The distinct linked records among the given stored values. */
+export const collectRecordLinkValues = (
+  values: Iterable<JsonValue>,
+): readonly RecordLinkReference[] => {
+  const links = new Map<string, RecordLinkReference>();
+  for (const value of values) {
+    const link = asRecordLink(value);
+    if (link !== undefined) links.set(recordLinkLabelKey(link), link);
+  }
+  return [...links.values()];
+};
+
 /** The distinct linked records among every value of the rows the Query engine returned. */
 export const collectRecordLinks = (
   rows: readonly ProtectedQueryRow[],
-): readonly RecordLinkReference[] => {
-  const links = new Map<string, RecordLinkReference>();
-  for (const row of rows)
-    for (const value of Object.values<JsonValue>(row.values)) {
-      const link = asRecordLink(value);
-      if (link !== undefined) links.set(recordLinkLabelKey(link), link);
-    }
-  return [...links.values()];
+): readonly RecordLinkReference[] =>
+  collectRecordLinkValues(rows.flatMap((row) => Object.values<JsonValue>(row.values)));
+
+/** The plain text a label-only surface shows for a linked record; never the stored identity. */
+export const recordLinkPlainText = (
+  value: JsonValue | undefined,
+  recordLinks: ProjectedRecordLinks | undefined,
+): string | undefined => {
+  const link = value === undefined ? undefined : asRecordLink(value);
+  if (link === undefined) return undefined;
+  const resolved = recordLinks?.get(recordLinkLabelKey(link));
+  if (resolved === undefined) {
+    console.error("[page] record link label missing: RECORD_LINK_LABEL_UNAVAILABLE");
+    return "Unavailable";
+  }
+  return resolved.kind === "restricted" ? "Restricted" : resolved.label;
 };
 
 /**

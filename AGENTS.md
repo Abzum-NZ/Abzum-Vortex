@@ -85,8 +85,11 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 
 ## Guardrails
 
-`pnpm guard` has two tiers. Blocking rules protect business-name boundaries, package layering, migration parity and function UUIDs, and versioned names. A new blocking finding must be fixed or covered by a reviewed, occurrence-specific exception. File size, unused files/exports/dependencies, process artefacts and silent-parse findings are warnings; they are printed in CI and do not fail the run. Warnings are not stored in the baseline. The baseline applies only to blocking findings; stale entries are reported as warnings. Blocking baseline identities follow Git rename history, and `pnpm guard --update-baseline` persists a moved path.
+`pnpm guard` has two tiers. Blocking rules protect business-name boundaries, package layering, migration parity, canonical coverage and owner roles, SQL identifier length, duplicate migration versions, function UUIDs, versioned names and offline definition validation; any blocking finding fails the run (there is no baseline). File size is a warning. Unused code is `pnpm knip`'s job, not the guard's.
 
-Use `// guard-allow: <rule> <reason>` on the offending line or the line directly above it. SQL supports `-- guard-allow: <rule> <reason>`, and block comments support `/* guard-allow: <rule> <reason> */`. The rule must be a real guard rule and the reason must contain at least 10 characters. Each directive covers one occurrence, and the guard lists every used exception. An exception is appropriate only when the finding is intentional and a direct fix is not suitable; the reviewer must agree with the stated reason. Unmatched directives warn, while an unknown rule or short reason blocks the run.
+Use `// guard-allow: <rule> <reason>` on the offending line or the line directly above it. SQL supports `-- guard-allow: <rule> <reason>`, and block comments support `/* guard-allow: <rule> <reason> */`. The rule must be a real guard rule and the reason must contain at least 10 characters. Each directive covers one occurrence; the guard counts used exceptions per rule. An exception is appropriate only when the finding is intentional and a direct fix is not suitable; the reviewer must agree with the stated reason. Unmatched directives warn, while an unknown rule or short reason blocks the run.
 
-Each rule's owner and review-by date are recorded in `tooling/guard/config.ts`. The guard prints a notice after a review date passes; the notice does not fail the run.
+Guards must stay current, or they rot into noise:
+
+- A pull request that changes a feature a guard rule covers updates or removes that rule (and its allowances) in the same pull request.
+- Every rule in `tooling/guard/config.ts` has an owner and a review-by date; the guard prints a notice once it passes, and the lead then keeps, changes or removes the rule.

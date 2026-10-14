@@ -40,44 +40,29 @@ type Target = Readonly<{
   /** A detail page is addressed by the id of one stored record of this record type. */
   recordKey?: string;
 }>;
-// guard-allow: business-name measurement script for named shipped pages, not an engine
 const pipelineApplication = "vortex.app.crm";
-// guard-allow: business-name measurement script for named shipped pages, not an engine
 const casesApplication = "vortex.app.service_desk";
-// guard-allow: business-name measurement script for named shipped pages, not an engine
 const groupsApplication = "vortex.app.iam";
 const targets: readonly Target[] = [
   {
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     label: "CRM pipeline",
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     application: pipelineApplication,
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     page: "crm_pipeline",
   },
   {
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     label: "CRM opportunity detail",
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     application: pipelineApplication,
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     page: "crm_opportunity_detail",
     recordKey: "opportunity",
   },
   {
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     label: "Service Desk case list",
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     application: casesApplication,
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     page: "service_desk_cases",
   },
   {
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     label: "Service Desk case detail",
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     application: casesApplication,
-    // guard-allow: business-name measurement script for named shipped pages, not an engine
     page: "service_desk_case_detail",
     recordKey: "case",
   },
