@@ -80,34 +80,34 @@ begin
   execute pg_catalog.format('alter table record_data.%I force row level security', table_token);
   execute pg_catalog.format(
     'create policy record_select on record_data.%I for select to vortex_record_adapter using (
-      organisation_id = vortex_platform.organization_id()
+      organisation_id = (select vortex_platform.organization_id())
       and case when application_root_id is null then true
-        else application_root_id = vortex_platform.application_root_id(true) end
+        else application_root_id = (select vortex_platform.application_root_id(true)) end
     )', table_token
   );
   execute pg_catalog.format(
     'create policy record_insert on record_data.%I for insert to vortex_record_adapter with check (
-      organisation_id = vortex_platform.organization_id()
+      organisation_id = (select vortex_platform.organization_id())
       and case when application_root_id is null then true
-        else application_root_id = vortex_platform.application_root_id(true) end
+        else application_root_id = (select vortex_platform.application_root_id(true)) end
     )', table_token
   );
   execute pg_catalog.format(
     'create policy record_update on record_data.%I for update to vortex_record_adapter using (
-      organisation_id = vortex_platform.organization_id()
+      organisation_id = (select vortex_platform.organization_id())
       and case when application_root_id is null then true
-        else application_root_id = vortex_platform.application_root_id(true) end
+        else application_root_id = (select vortex_platform.application_root_id(true)) end
     ) with check (
-      organisation_id = vortex_platform.organization_id()
+      organisation_id = (select vortex_platform.organization_id())
       and case when application_root_id is null then true
-        else application_root_id = vortex_platform.application_root_id(true) end
+        else application_root_id = (select vortex_platform.application_root_id(true)) end
     )', table_token
   );
   execute pg_catalog.format(
     'create policy record_delete on record_data.%I for delete to vortex_record_adapter using (
-      organisation_id = vortex_platform.organization_id()
+      organisation_id = (select vortex_platform.organization_id())
       and case when application_root_id is null then true
-        else application_root_id = vortex_platform.application_root_id(true) end
+        else application_root_id = (select vortex_platform.application_root_id(true)) end
     )', table_token
   );
   execute pg_catalog.format(
