@@ -57,6 +57,7 @@ export {
   type ProjectedNavigationItem,
   type StoredNavigationProjectionDependencies,
 } from "./navigation-projection";
+export { recordLinkLabelKey } from "../definition/app-index";
 export {
   projectRecordDetailData,
   projectRecordsTableData,

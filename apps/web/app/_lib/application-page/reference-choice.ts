@@ -7,6 +7,8 @@ import {
   type InstalledRuntimeContext,
   createStoredPageCapabilityService,
   type ReferenceChoiceOption,
+  type RecordLinkResolver,
+  recordLinkLabelKey,
   projectReferenceChoiceInputValues,
 } from "@vortex/platform/server";
 import { FIELD_INPUT_BLOCK_RELEASE, FIELD_INPUT_CONTROL_RELEASES } from "@vortex/platform/server";
@@ -465,27 +467,60 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
 
 /**
  * The record a form opens with selected, named by the page address and offered by the Choice's own
- * Query under the viewer's authority. A value that is not a record id, or is not offered, selects
- * nothing: the person still sees the ordinary empty Choice.
+ * Query under the viewer's authority. The lookup is bounded: the already-read first page, else one
+ * search page named by the record's own label (read for this viewer, so a record they cannot read is
+ * never looked up). A value that is not offered selects nothing: the person sees the ordinary
+ * empty Choice.
  */
 export const projectInitialReferenceChoice = async (args: Readonly<{
   firstPage: ReferenceChoiceFirstPage;
   recordId: string;
+  resolveRecordLinks: RecordLinkResolver;
   service: ReturnType<typeof createReferenceChoiceService>;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
 }>): Promise<PageDataState | undefined> => {
-  const command = args.firstPage.field.command;
+  const first = args.firstPage;
+  const command = first.field.command;
   if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
     return undefined;
   const target = command.source.query.recordType;
-  const projected = await projectSelectedReferenceChoiceEditField({
-    firstPage: args.firstPage,
-    field: { key: args.firstPage.field.fieldKey, required: false, targets: [target] },
-    stored: { recordTypeId: String(target.recordTypeId), recordId: args.recordId },
-    service: args.service,
-    session: args.session,
-    selection: args.selection,
+  const matches = (choice: ReferenceChoiceOption): boolean =>
+    !("organizationAccountId" in choice.value) &&
+    sameId(choice.value.recordTypeId, target.recordTypeId) &&
+    sameId(choice.value.recordId, args.recordId);
+  const nextPage = first.nextContinuationToken === undefined
+    ? {}
+    : { nextContinuationToken: first.nextContinuationToken };
+  const project = (
+    choices: readonly ReferenceChoiceOption[],
+    selected: ReferenceChoiceOption,
+    evidence: ReferenceChoiceSelectionEvidence | undefined,
+  ): PageDataState => ({
+    status: "ready",
+    values: projectReferenceChoiceInputValues(choices, selected.key, undefined, {
+      ...nextPage,
+      ...(evidence === undefined ? {} : { optionEvidenceOverrides: { [selected.key]: evidence } }),
+    }),
   });
-  return projected?.data;
+
+  const onFirstPage = first.choices.find(matches);
+  if (onFirstPage !== undefined) return project(first.choices, onFirstPage, undefined);
+
+  const link = { recordTypeId: String(target.recordTypeId), recordId: args.recordId };
+  const labels = await args.resolveRecordLinks([link]);
+  const label = labels?.get(recordLinkLabelKey(link));
+  if (label?.kind !== "record_link") return undefined;
+  const search = label.label.trim().slice(0, 100);
+  if (search === "") return undefined;
+  const result = await args.service.run(args.session, args.selection, { ...command, search });
+  if (
+    result.kind !== "available" ||
+    result.value.outcome !== "completed" ||
+    result.value.kind !== "record_reference"
+  )
+    return undefined;
+  const offered = result.value.choices.find(matches);
+  if (offered === undefined) return undefined;
+  return project([...first.choices, offered], offered, { search });
 };

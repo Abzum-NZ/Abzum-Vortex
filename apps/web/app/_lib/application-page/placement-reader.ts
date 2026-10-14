@@ -303,6 +303,7 @@ export const readPlacement = async (
       : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
     const field = form?.placements.get(placementId);
     if (field === undefined || formId === undefined) {
+      logPlacementFailure(address, placementId, "choice_settings_invalid");
       data[placementId] = { status: "disabled", reason: "Choices unavailable" };
       return;
     }
@@ -361,6 +362,7 @@ export const readPlacement = async (
       const initial = await projectInitialReferenceChoice({
         firstPage: referenceChoiceFirstPages.get(placementId)!,
         recordId: initialRecordId.data,
+        resolveRecordLinks,
         service: referenceChoices,
         session,
         selection,
