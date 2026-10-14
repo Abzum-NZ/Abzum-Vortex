@@ -357,7 +357,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                     key={day}
                     role="group"
                     aria-label={dayLabel(day)}
-                    className={`min-h-24 overflow-hidden rounded-md border p-1 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
+                    className={`min-h-24 min-w-0 overflow-hidden rounded-md border p-1 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
                   >
                     <div className={`mb-1 text-xs font-medium ${values.view === "month" ? "text-right" : ""}`}>
                       {values.view === "week" ? dayLabel(day) : Number(day.slice(8, 10))}

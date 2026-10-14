@@ -1,6 +1,7 @@
 "use client";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Button } from "@vortex/ui/components/button";
+import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -253,15 +254,17 @@ export function ApplicationReleaseRestore({
         <dl className="space-y-3">
           <div><dt className="font-semibold">Application</dt><dd>{displayedLoad.snapshot.definitionKey}</dd></div>
           <div><dt className="font-semibold">Selected version and revision</dt><dd>{displayedLoad.metadata.releaseVersion} · revision {displayedLoad.metadata.releaseRevision}</dd></div>
-          <div><dt className="font-semibold">Selected release source fingerprint</dt><dd className="break-all"><code>{displayedLoad.metadata.sourceFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Release status</dt><dd>{displayedLoad.metadata.isCurrent ? "Current published release" : "Earlier published release"}</dd></div>
           <div><dt className="font-semibold">Published</dt><dd><time dateTime={displayedLoad.metadata.publishedAt}>{displayedLoad.metadata.publishedAt}</time></dd></div>
           <div><dt className="font-semibold">Published by</dt><dd className="break-all">{displayedLoad.metadata.publishedBy}</dd></div>
           <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{displayedLoad.metadata.releaseNote}</dd></div>
           <div><dt className="font-semibold">Current saved draft revision</dt><dd>{displayedLoad.snapshot.draftRevision}</dd></div>
-          <div><dt className="font-semibold">Current saved draft source fingerprint</dt><dd className="break-all"><code>{displayedLoad.snapshot.sourceFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Current publication anchor</dt><dd>{displayedLoad.snapshot.anchorReleaseRevision}</dd></div>
         </dl>
+        <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Selected release source fingerprint</dt><dd className="break-all"><code>{displayedLoad.metadata.sourceFingerprint}</code></dd></div>
+          <div><dt className="font-semibold">Current saved draft source fingerprint</dt><dd className="break-all"><code>{displayedLoad.snapshot.sourceFingerprint}</code></dd></div>
+        </dl></TechnicalDetails>
         {staleLabel && <p>This preview is the last confirmed snapshot. Reload to confirm the current saved draft before continuing.</p>}
       </> : <p>The selected release and saved draft could not be loaded. Reload to check them again.</p>}
     </section>
@@ -294,12 +297,14 @@ export function ApplicationReleaseRestore({
       <dl className="space-y-2">
         <div><dt className="font-semibold">New saved draft revision</dt><dd>{receipt.draftRevision}</dd></div>
         <div><dt className="font-semibold">Restored from release revision</dt><dd>{receipt.targetReleaseRevision}</dd></div>
-        <div><dt className="font-semibold">Restored source fingerprint</dt><dd className="break-all"><code>{receipt.sourceFingerprint}</code></dd></div>
         <div><dt className="font-semibold">Publication anchor</dt><dd>{receipt.publicationAnchor}</dd></div>
         <div><dt className="font-semibold">Restored by organization account</dt><dd className="break-all">{receipt.restoredBy}</dd></div>
         <div><dt className="font-semibold">Database operation time</dt><dd><time dateTime={receipt.restoredAt}>{receipt.restoredAt}</time></dd></div>
         <div><dt className="font-semibold">Request correlation</dt><dd className="break-all">{receipt.correlationId}</dd></div>
       </dl>
+      <TechnicalDetails><dl className="space-y-2">
+        <div><dt className="font-semibold">Restored source fingerprint</dt><dd className="break-all"><code>{receipt.sourceFingerprint}</code></dd></div>
+      </dl></TechnicalDetails>
       <p>Reload the saved draft before another restore. No release was published or installed.</p>
     </section>}
 

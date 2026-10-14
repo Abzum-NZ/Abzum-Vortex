@@ -111,7 +111,6 @@ export const checkSavedPagePreview = (
   return { kind: "available", artifact, resolutionFingerprint: resolutionFingerprint.data };
 };
 
-const buttonClass = "";
 const breakpoints: readonly ApplicationPreviewBreakpoint[] = ["desktop", "tablet", "phone"];
 
 class PreviewRenderBoundary extends Component<{
@@ -236,7 +235,7 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
     <p className="text-sm">Choose a saved page and, for guided forms, a declared step. Interactions are simulations;
       nothing is saved, published or installed.</p>
     <label className="block text-sm">Saved page
-      <NativeSelect className={`${buttonClass} ml-2`} value={chosen?.pageKey ?? ""}
+      <NativeSelect className="ml-2" value={chosen?.pageKey ?? ""}
         disabled={context === null} onChange={(event) => {
           const current = readContext();
           if (current === null || context === null || !sameContext(context, current)) return;
@@ -253,7 +252,7 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
       </NativeSelect>
     </label>
     {chosenPage?.type === "guided_form" && <label className="block text-sm">Guided step
-      <NativeSelect className={`${buttonClass} ml-2`} value={chosen?.stepAlias ?? ""}
+      <NativeSelect className="ml-2" value={chosen?.stepAlias ?? ""}
         onChange={(event) => {
           const current = readContext();
           const currentSelection = selectionFor(current, selectedSelection.current);
@@ -266,7 +265,7 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
       </NativeSelect>
     </label>}
     <fieldset className="flex flex-wrap gap-2"><legend className="mb-2 text-sm">Preview size</legend>
-      {breakpoints.map((size) => <Button key={size} type="button" className={buttonClass}
+      {breakpoints.map((size) => <Button key={size} type="button"
         aria-pressed={breakpoint === size} onClick={() => {
           if (selectedBreakpoint.current === size) return;
           selectedBreakpoint.current = size;
@@ -274,7 +273,7 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
           setBreakpoint(size);
         }}>{size === "desktop" ? "Desktop" : size === "tablet" ? "Tablet" : "Phone"}</Button>)}
     </fieldset>
-    <Button type="button" variant="outline" size="sm" className={buttonClass} disabled={context === null || chosen === null || isPending}
+    <Button type="button" variant="outline" size="sm" disabled={context === null || chosen === null || isPending}
       onClick={preview}>Preview saved page</Button>
     <p role="status" aria-live="polite">{context === null
       ? "Preview requires a verified saved baseline with no unsaved or pending inputs. Finish editing or reopen the saved draft explicitly."

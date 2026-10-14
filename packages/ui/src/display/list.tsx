@@ -61,7 +61,7 @@ export function ListDisplay(props: DisplayRenderProps<ListPayload>): ReactElemen
                     selected={values.selectedRecordIds?.includes(row.recordId) ?? false}
                     events={events}
                   />
-                  <div className="flex flex-1 flex-col">
+                  <div className="flex min-w-0 flex-1 flex-col break-words">
                     <span className="font-semibold">
                       <DisplayCellView value={heading ?? { kind: "empty" }} />
                     </span>

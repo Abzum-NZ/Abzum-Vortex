@@ -64,15 +64,15 @@ export function RecordDetailDisplay(
           ) : null}
           {hasHeader ? <Separator /> : null}
           <CardContent className="flex flex-col items-start gap-4">
-            <dl className="grid w-full gap-4 sm:grid-cols-2">
+            <dl className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
               {fields.map((field) => (
                 <div
                   key={field.key}
                   data-vortex-field-key={field.key}
-                  className="flex flex-col gap-1"
+                  className="flex min-w-0 flex-col gap-1"
                 >
                   <dt className="text-sm font-medium text-muted-foreground">{field.label}</dt>
-                  <dd className="text-sm">
+                  <dd className="break-words text-sm">
                     <DisplayCellView value={field.value} />
                   </dd>
                 </div>

@@ -1,6 +1,9 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
+import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-details";
+import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
+import { StudioField } from "./studio-field";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
@@ -36,7 +39,6 @@ type Props = Readonly<{
 }>;
 
 const inputClass = "w-full";
-const buttonClass = "";
 
 const candidateFingerprint = async (source: ApplicationSourceDocument): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalJson(source)));
@@ -254,24 +256,26 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
     <h2 className="font-semibold">Import authored Application source</h2>
     <p>Choose a local JSON file or paste source in format 2.0.0, up to 2 MiB. Keep this draft's key and root alias.
       Review the complete source before replacing local history. Import does not publish, install or adopt a release.</p>
-    <label className="block space-y-1"><span>Local JSON source file</span>
-      <input ref={fileInput} className={inputClass} type="file" accept=".json,application/json" disabled={disabled}
-        onChange={(event) => { void readFile(event); }} /></label>
-    <label className="block space-y-1"><span>Authored Application JSON</span>
-      <Textarea className={`${inputClass} min-h-48 font-mono text-sm`} value={text} disabled={disabled}
+    <StudioField label="Local JSON source file">
+      {(control) => <Input {...control} ref={fileInput} type="file" accept=".json,application/json" disabled={disabled}
+        onChange={(event) => { void readFile(event); }} />}
+    </StudioField>
+    <StudioField label="Authored Application JSON">
+      {(control) => <Textarea {...control} className={`${inputClass} min-h-48 font-mono text-sm`} value={text} disabled={disabled}
         onChange={(event) => {
           if (disabled || readSnapshot() === null) return;
           replaceText(event.target.value);
           setMessage("Input changed. Review this source before applying it.");
-        }} /></label>
+        }} />}
+    </StudioField>
     {reviewed !== null && <div className="space-y-2">
-      <p className="break-all">Reviewed source fingerprint: {reviewed.fingerprint}</p>
       <p>Applying replaces the complete current local source, including permissions, roles, dependencies, pages and flows.
         This review does not establish publication eligibility or installed permissions.</p>
-      <details><summary>Current local source</summary>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(reviewed.snapshot.source, null, 2)}</pre></details>
-      <details open><summary>Complete reviewed replacement source</summary>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">{JSON.stringify(reviewed.source, null, 2)}</pre></details>
+      <TechnicalDetails title="View source and technical details">
+        <p className="break-all">Reviewed source fingerprint: <code>{reviewed.fingerprint}</code></p>
+        <ViewSource value={reviewed.snapshot.source} title="Current local source" />
+        <ViewSource value={reviewed.source} title="Complete reviewed replacement source" />
+      </TechnicalDetails>
     </div>}
     {diagnosticsCurrent && diagnostics !== null && <div role="status" aria-live="polite" className="space-y-2">
       <h3 className="font-semibold">Source validation issues</h3>
@@ -286,11 +290,11 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       </ul>
     </div>}
     <div className="flex flex-wrap gap-2">
-      <Button className={buttonClass} type="button" disabled={disabled || operation !== null || text.length === 0}
+      <Button type="button" disabled={disabled || operation !== null || text.length === 0}
         onClick={() => { void review(); }}>Review source</Button>
-      <Button className={buttonClass} type="button" disabled={disabled || operation !== null || reviewed === null}
+      <Button type="button" disabled={disabled || operation !== null || reviewed === null}
         onClick={apply}>Apply reviewed source to local history</Button>
-      <Button className={buttonClass} type="button" disabled={text.length === 0 && operation === null}
+      <Button type="button" disabled={text.length === 0 && operation === null}
         onClick={() => {
           replaceText("");
           if (fileInput.current !== null) fileInput.current.value = "";
