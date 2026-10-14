@@ -1,6 +1,7 @@
 import {
   flowFieldCorrectionSchema,
   flowRefusalFeedbackCodeSchema,
+  flowRuleRefusalSchema,
   labelSchema,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type PlatformBlockRelease,
@@ -273,7 +274,11 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
       });
     }
     if (feedback.kind === "refusal") {
-      requireExactKeys(feedback, ["kind", "code", "fieldLabel", "corrections", "recovery"], location);
+      requireExactKeys(
+        feedback,
+        ["kind", "code", "fieldLabel", "corrections", "ruleMessage", "recovery"],
+        location,
+      );
       if (
         feedback.recovery !== undefined &&
         feedback.recovery !== "partial" &&
@@ -296,11 +301,20 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
         fail("Flow refusal feedback field corrections are invalid", location);
       if (corrections !== undefined && code.data !== "invalid_command")
         fail("Only invalid command feedback may carry field corrections", location);
+      const ruleMessage =
+        feedback.ruleMessage === undefined
+          ? undefined
+          : flowRuleRefusalSchema.shape.message.safeParse(feedback.ruleMessage);
+      if (ruleMessage !== undefined && !ruleMessage.success)
+        fail("Flow refusal feedback rule message is invalid", location);
+      if (ruleMessage !== undefined && code.data !== "invalid_command")
+        fail("Only invalid command feedback may carry a rule message", location);
       return Object.freeze({
         kind: "refusal",
         code: code.data,
         ...(fieldLabel?.success ? { fieldLabel: fieldLabel.data } : {}),
         ...(corrections?.success ? { corrections: corrections.data } : {}),
+        ...(ruleMessage?.success ? { ruleMessage: ruleMessage.data } : {}),
         ...(feedback.recovery === undefined ? {} : { recovery: feedback.recovery }),
       });
     }
