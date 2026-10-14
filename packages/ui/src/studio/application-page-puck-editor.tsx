@@ -103,6 +103,31 @@ export type ApplicationPagePuckEditorProps = Readonly<{
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
+/** The dependency list must name exactly the releases the placements use; a Puck edit can add or drop one. */
+const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void => {
+  const used = new Map<string, { block_id: string; release_version: string }>();
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(collect);
+    if (typeof value !== "object" || value === null) return;
+    const record = value as Record<string, unknown>;
+    const block = record.block as Record<string, unknown> | undefined;
+    if (typeof block?.block_id === "string" && typeof block.release_version === "string")
+      used.set(`${block.block_id}@${block.release_version}`,
+        { block_id: block.block_id, release_version: block.release_version });
+    Object.values(record).forEach(collect);
+  };
+  collect(source.body.pages);
+  collect(source.body.shells);
+  const kept = source.body.platform_block_dependencies.filter((dependency) =>
+    used.has(`${dependency.block_id}@${dependency.release_version}`));
+  for (const [identity, release] of used)
+    if (!kept.some((dependency) => `${dependency.block_id}@${dependency.release_version}` === identity))
+      kept.push({ kind: "platform_block", ...release });
+  kept.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
+    : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
+  source.body.platform_block_dependencies = kept;
+};
+
 export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps) {
   const page = props.source.body.pages.find((candidate) => candidate.id === props.pageAlias);
   const addresses = page === undefined ? [] : sourcePageSlotAddresses(page);
@@ -261,6 +286,7 @@ function ApplicationPageSlotPuckEditor({
         !setSourcePageSlot(nextPage, at, sourcePlacementSlotSchema.parse(editedSlot))
       )
         throw new TypeError("The selected page is unavailable.");
+      syncPlatformBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
       setMessage("");
