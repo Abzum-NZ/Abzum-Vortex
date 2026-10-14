@@ -53,7 +53,7 @@ export function ApplicationAccountMenu(): ReactElement {
       <DropdownMenuTrigger
         disabled={actions === null}
         aria-label="Account menu"
-        className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+        className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-[44px] max-sm:min-w-[44px] max-sm:items-center max-sm:justify-center"
       >
         <Avatar>
           <AvatarFallback>{avatarInitial}</AvatarFallback>
