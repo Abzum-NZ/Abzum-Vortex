@@ -58,6 +58,8 @@ export type RecordsTableQueryRequest = Readonly<{
   fieldChoiceLabels?: Readonly<
     Record<string, readonly Readonly<{ value: string; label: string }>[]>
   >;
+  /** The date and date-time fields of the installed definition (field identity to field type). */
+  fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
   /**
    * The viewer's chosen sort, from a `sort_changed` data event. It must be a declared sortable
    * field; `null` or absent uses the bound query's declared sort.
@@ -311,6 +313,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ...(request.fieldChoiceLabels === undefined
             ? {}
             : { fieldChoiceLabels: request.fieldChoiceLabels }),
+          ...(request.fieldDateTypes === undefined ? {} : { fieldDateTypes: request.fieldDateTypes }),
         },
         result.value.rows,
         (request.page ?? 1) > 1,

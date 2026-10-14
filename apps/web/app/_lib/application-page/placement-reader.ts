@@ -61,6 +61,7 @@ import {
   isApplicationLauncherPlacement,
   fieldLabelsOf,
   fieldChoiceLabelsOf,
+  fieldDateTypesOf,
   findModuleQuery,
   noticeQueryInput,
   coerceInput,
@@ -409,6 +410,7 @@ export const readPlacement = async (
           : {
               fieldLabels: fieldLabelsOf(subjectModule),
               fieldChoiceLabels: fieldChoiceLabelsOf(subjectModule, allowedPermissions),
+              fieldDateTypes: fieldDateTypesOf(subjectModule),
             }),
         ...(subjectFieldIds === undefined ? {} : { readableFieldIds: subjectFieldIds }),
       },
@@ -774,6 +776,7 @@ export const readPlacement = async (
       pageParameters,
       fieldLabels,
       fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
+      fieldDateTypes: fieldDateTypesOf(bound.module),
       page:
         tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
           ? tableContinuation.request.page
@@ -862,6 +865,7 @@ export const readPlacement = async (
         settings,
         fieldLabels: fieldLabelsOf(detailModule),
         fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
+        fieldDateTypes: fieldDateTypesOf(detailModule),
       },
       rows,
     );

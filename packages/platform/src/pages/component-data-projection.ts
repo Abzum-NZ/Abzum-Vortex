@@ -80,6 +80,8 @@ export type ComponentDataProjectionInput = Readonly<{
     Record<string, readonly Readonly<{ value: string; label: string }>[]>
   >;
   readableFieldIds?: readonly string[];
+  /** The date or date-time fields of the installed definition (field identity to field type), so a column declared "automatic" shows them as dates. */
+  fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
 }>;
 
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
@@ -88,11 +90,25 @@ const empty: ProjectedCellValue = Object.freeze({ kind: "empty" as const });
 const hasOwn = (record: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, key);
 
-const projectDate = (value: string): ProjectedCellValue =>
-  (ISO_CALENDAR_DATE.test(value) && !Number.isNaN(Date.parse(value))) ||
-  timestampSchema.safeParse(value).success
-    ? { kind: "date", iso: value }
-    : { kind: "text", text: value };
+/** A calendar date whose day exists in its month; `Date.parse` alone rolls 2026-02-31 over to March. */
+const isRealCalendarDate = (value: string): boolean => {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
+};
+
+/**
+ * A stored value of a date or date-time column. One that is not an ISO date or offset timestamp is
+ * logged with a stable code and shown as an explicit invalid-value text, never as the raw stored text.
+ */
+const projectDate = (value: string): ProjectedCellValue => {
+  if (
+    (ISO_CALENDAR_DATE.test(value) && isRealCalendarDate(value)) ||
+    timestampSchema.safeParse(value).success
+  )
+    return { kind: "date", iso: value };
+  console.error("[page] records display value refused DATE_VALUE_INVALID");
+  return { kind: "text", text: "Invalid date value" };
+};
 
 /**
  * Maps one stored value to a closed display value by the declared format. A value that does not
@@ -101,9 +117,11 @@ const projectDate = (value: string): ProjectedCellValue =>
  */
 const projectCell = (
   value: JsonValue,
-  format: RecordsDisplayFormat,
+  declaredFormat: RecordsDisplayFormat,
   choiceLabels?: readonly Readonly<{ value: string; label: string }>[],
+  dateType?: "date" | "date_time",
 ): ProjectedCellValue => {
+  const format = declaredFormat === "automatic" && dateType !== undefined ? dateType : declaredFormat;
   if (value === null) return empty;
   if (Array.isArray(value) && choiceLabels !== undefined) {
     const selected = value.filter((entry): entry is string => typeof entry === "string");
@@ -246,6 +264,7 @@ export const projectRecordsTableData = (
               valueOf(row, column.key)?.value ?? null,
               column.format,
               input.fieldChoiceLabels?.[column.key.toLowerCase()],
+              input.fieldDateTypes?.[column.key.toLowerCase()],
             ),
           ]),
         ),
@@ -280,7 +299,12 @@ export const projectRecordDetailData = (
     fields.push({
       key: declared.field,
       label,
-      value: projectCell(stored.value, declared.format, choiceLabels),
+      value: projectCell(
+        stored.value,
+        declared.format,
+        choiceLabels,
+        input.fieldDateTypes?.[declared.field.toLowerCase()],
+      ),
     });
   }
   return fields.length === 0
