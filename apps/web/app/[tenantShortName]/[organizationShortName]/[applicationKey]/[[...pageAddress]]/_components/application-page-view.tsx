@@ -22,6 +22,7 @@ import { ApplicationPageViewContent } from "./application-page-view/application-
  */
 export function ApplicationPageView({
   model,
+  content,
   frame,
   guidedFormActions,
   onOpenApplication,
@@ -32,6 +33,8 @@ export function ApplicationPageView({
   platformThemeTokens,
 }: Readonly<{
   model: ApplicationPageModel;
+  /** The page's own placements, rendered in the frame's outlet. */
+  content: Readonly<Record<string, unknown>>;
   frame: ProjectedApplicationFrame;
   guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
@@ -49,6 +52,7 @@ export function ApplicationPageView({
     <UnsavedWorkProvider>
       <ApplicationPageViewContent
         model={model}
+        content={content}
         frame={frame}
         guidedFormActions={guidedFormActions}
         onOpenApplication={onOpenApplication}

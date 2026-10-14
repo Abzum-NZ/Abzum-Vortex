@@ -61,6 +61,7 @@ import { useApplicationFrame, useFramePageState } from "../../../_components/app
 
 export function ApplicationPageViewContent({
   model,
+  content,
   frame,
   guidedFormActions,
   onOpenApplication,
@@ -71,6 +72,8 @@ export function ApplicationPageViewContent({
   platformThemeTokens,
 }: Readonly<{
   model: ApplicationPageModel;
+  /** The page's own placements, rendered in the frame's outlet. */
+  content: Readonly<Record<string, unknown>>;
   /** The frame projected with this page, handed to the application frame around it. */
   frame: ProjectedApplicationFrame;
   guidedFormActions: GuidedFormActions;
@@ -457,6 +460,35 @@ export function ApplicationPageViewContent({
   useFramePageState("webMcp", webMcpShellState);
   useFramePageState("unsavedWork", unsavedWork);
   useFramePageState("frame", frame);
+  useFramePageState("navigation", model.navigation);
+  // The runtime wires every placement of the page's projection. The content renders its own
+  // placements; the frame renders the shell's, so it receives their inputs.
+  const contentPlacementIds = useMemo(() => {
+    const ids = new Set<string>();
+    const visit = (slot: unknown): void => {
+      if (!isRecord(slot) || !isRecord(slot.placements)) return;
+      for (const [placementId, placement] of Object.entries(slot.placements)) {
+        ids.add(placementId);
+        if (isRecord(placement) && isRecord(placement.slots))
+          for (const child of Object.values(placement.slots)) visit(child);
+      }
+    };
+    const composition = content.composition;
+    if (isRecord(composition)) {
+      visit(composition.main);
+      if (isRecord(composition.stepContent))
+        for (const step of Object.values(composition.stepContent)) visit(step);
+    }
+    return ids;
+  }, [content]);
+  const [contentRuntimeInputs, frameRuntimeInputs] = useMemo(() => {
+    const own: Record<string, unknown> = {};
+    const shell: Record<string, unknown> = {};
+    for (const [placementId, input] of Object.entries(runtimeInputs))
+      (contentPlacementIds.has(placementId) ? own : shell)[placementId] = input;
+    return [own, Object.keys(shell).length === 0 ? undefined : shell] as const;
+  }, [contentPlacementIds, runtimeInputs]);
+  useFramePageState("runtimeInputs", frameRuntimeInputs);
   const releaseAdoption = model.adoption;
   const adoption = useMemo(
     () =>
@@ -515,7 +547,7 @@ export function ApplicationPageViewContent({
                 </>
               )
             }
-            composition={model.page as unknown as ProjectedPageCapability}
+            composition={content as unknown as ProjectedPageCapability}
             registry={platformComponentRegistry}
             fieldInputControlReleases={fieldInputControlReleases}
             platformThemeTokens={platformThemeTokens}
@@ -535,7 +567,7 @@ export function ApplicationPageViewContent({
                   activeStepId: model.guidedForm.activeStepId,
                   guidedSummaryValues: model.guidedForm.values,
                 })}
-            runtimeInputs={runtimeInputs}
+            runtimeInputs={contentRuntimeInputs}
             {...(model.guidedForm === undefined
               ? {}
               : {

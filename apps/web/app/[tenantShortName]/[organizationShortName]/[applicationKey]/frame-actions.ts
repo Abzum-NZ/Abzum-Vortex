@@ -20,10 +20,15 @@ export async function searchApplicationAction(
     [tenantShortName, organizationShortName, applicationKey, expression].some(
       (value) => typeof value !== "string",
     )
-  )
+  ) {
+    console.error("[application-frame] search refused: malformed address or expression");
     return { kind: "unavailable" };
+  }
   const resolution = await resolveIdentitySession();
-  if (resolution.kind !== "active") return { kind: "unavailable" };
+  if (resolution.kind !== "active") {
+    console.error(`[application-frame] search refused: session ${resolution.kind}`);
+    return { kind: "unavailable" };
+  }
   return loadApplicationSearch(
     resolution.session,
     { tenantShortName, organizationShortName, applicationKey },

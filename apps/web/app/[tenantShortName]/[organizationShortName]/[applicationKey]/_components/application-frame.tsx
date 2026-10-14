@@ -29,10 +29,25 @@ import {
   ApplicationFrameStateProvider,
   type ApplicationFramePageState,
   type ApplicationFrameStateValue,
+  type FramePageStateOwner,
 } from "./application-frame-state";
 import { FrozenRouter } from "./frozen-router";
 
 type ApplicationSearch = NonNullable<PagePuckRendererProps["applicationSearch"]>;
+type Registration = Readonly<{ owner: FramePageStateOwner; value: unknown }>;
+
+/** Every placement identity in a projected slot tree. */
+const placementIdsOf = (slot: ApplicationFrameModel["frame"]["composition"]["main"]): Set<string> => {
+  const ids = new Set<string>();
+  const visit = (current: typeof slot): void => {
+    for (const [placementId, placement] of Object.entries(current.placements)) {
+      ids.add(placementId);
+      for (const child of Object.values(placement.slots)) visit(child);
+    }
+  };
+  visit(slot);
+  return ids;
+};
 
 /** The search expression an address asks for: none, one, or a refused repeated value. */
 const expressionOf = (parameters: URLSearchParams): string | undefined => {
@@ -56,17 +71,39 @@ export function ApplicationFrame({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { application } = model;
-  const [pageState, setPageStateRecord] = useState<ApplicationFramePageState>({});
+  // Each registered part remembers the registration that set it, so a leaving page can withdraw
+  // only what is still its own.
+  const [registrations, setRegistrations] = useState<
+    Readonly<Partial<Record<keyof ApplicationFramePageState, Registration>>>
+  >({});
   const setPageState = useCallback<ApplicationFrameStateValue["setPageState"]>(
-    (key, value) =>
-      setPageStateRecord((current) => {
-        if (current[key] === value) return current;
-        const next: Record<string, unknown> = { ...current };
+    (key, value, owner) =>
+      setRegistrations((current) => {
+        const existing = current[key];
+        if (existing?.owner === owner && existing.value === value) return current;
+        const next = { ...current };
         if (value === undefined) delete next[key];
-        else next[key] = value;
-        return next as ApplicationFramePageState;
+        else next[key] = { owner, value };
+        return next;
       }),
     [],
+  );
+  const clearPageState = useCallback<ApplicationFrameStateValue["clearPageState"]>(
+    (key, owner) =>
+      setRegistrations((current) => {
+        if (current[key]?.owner !== owner) return current;
+        const next = { ...current };
+        delete next[key];
+        return next;
+      }),
+    [],
+  );
+  const pageState = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(registrations).map(([key, registration]) => [key, registration.value]),
+      ) as ApplicationFramePageState,
+    [registrations],
   );
 
   const registry = useMemo(
@@ -190,6 +227,15 @@ export function ApplicationFrame({
     frame.shellId === undefined
       ? undefined
       : model.shells.find((candidate) => sameId(candidate.shellId, frame.shellId!));
+  // The page runtime wires every placement of its projection; the frame takes the inputs of the
+  // placements it renders itself (a definition may place data, form or action blocks in its shell).
+  const framePlacementIds = useMemo(() => placementIdsOf(frame.composition.main), [frame]);
+  const frameRuntimeInputs = useMemo(() => {
+    const inputs = pageState.runtimeInputs;
+    if (inputs === undefined) return undefined;
+    const own = Object.entries(inputs).filter(([placementId]) => framePlacementIds.has(placementId));
+    return own.length === 0 ? undefined : Object.fromEntries(own);
+  }, [framePlacementIds, pageState.runtimeInputs]);
   const applicationShellRuntime: ApplicationShellRuntime = {
     applicationName: application.name,
     applicationHref: `${basePath}/${encodeURIComponent(application.homePageKey)}`,
@@ -204,8 +250,14 @@ export function ApplicationFrame({
   };
 
   const frameState = useMemo<ApplicationFrameStateValue>(
-    () => ({ setPageState, navigateToPage, applicationSearch, applicationSearchPageSubject }),
-    [applicationSearch, applicationSearchPageSubject, navigateToPage, setPageState],
+    () => ({
+      setPageState,
+      clearPageState,
+      navigateToPage,
+      applicationSearch,
+      applicationSearchPageSubject,
+    }),
+    [applicationSearch, applicationSearchPageSubject, clearPageState, navigateToPage, setPageState],
   );
 
   return (
@@ -225,7 +277,8 @@ export function ApplicationFrame({
           applicationShellRuntime={applicationShellRuntime}
           applicationSearch={applicationSearch}
           applicationSearchPageSubject={applicationSearchPageSubject}
-          projectedNavigation={model.navigation}
+          projectedNavigation={pageState.navigation ?? model.navigation}
+          {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
           resolvePageHref={resolvePageHref}
           onNavigatePage={navigateToPage}
           {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}

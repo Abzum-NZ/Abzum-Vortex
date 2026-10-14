@@ -263,7 +263,8 @@ export default async function ApplicationAddressPage({
   // The page renders only its content; the frame around it is the shell part of the same
   // projection, which the layout shows (and which this page hands to the frame on a later change).
   const { frame, content } = splitProjectedPage(page.model.page, page.model.applicationShell);
-  const model = { ...page.model, page: content };
+  // The page runtime keeps the whole projection, so shell placements keep their data and events;
+  // only the rendering is split between the frame and the content.
   const adoptionOutcome =
     parameters.adoption === "recent_authentication_required"
       ? "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use."
@@ -272,9 +273,10 @@ export default async function ApplicationAddressPage({
         : undefined;
   return (
     <ApplicationPageView
-      model={model}
+      model={page.model}
+      content={content}
       frame={frame}
-      platformBlockReleases={platformBlockReleasesFor(content)}
+      platformBlockReleases={platformBlockReleasesFor(page.model.page)}
       fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
       platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
       onOpenApplication={openApplication}
