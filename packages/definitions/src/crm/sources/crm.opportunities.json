@@ -1040,6 +1040,35 @@
         ],
         "page_size": 50,
         "relationship_hops": 0
+      },
+      {
+        "id": "qry_crm_pipeline_by_stage",
+        "key": "crm_pipeline_by_stage",
+        "label": "Pipeline by stage",
+        "description": "Opportunity count for each pipeline stage",
+        "record_type": "opportunity",
+        "inputs": [],
+        "select": [
+          "stage"
+        ],
+        "filter": null,
+        "group_by": [
+          "stage"
+        ],
+        "aggregates": [
+          {
+            "operation": "count",
+            "alias": "opportunity_count"
+          }
+        ],
+        "sort": [
+          {
+            "field": "stage",
+            "direction": "ascending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
       }
     ]
   }
