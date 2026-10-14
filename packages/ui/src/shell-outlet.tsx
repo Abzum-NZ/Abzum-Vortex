@@ -3,6 +3,8 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { ComponentData, Config, Content, Data } from "@puckeditor/core";
 import type { ShellOutletLocation } from "@vortex/platform/schema";
+import type { SlotGapName } from "./layout-styles";
+import { RootSlotGapProvider } from "./puck-config";
 
 /**
  * The application frame and the page content are two renders of one projected page. The frame
@@ -47,16 +49,23 @@ export const frameConfigFor = (config: Config): Config => {
 };
 
 /**
- * The content's config: the frame's root already supplies the shell, theme and root slot gap, so
- * the content's own root renders only its placements, directly inside the outlet.
+ * The content's config: the frame's root already supplies the shell and theme, so the content's own
+ * root renders only its placements, directly inside the outlet, with its own root slot gap (the
+ * same page root's gap the frame's root has). Content therefore renders correctly wherever it is
+ * mounted, including while it leaves the outlet or before its frame has arrived.
  */
 export const contentConfigFor = (config: Config): Config => {
   let content = contentConfigs.get(config);
   if (content === undefined) {
     content = {
       ...config,
-      root: { ...config.root, render: ({ children }: { children: ReactNode }) => <>{children}</> },
-    } as Config;
+      root: {
+        ...config.root,
+        render: ({ children, gap }: { children: ReactNode; gap: SlotGapName }) => (
+          <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>
+        ),
+      },
+    } as unknown as Config;
     contentConfigs.set(config, content);
   }
   return content;
@@ -68,7 +77,10 @@ const isContent = (value: unknown): value is Content =>
     (item) => typeof item === "object" && item !== null && "type" in item && "props" in item,
   );
 
-const replaceIn = (content: Content, location: Exclude<ShellOutletLocation, { kind: "root" }>): Content =>
+const replaceIn = (
+  content: Content,
+  location: Exclude<ShellOutletLocation, { kind: "root" }>,
+): Content =>
   content.map((item) => {
     if (item.props.id === location.placementId) {
       if (location.kind === "placement") return outletItem;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, useState, type ReactNode } from "react";
-import { useIsPresent } from "motion/react";
+import { usePagePresence } from "@vortex/ui";
 // The App Router gives each segment's children their tree through this context. Holding it lets the
 // leaving page keep showing itself while it animates out, instead of the next page's tree.
 import { LayoutRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
@@ -12,7 +12,7 @@ import { LayoutRouterContext } from "next/dist/shared/lib/app-router-context.sha
  */
 export function FrozenRouter({ children }: Readonly<{ children: ReactNode }>) {
   const context = useContext(LayoutRouterContext);
-  const present = useIsPresent();
+  const present = usePagePresence();
   const [frozen, setFrozen] = useState(context);
   if (present && frozen !== context) setFrozen(context);
   return (

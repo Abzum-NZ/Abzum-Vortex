@@ -95,7 +95,21 @@ export default async function ApplicationAddressPage({
   );
   const { resolution, email } = await resolveIdentitySessionWithEmail();
   const identity = await continueSessionOrEnd(resolution, applicationHome);
-  const retryHref = launcherPath(tenantShortName, organizationShortName);
+  // A read that cannot be made right now (an overloaded or stopped request) is retried at this same
+  // address, so a transient failure never sends the person to another application.
+  const parameters = await searchParams;
+  const query = new URLSearchParams(
+    Object.entries(parameters).flatMap(([key, value]) =>
+      (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(
+        (entry) => [key, entry] as [string, string],
+      ),
+    ),
+  ).toString();
+  const retryHref = `${
+    pageSegments[0] === undefined
+      ? `${launcherPath(tenantShortName, organizationShortName)}/${encodeURIComponent(applicationKey)}`
+      : addressPath(tenantShortName, organizationShortName, applicationKey, pageSegments[0])
+  }${query === "" ? "" : `?${query}`}`;
 
   async function openApplication(event: DisplaySemanticEvent): Promise<void> {
     "use server";
@@ -178,8 +192,7 @@ export default async function ApplicationAddressPage({
     );
 
   if (email === undefined) throw new Error("Active identity session resolved without an email");
-  if (pageSegments.length > 1)
-    return <BarePage>{unavailableAddress}</BarePage>;
+  if (pageSegments.length > 1) return <BarePage>{unavailableAddress}</BarePage>;
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -231,12 +244,16 @@ export default async function ApplicationAddressPage({
 
   if (pageSegments.length === 0)
     redirect(
-      addressPath(tenantShortName, organizationShortName, resolved.application.key, resolved.pageKey),
+      addressPath(
+        tenantShortName,
+        organizationShortName,
+        resolved.application.key,
+        resolved.pageKey,
+      ),
     );
 
   // The addressed page: the permission-filtered page, the viewer's menu, the theme and the
   // persisted data are all composed on the server from this person's own request.
-  const parameters = await searchParams;
   const page = await loadApplicationPage(
     identity.session,
     {

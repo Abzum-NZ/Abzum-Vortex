@@ -12,7 +12,7 @@ export {
   type ApplicationAccountActions,
 } from "./account-actions";
 export { WebMcpStatus } from "./application-shell";
-export { ContentTransition } from "./content-transition";
+export { ContentTransition, usePagePresence } from "./content-transition";
 export type { ApplicationShellRuntime, ApplicationWebMcpRuntime } from "./application-shell";
 export {
   NAVIGATION_COMPONENT_REGISTRATIONS,

@@ -1,9 +1,10 @@
 import type { ReactElement, ReactNode } from "react";
 
 // While a state that is not a page of this application shows, the application frame around the
-// outlet is hidden (also from assistive technology) and the state covers the whole viewport.
+// outlet is hidden (also from assistive technology) and the state covers the whole viewport. A state
+// that is only fading out of the outlet (a page already left) no longer hides the frame.
 const barePageCss = `
-[data-vortex-puck-root]:has([data-vortex-bare-page]) { visibility: hidden; }
+[data-vortex-puck-root]:has([data-vortex-bare-page]:not([data-vortex-page-leaving] [data-vortex-bare-page])) { visibility: hidden; }
 [data-vortex-bare-page] { visibility: visible; }
 `;
 

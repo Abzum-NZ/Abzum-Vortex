@@ -200,6 +200,19 @@ const ThemeScopeContext = createContext<PlacementThemeScope>(EMPTY_THEME_SCOPE);
  */
 const RootSlotGapContext = createContext<string | undefined>(undefined);
 
+/**
+ * Supplies the page root's slot gap to the placements below it. The page content rendered in a
+ * frame's outlet supplies its own root's gap, so its placements never depend on the frame's root.
+ */
+export function RootSlotGapProvider({
+  gap,
+  children,
+}: Readonly<{ gap: SlotGapName; children: ReactNode }>) {
+  return (
+    <RootSlotGapContext.Provider value={slotGapLength(gap)}>{children}</RootSlotGapContext.Provider>
+  );
+}
+
 /** Seeds the root tokens while descendant placements inherit their nearest themed ancestor. */
 export function VortexPuckThemeScopeProvider({
   scope,
@@ -215,9 +228,7 @@ export function VortexPuckThemeScopeProvider({
 // The heavy blocks load on demand: a page that places none of them never downloads their code. The
 // server still renders them (the lazy boundary suspends and streams), and the registry stays the
 // one table that binds a renderer key to its component.
-const lazyBlock = (
-  load: () => Promise<PlatformComponentRenderer>,
-): PlatformComponentRenderer => {
+const lazyBlock = (load: () => Promise<PlatformComponentRenderer>): PlatformComponentRenderer => {
   const Block = lazy(async () => ({ default: await load() }));
   const LazyBlock: PlatformComponentRenderer = (props) => (
     <Suspense fallback={null}>
