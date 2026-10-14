@@ -16,7 +16,7 @@ import {
 import {
   organizationAccountLanguageSchema,
   organizationRuntimeSettingsSchema,
-} from "../access/identity-access";
+} from "../access/organization-runtime-settings-schema";
 
 const displayNameSchema = z.string().trim().min(1).max(120);
 const runtimeSettingsInputSchema = organizationRuntimeSettingsSchema.omit({
