@@ -23,6 +23,9 @@ declare
   decision_account_id uuid;
   audit_projection boolean;
   activity_projection_window constant interval := interval '90 days';
+  -- The generated projection view passes no page bound, so the reader caps itself: the
+  -- newest entries come straight off the recent index and the list pages within them.
+  activity_projection_row_ceiling constant integer := 1000;
 begin
   begin
     checked_context := vortex_access.validated_human_request_context();
@@ -90,7 +93,8 @@ begin
       or (entry.actor_kind = 'organization_account' and entry.actor_id = actor_account_id)
       or (entry.actor_kind = 'identity' and entry.actor_id = actor_identity_id)
     )
-  order by entry.occurred_at desc, entry.activity_id desc;
+  order by entry.occurred_at desc, entry.activity_id desc
+  limit activity_projection_row_ceiling;
 end
 $function$;
 
