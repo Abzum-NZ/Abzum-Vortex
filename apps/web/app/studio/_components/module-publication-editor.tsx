@@ -20,6 +20,7 @@ import { Input } from "@vortex/ui/components/input";
 type PublicationConfirmation = ReturnType<
   typeof prepareDefinitionPublicationResultSchema.parse
 >["confirmation"];
+type ComponentLabels = ReturnType<typeof prepareDefinitionPublicationResultSchema.parse>["componentLabels"];
 type PublishedRelease = ReturnType<typeof publishDefinitionResultSchema.parse>;
 
 const reasonMessages: Record<string, string> = {
@@ -78,6 +79,7 @@ export function ModulePublicationEditor({
   ) => Promise<HumanDefinitionPublicationResult>;
 }) {
   const [confirmation, setConfirmation] = useState<PublicationConfirmation | null>(null);
+  const [componentLabels, setComponentLabels] = useState<ComponentLabels>([]);
   const [release, setRelease] = useState<PublishedRelease | null>(null);
   const [releaseNote, setReleaseNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -104,6 +106,7 @@ export function ModulePublicationEditor({
         parsed.data.confirmation.expectedDraftRevision === draft.draftRevision
       ) {
         setConfirmation(parsed.data.confirmation);
+        setComponentLabels(parsed.data.componentLabels);
         setMessage(
           "Preparation verified. Review the release identity and dependencies, then publish explicitly.",
         );
@@ -208,7 +211,7 @@ export function ModulePublicationEditor({
       {confirmation !== null ? (
         <section className="space-y-4 rounded-lg border p-4" aria-label="Prepared Module release">
           <h2 className="text-lg font-semibold">Prepared release for review</h2>
-          <PublicationSummary confirmation={confirmation} />
+          <PublicationSummary confirmation={confirmation} componentLabels={componentLabels} />
           <label className="block space-y-1 text-sm font-medium">
             Release note
             <Input

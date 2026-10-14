@@ -78,6 +78,24 @@ export type RecordLinkLabelsResult =
   | Readonly<{ outcome: "read"; labels: ReadonlyMap<string, RecordLinkLabel> }>
   | Readonly<{ outcome: "unavailable" }>;
 
+/**
+ * The display names of the requested people the current viewer may see, keyed by lowercase
+ * organisation-account id. A person the viewer may not see is absent: callers show the restricted
+ * wording, never the id.
+ */
+export const readVisiblePersonLabels = async (
+  transaction: RequestDatabaseTransaction,
+  personIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> => {
+  const rows = await transaction.query<{ record_id: string; display_name: string }>`
+    select record_id::text, display_name
+    from vortex_access.list_visible_person_link_labels(
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(personIds)}::text::jsonb)::uuid)
+    )
+  `;
+  return new Map(rows.map((row) => [row.record_id.toLowerCase(), row.display_name]));
+};
+
 /** The key a link's label is held under in a `RecordLinkLabelsResult`. */
 export const recordLinkLabelKey = (link: RecordLinkReference): string =>
   "organizationAccountId" in link
@@ -362,13 +380,7 @@ export const createViewerSafeRecordLinkService = (
             const personIds = [...people.values()];
             for (let start = 0; start < personIds.length; start += titleReadBatchSize) {
               const batch = personIds.slice(start, start + titleReadBatchSize);
-              const rows = await transaction.query<{ record_id: string; display_name: string }>`
-                select record_id::text, display_name
-                from vortex_access.list_visible_person_link_labels(
-                  array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(batch)}::text::jsonb)::uuid)
-                )
-              `;
-              const visible = new Map(rows.map((row) => [row.record_id.toLowerCase(), row.display_name]));
+              const visible = await readVisiblePersonLabels(transaction, batch);
               for (const id of batch)
                 labels.set(`person:${id.toLowerCase()}`, visible.has(id.toLowerCase())
                   ? { outcome: "available", label: visible.get(id.toLowerCase())! }

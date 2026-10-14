@@ -262,7 +262,13 @@ export const definitionPublicationConfirmationSchema = z.discriminatedUnion("out
 ]);
 
 export const prepareDefinitionPublicationResultSchema = z
-  .object({ confirmation: definitionPublicationConfirmationSchema })
+  .object({
+    confirmation: definitionPublicationConfirmationSchema,
+    // The authored names of the components a change touches, so a review reads names, not ids.
+    componentLabels: z
+      .array(z.object({ componentId: platformIdSchema, label: z.string().min(1) }).strict())
+      .max(10_000),
+  })
   .strict();
 
 export const publishDefinitionCommandSchema = z
