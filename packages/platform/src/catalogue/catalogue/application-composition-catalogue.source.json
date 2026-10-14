@@ -309,7 +309,6 @@
         "label": "Severity",
         "help": "Announcement and visual severity of the notice",
         "required": true,
-        "defaultValue": { "kind": "choice", "value": "info" },
         "options": [
           { "key": "info", "label": "Information" },
           { "key": "success", "label": "Success" },
@@ -331,7 +330,6 @@
         "label": "Content",
         "help": "Ordered plain-text and safe-link parts shown by the notice",
         "required": true,
-        "defaultValue": { "kind": "list", "items": [{ "kind": "group", "properties": { "kind": { "kind": "choice", "value": "text" }, "value": { "kind": "text", "value": "Notice message" } } }] },
         "minimumItems": 1,
         "maximumItems": 100,
         "item": {

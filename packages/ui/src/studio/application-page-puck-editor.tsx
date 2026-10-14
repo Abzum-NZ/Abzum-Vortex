@@ -188,6 +188,7 @@ function ApplicationPageSlotPuckEditor({
   const runtimeAdapter = useMemo(() => createVortexPuckAdapter(catalogue), [catalogue]);
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
+  const [canvasGeneration, setCanvasGeneration] = useState(0);
   const sourceRef = useRef(source);
   sourceRef.current = source;
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
@@ -294,6 +295,8 @@ function ApplicationPageSlotPuckEditor({
       onChange(current, parsed.data);
     } catch (error: unknown) {
       console.error("Failed to apply Puck page changes", error);
+      // Puck keeps the refused block in its own state; remounting restores the accepted draft.
+      setCanvasGeneration((generation) => generation + 1);
       setMessage(
         error instanceof AuthoredPuckSettingRefusal
           ? `This page change could not be applied. ${error.message}. The saved draft and current edits are preserved.`
@@ -349,6 +352,7 @@ function ApplicationPageSlotPuckEditor({
         </div>
       )}
       <Puck
+        key={canvasGeneration}
         config={config}
         data={data}
         onChange={change}
