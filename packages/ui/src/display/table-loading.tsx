@@ -80,7 +80,7 @@ export function TableLoadingState({
           <TableRow>
             {columns.map((column) => (
               <TableHead key={column}>
-                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-[0.75em] w-16" />
               </TableHead>
             ))}
           </TableRow>
@@ -90,7 +90,10 @@ export function TableLoadingState({
             <TableRow key={row}>
               {columns.map((column) => (
                 <TableCell key={column}>
-                  <Skeleton className={cn("h-5", column === 0 ? "w-3/4" : "w-1/2")} />
+                  {/* One text line tall, as a cell's value is, so the row has the real height. */}
+                  <div className="flex h-[1lh] items-center">
+                    <Skeleton className={cn("h-[0.75em]", column === 0 ? "w-3/4" : "w-1/2")} />
+                  </div>
                 </TableCell>
               ))}
             </TableRow>
