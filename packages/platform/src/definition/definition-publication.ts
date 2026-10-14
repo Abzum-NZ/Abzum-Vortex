@@ -611,18 +611,16 @@ export const createDefinitionPublicationService = (
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
     await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
-    const state = await repository.read(context, async (reader) =>
-      prepareFromReader(
-        context,
-        reader,
-        catalogue,
-        parsedCommand,
-        await reader.readCandidate(parsedCommand.rootId),
-      ),
-    );
+    const { state, previousContent } = await repository.read(context, async (reader) => {
+      const candidate = await reader.readCandidate(parsedCommand.rootId);
+      return {
+        state: await prepareFromReader(context, reader, catalogue, parsedCommand, candidate),
+        previousContent: candidate?.historyEvidence.latestRelease?.content,
+      };
+    });
     return prepareDefinitionPublicationResultSchema.parse({
       confirmation: state.confirmation,
-      componentLabels: componentLabelsOf(state.compilationOutput.canonical),
+      componentLabels: componentLabelsOf(state.compilationOutput.canonical, previousContent),
     });
   },
 
