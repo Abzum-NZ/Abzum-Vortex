@@ -3,6 +3,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
+import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { canonicalJson, labelSchema, sameId, storedModuleDefinitionDraftSchema } from "@vortex/platform/schema";
@@ -150,13 +151,13 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
 
   return <main className="mx-auto max-w-3xl space-y-6 p-6" aria-busy={busy}>
     <header className="space-y-2"><h1 className="text-2xl font-semibold">Module draft: {baseline.source.body.name}</h1>
-      <dl className="break-all text-sm">
+      <TechnicalDetails><dl className="break-all text-sm">
         <div><dt className="inline font-medium">Organization: </dt><dd className="inline">{baseline.organizationId}</dd></div>
         <div><dt className="inline font-medium">Module root: </dt><dd className="inline">{baseline.rootId}</dd></div>
         <div><dt className="inline font-medium">Module key: </dt><dd className="inline">{baseline.key}</dd></div>
         <div><dt className="inline font-medium">Module draft revision: </dt><dd className="inline">{baseline.draftRevision}</dd></div>
         <div><dt className="inline font-medium">Saved source fingerprint: </dt><dd className="inline">{baseline.sourceFingerprint}</dd></div>
-      </dl>
+      </dl></TechnicalDetails>
       <p>Edit one authored field label. Save explicitly updates this Module's draft revision.</p>
     </header>
     <form className="space-y-4" onSubmit={save}>

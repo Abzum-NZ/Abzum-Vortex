@@ -256,12 +256,12 @@ export function ApplicationReleaseRestore({
           <div><dt className="font-semibold">Selected version and revision</dt><dd>{displayedLoad.metadata.releaseVersion} · revision {displayedLoad.metadata.releaseRevision}</dd></div>
           <div><dt className="font-semibold">Release status</dt><dd>{displayedLoad.metadata.isCurrent ? "Current published release" : "Earlier published release"}</dd></div>
           <div><dt className="font-semibold">Published</dt><dd><time dateTime={displayedLoad.metadata.publishedAt}>{displayedLoad.metadata.publishedAt}</time></dd></div>
-          <div><dt className="font-semibold">Published by</dt><dd className="break-all">{displayedLoad.metadata.publishedBy}</dd></div>
           <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{displayedLoad.metadata.releaseNote}</dd></div>
           <div><dt className="font-semibold">Current saved draft revision</dt><dd>{displayedLoad.snapshot.draftRevision}</dd></div>
           <div><dt className="font-semibold">Current publication anchor</dt><dd>{displayedLoad.snapshot.anchorReleaseRevision}</dd></div>
         </dl>
         <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Published by (account id)</dt><dd className="break-all">{displayedLoad.metadata.publishedBy}</dd></div>
           <div><dt className="font-semibold">Selected release source fingerprint</dt><dd className="break-all"><code>{displayedLoad.metadata.sourceFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Current saved draft source fingerprint</dt><dd className="break-all"><code>{displayedLoad.snapshot.sourceFingerprint}</code></dd></div>
         </dl></TechnicalDetails>
