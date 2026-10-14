@@ -25,11 +25,17 @@ export function tableQueryParameterFailures(
       failures.push("unknown_property");
       continue;
     }
-    // The table's page adapter converts only number/boolean scalars. Neither adapter accepts
-    // structured values or identity inputs; fixed settings reach the engine as text unchanged.
+    // The table's page adapter converts number/boolean scalars and a record id into a reference to
+    // the input's one declared record type. Neither adapter accepts other structured values or
+    // identity inputs; fixed settings reach the engine as text unchanged.
+    const pageReference =
+      parameter.source === "page" &&
+      input.type === "record_reference" &&
+      input.recordTypes.length === 1;
     if (
       !["text", "decimal_number", "date", "date_time"].includes(input.type) &&
-      !(parameter.source === "page" && ["number", "boolean"].includes(input.type))
+      !(parameter.source === "page" && ["number", "boolean"].includes(input.type)) &&
+      !pageReference
     ) {
       failures.push("unsupported_choice");
       continue;

@@ -1325,6 +1325,45 @@
         "relationship_hops": 0
       },
       {
+        "id": "qry_sd_company_cases",
+        "key": "service_desk_company_cases",
+        "label": "Cases of one company",
+        "record_type": "case",
+        "inputs": [
+          {
+            "key": "company",
+            "label": "Company",
+            "required": true,
+            "type": "record_reference",
+            "record_types": [
+              "vortex.crm.organisations:company"
+            ]
+          }
+        ],
+        "select": [
+          "case_number",
+          "subject",
+          "status",
+          "priority",
+          "customer_company"
+        ],
+        "filter": {
+          "field": "customer_company",
+          "operator": "equals",
+          "parameter": "company"
+        },
+        "group_by": [],
+        "aggregates": [],
+        "sort": [
+          {
+            "field": "case_number",
+            "direction": "descending"
+          }
+        ],
+        "page_size": 50,
+        "relationship_hops": 0
+      },
+      {
         "id": "qry_sd_open_cases",
         "key": "service_desk_open_cases",
         "record_type": "case",
