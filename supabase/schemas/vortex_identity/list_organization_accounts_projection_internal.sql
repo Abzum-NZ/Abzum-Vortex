@@ -41,9 +41,9 @@ begin
     else 'account.organization_account_id' end;
   if p_after is not null then
     if pg_catalog.jsonb_typeof(p_after) <> 'object'
-      or pg_catalog.jsonb_typeof(p_after -> 'recordId') <> 'string'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
       or (p_sort_key <> 'record_id' and (
-        pg_catalog.jsonb_typeof(p_after -> 'sortKey') <> 'array'
+        pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
         or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
         or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) not in ('string', 'null')
       )) then
