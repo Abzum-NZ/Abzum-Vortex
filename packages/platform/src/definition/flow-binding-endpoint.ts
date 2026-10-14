@@ -428,6 +428,7 @@ const surfaceDiagnostic = (
     code: parsed.data.code,
     ...(submittedField === undefined ? {} : { submittedField }),
     ...(corrections.length === 0 ? {} : { corrections }),
+    ...(parsed.data.ruleRefusal === undefined ? {} : { ruleRefusal: parsed.data.ruleRefusal }),
   });
 };
 

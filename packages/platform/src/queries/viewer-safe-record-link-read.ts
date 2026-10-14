@@ -5,6 +5,7 @@ import {
   activeApplicationInstallationEvidenceSchema,
   fieldIdSchema,
   jsonValueSchema,
+  recordIdSchema,
   revisionSchema,
   sameId,
   selectedOrganizationScopeSchema,
@@ -309,8 +310,121 @@ const readFields = async (
   return viewerSafeRecordLinkFieldsReadResultSchema.parse({ outcome: "read", values });
 };
 
+const viewerSafeRecordLinkTitlesCommandSchema = z
+  .object({
+    identity: viewerSafeRecordLinkIdentitySchema.omit({ recordId: true }),
+    /** The exact Application revision already checked by App's installed-context loader. */
+    applicationReleaseRevision: revisionSchema,
+    titleFieldId: fieldIdSchema,
+    /** One page of linked records of this one record type; the read is a single statement. */
+    recordIds: z.array(recordIdSchema).min(1).max(1_000),
+  })
+  .strict();
+
+type RecordLinkTitlesRow = DatabaseRow & {
+  readonly active_installation: unknown;
+  readonly record_id: string;
+  readonly result: unknown;
+};
+
+/** The titles of one record type's linked records, keyed by lower-case record identity. */
+export type ViewerSafeRecordLinkTitlesReadResult =
+  | Readonly<{
+      outcome: "read";
+      /** A record the viewer may read and whose title field is readable; every other record is absent. */
+      titles: ReadonlyMap<string, z.infer<typeof viewerSafeRecordLinkTitleSchema>>;
+    }>
+  | Readonly<{ outcome: "unavailable" }>;
+
+/**
+ * Reads the configured title of many linked records of one record type in one statement behind the
+ * same exact current-installation gate as the single read, through the same protected Record
+ * projection. A record the viewer may not read, or whose title field is withheld, is simply absent
+ * from the result, so a caller cannot tell it from a record that does not exist.
+ */
+const readTitles = async (
+  transaction: RequestDatabaseTransaction,
+  scopeCandidate: unknown,
+  commandCandidate: unknown,
+): Promise<ViewerSafeRecordLinkTitlesReadResult> => {
+  const scope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
+  const command = viewerSafeRecordLinkTitlesCommandSchema.safeParse(commandCandidate);
+  if (!scope.success || !command.success) return unavailable;
+  const { identity, applicationReleaseRevision, titleFieldId, recordIds } = command.data;
+  if (
+    scope.data.applicationRootId === undefined ||
+    !sameId(scope.data.organizationId, identity.organizationId) ||
+    !sameId(scope.data.applicationRootId, identity.applicationRootId)
+  )
+    return unavailable;
+
+  const rows = await transaction.query<RecordLinkTitlesRow>`
+    with active_installation as materialized (
+      select vortex_definition.read_current_active_installation() as value
+    ), verified_installation as materialized (
+      select value
+      from active_installation
+      where pg_catalog.lower(value ->> 'organizationId') =
+          pg_catalog.lower(${identity.organizationId}::text)
+        and pg_catalog.lower(value ->> 'applicationRootId') =
+          pg_catalog.lower(${identity.applicationRootId}::text)
+        and (value ->> 'applicationReleaseRevision')::bigint =
+          ${applicationReleaseRevision}::bigint
+        and exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(value -> 'moduleBindings') as binding(value)
+          where pg_catalog.lower(binding.value ->> 'moduleRootId') =
+              pg_catalog.lower(${identity.moduleRootId}::text)
+            and (binding.value ->> 'moduleReleaseRevision')::bigint =
+              ${identity.moduleReleaseRevision}::bigint
+            and binding.value ->> 'state' = 'active'
+        )
+    )
+    select
+      active_installation.value as active_installation,
+      linked.record_id::text as record_id,
+      (
+        select vortex_record.read_record(${identity.recordTypeId}::uuid, linked.record_id)
+        from verified_installation
+      ) as result
+    from active_installation
+    cross join (
+      select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordIds)}::text::jsonb)::uuid
+        as record_id
+    ) as linked
+  `;
+  const first = rows[0];
+  if (first === undefined) throw contractError("RECORD_LINK_READ_ROW_INVALID", rows.length);
+  if (
+    !currentInstallationMatches(
+      first.active_installation,
+      scope.data,
+      { ...identity, recordId: recordIds[0]! },
+      applicationReleaseRevision,
+    )
+  )
+    return unavailable;
+
+  const titles = new Map<string, z.infer<typeof viewerSafeRecordLinkTitleSchema>>();
+  for (const row of rows) {
+    if (refusedRecordSchema.safeParse(row.result).success) continue;
+    const record = readableRecordSchema.safeParse(row.result);
+    if (!record.success) throw contractError("RECORD_LINK_READ_RESULT_INVALID", record.error);
+    if (!sameId(record.data.recordId, row.record_id))
+      throw contractError("RECORD_LINK_READ_IDENTITY_INVALID");
+    const entries = Object.entries(record.data.values).filter(([fieldId]) =>
+      sameId(fieldId, titleFieldId),
+    );
+    if (entries.length !== 1) continue;
+    const title = viewerSafeRecordLinkTitleSchema.safeParse(entries[0]?.[1]);
+    if (!title.success) throw contractError("RECORD_LINK_READ_TITLE_INVALID", title.error);
+    titles.set(row.record_id.toLowerCase(), title.data);
+  }
+  return { outcome: "read", titles };
+};
+
 /** One uncached protected Query reader for a target record's title or selected fields. */
-export const createViewerSafeRecordLinkReadService = () => Object.freeze({ read, readFields });
+export const createViewerSafeRecordLinkReadService = () => Object.freeze({ read, readFields, readTitles });
 
 export type ViewerSafeRecordLinkReadService = ReturnType<
   typeof createViewerSafeRecordLinkReadService

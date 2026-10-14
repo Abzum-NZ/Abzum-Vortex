@@ -3,12 +3,14 @@ import "server-only";
 import {
   readRecordDetailContract,
   readRecordsTableContract,
+  richTextDocumentSchema,
   timestampSchema,
   type BlockPropertyValueContract,
   type JsonValue,
   type RecordsDisplayFormat,
 } from "../schema";
 import type { ProtectedQueryRow } from "../queries/index";
+import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 
 /**
  * One closed display value. It is structurally the value the shared display components render, so
@@ -19,7 +21,54 @@ export type ProjectedCellValue =
   | Readonly<{ kind: "number"; value: number }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
+  | Readonly<{ kind: "rich_text"; document: ReturnType<typeof richTextDocumentSchema.parse> }>
+  | ProjectedRecordLink
+  | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "empty" }>;
+
+/**
+ * A linked record as the viewer may see it: its label, with the address of its detail page only
+ * when the viewer may open that page, or a neutral `restricted` that carries nothing of the record.
+ */
+export type ProjectedRecordLink =
+  | Readonly<{ kind: "record_link"; label: string; href?: string }>
+  | Readonly<{ kind: "restricted" }>;
+
+/** The resolved links of one page, keyed by `recordLinkLabelKey`; absent when the read failed. */
+export type ProjectedRecordLinks = ReadonlyMap<string, ProjectedRecordLink>;
+
+/**
+ * Reads the labels of every linked record one page shows in one batched read per link target
+ * record type. Undefined when the read failed; the failure is already logged with its cause.
+ */
+export type RecordLinkResolver = (
+  links: readonly RecordLinkReference[],
+) => Promise<ProjectedRecordLinks | undefined>;
+
+/** A stored link value is exactly a record type identity and a record identity. */
+const asRecordLink = (value: JsonValue): RecordLinkReference | undefined => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const keys = Object.keys(value);
+  const { recordTypeId, recordId } = value;
+  return keys.length === 2 &&
+    typeof recordTypeId === "string" &&
+    typeof recordId === "string"
+    ? { recordTypeId, recordId }
+    : undefined;
+};
+
+/** The distinct linked records among every value of the rows the Query engine returned. */
+export const collectRecordLinks = (
+  rows: readonly ProtectedQueryRow[],
+): readonly RecordLinkReference[] => {
+  const links = new Map<string, RecordLinkReference>();
+  for (const row of rows)
+    for (const value of Object.values<JsonValue>(row.values)) {
+      const link = asRecordLink(value);
+      if (link !== undefined) links.set(recordLinkLabelKey(link), link);
+    }
+  return [...links.values()];
+};
 
 /**
  * One row addressed by the record identity the Query engine returned; cells are keyed by field.
@@ -61,8 +110,7 @@ export type ProjectedRecordDetailValues = Readonly<{
  * caller cannot render data the projection did not authorise.
  */
 export type ProjectedComponentData<Values> =
-  | Readonly<{ status: "empty" }>
-  | Readonly<{ status: "ready"; values: Values }>;
+  Readonly<{ status: "empty" }> | Readonly<{ status: "ready"; values: Values }>;
 
 /**
  * What the projector combines with the component's declared contract. `settings` are the
@@ -82,6 +130,8 @@ export type ComponentDataProjectionInput = Readonly<{
   readableFieldIds?: readonly string[];
   /** The date or date-time fields of the installed definition (field identity to field type), so a column declared "automatic" shows them as dates. */
   fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
+  /** The labels of the linked records the rows carry; absent when they could not be read. */
+  recordLinks?: ProjectedRecordLinks;
 }>;
 
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
@@ -112,17 +162,27 @@ const projectDate = (value: string): ProjectedCellValue => {
 
 /**
  * Maps one stored value to a closed display value by the declared format. A value that does not
- * fit its declared format is shown as plain text, and a structured value that is not a display
- * value at all is shown as empty; neither ever reaches the component as raw JSON.
+ * fit its declared format is shown as plain text, and a formatted-text document is shown as rich text,
+ * and a structured value that is not a display value at all is shown as empty; neither ever reaches the component as raw JSON.
  */
 const projectCell = (
   value: JsonValue,
   declaredFormat: RecordsDisplayFormat,
   choiceLabels?: readonly Readonly<{ value: string; label: string }>[],
   dateType?: "date" | "date_time",
+  recordLinks?: ProjectedRecordLinks,
 ): ProjectedCellValue => {
   const format = declaredFormat === "automatic" && dateType !== undefined ? dateType : declaredFormat;
   if (value === null) return empty;
+  // A link shows its target's label as the viewer may read it; one that could not be resolved is
+  // an explicit unavailable state, never a blank and never the stored identity.
+  const link = asRecordLink(value);
+  if (link !== undefined) {
+    const resolved = recordLinks?.get(recordLinkLabelKey(link));
+    if (resolved !== undefined) return resolved;
+    console.error("[page] record link label missing: RECORD_LINK_LABEL_UNAVAILABLE");
+    return { kind: "unavailable" };
+  }
   if (Array.isArray(value) && choiceLabels !== undefined) {
     const selected = value.filter((entry): entry is string => typeof entry === "string");
     if (
@@ -146,6 +206,11 @@ const projectCell = (
     const option = choiceLabels.find((candidate) => candidate.value === value);
     return option === undefined ? empty : { kind: "text", text: option.label };
   }
+  // A formatted-text value is shown as its document, never flattened or dropped.
+  const document = richTextDocumentSchema.safeParse(value);
+  if (document.success) return { kind: "rich_text", document: document.data };
+  if (typeof value === "object" && !Array.isArray(value) && "blocks" in value)
+    console.error(`[page] formatted text value is not a valid document: RICH_TEXT_DOCUMENT_INVALID issues=${document.error.issues.length}`);
   // A money value is its exact amount with its currency code.
   if (
     typeof value === "object" &&
@@ -183,7 +248,8 @@ const projectCell = (
  * Field identities are UUIDs compared without regard to case: the Query engine keys row values by
  * the lowercase identity, while a declaration may spell it in either case.
  */
-const sameField = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+const sameField = (left: string, right: string): boolean =>
+  left.toLowerCase() === right.toLowerCase();
 
 /** The row's value for a declared field, or undefined when the engine withheld it (absent). */
 const valueOf = (row: ProtectedQueryRow, field: string): { value: JsonValue } | undefined => {
@@ -265,6 +331,7 @@ export const projectRecordsTableData = (
               column.format,
               input.fieldChoiceLabels?.[column.key.toLowerCase()],
               input.fieldDateTypes?.[column.key.toLowerCase()],
+              input.recordLinks,
             ),
           ]),
         ),
@@ -285,7 +352,12 @@ export const projectRecordDetailData = (
 ): ProjectedComponentData<ProjectedRecordDetailValues> | undefined => {
   const contract = readRecordDetailContract(input.settings);
   const row = rows[0];
-  if (contract === undefined || contract.fields.length === 0 || rows.length !== 1 || row === undefined)
+  if (
+    contract === undefined ||
+    contract.fields.length === 0 ||
+    rows.length !== 1 ||
+    row === undefined
+  )
     return undefined;
 
   const fields: { key: string; label: string; value: ProjectedCellValue }[] = [];
@@ -304,6 +376,7 @@ export const projectRecordDetailData = (
         declared.format,
         choiceLabels,
         input.fieldDateTypes?.[declared.field.toLowerCase()],
+        input.recordLinks,
       ),
     });
   }

@@ -19,6 +19,8 @@
 
 import {
   createContext,
+  lazy,
+  Suspense,
   useContext,
   useRef,
   useState,
@@ -81,9 +83,6 @@ import {
 } from "./navigation/application-search-block";
 import { Container } from "./layout/container";
 import { Heading } from "./layout/heading";
-import { BoardDisplay } from "./display/board";
-import { CalendarDisplay } from "./display/calendar";
-import { GroupedDataDisplay } from "./display/grouped-data";
 import { ListDisplay } from "./display/list";
 import { NoticeBlock } from "./display/notice";
 import { QueryNoticeDisplay } from "./display/query-notice";
@@ -213,6 +212,21 @@ export function VortexPuckThemeScopeProvider({
 // Block implementations: the one table that binds a renderer key to its React component
 // ---------------------------------------------------------------------------------------------
 
+// The heavy blocks load on demand: a page that places none of them never downloads their code. The
+// server still renders them (the lazy boundary suspends and streams), and the registry stays the
+// one table that binds a renderer key to its component.
+const lazyBlock = (
+  load: () => Promise<PlatformComponentRenderer>,
+): PlatformComponentRenderer => {
+  const Block = lazy(async () => ({ default: await load() }));
+  const LazyBlock: PlatformComponentRenderer = (props) => (
+    <Suspense fallback={null}>
+      <Block {...props} />
+    </Suspense>
+  );
+  return LazyBlock;
+};
+
 const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   string,
   PlatformComponentRenderer
@@ -227,13 +241,22 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   ["platform.renderer.list", ListDisplay],
   ["platform.renderer.table", TableDisplay],
   ["platform.renderer.record_detail", RecordDetailDisplay],
-  ["platform.renderer.grouped_data", GroupedDataDisplay],
+  [
+    "platform.renderer.grouped_data",
+    lazyBlock(async () => (await import("./display/grouped-data")).GroupedDataDisplay),
+  ],
   ["platform.renderer.summary_values", SummaryValuesDisplay],
   ["platform.renderer.chart", ChartDisplay],
   ["platform.renderer.notice", NoticeBlock],
   ["platform.renderer.query_notice", QueryNoticeDisplay],
-  ["platform.renderer.calendar", CalendarDisplay],
-  ["platform.renderer.board", BoardDisplay],
+  [
+    "platform.renderer.calendar",
+    lazyBlock(async () => (await import("./display/calendar")).CalendarDisplay),
+  ],
+  [
+    "platform.renderer.board",
+    lazyBlock(async () => (await import("./display/board")).BoardDisplay),
+  ],
   ["platform.renderer.attachment_list", SearchAttachmentDisplay],
   ["platform.renderer.form_container", FormContainer],
   ["platform.renderer.field_input", FieldInput],

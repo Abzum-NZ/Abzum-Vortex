@@ -130,7 +130,6 @@ export {
 export {
   DisplayCellView,
   DisplayStateContainer,
-  GroupedDataDisplay,
   ListDisplay,
   NoticeBlock,
   QueryNoticeDisplay,
@@ -314,6 +313,7 @@ export {
   type ApplicationAccountActions,
   type ApplicationShellRuntime,
   type ApplicationWebMcpRuntime,
+  ContentTransition,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   WebMcpStatus,
   createNavigationComponentRegistry,

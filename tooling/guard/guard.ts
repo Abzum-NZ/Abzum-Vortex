@@ -687,6 +687,14 @@ function functions(
 const migrationFiles = files
   .filter((file) => file.startsWith(paths.migrations) && file.endsWith(".sql"))
   .sort();
+// Supabase keys applied migrations by the leading version, so two files sharing it break a reset.
+const migrationVersions = new Map<string, string>();
+for (const file of migrationFiles) {
+  const version = file.slice(paths.migrations.length).replace(/^\//, "").split("_")[0];
+  const first = migrationVersions.get(version);
+  if (first) add("migration-version-duplicate", file, 1, `${version} also used by ${first}`);
+  else migrationVersions.set(version, file);
+}
 const latest = new Map<string, { definition: string; file: string }>();
 const latestLive = new Map<string, { file: string; line: number; key: string }>();
 for (const file of migrationFiles) {

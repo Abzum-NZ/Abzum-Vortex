@@ -21,6 +21,7 @@ import {
   type SystemContextFacts,
 } from "../development-setup/development-authority";
 import { loadCurrentSetupState, type SetupState } from "../development-setup/state";
+import { additionalContacts, cases, leads, tasks } from "./demo-seed-data";
 import { loadLocalWebEnvironment } from "./local-environment";
 
 const uuidNamespace = Buffer.from("6d1f0c523b7a4c4e8a510e1a7b0c9d00", "hex");
@@ -232,23 +233,9 @@ const opportunities = [
   },
 ] as const;
 
-const cases = [
-  ["VPN access drops during shift changes", "high", "in_progress", 1],
-  ["Invoice export is missing tax totals", "normal", "triage", 2],
-  ["New starter cannot access the mobile app", "normal", "waiting_customer", 3],
-  ["Warehouse scanner reconnects repeatedly", "high", "in_progress", 4],
-  ["Store tablet setup for the new branch", "low", "new", 5],
-  ["Analytics workspace invite expired", "normal", "resolved", 6],
-  ["Dispatch dashboard loads without route data", "critical", "triage", 7],
-  ["Customer portal password reset loop", "high", "in_progress", 8],
-  ["Quarterly access review export request", "low", "closed", 2],
-  ["Service report is delayed after overnight run", "normal", "waiting_customer", 4],
-  ["New payment approver needs a role update", "high", "new", 3],
-  ["Product catalogue changes are not syncing", "normal", "resolved", 5],
-  ["Field team cannot upload completion photos", "high", "in_progress", 1],
-  ["Partner data feed returned an authentication error", "critical", "triage", 6],
-  ["Request to add a regional reporting filter", "low", "new", 8],
-] as const;
+const paragraph = (text: string) => ({
+  blocks: [{ kind: "paragraph", children: [{ kind: "text", text }] }],
+});
 
 const recordType = (
   releaseSet: BoundReleaseSet,
@@ -282,6 +269,7 @@ export type DemoSeedFacts = Readonly<{
   identityAuthorityId: ReturnType<typeof identityAuthorityIdSchema.parse>;
   system: SystemContextFacts;
   stewardIdentityId: string;
+  stewardOrganizationAccountId: string;
   releases: ReadonlyMap<string, Readonly<{ rootId: string; releaseRevision: number }>>;
   tenantShortName: string;
   organizationShortName: string;
@@ -301,7 +289,8 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const context = mintSystemContext(facts.system);
   const crmRelease = requiredRelease(facts, "vortex.app.crm");
   const serviceDeskRelease = requiredRelease(facts, "vortex.app.service_desk");
-  const [crm, serviceDesk] = await Promise.all([
+  const tasksRelease = requiredRelease(facts, "vortex.app.tasks");
+  const [crm, serviceDesk, tasksSet] = await Promise.all([
     inSystemTransaction(context, (transaction) =>
       createDatabaseSystemApplicationBoundReleaseSetService(
         developmentPublicationCatalogue,
@@ -320,17 +309,31 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         applicationReleaseRevision: serviceDeskRelease.releaseRevision,
       }),
     ),
+    inSystemTransaction(context, (transaction) =>
+      createDatabaseSystemApplicationBoundReleaseSetService(
+        developmentPublicationCatalogue,
+        transaction,
+      ).read(context, {
+        applicationRootId: applicationRootIdSchema.parse(tasksRelease.rootId),
+        applicationReleaseRevision: tasksRelease.releaseRevision,
+      }),
+    ),
   ]);
   const companyType = recordType(crm, "vortex.crm.organisations", "company");
   const contactType = recordType(crm, "vortex.crm.people", "contact");
   const opportunityType = recordType(crm, "vortex.crm.opportunities", "opportunity");
+  const leadType = recordType(crm, "vortex.crm.people", "lead");
+  const taskType = recordType(tasksSet, "vortex.tasks", "task");
   const calendarType = recordType(serviceDesk, "vortex.service_desk.sla", "business_calendar");
   const serviceLevelType = recordType(serviceDesk, "vortex.service_desk.sla", "service_level");
   const caseType = recordType(serviceDesk, "vortex.service_desk.cases", "case");
+  const activityType = recordType(crm, "vortex.crm.activities", "activity");
   const crmRootId = applicationRootIdSchema.parse(crmRelease.rootId);
   const serviceDeskRootId = applicationRootIdSchema.parse(serviceDeskRelease.rootId);
+  const tasksRootId = applicationRootIdSchema.parse(tasksRelease.rootId);
   const ownerSession = nominatedOwnerSession(facts.stewardIdentityId);
   const saveRecord = createRecordSaveService({ identityAuthorityId: facts.identityAuthorityId });
+  const personOwner = { organizationAccountId: facts.stewardOrganizationAccountId };
   const readOwnerGroup = async (applicationRootId: string): Promise<string> => {
     const result = await createHumanOrganizationRequestService({
       identityAuthorityId: facts.identityAuthorityId,
@@ -419,25 +422,33 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
     companyIds.push(companyId);
   }
 
-  for (const [index, company] of companies.entries()) {
+  const contactSeeds = [
+    ...companies.map((company, companyIndex) => ({ ...company, companyIndex })),
+    ...additionalContacts,
+  ];
+  for (const [index, contact] of contactSeeds.entries()) {
     const contactId = await save(
       crmRootId,
       contactType,
       `contact/${index + 1}`,
       {
-        first_name: company.firstName,
-        last_name: company.lastName,
-        email: company.email,
-        phone: company.phone,
-        company: { recordTypeId: companyType.recordTypeId, recordId: companyIds[index]! },
+        first_name: contact.firstName,
+        last_name: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        company: {
+          recordTypeId: companyType.recordTypeId,
+          recordId: companyIds[contact.companyIndex]!,
+        },
         email_consent: index % 3 !== 2,
+        relationship_owner: personOwner,
       },
       crmOwnerGroupId,
     );
     contactIds.push(contactId);
   }
 
-  const referenceDate = new Date("2026-10-13T12:00:00.000Z");
+  const referenceDate = new Date();
   for (const [index, opportunity] of opportunities.entries()) {
     const expectedCloseDate = new Date(referenceDate);
     expectedCloseDate.setUTCDate(expectedCloseDate.getUTCDate() + opportunity.days);
@@ -458,6 +469,44 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       crmOwnerGroupId,
     );
   }
+
+  for (const [index, lead] of leads.entries()) {
+    const receivedAt = new Date(referenceDate);
+    receivedAt.setUTCDate(receivedAt.getUTCDate() - lead.receivedDaysAgo);
+    receivedAt.setUTCHours(receivedAt.getUTCHours() - (index % 6), 0, 0, 0);
+    await save(crmRootId, leadType, `lead/${index + 1}`, {
+      display_name: lead.displayName,
+      company_name: lead.companyName,
+      email: lead.email,
+      source: lead.source,
+      interests: [...lead.interests],
+      score: lead.score,
+      status: lead.status,
+      ...(lead.unqualifiedReason === undefined
+        ? {}
+        : { unqualified_reason: lead.unqualifiedReason }),
+      received_at: receivedAt.toISOString(),
+    });
+  }
+
+  for (const [index, contactId] of contactIds.slice(0, 4).entries()) {
+    const dueAt = new Date(referenceDate);
+    dueAt.setUTCDate(dueAt.getUTCDate() + index + 1);
+    await save(crmRootId, activityType, `activity/${index + 1}`, {
+      subject: `Follow up with contact ${index + 1}`,
+      activity_type: index % 2 === 0 ? "call" : "email",
+      due_at: dueAt.toISOString(),
+      completed: false,
+      regarding: { recordTypeId: contactType.recordTypeId, recordId: contactId },
+      owner: personOwner,
+    });
+  }
+
+  for (const [index, task] of tasks.entries())
+    await save(tasksRootId, taskType, `task/${index + 1}`, {
+      title: task.title,
+      notes: task.notes,
+    });
 
   const calendarId = await save(
     serviceDeskRootId,
@@ -490,47 +539,33 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
     serviceDeskOwnerGroupId,
   );
 
-  for (const [index, [subject, priority, status, companyIndex]] of cases.entries()) {
-    const openedAt = new Date(referenceDate);
-    openedAt.setUTCDate(openedAt.getUTCDate() - (index + 1) * 2);
-    openedAt.setUTCHours(8 + (index % 8), 15, 0, 0);
-    const firstResponseDueAt = new Date(openedAt);
-    firstResponseDueAt.setUTCHours(firstResponseDueAt.getUTCHours() + 4);
-    const resolutionDueAt = new Date(openedAt);
-    resolutionDueAt.setUTCDate(resolutionDueAt.getUTCDate() + 2);
+  for (const [index, serviceCase] of cases.entries()) {
+    const openedAt = new Date(referenceDate.getTime() - serviceCase.openedHoursAgo * 3_600_000);
+    const firstResponseDueAt = new Date(openedAt.getTime() + 4 * 3_600_000);
+    const resolutionDueAt = new Date(openedAt.getTime() + 48 * 3_600_000);
     const resolvedAt =
-      status === "resolved" || status === "closed" ? new Date(openedAt) : undefined;
-    if (resolvedAt !== undefined) resolvedAt.setUTCHours(resolvedAt.getUTCHours() + 2);
-    const companyIndexZeroBased = companyIndex - 1;
+      serviceCase.status === "resolved" || serviceCase.status === "closed"
+        ? new Date(openedAt)
+        : undefined;
+    if (resolvedAt !== undefined) resolvedAt.setUTCHours(resolvedAt.getUTCHours() + 6);
     await save(
       serviceDeskRootId,
       caseType,
       `service-desk/case/${index + 1}`,
       {
-        subject,
-        description: {
-          blocks: [
-            {
-              kind: "paragraph",
-              children: [
-                {
-                  kind: "text",
-                  text: `${subject}. The customer supplied the relevant steps and requested an update through the support team.`,
-                },
-              ],
-            },
-          ],
-        },
+        subject: serviceCase.subject,
+        description: paragraph(serviceCase.summary),
         customer_company: {
           recordTypeId: companyType.recordTypeId,
-          recordId: companyIds[companyIndexZeroBased]!,
+          recordId: companyIds[serviceCase.companyIndex]!,
         },
         requester: {
           recordTypeId: contactType.recordTypeId,
-          recordId: contactIds[companyIndexZeroBased]!,
+          recordId: contactIds[serviceCase.requesterIndex]!,
         },
-        status,
-        priority,
+        status: serviceCase.status,
+        priority: serviceCase.priority,
+        owner: personOwner,
         service_level: { recordTypeId: serviceLevelType.recordTypeId, recordId: serviceLevelId },
         opened_at: openedAt.toISOString(),
         first_response_due_at: firstResponseDueAt.toISOString(),
@@ -542,7 +577,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   }
 
   process.stdout.write(
-    `[demo seed] ${setupKey}: ${companies.length * 3} CRM companies, contacts and opportunities; ${cases.length} Service Desk cases, a service calendar and SLA.\n`,
+    `[demo seed] ${setupKey}: ${companies.length} CRM companies, ${contactSeeds.length} contacts, ${opportunities.length} opportunities, ${leads.length} leads; ${cases.length} Service Desk cases, a service calendar and SLA; ${tasks.length} tasks.\n`,
   );
 };
 
@@ -580,6 +615,7 @@ const readFactsFromCurrentSetup = (argv: readonly string[]): DemoSeedFacts => {
       accessVersion: state.metadata.accessVersion,
     },
     stewardIdentityId: state.metadata.stewardIdentityId,
+    stewardOrganizationAccountId: state.metadata.stewardOrganizationAccountId,
     releases: new Map(Object.entries(state.releases)),
     tenantShortName: state.metadata.tenantShortName,
     organizationShortName: state.metadata.organizationShortName,

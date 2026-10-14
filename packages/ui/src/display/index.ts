@@ -70,7 +70,6 @@ export { RichTextDisplay } from "./rich-text-component";
 export { ListDisplay } from "./list";
 export { TableDisplay } from "./table";
 export { RecordDetailDisplay } from "./record-detail";
-export { GroupedDataDisplay } from "./grouped-data";
 export { SummaryValuesDisplay } from "./summary-values";
 
 // Per-Block Render Props
