@@ -179,12 +179,15 @@ export function applicationPageRules(scope: ApplicationScope): void {
       }
       if (blockKey === "platform.display.calendar") {
         const settingFieldId = (value: unknown): string | undefined => {
+          // An optional property the placement leaves out is absent, not an error.
+          if (value === undefined) return undefined;
           const property = object(value);
           return property.kind === "field_reference" && typeof property.fieldId === "string"
             ? property.fieldId
             : undefined;
         };
         const settingChoice = (value: unknown): string | undefined => {
+          if (value === undefined) return undefined;
           const property = object(value);
           return property.kind === "choice" && typeof property.value === "string"
             ? property.value
@@ -259,6 +262,33 @@ export function applicationPageRules(scope: ApplicationScope): void {
             mappedFieldIds.every((fieldId) => selectedFieldIds.has(fieldId.toLowerCase()));
         }
         if (!calendarMappingValid)
+          failures.push(
+            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+          );
+      }
+      if (blockKey === "platform.display.chart") {
+        // A chart's categories are the one field its query groups by, and each category is shown as
+        // text: a text or choice value, or a link's viewer-safe label.
+        const category = settings.category_field as unknown;
+        const categoryId =
+          category !== undefined &&
+          object(category).kind === "field_reference" &&
+          typeof object(category).fieldId === "string"
+            ? String(object(category).fieldId).toLowerCase()
+            : undefined;
+        const chartRecordType = records.get(String(object(bound.recordType).recordTypeId));
+        const categoryField = array(chartRecordType?.fields).find(
+          (field) => String(field.fieldId).toLowerCase() === categoryId,
+        );
+        const groupedBy = array(bound.groupByFieldIds).map((fieldId) =>
+          String(fieldId).toLowerCase(),
+        );
+        if (
+          categoryField === undefined ||
+          !["text", "choice", "link"].includes(String(categoryField.type)) ||
+          groupedBy.length !== 1 ||
+          groupedBy[0] !== categoryId
+        )
           failures.push(
             failure(output, "vortex.definition.application_block_settings", "broken_reference"),
           );
