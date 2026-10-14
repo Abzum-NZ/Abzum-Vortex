@@ -82,7 +82,9 @@ const pageMountId = (transitionKey: string, generation: number): string =>
  * has passed. A further change while a page is still leaving removes that page at once and lets the
  * page just replaced leave instead, so rapid changes never stack pages. With reduced motion the
  * change is immediate and nothing leaves. The outlet's state follows the committed render only, so
- * a page change React abandons (an interrupted navigation) leaves nothing behind. The outlet keeps
+ * a page change React abandons (an interrupted navigation) leaves nothing behind. While the next
+ * page is being fetched (`busy`) the current page stays in place and a thin progress line runs
+ * along the top of the outlet; it appears only once the wait is noticeable. The outlet keeps
  * the layout of the slot it stands in, so the page's placements lay out exactly as they would
  * directly in that slot.
  */
@@ -145,6 +147,7 @@ export function ContentTransition({
       style={{ gap: "inherit" }}
       {...(busy ? { "aria-busy": true, "data-vortex-page-transition": "" } : {})}
     >
+      {busy ? <div data-vortex-page-progress="" aria-hidden /> : null}
       {current.leaving === undefined ? null : (
         // The same key the page had while current, so the leaving page keeps its mounted tree.
         <motion.div

@@ -88,6 +88,7 @@ const RESERVED_RENDER_PROP_NAMES: ReadonlySet<string> = new Set([
   "projectedNavigation",
   "resolvePageHref",
   "onNavigatePage",
+  "onPrefetchPage",
   "currentPageId",
   "themeTokens",
   "componentBundleOrigin",
@@ -199,6 +200,11 @@ export type PlatformBlockRenderProps = Readonly<{
    * the shell stays mounted. Without it the browser follows the resolved address.
    */
   onNavigatePage?: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
+  /**
+   * Intent to open an internal page (a pointer resting on, or focus reaching, its link), supplied
+   * by the shell so it can start loading that page before the click.
+   */
+  onPrefetchPage?: (pageId: string) => void;
   /** Exact internal page identity currently shown, for the current-page state. */
   currentPageId?: string;
   /**

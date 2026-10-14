@@ -201,6 +201,8 @@ export type PagePuckRendererProps = Readonly<{
    * the shell stays mounted; without it the browser follows the resolved address.
    */
   onNavigatePage?: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
+  /** Intent to open an internal page, so the shell can start loading it before the click. */
+  onPrefetchPage?: (pageId: string) => void;
   /** Internal page identity currently shown, for a navigation placement's current-page state. */
   currentPageId?: string;
   /**
@@ -258,6 +260,7 @@ export function PagePuckRenderer({
   projectedNavigation,
   resolvePageHref,
   onNavigatePage,
+  onPrefetchPage,
   currentPageId,
   theme,
   themeMode,
@@ -297,6 +300,7 @@ export function PagePuckRenderer({
     ...(projectedNavigation === undefined ? {} : { projectedNavigation }),
     ...(resolvePageHref === undefined ? {} : { resolvePageHref }),
     ...(onNavigatePage === undefined ? {} : { onNavigatePage }),
+    ...(onPrefetchPage === undefined ? {} : { onPrefetchPage }),
     ...(currentPageId === undefined ? {} : { currentPageId }),
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
     ...(applicationShellRuntime === undefined ? {} : { applicationShellRuntime }),
