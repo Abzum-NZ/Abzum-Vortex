@@ -2,21 +2,9 @@ import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "../definition/definition-provenance";
-import {
-  flowContractVersion,
-  flowExecutionKindSchema,
-  flowFormulaSchema,
-  flowLiteralSchema,
-  flowMaximumTaskCount,
-  flowReadFieldsProjectionSchema,
-  flowRegisteredTaskTypeSchema,
-  flowScheduleRecurrenceSchema,
-  flowSchema,
-  flowStandardEventKindSchema,
-  flowTaskTimeoutSchema,
-  flowValueSchema,
-} from "./flow-contracts";
-import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-contracts";
+import { flowContractVersion, flowExecutionKindSchema, flowMaximumTaskCount, flowReadFieldsProjectionSchema, flowRegisteredTaskTypeSchema, flowScheduleRecurrenceSchema, flowSchema, flowStandardEventKindSchema, flowTaskTimeoutSchema } from "./flow-contracts";
+import { flowFormulaSchema, flowLiteralSchema, flowValueSchema } from "./flow-values";
+import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 import {
   builderKeySchema,
   namespacedKeySchema,
