@@ -72,8 +72,8 @@ function SwitcherButton({
   return (
     <span className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm font-medium text-foreground">
       <Icon name={icon} aria-hidden="true" />
-      <span className="truncate">{label}</span>
-      <Icon name="chevron-down" aria-hidden="true" className="size-3.5 text-muted-foreground" />
+      <span className="truncate max-sm:sr-only">{label}</span>
+      <Icon name="chevron-down" aria-hidden="true" className="size-3.5 text-muted-foreground max-sm:hidden" />
     </span>
   );
 }
@@ -92,7 +92,7 @@ export function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpR
           : "Browser agent tools could not be enabled.";
   return (
     <div
-      className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 text-xs"
+      className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-md border px-2 py-1 text-xs"
       role="status"
       aria-live="polite"
       data-vortex-webmcp={runtime.working === undefined ? runtime.status : "working"}
@@ -122,20 +122,20 @@ function Breadcrumbs({
   const applicationName = runtime?.applicationName ?? shellName;
   const pageName = runtime?.pageName ?? shellName;
   return (
-    <Breadcrumb className="min-w-0">
-      <BreadcrumbList>
-        <BreadcrumbItem>
+    <Breadcrumb className="min-w-0 flex-1 sm:flex-none">
+      <BreadcrumbList className="flex-nowrap">
+        <BreadcrumbItem className="min-w-0 max-sm:hidden">
           {runtime === undefined ? (
-            <span>{applicationName}</span>
+            <span className="truncate">{applicationName}</span>
           ) : (
-            <BreadcrumbLink href={runtime.applicationHref}>{applicationName}</BreadcrumbLink>
+            <BreadcrumbLink href={runtime.applicationHref} className="truncate">{applicationName}</BreadcrumbLink>
           )}
         </BreadcrumbItem>
-        <BreadcrumbSeparator>
+        <BreadcrumbSeparator className="max-sm:hidden">
           <Icon name="chevron-right" aria-hidden="true" />
         </BreadcrumbSeparator>
-        <BreadcrumbItem>
-          <BreadcrumbPage>{pageName}</BreadcrumbPage>
+        <BreadcrumbItem className="min-w-0">
+          <BreadcrumbPage className="truncate">{pageName}</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
@@ -152,7 +152,7 @@ function OrganizationSwitcher({
       <DropdownMenuTrigger
         disabled={runtime === undefined && actions === null}
         aria-label={`Organisation: ${organizationName}`}
-        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center"
       >
         <SwitcherButton icon="building-2" label={organizationName} />
       </DropdownMenuTrigger>
@@ -185,7 +185,7 @@ function ApplicationSwitcher({
         className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm text-muted-foreground"
       >
         <Icon name="grid" aria-hidden="true" />
-        <span className="truncate">Applications temporarily unavailable</span>
+        <span className="truncate max-sm:sr-only">Applications temporarily unavailable</span>
       </span>
     );
   if (runtime?.applicationSwitcherState === "unavailable")
@@ -196,7 +196,7 @@ function ApplicationSwitcher({
         className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm text-muted-foreground"
       >
         <Icon name="grid" aria-hidden="true" />
-        <span className="truncate">Applications unavailable</span>
+        <span className="truncate max-sm:sr-only">Applications unavailable</span>
       </span>
     );
   const applicationName = runtime?.applicationName ?? shellName;
@@ -205,7 +205,7 @@ function ApplicationSwitcher({
       <DropdownMenuTrigger
         disabled={runtime === undefined || runtime.applications.length === 0 || actions === null}
         aria-label={`Application: ${applicationName}`}
-        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center"
       >
         <SwitcherButton icon="grid" label={applicationName} />
       </DropdownMenuTrigger>
@@ -269,12 +269,14 @@ export function ApplicationShellRoot({
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
         <style>{shellFrameCss}</style>
-        <header className="sticky top-0 z-20 flex h-14 w-full shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          {presentation.sidebar.collapsible === "icon" ? <SidebarTrigger /> : null}
+        <header className="sticky top-0 z-20 flex min-h-14 w-full shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b py-1 sm:h-14 sm:flex-nowrap sm:py-0 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          {presentation.sidebar.collapsible === "icon" ? (
+            <SidebarTrigger className="max-sm:size-11" />
+          ) : null}
           {presentation.topBar.breadcrumbs ? (
             <Breadcrumbs shellName={shell.name} runtime={runtime} />
           ) : null}
-          <div className="ms-auto flex min-w-0 items-center gap-1">
+          <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
             {presentation.topBar.organizationSwitcher ? (
               <OrganizationSwitcher runtime={runtime} />
             ) : null}
