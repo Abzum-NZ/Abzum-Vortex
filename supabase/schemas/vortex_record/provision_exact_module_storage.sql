@@ -151,14 +151,8 @@ begin
       or pg_catalog.jsonb_typeof(record_type -> 'relationships') <> 'array' then
       raise exception using errcode = '42501', message = 'Module record storage definition is invalid';
     end if;
-    if (
-      select pg_catalog.count(*) > 8
-      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field_item(value)
-      where field_item.value ->> 'sortable' = 'true'
-    ) then
-      raise exception using errcode = '23514',
-        message = 'A record type may declare at most eight sortable fields';
-    end if;
+    -- The eight-sortable-field limit is a publish rule; an older release may declare more and
+    -- simply gets an index per sortable field.
     -- The record-type loop is ordered by storage identity, so overlapping
     -- provisions acquire absent and existing lineage locks deterministically.
     perform pg_catalog.pg_advisory_xact_lock(
