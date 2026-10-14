@@ -4119,7 +4119,7 @@
                                          "board_crm_pipeline": {
                                            "block": {
                                              "block_id": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-                                             "release_version": "1.0.0"
+                                             "release_version": "1.1.0"
                                            },
                                            "query": "vortex.crm.opportunities:crm_pipeline_board",
                                            "settings": {
@@ -4627,6 +4627,13 @@
     {
         "id": "event_crm_pipeline_open_opportunity",
         "key": "vortex.app.events.vortex_app_crm_pipeline_open_opportunity",
+        "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+    },
+    {
+        "id": "event_crm_pipeline_move_opportunity",
+        "key": "vortex.app.events.vortex_app_crm_pipeline_move_opportunity",
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -5771,6 +5778,78 @@
                      },
                      {
                          "contractVersion": "1.0.0",
+                         "id": "crm_move_opportunity_stage",
+                         "key": "crm_move_opportunity_stage",
+                         "description": "Saves the stage a moved pipeline card was dropped into through the one Save record task, the same record save an edit form uses.",
+                         "labels": {
+                             "name": "Move opportunity"
+                         },
+                         "execution": "interactive",
+                         "runAs": {
+                             "kind": "initiator"
+                         },
+                         "inputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "required": true,
+                                 "recordTypeIds": [
+                                     "vortex.crm.opportunities:opportunity"
+                                 ]
+                             },
+                             "values": {
+                                 "type": "json",
+                                 "required": true
+                             }
+                         },
+                         "tasks": [
+                             {
+                                 "id": "save",
+                                 "type": "record.save",
+                                 "version": "1.0.0",
+                                 "properties": {
+                                     "record_type": {
+                                         "kind": "literal",
+                                         "literal": {
+                                             "type": "text",
+                                             "value": "vortex.crm.opportunities:opportunity"
+                                         }
+                                     },
+                                     "record": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "record"
+                                         }
+                                     },
+                                     "values": {
+                                         "kind": "reference",
+                                         "reference": {
+                                             "source": "input",
+                                             "name": "values"
+                                         }
+                                     }
+                                 }
+                             }
+                         ],
+                         "outputs": {
+                             "record": {
+                                 "type": "record_reference",
+                                 "recordTypeIds": [
+                                     "vortex.crm.opportunities:opportunity"
+                                 ],
+                                 "value": {
+                                     "kind": "reference",
+                                     "reference": {
+                                         "source": "task_output",
+                                         "task": "save",
+                                         "key": "record"
+                                     }
+                                 }
+                             }
+                         }
+                     },
+                     {
+                         "contractVersion": "1.0.0",
                          "id": "crm_open_activity",
                          "key": "crm_open_activity",
                          "description": "Opens the clicked activity's own detail page with the record identity the clicked row carries.",
@@ -6556,6 +6635,23 @@
                              "record_id": {
                                  "kind": "caller",
                                  "name": "record_id"
+                             }
+                         }
+                     },
+                     {
+                         "id": "card_binding_crm_pipeline_move_opportunity",
+                         "control": "board_crm_pipeline",
+                         "event_id": "event_crm_pipeline_move_opportunity",
+                         "event": "card_moved",
+                         "flow": "crm_move_opportunity_stage",
+                         "inputs": {
+                             "record": {
+                                 "kind": "caller",
+                                 "name": "record_id"
+                             },
+                             "values": {
+                                 "kind": "caller",
+                                 "name": "values"
                              }
                          }
                      },
