@@ -12,28 +12,7 @@ import {
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
 } from "@vortex/platform/server";
-import {
-  crmApplication,
-  crmModuleSources,
-  hrApplication,
-  hrModuleSources,
-  iamApplication,
-  iamModule,
-  landingZoneApplication,
-  landingZoneModuleSources,
-  messagesPreferenceModule,
-  operationsApplication,
-  operationsModuleSources,
-  organisationAdministrationApplication,
-  organisationAdministrationModule,
-  serviceDeskApplication,
-  serviceDeskModuleSources,
-  systemDirectoryModule,
-  tasksApplication,
-  tasksModule,
-  tenantAdministrationApplication,
-  tenantAdministrationModule,
-} from "@vortex/definitions";
+import { shippedApplications, shippedModuleSources } from "@vortex/definitions";
 import {
   developmentBuilderAuthority,
   inSystemTransaction,
@@ -80,39 +59,14 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
  * Every module source available to the development setup. Publishing each shipped Module also
  * validates independently reusable Modules that no Application currently binds.
  */
-const moduleSources = [
-  iamModule,
-  tenantAdministrationModule,
-  organisationAdministrationModule,
-  systemDirectoryModule,
-  ...landingZoneModuleSources,
-  messagesPreferenceModule,
-  ...crmModuleSources,
-  ...serviceDeskModuleSources,
-  ...operationsModuleSources,
-  ...hrModuleSources,
-  tasksModule,
-] as readonly StoredDefinitionSource[];
+const moduleSources = shippedModuleSources;
 
 type TrustedApplicationDescriptor = Readonly<{
   source: Extract<StoredDefinitionSource, { kind: "application" }>;
   applicationOriginKind: TrustedApplicationRootOriginKind;
 }>;
 
-const applicationDescriptors: readonly TrustedApplicationDescriptor[] = [
-  { source: iamApplication, applicationOriginKind: "platform_system_application" },
-  { source: tenantAdministrationApplication, applicationOriginKind: "platform_system_application" },
-  {
-    source: organisationAdministrationApplication,
-    applicationOriginKind: "platform_system_application",
-  },
-  { source: operationsApplication, applicationOriginKind: "ordinary" },
-  { source: crmApplication, applicationOriginKind: "ordinary" },
-  { source: hrApplication, applicationOriginKind: "ordinary" },
-  { source: tasksApplication, applicationOriginKind: "ordinary" },
-  { source: serviceDeskApplication, applicationOriginKind: "ordinary" },
-  { source: landingZoneApplication, applicationOriginKind: "platform_system_application" },
-];
+const applicationDescriptors: readonly TrustedApplicationDescriptor[] = shippedApplications;
 
 const shippedApplicationDescriptor = (key: string): TrustedApplicationDescriptor => {
   const descriptor = applicationDescriptors.find((candidate) => candidate.source.key === key);
