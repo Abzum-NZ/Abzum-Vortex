@@ -259,7 +259,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
           </p>
           <BoardMetrics metrics={values.aggregates} />
           <div
-            className="min-w-0 overflow-x-auto"
+            className="relative min-w-0 overflow-x-auto"
             role="region"
             aria-label={`${accessibleName} columns`}
             tabIndex={0}
