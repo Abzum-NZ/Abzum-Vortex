@@ -1,9 +1,9 @@
 set local role vortex_owner;
 
 alter table vortex_platform.request_contexts
-  add column validated_transaction_id xid8,
-  add column validated_role text,
-  add column validated_human_context jsonb;
+  add column if not exists validated_transaction_id xid8,
+  add column if not exists validated_role text,
+  add column if not exists validated_human_context jsonb;
 
 CREATE OR REPLACE FUNCTION vortex_access.validated_human_request_context() RETURNS jsonb
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
