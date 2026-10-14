@@ -8,6 +8,7 @@ declare
   definition_fingerprint text;
   observed text;
   text_column boolean;
+  sortable_unique boolean := false;
 begin
   canonical_scope_columns := vortex_record.index_scope_columns(p_storage_scope);
   if p_storage_contract_id is null
@@ -30,11 +31,23 @@ begin
   );
 
   if p_purpose = 'uniqueness' then
+    select coalesce((mapping.field_definition ->> 'sortable')::boolean, false)
+      into sortable_unique
+    from vortex_record.field_storage_mappings as mapping
+    where mapping.storage_contract_id = p_storage_contract_id
+      and mapping.field_id = p_field_id and mapping.state = 'active';
+    if not found then
+      raise exception using errcode = '55000', message = 'Record field index mapping is missing';
+    end if;
+  end if;
+
+  if p_purpose = 'uniqueness' then
     execute pg_catalog.format(
       'create unique index if not exists %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
       index_token, p_table_token, p_scope_index_columns, p_column_token
     );
-  else
+  end if;
+  if p_purpose = 'performance' or sortable_unique then
     select attribute.atttypid = 'pg_catalog.text'::pg_catalog.regtype
       into text_column
     from pg_catalog.pg_attribute as attribute
@@ -47,7 +60,9 @@ begin
     end if;
     execute pg_catalog.format(
       'create index if not exists %I on record_data.%I (%s, %I%s asc nulls first, record_id asc) where lifecycle_state = ''active''',
-      index_token, p_table_token, p_scope_index_columns, p_column_token,
+      case when sortable_unique then 'ix_' || pg_catalog.substr(p_column_token, 3)
+        else index_token end,
+      p_table_token, p_scope_index_columns, p_column_token,
       case when text_column then ' collate "C"' else '' end
     );
   end if;

@@ -44,7 +44,11 @@ const kinds: readonly Kind[] = [
   { label: "Service Desk cases", recordKey: "case", queryKey: "service_desk_open_cases" },
 ];
 
-type Next = Readonly<{ sortKey: readonly (string | null)[]; recordId: string }>;
+type Next = Readonly<{
+  sortKey: readonly (string | null)[];
+  phase: "null" | "value";
+  recordId: string;
+}>;
 type Page = Readonly<{
   outcome: "completed" | "refused";
   reasonCode?: string;
@@ -218,7 +222,12 @@ const read = async (
       rows?: unknown[];
     };
     const scan = notices
-      .filter((message) => message.includes("plan:") && message.includes("record_data."))
+      .filter(
+        (message) =>
+          message.includes("plan:") &&
+          message.includes(" as sort_key,") &&
+          message.includes("limit $5"),
+      )
       .sort((left, right) => right.length - left.length)[0];
     return {
       page: {
@@ -319,7 +328,11 @@ const positionsOf = async (
       );
       return row === undefined
         ? null
-        : { sortKey: row.sort_key as (string | null)[], recordId: row.record_id as string };
+        : {
+            sortKey: row.sort_key as (string | null)[],
+            phase: (row.sort_key as (string | null)[])[0] === null ? "null" : "value",
+            recordId: row.record_id as string,
+          };
     },
   };
 };
