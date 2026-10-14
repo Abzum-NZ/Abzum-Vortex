@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactElement } from "react";
+import type { KeyboardEvent, MouseEvent, ReactElement } from "react";
 import {
   readRecordsTableContract,
   type RecordsTableActionContract,
@@ -93,6 +93,21 @@ const priorityClass = (column: RenderedColumn, first: boolean): string | undefin
     default:
       return undefined;
   }
+};
+
+/** Controls inside a row keep their own meaning: a click or key on one never opens the row. */
+const INTERACTIVE_IN_ROW =
+  "a,button,input,select,textarea,label,summary,[role='button'],[role='checkbox'],[role='radio'],[role='menuitem'],[role='switch'],[contenteditable='true']";
+const isInteractiveTarget = (target: EventTarget, row: HTMLElement): boolean => {
+  if (!(target instanceof Element)) return false;
+  const control = target.closest(INTERACTIVE_IN_ROW);
+  return control !== null && control !== row && row.contains(control);
+};
+
+/** The row's own record link: the first column's projected record link, when it has an address. */
+const rowOpenAddress = (row: DisplayRow, columnKey: string | undefined): string | undefined => {
+  const cell = columnKey === undefined ? undefined : row.cells[columnKey];
+  return cell?.kind === "record_link" ? cell.href : undefined;
 };
 
 /** Field identities compare without regard to case, as the Query engine keys them. */
@@ -351,12 +366,18 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                     ? undefined
                     : declaredRowActions.filter((action) => rowShowsAction(row, action));
                 const activate = activateRow;
+                // A row with no declared click command opens the record its first column links to,
+                // through that column's own address, so the whole row acts as the link.
+                const openAddress =
+                  activate === undefined ? rowOpenAddress(row, columns[0]?.key) : undefined;
                 const rowInteraction =
-                  activate === undefined
-                    ? {}
-                    : {
+                  activate !== undefined
+                    ? {
                         tabIndex: 0,
-                        onClick: () => activate(row.recordId),
+                        onClick: (event: MouseEvent<HTMLTableRowElement>) => {
+                          if (isInteractiveTarget(event.target, event.currentTarget)) return;
+                          activate(row.recordId);
+                        },
                         // Only a key pressed on the focused row itself opens it; Enter or Space on
                         // a row command, selection checkbox or inline editor keeps its own meaning.
                         onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) => {
@@ -366,13 +387,21 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                             activate(row.recordId);
                           }
                         },
-                      };
+                      }
+                    : openAddress === undefined
+                      ? {}
+                      : {
+                          onClick: (event: MouseEvent<HTMLTableRowElement>) => {
+                            if (isInteractiveTarget(event.target, event.currentTarget)) return;
+                            window.location.assign(openAddress);
+                          },
+                        };
                 return (
                   <TableRow
                     key={row.recordId}
                     data-vortex-record-id={row.recordId}
                     data-state={selected ? "selected" : undefined}
-                    className={cn(activate === undefined ? undefined : "cursor-pointer")}
+                    className={cn(activate === undefined && openAddress === undefined ? undefined : "cursor-pointer")}
                     {...rowInteraction}
                   >
                     {!selectable ? null : (

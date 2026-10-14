@@ -2,6 +2,7 @@ import type {
   ProtectedQuerySummaryAggregateResult,
   InstalledRuntimeContext,
   PermittedApplication,
+  LinkFieldType,
 } from "@vortex/platform/server";
 import type { DisplayCellValue } from "@vortex/ui";
 import {
@@ -167,6 +168,19 @@ export const fieldDateTypesOf = (
           ? [[String(field.fieldId).toLowerCase(), valueType] as const]
           : [];
       }),
+    ),
+  );
+
+export const fieldLinkTypesOf = (module: ModuleRelease): Record<string, LinkFieldType> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.fields.flatMap((field) =>
+        field.type === "web_address" ||
+        field.type === "email_address" ||
+        field.type === "phone_number"
+          ? [[String(field.fieldId).toLowerCase(), field.type] as const]
+          : [],
+      ),
     ),
   );
 

@@ -6,8 +6,8 @@ import {
   moduleRootIdSchema,
   queryIdSchema,
   stableDefinitionReleaseVersionSchema,
-  safeHttpsUrlSchema,
   timestampSchema,
+  isSafeLinkAddress,
   type BoardColumnSelector,
   type BlockPropertyValueContract,
   type ComponentSemanticEventKind,
@@ -348,6 +348,9 @@ const UNAVAILABLE_CELL: DisplayCellValue = Object.freeze({ kind: "unavailable" }
 /** An address inside this application: an absolute path, never another origin or a script. */
 export const isInternalAddress = (value: unknown): value is string =>
   typeof value === "string" && /^\/(?![/\\])\S*$/.test(value);
+
+/** A web link opens in a new page; a mail or telephone link hands over to the viewer's own app. */
+export const isWebLinkAddress = (value: string): boolean => /^https?:/i.test(value);
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 const isValidIsoCalendarDate = (text: string): boolean => {
@@ -519,18 +522,17 @@ const parseCellValue = (
       });
     case "link": {
       requireExactKeys(record, ["kind", "address", "label"], location);
-      const address = safeHttpsUrlSchema.safeParse(record.address);
-      return address.success
+      return isSafeLinkAddress(record.address)
         ? Object.freeze({
             kind: "link",
-            address: address.data,
+            address: record.address,
             label: requireNonEmptyString(
               record.label,
               "A link display value requires a label",
               location,
             ),
           })
-        : fail("A link display value requires a safe HTTPS address", location);
+        : fail("A link display value requires a safe web, mail or telephone address", location);
     }
     case "rich_text":
       requireExactKeys(record, ["kind", "document"], location);

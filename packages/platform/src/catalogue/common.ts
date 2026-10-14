@@ -85,3 +85,31 @@ export const boundedPageSchema = z
   .strict();
 
 export type CorrelationId = z.infer<typeof correlationIdSchema>;
+
+const MAXIMUM_LINK_ADDRESS_LENGTH = 2_048;
+/**
+ * The schemes a link cell may use. A web address must carry no embedded credential; a mail or
+ * telephone address must carry only its own characters. Anything else, a script address included,
+ * is refused before it can be rendered.
+ */
+export const isSafeLinkAddress = (value: unknown): value is string => {
+  if (typeof value !== "string" || value.length === 0 || value.length > MAXIMUM_LINK_ADDRESS_LENGTH)
+    return false;
+  let address: URL;
+  try {
+    address = new URL(value);
+  } catch {
+    return false;
+  }
+  switch (address.protocol) {
+    case "https:":
+    case "http:":
+      return address.username === "" && address.password === "" && address.hostname !== "";
+    case "mailto:":
+      return /^mailto:[^\s<>"]+$/.test(value);
+    case "tel:":
+      return /^tel:\+?[0-9().;=\-A-Za-z]+$/.test(value);
+    default:
+      return false;
+  }
+};
