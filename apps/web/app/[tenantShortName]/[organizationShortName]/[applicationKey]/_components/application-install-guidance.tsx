@@ -105,7 +105,11 @@ export function ApplicationInstallGuidance(props: Props) {
       document.removeEventListener("visibilitychange", visible);
       removeOwnLink();
     };
-  }, [pathname, pathMatches, props.applicationPath, props.manifestUrl, props.snapshot, props.validUntil,
+  // Moving between pages of the application keeps the same manifest, so a page change is not a
+  // re-check: only leaving the application's path, a server render with a new snapshot, the tab
+  // becoming visible again or opening the guide checks again. A re-check on every page change would
+  // put a second server request (identity, address and bundle reads) beside every navigation.
+  }, [pathMatches, props.applicationPath, props.manifestUrl, props.snapshot, props.validUntil,
     props.initialManifest, reload, removeOwnLink]);
 
   return <aside aria-label="Application installation" className="flex flex-col items-start gap-2 border-b bg-muted/40 px-4 py-1.5 text-sm">
