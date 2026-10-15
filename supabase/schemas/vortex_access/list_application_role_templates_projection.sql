@@ -146,20 +146,18 @@ begin
       case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
     end;
-  if p_limit is not null then
-    scan_sql := scan_sql || ' limit $5';
-  end if;
+  -- No limit in the scan: a candidate whose release roles fail validation is skipped, as the
+  -- legacy reader skipped it, so the loop reads on until the page is full (the scan is an
+  -- ordered index walk, so only the rows consumed are read).
 
   for candidate in execute scan_sql using scope_row.organization_id, p_record_ids,
     after_record_id, after_text, p_limit
   loop
     if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
-      raise exception using errcode = '23514',
-        message = 'Application role template release roles are invalid';
+      continue;
     end if;
     if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 100 then
-      raise exception using errcode = '23514',
-        message = 'Application role template release roles are invalid';
+      continue;
     end if;
     seen_role_ids := array[]::uuid[];
     valid_roles := true;
@@ -194,21 +192,15 @@ begin
       end if;
     end loop;
     if not valid_roles or selected_template is null then
-      raise exception using errcode = '23514',
-        message = 'Application role template release role identity is invalid';
-    end if;
-    if candidate.key is distinct from selected_template ->> 'key'
-      or candidate.label is distinct from selected_template ->> 'name' then
-      raise exception using errcode = '23514',
-        message = 'Application role template continuity metadata does not match its release';
+      continue;
     end if;
     return query select scope_row.organization_id,
       candidate.source_role_id, candidate.registration_revision,
       pg_catalog.jsonb_build_object(
         'application_root_id', candidate.application_root_id,
         'source_role_id', candidate.source_role_id,
-        'key', candidate.key,
-        'label', candidate.label,
+        'key', selected_template ->> 'key',
+        'label', selected_template ->> 'name',
         'continuity_revision', candidate.continuity_revision
       );
     emitted := emitted + 1;
