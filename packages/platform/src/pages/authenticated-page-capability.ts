@@ -97,6 +97,18 @@ export type AuthenticatedPageCapabilityDependencies<Command> =
         page: PageDefinition,
         condition: ConditionNode,
       ) => Promise<boolean>;
+      /**
+       * Whether the action a placement is bound to can run on the page's subject for the viewer,
+       * decided by that action's own preview under the same verified transaction. `undefined`
+       * means the placement is bound to no action, or the preview cannot decide before the person
+       * supplies inputs; only `false` hides the placement. One decision per action per projection.
+       */
+      evaluateActionAvailability?: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        page: PageDefinition,
+        placementId: string,
+      ) => Promise<boolean | undefined>;
       /** Final current-context and database-clock check for the earliest private Access deadline. */
       validateAccessEligibilityUntil?: (
         transaction: RequestDatabaseTransaction,
@@ -285,10 +297,20 @@ export const createAuthenticatedPageCapabilityService = <Command>(
                       page,
                       required.visibilityCondition,
                     );
+          const actionAvailable =
+            ancestorHidden || !view.allowed || dependencies.evaluateActionAvailability === undefined
+              ? undefined
+              : await dependencies.evaluateActionAvailability(
+                  transaction,
+                  scope,
+                  page,
+                  required.placementId,
+                );
           if (
             ancestorHidden ||
             !view.allowed ||
-            (required.visibilityCondition !== undefined && conditionAllowed !== true)
+            (required.visibilityCondition !== undefined && conditionAllowed !== true) ||
+            actionAvailable === false
           )
             hiddenPlacements.add(required.placementId);
           states[required.placementId] = {
@@ -301,6 +323,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
             ...(conditionAllowed === undefined
               ? {}
               : { conditionAllowed }),
+            ...(actionAvailable === undefined ? {} : { actionAvailable }),
           };
         }
         if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
