@@ -26,6 +26,7 @@ import {
   cases,
   hrDepartments,
   hrEmployees,
+  hrEntitlementYear,
   hrLeaveRequests,
   hrPositions,
   leads,
@@ -354,6 +355,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const departmentType = recordType(hrSet, "vortex.hr", "department");
   const positionType = recordType(hrSet, "vortex.hr", "position");
   const employeeType = recordType(hrSet, "vortex.hr", "employee");
+  const leaveEntitlementType = recordType(hrSet, "vortex.hr", "leave_entitlement");
   const leaveRequestType = recordType(hrSet, "vortex.hr", "leave_request");
   const personType = recordType(hrSet, "vortex.system_directory", "person");
   const ownerSession = nominatedOwnerSession(facts.stewardIdentityId);
@@ -571,6 +573,18 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         },
       }),
     );
+  const entitlementIds: string[] = [];
+  for (const [index, employee] of hrEmployees.entries())
+    entitlementIds.push(
+      await save(hrRootId, leaveEntitlementType, `hr/leave-entitlement/${index + 1}`, {
+        year: hrEntitlementYear,
+        days: employee.annualLeaveDays,
+        employee: {
+          recordTypeId: employeeType.recordTypeId,
+          recordId: employeeIds[index]!,
+        },
+      }),
+    );
   for (const [index, leave] of hrLeaveRequests.entries())
     await save(hrRootId, leaveRequestType, `hr/leave-request/${index + 1}`, {
       start_date: leave.startDate,
@@ -581,6 +595,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       employee: {
         recordTypeId: employeeType.recordTypeId,
         recordId: employeeIds[leave.employeeIndex]!,
+      },
+      entitlement: {
+        recordTypeId: leaveEntitlementType.recordTypeId,
+        recordId: entitlementIds[leave.employeeIndex]!,
       },
     });
 
