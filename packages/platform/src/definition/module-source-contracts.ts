@@ -26,7 +26,10 @@ import {
 } from "../records/module-field-values";
 import { moduleSourceRecordOwnershipModeSchema } from "../records/record-ownership-compatibility";
 import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
-import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
+import {
+  boundedProtectedReadModelSortKeys,
+  protectedReadModelKeySchema,
+} from "./application-composition/protected-read-models";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import {
   permissionActionKindSchema,
@@ -519,6 +522,14 @@ const moduleSourceRecordTypeSchema = z
           code: "custom",
           path: ["system_projection", "sortable_fields", index],
           message: "A declared sortable field must be a sortable field of the record type",
+        });
+    const readerSortKeys = boundedProtectedReadModelSortKeys[projection.protected_view];
+    for (const [index, key] of projection.sortable_fields.entries())
+      if (readerSortKeys !== undefined && !readerSortKeys.includes(key))
+        context.addIssue({
+          code: "custom",
+          path: ["system_projection", "sortable_fields", index],
+          message: `Protected projection reader ${projection.protected_view} does not accept sort key ${key}`,
         });
     // The declared lists are the closed set the query engine may use, so a field flagged
     // filterable or sortable outside them would be an undeclared query capability.

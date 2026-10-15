@@ -3,7 +3,8 @@ create or replace function vortex_record.read_record_projection_with_validated_t
   p_record_id uuid,
   p_page_declaration jsonb,
   p_page_eligibility jsonb,
-  p_validated_record_types jsonb
+  p_validated_record_types jsonb,
+  p_projection_row jsonb
 )
 returns table (projection jsonb, read_facts jsonb, read_bounds jsonb)
 language plpgsql
@@ -36,7 +37,9 @@ begin
     return next;
     return;
   end if;
-  loaded := vortex_record.load_record_access_facts_internal(p_record_type_id, 'read', p_record_id, null);
+  loaded := vortex_record.load_record_access_facts_internal(
+    p_record_type_id, 'read', p_record_id, null, p_projection_row
+  );
   if loaded ->> 'outcome' <> 'loaded'
     or pg_catalog.jsonb_typeof(loaded -> 'declaration') <> 'object' then
     projection := pg_catalog.jsonb_build_object('outcome', 'refused');
@@ -156,7 +159,28 @@ begin
 end
 $function$;
 
+create or replace function vortex_record.read_record_projection_with_validated_types_internal(
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_page_declaration jsonb,
+  p_page_eligibility jsonb,
+  p_validated_record_types jsonb
+)
+returns table (projection jsonb, read_facts jsonb, read_bounds jsonb)
+language sql volatile security invoker set search_path = ''
+as $function$
+  select * from vortex_record.read_record_projection_with_validated_types_internal(
+    p_record_type_id, p_record_id, p_page_declaration, p_page_eligibility,
+    p_validated_record_types, null::jsonb
+  )
+$function$;
+
+alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb) owner to vortex_owner;
 alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_owner;
+revoke all on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb)
+  to vortex_record_adapter;
 revoke all on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb)
