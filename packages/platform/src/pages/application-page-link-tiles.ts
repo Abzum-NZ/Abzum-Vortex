@@ -19,7 +19,7 @@ export const projectedApplicationPageLinkTilesSchema = z.object({
     sourceRecordId: recordIdSchema,
     sourceRevision: revisionSchema,
     target: applicationPageLinkTileTargetSchema,
-  }).strict()).max(10_000),
+  }).strict()).max(200),
 }).strict().superRefine((value, context) => {
   if (new Set(value.rows.map((row) => row.sourceRecordId.toLowerCase())).size !== value.rows.length)
     context.addIssue({ code: "custom", message: "Each source tile must occur once" });

@@ -962,6 +962,7 @@ const loadApplicationPageJoined = async (
               parsedValueFieldId !== undefined && parsedValueFieldId.success
                 ? subjectRow.row.values[parsedValueFieldId.data]
                 : undefined,
+            resolveRecordLinks,
             service: referenceChoices,
             session,
             selection,
