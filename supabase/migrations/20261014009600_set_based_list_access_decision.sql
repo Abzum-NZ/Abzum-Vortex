@@ -26,6 +26,7 @@ declare
   evidence jsonb;
   wants_share boolean;
   share_candidates uuid[] := array[]::uuid[];
+  page_record_ids uuid[];
   constant_matched jsonb;
   constant_valid_until text;
   decisions jsonb;
@@ -123,18 +124,27 @@ begin
     where route.value ->> 'kind' = 'direct_share'
   );
   if wants_share then
-    -- A superset of the records any current share can reach; the exact share
-    -- reader still decides each of them.
+    -- The page's record identities, once; then a superset of the records any
+    -- current share of this binding can reach, through the active share scope
+    -- index. The exact share reader still decides each of them.
+    select coalesce(pg_catalog.array_agg((item.value #>> '{recordScope,recordId}')::uuid), array[]::uuid[])
+    into page_record_ids
+    from pg_catalog.jsonb_array_elements(p_records) as item(value)
+    where pg_catalog.jsonb_typeof(item.value) = 'object'
+      and vortex_platform.is_non_nil_uuid(item.value #>> '{recordScope,recordId}');
     select coalesce(pg_catalog.array_agg(distinct share.record_id), array[]::uuid[])
     into share_candidates
     from vortex_access.organization_direct_record_shares as share
     where share.organization_id = v_organization_id
-      and share.state = 'active'
-      and share.record_id in (
-        select (item.value #>> '{recordScope,recordId}')::uuid
-        from pg_catalog.jsonb_array_elements(p_records) as item(value)
-        where vortex_platform.is_non_nil_uuid(item.value #>> '{recordScope,recordId}')
-      );
+      and share.storage_scope = binding ->> 'storageScope'
+      and share.application_scope_id = coalesce(case
+        when binding ->> 'storageScope' = 'application_contained' then v_application_root_id
+        else null::uuid end, '00000000-0000-0000-0000-000000000000'::uuid)
+      and share.module_root_id = (binding ->> 'moduleRootId')::uuid
+      and share.record_type_id = (binding ->> 'recordTypeId')::uuid
+      and share.storage_contract_id = (binding ->> 'storageContractId')::uuid
+      and share.record_id = any (page_record_ids)
+      and share.state = 'active';
   end if;
 
   -- When every eligible alternative admits all records and no share applies,
@@ -225,6 +235,20 @@ begin
             and not (records.record ? 'ownerOrganizationAccountId') end end as evidence_ok
     from records
   ),
+  -- Each shared record's current shares, read once by the exact share reader
+  -- whatever the number of alternatives.
+  shares as materialized (
+    select assessed.row_index, share.*
+    from assessed
+    cross join lateral vortex_access.read_current_direct_record_share_contributions(
+      v_organization_id, v_application_root_id,
+      (target_type ->> 'moduleRootId')::uuid, (target_type ->> 'recordTypeId')::uuid,
+      (target_type ->> 'storageContractId')::uuid, target_type ->> 'storageScope',
+      assessed.record_id, v_organization_id, v_application_root_id, v_account_id, p_checked_at
+    ) as share
+    where wants_share and assessed.record_id = any (share_candidates)
+      and assessed.target_ok and assessed.evidence_ok
+  ),
   contributions as (
     -- All-record and owner routes: one contribution when admitted.
     select assessed.row_index, alternatives.alt_index, alternatives.candidate,
@@ -270,17 +294,10 @@ begin
       ),
       share.valid_until,
       alternatives.candidate_valid_until
-    from assessed
+    from shares as share
+    join assessed on assessed.row_index = share.row_index
     cross join alternatives
-    cross join lateral vortex_access.read_current_direct_record_share_contributions(
-      v_organization_id, v_application_root_id,
-      (target_type ->> 'moduleRootId')::uuid, (target_type ->> 'recordTypeId')::uuid,
-      (target_type ->> 'storageContractId')::uuid, target_type ->> 'storageScope',
-      assessed.record_id, v_organization_id, v_application_root_id, v_account_id, p_checked_at
-    ) as share
-    where wants_share and alternatives.has_share
-      and assessed.target_ok and assessed.evidence_ok
-      and assessed.record_id = any (share_candidates)
+    where alternatives.has_share
       and (action_kind = 'read' or pg_catalog.cardinality(share.changeable_field_ids) > 0)
   ),
   matched as (
