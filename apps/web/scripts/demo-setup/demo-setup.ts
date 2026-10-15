@@ -128,9 +128,14 @@ const main = async (): Promise<void> => {
   );
 };
 
-main().catch((error: unknown) => {
-  process.stderr.write(
-    `[demo setup] failed: ${error instanceof Error ? error.message : "unexpected error"}\n`,
-  );
-  process.exitCode = 1;
-});
+// A one-shot command: exit once the setup settles, so an idle client keep-alive socket can never
+// hold the process (and the caller's setup lock) open.
+main()
+  .catch((error: unknown) => {
+    process.stderr.write(
+      `[demo setup] failed: ${error instanceof Error ? error.message : "unexpected error"}
+`,
+    );
+    process.exitCode = 1;
+  })
+  .finally(() => process.exit());

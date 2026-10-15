@@ -383,14 +383,19 @@ export const runDevelopmentSetup = async (
 const main = async (): Promise<void> =>
   runDevelopmentSetup(process.argv.slice(2)).then(() => undefined);
 
-main().catch((error: unknown) => {
-  if (error instanceof DevelopmentSetupRefusal) process.stderr.write(`[setup] ${error.message}\n`);
-  else {
-    const code = error instanceof Error && "code" in error ? String(error.code) : undefined;
-    process.stderr.write(
-      `[setup] failed${code === undefined ? "" : ` (${code})`}: ${error instanceof Error ? error.message : "unexpected error"}\n`,
-    );
-    if (process.env.VORTEX_SETUP_DEBUG === "1") console.error(error);
-  }
-  process.exitCode = 1;
-});
+// A one-shot command: exit once the setup settles, so an idle pooled connection or a client
+// keep-alive socket can never hold the process (and the caller's setup lock) open.
+main()
+  .catch((error: unknown) => {
+    if (error instanceof DevelopmentSetupRefusal)
+      process.stderr.write(`[setup] ${error.message}\n`);
+    else {
+      const code = error instanceof Error && "code" in error ? String(error.code) : undefined;
+      process.stderr.write(
+        `[setup] failed${code === undefined ? "" : ` (${code})`}: ${error instanceof Error ? error.message : "unexpected error"}\n`,
+      );
+      if (process.env.VORTEX_SETUP_DEBUG === "1") console.error(error);
+    }
+    process.exitCode = 1;
+  })
+  .finally(() => process.exit());
