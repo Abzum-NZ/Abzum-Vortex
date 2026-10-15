@@ -12,6 +12,7 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   platformIdSchema,
+  recordIdSchema,
   revisionSchema,
 } from "../catalogue/identifiers";
 
@@ -34,6 +35,7 @@ export const referenceChoiceSelectionEvidenceSchema = z
   .object({
     search: z.string().trim().min(1).max(100).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
+    exactRecordId: recordIdSchema.optional(),
   })
   .strict();
 export type ReferenceChoiceSelectionEvidence = z.infer<

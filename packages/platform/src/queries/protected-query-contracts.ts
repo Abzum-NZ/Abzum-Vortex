@@ -118,6 +118,8 @@ export const protectedQueryCommandSchema = z
     pageSize: z.number().int().min(1).max(200),
     pageDirection: z.enum(["forward", "backward"]).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
+    /** Narrows the installed query to one record under its ordinary viewer authority. */
+    exactRecordId: recordIdSchema.optional(),
   })
   .strict();
 export type ProtectedQueryCommand = z.infer<typeof protectedQueryCommandSchema>;
@@ -499,7 +501,11 @@ export type ProtectedQuerySummaryResult = z.infer<typeof protectedQuerySummaryRe
 export const protectedQueryBoardSummaryColumnSchema = z
   .object({
     value: z.string().min(1).max(120),
-    label: z.string().min(1).max(60).refine((label) => label.trim().length > 0),
+    label: z
+      .string()
+      .min(1)
+      .max(60)
+      .refine((label) => label.trim().length > 0),
     rowCount: z.number().int().nonnegative().max(100_000),
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
   })
@@ -568,8 +574,12 @@ export const protectedQueryBoardSummaryCompletedSchema = z
       )
         context.addIssue({
           code: "custom",
-          path: index < summary.columns.length ? ["columns", index, "aggregates"] : ["unassigned", "aggregates"],
-          message: "Every board bucket reports the same declared aggregate aliases as the global result",
+          path:
+            index < summary.columns.length
+              ? ["columns", index, "aggregates"]
+              : ["unassigned", "aggregates"],
+          message:
+            "Every board bucket reports the same declared aggregate aliases as the global result",
         });
     }
 

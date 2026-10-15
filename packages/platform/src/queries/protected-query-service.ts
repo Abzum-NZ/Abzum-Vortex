@@ -505,7 +505,9 @@ const readPage = async (
       ${command.pageSize}::integer,
       ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
       ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
-      ${JSON.stringify({ ...userQueryInputs(command), pageDirection: command.pageDirection ?? "forward" })}::text::jsonb
+      ${JSON.stringify(userQueryInputs(command))}::text::jsonb,
+      ${command.pageDirection ?? "forward"}::text,
+      ${command.exactRecordId ?? null}::uuid
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -872,6 +874,8 @@ const runCommand = async (
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined) return refusal("request_invalid");
+  if (command.exactRecordId !== undefined && command.continuationToken !== undefined)
+    return refusal("request_invalid");
 
   // A user sort or filter outside the component-declared sets is refused before any read.
   const userRefusal = userInputRefusal(command);
@@ -928,7 +932,7 @@ const runCommand = async (
     let nextAnchor: z.infer<typeof pageAnchorSchema> | null = null;
     let oppositeAnchor: z.infer<typeof pageAnchorSchema> | null = null;
     let releaseVersion: string | undefined;
-    for (let call = 0; call < 4; call += 1) {
+    for (let call = 0; call < (command.exactRecordId === undefined ? 4 : 1); call += 1) {
       const page = await readPage(
         transaction,
         { ...command, pageSize: command.pageSize - rows.length },
@@ -1017,7 +1021,7 @@ const runCommand = async (
     };
   };
 
-  if (cache === undefined) return load();
+  if (cache === undefined || command.exactRecordId !== undefined) return load();
   const plan = await planCache(transaction, scope, command, applicationRootId, declared, cache);
   if (plan === undefined) return load();
   const { value } = await readThroughQueryCache<ProtectedQueryResult>({
