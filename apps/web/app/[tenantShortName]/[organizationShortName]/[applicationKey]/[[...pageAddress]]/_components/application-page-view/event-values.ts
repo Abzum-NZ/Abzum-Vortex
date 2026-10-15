@@ -68,6 +68,7 @@ export const suppliedValues = (event: DisplaySemanticEvent): Record<string, unkn
       return {
         record_id: event.recordId,
         values: { [event.field]: event.value },
+        value: event.value,
         ...(event.revision === undefined ? {} : { revision: event.revision }),
       };
     default:

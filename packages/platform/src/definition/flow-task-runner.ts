@@ -280,8 +280,15 @@ export const createFlowTaskRunner = (
       if (linkedActions.length > 0) {
         if (linkedActions.length > 1 || Object.keys(submittedValues).length > 1)
           return { outcome: "validation" };
-        return planNamedAction(run, state, call, commandId, linkedActions[0]!, {}, true);
+        // The action's inputs come from the task's own map; a release published before the map
+        // existed has none and reads as no inputs.
+        const actionInputs = call.properties.action_inputs?.value ?? {};
+        if (!isRecord(actionInputs) || carriesSensitive(actionInputs, run.sensitive))
+          return { outcome: "validation" };
+        return planNamedAction(run, state, call, commandId, linkedActions[0]!, actionInputs, true);
       }
+      // Inputs for an action only make sense when the value names an option an action owns.
+      if (Object.hasOwn(call.properties, "action_inputs")) return { outcome: "validation" };
       const command = saveRecordCommandSchema.safeParse({
         contractVersion: "2.0.0",
         commandId,

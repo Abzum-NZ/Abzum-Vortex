@@ -422,6 +422,8 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       record: optional("record_reference"),
       values: required("field_values"),
       selected_owner_group_id: optional("text"),
+      // The inputs of the named action that owns the chosen option; absent means none.
+      action_inputs: optional("input_map"),
     },
     outputs: [output("record", "record_reference")],
     kestra: "protected_callback",
