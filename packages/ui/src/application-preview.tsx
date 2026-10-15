@@ -32,6 +32,7 @@ import {
 } from "./controls/projected-data";
 import {
   DISPLAY_EVENT_NAMES,
+  type DisplaySemanticEvent,
   type DisplaySemanticEventName,
 } from "./display/projected-data";
 import type { PlatformThemeTokens, ThemeMode } from "./theme";
@@ -448,11 +449,18 @@ export function ApplicationPreview({
   };
 
   // Only local simulations are wired: each callback reports the interaction and does nothing else.
-  const displayHandlers = new Map<string, Partial<Record<DisplaySemanticEventName, () => void>>>();
+  const displayHandlers = new Map<
+    string,
+    Partial<Record<DisplaySemanticEventName, (event?: DisplaySemanticEvent) => void>>
+  >();
   const controlHandlers = new Map<string, Partial<Record<ControlSemanticEventName, () => void>>>();
   for (const interaction of artifact.interactions) {
     if (!availablePlacementIds.has(interaction.controlId)) continue;
-    const handler = () => onSimulation?.(interaction);
+    // Hovering or focusing First or Last announces an intent to read ahead, not a page change.
+    const handler = (event?: DisplaySemanticEvent) => {
+      if (event?.event === "page_changed" && "intent" in event && event.intent === true) return;
+      onSimulation?.(interaction);
+    };
     if (DISPLAY_EVENT_NAMES.includes(interaction.event as DisplaySemanticEventName))
       displayHandlers.set(interaction.controlId, {
         ...displayHandlers.get(interaction.controlId),

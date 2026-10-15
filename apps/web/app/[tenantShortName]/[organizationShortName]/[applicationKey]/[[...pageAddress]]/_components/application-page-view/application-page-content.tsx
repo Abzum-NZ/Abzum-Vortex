@@ -55,6 +55,7 @@ import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useTablePageAddress } from "./use-table-page-address";
+import { useTablePageCache, useTablePagePrefetch } from "./use-table-page-cache";
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
@@ -212,6 +213,13 @@ export function ApplicationPageViewContent({
     },
     [basePath, pageKeyOf],
   );
+  const pageCache = useTablePageCache({
+    navigationKey,
+    accessVersion: model.accessVersion,
+    application,
+    pageKey: currentPageKey,
+    search: currentSearch,
+  });
   const {
     currentData,
     refreshPlacements,
@@ -233,7 +241,18 @@ export function ApplicationPageViewContent({
     setDialogChoicePages,
     setRefreshedPlacementData,
     refreshedPlacementData,
+    pageCache,
   });
+  const pagedPlacementIds = useMemo(
+    () =>
+      new Set(
+        Object.entries(placementEventNames)
+          .filter(([, names]) => names.has("page_changed"))
+          .map(([placementId]) => placementId),
+      ),
+    [placementEventNames],
+  );
+  useTablePagePrefetch({ cache: pageCache, currentData, pagedPlacementIds, busy });
 
   useEffect(() => {
     setBusy(false);
@@ -416,6 +435,7 @@ export function ApplicationPageViewContent({
     router,
     tableContinuationScopeRef,
     commitTablePage,
+    pageCache,
   });
 
   const { runtimeInputs } = useRuntimeInputs({
