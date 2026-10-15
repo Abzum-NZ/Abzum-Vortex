@@ -52,5 +52,6 @@ export const boundedProtectedReadModelSortKeys: Partial<
   delegations: ["record_id", "scope_kind", "starts_at", "expires_at", "state"],
   organization_invitations: ["record_id", "invited_email", "expires_at", "state"],
   organization_runtime_settings: ["record_id", "language"],
+  application_role_templates: ["record_id", "source_role_id", "key", "label"],
   activity_entry: ["occurred_at"],
 };
