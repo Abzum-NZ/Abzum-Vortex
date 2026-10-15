@@ -42,6 +42,7 @@ import {
 } from "./cache-policy";
 import {
   protectedQueryCommandSchema,
+  protectedQueryBoardColumnSchema,
   protectedQueryBoardMembersCommandSchema,
   protectedQueryBoardSelectorSchema,
   protectedQueryGroupedMembersCommandSchema,
@@ -216,25 +217,26 @@ const pageAnchorSchema = z
     recordId: recordIdSchema,
   })
   .strict();
+const pageRowsSchema = z
+  .array(
+    z
+      .object({
+        recordId: recordIdSchema,
+        revision: revisionSchema,
+        capabilities: protectedQueryRowCapabilitiesSchema,
+        values: z.record(fieldIdSchema, jsonValueSchema),
+        systemValues: recordSystemValuesSchema.optional(),
+      })
+      .strict(),
+  )
+  .max(200);
 const pageReadSchema = z.discriminatedUnion("outcome", [
   z
     .object({
       outcome: z.literal("completed"),
       moduleReleaseRevision: revisionSchema,
       moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-      rows: z
-        .array(
-          z
-            .object({
-              recordId: recordIdSchema,
-              revision: revisionSchema,
-              capabilities: protectedQueryRowCapabilitiesSchema,
-              values: z.record(fieldIdSchema, jsonValueSchema),
-              systemValues: recordSystemValuesSchema.optional(),
-            })
-            .strict(),
-        )
-        .max(200),
+      rows: pageRowsSchema,
       next: pageAnchorSchema.nullable(),
       opposite: pageAnchorSchema.nullable(),
     })
@@ -640,7 +642,34 @@ const boardMembersCommand = async (
     throw error;
   }
 
-  const inputFingerprint = fingerprintQueryInputs({
+  const inputFingerprint = boardMemberFingerprint(command, inputValues);
+  if (after !== undefined && after.inputFingerprint !== inputFingerprint)
+    return refusal("cursor_stale");
+
+  const page = await readBoardMemberPage(
+    transaction,
+    command,
+    declared.moduleReleaseRevision,
+    inputValues,
+    after,
+  );
+  if (page.outcome === "refused") return refusal(page.reasonCode);
+  return boardMemberResult(
+    scope,
+    applicationRootId,
+    command,
+    page,
+    inputFingerprint,
+    continuationKey,
+  );
+};
+
+/** Binds a member page's continuation to its exact operation, selector and projection. */
+const boardMemberFingerprint = (
+  command: ProtectedQueryBoardMembersCommand,
+  inputValues: Readonly<Record<string, JsonValue>>,
+): string =>
+  fingerprintQueryInputs({
     operation: "protected-board-members-v1",
     inputValues,
     selector: {
@@ -654,17 +683,16 @@ const boardMembersCommand = async (
     pageSize: command.pageSize,
     memberOrder: "record_id_ascending",
   });
-  if (after !== undefined && after.inputFingerprint !== inputFingerprint)
-    return refusal("cursor_stale");
 
-  const page = await readBoardMemberPage(
-    transaction,
-    command,
-    declared.moduleReleaseRevision,
-    inputValues,
-    after,
-  );
-  if (page.outcome === "refused") return refusal(page.reasonCode);
+/** One column's member page with its continuation, whichever read produced it. */
+const boardMemberResult = (
+  scope: SelectedOrganizationScope,
+  applicationRootId: NonNullable<SelectedOrganizationScope["applicationRootId"]>,
+  command: ProtectedQueryBoardMembersCommand,
+  page: Extract<z.infer<typeof pageReadSchema>, { outcome: "completed" }>,
+  inputFingerprint: string,
+  continuationKey: QueryContinuationKey,
+): ProtectedQueryResult => {
   const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
   for (const row of page.rows) {
     const disclosed = Object.keys(row.systemValues ?? {});
@@ -704,6 +732,139 @@ const boardMembersCommand = async (
             continuationKey,
           ),
         }),
+  };
+};
+
+const boardColumnPagesReadSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("completed"),
+      moduleReleaseRevision: revisionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+      columns: z
+        .array(
+          z
+            .object({
+              column: protectedQueryBoardColumnSchema,
+              rows: pageRowsSchema,
+              next: pageAnchorSchema.nullable(),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(13),
+    })
+    .strict(),
+  refusedSchema,
+]);
+
+/** Every displayed column's first member page, read in one database call. */
+const readBoardColumnPages = async (
+  transaction: RequestDatabaseTransaction,
+  command: z.infer<typeof boardInitialPagesCommandSchema>,
+  releaseRevision: number,
+  inputValues: Readonly<Record<string, JsonValue>>,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${command.pageSize}::integer,
+      ${null}::text::jsonb,
+      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
+      ${JSON.stringify({
+        sort: [],
+        filter: command.filter ?? null,
+        search: null,
+        sortableFieldIds: [],
+        filterableFieldIds: command.filterableFieldIds,
+        searchableFieldIds: [],
+        boardColumns: {
+          choiceFieldId: command.selectors[0]!.choiceFieldId,
+          columns: command.selectors.map((selector) => selector.column),
+        },
+      })}::text::jsonb,
+      ${"forward"}::text,
+      ${null}::uuid
+    ) as result
+  `;
+  return boardColumnPagesReadSchema.parse(one(rows));
+};
+
+const firstPagesRefusal = (
+  reasonCode: ProtectedQueryRefusalReasonCode,
+): Extract<ProtectedQueryResult, { outcome: "refused" }> => ({ outcome: "refused", reasonCode });
+
+/**
+ * A board's first pages: one bounded member page per displayed column, each with its own
+ * continuation exactly as a member page read would return it.
+ */
+const boardFirstPagesCommand = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: z.infer<typeof boardInitialPagesCommandSchema>,
+  continuationKey: QueryContinuationKey,
+): Promise<
+  | Readonly<{ outcome: "completed"; pages: readonly ProtectedQueryResult[] }>
+  | Extract<ProtectedQueryResult, { outcome: "refused" }>
+> => {
+  const applicationRootId = scope.applicationRootId;
+  if (applicationRootId === undefined) return firstPagesRefusal("request_invalid");
+  const memberCommands = command.selectors.map(
+    (selector): ProtectedQueryBoardMembersCommand => ({ ...command, selector }),
+  );
+  const filterRefusal = boardMembersFilterInputRefusal(memberCommands[0]!);
+  if (filterRefusal !== undefined) return firstPagesRefusal(filterRefusal);
+
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused") return firstPagesRefusal(declared.reasonCode);
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined) return firstPagesRefusal("descriptor_invalid");
+  let inputValues: Readonly<Record<string, JsonValue>>;
+  try {
+    inputValues = validateQueryInputValues(declarations, command.inputValues);
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError) return firstPagesRefusal("input_invalid");
+    throw error;
+  }
+
+  const read = await readBoardColumnPages(
+    transaction,
+    command,
+    declared.moduleReleaseRevision,
+    inputValues,
+  );
+  if (read.outcome === "refused") return firstPagesRefusal(read.reasonCode);
+  if (
+    read.columns.length !== memberCommands.length ||
+    read.columns.some(
+      (page, index) =>
+        JSON.stringify(page.column) !== JSON.stringify(memberCommands[index]!.selector.column),
+    )
+  )
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  return {
+    outcome: "completed",
+    pages: memberCommands.map((memberCommand, index) =>
+      boardMemberResult(
+        scope,
+        applicationRootId,
+        memberCommand,
+        {
+          outcome: "completed",
+          moduleReleaseRevision: read.moduleReleaseRevision,
+          moduleReleaseVersion: read.moduleReleaseVersion,
+          rows: read.columns[index]!.rows,
+          next: read.columns[index]!.next,
+          opposite: null,
+        },
+        boardMemberFingerprint(memberCommand, inputValues),
+        continuationKey,
+      ),
+    ),
   };
 };
 
@@ -1381,24 +1542,9 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success)
         return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
-      return requests.run(caller, selection, async (transaction, scope) => {
-        const pages: ProtectedQueryResult[] = [];
-        for (const selector of command.data.selectors) {
-          const memberCommand: ProtectedQueryBoardMembersCommand = {
-            ...command.data,
-            selector,
-          };
-          const page = await boardMembersCommand(
-            transaction,
-            scope,
-            memberCommand,
-            continuationKey,
-          );
-          if (page.outcome === "refused") return page;
-          pages.push(page);
-        }
-        return { outcome: "completed" as const, pages };
-      });
+      return requests.run(caller, selection, (transaction, scope) =>
+        boardFirstPagesCommand(transaction, scope, command.data, continuationKey),
+      );
     },
     async groupedMembers(
       caller: IdentitySession | ExecutionAuthorityContext,
