@@ -31,6 +31,30 @@ const SHARED_COMPONENT_STYLES_CSS = `
    * ease-out-back overshoot that settles to rest; Motion drives the same movement with spring
    * physics. */
   --vortex-motion-layout-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /*
+   * Page change (hold then swap). While the next page is fetched the current page dims; the next
+   * page is held until its primary data has arrived or the hold has passed, then the current page
+   * fades out quickly while the next one rises into place. Rows that first appear settle in with a
+   * short stagger. The hold and the loader delay are waits, not motion, so reduced motion keeps
+   * them and only the movement stops.
+   */
+  --vortex-motion-page-dim: 120ms; /* the current page dimming while the next one is fetched */
+  --vortex-motion-page-dim-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --vortex-motion-page-dim-opacity: 0.7;
+  --vortex-motion-page-swap-out: 80ms; /* the leaving page's fade */
+  --vortex-motion-page-swap-out-easing: cubic-bezier(0.4, 0, 1, 1);
+  --vortex-motion-page-swap-in: 180ms; /* the entering page's fade and 4px rise */
+  --vortex-motion-page-swap-in-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --vortex-motion-page-hold: 450ms; /* the longest a ready page waits for its primary data */
+  --vortex-motion-page-loader-delay: 1200ms; /* a wait this long shows the loader over the page */
+  --vortex-motion-row-settle: 180ms; /* each first-appearing row's fade and 3px rise */
+  --vortex-motion-row-settle-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --vortex-motion-row-stagger: 13ms; /* the step between rows; the twentieth row and later share one */
+  --vortex-motion-loader-fade: 200ms; /* the loader's fade in */
+  /* The platform loader: the brand mark's ink, its size and one draw-hold-erase cycle. */
+  --vortex-loader-ink: var(--primary, var(--vortex-accent));
+  --vortex-loader-size: 100px;
+  --vortex-loader-cycle: 5s;
   color: var(--vortex-text);
   background-color: var(--vortex-surface);
   font-family: var(--vortex-font-family);
@@ -168,8 +192,46 @@ const SHARED_COMPONENT_STYLES_CSS = `
   height: 0.125rem;
   overflow: hidden;
   pointer-events: none;
-  animation: vortex-loading-reveal var(--vortex-motion-enter-exit)
-    var(--vortex-motion-enter-exit-easing) 200ms both;
+  /* The loader takes over from the line once the wait reaches the loader delay. */
+  animation:
+    vortex-loading-reveal var(--vortex-motion-enter-exit) var(--vortex-motion-enter-exit-easing)
+      200ms both,
+    vortex-loading-conceal var(--vortex-motion-enter-exit) var(--vortex-motion-enter-exit-easing)
+      var(--vortex-motion-page-loader-delay) forwards;
+}
+
+@keyframes vortex-loading-conceal {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* A page that was held past the page hold shows its skeleton at once: the wait has been seen. */
+[data-vortex-page-held] [data-vortex-display-state="loading"] {
+  animation-delay: 0ms;
+}
+
+/*
+ * The navigation's selected item: one indicator slides between items (Motion, layoutId), so the
+ * button's own selected fill is left to it. The selected text weight and colour stay on the button.
+ */
+[data-vortex-shell-navigation] [data-vortex-navigation-indicator] {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: calc(var(--radius) * 0.8);
+  background-color: var(--sidebar-accent);
+  pointer-events: none;
+}
+
+[data-vortex-shell-navigation] [data-vortex-navigation-item-type] > [data-active]:not([data-active="false"]),
+[data-vortex-shell-navigation] [data-vortex-navigation-item-type] > [data-active]:not([data-active="false"]):hover {
+  position: relative;
+  z-index: 1;
+  background-color: transparent;
 }
 
 [data-vortex-page-progress]::before {
@@ -207,6 +269,12 @@ const SHARED_COMPONENT_STYLES_CSS = `
     --vortex-motion-refresh: 0ms;
     --vortex-motion-panel: 0ms;
     --vortex-motion-page: 0ms;
+    --vortex-motion-page-dim: 0ms;
+    --vortex-motion-page-swap-out: 0ms;
+    --vortex-motion-page-swap-in: 0ms;
+    --vortex-motion-row-settle: 0ms;
+    --vortex-motion-row-stagger: 0ms;
+    --vortex-motion-loader-fade: 0ms;
   }
 }
 

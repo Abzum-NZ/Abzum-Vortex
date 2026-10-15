@@ -16,6 +16,7 @@ import {
   ApplicationAccountActionsProvider,
   ContentTransition,
   createPlatformComponentRegistryForReleases,
+  PageNavigationBusyContext,
   PagePuckRenderer,
   type ApplicationAccountActions,
   type ApplicationShellRuntime,
@@ -40,7 +41,9 @@ type ApplicationSearch = NonNullable<PagePuckRendererProps["applicationSearch"]>
 type Registration = Readonly<{ owner: FramePageStateOwner; value: unknown }>;
 
 /** Every placement identity in a projected slot tree. */
-const placementIdsOf = (slot: ApplicationFrameModel["frame"]["composition"]["main"]): Set<string> => {
+const placementIdsOf = (
+  slot: ApplicationFrameModel["frame"]["composition"]["main"],
+): Set<string> => {
   const ids = new Set<string>();
   const visit = (current: typeof slot): void => {
     for (const [placementId, placement] of Object.entries(current.placements)) {
@@ -171,7 +174,11 @@ export function ApplicationFrame({
   const expression = expressionOf(new URLSearchParams(searchParams.toString()));
   const searchEnabled = model.search.kind !== "disabled";
   const [searched, setSearched] = useState<
-    Readonly<{ source: ApplicationFrameModel["search"]; expression: string | undefined; view: ApplicationSearch }>
+    Readonly<{
+      source: ApplicationFrameModel["search"];
+      expression: string | undefined;
+      view: ApplicationSearch;
+    }>
   >(() => ({ source: model.search, expression, view: model.search }));
   const current =
     searched.source === model.search
@@ -247,7 +254,9 @@ export function ApplicationFrame({
   const frameRuntimeInputs = useMemo(() => {
     const inputs = pageState.runtimeInputs;
     if (inputs === undefined) return undefined;
-    const own = Object.entries(inputs).filter(([placementId]) => framePlacementIds.has(placementId));
+    const own = Object.entries(inputs).filter(([placementId]) =>
+      framePlacementIds.has(placementId),
+    );
     return own.length === 0 ? undefined : Object.fromEntries(own);
   }, [framePlacementIds, pageState.runtimeInputs]);
   const applicationShellRuntime: ApplicationShellRuntime = {
@@ -277,35 +286,37 @@ export function ApplicationFrame({
   return (
     <ApplicationFrameStateProvider value={frameState}>
       <ApplicationAccountActionsProvider actions={accountActions}>
-        <PagePuckRenderer
-          overlay={<Toaster position="bottom-right" />}
-          themeMode="system"
-          applicationSurface
-          composition={frame}
-          registry={registry}
-          fieldInputControlReleases={model.fieldInputControlReleases}
-          platformThemeTokens={model.platformThemeTokens}
-          shells={model.shells}
-          {...(shell === undefined ? {} : { shell })}
-          theme={model.theme}
-          applicationShellRuntime={applicationShellRuntime}
-          applicationSearch={applicationSearch}
-          applicationSearchPageSubject={applicationSearchPageSubject}
-          projectedNavigation={pageState.navigation ?? model.navigation}
-          {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
-          resolvePageHref={resolvePageHref}
-          onNavigatePage={navigateToPage}
-          onPrefetchPage={prefetchPage}
-          {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}
-          outlet={{
-            location: frame.outlet,
-            content: (
-              <ContentTransition transitionKey={pathname} busy={pageTransitionPending}>
-                <FrozenRouter>{children}</FrozenRouter>
-              </ContentTransition>
-            ),
-          }}
-        />
+        <PageNavigationBusyContext.Provider value={pageTransitionPending}>
+          <PagePuckRenderer
+            overlay={<Toaster position="bottom-right" />}
+            themeMode="system"
+            applicationSurface
+            composition={frame}
+            registry={registry}
+            fieldInputControlReleases={model.fieldInputControlReleases}
+            platformThemeTokens={model.platformThemeTokens}
+            shells={model.shells}
+            {...(shell === undefined ? {} : { shell })}
+            theme={model.theme}
+            applicationShellRuntime={applicationShellRuntime}
+            applicationSearch={applicationSearch}
+            applicationSearchPageSubject={applicationSearchPageSubject}
+            projectedNavigation={pageState.navigation ?? model.navigation}
+            {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
+            resolvePageHref={resolvePageHref}
+            onNavigatePage={navigateToPage}
+            onPrefetchPage={prefetchPage}
+            {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}
+            outlet={{
+              location: frame.outlet,
+              content: (
+                <ContentTransition transitionKey={pathname} busy={pageTransitionPending}>
+                  <FrozenRouter>{children}</FrozenRouter>
+                </ContentTransition>
+              ),
+            }}
+          />
+        </PageNavigationBusyContext.Provider>
       </ApplicationAccountActionsProvider>
     </ApplicationFrameStateProvider>
   );

@@ -26,13 +26,9 @@ import {
 } from "./controls";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
+import { useRowEntrance } from "./row-entrance";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
-import type {
-  DisplayCellValue,
-  DisplayColumn,
-  DisplayRow,
-  TablePayload,
-} from "./projected-data";
+import type { DisplayCellValue, DisplayColumn, DisplayRow, TablePayload } from "./projected-data";
 
 type RenderedColumn = Readonly<{
   key: string;
@@ -52,7 +48,11 @@ const renderedColumns = (
   projected: readonly DisplayColumn[],
 ): readonly RenderedColumn[] => {
   if (contract === undefined)
-    return projected.map((column) => ({ key: column.key, label: column.label, declared: undefined }));
+    return projected.map((column) => ({
+      key: column.key,
+      label: column.label,
+      declared: undefined,
+    }));
   const labels = new Map(projected.map((column) => [column.key, column.label]));
   return contract.columns.flatMap((column): RenderedColumn[] => {
     const projectedLabel = labels.get(column.field);
@@ -133,8 +133,7 @@ const rowShowsAction = (
   row: DisplayRow,
   action: Pick<RecordsTableActionContract, "capability">,
 ): boolean =>
-  action.capability === undefined ||
-  row.capabilities?.actions.includes(action.capability) === true;
+  action.capability === undefined || row.capabilities?.actions.includes(action.capability) === true;
 
 /**
  * Shared browser-safe display component for tabular data, rendered with the shadcn Table, Checkbox,
@@ -146,12 +145,20 @@ const rowShowsAction = (
  */
 export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
   const { placementId, availability } = props;
-  const { title, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
-    resolveDisplayContext<TablePayload>(
-      props,
-      (table) => table.rows.length === 0,
-      "No records to show",
-    );
+  const {
+    title,
+    accessibleName,
+    values,
+    state,
+    emptyMessage,
+    refusedMessage,
+    errorMessage,
+    events,
+  } = resolveDisplayContext<TablePayload>(
+    props,
+    (table) => table.rows.length === 0,
+    "No records to show",
+  );
   const contract = readRecordsTableContract(props.settings);
   const columns = values === undefined ? [] : renderedColumns(contract, values.columns);
   const rows = values?.rows ?? [];
@@ -221,9 +228,8 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     if (selectedRecordIds.length === 0) return false;
     return selectedRecordIds.every(
       (recordId) =>
-        rows
-          .find((row) => row.recordId === recordId)
-          ?.capabilities?.actions.includes(required) === true,
+        rows.find((row) => row.recordId === recordId)?.capabilities?.actions.includes(required) ===
+        true,
     );
   };
 
@@ -231,6 +237,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
   // name the standard state container gives them, and the container still owns the refused, error
   // and unavailable states of this placement.
   const revealed = useLoadingReveal(state.status === "loading");
+  const rowsRef = useRowEntrance<HTMLDivElement>(pageRecordIds, "tbody > tr");
   if (state.status === "loading")
     return (
       <TableLoadingState
@@ -259,6 +266,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     >
       {values === undefined ? null : (
         <div
+          ref={rowsRef}
           data-vortex-display="table"
           data-vortex-placement-id={placementId}
           {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
@@ -416,7 +424,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
                               {...(row.revision === undefined ? {} : { revision: row.revision })}
                               field={column.key}
                               label={column.label}
-                              value={cell.kind === "link" ? { kind: "text", text: cell.label } : cell}
+                              value={
+                                cell.kind === "link" ? { kind: "text", text: cell.label } : cell
+                              }
                               handler={onInlineEdit}
                             />
                           ) : (
@@ -448,7 +458,9 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             {...(values.nextContinuationToken === undefined
               ? {}
               : { nextContinuationToken: values.nextContinuationToken })}
-            {...(values.hasPreviousPage === undefined ? {} : { hasPreviousPage: values.hasPreviousPage })}
+            {...(values.hasPreviousPage === undefined
+              ? {}
+              : { hasPreviousPage: values.hasPreviousPage })}
             {...(values.previousContinuationToken === undefined
               ? {}
               : { previousContinuationToken: values.previousContinuationToken })}
