@@ -28,7 +28,6 @@ const placementRefreshAddressSchema = z
 
 const placementIdsSchema = z
   .array(containedComponentIdSchema)
-  .min(1)
   .max(500)
   .transform((placementIds) => [
     ...new Set(placementIds.map((placementId) => placementId.toLowerCase())),
@@ -94,6 +93,7 @@ export async function rereadApplicationPlacements(
   placementIdsInput: unknown,
   boardContinuationInput?: unknown,
   tableContinuationInput?: unknown,
+  includeContentInput?: unknown,
 ): Promise<ApplicationPagePlacementReadResult> {
   const address = placementRefreshAddressSchema.safeParse(addressInput);
   const placementIds = placementIdsSchema.safeParse(placementIdsInput);
@@ -105,9 +105,12 @@ export async function rereadApplicationPlacements(
     tableContinuationInput === undefined
       ? undefined
       : tableContinuationTargetSchema.safeParse(tableContinuationInput);
+  const includeContent = z.literal(true).safeParse(includeContentInput).success;
   if (
     !address.success ||
     !placementIds.success ||
+    // No placement ids is a content-only refresh: it needs the content flag.
+    (placementIds.data.length === 0 && !includeContent) ||
     boardContinuation?.success === false ||
     tableContinuation?.success === false ||
     (boardContinuation?.success === true && tableContinuation?.success === true)
@@ -166,6 +169,7 @@ export async function rereadApplicationPlacements(
             },
           }
         : undefined,
+      includeContent,
     );
   } catch {
     return {

@@ -64,4 +64,6 @@ export type RefreshedPlacementData = Readonly<{
   data: Readonly<Record<string, PageDataState>>;
   editFormBaselines: Readonly<Record<string, EditFormBaseline | null>>;
   subject?: ApplicationPageModel["subject"] | null;
+  /** The page's own placements as re-projected by the server after an action's write. */
+  content?: Readonly<Record<string, unknown>>;
 }>;
