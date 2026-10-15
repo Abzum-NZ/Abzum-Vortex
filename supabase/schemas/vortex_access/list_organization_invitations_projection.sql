@@ -1,41 +1,23 @@
 create or replace function vortex_access.list_organization_invitations_projection(
-  p_record_id uuid,
-  p_page_size integer
+  p_record_ids uuid[], p_sort_key text, p_direction text,
+  p_after jsonb, p_limit integer
 )
 returns table (
-  organization_id uuid,
-  record_id uuid,
-  revision bigint,
-  attribute_values jsonb
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
 )
-language plpgsql
-volatile
-security definer
-set search_path = ''
+language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
   scope_row record;
 begin
-  -- The projection keeps today's row visibility inside itself: the same fixed
-  -- invitations.read decision the bespoke administration reader applies decides
-  -- whether the viewer sees any invitation at all, and the caller's current
-  -- organisation is never an input. A viewer the decision refuses sees no rows,
-  -- exactly as a missing or foreign record. The record identity is the
-  -- invitation, the revision is the invitation's own revision and the attribute
-  -- names are the lowercase field keys a projection record type declares. The
-  -- raw invitation secret and its stored fingerprint are never projected.
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_invitations_administration_scope() as authorized;
-  exception
-    when insufficient_privilege then
-      return;
+  exception when insufficient_privilege then
+    return;
   end;
   return query
-  select
-    scope_row.organization_id,
-    projected.invitation_id,
-    projected.revision,
+  select scope_row.organization_id, projected.invitation_id, projected.revision,
     pg_catalog.jsonb_build_object(
       'invited_email', projected.invited_email,
       'state', projected.invitation_state,
@@ -43,22 +25,42 @@ begin
       'expires_at', projected.expires_at
     )
   from vortex_identity.list_organization_invitations_projection_internal(
-    scope_row.organization_id
-  ) as projected
-  where p_record_id is null or p_record_id = projected.invitation_id;
+    scope_row.organization_id, p_record_ids, p_sort_key, p_direction, p_after, p_limit
+  ) as projected;
 end
 $function$;
 
+create or replace function vortex_access.list_organization_invitations_projection(
+  p_record_id uuid, p_page_size integer
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language sql volatile security definer set search_path = ''
+as $function$
+  select projected.*
+  from vortex_access.list_organization_invitations_projection(
+    case when p_record_id is null then null else array[p_record_id] end,
+    'record_id', 'ascending', null, null
+  ) as projected
+$function$;
+
+revoke all on function vortex_access.list_organization_invitations_projection(
+  uuid[], text, text, jsonb, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_organization_invitations_projection(
+  uuid[], text, text, jsonb, integer
+) to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_organization_invitations_projection(
+  uuid[], text, text, jsonb, integer
+) owner to vortex_owner;
+
 revoke all on function vortex_access.list_organization_invitations_projection(uuid, integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
 grant execute on function vortex_access.list_organization_invitations_projection(
   uuid, integer
-) to vortex_owner, vortex_record_adapter;
-
+) to vortex_owner, vortex_record_adapter, postgres;
 comment on function vortex_access.list_organization_invitations_projection(uuid, integer) is
-  'Registered organisation-invitation projection: returns every invitation the current viewer may read under the fixed invitations.read decision, with the organisation, the invitation identity, the invitation revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. The secret and fingerprint are never projected.';
-
-alter function vortex_access.list_organization_invitations_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
-
-grant execute on function vortex_access.list_organization_invitations_projection(p_record_id uuid, p_page_size integer) to postgres;
+  'Registered invitation projection with the original record-id ordering and visibility; delegates to the bounded reader.';
+alter function vortex_access.list_organization_invitations_projection(uuid, integer)
+  owner to vortex_owner;

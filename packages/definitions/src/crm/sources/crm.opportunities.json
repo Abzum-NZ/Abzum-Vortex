@@ -849,6 +849,8 @@
         "label": "Mark opportunity won",
         "record_type": "opportunity",
         "permission": "vortex.crm.opportunities.opportunity.mark_won",
+        "sets_choice_field": "stage",
+        "sets_choice_option": "won",
         "shareable": false,
         "inputs": [],
         "precondition": {

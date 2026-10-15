@@ -448,6 +448,10 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
             {...(values.nextContinuationToken === undefined
               ? {}
               : { nextContinuationToken: values.nextContinuationToken })}
+            {...(values.hasPreviousPage === undefined ? {} : { hasPreviousPage: values.hasPreviousPage })}
+            {...(values.previousContinuationToken === undefined
+              ? {}
+              : { previousContinuationToken: values.previousContinuationToken })}
             accessibleName={accessibleName}
             events={events}
           />

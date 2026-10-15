@@ -39,6 +39,7 @@ import {
   sensitiveValues,
 } from "./flow-orchestrator-support";
 import type {
+  FlowNamedAction,
   FlowOrchestratorDependencies,
   NamedActionExecutionResult,
   Run,
@@ -71,7 +72,12 @@ export const createFlowTaskRunner = (
         /** The key of every field of the record type, by lower-case field id. */
         fieldKeys: ReadonlyMap<string, string>;
       }>
-    | Readonly<{ kind: "action"; command: ExecuteNamedActionCommand }>;
+    | Readonly<{
+        kind: "action";
+        command: ExecuteNamedActionCommand;
+        /** The action stands in for a Save record task, so it reports the saved record like one. */
+        asSave?: true;
+      }>;
 
   type TaskResult = {
     outcome: FlowTaskOutcome;
@@ -146,6 +152,52 @@ export const createFlowTaskRunner = (
   };
 
   /**
+   * Plans one named action of the exact release, run for the surface's subject record through the
+   * same path as its binding (`executeAction`).
+   */
+  const planNamedAction = (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+    commandId: string,
+    named: FlowNamedAction,
+    inputs: Record<string, unknown>,
+    asSave?: true,
+  ): Readonly<{ plan: TaskPlan }> | TaskResult => {
+    if (dependencies.actionRecords === undefined)
+      return notAvailable(run, call, "a registered protected operation");
+    if (state.subject === undefined)
+      return notAvailable(run, call, "the record the action runs on");
+    if (dependencies.subjects === undefined)
+      return notAvailable(run, call, "a protected read of the page's record");
+    const command = executeNamedActionCommandSchema.safeParse({
+      contractVersion: "2.0.0",
+      commandId,
+      action: named.action,
+      recordTypeId: named.subjectRecordTypeId,
+      recordId: state.subject.recordId,
+      expectedConcurrencyNumber: state.subject.revision,
+      inputs: Object.fromEntries(
+        Object.entries(inputs).map(([name, value]) => [
+          name,
+          typeof value === "string" && Object.hasOwn(named.referenceInputTypes, name)
+            ? { recordTypeId: named.referenceInputTypes[name], recordId: value }
+            : value,
+        ]),
+      ),
+    });
+    if (!command.success) {
+      console.error(
+        `[flows] named action command invalid at task ${call.taskId}: ${command.error.issues
+          .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+          .join("; ")}`,
+      );
+      return { outcome: "validation" };
+    }
+    return { plan: { kind: "action", command: command.data, ...(asSave ? { asSave } : {}) } };
+  };
+
+  /**
    * Decides what one protected task runs, from the task, the exact release and the segment's
    * subject only. Nothing runs here, so a task that cannot run is settled before any claim.
    */
@@ -216,6 +268,20 @@ export const createFlowTaskRunner = (
         return notAvailable(run, call, "the revision of the record the page shows");
       if (dependencies.subjects === undefined)
         return notAvailable(run, call, "a protected read of the page's record");
+      // A choice option that a named action sets is changed only by that action, run for this
+      // record with the action's own inputs, permission, rules and refusals.
+      const linkedActions = Object.entries(submittedValues).flatMap(([fieldId, value]) => {
+        const action =
+          typeof value === "string"
+            ? recordType.optionActions.get(fieldId.toLowerCase())?.get(value)
+            : undefined;
+        return action === undefined ? [] : [action];
+      });
+      if (linkedActions.length > 0) {
+        if (linkedActions.length > 1 || Object.keys(submittedValues).length > 1)
+          return { outcome: "validation" };
+        return planNamedAction(run, state, call, commandId, linkedActions[0]!, {}, true);
+      }
       const command = saveRecordCommandSchema.safeParse({
         contractVersion: "2.0.0",
         commandId,
@@ -247,37 +313,8 @@ export const createFlowTaskRunner = (
     // subject record through the same path as its binding (`executeAction`).
     const named =
       typeof operationKey === "string" ? run.release.namedActions?.get(operationKey) : undefined;
-    if (named === undefined || dependencies.actionRecords === undefined)
-      return notAvailable(run, call, "a registered protected operation");
-    if (state.subject === undefined)
-      return notAvailable(run, call, "the record the action runs on");
-    if (dependencies.subjects === undefined)
-      return notAvailable(run, call, "a protected read of the page's record");
-    const command = executeNamedActionCommandSchema.safeParse({
-      contractVersion: "2.0.0",
-      commandId,
-      action: named.action,
-      recordTypeId: named.subjectRecordTypeId,
-      recordId: state.subject.recordId,
-      expectedConcurrencyNumber: state.subject.revision,
-      inputs: Object.fromEntries(
-        Object.entries(inputs).map(([name, value]) => [
-          name,
-          typeof value === "string" && Object.hasOwn(named.referenceInputTypes, name)
-            ? { recordTypeId: named.referenceInputTypes[name], recordId: value }
-            : value,
-        ]),
-      ),
-    });
-    if (!command.success) {
-      console.error(
-        `[flows] named action ${String(operationKey)} command invalid at task ${call.taskId}: ${command.error.issues
-          .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-          .join("; ")}`,
-      );
-      return { outcome: "validation" };
-    }
-    return { plan: { kind: "action", command: command.data } };
+    if (named === undefined) return notAvailable(run, call, "a registered protected operation");
+    return planNamedAction(run, state, call, commandId, named, inputs);
   };
 
   /** Reads the active task's selected fields without using the replayable effect ledger. */
@@ -437,9 +474,9 @@ export const createFlowTaskRunner = (
       const value = executed.value;
       if (value.outcome === "completed") {
         // Only the record's identity and revision are kept: its readable values stay with the port.
-        const outputs = {
-          result: { recordId: value.recordId, concurrencyNumber: value.concurrencyNumber },
-        };
+        const outputs = plan.asSave
+          ? { record: value.recordId }
+          : { result: { recordId: value.recordId, concurrencyNumber: value.concurrencyNumber } };
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
       // The action port logged this refusal with its reason; the run-ended line must not repeat it.

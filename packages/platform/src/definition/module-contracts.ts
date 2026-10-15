@@ -1250,9 +1250,18 @@ export const actionDefinitionSchema = z
       precondition: conditionNodeSchema.optional(),
       tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
       protectedOperation: protectedOperationReferenceSchema.optional(),
+      /** The choice field and option this action sets, so a plain save of that option runs it. */
+      setsChoiceFieldId: fieldIdSchema.optional(),
+      setsChoiceOption: z.string().min(1).max(120).optional(),
     })
     .strict()
     .superRefine((value, context) => {
+      if ((value.setsChoiceFieldId === undefined) !== (value.setsChoiceOption === undefined))
+        context.addIssue({
+          code: "custom",
+          path: ["setsChoiceOption"],
+          message: "An action names the choice field and the option it sets together",
+        });
       if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
         context.addIssue({
           code: "custom",

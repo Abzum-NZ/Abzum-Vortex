@@ -240,6 +240,12 @@ function compileModule(
         ? { permissionKeys: action.permission_alternatives }
         : { permissionKey: action.permission }),
       sharing: action.shareable ? "allowed" : "refused",
+      ...(action.sets_choice_field
+        ? {
+            setsChoiceFieldId: localField(String(action.sets_choice_field)),
+            setsChoiceOption: action.sets_choice_option,
+          }
+        : {}),
       ...(action.protected_operation
         ? {
             protectedOperation: platformServiceProtectedOperationReference(
