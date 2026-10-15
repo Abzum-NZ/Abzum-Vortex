@@ -25,7 +25,7 @@ declare
   after_record_id uuid;
   scan_sql text;
 begin
-  if p_sort_key not in ('record_id', 'invited_email', 'expires_at')
+  if p_sort_key not in ('record_id', 'invited_email', 'expires_at', 'state')
     or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
     or (p_limit is not null and p_limit < 1)
@@ -35,6 +35,13 @@ begin
   sort_column := case p_sort_key
     when 'invited_email' then 'invitation.invited_email'
     when 'expires_at' then 'invitation.expires_at'
+    -- Releases published before the state sort was dropped still forward it; it has no index.
+    when 'state' then '(' || $state$case
+          when invitation.accepted_at is not null then 'accepted'
+          when invitation.revoked_at is not null then 'revoked'
+          when invitation.expires_at <= pg_catalog.statement_timestamp() then 'expired'
+          else 'pending'
+        end$state$ || ')'
     else 'invitation.invitation_id' end;
   if p_after is not null then
     if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
@@ -59,10 +66,10 @@ begin
       keyset_sql := case when p_direction = 'ascending'
         then ' and invitation.invitation_id > $4'
         else ' and invitation.invitation_id < $4' end;
-    elsif p_sort_key = 'invited_email' then
+    elsif p_sort_key in ('invited_email', 'state') then
       keyset_sql := pg_catalog.format(
-        ' and (invitation.invited_email collate "C", invitation.invitation_id) %s ($3 collate "C", $4)',
-        case when p_direction = 'ascending' then '>' else '<' end
+        ' and (%s collate "C", invitation.invitation_id) %s ($3 collate "C", $4)',
+        sort_column, case when p_direction = 'ascending' then '>' else '<' end
       );
     else
       keyset_sql := pg_catalog.format(
@@ -75,7 +82,7 @@ begin
     then pg_catalog.format('invitation.invitation_id %s',
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
     else pg_catalog.format('%s%s %s, invitation.invitation_id %s',
-      sort_column, case when p_sort_key = 'invited_email' then ' collate "C"' else '' end,
+      sort_column, case when p_sort_key in ('invited_email', 'state') then ' collate "C"' else '' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
   scan_sql := $scan$
