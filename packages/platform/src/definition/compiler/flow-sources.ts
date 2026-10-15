@@ -220,7 +220,7 @@ export function compileCheckedFlowSources(
   // tasks that supply the action's inputs.
   const optionActions = new Map<string, Map<string, { required: boolean; type: string }>>();
   const optionKey = (recordTypeId: string, fieldId: string, option: string) =>
-    `${recordTypeId} ${fieldId} ${option}`.toLowerCase();
+    `${recordTypeId.toLowerCase()} ${fieldId.toLowerCase()} ${option}`;
   const rememberOption = (
     recordTypeId: string,
     fieldId: string,

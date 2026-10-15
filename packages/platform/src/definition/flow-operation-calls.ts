@@ -345,11 +345,18 @@ export type OptionActionLookup = (
   option: string,
 ) => OwnedActionInputs | undefined;
 
-const literalFlowTypes: Readonly<Record<string, string>> = {
-  text: "text",
-  boolean: "yes_no",
-  number: "decimal_number",
-  whole_number: "whole_number",
+/** The flow literal types an action input of each declared type accepts. */
+const acceptedLiteralTypes: Readonly<Record<string, readonly string[]>> = {
+  text: ["text"],
+  formatted_text: ["text", "formatted_text"],
+  number: ["whole_number", "decimal_number"],
+  decimal_number: ["whole_number", "decimal_number"],
+  money: ["whole_number", "decimal_number", "money"],
+  boolean: ["yes_no"],
+  date: ["date"],
+  date_time: ["date_time"],
+  record_reference: ["text", "record_reference"],
+  organization_account_reference: ["text", "organization_account_reference"],
 };
 
 /**
@@ -401,8 +408,13 @@ export function findActionInputsIssue(
       for (const [name, value] of Object.entries(supplied.entries)) {
         const input = declared.get(name);
         if (input === undefined) return issue("unknown_property");
-        const expected = literalFlowTypes[input.type];
-        if (value.kind === "literal" && expected !== undefined && value.literal.type !== expected)
+        const accepted = acceptedLiteralTypes[input.type];
+        if (
+          value.kind === "literal" &&
+          accepted !== undefined &&
+          value.literal.type !== "json" &&
+          !accepted.includes(value.literal.type)
+        )
           return issue("invalid_value");
       }
       for (const [name, input] of declared)
