@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { BrandLoader } from "../display/brand-loader";
+import { BrandLoader, type LoaderMark } from "../display/brand-loader";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
 import { markDocumentHydrated } from "./page-hold";
 
@@ -86,8 +86,15 @@ const pageMountId = (transitionKey: string, generation: number): string =>
 export function ContentTransition({
   transitionKey,
   busy = false,
+  loaderMark,
   children,
-}: Readonly<{ transitionKey: string; busy?: boolean; children: ReactNode }>): ReactElement {
+}: Readonly<{
+  transitionKey: string;
+  busy?: boolean;
+  /** The theme's loader mark; without one the platform mark is drawn. */
+  loaderMark?: LoaderMark | undefined;
+  children: ReactNode;
+}>): ReactElement {
   const reducedMotion = useReducedMotion();
   const outletRef = useRef<HTMLDivElement>(null);
   const [timings, setTimings] = useState<OutletTimings>();
@@ -166,7 +173,7 @@ export function ContentTransition({
             exit={{ opacity: 0 }}
             transition={swapOut ?? NO_MOTION}
           >
-            <BrandLoader overlay />
+            <BrandLoader overlay {...(loaderMark === undefined ? {} : { mark: loaderMark })} />
           </motion.div>
         ) : null}
       </AnimatePresence>

@@ -79,6 +79,35 @@ const addressedPage = async (
 };
 
 /**
+ * The theme of the application a request addresses, for the loader drawn while the frame is still
+ * being composed. It reads what the frame reads (one resolution per request, shared with it); a
+ * request that addresses no page the viewer may open has no theme here, and the platform loader is
+ * drawn.
+ */
+export const loadApplicationStartTheme = cache(
+  async (
+    tenantShortName: string,
+    organizationShortName: string,
+    applicationKey: string,
+  ): Promise<ApplicationFrameModel["theme"] | undefined> => {
+    const addressed = await addressedPage(tenantShortName, organizationShortName, applicationKey);
+    if (addressed === undefined) return undefined;
+    const { resolution } = await resolveIdentitySessionWithEmail();
+    if (resolution.kind !== "active") return undefined;
+    const resolved = await resolveApplicationAddress(
+      resolution.session,
+      tenantShortName,
+      organizationShortName,
+      applicationKey,
+      addressed.pageKey,
+    );
+    return resolved.kind === "application_page"
+      ? resolved.installedContext?.releaseSet.application.content.theme
+      : undefined;
+  },
+);
+
+/**
  * The viewer's application frame for one application address. It is the shell part of the same
  * projection the addressed page renders from (one read per request, shared with the page), so the
  * frame shows exactly the shell placements the page would. Without a page address, or when the page

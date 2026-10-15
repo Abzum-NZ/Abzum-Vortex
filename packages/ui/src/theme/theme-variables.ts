@@ -512,11 +512,16 @@ export function createThemeRootProps(
   platformThemeTokens: PlatformThemeTokens,
   mode: ThemeMode = "light",
 ): ThemeRootProps {
+  // The theme's own loader cycle replaces the platform's 5s token; a theme without one keeps it.
+  const loaderCycle = theme?.loaderMark?.cycleSeconds;
   const style: CSSProperties & ThemeCssVariables = {
     ...generateThemeCssVariables(platformThemeTokens, theme?.tokens),
     // Maia's pinned style uses wider component spacing; carry that choice on this app root so
     // another application on the same page keeps its own style values.
     "--vortex-component-spacing": theme?.selection?.style === "maia" ? "0.4rem" : "0.25rem",
+    ...(loaderCycle !== undefined && Number.isFinite(loaderCycle) && loaderCycle > 0
+      ? { "--vortex-loader-cycle": `${loaderCycle}s` }
+      : {}),
     colorScheme: COLOR_SCHEME[mode],
   };
   return {

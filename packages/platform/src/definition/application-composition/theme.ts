@@ -298,16 +298,69 @@ export const canonicalApplicationThemeSelection = (
   headingFont: source.heading_font,
 });
 
+/** The box a loader mark is drawn in: every coordinate lies between 0 and this size. */
+const LOADER_MARK_BOX_SIZE = 120;
+const LOADER_MARK_MAXIMUM_SEGMENTS = 12;
+const LOADER_MARK_MINIMUM_CYCLE_SECONDS = 1;
+const LOADER_MARK_MAXIMUM_CYCLE_SECONDS = 10;
+
+/**
+ * The loader mark of a stored application theme: stroke segments `[x1, y1, x2, y2]` in a 120 x 120
+ * box and an optional cycle. It carries no limits of its own: the limits are publication rules
+ * (`sourceApplicationThemeLoaderMarkSchema`), so every release that was publishable when it was
+ * made still reads.
+ */
+const applicationThemeLoaderMarkSchema = z
+  .object({
+    segments: z.array(z.tuple([z.number(), z.number(), z.number(), z.number()])),
+    cycleSeconds: z.number().optional(),
+  })
+  .strict();
+
+const loaderMarkCoordinateSchema = z
+  .number()
+  .finite()
+  .min(0)
+  .max(LOADER_MARK_BOX_SIZE);
+
+/**
+ * The authored loader mark. A publication with more than 12 segments, a coordinate outside the
+ * box or a cycle outside 1 to 10 seconds is refused.
+ */
+const sourceApplicationThemeLoaderMarkSchema = z
+  .object({
+    segments: z
+      .array(
+        z.tuple([
+          loaderMarkCoordinateSchema,
+          loaderMarkCoordinateSchema,
+          loaderMarkCoordinateSchema,
+          loaderMarkCoordinateSchema,
+        ]),
+      )
+      .min(1)
+      .max(LOADER_MARK_MAXIMUM_SEGMENTS),
+    cycle_seconds: z
+      .number()
+      .finite()
+      .min(LOADER_MARK_MINIMUM_CYCLE_SECONDS)
+      .max(LOADER_MARK_MAXIMUM_CYCLE_SECONDS)
+      .optional(),
+  })
+  .strict();
+
 /**
  * Canonical  themes contain the complete resolved application token set plus the catalogue
  * selection they were materialised from. Every theme records its selection, including the icon
- * library, so a theme without one cannot be represented.
+ * library, so a theme without one cannot be represented. A theme may also carry the mark its
+ * loader draws; without one the platform mark is drawn.
  */
 export const applicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(exactPlatformThemeDependencySchema),
     selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
+    loaderMark: sourceProvenanceUnchanged(applicationThemeLoaderMarkSchema.optional(), true),
   })
   .strict();
 
@@ -323,6 +376,7 @@ export const sourceApplicationThemeSchema = z
     token_overrides: sourceProvenanceUnchanged(
       z.record(builderKeySchema, sourceThemeTokenValueSchema),
     ),
+    loader_mark: sourceProvenanceUnchanged(sourceApplicationThemeLoaderMarkSchema.optional(), true),
   })
   .strict();
 

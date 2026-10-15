@@ -1,30 +1,36 @@
 import type { ReactElement } from "react";
 import { cn } from "../lib/utils";
 
+/** One stroke of a loader mark: `[x1, y1, x2, y2]` in the 120 x 120 box. */
+type MarkSegment = readonly [number, number, number, number];
+
+/** The mark a loader draws: its strokes, in the order they are traced. */
+export type LoaderMark = Readonly<{ segments: readonly MarkSegment[] }>;
+
 /**
  * The platform mark, drawn as six line segments in the order the loader traces them (all in a
  * 120 x 120 box): the outer triangle's left, right and base sides, then the inner diagonal, the
- * middle bar and the inner leg.
- *
- * TODO(#2519): source the mark from the application's theme or frame definition once either
- * declares a brand mark; until then this is the default platform mark.
+ * middle bar and the inner leg. A theme that declares a loader mark of its own replaces it.
  */
-const MARK_SEGMENTS: readonly string[] = [
-  "M12 101.569 L60 18.431",
-  "M60 18.431 L108 101.569",
-  "M108 101.569 L12 101.569",
-  "M12 101.569 L84 60",
-  "M84 60 L36 60",
-  "M36 60 L48 80.784",
-];
+const PLATFORM_MARK: LoaderMark = {
+  segments: [
+    [12, 101.569, 60, 18.431],
+    [60, 18.431, 108, 101.569],
+    [108, 101.569, 12, 101.569],
+    [12, 101.569, 84, 60],
+    [84, 60, 36, 60],
+    [36, 60, 48, 80.784],
+  ],
+};
 
 /** The loader's stylesheet, hoisted once into the document by React wherever a loader renders. */
 const BRAND_LOADER_CSS = `/*
  * The platform loader. Outside an application's theme root (the first load of an application) the
  * token fallbacks below are the platform defaults the theme root also declares. Each segment is
- * normalised to a path length of 100: it draws in its 7.5% of the cycle, the mark holds from 45% to
- * 55%, and the pen then retraces backwards, erasing from the latest end, while the mark turns 120
- * degrees, so the next cycle starts where the erase ends.
+ * normalised to a path length of 100: the segments draw one after another in the first 45% of the
+ * cycle, the mark holds from 45% to 55%, and the pen then retraces backwards, erasing from the
+ * latest end, while the mark turns 120 degrees, so the next cycle starts where the erase ends. The
+ * draw and erase keyframes are generated for the number of segments the mark has.
  */
 [data-vortex-brand-loader] {
   display: flex;
@@ -73,42 +79,6 @@ const BRAND_LOADER_CSS = `/*
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
-[data-vortex-loader-segment="1"] {
-  animation-name: vortex-loader-segment-1;
-}
-[data-vortex-loader-segment="2"] {
-  animation-name: vortex-loader-segment-2;
-}
-[data-vortex-loader-segment="3"] {
-  animation-name: vortex-loader-segment-3;
-}
-[data-vortex-loader-segment="4"] {
-  animation-name: vortex-loader-segment-4;
-}
-[data-vortex-loader-segment="5"] {
-  animation-name: vortex-loader-segment-5;
-}
-[data-vortex-loader-segment="6"] {
-  animation-name: vortex-loader-segment-6;
-}
-@keyframes vortex-loader-segment-1 {
-  0% { stroke-dashoffset: 100; } 7.5% { stroke-dashoffset: 0; } 92.5% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; }
-}
-@keyframes vortex-loader-segment-2 {
-  0%, 7.5% { stroke-dashoffset: 100; } 15% { stroke-dashoffset: 0; } 85% { stroke-dashoffset: 0; } 92.5%, 100% { stroke-dashoffset: -100; }
-}
-@keyframes vortex-loader-segment-3 {
-  0%, 15% { stroke-dashoffset: 100; } 22.5% { stroke-dashoffset: 0; } 77.5% { stroke-dashoffset: 0; } 85%, 100% { stroke-dashoffset: -100; }
-}
-@keyframes vortex-loader-segment-4 {
-  0%, 22.5% { stroke-dashoffset: 100; } 30% { stroke-dashoffset: 0; } 70% { stroke-dashoffset: 0; } 77.5%, 100% { stroke-dashoffset: -100; }
-}
-@keyframes vortex-loader-segment-5 {
-  0%, 30% { stroke-dashoffset: 100; } 37.5% { stroke-dashoffset: 0; } 62.5% { stroke-dashoffset: 0; } 70%, 100% { stroke-dashoffset: -100; }
-}
-@keyframes vortex-loader-segment-6 {
-  0%, 37.5% { stroke-dashoffset: 100; } 45% { stroke-dashoffset: 0; } 55% { stroke-dashoffset: 0; } 62.5%, 100% { stroke-dashoffset: -100; }
-}
 @keyframes vortex-loader-whirl {
   0%, 55% { transform: rotate(0deg); }
   100% { transform: rotate(120deg); }
@@ -130,6 +100,30 @@ const BRAND_LOADER_CSS = `/*
   }
 }`;
 
+const percent = (value: number): string => `${Number(value.toFixed(3))}%`;
+
+/**
+ * The draw and erase keyframes of a mark with `count` segments. The draw phase takes the first 45%
+ * of the cycle, split evenly; the hold takes 45% to 55%; the erase takes the last 45%, latest
+ * segment first. Segment names carry the count, so loaders of different marks never share them.
+ * Kept out of reduced motion, where the segments stay fully drawn.
+ */
+const segmentCss = (count: number): string => {
+  const step = 45 / count;
+  const rules: string[] = [];
+  for (let index = 1; index <= count; index += 1) {
+    const drawStart = (index - 1) * step;
+    const drawEnd = index * step;
+    const eraseStart = 55 + (count - index) * step;
+    const eraseEnd = eraseStart + step;
+    rules.push(
+      `[data-vortex-loader-segments="${count}"] [data-vortex-loader-segment="${index}"] { animation-name: vortex-loader-${count}-segment-${index}; }`,
+      `@keyframes vortex-loader-${count}-segment-${index} { 0%, ${percent(drawStart)} { stroke-dashoffset: 100; } ${percent(drawEnd)}, ${percent(eraseStart)} { stroke-dashoffset: 0; } ${percent(eraseEnd)}, 100% { stroke-dashoffset: -100; } }`,
+    );
+  }
+  return ["@media (prefers-reduced-motion: no-preference) {", ...rules, "}"].join("\n");
+};
+
 /**
  * The platform loader: the mark drawn segment by segment, held, then erased backwards while it
  * turns a third of a revolution, on a loop. It is pure CSS (keyframes in its own hoisted stylesheet),
@@ -138,13 +132,16 @@ const BRAND_LOADER_CSS = `/*
  * is the still, fully drawn mark. It is for long waits only (the first load of an application and a
  * page change that is still waiting after the loader delay), never for a button or a row.
  *
+ * `mark` is the theme's loader mark; without one the platform mark is drawn.
  * `overlay` centres it over the area it is placed in, without taking layout space.
  */
 export function BrandLoader({
+  mark = PLATFORM_MARK,
   overlay = false,
   label = "Loading",
   className,
-}: Readonly<{ overlay?: boolean; label?: string; className?: string }>): ReactElement {
+}: Readonly<{ mark?: LoaderMark; overlay?: boolean; label?: string; className?: string }>): ReactElement {
+  const count = mark.segments.length;
   return (
     <div
       role="status"
@@ -155,10 +152,22 @@ export function BrandLoader({
       <style href="vortex-brand-loader" precedence="vortex">
         {BRAND_LOADER_CSS}
       </style>
-      <svg viewBox="0 0 120 120" fill="none" aria-hidden="true" focusable="false">
-        {MARK_SEGMENTS.map((d, index) => (
-          <path key={d} d={d} pathLength={100} data-vortex-loader-segment={index + 1} />
-        ))}
+      <style href={`vortex-brand-loader-${count}`} precedence="vortex">
+        {segmentCss(count)}
+      </style>
+      <svg
+        viewBox="0 0 120 120"
+        fill="none"
+        aria-hidden="true"
+        focusable="false"
+        data-vortex-loader-segments={count}
+      >
+        {mark.segments.map(([x1, y1, x2, y2], index) => {
+          const d = `M${x1} ${y1} L${x2} ${y2}`;
+          return (
+            <path key={`${index}:${d}`} d={d} pathLength={100} data-vortex-loader-segment={index + 1} />
+          );
+        })}
       </svg>
     </div>
   );
