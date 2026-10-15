@@ -33,6 +33,7 @@ const queryContinuationSchema = z
     queryId: queryIdSchema,
     moduleReleaseRevision: revisionSchema,
     inputFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    direction: z.enum(["forward", "backward"]),
     sort: z
       .array(
         z

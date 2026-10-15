@@ -92,6 +92,8 @@ begin
     where value ->> 'source' = 'field'
       and pg_catalog.pg_input_is_valid(value ->> 'fieldId', 'uuid')
   ), '[]'::jsonb);
+  -- Publication checks filterability. The installed access plan carries field
+  -- identity and value type, which are the facts this runtime projection needs.
   if exists (
     select 1
     from pg_catalog.jsonb_array_elements_text(filter_field_ids) as selected(field_id)
@@ -99,11 +101,22 @@ begin
       select 1
       from pg_catalog.jsonb_array_elements(source_type_value -> 'fields') as field(value)
       where pg_catalog.lower(field.value ->> 'fieldId') = selected.field_id
-        and field.value ->> 'filterable' = 'true'
     )
   ) then
     raise exception using errcode = '55000',
       message = 'Published total filter refers to an unavailable field';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements_text(filter_field_ids) as selected(field_id)
+    join pg_catalog.jsonb_array_elements(source_type_value -> 'fields') as field(value)
+      on pg_catalog.lower(field.value ->> 'fieldId') = selected.field_id
+    where nullif(field.value ->> 'type', '') is null
+      or (field.value ->> 'type' in ('calculation', 'total')
+        and nullif(field.value #>> '{settings,resultType}', '') is null)
+  ) then
+    raise exception using errcode = '55000',
+      message = 'Published total filter field has no comparable value type';
   end if;
   source_ids := source_ids || filter_field_ids;
 

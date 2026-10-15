@@ -721,9 +721,15 @@ const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration
   postgres(configuration.connectionString, {
     prepare: false,
     max: configuration.poolSize,
-    idle_timeout: 20,
+    // A new connection is a new database server process, which compiles every database function
+    // it calls again and rebuilds its catalogue caches: the first page read on it costs seconds
+    // instead of milliseconds. Local loopback connections are therefore kept between page changes
+    // (a person reading a page for a minute would otherwise find every connection closed and cold).
+    // Hosted connections reach the transaction pooler, whose server connections stay warm on their
+    // own, so they keep the short client-side lifetimes.
+    idle_timeout: configuration.transport.kind === "local_loopback" ? 0 : 20,
     connect_timeout: 10,
-    max_lifetime: 300,
+    max_lifetime: configuration.transport.kind === "local_loopback" ? 3_600 : 300,
     ssl:
       configuration.transport.kind === "hosted_tls"
         ? {
