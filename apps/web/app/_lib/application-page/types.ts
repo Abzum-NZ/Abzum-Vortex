@@ -156,7 +156,11 @@ export type BoardContinuationTarget = Readonly<{
 
 export type TableContinuationTarget = Readonly<{
   placementId: string;
-  request: Readonly<{ page: number; continuationToken?: string }>;
+  request: Readonly<{
+    page: number;
+    pageDirection: "forward" | "backward";
+    continuationToken?: string;
+  }>;
 }>;
 
 export type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];

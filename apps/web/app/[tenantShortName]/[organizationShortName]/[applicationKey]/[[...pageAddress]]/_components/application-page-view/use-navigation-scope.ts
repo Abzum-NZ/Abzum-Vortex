@@ -36,11 +36,10 @@ export function useNavigationScope({
     generations: Map<string, ComponentRequestGeneration>;
   }>({ base: "", key: "", generations: new Map<string, ComponentRequestGeneration>() });
   const boardContinuationInFlightRef = useRef(new Set<string>());
-  const tableContinuationHistoryRef = useRef<{
+  const tableContinuationScopeRef = useRef<{
     scopeKey: string;
-    cursors: Map<string, Map<number, string>>;
     inFlight: Set<string>;
-  }>({ scopeKey: "", cursors: new Map(), inFlight: new Set() });
+  }>({ scopeKey: "", inFlight: new Set() });
   if (placementRequestsRef.current.base !== navigationBase) {
     navigationSequenceRef.current += 1;
     placementRequestsRef.current = {
@@ -51,5 +50,10 @@ export function useNavigationScope({
   }
   const navigationKey = placementRequestsRef.current.key;
 
-  return { navigationKey, placementRequestsRef, boardContinuationInFlightRef, tableContinuationHistoryRef };
+  return {
+    navigationKey,
+    placementRequestsRef,
+    boardContinuationInFlightRef,
+    tableContinuationScopeRef,
+  };
 }

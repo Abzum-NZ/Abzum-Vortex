@@ -121,6 +121,8 @@ export type ProjectedTableValues = Readonly<{
   page?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
+  hasPreviousPage?: boolean;
+  previousContinuationToken?: string;
 }>;
 
 export type ProjectedRecordDetailValues = Readonly<{

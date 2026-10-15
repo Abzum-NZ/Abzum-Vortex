@@ -353,6 +353,7 @@ export const decideQueryCache = (input: unknown): QueryCacheDecision => {
           filterableFieldIds: [...request.filterableFieldIds].map(lower).sort(),
           searchableFieldIds: [...request.searchableFieldIds].map(lower).sort(),
           pageSize: request.pageSize,
+          pageDirection: request.pageDirection ?? "forward",
           continuationToken: request.continuationToken ?? null,
         },
       }),
