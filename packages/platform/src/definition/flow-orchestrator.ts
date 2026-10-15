@@ -6,7 +6,6 @@ import {
   executeNamedActionCommandSchema,
   executionAuthorityContextSchema,
   flowMaximumServerSeconds,
-  flowSchema,
   identitySessionSchema,
   isRecord,
   organizationSelectionCandidateSchema,
@@ -20,6 +19,7 @@ import { readFlowRunAsPrincipalForRun } from "../access/index";
 import { withRuntimeTransaction } from "../db/index";
 import {
   collectActionFlowTasks,
+  flowLibraryOf,
   resumeFlowRun,
   startFlowRun,
   type FlowLibrary,
@@ -74,18 +74,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   const newToken = dependencies.newToken ?? (() => randomBytes(32).toString("base64url"));
 
   /** The library of validated flows of one release; an invalid flow is unavailable, never trusted. */
-  const libraryOf = (release: FlowRelease): FlowLibrary => {
-    const parsed = new Map<string, FlowDefinition | undefined>();
-    return (flowId) => {
-      if (parsed.has(flowId)) return parsed.get(flowId);
-      const candidate = release.flows.get(flowId);
-      const result = candidate === undefined ? undefined : flowSchema.safeParse(candidate);
-      const flow = result?.success ? result.data : undefined;
-      parsed.set(flowId, flow?.id === flowId ? flow : undefined);
-      return parsed.get(flowId);
-    };
-  };
-
+  const libraryOf = (release: FlowRelease): FlowLibrary => flowLibraryOf(release.flows);
 
   const elapsedMilliseconds = (run: Run): number =>
     Math.max(0, Math.round(run.carriedMilliseconds + (clock() - run.segmentStart)));
