@@ -45,6 +45,8 @@ type PageScope = {
 
 type CacheContext = Readonly<{
   navigationKey: string;
+  /** The access version the shown page was authorised under; pages read under another are dropped. */
+  accessVersion: number;
   application: ApplicationPageModel["invocation"];
   pageKey: string | undefined;
   search: string;
@@ -79,10 +81,22 @@ const listKeyOf = (placementId: string): string => placementId.toLowerCase();
  * here is the page the same click would fetch. Nothing is kept across a navigation, a sort, filter
  * or search change, a release change, or a reread of the list's own records.
  */
-export function useTablePageCache({ navigationKey, application, pageKey, search }: CacheContext) {
-  const contextRef = useRef<CacheContext>({ navigationKey, application, pageKey, search });
-  contextRef.current = { navigationKey, application, pageKey, search };
-  const scopeRef = useRef<PageScope>(newScope(navigationKey));
+export function useTablePageCache({
+  navigationKey,
+  accessVersion,
+  application,
+  pageKey,
+  search,
+}: CacheContext) {
+  const contextRef = useRef<CacheContext>({
+    navigationKey,
+    accessVersion,
+    application,
+    pageKey,
+    search,
+  });
+  contextRef.current = { navigationKey, accessVersion, application, pageKey, search };
+  const scopeRef = useRef<PageScope>(newScope(`${navigationKey}\u0000${accessVersion}`));
   const cacheRef = useRef<ReturnType<typeof createCache> | undefined>(undefined);
   cacheRef.current ??= createCache(contextRef, scopeRef);
   return cacheRef.current;
@@ -90,7 +104,9 @@ export function useTablePageCache({ navigationKey, application, pageKey, search 
 
 function createCache(contextRef: RefObject<CacheContext>, scopeRef: RefObject<PageScope>) {
   const scope = (): PageScope => {
-    const key = contextRef.current.navigationKey;
+    // A new navigation or a changed access version starts an empty scope: no page read under an
+    // older authority is ever served.
+    const key = `${contextRef.current.navigationKey}\u0000${contextRef.current.accessVersion}`;
     if (scopeRef.current.key !== key) scopeRef.current = newScope(key);
     return scopeRef.current;
   };

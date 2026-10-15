@@ -215,6 +215,7 @@ export function ApplicationPageViewContent({
   );
   const pageCache = useTablePageCache({
     navigationKey,
+    accessVersion: model.accessVersion,
     application,
     pageKey: currentPageKey,
     search: currentSearch,
