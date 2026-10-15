@@ -199,8 +199,8 @@ begin
       pg_catalog.jsonb_build_object(
         'application_root_id', candidate.application_root_id,
         'source_role_id', candidate.source_role_id,
-        'key', selected_template ->> 'key',
-        'label', selected_template ->> 'name',
+        'key', candidate.key,
+        'label', candidate.label,
         'continuity_revision', candidate.continuity_revision
       );
     emitted := emitted + 1;
