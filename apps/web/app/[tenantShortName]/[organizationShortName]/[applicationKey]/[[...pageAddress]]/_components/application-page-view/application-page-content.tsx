@@ -1,4 +1,5 @@
 import {
+  use,
   useCallback,
   useEffect,
   useMemo,
@@ -19,6 +20,9 @@ import {
   type ProjectedPageCapability,
   type PlatformThemeTokens,
   type ApplicationWebMcpRuntime,
+  isClientPageChange,
+  pageHoldFor,
+  primaryStreamedPlacement,
 } from "@vortex/ui";
 import {
   describeFailure,
@@ -39,12 +43,7 @@ import {
 } from "@vortex/ui/components/dialog";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
-import type {
-  GuidedFormActions,
-  Notice,
-  SubmittedForm,
-  RefreshedPlacementData,
-} from "./types";
+import type { GuidedFormActions, Notice, SubmittedForm, RefreshedPlacementData } from "./types";
 import { formOwnersByPlacement } from "./form-surface";
 import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./placement-helpers";
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
@@ -57,7 +56,10 @@ import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
-import { useApplicationFrame, useFramePageState } from "../../../_components/application-frame-state";
+import {
+  useApplicationFrame,
+  useFramePageState,
+} from "../../../_components/application-frame-state";
 
 export function ApplicationPageViewContent({
   model,
@@ -84,6 +86,18 @@ export function ApplicationPageViewContent({
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
+  // Hold then swap: a page that arrives after the document has loaded waits, inside the page
+  // change's transition (so the current page stays on screen), for its primary placement's data or
+  // the page hold, whichever comes first. The data is the same response's streamed read, so the
+  // wait never costs a request. A page released by the hold shows its skeleton at once.
+  const primaryPlacementId =
+    model.streamedData === undefined
+      ? undefined
+      : primaryStreamedPlacement(content, model.streamedData);
+  const primaryRead =
+    primaryPlacementId === undefined ? undefined : model.streamedData?.[primaryPlacementId];
+  const pageHold =
+    primaryRead !== undefined && isClientPageChange() ? use(pageHoldFor(primaryRead)) : "ready";
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -514,73 +528,76 @@ export function ApplicationPageViewContent({
 
   return (
     <>
-      <div ref={compositionRootRef} className="contents">
-          <WebMcpAdapter
-            contextKey={webMcpContextKey}
-            tools={model.webMcpTools}
-            onInvoke={invokeWebMcpTool}
-            onStatusChange={reportWebMcpShellState}
-          />
-          <PagePuckRenderer
-            contentRegion
-            feedback={
-              pageFeedback === undefined &&
-              (notice === undefined || notice.tone === "info") &&
-              model.bodyContentAvailable !== false ? undefined : (
-                <>
-                  {pageFeedback}
-                  {model.bodyContentAvailable !== false ? null : (
-                    <Alert role="status" aria-live="polite">
-                      <AlertDescription>No page content is available.</AlertDescription>
-                    </Alert>
-                  )}
-                  {notice === undefined || notice.tone === "info" ? null : (
-                    <Alert
-                      variant={notice.tone === "problem" ? "destructive" : "default"}
-                      role={notice.tone === "problem" ? "alert" : "status"}
-                      aria-live="polite"
-                      data-vortex-notice={notice.tone}
-                    >
-                      <AlertDescription>{notice.text}</AlertDescription>
-                    </Alert>
-                  )}
-                </>
-              )
-            }
-            composition={content as unknown as ProjectedPageCapability}
-            registry={platformComponentRegistry}
-            fieldInputControlReleases={fieldInputControlReleases}
-            platformThemeTokens={platformThemeTokens}
-            applicationSearch={applicationFrame?.applicationSearch}
-            applicationSearchPageSubject={applicationFrame?.applicationSearchPageSubject}
-            pageId={model.pageId}
-            theme={model.theme}
-            projectedNavigation={model.navigation}
-            resolvePageHref={resolvePageHref}
-            {...(applicationFrame === null
-              ? {}
-              : { onNavigatePage: applicationFrame.navigateToPage })}
-            currentPageId={model.pageId}
-            {...(model.guidedForm === undefined
-              ? {}
-              : {
-                  activeStepId: model.guidedForm.activeStepId,
-                  guidedSummaryValues: model.guidedForm.values,
-                })}
-            runtimeInputs={contentRuntimeInputs}
-            {...(model.guidedForm === undefined
-              ? {}
-              : {
-                  guidedStepNavigation: {
-                    disabled: busy || guidedFormCompleted,
-                    onBack: () => {
-                      if (guidedPreviousStepId !== undefined)
-                        requestGuidedStep(guidedPreviousStepId);
-                    },
-                    onNext: () => requestGuidedStep(),
+      <div
+        ref={compositionRootRef}
+        className="contents"
+        {...(pageHold === "held" ? { "data-vortex-page-held": "" } : {})}
+      >
+        <WebMcpAdapter
+          contextKey={webMcpContextKey}
+          tools={model.webMcpTools}
+          onInvoke={invokeWebMcpTool}
+          onStatusChange={reportWebMcpShellState}
+        />
+        <PagePuckRenderer
+          contentRegion
+          feedback={
+            pageFeedback === undefined &&
+            (notice === undefined || notice.tone === "info") &&
+            model.bodyContentAvailable !== false ? undefined : (
+              <>
+                {pageFeedback}
+                {model.bodyContentAvailable !== false ? null : (
+                  <Alert role="status" aria-live="polite">
+                    <AlertDescription>No page content is available.</AlertDescription>
+                  </Alert>
+                )}
+                {notice === undefined || notice.tone === "info" ? null : (
+                  <Alert
+                    variant={notice.tone === "problem" ? "destructive" : "default"}
+                    role={notice.tone === "problem" ? "alert" : "status"}
+                    aria-live="polite"
+                    data-vortex-notice={notice.tone}
+                  >
+                    <AlertDescription>{notice.text}</AlertDescription>
+                  </Alert>
+                )}
+              </>
+            )
+          }
+          composition={content as unknown as ProjectedPageCapability}
+          registry={platformComponentRegistry}
+          fieldInputControlReleases={fieldInputControlReleases}
+          platformThemeTokens={platformThemeTokens}
+          applicationSearch={applicationFrame?.applicationSearch}
+          applicationSearchPageSubject={applicationFrame?.applicationSearchPageSubject}
+          pageId={model.pageId}
+          theme={model.theme}
+          projectedNavigation={model.navigation}
+          resolvePageHref={resolvePageHref}
+          {...(applicationFrame === null
+            ? {}
+            : { onNavigatePage: applicationFrame.navigateToPage })}
+          currentPageId={model.pageId}
+          {...(model.guidedForm === undefined
+            ? {}
+            : {
+                activeStepId: model.guidedForm.activeStepId,
+                guidedSummaryValues: model.guidedForm.values,
+              })}
+          runtimeInputs={contentRuntimeInputs}
+          {...(model.guidedForm === undefined
+            ? {}
+            : {
+                guidedStepNavigation: {
+                  disabled: busy || guidedFormCompleted,
+                  onBack: () => {
+                    if (guidedPreviousStepId !== undefined) requestGuidedStep(guidedPreviousStepId);
                   },
-                })}
-          />
+                  onNext: () => requestGuidedStep(),
+                },
+              })}
+        />
       </div>
       {intentHostElement}
       <Dialog

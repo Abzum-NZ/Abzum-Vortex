@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from "react";
 import type { useRouter } from "next/navigation";
-import type { ChoiceInputPayload } from "@vortex/ui";
+import { observeSettled, settledValue, type ChoiceInputPayload } from "@vortex/ui";
 import {
   mountedRecordPinFrameSchema,
   isCurrentComponentRequestGeneration,
@@ -17,20 +17,13 @@ import {
   type ComponentRequestGeneration,
   containedComponentIdSchema,
 } from "@vortex/platform/schema";
-import type {
-  ApplicationPageModel,
-  PageDataState,
-} from "../../../../../../_lib/application-page";
+import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
 import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import {
   createMountedRecordPinWatchClient,
   readMountedRecordPinMemberships,
 } from "../../../../../../_lib/mounted-record-pin-watch-client";
-import type {
-  RefreshedPlacementData,
-  TableContinuationTarget,
-  EditFormBaseline,
-} from "./types";
+import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline } from "./types";
 
 export function usePlacementRefresh({
   currentPageKey,
@@ -47,7 +40,11 @@ export function usePlacementRefresh({
   refreshedPlacementData,
 }: Readonly<{
   currentPageKey: string | undefined;
-  placementRequestsRef: RefObject<{ base: string; key: string; generations: Map<string, ComponentRequestGeneration> }>;
+  placementRequestsRef: RefObject<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>;
   navigationKey: string;
   application: ApplicationPageModel["invocation"];
   currentSearch: string;
@@ -135,19 +132,19 @@ export function usePlacementRefresh({
         }
 
         for (const [key, request] of batch) {
-          if (
-            !isCurrentComponentRequestGeneration(requestScope.generations.get(key), request)
-          )
+          if (!isCurrentComponentRequestGeneration(requestScope.generations.get(key), request))
             continue;
           const data =
             result.kind === "available"
-              ? Object.entries(result.data).find(([candidate]) => candidate.toLowerCase() === key)?.[1]
+              ? Object.entries(result.data).find(
+                  ([candidate]) => candidate.toLowerCase() === key,
+                )?.[1]
               : undefined;
           const baseline =
             result.kind === "available"
-              ? Object.entries(result.editFormBaselines).find(
+              ? (Object.entries(result.editFormBaselines).find(
                   ([candidate]) => candidate.toLowerCase() === key,
-                )?.[1] ?? null
+                )?.[1] ?? null)
               : null;
           loadedData.set(key, data ?? { status: "error" });
           loadedBaselines.set(key, baseline);
@@ -189,15 +186,21 @@ export function usePlacementRefresh({
       const refreshedChoices = new Set(
         accepted
           .filter((entry) =>
-            isCurrentComponentRequestGeneration(requestScope.generations.get(entry.key), entry.request),
+            isCurrentComponentRequestGeneration(
+              requestScope.generations.get(entry.key),
+              entry.request,
+            ),
           )
           .map((entry) => entry.placementId),
       );
       if (refreshedChoices.size > 0) {
         for (const stateKey of Object.keys(choiceRequestIdsRef.current))
-          if ([...refreshedChoices].some((placementId) =>
-            stateKey === placementId || stateKey.endsWith(`\u0000${placementId}`),
-          ))
+          if (
+            [...refreshedChoices].some(
+              (placementId) =>
+                stateKey === placementId || stateKey.endsWith(`\u0000${placementId}`),
+            )
+          )
             choiceRequestIdsRef.current[stateKey] =
               (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
         setChoicePages((current) =>
@@ -207,10 +210,11 @@ export function usePlacementRefresh({
         );
         setDialogChoicePages((current) =>
           Object.fromEntries(
-            Object.entries(current).filter(([stateKey]) =>
-              ![...refreshedChoices].some((placementId) =>
-                stateKey.endsWith(`\u0000${placementId}`),
-              ),
+            Object.entries(current).filter(
+              ([stateKey]) =>
+                ![...refreshedChoices].some((placementId) =>
+                  stateKey.endsWith(`\u0000${placementId}`),
+                ),
             ),
           ),
         );
@@ -225,7 +229,12 @@ export function usePlacementRefresh({
         let subject = current?.navigationKey === requestScope.key ? current.subject : undefined;
         let changed = false;
         for (const entry of accepted) {
-          if (!isCurrentComponentRequestGeneration(liveScope.generations.get(entry.key), entry.request))
+          if (
+            !isCurrentComponentRequestGeneration(
+              liveScope.generations.get(entry.key),
+              entry.request,
+            )
+          )
             continue;
           data[entry.placementId] = entry.data;
           editFormBaselines[entry.placementId] = entry.editFormBaseline;
@@ -261,10 +270,24 @@ export function usePlacementRefresh({
   const [streamed, setStreamed] = useState<
     Readonly<{ owner: ApplicationPageModel["data"]; data: Readonly<Record<string, PageDataState>> }>
   >({ owner: model.data, data: {} });
+  // The reads that had settled before the page's first render (the page was held for its primary
+  // data), so that render already shows them instead of a loading state for one frame. Later
+  // settlements arrive through `streamed`, so this runs once per model.
+  const settledStreams = useMemo(() => {
+    const settled: Record<string, PageDataState> = {};
+    for (const [placementId, read] of Object.entries(model.streamedData ?? {})) {
+      observeSettled(read);
+      const state = settledValue(read);
+      if (state !== undefined) settled[placementId] = state;
+    }
+    return settled;
+  }, [model.streamedData]);
   useEffect(() => {
     if (model.streamedData === undefined) return;
     let current = true;
-    for (const [placementId, settled] of Object.entries(model.streamedData))
+    for (const [placementId, settled] of Object.entries(model.streamedData)) {
+      // A read that had already settled when the page was shown is in the first render's data.
+      if (Object.hasOwn(settledStreams, placementId)) continue;
       void settled.then((state) => {
         if (!current) return;
         setStreamed((prior) => ({
@@ -272,20 +295,27 @@ export function usePlacementRefresh({
           data: { ...(prior.owner === model.data ? prior.data : {}), [placementId]: state },
         }));
       });
+    }
     return () => {
       current = false;
     };
-  }, [model.data, model.streamedData]);
+  }, [model.data, model.streamedData, settledStreams]);
   const currentData = useMemo(() => {
-    const served = streamed.owner === model.data ? { ...model.data, ...streamed.data } : model.data;
+    const served = {
+      ...model.data,
+      ...settledStreams,
+      ...(streamed.owner === model.data ? streamed.data : {}),
+    };
     return refreshedPlacementData?.navigationKey === navigationKey
       ? { ...served, ...refreshedPlacementData.data }
       : served;
-  }, [model.data, navigationKey, refreshedPlacementData, streamed]);
+  }, [model.data, navigationKey, refreshedPlacementData, settledStreams, streamed]);
   const currentTileDataRef = useRef(currentData);
   currentTileDataRef.current = currentData;
   const compositionRootRef = useRef<HTMLDivElement>(null);
-  const pinWatchClientRef = useRef<ReturnType<typeof createMountedRecordPinWatchClient> | undefined>(undefined);
+  const pinWatchClientRef = useRef<
+    ReturnType<typeof createMountedRecordPinWatchClient> | undefined
+  >(undefined);
   const pinRefreshRef = useRef(refreshPlacements);
   pinRefreshRef.current = refreshPlacements;
   useEffect(() => {
@@ -307,9 +337,13 @@ export function usePlacementRefresh({
         pageKey: model.invocation.pageKey,
       },
       isCurrent,
-      readMemberships: () => !isCurrent() || model.bodyContentAvailable === false ? []
-        : readMountedRecordPinMemberships(root, frame.data, currentTileDataRef.current),
-      refreshPlacements: async (ids) => { if (isCurrent()) await pinRefreshRef.current(ids); },
+      readMemberships: () =>
+        !isCurrent() || model.bodyContentAvailable === false
+          ? []
+          : readMountedRecordPinMemberships(root, frame.data, currentTileDataRef.current),
+      refreshPlacements: async (ids) => {
+        if (isCurrent()) await pinRefreshRef.current(ids);
+      },
     });
     pinWatchClientRef.current = client;
     return () => {
@@ -318,7 +352,9 @@ export function usePlacementRefresh({
       client.dispose();
     };
   }, [model, navigationKey]);
-  useEffect(() => { pinWatchClientRef.current?.reconcile(); }, [currentData]);
+  useEffect(() => {
+    pinWatchClientRef.current?.reconcile();
+  }, [currentData]);
   const pinActivationInFlightRef = useRef(false);
   const currentEditFormBaselines = useMemo(() => {
     const baselines = { ...model.editFormBaselines };
@@ -332,5 +368,13 @@ export function usePlacementRefresh({
     return baselines;
   }, [model.editFormBaselines, navigationKey, refreshedPlacementData]);
 
-  return { currentData, refreshPlacements, refreshTargetsForBinding, currentEditFormBaselines, pinActivationInFlightRef, currentTileDataRef, compositionRootRef };
+  return {
+    currentData,
+    refreshPlacements,
+    refreshTargetsForBinding,
+    currentEditFormBaselines,
+    pinActivationInFlightRef,
+    currentTileDataRef,
+    compositionRootRef,
+  };
 }

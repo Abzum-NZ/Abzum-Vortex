@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type ReactElement, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactElement,
+  type RefObject,
+} from "react";
 import { describeFailure, type BoardColumnSelector } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
@@ -23,6 +30,7 @@ import { DisplayHeader, RowActionControl } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { BoardBucketPayload, BoardPayload, DisplaySemanticEvent } from "./projected-data";
+import { useRowEntrance } from "./row-entrance";
 
 type BoardBucket = Readonly<{
   key: string;
@@ -166,7 +174,7 @@ function BoardColumn({
                 );
               const idle = movable && mover.movingRecordId === undefined;
               return (
-                <li key={row.recordId}>
+                <li key={row.recordId} data-vortex-board-card="">
                   <Card
                     size="sm"
                     className={moving ? "gap-0 opacity-60" : "gap-0"}
@@ -350,6 +358,11 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
           },
         ];
 
+  const cardsRef = useRowEntrance<HTMLElement>(
+    buckets.flatMap((bucket) => bucket.values.page?.rows.map((row) => row.recordId) ?? []),
+    "[data-vortex-board-card]",
+  );
+
   const releaseMove = (): void => {
     movingRef.current = false;
     setMoving(undefined);
@@ -437,6 +450,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
     >
       {values === undefined ? null : (
         <section
+          ref={cardsRef}
           data-vortex-display="board"
           data-vortex-placement-id={placementId}
           className="flex min-w-0 flex-col gap-3"

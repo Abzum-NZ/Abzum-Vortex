@@ -128,6 +128,7 @@ export {
 
 // Display Components & Views
 export {
+  BrandLoader,
   DisplayCellView,
   DisplayStateContainer,
   ListDisplay,
@@ -300,6 +301,7 @@ export { LAYOUT_COMPONENT_REGISTRATIONS, createLayoutComponentRegistry } from ".
 export {
   ApplicationNavigation,
   ApplicationNavigationBlock,
+  PageNavigationBusyContext,
   type ApplicationNavigationProps,
   type ProjectedNavigation,
   type ProjectedNavigationItem,
@@ -314,6 +316,12 @@ export {
   type ApplicationShellRuntime,
   type ApplicationWebMcpRuntime,
   ContentTransition,
+  isClientPageChange,
+  observeSettled,
+  pageHoldFor,
+  primaryStreamedPlacement,
+  settledValue,
+  type PageHoldOutcome,
   usePagePresence,
   NAVIGATION_COMPONENT_REGISTRATIONS,
   WebMcpStatus,

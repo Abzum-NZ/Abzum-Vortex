@@ -10,6 +10,7 @@ import {
 } from "./controls";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
+import { useRowEntrance } from "./row-entrance";
 import type { ListPayload } from "./projected-data";
 
 /**
@@ -21,6 +22,10 @@ export function ListDisplay(props: DisplayRenderProps<ListPayload>): ReactElemen
   const { placementId, availability } = props;
   const { title, accessibleName, values, state, emptyMessage, events } =
     resolveDisplayContext<ListPayload>(props, (list) => list.rows.length === 0, "No items to show");
+  const rowsRef = useRowEntrance<HTMLElement>(
+    values?.rows.map((row) => row.recordId) ?? [],
+    "ul > li",
+  );
 
   // The list's own loading and no-rows presentations keep the state identity, role and accessible
   // name the standard state container gives them, and the container still owns the refused, error
@@ -38,6 +43,7 @@ export function ListDisplay(props: DisplayRenderProps<ListPayload>): ReactElemen
     >
       {values === undefined ? null : (
         <section
+          ref={rowsRef}
           data-vortex-display="list"
           data-vortex-placement-id={placementId}
           aria-label={accessibleName}

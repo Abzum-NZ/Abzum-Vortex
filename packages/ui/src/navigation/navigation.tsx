@@ -1,7 +1,19 @@
 "use client";
 
-import { useEffect, useId, useState, type MouseEvent, type ReactElement } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactElement,
+} from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { Icon } from "../icons/icon";
+import { readMotionTiming, type MotionTiming } from "./motion-tokens";
 import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
@@ -81,7 +93,16 @@ type NavigationListProps = Readonly<{
   pendingPageId: string | undefined;
   onNavigate: ((pageId: string, event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
   onPrefetch: ((pageId: string) => void) | undefined;
+  /** The one selected-item indicator's layout identity and its slide timing. */
+  indicator: Readonly<{ layoutId: string; timing: MotionTiming | undefined }>;
 }>;
+
+/**
+ * Whether the host is carrying out a page change it started from this navigation. When a change
+ * ends without the shown page changing (it failed or was refused), the chosen item gives the
+ * selection back to the shown page at once.
+ */
+export const PageNavigationBusyContext = createContext(false);
 
 const samePage = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -103,6 +124,7 @@ function NavigationList({
   pendingPageId,
   onNavigate,
   onPrefetch,
+  indicator,
 }: NavigationListProps): ReactElement {
   const sub = depth > 1;
   const List = sub ? SidebarMenuSub : SidebarMenu;
@@ -142,6 +164,7 @@ function NavigationList({
                 pendingPageId={pendingPageId}
                 onNavigate={onNavigate}
                 onPrefetch={onPrefetch}
+                indicator={indicator}
               />
             </Item>
           );
@@ -161,7 +184,12 @@ function NavigationList({
                 />,
                 <>
                   <Icon name={item.icon} aria-hidden="true" />
-                  <span data-vortex-navigation-label="" className="min-w-0 truncate underline underline-offset-4">{item.label}</span>
+                  <span
+                    data-vortex-navigation-label=""
+                    className="min-w-0 truncate underline underline-offset-4"
+                  >
+                    {item.label}
+                  </span>
                   <span className="ms-auto shrink-0 text-xs text-muted-foreground">External</span>
                 </>,
                 false,
@@ -171,16 +199,26 @@ function NavigationList({
         }
         const current = currentPageId !== undefined && samePage(item.pageId, currentPageId);
         const pending = pendingPageId !== undefined && samePage(item.pageId, pendingPageId);
+        const selected = pendingPageId === undefined ? current : pending;
         return (
           <Item
             key={item.id}
             data-vortex-navigation-item-id={item.id}
             data-vortex-navigation-item-type="page"
           >
+            {!selected ? null : (
+              // The selected fill slides from the item it leaves to this one.
+              <motion.span
+                layoutId={indicator.layoutId}
+                data-vortex-navigation-indicator=""
+                aria-hidden
+                transition={indicator.timing ?? { duration: 0 }}
+              />
+            )}
             {renderLink(
-                <a
-                  href={resolvePageHref(item.pageId)}
-                  aria-label={item.label}
+              <a
+                href={resolvePageHref(item.pageId)}
+                aria-label={item.label}
                 {...(current ? { "aria-current": "page" as const } : {})}
                 {...(pending ? { "data-vortex-navigation-pending": "" } : {})}
                 {...(onPrefetch === undefined || current
@@ -190,12 +228,12 @@ function NavigationList({
                       onFocus: () => onPrefetch(item.pageId),
                     })}
                 onClick={(event) => onNavigate?.(item.pageId, event)}
-                />,
+              />,
               <>
                 <Icon name={item.icon} aria-hidden="true" />
                 <span data-vortex-navigation-label="">{item.label}</span>
               </>,
-              pendingPageId === undefined ? current : pending,
+              selected,
             )}
           </Item>
         );
@@ -250,14 +288,33 @@ export function ApplicationNavigation({
     setShownPageId(currentPageId);
     setPending(undefined);
   }
+  // A change the host started and then finished without changing the shown page (it failed or was
+  // refused) gives the selection back to the shown page.
+  const navigationBusy = useContext(PageNavigationBusyContext);
+  const [hostBusy, setHostBusy] = useState(navigationBusy);
+  if (hostBusy !== navigationBusy) {
+    setHostBusy(navigationBusy);
+    if (!navigationBusy) setPending(undefined);
+  }
   useEffect(() => {
     if (pending === undefined) return;
     const timer = setTimeout(() => setPending(undefined), 10_000);
     return () => clearTimeout(timer);
   }, [pending]);
-  const pendingPageId = pending !== undefined && pending.from === currentPageId
-    ? pending.pageId
-    : undefined;
+  // The selected item's indicator slides with the enter-exit motion token; with reduced motion it
+  // moves at once.
+  const navRef = useRef<HTMLElement>(null);
+  const reducedMotion = useReducedMotion();
+  const [indicatorTiming, setIndicatorTiming] = useState<MotionTiming>();
+  useLayoutEffect(() => {
+    if (navRef.current !== null) setIndicatorTiming(readMotionTiming(navRef.current, "enter-exit"));
+  }, []);
+  const indicator = {
+    layoutId: `${baseId}-selected`,
+    timing: reducedMotion === true ? undefined : indicatorTiming,
+  };
+  const pendingPageId =
+    pending !== undefined && pending.from === currentPageId ? pending.pageId : undefined;
 
   // A forced phone breakpoint always uses the disclosure; otherwise a narrow viewport does through
   // the small-screen variant, so the same server HTML adapts before any script runs.
@@ -266,6 +323,7 @@ export function ApplicationNavigation({
 
   return (
     <nav
+      ref={navRef}
       aria-label={label}
       data-vortex-shell-navigation=""
       data-vortex-navigation-open={open ? "true" : "false"}
@@ -306,6 +364,7 @@ export function ApplicationNavigation({
                     pendingPageId={pendingPageId}
                     onNavigate={activatePage}
                     onPrefetch={onPrefetch}
+                    indicator={indicator}
                   />
                 </SidebarGroupContent>
               </>
