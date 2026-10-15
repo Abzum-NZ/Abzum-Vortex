@@ -29,6 +29,9 @@ declare
   target_module_root_id uuid;
   target_release_revision bigint;
   target_is_system_projection boolean;
+  target_source_sql text;
+  target_projection_definition jsonb;
+  target_projection_sort_key text;
   records_by_id jsonb := '{}'::jsonb;
   candidate_edges jsonb := '[]'::jsonb;
   load_contracts uuid[] := array[]::uuid[];
@@ -109,6 +112,74 @@ begin
   end if;
   target_is_system_projection := (target_meta ->> 'isSystemProjection')::boolean;
 
+  target_source_sql := pg_catalog.format('record_data.%I as stored', target_table);
+  if target_is_system_projection then
+    select storage.record_type_definition into target_projection_definition
+    from vortex_record.storage_catalogue as storage
+    where storage.storage_contract_id = (target_meta ->> 'storageContractId')::uuid
+      and storage.physical_schema_token = 'system_projection'
+      and storage.state = 'active';
+    if not found then
+      raise exception using errcode = '55000',
+        message = 'Protected projection reader is unavailable';
+    end if;
+    if pg_catalog.jsonb_typeof(target_projection_definition -> 'fields') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(target_projection_definition -> 'systemProjection')
+        is distinct from 'object' then
+      raise exception using errcode = '55000',
+        message = 'Protected projection definition is invalid';
+    end if;
+    select field.value ->> 'key' into target_projection_sort_key
+    from pg_catalog.jsonb_array_elements(target_projection_definition -> 'fields')
+      as field(value)
+    where field.value ->> 'fieldId'
+      = target_projection_definition #>> '{systemProjection,sortableFieldIds,0}';
+    if target_projection_definition #> '{systemProjection,sortableFieldIds,0}' is not null
+      and target_projection_sort_key is null then
+      raise exception using errcode = '55000',
+        message = 'Protected projection sort field is invalid';
+    end if;
+    target_projection_sort_key := coalesce(target_projection_sort_key, 'record_id');
+    -- Shape each protected reader row as the existing view's composite type.
+    -- The view supplies the type only: its unbounded reader is never scanned.
+    target_source_sql := pg_catalog.format($source$
+      vortex_record.read_system_projection_rows_internal(
+        %L::uuid, array[$2]::uuid[], %L, 'ascending', null::jsonb, 1
+      ) as projection
+      cross join lateral pg_catalog.jsonb_populate_record(
+        null::record_data.%I,
+        pg_catalog.jsonb_build_object(
+          'organisation_id', projection.organization_id,
+          'module_root_id', %L::uuid,
+          'record_type_id', %L::uuid,
+          'storage_contract_id', %L::uuid,
+          'record_id', projection.record_id,
+          'definition_revision', %L::bigint,
+          'lifecycle_state', 'active',
+          'concurrency_number', projection.revision
+        ) || coalesce((
+          select pg_catalog.jsonb_object_agg(
+            'f_' || pg_catalog.replace(pg_catalog.lower(field.value ->> 'fieldId'), '-', ''),
+            case
+              when field.value ->> 'fieldId' = %L
+                then pg_catalog.to_jsonb(projection.organization_id::text)
+              when field.value ->> 'fieldId' = %L
+                then pg_catalog.to_jsonb(projection.revision)
+              else projection.attribute_values -> (field.value ->> 'key')
+            end
+          )
+          from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
+        ), '{}'::jsonb)
+      ) as stored$source$,
+      (target_meta ->> 'storageContractId')::uuid,
+      target_projection_sort_key, target_table, target_module_root_id, p_record_type_id,
+      (target_meta ->> 'storageContractId')::uuid, target_release_revision,
+      target_projection_definition #>> '{systemProjection,organizationFieldId}',
+      target_projection_definition #>> '{systemProjection,revisionFieldId}',
+      target_projection_definition
+    );
+  end if;
+
   -- Step 4: the declaration. Every record-scoped permission of this action
   -- kind declared for this exact record type, owned by the context Application
   -- or by the record type's own Module, in the canonical order the eligibility
@@ -185,11 +256,11 @@ begin
          then pg_catalog.jsonb_build_object(''ownerGroupId'', stored.owner_group_id)
        else ''{}''::jsonb end,
      stored.concurrency_number, stored.definition_revision
-     from record_data.%I as stored
+     from %s
      where stored.organisation_id = $1 and stored.record_id = $2%s',
     target_scope, target_module_root_id, p_record_type_id,
     (target_meta ->> 'storageContractId')::uuid, target_scope,
-    target_meta ->> 'valueExpression', target_table,
+    target_meta ->> 'valueExpression', target_source_sql,
     case when p_expected_concurrency_number is null then '' else ' for update' end
   );
 

@@ -20,7 +20,7 @@ import {
 import type { RequestDatabaseTransaction } from "../db/index";
 import {
   createHumanOrganizationRequestService,
-  runOrganizationAccessOperation,
+  decideOrganizationAccessBatch,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "../access/index";
@@ -142,23 +142,27 @@ export const createAuthenticatedNavigationProjectionService = <Command>(
         const bindings = loaded.permissionBindings;
         const correlations = new Set([loaded.sourceCorrelationId.toLowerCase()]);
         const decisions: Record<string, boolean> = {};
-        for (const permissionKey of collectNavigationPermissionKeys(loaded.navigation)) {
+        const permissionKeys = collectNavigationPermissionKeys(loaded.navigation);
+        const declarations = permissionKeys.map((permissionKey) => {
           const binding = Object.hasOwn(bindings, permissionKey)
             ? bindings[permissionKey]
             : undefined;
           if (binding === undefined || binding.permissionKey !== permissionKey)
             throw new Error("NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
-          const evaluated = await runOrganizationAccessOperation(
-            transaction,
-            scope,
-            binding.declaration,
-            async (decision) => decision.correlationId,
-          );
-          // An allowed decision carries its correlation as the operation value; a refusal carries
-          // it directly. Both must belong to this one request.
-          const allowed = evaluated.outcome === "completed";
-          correlations.add((allowed ? evaluated.value : evaluated.correlationId).toLowerCase());
-          decisions[permissionKey] = allowed;
+          return binding.declaration;
+        });
+        // Every distinct permission is decided through the same live eligibility evaluation, all in
+        // one statement of this request instead of one round trip each. Each decision is still
+        // bound to this request's scope and access version, and its correlation must be this one
+        // request's.
+        const evaluated = await decideOrganizationAccessBatch(transaction, scope, declarations);
+        if (evaluated.length !== permissionKeys.length)
+          throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
+        for (const [index, permissionKey] of permissionKeys.entries()) {
+          const decision = evaluated[index];
+          if (decision === undefined) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
+          correlations.add(decision.correlationId.toLowerCase());
+          decisions[permissionKey] = decision.allowed;
         }
         if (correlations.size !== 1) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
         return projectNavigation(loaded.navigation, decisions);

@@ -48,6 +48,7 @@ import {
 } from "./delete-record";
 import {
   calculateLockedRelationshipTotalSave,
+  type LockedRelationshipTotalPreparation,
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import type { RecordFieldValuePendingCheck } from "./field-values";
@@ -374,13 +375,31 @@ const describeIssues = (
         .join("; ");
 
 const ruleReasonFromIssues = (
-  issues: ReadonlyArray<Readonly<{ code: string; requirement?: RuleReason }>>,
-): RuleReason | undefined =>
-  issues.find(
+  issues: ReadonlyArray<
+    Readonly<{ code: string; recordKey?: string; ruleKey?: string; requirement?: RuleReason }>
+  >,
+  preparation?: LockedRelationshipTotalPreparation,
+): RuleReason | undefined => {
+  const issue = issues.find(
     (issue) =>
       issue.requirement !== undefined &&
       (issue.code === "before_save_rule_refused" || issue.code === "required_field_missing"),
-  )?.requirement;
+  );
+  if (issue?.requirement === undefined) return undefined;
+  if (preparation !== undefined && issue.recordKey !== undefined && issue.recordKey !== "root") {
+    const parent = preparation.records.find((record) => record.recordKey === issue.recordKey);
+    if (parent === undefined) throw new Error("RELATIONSHIP_TOTAL_PARENT_MISSING");
+    console.error(
+      `[named-action] parent rule refused: rule=${issue.ruleKey ?? ("ruleKey" in issue.requirement ? issue.requirement.ruleKey : "unknown")} parent=${parent.recordId ?? issue.recordKey} reason=${issue.requirement.code}`,
+    );
+    if (!parent.canRead)
+      return {
+        code: "related_record_rule_conflict",
+        message: "This change conflicts with a rule on a related record",
+      };
+  }
+  return { code: issue.requirement.code, message: issue.requirement.message };
+};
 
 const creationFinalValues = (
   prepared: PreparedAction,
@@ -388,7 +407,6 @@ const creationFinalValues = (
   issuedAt: string,
   organizationCurrency: string | undefined,
   timeZone: string | undefined,
-  ruleExecutions: BeforeSaveRuleExecution[],
 ): Readonly<
   | { values: Record<number, Record<string, JsonValue | null>> }
   | { reason: string; ruleReason?: RuleReason }
@@ -459,7 +477,6 @@ const creationFinalValues = (
         reason: `the created record ${creation.ordinal}'s before-save rules changed a relationship after its targets were locked`,
       };
     values[creation.ordinal] = created;
-    ruleExecutions.push(execution);
   }
   return { values };
 };
@@ -905,7 +922,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                   "operation_refused",
                   `the relationship copy target ${target.recordId}'s rules changed values outside the copy plan`,
                 );
-              attempted.executions.push(execution);
             }
             let closureRules: Map<string, BeforeSaveRuleExecution> | undefined;
             if (totalPreparation.outcome === "prepared") {
@@ -930,7 +946,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 ) {
                   const execution = beginBeforeSaveRuleExecution(ruleSet);
                   closureRules.set(record.recordKey, execution);
-                  attempted.executions.push(execution);
+                  if (record.recordKey === "root") attempted.executions.push(execution);
                 }
               }
             } else if (Object.keys(composition.submittedValues).length > 0) {
@@ -1004,7 +1020,10 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                   totalPreparation.outcome === "prepared" && clock === undefined
                     ? "the relationship totals have no operation clock for the records' time zone"
                     : `the subject values the action writes did not calculate: ${describeIssues(calculated.issues)}`,
-                  ruleReasonFromIssues(calculated.issues),
+                  ruleReasonFromIssues(
+                    calculated.issues,
+                    totalPreparation.outcome === "prepared" ? totalPreparation : undefined,
+                  ),
                 );
               if (totalPreparation.outcome === "prepared" && root === undefined)
                 return safeRefusal(
@@ -1085,7 +1104,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       issuedAt,
                       settings?.currency,
                       settings?.timeZone,
-                      attempted.executions,
                     );
               if ("reason" in createdFinalValues)
                 return safeRefusal(
@@ -1203,6 +1221,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
               refused.correlationId,
               refused.outcome === "conflict" ? "conflict" : "operation_refused",
               `the subject delete was ${refused.outcome}`,
+              refused.outcome === "refused" ? refused.ruleReason : undefined,
             ),
           };
         }
@@ -1225,4 +1244,46 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       return { kind: "temporarily_unavailable" };
     },
   });
+};
+
+/** Whether a named action can run on one record for the viewer, as a page asks before it shows a control. */
+export type NamedActionAvailability =
+  | Readonly<{ kind: "available" }>
+  | Readonly<{ kind: "refused"; cause: "precondition" | "permission" }>
+  /** The preview cannot decide without the inputs the person has yet to supply; submit decides. */
+  | Readonly<{ kind: "undecided"; reason: string }>;
+
+/**
+ * Asks the action's own preview whether it would run on the record, inside a transaction the caller
+ * already verified, and writes nothing: the preview only reads (its receipt lookup is replay-only,
+ * it appends no Activity and bumps no revision), and a refusal is never recorded here, unlike an
+ * attempt to run the action. The precondition is decided by the same flow run the action itself
+ * uses, with no inputs supplied: a precondition that reads an input leaves the run unable to
+ * decide, which is reported as undecided, never as a refusal.
+ */
+export const previewNamedActionAvailability = async (
+  transaction: RequestDatabaseTransaction,
+  command: ExecuteNamedActionCommand,
+  issuedAt: string,
+  run: ActionFlowRunner,
+): Promise<NamedActionAvailability> => {
+  let preview: ActionPreparation;
+  try {
+    preview = await prepare(transaction, command, randomUUID(), true);
+  } finally {
+    await transaction.query`set local role vortex_request`;
+  }
+  if (preview.outcome === "permission_refused") return { kind: "refused", cause: "permission" };
+  if (preview.outcome !== "previewed") {
+    const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
+    return {
+      kind: "undecided",
+      reason: `the preview was ${preview.outcome}, not previewed (${reasonCode ?? "no reason code"})`,
+    };
+  }
+  const outcome = run(actionFlowSeed(preview, {}, issuedAt));
+  if (outcome.kind === "refused") return { kind: "refused", cause: "precondition" };
+  return outcome.kind === "collected"
+    ? { kind: "available" }
+    : { kind: "undecided", reason: outcome.reason };
 };

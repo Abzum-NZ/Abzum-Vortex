@@ -129,6 +129,77 @@ const SHARED_COMPONENT_STYLES_CSS = `
   border: 0;
 }
 
+/*
+ * Loading visuals. A placement's loading skeleton keeps its space from the start but stays
+ * invisible for the first 200ms, so data that arrives quickly replaces it without a flash; a slow
+ * read then shows it with the refresh motion. Content that replaces a shown skeleton enters with
+ * the same motion, in the skeleton's place. The delay is a platform constant, not a motion token:
+ * under reduced motion the skeleton still waits, then appears and is replaced without animation.
+ */
+[data-vortex-display-state="loading"] {
+  animation: vortex-loading-reveal var(--vortex-motion-refresh) var(--vortex-motion-refresh-easing)
+    200ms both;
+}
+
+[data-vortex-display-revealed] {
+  animation: vortex-loading-reveal var(--vortex-motion-refresh) var(--vortex-motion-refresh-easing)
+    both;
+}
+
+@keyframes vortex-loading-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * The page progress line: a thin bar along the top of the page outlet while the next page is
+ * fetched, so the current page can stay in place without the click looking ignored. It appears
+ * only after 200ms, so a quick change shows nothing, and it is static under reduced motion.
+ */
+[data-vortex-page-progress] {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 20;
+  height: 0.125rem;
+  overflow: hidden;
+  pointer-events: none;
+  animation: vortex-loading-reveal var(--vortex-motion-enter-exit)
+    var(--vortex-motion-enter-exit-easing) 200ms both;
+}
+
+[data-vortex-page-progress]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 40%;
+  background-color: var(--primary, var(--vortex-accent));
+  animation: vortex-page-progress calc(var(--vortex-motion-page) * 4)
+    var(--vortex-motion-page-easing) infinite;
+}
+
+@keyframes vortex-page-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-vortex-page-progress]::before {
+    width: 100%;
+    opacity: 0.6;
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-vortex-theme] {
     --vortex-motion-feedback: 0ms;

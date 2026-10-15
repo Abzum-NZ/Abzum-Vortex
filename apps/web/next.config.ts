@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   typescript: {
     tsconfigPath: "tsconfig.build.json",
   },
+  experimental: {
+    // Pages are composed per viewer from current permissions and records, so the client router
+    // never reuses a dynamic page it fetched earlier: every navigation reads the page fresh. This
+    // is Next's default, stated here because hover prefetch and navigation rely on it.
+    staleTimes: { dynamic: 0 },
+  },
   transpilePackages: [
     "@vortex/platform",
     "@vortex/definitions",

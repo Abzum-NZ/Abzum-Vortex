@@ -1,12 +1,14 @@
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
   databaseTimestamp,
   sameId,
   describeFailure,
   conditionNodeSchema,
   applicationRootIdSchema,
+  executeNamedActionCommandSchema,
   organizationRecordAccessDeclarationSchema,
   pageIdSchema,
   revisionSchema,
@@ -28,7 +30,15 @@ import {
   type JsonValue,
   type PlatformId,
 } from "../schema";
-import { evaluateTypedCondition, TypedConditionEvaluationError } from "../rules/index";
+import {
+  collectActionFlowTasks,
+  evaluateTypedCondition,
+  flowLibraryOf,
+  TypedConditionEvaluationError,
+} from "../rules/index";
+import { previewNamedActionAvailability } from "../records/action-record-port";
+import { installedNamedActions } from "../definition/installed-named-actions";
+import type { FlowNamedAction } from "../definition/flow-orchestrator-types";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -209,6 +219,61 @@ const placementPermission = (
   };
 };
 
+const literal = (task: FlowTask, name: string): string | undefined => {
+  const value = (
+    task as { properties?: Record<string, { kind: string; literal?: { value: unknown } }> }
+  ).properties?.[name];
+  return value?.kind === "literal" ? String(value.literal?.value) : undefined;
+};
+
+/**
+ * The one installed named action each placement's bound flows call, by lower-case placement id. A
+ * placement whose flows call no named action, or more than one, is bound to none: its availability
+ * is not one action's.
+ */
+const placementNamedActions = (
+  context: InstalledRuntimeContext,
+): ReadonlyMap<string, FlowNamedAction> => {
+  const application = context.releaseSet.application;
+  const named = installedNamedActions(application, context.releaseSet.modules);
+  const flows = new Map(application.content.flows.map((flow) => [flow.id.toLowerCase(), flow]));
+  const called = new Map<string, Map<string, FlowNamedAction>>();
+  for (const binding of application.content.flowBindings) {
+    const flow = flows.get(binding.flow.flowId.toLowerCase());
+    if (flow === undefined) continue;
+    const placementId = binding.controlId.toLowerCase();
+    const actions = called.get(placementId) ?? new Map<string, FlowNamedAction>();
+    called.set(placementId, actions);
+    const seen = new Set<string>();
+    const visit = (tasks: readonly FlowTask[]): void => {
+      for (const task of tasks) {
+        if (task.type === "operation.call") {
+          const key = literal(task, "operation");
+          const action = key === undefined ? undefined : named.get(key);
+          if (key !== undefined && action !== undefined) actions.set(key, action);
+        } else if (task.type === "run_flow") {
+          visitFlow(String((task as { flowId: string }).flowId));
+        }
+        for (const child of flowTaskChildLists(task)) visit(child.tasks);
+      }
+    };
+    const visitFlow = (id: string): void => {
+      const target = flows.get(id.toLowerCase());
+      if (target === undefined || seen.has(target.id)) return;
+      seen.add(target.id);
+      visit(target.tasks);
+      visit(target.errors);
+      visit(target.finally);
+    };
+    visitFlow(flow.id);
+  }
+  return new Map(
+    [...called].flatMap(([placementId, actions]) =>
+      actions.size === 1 ? [[placementId, [...actions.values()][0]!] as const] : [],
+    ),
+  );
+};
+
 /** Whether a placement's flow bindings reach an operation, and whether all of them resolve. */
 type PlacementOperationBinding = Readonly<{ required: boolean; bound: boolean }>;
 
@@ -255,12 +320,6 @@ const placementOperationBindings = (
     ...application.content.queries.map((query) => query.queryId),
     ...release.modules.flatMap((module) => module.content.queries.map((query) => query.queryId)),
   ]);
-  const literal = (task: FlowTask, name: string): string | undefined => {
-    const value = (
-      task as { properties?: Record<string, { kind: string; literal?: { value: unknown } }> }
-    ).properties?.[name];
-    return value?.kind === "literal" ? String(value.literal?.value) : undefined;
-  };
   const operationResolves = (key: string | undefined): boolean => {
     if (key === undefined) return false;
     if (actionKeys.has(key)) return true;
@@ -386,6 +445,23 @@ export const createStoredPageCapabilityService = (
     correlationId: () => context.correlationId,
   };
   const requests = createHumanOrganizationRequestService(requestDependencies);
+  const boundActions = placementNamedActions(context);
+  // Application and Module flows, one per identity: an ambiguous release is refused, not run.
+  let flowLibraryValue: ReturnType<typeof flowLibraryOf> | undefined;
+  const flowLibrary = () => {
+    if (flowLibraryValue === undefined) {
+      const flows = new Map<string, unknown>();
+      for (const flow of [
+        ...applicationRelease.content.flows,
+        ...context.releaseSet.modules.flatMap((module) => module.content.flows),
+      ]) {
+        if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
+        flows.set(String(flow.id), flow);
+      }
+      flowLibraryValue = flowLibraryOf(flows);
+    }
+    return flowLibraryValue;
+  };
 
   // Undefined means the selected page is not in the release: a lasting answer, not a fault.
   const load = async (pageId: string): Promise<FixedAuthenticatedPageCapability | undefined> => {
@@ -487,16 +563,94 @@ export const createStoredPageCapabilityService = (
   ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     // This cache belongs to one projection transaction, never another page, actor or release.
     let subjectRead: Promise<PageSubjectReadResult> | undefined;
+    // One preview per bound action, however many placements share it.
+    const availabilities = new Map<string, Promise<boolean | undefined>>();
     return createAuthenticatedPageCapabilityService({
       ...requestDependencies,
+      evaluateActionAvailability: async (transaction, scope, page, placementId) => {
+        const action = boundActions.get(placementId.toLowerCase());
+        const subjectRecordId = dependencies.selection.subjectRecordId;
+        // Only the selected page's own subject is previewed; a list or another page has none.
+        if (
+          action === undefined ||
+          subjectRecordId === undefined ||
+          !sameId(page.pageId, selectedPageId) ||
+          !(
+            page.type === "detail" ||
+            page.type === "public" ||
+            page.type === "form" ||
+            page.type === "guided_form"
+          ) ||
+          page.recordType?.state !== "resolved" ||
+          !sameId(page.recordType.recordTypeId, action.subjectRecordTypeId) ||
+          scope.applicationRootId === undefined ||
+          !sameId(scope.organizationId, context.organizationId) ||
+          !sameId(scope.applicationRootId, applicationRootId)
+        )
+          return undefined;
+        const key = action.action.actionId.toLowerCase();
+        let decision = availabilities.get(key);
+        if (decision === undefined) {
+          decision = (async () => {
+            subjectRead ??= readPageSubjectInTransaction(transaction, {
+              recordTypeId: action.subjectRecordTypeId,
+              recordId: subjectRecordId,
+            });
+            const read = await subjectRead;
+            // A transient failure is not a decision: it fails the projection instead of hiding controls.
+            if (read.kind === "temporarily_unavailable")
+              throw new Error("PAGE_SUBJECT_READ_UNAVAILABLE");
+            // A subject the viewer cannot read shows no control that acts on it.
+            if (read.kind !== "read") return false;
+            const command = executeNamedActionCommandSchema.parse({
+              contractVersion: "2.0.0",
+              commandId: randomUUID(),
+              action: action.action,
+              recordTypeId: action.subjectRecordTypeId,
+              recordId: subjectRecordId,
+              expectedConcurrencyNumber: read.row.revision,
+              inputs: {},
+            });
+            const availability = await previewNamedActionAvailability(
+              transaction,
+              command,
+              (dependencies.clock ?? (() => new Date()))().toISOString(),
+              (seed) => collectActionFlowTasks(flowLibrary(), command.action.actionId, randomUUID(), seed),
+            );
+            if (availability.kind === "undecided") {
+              console.info(
+                `[page] action availability undecided for placement ${placementId}: ${availability.reason}`,
+              );
+              return undefined;
+            }
+            return availability.kind === "available";
+          })();
+          availabilities.set(key, decision);
+        }
+        return decision;
+      },
       validateAccessEligibilityUntil: async (transaction, scope, validUntil) => {
         try {
-          if (isTrustedInstalledPageBundleContext(context)) {
-            const bundleRows = await transaction.query<{
-              readonly bundle_state: unknown;
-            }>`
-              select vortex_definition.read_active_installation_bundle_identity() as bundle_state
-            `;
+          // The installed bundle identity, the request context and the database clock are
+          // independent reads of this one transaction, so they are sent together (one round trip
+          // instead of three) and still checked in their original order.
+          const bundleRead = isTrustedInstalledPageBundleContext(context)
+            ? transaction.query<{
+                readonly bundle_state: unknown;
+              }>`
+                select vortex_definition.read_active_installation_bundle_identity() as bundle_state
+              `
+            : undefined;
+          const contextRead = transaction.query<{
+            readonly request_context: unknown;
+            readonly observed_at: unknown;
+          }>`
+            select
+              vortex_access.validated_human_request_context() - 'channel' as request_context,
+              clock_timestamp() as observed_at
+          `;
+          const [bundleRows, contextRows] = await Promise.all([bundleRead, contextRead]);
+          if (bundleRows !== undefined) {
             const bundleState = activeInstallationBundleStateSchema.safeParse(
               bundleRows[0]?.bundle_state,
             );
@@ -518,11 +672,6 @@ export const createStoredPageCapabilityService = (
               return false;
           }
 
-          const contextRows = await transaction.query<{
-            readonly request_context: unknown;
-          }>`
-            select vortex_access.validated_human_request_context() - 'channel' as request_context
-          `;
           if (contextRows.length !== 1 || contextRows[0] === undefined)
             throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CONTEXT_MISSING");
           const current = sessionContextSchema.safeParse(contextRows[0].request_context);
@@ -532,14 +681,7 @@ export const createStoredPageCapabilityService = (
             });
           if (current.data.callerKind !== "human")
             throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CONTEXT_CALLER_INVALID");
-          const clockRows = await transaction.query<{
-            readonly observed_at: unknown;
-          }>`
-            select clock_timestamp() as observed_at
-          `;
-          if (clockRows.length !== 1 || clockRows[0] === undefined)
-            throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CLOCK_MISSING");
-          const observedAt = databaseTimestamp(clockRows[0].observed_at);
+          const observedAt = databaseTimestamp(contextRows[0].observed_at);
           if (typeof observedAt !== "string")
             throw new StoredPageCapabilityFailure("STORED_PAGE_REQUEST_CLOCK_INVALID");
           const observedMilliseconds = Date.parse(observedAt);

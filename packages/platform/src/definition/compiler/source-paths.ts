@@ -65,6 +65,7 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   permission: "permissionKey",
   permission_alternatives: "permissionKeys",
   required_permission: "requiredPermissionId",
+  sets_choice_field: "setsChoiceFieldId",
   event: "eventKey",
   message: "messageKey",
   component: "componentId",

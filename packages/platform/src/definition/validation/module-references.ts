@@ -649,6 +649,47 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
           failure(output, "vortex.definition.module_action_references", "unsupported_choice"),
         );
     }
+    // An action that names the choice option it sets: the field must be a choice of its own
+    // record type with that option, every task that sets the field must set exactly that option,
+    // and no other action names the same option.
+    const namedOptions = new Set<string>();
+    for (const action of array(content.actions)) {
+      if (action.setsChoiceFieldId === undefined) continue;
+      const record = moduleRecords.get(String(action.subjectRecordTypeId));
+      const field = record
+        ? array(record.fields).find((candidate) => candidate.fieldId === action.setsChoiceFieldId)
+        : undefined;
+      const optionKey = `${String(action.setsChoiceFieldId)}:${String(action.setsChoiceOption)}`;
+      // Every assignment the action makes to the field must be the declared option, so a later
+      // task cannot leave the record in another stage.
+      const assignments = array(action.tasks).flatMap((task) => {
+        if (String(task.type) !== "record.set_fields") return [];
+        const values = object(object(task.properties).values);
+        return String(action.setsChoiceFieldId) in values
+          ? [object(values[String(action.setsChoiceFieldId)])]
+          : [];
+      });
+      const valid =
+        field?.type === "choice" &&
+        array(object(field.settings).options).some(
+          (option) => option.value === action.setsChoiceOption,
+        ) &&
+        !namedOptions.has(optionKey) &&
+        assignments.length > 0 &&
+        assignments.every(
+          (assigned) =>
+            assigned.kind === "literal" &&
+            object(assigned.literal).value === action.setsChoiceOption,
+        );
+      namedOptions.add(optionKey);
+      if (!valid)
+        failures.push(
+          failure(output, "vortex.definition.module_action_references", "broken_reference", {
+            kind: "action",
+            key: String(action.key),
+          }),
+        );
+    }
     for (const event of array(content.events)) {
       const record = moduleRecords.get(String(event.recordTypeId));
       const fields = new Map(

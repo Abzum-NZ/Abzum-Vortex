@@ -1,0 +1,1248 @@
+set local role vortex_owner;
+set local role vortex_record_adapter;
+
+create or replace function vortex_record.relationship_total_catalogue_internal()
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  installation jsonb;
+  binding jsonb;
+  content jsonb;
+  record_types jsonb := '[]'::jsonb;
+  relationships jsonb := '[]'::jsonb;
+  has_installed_rules boolean := false;
+  rule_subject_record_type_ids jsonb := '[]'::jsonb;
+  application_rule_subject_record_type_ids jsonb := '[]'::jsonb;
+  record_type jsonb;
+begin
+  installation := vortex_definition.read_current_active_installation();
+  for binding in
+    select item.value
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') item(value)
+    order by item.value ->> 'moduleRootId'
+  loop
+    begin
+      select release.compilation_output #> '{canonical,content}' into strict content
+      from vortex_definition.releases release
+      where release.root_id = (binding ->> 'moduleRootId')::uuid
+        and release.release_revision = (binding ->> 'moduleReleaseRevision')::bigint;
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_MODULE_RELEASE_LOOKUP_FAILED',
+          detail = pg_catalog.format('root=%s revision=%s cause=%s',
+            binding ->> 'moduleRootId', binding ->> 'moduleReleaseRevision', sqlstate);
+    end;
+    if pg_catalog.jsonb_typeof(content -> 'recordTypes') <> 'array' then
+      raise exception using errcode = '55000', message = 'Installed Record definitions are unavailable';
+    end if;
+    has_installed_rules := has_installed_rules or
+      pg_catalog.jsonb_array_length(coalesce(content -> 'rules', '[]'::jsonb)) > 0;
+    rule_subject_record_type_ids := rule_subject_record_type_ids || coalesce((
+      select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
+      from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
+      where rule.value ->> 'profile' = 'before_save'
+    ), '[]'::jsonb);
+    record_types := record_types || coalesce((
+      select pg_catalog.jsonb_agg(
+        item.value || pg_catalog.jsonb_build_object(
+          'moduleReleaseRevision', binding -> 'moduleReleaseRevision'
+        )
+        order by item.value ->> 'recordTypeId'
+      )
+      from pg_catalog.jsonb_array_elements(content -> 'recordTypes') item(value)
+    ), '[]'::jsonb);
+    for record_type in
+      select item.value from pg_catalog.jsonb_array_elements(content -> 'recordTypes') item(value)
+    loop
+      relationships := relationships || coalesce(record_type -> 'relationships', '[]'::jsonb);
+    end loop;
+  end loop;
+  begin
+    select release.compilation_output #> '{canonical,content}' into strict content
+    from vortex_definition.releases release
+    where release.root_id = (installation ->> 'applicationRootId')::uuid
+      and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  exception
+    when no_data_found or too_many_rows then
+      raise exception using errcode = '55000',
+        message = 'RELATIONSHIP_TOTAL_APPLICATION_RELEASE_LOOKUP_FAILED',
+        detail = pg_catalog.format('root=%s revision=%s cause=%s',
+          installation ->> 'applicationRootId',
+          installation ->> 'applicationReleaseRevision', sqlstate);
+  end;
+  has_installed_rules := has_installed_rules or
+    pg_catalog.jsonb_array_length(coalesce(content -> 'rules', '[]'::jsonb)) > 0;
+  rule_subject_record_type_ids := rule_subject_record_type_ids || coalesce((
+    select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
+    from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
+    where rule.value ->> 'profile' = 'before_save'
+  ), '[]'::jsonb);
+  application_rule_subject_record_type_ids := coalesce((
+    select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
+    from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
+    where rule.value ->> 'profile' = 'before_save'
+  ), '[]'::jsonb);
+  return pg_catalog.jsonb_build_object(
+    'recordTypes', record_types,
+    'relationships', relationships,
+    'hasInstalledRules', has_installed_rules,
+    'ruleSubjectRecordTypeIds', rule_subject_record_type_ids,
+    'applicationRuleSubjectRecordTypeIds', application_rule_subject_record_type_ids
+  );
+end
+$function$;
+
+alter function vortex_record.relationship_total_catalogue_internal() owner to vortex_record_adapter;
+
+revoke all on function vortex_record.relationship_total_catalogue_internal()
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.relationship_total_catalogue_internal()
+  to vortex_record_adapter;
+comment on function vortex_record.relationship_total_catalogue_internal() is
+  'Private relationship-total catalogue for the validated human Application request context.';
+
+create or replace function vortex_record.prepare_relationship_total_save(
+  p_command_id uuid,
+  p_operation text,
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_submitted_values jsonb,
+  p_selected_group_id uuid,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  catalogue jsonb;
+  root_type jsonb;
+  before_closure jsonb;
+  after_closure jsonb;
+  record_value jsonb;
+  locked_value jsonb;
+  prepared_records jsonb := '[]'::jsonb;
+  prepared_record jsonb;
+  total_field jsonb;
+  relationship_value jsonb;
+  source_type jsonb;
+  source_records jsonb;
+  edge_value vortex_record.relationship_edges%rowtype;
+  source_snapshot jsonb;
+  source_key text;
+  source_field_id text;
+  proposed_target jsonb;
+  context_organization_id uuid;
+  context_application_id uuid;
+  access_loaded jsonb;
+  access_decision jsonb;
+  parent_read jsonb;
+  access_bounds jsonb := pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
+  rule_module_root_id uuid;
+  rule_release_revision bigint;
+begin
+  if p_operation not in ('create', 'update')
+    or p_activity_id is null
+    or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or (p_operation = 'update' and p_selected_group_id is not null)
+    or pg_catalog.jsonb_typeof(p_submitted_values) <> 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_application_id := (context_value ->> 'applicationRootId')::uuid;
+  -- Receipt resolution remains owned by prepare_base_record_save. Merely seeing
+  -- an existing identity here avoids dependency reads or locks on replays and
+  -- changed-input duplicates.
+  if vortex_record.command_receipt_exists_internal('record_save', p_command_id) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+
+  catalogue := vortex_record.relationship_total_catalogue_internal();
+  select item.value into root_type
+  from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text);
+  if root_type is null then return pg_catalog.jsonb_build_object('outcome', 'defer'); end if;
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements_text(
+      coalesce(catalogue -> 'applicationRuleSubjectRecordTypeIds', '[]'::jsonb)
+    ) subject(record_type_id)
+    where pg_catalog.lower(subject.record_type_id) = pg_catalog.lower(p_record_type_id::text)
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+  if not exists (
+    select 1 from pg_catalog.jsonb_array_elements(root_type -> 'fields') field(value)
+    where field.value ->> 'type' = 'total'
+  ) and pg_catalog.jsonb_array_length(root_type -> 'relationships') = 0 then
+    return pg_catalog.jsonb_build_object('outcome', 'not_required');
+  end if;
+
+  -- Authorize the old source without a row lock before discovering or locking
+  -- any concrete dependency. A denied update is deferred to the base prepare,
+  -- which owns the existing content-free refusal Activity.
+  if p_operation = 'update' then
+    access_loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'update', p_record_id, null
+    );
+    if access_loaded ->> 'outcome' <> 'loaded'
+      or pg_catalog.jsonb_typeof(access_loaded -> 'declaration') <> 'object' then
+      return pg_catalog.jsonb_build_object('outcome', 'defer');
+    end if;
+    if (access_loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
+      );
+    end if;
+    access_decision := vortex_access.evaluate_organization_record_access_internal(
+      access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
+    );
+    if access_decision ->> 'outcome' <> 'allowed' then
+      perform vortex_record.append_base_save_activity_internal(
+        p_activity_id, 'update', context_organization_id,
+        array[]::uuid[], 'refused'
+      );
+      return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
+    end if;
+    access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+  end if;
+
+  before_closure := vortex_record.discover_relationship_total_closure_internal(
+    catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
+  );
+  if before_closure is null then return pg_catalog.jsonb_build_object('outcome', 'defer'); end if;
+  -- Application-owned rules have no executable Module rule set. Defer to the
+  -- base writer, which refuses a total change that cannot evaluate them.
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(before_closure -> 'records') record(value)
+    join pg_catalog.jsonb_array_elements_text(
+      coalesce(catalogue -> 'applicationRuleSubjectRecordTypeIds', '[]'::jsonb)
+    ) subject(record_type_id)
+      on pg_catalog.lower(subject.record_type_id) =
+        pg_catalog.lower(record.value ->> 'recordTypeId')
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+
+  -- Dynamic physical rows are locked in one canonical concrete identity order.
+  for record_value in
+    select item.value
+    from pg_catalog.jsonb_array_elements(before_closure -> 'records') item(value)
+    where item.value ? 'recordId'
+    order by (item.value ->> 'storageContractId')::uuid,
+      (item.value ->> 'recordId')::uuid
+  loop
+    locked_value := vortex_record.relationship_total_record_snapshot_internal(
+      catalogue,
+      (record_value ->> 'recordTypeId')::uuid,
+      (record_value ->> 'recordId')::uuid,
+      true
+    );
+    if locked_value is null then return pg_catalog.jsonb_build_object('outcome', 'restart'); end if;
+  end loop;
+
+  after_closure := vortex_record.discover_relationship_total_closure_internal(
+    catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
+  );
+  if after_closure is null then return pg_catalog.jsonb_build_object('outcome', 'restart'); end if;
+  if (before_closure -> 'signatures') is distinct from (after_closure -> 'signatures')
+    or (select pg_catalog.jsonb_agg(item.value -> 'recordKey' order by item.value ->> 'recordKey')
+        from pg_catalog.jsonb_array_elements(before_closure -> 'records') item(value))
+       is distinct from
+       (select pg_catalog.jsonb_agg(item.value -> 'recordKey' order by item.value ->> 'recordKey')
+        from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)) then
+    return pg_catalog.jsonb_build_object('outcome', 'restart');
+  end if;
+  -- A concurrent exact or changed-input duplicate may have completed while
+  -- this transaction waited for the source/parent locks. Let the existing
+  -- receipt owner distinguish replay from command-identity conflict.
+  if vortex_record.command_receipt_exists_internal('record_save', p_command_id) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+  if p_operation = 'update' and (
+    select (item.value ->> 'concurrencyNumber')::bigint
+    from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+    where item.value ->> 'recordKey' = 'root'
+  ) <> p_expected_concurrency_number then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
+    );
+  end if;
+
+  if p_operation = 'update' then
+    access_loaded := vortex_record.load_record_access_facts_internal(
+      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number
+    );
+    if access_loaded ->> 'outcome' <> 'loaded' then
+      return pg_catalog.jsonb_build_object('outcome', 'restart');
+    end if;
+    access_decision := vortex_access.evaluate_organization_record_access_internal(
+      access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
+    );
+    if access_decision ->> 'outcome' <> 'allowed' then
+      return pg_catalog.jsonb_build_object('outcome', 'restart');
+    end if;
+    access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+  end if;
+
+  -- Materialize only the declared aggregate sources for each locked affected
+  -- record. The initial source's proposed move replaces its old membership in
+  -- this transaction-visible snapshot.
+  for prepared_record in
+    select item.value
+    from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+    order by case when item.value ->> 'recordKey' = 'root' then 0 else 1 end,
+      item.value ->> 'recordKey'
+  loop
+    begin
+      select storage.module_root_id into strict rule_module_root_id
+      from vortex_record.storage_catalogue storage
+      where storage.storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+        and storage.record_type_id = (prepared_record ->> 'recordTypeId')::uuid
+        and storage.state = 'active';
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_STORAGE_LOOKUP_FAILED',
+          detail = pg_catalog.format('storage=%s type=%s cause=%s',
+            prepared_record ->> 'storageContractId',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    begin
+      select (item.value ->> 'moduleReleaseRevision')::bigint
+        into strict rule_release_revision
+      from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+      where (item.value ->> 'recordTypeId')::uuid =
+        (prepared_record ->> 'recordTypeId')::uuid;
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_RELEASE_LOOKUP_FAILED',
+          detail = pg_catalog.format('type=%s cause=%s',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    if prepared_record ->> 'recordKey' <> 'root' then
+      -- Use the established exact-record read path while the parent is locked.
+      select row_read.projection into parent_read
+      from vortex_record.read_record_projection_internal(
+        (prepared_record ->> 'recordTypeId')::uuid,
+        (prepared_record ->> 'recordId')::uuid
+      ) as row_read;
+    else
+      parent_read := null;
+    end if;
+    prepared_record := prepared_record || pg_catalog.jsonb_build_object(
+      'relationshipSources', '[]'::jsonb,
+      'canRead', prepared_record ->> 'recordKey' = 'root'
+        or coalesce(parent_read ->> 'outcome' = 'allowed', false),
+      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+        rule_module_root_id, rule_release_revision,
+        (prepared_record ->> 'recordTypeId')::uuid
+      )
+    );
+    for total_field in
+      select field.value
+      from pg_catalog.jsonb_array_elements(prepared_record -> 'recordType' -> 'fields') field(value)
+      where field.value ->> 'type' = 'total'
+      order by field.value ->> 'fieldId'
+    loop
+      select item.value into relationship_value
+      from pg_catalog.jsonb_array_elements(catalogue -> 'relationships') item(value)
+      where pg_catalog.lower(item.value ->> 'relationshipId') =
+        pg_catalog.lower(total_field #>> '{settings,relationshipId}')
+        and vortex_record.relationship_declares_target_internal(
+          item.value, (prepared_record ->> 'recordTypeId')::uuid
+        );
+      if relationship_value is null then return pg_catalog.jsonb_build_object('outcome', 'refused'); end if;
+      if exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(prepared_record -> 'relationshipSources') source(value)
+        where source.value ->> 'relationshipId' = relationship_value ->> 'relationshipId'
+      ) then
+        continue;
+      end if;
+      select item.value into source_type
+      from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+      where pg_catalog.lower(item.value ->> 'recordTypeId') =
+        pg_catalog.lower(relationship_value ->> 'fromRecordTypeId');
+      if source_type is null then return pg_catalog.jsonb_build_object('outcome', 'refused'); end if;
+      source_records := '[]'::jsonb;
+      for edge_value in
+        select edge.* from vortex_record.relationship_edges edge
+        where edge.relationship_id = (relationship_value ->> 'relationshipId')::uuid
+          and edge.from_storage_contract_id = (source_type ->> 'storageContractId')::uuid
+          and edge.to_storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+          and edge.to_record_id = (prepared_record ->> 'recordId')::uuid
+          and edge.from_organisation_id = context_organization_id
+          and edge.to_organisation_id = context_organization_id
+          and edge.from_application_root_id is not distinct from case
+            when source_type ->> 'storageScope' = 'application_contained'
+              then context_application_id else null end
+          and edge.to_application_root_id is not distinct from case
+            when prepared_record #>> '{recordType,storageScope}' = 'application_contained'
+              then context_application_id else null end
+        order by edge.from_storage_contract_id, edge.from_record_id
+      loop
+        source_snapshot := vortex_record.relationship_total_record_snapshot_internal(
+          catalogue, (relationship_value ->> 'fromRecordTypeId')::uuid,
+          edge_value.from_record_id, false
+        );
+        if source_snapshot is null
+          and vortex_record.relationship_total_source_is_retained_internal(
+            catalogue, (relationship_value ->> 'fromRecordTypeId')::uuid,
+            edge_value.from_record_id, context_organization_id, context_application_id
+          ) then
+          continue;
+        end if;
+        if source_snapshot is null then return pg_catalog.jsonb_build_object('outcome', 'restart'); end if;
+        select item.value ->> 'recordKey' into source_key
+        from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+        where item.value ->> 'recordTypeId' = source_snapshot ->> 'recordTypeId'
+          and item.value ->> 'recordId' = source_snapshot ->> 'recordId';
+        source_records := source_records || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'fieldValues', source_snapshot -> 'existingValues'
+          ) || case when source_key is null then '{}'::jsonb
+            else pg_catalog.jsonb_build_object('recordKey', source_key) end
+        );
+      end loop;
+
+      -- Replace the command source's old membership with its proposed one.
+      if pg_catalog.lower(relationship_value ->> 'fromRecordTypeId') =
+          pg_catalog.lower(p_record_type_id::text) then
+        source_field_id := pg_catalog.lower(relationship_value ->> 'fromFieldId');
+        select item.value -> 'existingValues' -> source_field_id into proposed_target
+        from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+        where item.value ->> 'recordKey' = 'root';
+        if p_submitted_values ? source_field_id then proposed_target := p_submitted_values -> source_field_id; end if;
+        source_records := coalesce((
+          select pg_catalog.jsonb_agg(item.value order by item.ordinality)
+          from pg_catalog.jsonb_array_elements(source_records) with ordinality item(value, ordinality)
+          where item.value ->> 'recordKey' is distinct from 'root'
+        ), '[]'::jsonb);
+        if pg_catalog.jsonb_typeof(proposed_target) = 'object'
+          and proposed_target ->> 'recordTypeId' = prepared_record ->> 'recordTypeId'
+          and proposed_target ->> 'recordId' = prepared_record ->> 'recordId' then
+          source_records := source_records || pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object('recordKey', 'root', 'fieldValues', '{}'::jsonb)
+          );
+        end if;
+      end if;
+      prepared_record := pg_catalog.jsonb_set(
+        prepared_record, '{relationshipSources}',
+        (prepared_record -> 'relationshipSources') || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'relationshipId', relationship_value -> 'relationshipId',
+            'sourceRecordType', source_type - 'moduleReleaseRevision',
+            'records', source_records
+          )
+        )
+      );
+    end loop;
+    prepared_records := prepared_records || pg_catalog.jsonb_build_array(prepared_record);
+  end loop;
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'prepared',
+    'correlationId', context_value -> 'correlationId',
+    'readableFieldIds', access_bounds -> 'readableFieldIds',
+    'records', prepared_records
+  );
+exception
+  when check_violation or invalid_text_representation then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+end
+$function$;
+
+alter function vortex_record.prepare_relationship_total_save(uuid,text,uuid,uuid,bigint,jsonb,uuid,uuid) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.prepare_relationship_total_save(
+  uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.prepare_relationship_total_save(
+  uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
+) to vortex_runtime;
+comment on function vortex_record.prepare_relationship_total_save(
+  uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
+) is
+  'Private Stage 2B preflight: discovers old/proposed concrete total closure, locks it canonically, re-reads it, and returns only declared evaluator inputs.';
+
+create or replace function vortex_record.prepare_record_lifecycle_totals_internal(
+  p_operation text,
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_command_id uuid,
+  p_root_snapshot jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_organization_id uuid;
+  context_application_id uuid;
+  catalogue jsonb;
+  before_closure jsonb;
+  after_closure jsonb;
+  record_value jsonb;
+  prepared_records jsonb := '[]'::jsonb;
+  prepared_record jsonb;
+  total_field jsonb;
+  relationship_value jsonb;
+  source_type jsonb;
+  source_records jsonb;
+  edge_value vortex_record.relationship_edges%rowtype;
+  source_snapshot jsonb;
+  source_key text;
+  rule_module_root_id uuid;
+  rule_release_revision bigint;
+  parent_read jsonb;
+begin
+  if p_operation is null or p_operation not in ('delete', 'restore')
+    or (p_operation = 'restore' and p_root_snapshot is not null) then
+    raise exception using errcode = '22023',
+      message = 'Record lifecycle total preparation is invalid';
+  end if;
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_application_id := (context_value ->> 'applicationRootId')::uuid;
+  catalogue := vortex_record.relationship_total_catalogue_internal();
+
+  before_closure := vortex_record.record_lifecycle_total_closure_internal(
+    catalogue, p_operation, p_record_type_id, p_record_id, p_command_id
+  );
+  if before_closure is null then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'relationship_refused',
+      'correlationId', context_value -> 'correlationId'
+    );
+  end if;
+
+  for record_value in
+    select item.value
+    from pg_catalog.jsonb_array_elements(before_closure -> 'records') as item(value)
+    where item.value ? 'recordId'
+    order by (item.value ->> 'storageContractId')::uuid,
+      (item.value ->> 'recordId')::uuid
+  loop
+    if vortex_record.relationship_total_record_snapshot_internal(
+      catalogue,
+      (record_value ->> 'recordTypeId')::uuid,
+      (record_value ->> 'recordId')::uuid,
+      true
+    ) is null then
+      return pg_catalog.jsonb_build_object('outcome', 'restart');
+    end if;
+  end loop;
+
+  after_closure := vortex_record.record_lifecycle_total_closure_internal(
+    catalogue, p_operation, p_record_type_id, p_record_id, p_command_id
+  );
+  if after_closure is null
+    or (before_closure -> 'signatures') is distinct from (after_closure -> 'signatures')
+    or (select pg_catalog.jsonb_agg(item.value -> 'recordKey' order by item.value ->> 'recordKey')
+        from pg_catalog.jsonb_array_elements(before_closure -> 'records') as item(value))
+      is distinct from
+      (select pg_catalog.jsonb_agg(item.value -> 'recordKey' order by item.value ->> 'recordKey')
+        from pg_catalog.jsonb_array_elements(after_closure -> 'records') as item(value)) then
+    return pg_catalog.jsonb_build_object('outcome', 'restart');
+  end if;
+
+  -- Application-owned rules have no executable Module rule set. A rule on
+  -- the deleted or restored root does not run for that lifecycle operation.
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(after_closure -> 'records') as item(value)
+    join pg_catalog.jsonb_array_elements_text(
+      coalesce(catalogue -> 'applicationRuleSubjectRecordTypeIds', '[]'::jsonb)
+    ) as subject(record_type_id)
+      on pg_catalog.lower(subject.record_type_id) =
+        pg_catalog.lower(item.value ->> 'recordTypeId')
+    where item.value ->> 'recordKey' <> 'root'
+  ) then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'unsupported_relationship_totals',
+      'correlationId', context_value -> 'correlationId'
+    );
+  end if;
+
+  for prepared_record in
+    select ordered.value
+    from (
+      select p_root_snapshot || pg_catalog.jsonb_build_object('recordKey', 'root') as value,
+        0 as position, '' as record_key
+      where p_root_snapshot is not null
+      union all
+      select item.value,
+        case when item.value ->> 'recordKey' = 'root' then 0 else 1 end,
+        item.value ->> 'recordKey'
+      from pg_catalog.jsonb_array_elements(after_closure -> 'records') as item(value)
+    ) as ordered
+    order by ordered.position, ordered.record_key collate "C"
+  loop
+    begin
+      select storage.module_root_id into strict rule_module_root_id
+      from vortex_record.storage_catalogue storage
+      where storage.storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+        and storage.record_type_id = (prepared_record ->> 'recordTypeId')::uuid
+        and storage.state = 'active';
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_STORAGE_LOOKUP_FAILED',
+          detail = pg_catalog.format('storage=%s type=%s cause=%s',
+            prepared_record ->> 'storageContractId',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    begin
+      select (item.value ->> 'moduleReleaseRevision')::bigint
+        into strict rule_release_revision
+      from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+      where (item.value ->> 'recordTypeId')::uuid =
+        (prepared_record ->> 'recordTypeId')::uuid;
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_RELEASE_LOOKUP_FAILED',
+          detail = pg_catalog.format('type=%s cause=%s',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    if prepared_record ->> 'recordKey' <> 'root' then
+      select row_read.projection into parent_read
+      from vortex_record.read_record_projection_internal(
+        (prepared_record ->> 'recordTypeId')::uuid,
+        (prepared_record ->> 'recordId')::uuid
+      ) as row_read;
+    else
+      parent_read := null;
+    end if;
+    prepared_record := prepared_record || pg_catalog.jsonb_build_object(
+      'relationshipSources', '[]'::jsonb,
+      'canRead', prepared_record ->> 'recordKey' = 'root'
+        or coalesce(parent_read ->> 'outcome' = 'allowed', false),
+      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+        rule_module_root_id, rule_release_revision,
+        (prepared_record ->> 'recordTypeId')::uuid
+      )
+    );
+    for total_field in
+      select field.value
+      from pg_catalog.jsonb_array_elements(prepared_record -> 'recordType' -> 'fields') as field(value)
+      where field.value ->> 'type' = 'total'
+      order by field.value ->> 'fieldId'
+    loop
+      relationship_value := null;
+      select item.value into relationship_value
+      from pg_catalog.jsonb_array_elements(catalogue -> 'relationships') as item(value)
+      where pg_catalog.lower(item.value ->> 'relationshipId') =
+          pg_catalog.lower(total_field #>> '{settings,relationshipId}')
+        and vortex_record.relationship_declares_target_internal(
+          item.value, (prepared_record ->> 'recordTypeId')::uuid
+        );
+      if relationship_value is null then
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'relationship_refused',
+          'correlationId', context_value -> 'correlationId'
+        );
+      end if;
+      if exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(prepared_record -> 'relationshipSources') as source(value)
+        where source.value ->> 'relationshipId' = relationship_value ->> 'relationshipId'
+      ) then
+        continue;
+      end if;
+      source_type := null;
+      select item.value into source_type
+      from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') as item(value)
+      where pg_catalog.lower(item.value ->> 'recordTypeId') =
+        pg_catalog.lower(relationship_value ->> 'fromRecordTypeId');
+      if source_type is null then
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'relationship_refused',
+          'correlationId', context_value -> 'correlationId'
+        );
+      end if;
+      source_records := '[]'::jsonb;
+      for edge_value in
+        select edge.* from vortex_record.relationship_edges as edge
+        where edge.relationship_id = (relationship_value ->> 'relationshipId')::uuid
+          and edge.from_storage_contract_id = (source_type ->> 'storageContractId')::uuid
+          and edge.to_storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+          and edge.to_record_id = (prepared_record ->> 'recordId')::uuid
+          and edge.from_organisation_id = context_organization_id
+          and edge.to_organisation_id = context_organization_id
+          and edge.from_application_root_id is not distinct from case
+            when source_type ->> 'storageScope' = 'application_contained'
+              then context_application_id else null end
+          and edge.to_application_root_id is not distinct from case
+            when prepared_record #>> '{recordType,storageScope}' = 'application_contained'
+              then context_application_id else null end
+        order by edge.from_storage_contract_id, edge.from_record_id
+      loop
+        source_snapshot := vortex_record.relationship_total_record_snapshot_internal(
+          catalogue, (relationship_value ->> 'fromRecordTypeId')::uuid,
+          edge_value.from_record_id, false
+        );
+        if source_snapshot is null
+          and vortex_record.relationship_total_source_is_retained_internal(
+            catalogue, (relationship_value ->> 'fromRecordTypeId')::uuid,
+            edge_value.from_record_id, context_organization_id, context_application_id
+          ) then
+          continue;
+        end if;
+        if source_snapshot is null then
+          return pg_catalog.jsonb_build_object('outcome', 'restart');
+        end if;
+        source_key := null;
+        select item.value ->> 'recordKey' into source_key
+        from pg_catalog.jsonb_array_elements(after_closure -> 'records') as item(value)
+        where item.value ->> 'recordTypeId' = source_snapshot ->> 'recordTypeId'
+          and item.value ->> 'recordId' = source_snapshot ->> 'recordId';
+        source_records := source_records || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'fieldValues', source_snapshot -> 'existingValues'
+          ) || case when source_key is null then '{}'::jsonb
+            else pg_catalog.jsonb_build_object('recordKey', source_key) end
+        );
+      end loop;
+      prepared_record := pg_catalog.jsonb_set(
+        prepared_record, '{relationshipSources}',
+        (prepared_record -> 'relationshipSources') || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'relationshipId', relationship_value -> 'relationshipId',
+            'sourceRecordType', source_type - 'moduleReleaseRevision',
+            'records', source_records
+          )
+        )
+      );
+    end loop;
+    prepared_records := prepared_records || pg_catalog.jsonb_build_array(prepared_record);
+  end loop;
+
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'prepared',
+    'correlationId', context_value -> 'correlationId',
+    'readableFieldIds', '[]'::jsonb,
+    'records', prepared_records
+  );
+end
+$function$;
+alter function vortex_record.prepare_record_lifecycle_totals_internal(text,uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.prepare_record_lifecycle_totals_internal(text, uuid, uuid, uuid, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_record.prepare_record_lifecycle_totals_internal(text, uuid, uuid, uuid, jsonb) is null;
+
+create or replace function vortex_record.prepare_named_action_command_totals(
+  p_command_id uuid,
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_submitted_values jsonb,
+  p_creations jsonb,
+  p_activity_id uuid,
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_organization_id uuid;
+  context_application_id uuid;
+  catalogue jsonb;
+  root_type jsonb;
+  creation_count integer;
+  before_closure jsonb;
+  after_closure jsonb;
+  link_targets jsonb;
+  lock_plan jsonb;
+  lock_entry jsonb;
+  locked_value jsonb;
+  target_loaded jsonb;
+  target_decision jsonb;
+  prepared_records jsonb := '[]'::jsonb;
+  prepared_record jsonb;
+  total_field jsonb;
+  relationship_value jsonb;
+  source_type jsonb;
+  source_records jsonb;
+  edge_value vortex_record.relationship_edges%rowtype;
+  source_snapshot jsonb;
+  source_key text;
+  source_field_id text;
+  proposed_target jsonb;
+  creation jsonb;
+  rule_module_root_id uuid;
+  rule_release_revision bigint;
+  access_loaded jsonb;
+  access_decision jsonb;
+  parent_read jsonb;
+  access_bounds jsonb := pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
+begin
+  if p_activity_id is null
+    or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or pg_catalog.jsonb_typeof(p_submitted_values) <> 'object'
+    or pg_catalog.jsonb_typeof(coalesce(p_creations, '[]'::jsonb)) <> 'array' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
+  creation_count := pg_catalog.jsonb_array_length(coalesce(p_creations, '[]'::jsonb));
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_application_id := (context_value ->> 'applicationRootId')::uuid;
+  if vortex_record.command_receipt_exists_internal('named_action', p_command_id) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+
+  catalogue := vortex_record.relationship_total_catalogue_internal();
+  select item.value into root_type
+  from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text);
+  if root_type is null then
+    return case when creation_count = 0
+      then pg_catalog.jsonb_build_object('outcome', 'defer')
+      else pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+      ) end;
+  end if;
+  -- A set-only action still uses the terminal writer's total probe. A command
+  -- with creations carries the exact release's rules for every closure record
+  -- to the existing Record evaluator before any row is written.
+  if creation_count = 0
+    and coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+
+  -- Authorize the subject without a row lock before discovering or locking any
+  -- concrete dependency, through the installed named declaration. Executing a
+  -- permitted action still requires no ordinary read or update authority.
+  access_loaded := vortex_record.load_named_action_facts_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+    p_action_id, p_record_type_id, p_record_id, null
+  );
+  if access_loaded ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(access_loaded -> 'declaration') <> 'object' then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+  if (access_loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
+    );
+  end if;
+  access_decision := vortex_access.evaluate_organization_record_access_internal(
+    access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
+  );
+  if access_decision ->> 'outcome' <> 'allowed' then
+    perform vortex_record.append_named_action_activity_internal(
+      p_activity_id, p_record_id, array[]::uuid[], 'refused'
+    );
+    return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
+  end if;
+  access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+
+  before_closure := vortex_record.named_action_command_closure_internal(
+    catalogue, p_record_type_id, p_record_id, p_submitted_values, p_creations
+  );
+  link_targets := vortex_record.named_action_command_link_targets_internal(
+    catalogue, p_record_type_id, p_submitted_values, p_creations
+  );
+  if before_closure is null or link_targets is null then
+    return case when creation_count = 0
+      then pg_catalog.jsonb_build_object('outcome', 'defer')
+      else pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
+      ) end;
+  end if;
+
+  -- One canonical row pass over the union of closure records (`for update`) and
+  -- concrete link targets (`for share`). Taking both here, in one ascending
+  -- concrete identity order, is what keeps a later `for share` inside the edge
+  -- writer from queueing behind an exclusive waiter while this command already
+  -- holds a resource that waiter needs.
+  select coalesce(pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'storageContractId', grouped.storage_contract_id,
+      'recordId', grouped.record_id,
+      'recordTypeId', grouped.record_type_id,
+      'mode', case when grouped.exclusive then 'update' else 'share' end
+    ) order by grouped.storage_contract_id, grouped.record_id
+  ), '[]'::jsonb)
+  into lock_plan
+  from (
+    select entry.storage_contract_id, entry.record_id, entry.record_type_id,
+      pg_catalog.bool_or(entry.exclusive) as exclusive
+    from (
+      select (item.value ->> 'storageContractId')::uuid as storage_contract_id,
+        (item.value ->> 'recordId')::uuid as record_id,
+        (item.value ->> 'recordTypeId')::uuid as record_type_id,
+        true as exclusive
+      from pg_catalog.jsonb_array_elements(before_closure -> 'records') item(value)
+      where item.value ? 'recordId'
+      union all
+      select (item.value ->> 'storageContractId')::uuid,
+        (item.value ->> 'recordId')::uuid,
+        (item.value ->> 'recordTypeId')::uuid,
+        false
+      from pg_catalog.jsonb_array_elements(link_targets) item(value)
+    ) entry
+    group by entry.storage_contract_id, entry.record_id, entry.record_type_id
+  ) grouped;
+
+  for lock_entry in
+    select item.value
+    from pg_catalog.jsonb_array_elements(lock_plan) with ordinality item(value, ordinality)
+    order by item.ordinality
+  loop
+    if lock_entry ->> 'mode' = 'update' then
+      locked_value := vortex_record.relationship_total_record_snapshot_internal(
+        catalogue, (lock_entry ->> 'recordTypeId')::uuid,
+        (lock_entry ->> 'recordId')::uuid, true
+      );
+      if locked_value is null then
+        return pg_catalog.jsonb_build_object('outcome', 'restart');
+      end if;
+    elsif not vortex_record.share_lock_named_action_target_internal(
+      catalogue, (lock_entry ->> 'recordTypeId')::uuid, (lock_entry ->> 'recordId')::uuid
+    ) then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'relationship_target_unavailable'
+      );
+    end if;
+  end loop;
+
+  -- A creation's link target is an ordinary record and keeps the ordinary read
+  -- requirement. Deciding it here, under the lock and before any write, turns
+  -- an unreadable target into a clean refusal instead of a late rollback. The
+  -- command's own subject is excluded: the named authority decided above is
+  -- sufficient for it, and requiring ordinary read would contradict #50.
+  for lock_entry in
+    select item.value
+    from pg_catalog.jsonb_array_elements(link_targets) with ordinality item(value, ordinality)
+    order by item.ordinality
+  loop
+    if (lock_entry ->> 'recordTypeId')::uuid = p_record_type_id
+      and (lock_entry ->> 'recordId')::uuid = p_record_id then
+      continue;
+    end if;
+    target_loaded := vortex_record.load_record_access_facts_internal(
+      (lock_entry ->> 'recordTypeId')::uuid, 'read',
+      (lock_entry ->> 'recordId')::uuid, null
+    );
+    if target_loaded ->> 'outcome' <> 'loaded'
+      or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'relationship_target_unavailable'
+      );
+    end if;
+    target_decision := vortex_access.evaluate_organization_record_access_internal(
+      target_loaded -> 'declaration', (lock_entry ->> 'recordId')::uuid,
+      target_loaded -> 'facts'
+    );
+    if target_decision ->> 'outcome' <> 'allowed' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'relationship_target_unavailable'
+      );
+    end if;
+  end loop;
+
+  after_closure := vortex_record.named_action_command_closure_internal(
+    catalogue, p_record_type_id, p_record_id, p_submitted_values, p_creations
+  );
+  if after_closure is null then
+    return pg_catalog.jsonb_build_object('outcome', 'restart');
+  end if;
+  if (before_closure -> 'signatures') is distinct from (after_closure -> 'signatures')
+    or (select pg_catalog.jsonb_agg(item.value -> 'recordKey' order by item.value ->> 'recordKey')
+        from pg_catalog.jsonb_array_elements(before_closure -> 'records') item(value))
+       is distinct from
+       (select pg_catalog.jsonb_agg(item.value -> 'recordKey' order by item.value ->> 'recordKey')
+        from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)) then
+    return pg_catalog.jsonb_build_object('outcome', 'restart');
+  end if;
+  if vortex_record.command_receipt_exists_internal('named_action', p_command_id) then
+    return pg_catalog.jsonb_build_object('outcome', 'defer');
+  end if;
+  if (
+    select (item.value ->> 'concurrencyNumber')::bigint
+    from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+    where item.value ->> 'recordKey' = 'root'
+  ) <> p_expected_concurrency_number then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
+    );
+  end if;
+  access_loaded := vortex_record.load_named_action_facts_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+    p_action_id, p_record_type_id, p_record_id, p_expected_concurrency_number
+  );
+  if access_loaded ->> 'outcome' <> 'loaded' then
+    return pg_catalog.jsonb_build_object('outcome', 'restart');
+  end if;
+  access_decision := vortex_access.evaluate_organization_record_access_internal(
+    access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
+  );
+  if access_decision ->> 'outcome' <> 'allowed' then
+    return pg_catalog.jsonb_build_object('outcome', 'restart');
+  end if;
+  access_bounds := vortex_access.resolve_record_field_bounds_internal(access_decision);
+
+  -- `not_required` is decided over the union of the subject type and every
+  -- creation target type, and only after the locks above, so a command that
+  -- needs no total still acquires its resources in the canonical order.
+  if not exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+    join pg_catalog.jsonb_array_elements(item.value -> 'recordType' -> 'fields') field(value)
+      on true
+    where field.value ->> 'type' = 'total'
+  ) and not exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+    where pg_catalog.jsonb_array_length(
+      coalesce(item.value -> 'recordType' -> 'relationships', '[]'::jsonb)
+    ) > 0
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'not_required');
+  end if;
+
+  for prepared_record in
+    select item.value
+    from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+    order by case when item.value ->> 'recordKey' = 'root' then 0 else 1 end,
+      item.value ->> 'recordKey'
+  loop
+    begin
+      select storage.module_root_id into strict rule_module_root_id
+      from vortex_record.storage_catalogue storage
+      where storage.storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+        and storage.record_type_id = (prepared_record ->> 'recordTypeId')::uuid
+        and storage.state = 'active';
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_STORAGE_LOOKUP_FAILED',
+          detail = pg_catalog.format('storage=%s type=%s cause=%s',
+            prepared_record ->> 'storageContractId',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    begin
+      select (item.value ->> 'moduleReleaseRevision')::bigint
+        into strict rule_release_revision
+      from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+      where (item.value ->> 'recordTypeId')::uuid =
+        (prepared_record ->> 'recordTypeId')::uuid;
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_RELEASE_LOOKUP_FAILED',
+          detail = pg_catalog.format('type=%s cause=%s',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    if prepared_record ->> 'recordKey' <> 'root' and prepared_record ? 'recordId' then
+      select row_read.projection into parent_read
+      from vortex_record.read_record_projection_internal(
+        (prepared_record ->> 'recordTypeId')::uuid,
+        (prepared_record ->> 'recordId')::uuid
+      ) as row_read;
+    else
+      parent_read := null;
+    end if;
+    prepared_record := prepared_record || pg_catalog.jsonb_build_object(
+      'relationshipSources', '[]'::jsonb,
+      'canRead', prepared_record ->> 'recordKey' = 'root'
+        or not (prepared_record ? 'recordId')
+        or coalesce(parent_read ->> 'outcome' = 'allowed', false),
+      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+        rule_module_root_id,
+        rule_release_revision,
+        (prepared_record ->> 'recordTypeId')::uuid
+      )
+    );
+    for total_field in
+      select field.value
+      from pg_catalog.jsonb_array_elements(prepared_record -> 'recordType' -> 'fields') field(value)
+      where field.value ->> 'type' = 'total'
+      order by field.value ->> 'fieldId'
+    loop
+      select item.value into relationship_value
+      from pg_catalog.jsonb_array_elements(catalogue -> 'relationships') item(value)
+      where pg_catalog.lower(item.value ->> 'relationshipId') =
+        pg_catalog.lower(total_field #>> '{settings,relationshipId}')
+        and vortex_record.relationship_declares_target_internal(
+          item.value, (prepared_record ->> 'recordTypeId')::uuid
+        );
+      if relationship_value is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      if exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(prepared_record -> 'relationshipSources') source(value)
+        where source.value ->> 'relationshipId' = relationship_value ->> 'relationshipId'
+      ) then
+        continue;
+      end if;
+      select item.value into source_type
+      from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+      where pg_catalog.lower(item.value ->> 'recordTypeId') =
+        pg_catalog.lower(relationship_value ->> 'fromRecordTypeId');
+      if source_type is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      source_records := '[]'::jsonb;
+      if prepared_record ? 'recordId' then
+        for edge_value in
+          select edge.* from vortex_record.relationship_edges edge
+          where edge.relationship_id = (relationship_value ->> 'relationshipId')::uuid
+            and edge.from_storage_contract_id = (source_type ->> 'storageContractId')::uuid
+            and edge.to_storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+            and edge.to_record_id = (prepared_record ->> 'recordId')::uuid
+            and edge.from_organisation_id = context_organization_id
+            and edge.to_organisation_id = context_organization_id
+            and edge.from_application_root_id is not distinct from case
+              when source_type ->> 'storageScope' = 'application_contained'
+                then context_application_id else null end
+            and edge.to_application_root_id is not distinct from case
+              when prepared_record #>> '{recordType,storageScope}' = 'application_contained'
+                then context_application_id else null end
+          order by edge.from_storage_contract_id, edge.from_record_id
+        loop
+          source_snapshot := vortex_record.relationship_total_record_snapshot_internal(
+            catalogue, (relationship_value ->> 'fromRecordTypeId')::uuid,
+            edge_value.from_record_id, false
+          );
+          if source_snapshot is null
+          and vortex_record.relationship_total_source_is_retained_internal(
+            catalogue, (relationship_value ->> 'fromRecordTypeId')::uuid,
+            edge_value.from_record_id, context_organization_id, context_application_id
+          ) then
+          continue;
+        end if;
+        if source_snapshot is null then
+            return pg_catalog.jsonb_build_object('outcome', 'restart');
+          end if;
+          select item.value ->> 'recordKey' into source_key
+          from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+          where item.value ->> 'recordTypeId' = source_snapshot ->> 'recordTypeId'
+            and item.value ->> 'recordId' = source_snapshot ->> 'recordId';
+          source_records := source_records || pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              'fieldValues', source_snapshot -> 'existingValues'
+            ) || case when source_key is null then '{}'::jsonb
+              else pg_catalog.jsonb_build_object('recordKey', source_key) end
+          );
+        end loop;
+      end if;
+
+      -- Replace the command source's old membership with its proposed one.
+      if pg_catalog.lower(relationship_value ->> 'fromRecordTypeId') =
+          pg_catalog.lower(p_record_type_id::text) then
+        source_field_id := pg_catalog.lower(relationship_value ->> 'fromFieldId');
+        select item.value -> 'existingValues' -> source_field_id into proposed_target
+        from pg_catalog.jsonb_array_elements(after_closure -> 'records') item(value)
+        where item.value ->> 'recordKey' = 'root';
+        if p_submitted_values ? source_field_id then
+          proposed_target := p_submitted_values -> source_field_id;
+        end if;
+        source_records := coalesce((
+          select pg_catalog.jsonb_agg(item.value order by item.ordinality)
+          from pg_catalog.jsonb_array_elements(source_records) with ordinality item(value, ordinality)
+          where item.value ->> 'recordKey' is distinct from 'root'
+        ), '[]'::jsonb);
+        if pg_catalog.jsonb_typeof(proposed_target) = 'object'
+          and proposed_target ->> 'recordTypeId' = prepared_record ->> 'recordTypeId'
+          and proposed_target ->> 'recordId' = prepared_record ->> 'recordId' then
+          source_records := source_records || pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object('recordKey', 'root', 'fieldValues', '{}'::jsonb)
+          );
+        end if;
+      end if;
+
+      -- Each creation that links to this parent through this relationship joins
+      -- its membership. A created record has no edges yet, so nothing is
+      -- removed; the evaluator substitutes its computed values by record key.
+      for creation in
+        select item.value
+        from pg_catalog.jsonb_array_elements(coalesce(p_creations, '[]'::jsonb))
+          with ordinality item(value, ordinality)
+        order by item.ordinality
+      loop
+        if pg_catalog.lower(relationship_value ->> 'fromRecordTypeId') <>
+          pg_catalog.lower((creation ->> 'recordTypeId')::uuid::text) then
+          continue;
+        end if;
+        source_field_id := pg_catalog.lower(relationship_value ->> 'fromFieldId');
+        proposed_target := creation -> 'values' -> source_field_id;
+        if pg_catalog.jsonb_typeof(proposed_target) = 'object'
+          and pg_catalog.lower(proposed_target ->> 'recordTypeId') =
+            pg_catalog.lower(prepared_record ->> 'recordTypeId')
+          and pg_catalog.lower(proposed_target ->> 'recordId') =
+            pg_catalog.lower(prepared_record ->> 'recordId') then
+          source_records := source_records || pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              'recordKey', 'create:' || (creation ->> 'ordinal'),
+              'fieldValues', '{}'::jsonb
+            )
+          );
+        end if;
+      end loop;
+
+      prepared_record := pg_catalog.jsonb_set(
+        prepared_record, '{relationshipSources}',
+        (prepared_record -> 'relationshipSources') || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'relationshipId', relationship_value -> 'relationshipId',
+            'sourceRecordType', source_type - 'moduleReleaseRevision',
+            'records', source_records
+          )
+        )
+      );
+    end loop;
+    prepared_records := prepared_records || pg_catalog.jsonb_build_array(prepared_record);
+  end loop;
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'prepared',
+    'correlationId', context_value -> 'correlationId',
+    'readableFieldIds', access_bounds -> 'readableFieldIds',
+    'records', prepared_records
+  );
+exception
+  when check_violation or invalid_text_representation then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+end
+$function$;
+
+alter function vortex_record.prepare_named_action_command_totals(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,text,uuid,bigint,uuid) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.prepare_named_action_command_totals(
+  uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.prepare_named_action_command_totals(
+  uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
+) to vortex_runtime;
+comment on function vortex_record.prepare_named_action_command_totals(
+  uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
+) is
+  'Private named-action command preflight: one merged total closure over the subject and every creation, locked once in canonical concrete identity order. Writes nothing.';
+
+reset role;

@@ -116,6 +116,7 @@ export const protectedQueryCommandSchema = z
       .refine(uniqueFieldIds, { message: "Each searchable field is named once" })
       .default([]),
     pageSize: z.number().int().min(1).max(200),
+    pageDirection: z.enum(["forward", "backward"]).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
   })
   .strict();
@@ -362,6 +363,7 @@ export const protectedQueryPageSchema = z
     rows: z.array(protectedQueryPageRowSchema).max(200),
     /** Opaque; present only when a later page may hold further permitted rows. */
     nextContinuationToken: z.string().optional(),
+    previousContinuationToken: z.string().optional(),
   })
   .strict();
 export type ProtectedQueryPage = z.infer<typeof protectedQueryPageSchema>;

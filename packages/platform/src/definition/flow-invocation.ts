@@ -9,7 +9,6 @@ import {
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
   fieldIdSchema,
-  installedNamedActionReferenceSchema,
   recordIdSchema,
   recordTypeIdSchema,
   sameId,
@@ -48,15 +47,11 @@ import type { createDatabaseApplicationBoundReleaseSetService } from "./applicat
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createDatabaseFlowStores } from "./flow-continuation-store";
 import { createFlowOrchestrator } from "./flow-orchestrator";
-import type {
-  FlowNamedAction,
-  FlowRecordType,
-  FlowRelease,
-} from "./flow-orchestrator-types";
+import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
-import type { ActionInputDefinition } from "./module-contracts";
+import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
@@ -886,7 +881,8 @@ export async function invokeInstalledFlow(
     selection: OrganizationSelectionCandidate,
   ): Promise<InstalledFlowBindings | undefined> => {
     const read = await requests.run(session, selection, async (transaction, scope) => {
-      if (scope.applicationRootId === undefined) throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
+      if (scope.applicationRootId === undefined)
+        throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
       const installation = await createHumanInstalledPageBundleContextLoader({
         transaction,
         scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
@@ -934,78 +930,31 @@ export async function invokeInstalledFlow(
       );
       if (selectedReadContext === undefined)
         throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
-      // Each record type's fields by key and by identity, for the values of a Save record task.
+      const installedActions = installedNamedActionDescriptors(application, releaseSet.modules);
+      // Each record type's fields by key and by identity, for the values of a Save record task,
+      // and the named action that declares it sets each choice option.
       const recordTypes = new Map<string, FlowRecordType>();
       for (const recordType of releaseSet.modules.flatMap((module) => module.content.recordTypes)) {
         const fieldIds = new Map<string, string>();
+        const optionActions = new Map<string, ReadonlyMap<string, FlowNamedAction>>();
         for (const field of recordType.fields) {
           fieldIds.set(String(field.key).toLowerCase(), String(field.fieldId));
           fieldIds.set(String(field.fieldId).toLowerCase(), String(field.fieldId));
         }
-        recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds });
-      }
-      // Each installed named action by its key, as the exact action a Call protected operation
-      // task names. An ambiguous key names no action rather than a guessed one.
-      const namedActions = new Map<string, FlowNamedAction>();
-      const ambiguousActionKeys = new Set<string>();
-      const addActions = (
-        owner: Readonly<{
-          ownerKind: "application" | "module";
-          ownerId: string;
-          releaseRevision: number;
-        }>,
-        actions: readonly Readonly<{
-          actionId: string;
-          key: string;
-          subjectRecordTypeId: string;
-          inputs: readonly ActionInputDefinition[];
-        }>[],
-      ) => {
-        for (const action of actions) {
-          const key = String(action.key);
-          const reference = installedNamedActionReferenceSchema.safeParse({
-            ...owner,
-            actionId: action.actionId,
-          });
-          if (!reference.success) continue;
-          if (namedActions.has(key) || ambiguousActionKeys.has(key)) {
-            namedActions.delete(key);
-            ambiguousActionKeys.add(key);
+        for (const { named, setsChoice } of installedActions) {
+          if (
+            setsChoice === undefined ||
+            named.subjectRecordTypeId.toLowerCase() !==
+              String(recordType.recordTypeId).toLowerCase()
+          )
             continue;
-          }
-          namedActions.set(key, {
-            action: reference.data,
-            subjectRecordTypeId: String(action.subjectRecordTypeId),
-            referenceInputTypes: Object.fromEntries(
-              action.inputs.flatMap((input) => {
-                if (input.type !== "record_reference") return [];
-                const resolved = input.recordTypes.flatMap((target) =>
-                  target.state === "resolved" ? [String(target.recordTypeId)] : [],
-                );
-                // An input that names several record types cannot be typed from the id alone.
-                return resolved.length === 1 ? [[input.key, resolved[0]!]] : [];
-              }),
-            ),
-          });
+          const linked = new Map(optionActions.get(setsChoice.fieldId.toLowerCase()));
+          linked.set(setsChoice.option, named);
+          optionActions.set(setsChoice.fieldId.toLowerCase(), linked);
         }
-      };
-      addActions(
-        {
-          ownerKind: "application",
-          ownerId: application.rootId,
-          releaseRevision: application.releaseRevision,
-        },
-        application.content.actions,
-      );
-      for (const module of releaseSet.modules)
-        addActions(
-          {
-            ownerKind: "module",
-            ownerId: module.rootId,
-            releaseRevision: module.releaseRevision,
-          },
-          module.content.actions,
-        );
+        recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds, optionActions });
+      }
+      const namedActions = installedNamedActions(application, releaseSet.modules);
       const installed: InstalledFlowBindings = {
         organizationId: installation.organizationId,
         applicationRootId: address.application.applicationRootId,

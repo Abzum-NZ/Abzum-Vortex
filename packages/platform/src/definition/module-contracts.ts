@@ -1087,12 +1087,8 @@ export const recordTypeDefinitionSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.fields.filter((field) => field.sortable).length > 8)
-      context.addIssue({
-        code: "custom",
-        path: ["fields"],
-        message: "A record type may declare at most eight sortable fields",
-      });
+    // The eight-sortable-field limit is a publish rule (module-source-contracts.ts). Stored releases
+    // are immutable, so this reader accepts every release that was publishable when it was made.
     if ((value.ownershipMode === "inherited") !== (value.ownershipRelationshipId !== undefined))
       context.addIssue({
         code: "custom",
@@ -1254,9 +1250,18 @@ export const actionDefinitionSchema = z
       precondition: conditionNodeSchema.optional(),
       tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
       protectedOperation: protectedOperationReferenceSchema.optional(),
+      /** The choice field and option this action sets, so a plain save of that option runs it. */
+      setsChoiceFieldId: fieldIdSchema.optional(),
+      setsChoiceOption: z.string().min(1).max(120).optional(),
     })
     .strict()
     .superRefine((value, context) => {
+      if ((value.setsChoiceFieldId === undefined) !== (value.setsChoiceOption === undefined))
+        context.addIssue({
+          code: "custom",
+          path: ["setsChoiceOption"],
+          message: "An action names the choice field and the option it sets together",
+        });
       if ((value.permissionKey === undefined) === (value.permissionKeys === undefined))
         context.addIssue({
           code: "custom",
