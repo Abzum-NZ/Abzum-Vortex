@@ -887,13 +887,17 @@ export const readPlacement = async (
         filters: state.filters,
         search: state.search,
       });
+    const fromAddress =
+      addressRequest !== undefined ||
+      (explicitRequest !== undefined && tableContinuation?.fromAddress === true);
     let resolved = await readPage(explicitRequest ?? addressRequest);
-    // A shared link opened by another account, or after an access, sort or filter change, no
-    // longer matches its sealed cursor: it opens the first page without an error.
+    // A shared link opened by another account, or after an access, release, sort or filter
+    // change, no longer matches its sealed cursor (invalid or stale): it opens the first page
+    // without an error.
     if (
-      addressRequest !== undefined &&
+      fromAddress &&
       resolved.kind === "refused" &&
-      resolved.reasonCode === "cursor_invalid"
+      (resolved.reasonCode === "cursor_invalid" || resolved.reasonCode === "cursor_stale")
     )
       resolved = await readPage(undefined);
     if (resolved.kind === "unavailable") {

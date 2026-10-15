@@ -161,6 +161,8 @@ export type BoardContinuationTarget = Readonly<{
 
 export type TableContinuationTarget = Readonly<{
   placementId: string;
+  /** The position came from the page address, so a cursor that no longer opens falls back to page one. */
+  fromAddress?: true;
   request: Readonly<{
     page: number;
     pageDirection: "forward" | "backward";

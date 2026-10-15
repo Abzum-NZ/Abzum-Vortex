@@ -67,6 +67,7 @@ export function useTablePageAddress({
       if (placementId === undefined) continue;
       void refreshPlacements([placementId], {
         placementId,
+        fromAddress: true,
         request: parseTablePagePosition(position) ?? { page: 1, pageDirection: "forward" },
       });
     }
