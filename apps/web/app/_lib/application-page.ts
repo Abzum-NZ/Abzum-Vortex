@@ -1,4 +1,4 @@
-import { sameId } from "@vortex/platform/schema";
+import { sameId, splitProjectedPage } from "@vortex/platform/schema";
 import "server-only";
 
 import {
@@ -222,6 +222,7 @@ export const loadApplicationPagePlacements = async (
   expectedInstallationRevision: number,
   boardContinuation?: BoardContinuationTarget,
   tableContinuation?: TableContinuationTarget,
+  includeContent?: boolean,
 ): Promise<ApplicationPagePlacementReadResult> => {
   const requestedIds = new Set(placementIds.map((placementId) => placementId.toLowerCase()));
   if (
@@ -256,5 +257,16 @@ export const loadApplicationPagePlacements = async (
     data[displayId] = entry?.[1] ?? { status: "error" };
     editFormBaselines[displayId] = baseline?.[1] ?? null;
   }
-  return { kind: "available", data, editFormBaselines, subject: loaded.model.subject ?? null };
+  return {
+    kind: "available",
+    data,
+    editFormBaselines,
+    subject: loaded.model.subject ?? null,
+    // The same projection the page load decided, so a control's availability is never decided twice.
+    ...(includeContent === true
+      ? {
+          content: splitProjectedPage(loaded.model.page, loaded.model.applicationShell).content,
+        }
+      : {}),
+  };
 };

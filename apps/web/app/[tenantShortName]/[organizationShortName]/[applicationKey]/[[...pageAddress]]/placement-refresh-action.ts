@@ -94,6 +94,7 @@ export async function rereadApplicationPlacements(
   placementIdsInput: unknown,
   boardContinuationInput?: unknown,
   tableContinuationInput?: unknown,
+  includeContentInput?: unknown,
 ): Promise<ApplicationPagePlacementReadResult> {
   const address = placementRefreshAddressSchema.safeParse(addressInput);
   const placementIds = placementIdsSchema.safeParse(placementIdsInput);
@@ -105,6 +106,7 @@ export async function rereadApplicationPlacements(
     tableContinuationInput === undefined
       ? undefined
       : tableContinuationTargetSchema.safeParse(tableContinuationInput);
+  const includeContent = z.literal(true).safeParse(includeContentInput).success;
   if (
     !address.success ||
     !placementIds.success ||
@@ -166,6 +168,7 @@ export async function rereadApplicationPlacements(
             },
           }
         : undefined,
+      includeContent,
     );
   } catch {
     return {

@@ -63,6 +63,7 @@ export function usePlacementRefresh({
     async (
       placementIds: readonly string[],
       tableContinuation?: TableContinuationTarget,
+      options?: Readonly<{ content?: true }>,
     ): Promise<void> => {
       const pageKey = currentPageKey;
       const requestScope = placementRequestsRef.current;
@@ -95,6 +96,7 @@ export function usePlacementRefresh({
       const loadedData = new Map<string, PageDataState>();
       const loadedBaselines = new Map<string, EditFormBaseline | null>();
       const loadedSubjects = new Map<string, ApplicationPageModel["subject"] | null>();
+      let loadedContent: Readonly<Record<string, unknown>> | undefined;
       const requestEntries = [...requests.entries()];
       for (let offset = 0; offset < requestEntries.length; offset += 500) {
         if (placementRequestsRef.current.key !== requestScope.key) return;
@@ -127,6 +129,7 @@ export function usePlacementRefresh({
               batch.map(([, request]) => request.componentId),
               undefined,
               tableContinuation,
+              options?.content,
             ));
           if (tableContinuation !== undefined && result.kind === "available")
             pageCache.settle(tableContinuation, result, cached);
@@ -146,6 +149,8 @@ export function usePlacementRefresh({
           continue;
         }
 
+        if (result.kind === "available" && result.content !== undefined)
+          loadedContent ??= result.content;
         for (const [key, request] of batch) {
           if (!isCurrentComponentRequestGeneration(requestScope.generations.get(key), request))
             continue;
@@ -242,6 +247,7 @@ export function usePlacementRefresh({
           ...(current?.navigationKey === requestScope.key ? current.editFormBaselines : {}),
         };
         let subject = current?.navigationKey === requestScope.key ? current.subject : undefined;
+        let content = current?.navigationKey === requestScope.key ? current.content : undefined;
         let changed = false;
         for (const entry of accepted) {
           if (
@@ -256,8 +262,15 @@ export function usePlacementRefresh({
           if (entry.subject !== undefined) subject = entry.subject;
           changed = true;
         }
+        if (changed && loadedContent !== undefined) content = loadedContent;
         return changed
-          ? { navigationKey: requestScope.key, data, editFormBaselines, subject }
+          ? {
+              navigationKey: requestScope.key,
+              data,
+              editFormBaselines,
+              subject,
+              ...(content === undefined ? {} : { content }),
+            }
           : current;
       });
     },
