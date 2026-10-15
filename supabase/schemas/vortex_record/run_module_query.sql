@@ -103,6 +103,17 @@ declare
   projection_last_record_id uuid;
   projection_last_sort_key text[];
   scan_record record;
+  scan_cursor refcursor;
+  cursor_position integer;
+  lookahead_record record;
+  lookahead_ids uuid[];
+  page_first_loaded jsonb;
+  decided_ids uuid[] := array[]::uuid[];
+  decided_loaded jsonb[];
+  decided_decisions jsonb[];
+  decided_bounds jsonb[];
+  decided_index integer;
+  page_batching boolean := true;
   examined integer := 0;
   budget_exhausted boolean := false;
   more_rows boolean := false;
@@ -1121,12 +1132,16 @@ begin
 
   -- A validated type set stays local to this invocation and is passed only to
   -- the fixed record adapter's private evaluator.
-  for scan_record in execute scan_sql
+  open scan_cursor scroll for execute scan_sql
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
-      filter_parameters, access_parameters, projection_batch
+      filter_parameters, access_parameters, projection_batch;
+  cursor_position := 0;
   loop
+    fetch scan_cursor into scan_record;
+    exit when not found;
+    cursor_position := cursor_position + 1;
     examined := examined + 1;
     if examined > scan_limit then
       budget_exhausted := true;
@@ -1172,15 +1187,45 @@ begin
             page_declaration, vortex_access.validated_human_request_context(),
             pg_catalog.clock_timestamp()
           );
+          page_first_loaded := page_access_loaded;
         end if;
       end if;
+      -- Decide this candidate and the page's next ones together in one set
+      -- pass; the cursor returns to this row, so the scan order, budget and
+      -- every later check stay those of the row-by-row walk.
+      if page_batching and page_first_loaded is not null
+        and not (scan_record.record_id = any (decided_ids)) then
+        lookahead_ids := array[scan_record.record_id];
+        while pg_catalog.cardinality(lookahead_ids) <= p_page_size loop
+          fetch scan_cursor into lookahead_record;
+          exit when not found;
+          lookahead_ids := pg_catalog.array_append(lookahead_ids, lookahead_record.record_id);
+        end loop;
+        move absolute cursor_position from scan_cursor;
+        select coalesce(pg_catalog.array_agg(decided.record_id), array[]::uuid[]),
+          pg_catalog.array_agg(decided.loaded), pg_catalog.array_agg(decided.decision),
+          pg_catalog.array_agg(decided.bounds)
+        into decided_ids, decided_loaded, decided_decisions, decided_bounds
+        from vortex_record.read_record_page_decisions_internal(
+          record_type_id_value, page_first_loaded, page_declaration, page_eligibility,
+          lookahead_ids
+        ) as decided;
+        page_batching := pg_catalog.cardinality(decided_ids) > 0;
+      end if;
+      -- The page's first record keeps the exact decision, which also validates
+      -- the installation-wide facts every decided record shares.
+      decided_index := case when page_access_loaded is null
+        then pg_catalog.array_position(decided_ids, scan_record.record_id) end;
       select row_read.* into read_row
       from vortex_record.read_record_projection_with_validated_types_internal(
         record_type_id_value, scan_record.record_id, page_declaration, page_eligibility,
-        validated_record_types, scan_record.projection_row, page_access_loaded
+        validated_record_types, scan_record.projection_row,
+        coalesce(decided_loaded[decided_index], page_access_loaded),
+        decided_decisions[decided_index], decided_bounds[decided_index]
       ) as row_read;
       projection := read_row.projection;
-      if validated_record_types is null then
+      -- Only the exact evaluator validates record types for reuse.
+      if validated_record_types is null and decided_index is null then
         validated_record_types := coalesce(
           read_row.read_facts -> 'validatedRecordTypes',
           case when projection ->> 'outcome' = 'allowed'
@@ -1280,7 +1325,10 @@ begin
             capability_rows,
             pg_catalog.jsonb_build_object(
               'recordId', scan_record.record_id,
-              'readFacts', read_row.read_facts,
+              -- The page pass's facts for this record when it has them, also
+              -- for the first record: the same facts every other row carries.
+              'readFacts', coalesce(decided_loaded[pg_catalog.array_position(
+                decided_ids, scan_record.record_id)], read_row.read_facts),
               'readBounds', read_row.read_bounds
             )
           );
@@ -1308,6 +1356,7 @@ begin
     last_examined_sort_key := scan_record.sort_key;
     last_examined_record_id := scan_record.record_id;
   end loop;
+  close scan_cursor;
   exit when more_rows or budget_exhausted;
   end loop;
   if projection_batch_exhausted and not more_rows then

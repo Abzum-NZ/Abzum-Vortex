@@ -98,9 +98,38 @@ begin
         limit 1
       ) as target on true
     ),
+    -- Records whose routes all have an exact set form are decided together,
+    -- per declaration, in one pass; the rest keep the composition below.
+    -- Eligibility is a function of the declaration; the record types are
+    -- grouped by their text so equal sets are compared once, not sorted.
+    grouped as materialized (
+      select assessed.declaration,
+        (pg_catalog.array_agg(assessed.eligibility))[1] as eligibility,
+        (pg_catalog.array_agg(assessed.facts -> 'recordTypes'))[1] as record_types,
+        pg_catalog.jsonb_agg(pg_catalog.jsonb_build_array(assessed.row_index, assessed.action_kind)
+          order by assessed.row_index, assessed.action_kind) as keys,
+        pg_catalog.jsonb_agg(coalesce(assessed.target_record, 'null'::jsonb)
+          order by assessed.row_index, assessed.action_kind) as records
+      from assessed
+      group by assessed.declaration, ((assessed.facts -> 'recordTypes')::text)
+    ),
+    decided as materialized (
+      select (grouped.keys -> (set_decision.ordinality::integer - 1) ->> 0)::integer as row_index,
+        grouped.keys -> (set_decision.ordinality::integer - 1) ->> 1 as action_kind,
+        set_decision.value as decision
+      from grouped
+      cross join lateral pg_catalog.jsonb_array_elements(
+        vortex_access.decide_record_page_scope_internal(
+          context_value, checked_at, grouped.declaration, grouped.eligibility,
+          grouped.record_types, grouped.records, false
+        )
+      ) with ordinality as set_decision(value, ordinality)
+      where set_decision.value <> 'null'::jsonb
+    ),
     scoped as (
-      select assessed.*,
-        case when assessed.eligibility ->> 'outcome' = 'eligible'
+      select assessed.*, decided.decision as set_decision,
+        case when decided.decision is null
+          and assessed.eligibility ->> 'outcome' = 'eligible'
           and assessed.target_ok then (
             select coalesce(pg_catalog.jsonb_agg(
               contribution.value order by
@@ -134,12 +163,14 @@ begin
           )
           else '[]'::jsonb end as matched
       from assessed
+      left join decided
+        on decided.row_index = assessed.row_index and decided.action_kind = assessed.action_kind
     )
     select coalesce(pg_catalog.jsonb_agg(
       pg_catalog.jsonb_build_object(
         'rowIndex', scoped.row_index,
         'actionKind', scoped.action_kind,
-        'decision', (
+        'decision', coalesce(scoped.set_decision, (
           (scoped.eligibility - 'outcome' - 'validUntil'
             - 'eligiblePermissions' - 'reasonCode')
           || pg_catalog.jsonb_build_object(
@@ -165,7 +196,7 @@ begin
               'matchedContributions', scoped.matched
             )
           end
-        )
+        ))
       ) order by scoped.row_index,
         case scoped.action_kind when 'update' then 1
           when 'delete' then 2 else 3 end
@@ -185,4 +216,4 @@ grant execute on function vortex_access.evaluate_organization_record_access_page
   to vortex_record_adapter;
 
 comment on function vortex_access.evaluate_organization_record_access_page_internal(jsonb,jsonb) is
-  'Private page access decision over already validated read facts: shares eligibility by action declaration while retaining exact row-scope composition for every record.';
+  'Private page access decision over already validated read facts: shares eligibility by action declaration, decides every record whose routes have an exact set form in one set pass per declaration, and keeps the exact row-scope composition for every other record.';

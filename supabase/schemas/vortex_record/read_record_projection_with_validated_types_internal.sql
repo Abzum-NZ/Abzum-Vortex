@@ -5,7 +5,9 @@ create or replace function vortex_record.read_record_projection_with_validated_t
   p_page_eligibility jsonb,
   p_validated_record_types jsonb,
   p_projection_row jsonb,
-  p_loaded jsonb
+  p_loaded jsonb,
+  p_decision jsonb,
+  p_bounds jsonb
 )
 returns table (projection jsonb, read_facts jsonb, read_bounds jsonb)
 language plpgsql
@@ -75,7 +77,15 @@ begin
     end if;
     bounds := preview_bounds;
   else
-    if p_page_eligibility ->> 'outcome' = 'eligible'
+    if p_decision is not null then
+      -- The page's set pass decided this exact record in this invocation from
+      -- these facts; only the fixed record adapter can pass it.
+      if p_loaded is null
+        or p_decision ->> 'recordId' is distinct from pg_catalog.lower(p_record_id::text) then
+        raise exception using errcode = '22023', message = 'Page record decision is invalid';
+      end if;
+      decision := p_decision;
+    elsif p_page_eligibility ->> 'outcome' = 'eligible'
       and loaded -> 'declaration' = p_page_declaration
       and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp() then
       decision := vortex_access.evaluate_record_access_with_validated_types_internal(
@@ -97,14 +107,21 @@ begin
       return next;
       return;
     end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    bounds := coalesce(case when p_decision is not null then p_bounds end,
+      vortex_access.resolve_record_field_bounds_internal(decision));
   end if;
-  bounds := bounds || pg_catalog.jsonb_build_object('readableFieldIds',
-    vortex_record.project_derived_readable_field_ids_internal(
-      loaded, p_record_type_id, p_record_id, bounds -> 'readableFieldIds',
-      bounds -> 'readableFieldIds', '[]'::jsonb
-    )
-  );
+  if p_decision is not null and bounds ? 'projectedReadableFieldIds' then
+    -- The page pass derived these once for the record type and these bounds.
+    bounds := (bounds - 'projectedReadableFieldIds')
+      || pg_catalog.jsonb_build_object('readableFieldIds', bounds -> 'projectedReadableFieldIds');
+  else
+    bounds := bounds || pg_catalog.jsonb_build_object('readableFieldIds',
+      vortex_record.project_derived_readable_field_ids_internal(
+        loaded, p_record_type_id, p_record_id, bounds -> 'readableFieldIds',
+        bounds -> 'readableFieldIds', '[]'::jsonb
+      )
+    );
+  end if;
   columns_value := loaded -> 'columns';
   -- Read-time calculations are worked out here, at one statement timestamp in
   -- the organisation's time zone, from the record's stored values. They are
@@ -179,6 +196,24 @@ create or replace function vortex_record.read_record_projection_with_validated_t
   p_page_declaration jsonb,
   p_page_eligibility jsonb,
   p_validated_record_types jsonb,
+  p_projection_row jsonb,
+  p_loaded jsonb
+)
+returns table (projection jsonb, read_facts jsonb, read_bounds jsonb)
+language sql volatile security invoker set search_path = ''
+as $function$
+  select * from vortex_record.read_record_projection_with_validated_types_internal(
+    p_record_type_id, p_record_id, p_page_declaration, p_page_eligibility,
+    p_validated_record_types, p_projection_row, p_loaded, null::jsonb, null::jsonb
+  )
+$function$;
+
+create or replace function vortex_record.read_record_projection_with_validated_types_internal(
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_page_declaration jsonb,
+  p_page_eligibility jsonb,
+  p_validated_record_types jsonb,
   p_projection_row jsonb
 )
 returns table (projection jsonb, read_facts jsonb, read_bounds jsonb)
@@ -206,9 +241,14 @@ as $function$
   )
 $function$;
 
+alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb) owner to vortex_owner;
 alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb) owner to vortex_owner;
 alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb) owner to vortex_owner;
 alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_owner;
+revoke all on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
+  to vortex_record_adapter;
 revoke all on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb)

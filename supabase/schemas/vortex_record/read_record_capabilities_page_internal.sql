@@ -33,6 +33,11 @@ declare
   action_decision jsonb;
   changeable_field_ids jsonb;
   actions text[];
+  same_jobs jsonb;
+  decisions_by_row jsonb := '{}'::jsonb;
+  same_permission_by_id jsonb;
+  same_target_meta jsonb;
+  same_context_root jsonb;
 begin
   if p_record_type_id is null or pg_catalog.jsonb_typeof(p_rows) is distinct from 'array'
     or pg_catalog.jsonb_array_length(p_rows) > 200 then
@@ -78,7 +83,18 @@ begin
           'storageContractId', target_meta -> 'storageContractId',
           'storageScope', target_meta -> 'storageScope'
         );
-    if not use_exact_row then
+    if not use_exact_row and same_jobs is not null
+      and permission_by_id = same_permission_by_id and target_meta = same_target_meta
+      and read_facts -> 'context' -> 'applicationRootId' = same_context_root then
+      -- Same permissions, record type and Application as an earlier row of the
+      -- page: the same simple action jobs.
+      jobs := jobs || (
+        select coalesce(pg_catalog.jsonb_agg(
+          job.value || pg_catalog.jsonb_build_object('rowIndex', row_index)
+          order by job.ordinality), '[]'::jsonb)
+        from pg_catalog.jsonb_array_elements(same_jobs) with ordinality as job(value, ordinality)
+      );
+    elsif not use_exact_row then
       foreach action_kind in array array['update', 'delete', 'restore'] loop
         select pg_catalog.jsonb_agg(
           pg_catalog.jsonb_build_object(
@@ -128,6 +144,15 @@ begin
           ));
         end if;
       end loop;
+      if not use_exact_row then
+        same_permission_by_id := permission_by_id;
+        same_target_meta := target_meta;
+        same_context_root := read_facts -> 'context' -> 'applicationRootId';
+        select coalesce(pg_catalog.jsonb_agg(job.value - 'rowIndex' order by job.ordinality), '[]'::jsonb)
+        into same_jobs
+        from pg_catalog.jsonb_array_elements(jobs) with ordinality as job(value, ordinality)
+        where (job.value ->> 'rowIndex')::integer = row_index;
+      end if;
     end if;
     if use_exact_row then
       -- Discard any simple jobs accumulated before a complex route was found.
@@ -176,6 +201,16 @@ begin
     ) as distinct_decision;
   end if;
 
+  -- Each row's decisions, in decision order, looked up once per row.
+  select coalesce(pg_catalog.jsonb_object_agg(grouped.row_key, grouped.items), '{}'::jsonb)
+  into decisions_by_row
+  from (
+    select item.value ->> 'rowIndex' as row_key,
+      pg_catalog.jsonb_agg(item.value order by item.ordinality) as items
+    from pg_catalog.jsonb_array_elements(decisions) with ordinality as item(value, ordinality)
+    group by item.value ->> 'rowIndex'
+  ) as grouped;
+
   for row_index in 1..pg_catalog.jsonb_array_length(p_rows) loop
     if results -> (row_index - 1) <> 'null'::jsonb then
       continue;
@@ -186,9 +221,8 @@ begin
     changeable_field_ids := '[]'::jsonb;
     for decision_item in
       select item.value
-      from pg_catalog.jsonb_array_elements(decisions)
+      from pg_catalog.jsonb_array_elements(coalesce(decisions_by_row -> row_index::text, '[]'::jsonb))
         with ordinality as item(value, ordinality)
-      where (item.value ->> 'rowIndex')::integer = row_index
       order by item.ordinality
     loop
       action_kind := decision_item ->> 'actionKind';
