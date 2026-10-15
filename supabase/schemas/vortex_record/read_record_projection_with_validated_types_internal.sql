@@ -32,6 +32,7 @@ declare
   status_key text;
   due_value jsonb;
   status_value jsonb;
+  batched boolean := false;
 begin
   if p_record_type_id is null or p_record_id is null
     or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -84,6 +85,16 @@ begin
         or p_decision ->> 'recordId' is distinct from pg_catalog.lower(p_record_id::text) then
         raise exception using errcode = '22023', message = 'Page record decision is invalid';
       end if;
+      -- It is used only while it is still current now: an allowed decision
+      -- whose own deadline (every matched permission path, share and group
+      -- membership) and the page eligibility are both still in the future.
+      -- Anything else is decided again exactly, at this row's own time.
+      batched := coalesce(p_decision ->> 'outcome' = 'allowed'
+        and (p_decision ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp()
+        and p_page_eligibility ->> 'outcome' = 'eligible'
+        and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp(), false);
+    end if;
+    if batched then
       decision := p_decision;
     elsif p_page_eligibility ->> 'outcome' = 'eligible'
       and loaded -> 'declaration' = p_page_declaration
@@ -107,10 +118,10 @@ begin
       return next;
       return;
     end if;
-    bounds := coalesce(case when p_decision is not null then p_bounds end,
+    bounds := coalesce(case when batched then p_bounds end,
       vortex_access.resolve_record_field_bounds_internal(decision));
   end if;
-  if p_decision is not null and bounds ? 'projectedReadableFieldIds' then
+  if batched and bounds ? 'projectedReadableFieldIds' then
     -- The page pass derived these once for the record type and these bounds.
     bounds := (bounds - 'projectedReadableFieldIds')
       || pg_catalog.jsonb_build_object('readableFieldIds', bounds -> 'projectedReadableFieldIds');
