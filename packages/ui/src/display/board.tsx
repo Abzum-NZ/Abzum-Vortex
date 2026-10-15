@@ -296,7 +296,13 @@ function CardMoveMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" size="sm" aria-label={`Move ${name}`} disabled={disabled} />
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`Move ${name}`}
+            disabled={disabled}
+            data-vortex-board-move={card.recordId}
+          />
         }
       >
         Move
@@ -338,6 +344,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
   const [moving, setMoving] = useState<BoardMoveCard>();
   const movingRef = useRef(false);
+  const focusAfterMoveRef = useRef<string | undefined>(undefined);
   const draggedRef = useRef<BoardMoveCard | undefined>(undefined);
 
   const buckets: BoardBucket[] =
@@ -382,6 +389,17 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
     releaseMove();
   });
 
+  // Whether the move was saved, refused or cancelled at a form, focus comes back to the card's own
+  // Move control once the move settles, so a keyboard user continues where they were.
+  useEffect(() => {
+    const recordId = focusAfterMoveRef.current;
+    if (recordId === undefined || moving !== undefined) return;
+    focusAfterMoveRef.current = undefined;
+    cardsRef.current
+      ?.querySelector<HTMLElement>(`[data-vortex-board-move="${CSS.escape(recordId)}"]`)
+      ?.focus();
+  });
+
   const moveCard = async (card: BoardMoveCard, target: BoardBucket): Promise<void> => {
     if (
       cardMoved === undefined ||
@@ -392,6 +410,7 @@ export function BoardDisplay(props: DisplayRenderProps<BoardPayload>): ReactElem
     )
       return;
     movingRef.current = true;
+    focusAfterMoveRef.current = card.recordId;
     setMoving(card);
     try {
       const accepted = await Promise.resolve(
