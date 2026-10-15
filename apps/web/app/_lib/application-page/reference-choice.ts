@@ -7,6 +7,7 @@ import {
   type InstalledRuntimeContext,
   createStoredPageCapabilityService,
   type ReferenceChoiceOption,
+  type RecordReferenceChoiceCommand,
   type RecordLinkResolver,
   recordLinkLabelKey,
   projectReferenceChoiceInputValues,
@@ -295,6 +296,50 @@ export const projectEditField = (
   };
 };
 
+/**
+ * Searches the Choice's own Query for the label of a stored value and follows the search's own
+ * continuation pages until the exact record id is offered or the search is exhausted. The work is
+ * bounded by the records sharing that label, never by the whole choice list. A value that is not
+ * offered (unreadable, or its label is not what the Choice searches) is logged with its cause.
+ */
+const findOfferedBySearch = async (
+  args: Readonly<{
+    service: ReturnType<typeof createReferenceChoiceService>;
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+  }>,
+  command: RecordReferenceChoiceCommand,
+  search: string,
+  matches: (choice: ReferenceChoiceOption) => boolean,
+): Promise<ReferenceChoiceOption | undefined> => {
+  let continuationToken: string | undefined;
+  for (;;) {
+    const result = await args.service.run(args.session, args.selection, {
+      ...command,
+      search,
+      ...(continuationToken === undefined ? {} : { continuationToken }),
+    });
+    if (
+      result.kind !== "available" ||
+      result.value.outcome !== "completed" ||
+      result.value.kind !== "record_reference"
+    ) {
+      console.error("reference_choice_selected_lookup_refused", {
+        kind: result.kind,
+        outcome: result.kind === "available" ? result.value.outcome : undefined,
+      });
+      return undefined;
+    }
+    const offered = result.value.choices.find(matches);
+    if (offered !== undefined) return offered;
+    continuationToken = result.value.nextContinuationToken;
+    if (continuationToken === undefined) {
+      console.error("reference_choice_selected_not_offered", { reason: "not_in_search_results" });
+      return undefined;
+    }
+  }
+};
+
 export type ReferenceChoiceFirstPage = Readonly<{
   field: ReferenceChoiceFormField;
   choices: readonly ReferenceChoiceOption[];
@@ -427,14 +472,7 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   if (label?.kind !== "record_link") return undefined;
   const search = label.label.trim().slice(0, 100);
   if (search === "") return undefined;
-  const result = await args.service.run(args.session, args.selection, { ...command, search });
-  if (
-    result.kind !== "available" ||
-    result.value.outcome !== "completed" ||
-    result.value.kind !== "record_reference"
-  )
-    return undefined;
-  const offered = result.value.choices.find(matches);
+  const offered = await findOfferedBySearch(args, command, search, matches);
   if (offered === undefined) return undefined;
   return project([...first.choices, offered], offered, { search });
 };
@@ -487,14 +525,7 @@ export const projectInitialReferenceChoice = async (args: Readonly<{
   if (label?.kind !== "record_link") return undefined;
   const search = label.label.trim().slice(0, 100);
   if (search === "") return undefined;
-  const result = await args.service.run(args.session, args.selection, { ...command, search });
-  if (
-    result.kind !== "available" ||
-    result.value.outcome !== "completed" ||
-    result.value.kind !== "record_reference"
-  )
-    return undefined;
-  const offered = result.value.choices.find(matches);
+  const offered = await findOfferedBySearch(args, command, search, matches);
   if (offered === undefined) return undefined;
   return project([...first.choices, offered], offered, { search });
 };
