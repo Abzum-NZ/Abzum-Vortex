@@ -1,0 +1,207 @@
+set local role vortex_owner;
+
+create index roots_installed_application_key_sort_idx
+  on vortex_definition.roots (organization_id, kind, key collate "C", root_id);
+create index releases_application_name_sort_idx
+  on vortex_definition.releases
+  ((application_address ->> 'name') collate "C" asc nulls first, root_id)
+  where application_address ->> 'kind' = 'application';
+create index registrations_installed_revision_sort_idx
+  on vortex_access.permission_registrations
+  (organization_id, registration_kind, state, source_revision, registration_owner_id);
+create or replace function vortex_access.list_installed_applications_projection(
+  p_record_ids uuid[], p_sort_key text, p_direction text,
+  p_after jsonb, p_limit integer
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language plpgsql volatile security definer set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  visible_organization_id uuid;
+  actor_identity_id uuid;
+  default_application_root_id uuid;
+  sort_column text;
+  sort_sql text;
+  keyset_sql text := '';
+  after_text text;
+  after_revision bigint;
+  after_record_id uuid;
+  comparison text;
+begin
+  if p_sort_key not in ('record_id', 'key', 'name', 'release_revision')
+    or p_direction not in ('ascending', 'descending')
+    or p_sort_key is null or p_direction is null
+    or (p_limit is not null and p_limit < 1)
+    or (p_sort_key not in ('record_id', 'key') and p_limit is null) then
+    raise exception using errcode = '22023',
+      message = 'Installed application projection bounds are invalid';
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
+      or (p_sort_key <> 'record_id' and (
+        pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+        or pg_catalog.jsonb_array_length(p_after -> 'sortKey') is distinct from 1
+        or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0)
+          not in ('string', 'null')
+      )) then
+      raise exception using errcode = '22023',
+        message = 'Installed application projection cursor is invalid';
+    end if;
+    begin
+      after_record_id := (p_after ->> 'recordId')::uuid;
+      after_text := p_after -> 'sortKey' ->> 0;
+      if p_sort_key = 'release_revision' then
+        after_revision := after_text::bigint;
+      end if;
+    exception when invalid_text_representation or numeric_value_out_of_range then
+      raise exception using errcode = '22023',
+        message = 'Installed application projection cursor is invalid';
+    end;
+    if p_sort_key in ('key', 'release_revision') and after_text is null then
+      raise exception using errcode = '22023',
+        message = 'Installed application projection cursor is invalid';
+    end if;
+  end if;
+
+  begin
+    context_value := vortex_access.validated_human_request_context();
+  exception when insufficient_privilege then
+    return;
+  end;
+  visible_organization_id := (context_value ->> 'organizationId')::uuid;
+  actor_identity_id := (context_value ->> 'identityId')::uuid;
+  if not vortex_platform.is_non_nil_uuid(visible_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(actor_identity_id::text) then
+    return;
+  end if;
+  begin
+    perform 1 from vortex_access.resolve_human_organization_scope(
+      actor_identity_id, visible_organization_id
+    );
+  exception when sqlstate '42501' or sqlstate 'P0002' then
+    return;
+  end;
+  select settings.default_application_root_id into default_application_root_id
+  from vortex_identity.organization_runtime_settings as settings
+  where settings.organization_id = visible_organization_id;
+
+  sort_column := case p_sort_key
+    when 'key' then 'root.key'
+    when 'name' then '(release.application_address ->> ''name'')'
+    when 'release_revision' then 'registration.source_revision'
+    else 'root.root_id' end;
+  comparison := case when p_direction = 'ascending' then '>' else '<' end;
+  if p_after is not null then
+    if p_sort_key = 'record_id' then
+      keyset_sql := pg_catalog.format(' and root.root_id %s $4', comparison);
+    elsif p_sort_key = 'name' and after_text is null then
+      keyset_sql := case when p_direction = 'ascending'
+        then ' and (((release.application_address ->> ''name'') is null
+            and root.root_id > $4)
+          or (release.application_address ->> ''name'') is not null)'
+        else ' and (release.application_address ->> ''name'') is null
+          and root.root_id < $4' end;
+    elsif p_sort_key = 'name' then
+      keyset_sql := pg_catalog.format(
+        ' and ((%s collate "C", root.root_id) %s ($3 collate "C", $4)%s)',
+        sort_column, comparison,
+        case when p_direction = 'descending'
+          then ' or (release.application_address ->> ''name'') is null'
+          else '' end);
+    elsif p_sort_key = 'key' then
+      keyset_sql := pg_catalog.format(
+        ' and (root.key collate "C", root.root_id) %s ($3 collate "C", $4)',
+        comparison);
+    else
+      keyset_sql := pg_catalog.format(
+        ' and (registration.source_revision, root.root_id) %s ($5, $4)',
+        comparison);
+    end if;
+  end if;
+  sort_sql := pg_catalog.format('%s%s %s%s, root.root_id %s',
+    sort_column,
+    case when p_sort_key in ('key', 'name') then ' collate "C"' else '' end,
+    case when p_direction = 'ascending' then 'asc' else 'desc' end,
+    case when p_sort_key = 'name' then
+      case when p_direction = 'ascending' then ' nulls first' else ' nulls last' end
+      else '' end,
+    case when p_direction = 'ascending' then 'asc' else 'desc' end);
+  if p_sort_key = 'record_id' then
+    sort_sql := pg_catalog.format('root.root_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end);
+  end if;
+
+  return query execute $scan$
+    select $1, root.root_id, registration.revision,
+      pg_catalog.jsonb_build_object(
+        'key', root.key,
+        'name', release.application_address ->> 'name',
+        'icon', release.application_address ->> 'icon',
+        'release_revision', registration.source_revision,
+        'is_default', root.root_id is not distinct from $7
+      )
+    from vortex_definition.roots as root
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = root.organization_id
+      and registration.registration_owner_id = root.root_id
+      and registration.registration_kind = 'application'
+      and registration.state = 'active'
+      and registration.source_definition_key = root.key
+    join vortex_definition.releases as release
+      on release.root_id = root.root_id
+      and release.release_revision = registration.source_revision
+      and release.release_version = registration.source_version
+      and release.validation_contract_version = registration.validation_contract_version
+    where root.organization_id = $1
+      and root.kind = 'application'
+      and ($2 is null or root.root_id = any($2))
+      and release.application_address ->> 'kind' = 'application'
+      and exists (
+        select 1 from vortex_definition.installation_bindings as binding
+        where binding.organization_id = $1
+          and binding.application_root_id = root.root_id
+          and binding.application_release_revision = registration.source_revision
+          and binding.state = 'active'
+      )
+  $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $6', sort_sql)
+  using visible_organization_id, p_record_ids, after_text, after_record_id,
+    after_revision, p_limit, default_application_root_id;
+end
+$function$;
+
+create or replace function vortex_access.list_installed_applications_projection(
+  p_record_id uuid, p_page_size integer
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language sql volatile security definer set search_path = ''
+as $function$
+  select projected.* from vortex_access.list_installed_applications_projection(
+    case when p_record_id is null then null else array[p_record_id] end,
+    'key', 'ascending', null, null
+  ) as projected
+$function$;
+
+revoke all on function vortex_access.list_installed_applications_projection(uuid, integer)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_installed_applications_projection(uuid, integer)
+  to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_installed_applications_projection(uuid, integer)
+  owner to vortex_owner;
+
+revoke all on function vortex_access.list_installed_applications_projection(
+  uuid[], text, text, jsonb, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_installed_applications_projection(
+  uuid[], text, text, jsonb, integer
+) to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_installed_applications_projection(
+  uuid[], text, text, jsonb, integer
+) owner to vortex_owner;
+
+reset role;
