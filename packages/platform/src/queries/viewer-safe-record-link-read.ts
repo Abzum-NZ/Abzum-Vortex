@@ -379,19 +379,25 @@ const readTitles = async (
               ${identity.moduleReleaseRevision}::bigint
             and binding.value ->> 'state' = 'active'
         )
+    ), linked as materialized (
+      select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordIds)}::text::jsonb)::uuid
+        as record_id
+    ), titles as materialized (
+      select title.record_id, title.result
+      from verified_installation
+      cross join lateral vortex_record.read_record_titles(
+        ${identity.recordTypeId}::uuid,
+        array(select linked.record_id from linked),
+        ${titleFieldId}::uuid
+      ) as title
     )
     select
       active_installation.value as active_installation,
       linked.record_id::text as record_id,
-      (
-        select vortex_record.read_record(${identity.recordTypeId}::uuid, linked.record_id)
-        from verified_installation
-      ) as result
+      titles.result as result
     from active_installation
-    cross join (
-      select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordIds)}::text::jsonb)::uuid
-        as record_id
-    ) as linked
+    cross join linked
+    left join titles on titles.record_id = linked.record_id
   `;
   const first = rows[0];
   if (first === undefined) throw contractError("RECORD_LINK_READ_ROW_INVALID", rows.length);
@@ -424,7 +430,8 @@ const readTitles = async (
 };
 
 /** One uncached protected Query reader for a target record's title or selected fields. */
-export const createViewerSafeRecordLinkReadService = () => Object.freeze({ read, readFields, readTitles });
+export const createViewerSafeRecordLinkReadService = () =>
+  Object.freeze({ read, readFields, readTitles });
 
 export type ViewerSafeRecordLinkReadService = ReturnType<
   typeof createViewerSafeRecordLinkReadService
