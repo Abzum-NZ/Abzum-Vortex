@@ -38,6 +38,8 @@ declare
   access_loaded jsonb;
   access_decision jsonb;
   access_bounds jsonb := pg_catalog.jsonb_build_object('readableFieldIds', '[]'::jsonb);
+  rule_module_root_id uuid;
+  rule_release_revision bigint;
 begin
   if p_operation not in ('create', 'update')
     or p_activity_id is null
@@ -64,7 +66,7 @@ begin
   if exists (
     select 1
     from pg_catalog.jsonb_array_elements_text(
-      coalesce(catalogue -> 'ruleSubjectRecordTypeIds', '[]'::jsonb)
+      coalesce(catalogue -> 'applicationRuleSubjectRecordTypeIds', '[]'::jsonb)
     ) subject(record_type_id)
     where pg_catalog.lower(subject.record_type_id) = pg_catalog.lower(p_record_type_id::text)
   ) then
@@ -110,13 +112,13 @@ begin
     catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
   );
   if before_closure is null then return pg_catalog.jsonb_build_object('outcome', 'defer'); end if;
-  -- A generated parent update must not bypass a rule on that parent. Rules on
-  -- unrelated installed record types do not prevent this closure from saving.
+  -- Application-owned rules have no executable Module rule set. Defer to the
+  -- base writer, which refuses a total change that cannot evaluate them.
   if exists (
     select 1
     from pg_catalog.jsonb_array_elements(before_closure -> 'records') record(value)
     join pg_catalog.jsonb_array_elements_text(
-      coalesce(catalogue -> 'ruleSubjectRecordTypeIds', '[]'::jsonb)
+      coalesce(catalogue -> 'applicationRuleSubjectRecordTypeIds', '[]'::jsonb)
     ) subject(record_type_id)
       on pg_catalog.lower(subject.record_type_id) =
         pg_catalog.lower(record.value ->> 'recordTypeId')
@@ -194,8 +196,22 @@ begin
     order by case when item.value ->> 'recordKey' = 'root' then 0 else 1 end,
       item.value ->> 'recordKey'
   loop
+    select storage.module_root_id into strict rule_module_root_id
+    from vortex_record.storage_catalogue storage
+    where storage.storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+      and storage.record_type_id = (prepared_record ->> 'recordTypeId')::uuid
+      and storage.state = 'active';
+    select (item.value ->> 'moduleReleaseRevision')::bigint
+      into strict rule_release_revision
+    from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+    where (item.value ->> 'recordTypeId')::uuid =
+      (prepared_record ->> 'recordTypeId')::uuid;
     prepared_record := prepared_record || pg_catalog.jsonb_build_object(
-      'relationshipSources', '[]'::jsonb
+      'relationshipSources', '[]'::jsonb,
+      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+        rule_module_root_id, rule_release_revision,
+        (prepared_record ->> 'recordTypeId')::uuid
+      )
     );
     for total_field in
       select field.value

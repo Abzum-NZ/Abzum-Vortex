@@ -13,6 +13,7 @@ declare
   relationships jsonb := '[]'::jsonb;
   has_installed_rules boolean := false;
   rule_subject_record_type_ids jsonb := '[]'::jsonb;
+  application_rule_subject_record_type_ids jsonb := '[]'::jsonb;
   record_type jsonb;
 begin
   installation := vortex_definition.read_current_active_installation();
@@ -61,11 +62,17 @@ begin
     from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
     where rule.value ->> 'profile' = 'before_save'
   ), '[]'::jsonb);
+  application_rule_subject_record_type_ids := coalesce((
+    select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
+    from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
+    where rule.value ->> 'profile' = 'before_save'
+  ), '[]'::jsonb);
   return pg_catalog.jsonb_build_object(
     'recordTypes', record_types,
     'relationships', relationships,
     'hasInstalledRules', has_installed_rules,
-    'ruleSubjectRecordTypeIds', rule_subject_record_type_ids
+    'ruleSubjectRecordTypeIds', rule_subject_record_type_ids,
+    'applicationRuleSubjectRecordTypeIds', application_rule_subject_record_type_ids
   );
 end
 $function$;
