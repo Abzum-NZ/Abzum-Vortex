@@ -607,8 +607,7 @@
           "sortable_fields": [
             "key",
             "label",
-            "lifecycle",
-            "accepted_permission_count"
+            "lifecycle"
           ]
         },
         "fields": [
@@ -783,7 +782,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
             "type": "whole_number",
