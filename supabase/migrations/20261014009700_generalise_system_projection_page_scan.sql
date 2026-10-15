@@ -785,7 +785,7 @@ begin
   end if;
   -- The tie-break direction is a property of the declared order, independent
   -- of whether its asynchronous physical index has finished building.
-  if pg_catalog.cardinality(sort_ids) > 1 then
+  if pg_catalog.cardinality(sort_ids) > 0 then
     record_id_direction := sort_directions[pg_catalog.cardinality(sort_ids)];
   end if;
   if pg_catalog.cardinality(sort_ids) > 1
@@ -886,9 +886,6 @@ begin
   projection_page_scan := not preview_mode and record_type_item ? 'systemProjection'
     and pg_catalog.cardinality(sort_ids) = 1
     and pg_catalog.cardinality(declared_sort_ids) = 1
-    -- Single-key page ties use ascending record ids; bounded readers tie in
-    -- their requested direction, so descending page sorts retain the view path.
-    and sort_directions[1] = 'ascending'
     and exists (
       select 1
       from pg_catalog.jsonb_array_elements_text(
