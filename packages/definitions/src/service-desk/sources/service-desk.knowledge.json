@@ -14,6 +14,14 @@
           "selection": "exact",
           "version": "1.0.0"
         }
+      },
+      {
+        "dependency_key": "system_directory",
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       }
     ],
     "record_types": [
@@ -174,6 +182,25 @@
             }
           },
           {
+            "id": "fld_article_author_person",
+            "key": "author_person",
+            "label": "Author",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.system_directory:person",
+              "reverse_key": "author_person_references",
+              "on_parent_delete": "empty_optional",
+              "application_root_required": true,
+              "legacy_person_field": "author"
+            }
+          },
+          {
             "id": "fld_article_files",
             "key": "attachments",
             "label": "Attachments",
@@ -202,7 +229,16 @@
             }
           }
         ],
-        "relationships": []
+        "relationships": [
+          {
+            "id": "fld_article_author_person_relationship",
+            "key": "author_person",
+            "from_field": "author_person",
+            "to_record_type": "vortex.system_directory:person",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "empty_optional"
+          }
+        ]
       },
       {
         "id": "rt_sd_article_case",
@@ -621,7 +657,13 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "status": { "kind": "literal", "literal": { "type": "json", "value": "published" } }
+                "status": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "published"
+                  }
+                }
               }
             }
           },

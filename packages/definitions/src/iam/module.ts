@@ -280,6 +280,21 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
           },
           {
             ...fieldBase,
+            id: "fld_iam_request_beneficiary_person",
+            key: "beneficiary_person",
+            label: "Beneficiary",
+            personal_data: "personal",
+            type: "link",
+            settings: {
+              target: "vortex.system_directory:person",
+              reverse_key: "beneficiary_references",
+              on_parent_delete: "empty_optional",
+              application_root_required: false,
+              legacy_person_field: "beneficiary",
+            },
+          },
+          {
+            ...fieldBase,
             id: "fld_iam_request_role",
             key: "target_role_key",
             label: "Target role",
@@ -370,6 +385,14 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
           },
         ],
         relationships: [
+          {
+            id: "rel_iam_request_beneficiary_person",
+            key: "beneficiary_person",
+            from_field: "beneficiary_person",
+            to_record_type: "vortex.system_directory:person",
+            cardinality: "many_to_one",
+            on_parent_delete: "empty_optional",
+          },
           {
             id: "rel_iam_request_group_record",
             key: "target_group",

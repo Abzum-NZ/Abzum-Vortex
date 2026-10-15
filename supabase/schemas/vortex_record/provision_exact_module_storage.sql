@@ -640,6 +640,12 @@ begin
     end loop;
   end loop;
 
+  -- The release declares each legacy Person field paired with its new link.
+  -- Both field columns and relationship mappings now exist for every record type.
+  perform vortex_record.backfill_person_links_internal(
+    p_module_root_id, p_module_release_revision
+  );
+
   select pg_catalog.array_agg(value order by value) into result_storage_ids
   from pg_catalog.unnest(result_storage_ids) as item(value);
   insert into vortex_record.release_provisions (
