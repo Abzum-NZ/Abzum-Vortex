@@ -54,6 +54,7 @@ import { useFlowRuntime } from "./use-flow-runtime";
 import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
+import { useTablePageAddress } from "./use-table-page-address";
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
@@ -397,6 +398,7 @@ export function ApplicationPageViewContent({
     applyDispatch,
   });
 
+  const { commitTablePage } = useTablePageAddress({ model, currentSearch, refreshPlacements });
   const { runBinding, continueBoardColumn, continueTablePage } = usePlacementActions({
     applyDispatch,
     flowRuntime,
@@ -413,6 +415,7 @@ export function ApplicationPageViewContent({
     currentSearch,
     router,
     tableContinuationScopeRef,
+    commitTablePage,
   });
 
   const { runtimeInputs } = useRuntimeInputs({

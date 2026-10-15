@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
+import { searchWithoutTablePages } from "../../../../../../_lib/table-page-position";
 
 export function useNavigationScope({
   model,
@@ -23,7 +24,8 @@ export function useNavigationScope({
   }
   const navigationBase = JSON.stringify([
     pathname,
-    currentSearch,
+    // A table page change is shallow: it keeps the frame and the data already read.
+    searchWithoutTablePages(currentSearch),
     model.pageId,
     application.installationRevision,
     application.releaseKey,

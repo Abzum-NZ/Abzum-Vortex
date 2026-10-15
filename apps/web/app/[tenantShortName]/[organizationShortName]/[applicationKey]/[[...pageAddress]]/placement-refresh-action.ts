@@ -44,6 +44,8 @@ const boardContinuationTargetSchema = z
 const tableContinuationTargetSchema = z
   .object({
     placementId: containedComponentIdSchema,
+    /** The position was read from the page address (Back, Forward), so a stale cursor opens page one. */
+    fromAddress: z.literal(true).optional(),
     request: z
       .object({
         page: z.number().int().min(1).max(100_000),
@@ -154,6 +156,7 @@ export async function rereadApplicationPlacements(
       tableContinuation?.success === true
         ? {
             placementId: tableContinuation.data.placementId,
+            ...(tableContinuation.data.fromAddress === true ? { fromAddress: true as const } : {}),
             request: {
               page: tableContinuation.data.request.page,
               pageDirection: tableContinuation.data.request.pageDirection,

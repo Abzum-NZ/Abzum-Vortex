@@ -20,6 +20,7 @@ export type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string]
 
 export type TableContinuationTarget = Readonly<{
   placementId: string;
+  fromAddress?: true;
   request: Readonly<{ page: number; pageDirection: "forward" | "backward"; continuationToken?: string }>;
 }>;
 
