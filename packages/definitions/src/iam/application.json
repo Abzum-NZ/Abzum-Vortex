@@ -4192,6 +4192,19 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_group"
+                          },
+                          "label": {
+                            "kind": "text",
+                            "value": "Target group record"
+                          }
+                        }
+                      },
+                      {
+                        "kind": "group",
+                        "properties": {
+                          "field": {
+                            "kind": "field_reference",
                             "field": "vortex.iam.core:access_request.application_context"
                           },
                           "label": {
@@ -4435,6 +4448,27 @@
                         },
                         "slots": {}
                       },
+                      "iam_request_new_group_record": {
+                        "block": {
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_group"
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": { "kind": "fill" },
+                            "height": { "kind": "content" }
+                          }
+                        },
+                        "slots": {}
+                      },
                       "iam_request_new_application": {
                         "block": {
                           "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -4579,6 +4613,7 @@
                         "iam_request_new_type",
                         "iam_request_new_role",
                         "iam_request_new_group",
+                        "iam_request_new_group_record",
                         "iam_request_new_application",
                         "iam_request_new_reason",
                         "iam_request_new_starts",
@@ -4736,6 +4771,27 @@
                         },
                         "slots": {}
                       },
+                      "iam_request_edit_group_record": {
+                        "block": {
+                          "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                          "release_version": "1.0.0"
+                        },
+                        "settings": {
+                          "field": {
+                            "kind": "field_reference",
+                            "field": "vortex.iam.core:access_request.target_group"
+                          }
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": { "kind": "fill" },
+                            "height": { "kind": "content" }
+                          }
+                        },
+                        "slots": {}
+                      },
                       "iam_request_edit_application": {
                         "block": {
                           "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -4880,6 +4936,7 @@
                         "iam_request_edit_type",
                         "iam_request_edit_role",
                         "iam_request_edit_group",
+                        "iam_request_edit_group_record",
                         "iam_request_edit_application",
                         "iam_request_edit_reason",
                         "iam_request_edit_starts",
