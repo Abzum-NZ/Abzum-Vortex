@@ -7,7 +7,8 @@ create or replace function vortex_record.run_module_query(
   p_page_size integer,
   p_after jsonb,
   p_requested_system_field_keys jsonb,
-  p_user_inputs jsonb
+  p_user_inputs jsonb,
+  p_direction text
 )
 returns jsonb
 language plpgsql
@@ -41,6 +42,7 @@ declare
   declared_sort_ids text[] := array[]::text[];
   cursor_sort jsonb := '[]'::jsonb;
   sort_directions text[] := array[]::text[];
+  scan_directions text[] := array[]::text[];
   sort_value_sql text[] := array[]::text[];
   sort_sql_types text[] := array[]::text[];
   filter_condition jsonb;
@@ -70,6 +72,7 @@ declare
   composite_sort jsonb;
   composite_index_ready boolean := false;
   record_id_direction text := 'ascending';
+  scan_record_id_direction text := 'ascending';
   -- Whether each sort key has the aligned field index (stored and sortable or unique).
   sort_index_backed boolean[] := array[]::boolean[];
   sort_stored boolean[] := array[]::boolean[];
@@ -109,7 +112,10 @@ declare
   last_examined_record_id uuid;
   last_returned_sort_key text[];
   last_returned_record_id uuid;
+  first_returned_sort_key text[];
+  first_returned_record_id uuid;
   next_value jsonb := null;
+  opposite_value jsonb := null;
   system_field_keys text[] := array[]::text[];
   system_key text;
   system_expressions text[] := array[]::text[];
@@ -156,6 +162,9 @@ declare
   preview_mode boolean := false;
 begin
   -- Request shape. Nothing here is authority; it only bounds the work.
+  if p_direction not in ('forward', 'backward') or p_direction is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
   if p_requested_field_ids is null
     or pg_catalog.jsonb_typeof(p_requested_field_ids) <> 'array'
     or pg_catalog.jsonb_array_length(p_requested_field_ids) not between 1 and 200
@@ -816,6 +825,15 @@ begin
     end loop;
   end if;
 
+  for sort_index in 1 .. pg_catalog.cardinality(sort_directions) loop
+    scan_directions := pg_catalog.array_append(scan_directions,
+      case when p_direction = 'forward' then sort_directions[sort_index]
+        when sort_directions[sort_index] = 'ascending' then 'descending'
+        else 'ascending' end);
+  end loop;
+  scan_record_id_direction := case when p_direction = 'forward' then record_id_direction
+    when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
+
   -- The scan. Identifiers come only from the storage catalogue; every value is
   -- a bound parameter. Nulls order first ascending and last descending. The
   -- order always ends with the record id, so the keyset stays total even when
@@ -825,7 +843,7 @@ begin
       then sort_value_sql[sort_index] || ' collate "C"'
       else sort_value_sql[sort_index] end;
     order_terms := pg_catalog.array_append(order_terms, column_sql || case
-      when sort_directions[sort_index] = 'ascending' then ' asc nulls first'
+      when scan_directions[sort_index] = 'ascending' then ' asc nulls first'
       else ' desc nulls last' end);
     sort_key_terms := pg_catalog.array_append(sort_key_terms, case sort_sql_types[sort_index]
       when 'timestamp with time zone' then pg_catalog.format(
@@ -841,14 +859,14 @@ begin
         else pg_catalog.format('($3[%s])::%s', sort_index, sort_sql_types[sort_index]) end;
       if after_sort_key[sort_index] is null then
         after_terms := pg_catalog.array_append(after_terms, equal_prefix || case
-          when sort_directions[sort_index] = 'ascending'
+          when scan_directions[sort_index] = 'ascending'
             then pg_catalog.format('(%s) is not null', sort_value_sql[sort_index])
           else 'false' end);
         equal_prefix := equal_prefix
           || pg_catalog.format('(%s) is null and ', sort_value_sql[sort_index]);
       else
         after_terms := pg_catalog.array_append(after_terms, equal_prefix || case
-          when sort_directions[sort_index] = 'ascending'
+          when scan_directions[sort_index] = 'ascending'
             then pg_catalog.format('coalesce(%s > %s, false)', column_sql, value_sql)
           else pg_catalog.format('((%s) is null or coalesce(%s < %s, false))',
             sort_value_sql[sort_index], column_sql, value_sql) end);
@@ -859,15 +877,16 @@ begin
   end loop;
   if after_record_id is not null then
     after_terms := pg_catalog.array_append(after_terms, equal_prefix ||
-      'stored.record_id ' || case when record_id_direction = 'ascending' then '>' else '<' end || ' $4');
+      'stored.record_id ' || case when scan_record_id_direction = 'ascending' then '>' else '<' end || ' $4');
     keyset_sql := ' and ((' || pg_catalog.array_to_string(after_terms, ') or (') || '))';
   end if;
   order_by_sql := pg_catalog.array_to_string(order_terms, ', ');
   if order_by_sql = '' then
-    order_by_sql := 'stored.record_id asc';
+    order_by_sql := 'stored.record_id ' ||
+      case when scan_record_id_direction = 'ascending' then 'asc' else 'desc' end;
   else
     order_by_sql := order_by_sql || ', stored.record_id ' ||
-      case when record_id_direction = 'ascending' then 'asc' else 'desc' end;
+      case when scan_record_id_direction = 'ascending' then 'asc' else 'desc' end;
   end if;
 
   if composite_index_ready then
@@ -896,7 +915,7 @@ begin
       end loop;
       segment_predicates := pg_catalog.array_append(segment_predicates,
         segment_prefix || ' and stored.record_id ' ||
-        case when record_id_direction = 'ascending' then '>' else '<' end || ' $4');
+        case when scan_record_id_direction = 'ascending' then '>' else '<' end || ' $4');
       for sort_index in reverse pg_catalog.cardinality(sort_ids) .. 1 loop
         segment_prefix := '';
         for prefix_index in 1 .. sort_index - 1 loop
@@ -918,7 +937,7 @@ begin
           then sort_value_sql[sort_index] || ' collate "C"'
           else sort_value_sql[sort_index] end;
         if after_sort_key[sort_index] is null then
-          if sort_directions[sort_index] = 'ascending' then
+          if scan_directions[sort_index] = 'ascending' then
             segment_predicates := pg_catalog.array_append(segment_predicates,
               segment_prefix || pg_catalog.format(' and %s is not null', sort_value_sql[sort_index]));
           end if;
@@ -928,31 +947,45 @@ begin
             else pg_catalog.format('($3[%s])::%s', sort_index, sort_sql_types[sort_index]) end;
           segment_predicates := pg_catalog.array_append(segment_predicates,
             segment_prefix || pg_catalog.format(' and %s %s %s', column_sql,
-              case when sort_directions[sort_index] = 'ascending' then '>' else '<' end,
+              case when scan_directions[sort_index] = 'ascending' then '>' else '<' end,
               value_sql));
-          if sort_directions[sort_index] = 'descending' then
+          if scan_directions[sort_index] = 'descending' then
             segment_predicates := pg_catalog.array_append(segment_predicates,
               segment_prefix || pg_catalog.format(' and %s is null', sort_value_sql[sort_index]));
           end if;
         end if;
       end loop;
     end if;
-  elsif pg_catalog.cardinality(sort_ids) = 1
-    and sort_directions[1] = 'ascending'
-    and sort_index_backed[1] then
+  elsif pg_catalog.cardinality(sort_ids) = 1 and sort_index_backed[1] then
     -- Each segment has one contiguous range in the aligned index. A NULL
     -- cursor finishes its record-id range before the value range begins.
-    if after_record_id is null or after_phase = 'null' then
+    if scan_directions[1] = 'ascending' then
+      if after_record_id is null or after_phase = 'null' then
+        segment_predicates := array[
+          pg_catalog.format(' and %s is null%s', sort_value_sql[1],
+            case when after_record_id is null then '' else ' and stored.record_id > $4' end),
+          pg_catalog.format(' and %s is not null', sort_value_sql[1])
+        ];
+      else
+        segment_predicates := array[pg_catalog.format(
+          ' and %s is not null and (%s, stored.record_id) > (%s, $4)',
+          sort_value_sql[1], column_sql, value_sql
+        )];
+      end if;
+    elsif after_record_id is null then
       segment_predicates := array[
-        pg_catalog.format(' and %s is null%s', sort_value_sql[1],
-          case when after_record_id is null then '' else ' and stored.record_id > $4' end),
-        pg_catalog.format(' and %s is not null', sort_value_sql[1])
+        pg_catalog.format(' and %s is not null', sort_value_sql[1]),
+        pg_catalog.format(' and %s is null', sort_value_sql[1])
+      ];
+    elsif after_phase = 'value' then
+      segment_predicates := array[
+        pg_catalog.format(' and %s is not null and (%s, stored.record_id) < (%s, $4)',
+          sort_value_sql[1], column_sql, value_sql),
+        pg_catalog.format(' and %s is null', sort_value_sql[1])
       ];
     else
       segment_predicates := array[pg_catalog.format(
-        ' and %s is not null and (%s, stored.record_id) > (%s, $4)',
-        sort_value_sql[1], column_sql, value_sql
-      )];
+        ' and %s is null and stored.record_id < $4', sort_value_sql[1])];
     end if;
   else
     segment_predicates := array[keyset_sql];
@@ -1145,6 +1178,10 @@ begin
             more_rows := true;
             exit;
           end if;
+          if row_count = 0 then
+            first_returned_sort_key := scan_record.sort_key;
+            first_returned_record_id := scan_record.record_id;
+          end if;
           -- Keep the read facts and field bounds for one page-level capability
           -- decision after the readable page has been selected.
           capability_rows := pg_catalog.array_append(
@@ -1218,6 +1255,21 @@ begin
     );
   end if;
 
+  if first_returned_record_id is not null then
+    opposite_value := pg_catalog.jsonb_build_object(
+      'sort', cursor_sort,
+      'sortKey', pg_catalog.to_jsonb(first_returned_sort_key),
+      'phase', case when pg_catalog.cardinality(first_returned_sort_key) > 0
+        and first_returned_sort_key[1] is null then 'null' else 'value' end,
+      'recordId', first_returned_record_id
+    );
+  end if;
+  if p_direction = 'backward' and row_count > 1 then
+    select pg_catalog.jsonb_agg(item.value order by item.ordinality desc)
+    into rows_value
+    from pg_catalog.jsonb_array_elements(rows_value) with ordinality as item(value, ordinality);
+  end if;
+
   if group_member_mode then
     return pg_catalog.jsonb_build_object(
       'outcome', 'completed',
@@ -1235,13 +1287,41 @@ begin
     'moduleReleaseRevision', resolved -> 'moduleReleaseRevision',
     'moduleReleaseVersion', resolved -> 'moduleReleaseVersion',
     'rows', rows_value,
-    'next', next_value
+    'next', next_value,
+    'opposite', opposite_value
   );
 end
 $function$;
 
+create or replace function vortex_record.run_module_query(
+  p_module_root_id uuid,
+  p_query_id uuid,
+  p_expected_release_revision bigint,
+  p_input_values jsonb,
+  p_requested_field_ids jsonb,
+  p_page_size integer,
+  p_after jsonb,
+  p_requested_system_field_keys jsonb,
+  p_user_inputs jsonb
+)
+returns jsonb
+language sql
+volatile
+security definer
+set search_path = ''
+as $function$
+  select vortex_record.run_module_query(
+    p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
+    p_requested_field_ids, p_page_size, p_after, p_requested_system_field_keys,
+    p_user_inputs - 'pageDirection', coalesce(p_user_inputs ->> 'pageDirection', 'forward')
+  );
+$function$;
+
+alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb,text) owner to vortex_record_adapter;
 alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
 
+revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb)

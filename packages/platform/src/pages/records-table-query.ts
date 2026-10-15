@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  describeFailure,
   unavailableResult,
   readRecordsTableContract,
   type BlockPropertyValueContract,
@@ -54,6 +55,7 @@ export type RecordsTableQueryRequest = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
   pageParameters?: Readonly<Record<string, JsonValue>>;
   page?: number;
+  pageDirection?: "forward" | "backward";
   continuationToken?: string;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
@@ -99,6 +101,7 @@ export type RecordsTableQueryResolution =
       /** The display payload projected from the rows and the declared contract; render this, never `rows`. */
       display: ProjectedComponentData<ProjectedTableValues>;
       nextContinuationToken?: string;
+      previousContinuationToken?: string;
     }>
   | Readonly<{ kind: "refused"; reasonCode?: ProtectedQueryRefusalReasonCode }>
   | Readonly<{ kind: "unavailable" }>;
@@ -288,6 +291,7 @@ export const buildRecordsTableQueryCommand = (
     // declared set tells the engine to search every field the record type marks searchable.
     searchableFieldIds: [],
     pageSize: contract.pageSize,
+    ...(request.pageDirection === undefined ? {} : { pageDirection: request.pageDirection }),
     ...(request.continuationToken === undefined
       ? {}
       : { continuationToken: request.continuationToken }),
@@ -326,14 +330,19 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ...(request.fieldChoiceLabels === undefined
             ? {}
             : { fieldChoiceLabels: request.fieldChoiceLabels }),
-          ...(request.fieldDateTypes === undefined ? {} : { fieldDateTypes: request.fieldDateTypes }),
-          ...(request.fieldLinkTypes === undefined ? {} : { fieldLinkTypes: request.fieldLinkTypes }),
+          ...(request.fieldDateTypes === undefined
+            ? {}
+            : { fieldDateTypes: request.fieldDateTypes }),
+          ...(request.fieldLinkTypes === undefined
+            ? {}
+            : { fieldLinkTypes: request.fieldLinkTypes }),
         },
         result.value.rows,
         (request.page ?? 1) > 1,
       );
       if (projected === undefined) return refused;
       const nextContinuationToken = result.value.nextContinuationToken;
+      const previousContinuationToken = result.value.previousContinuationToken;
       const display: ProjectedComponentData<ProjectedTableValues> =
         projected.status === "empty"
           ? projected
@@ -343,7 +352,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
                 ...projected.values,
                 page: request.page ?? 1,
                 hasNextPage: nextContinuationToken !== undefined,
+                hasPreviousPage: previousContinuationToken !== undefined,
                 ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+                ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
               },
             };
       return {
@@ -353,8 +364,12 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         pageSize: built.command.pageSize,
         rows: result.value.rows,
         ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+        ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
       };
-    } catch {
+    } catch (error) {
+      console.error(
+        `[records-table] query unavailable code=PROTECTED_QUERY_FAILED cause=${describeFailure(error)}`,
+      );
       return unavailableResult;
     }
   },
