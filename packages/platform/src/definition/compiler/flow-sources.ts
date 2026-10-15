@@ -11,6 +11,7 @@ import {
   type ResolvedFlowIdentity,
 } from "../flow-compilation";
 import {
+  findActionInputsIssue,
   findOperationCallIssue,
   namedActionInputs,
   platformOperationLookup,
@@ -214,6 +215,58 @@ export function compileCheckedFlowSources(
       issue.ruleCode,
       issue.family,
       flowIssueLocation(resolution.location("flow", issue.flowKey), { taskId: issue.taskId }),
+    );
+  // The named action that owns each option, by record type, field and option, for Save record
+  // tasks that supply the action's inputs.
+  const optionActions = new Map<string, Map<string, { required: boolean; type: string }>>();
+  const optionKey = (recordTypeId: string, fieldId: string, option: string) =>
+    `${recordTypeId} ${fieldId} ${option}`.toLowerCase();
+  const rememberOption = (
+    recordTypeId: string,
+    fieldId: string,
+    option: string,
+    inputs: unknown,
+  ) =>
+    optionActions.set(
+      optionKey(recordTypeId, fieldId, option),
+      new Map(
+        (Array.isArray(inputs) ? (inputs as JsonObject[]) : []).map((input) => [
+          String(input.key),
+          { required: input.required === true, type: String(input.type) },
+        ]),
+      ),
+    );
+  if (source.kind === "module")
+    for (const action of (asObject(source.body).actions ?? []) as JsonObject[]) {
+      if (action.sets_choice_field === undefined) continue;
+      const record = `${String(source.key)}:${String(action.record_type)}`;
+      rememberOption(
+        resolution.recordType(record).recordTypeId,
+        resolution.field(record, String(action.sets_choice_field)),
+        String(action.sets_choice_option),
+        action.inputs,
+      );
+    }
+  for (const output of dependencyOutputs)
+    if (output.kind === "module")
+      for (const action of output.canonical.content.actions as unknown as JsonObject[])
+        if (action.setsChoiceFieldId !== undefined)
+          rememberOption(
+            String(action.subjectRecordTypeId),
+            String(action.setsChoiceFieldId),
+            String(action.setsChoiceOption),
+            action.inputs,
+          );
+  const actionInputsIssue = findActionInputsIssue(flowSet.flows, (recordTypeId, fieldId, option) =>
+    optionActions.get(optionKey(recordTypeId, fieldId, option)),
+  );
+  if (actionInputsIssue !== undefined)
+    throw new DefinitionCompilationError(
+      actionInputsIssue.ruleCode,
+      actionInputsIssue.family,
+      flowIssueLocation(resolution.location("flow", actionInputsIssue.flowKey), {
+        taskId: actionInputsIssue.taskId,
+      }),
     );
   return flowSet;
 }

@@ -43,7 +43,8 @@
           "export"
         ],
         "custom_actions": [
-          "act_opp_mark_won"
+          "act_opp_mark_won",
+          "act_opp_mark_lost"
         ],
         "fields": [
           {
@@ -347,6 +348,21 @@
               "multiple": true,
               "max_files": 20
             }
+          },
+          {
+            "id": "fld_opp_lost_reason",
+            "key": "lost_reason",
+            "label": "Lost reason",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "text",
+            "settings": {
+              "max_length": 500
+            }
           }
         ],
         "relationships": [
@@ -506,7 +522,8 @@
             "stage",
             "expected_close_date",
             "payment_schedule",
-            "documents"
+            "documents",
+            "lost_reason"
           ],
           "changeable_fields": [
             "name",
@@ -550,7 +567,8 @@
             "stage",
             "expected_close_date",
             "payment_schedule",
-            "documents"
+            "documents",
+            "lost_reason"
           ],
           "changeable_fields": []
         }
@@ -583,7 +601,8 @@
             "stage",
             "expected_close_date",
             "payment_schedule",
-            "documents"
+            "documents",
+            "lost_reason"
           ],
           "changeable_fields": [
             "name",
@@ -667,7 +686,8 @@
             "stage",
             "expected_close_date",
             "payment_schedule",
-            "documents"
+            "documents",
+            "lost_reason"
           ],
           "changeable_fields": []
         }
@@ -840,6 +860,33 @@
             "stage"
           ]
         }
+      },
+      {
+        "id": "perm_named_3_mark_lost",
+        "key": "vortex.crm.opportunities.opportunity.mark_lost",
+        "label": "Mark an opportunity as lost",
+        "description": "Allows the named mark_lost operation.",
+        "record_type": "opportunity",
+        "action_kind": "named",
+        "named_action": "mark_lost",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "stage",
+            "lost_reason"
+          ],
+          "changeable_fields": [
+            "stage",
+            "lost_reason"
+          ]
+        }
       }
     ],
     "actions": [
@@ -879,6 +926,59 @@
             "type": "event.announce",
             "properties": {
               "event": "vortex.crm.opportunities.opportunity.won"
+            }
+          },
+          {
+            "id": "announce_opportunity_stage_changed",
+            "type": "event.announce",
+            "properties": {
+              "event": "vortex.crm.opportunities.opportunity.stage_changed"
+            }
+          }
+        ]
+      },
+      {
+        "id": "act_opp_mark_lost",
+        "key": "vortex.crm.opportunities.opportunity.mark_lost",
+        "label": "Mark opportunity lost",
+        "record_type": "opportunity",
+        "permission": "vortex.crm.opportunities.opportunity.mark_lost",
+        "sets_choice_field": "stage",
+        "sets_choice_option": "lost",
+        "shareable": false,
+        "inputs": [
+          {
+            "key": "lost_reason",
+            "label": "Lost reason",
+            "required": true,
+            "type": "text"
+          }
+        ],
+        "precondition": {
+          "field": "stage",
+          "operator": "in",
+          "value": [
+            "discovery",
+            "qualified",
+            "proposal",
+            "negotiation"
+          ]
+        },
+        "tasks": [
+          {
+            "id": "set_stage_lost",
+            "type": "record.set_fields",
+            "properties": {
+              "values": {
+                "stage": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "lost"
+                  }
+                },
+                "lost_reason": "{{ inputs.lost_reason }}"
+              }
             }
           },
           {
