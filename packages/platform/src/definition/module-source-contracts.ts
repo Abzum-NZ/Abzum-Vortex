@@ -554,6 +554,8 @@ const moduleSourceActionSchema = z
     tasks: sourceProvenanceUnchanged(
       z.array(sourceActionTaskSchema).max(10).superRefine(refineActionTaskIds),
     ),
+    sets_choice_field: sourceProvenanceTarget(builderKeySchema.optional(), ["setsChoiceFieldId"]),
+    sets_choice_option: sourceProvenanceUnchanged(z.string().min(1).max(120).optional()),
     protected_operation: sourceProvenanceTarget(
       moduleSourceProtectedOperationKeySchema.optional(),
       [
@@ -572,6 +574,12 @@ const moduleSourceActionSchema = z
         code: "custom",
         path: ["protected_operation"],
         message: "An action targets either ordered tasks or one registered protected operation",
+      });
+    if ((value.sets_choice_field === undefined) !== (value.sets_choice_option === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["sets_choice_option"],
+        message: "An action names the choice field and the option it sets together",
       });
     if ((value.permission === undefined) === (value.permission_alternatives === undefined))
       context.addIssue({
