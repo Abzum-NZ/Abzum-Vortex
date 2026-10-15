@@ -19,7 +19,9 @@ declare
   settings_default_application_root_id uuid;
   settings_extension_values jsonb;
 begin
-  if p_sort_key is distinct from 'record_id'
+  -- One settings row per organisation, so ordering is irrelevant: record_id and the projection's
+  -- declared sortable field (language) are both accepted.
+  if p_sort_key is null or p_sort_key not in ('record_id', 'language')
     or p_direction not in ('ascending', 'descending')
     or p_direction is null
     or (p_limit is not null and p_limit < 1) then
