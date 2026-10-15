@@ -906,15 +906,20 @@ begin
       case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
     end;
+  if p_limit is not null then
+    scan_sql := scan_sql || ' limit $5';
+  end if;
 
   for candidate in execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_record_id, after_text
+    after_record_id, after_text, p_limit
   loop
     if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
-      continue;
+      raise exception using errcode = '23514',
+        message = 'Application role template release roles are invalid';
     end if;
     if pg_catalog.jsonb_array_length(candidate.roles) not between 1 and 100 then
-      continue;
+      raise exception using errcode = '23514',
+        message = 'Application role template release roles are invalid';
     end if;
     seen_role_ids := array[]::uuid[];
     valid_roles := true;
@@ -949,7 +954,8 @@ begin
       end if;
     end loop;
     if not valid_roles or selected_template is null then
-      continue;
+      raise exception using errcode = '23514',
+        message = 'Application role template release role identity is invalid';
     end if;
     if candidate.key is distinct from selected_template ->> 'key'
       or candidate.label is distinct from selected_template ->> 'name' then
