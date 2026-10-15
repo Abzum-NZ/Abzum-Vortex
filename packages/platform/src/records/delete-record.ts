@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  correlationIdSchema,
-  recordIdSchema,
-  type SaveRecordCommand,
-} from "../schema";
+import { correlationIdSchema, recordIdSchema, type SaveRecordCommand } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   calculateLockedRelationshipTotalSave,
@@ -18,6 +14,13 @@ import {
   revision,
 } from "./save-record";
 import { operationClock } from "./field-candidate";
+import {
+  beforeSaveRuleRefusedIssueCode,
+  beforeSaveRuleUnavailableIssueCode,
+  beginBeforeSaveRuleExecution,
+  parseBeforeSaveRuleSet,
+  type BeforeSaveRuleExecution,
+} from "./before-save-rules";
 
 type Row = DatabaseRow & { readonly result: unknown };
 
@@ -51,6 +54,7 @@ type RecordLifecycleRefusal = Readonly<{
   recordId: string;
   correlationId: string;
   reason: RecordLifecycleRefusalReason;
+  ruleReason?: Readonly<{ code: string; message: string }>;
 }>;
 
 export type RecordDeleteResult =
@@ -146,13 +150,13 @@ const parseDatabaseOutcome = (candidate: unknown): DatabaseOutcome => {
 };
 
 const one = <Value>(rows: readonly Value[]): Value => {
-  if (rows.length !== 1 || rows[0] === undefined) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
   return rows[0];
 };
 
 export type Settled<Result> =
-  | Readonly<{ kind: "restart" }>
-  | Readonly<{ kind: "result"; value: Result }>;
+  Readonly<{ kind: "restart" }> | Readonly<{ kind: "result"; value: Result }>;
 
 /**
  * Carries the command's settled outcome out of a transaction that must roll
@@ -215,7 +219,21 @@ const rollBack = (
   }
 };
 
-const refuseCalculation = (recordId: string, correlationId: string): never => {
+const refuseCalculation = (
+  recordId: string,
+  correlationId: string,
+  issues: readonly Readonly<{
+    code: string;
+    recordKey: string;
+    requirement?: Readonly<{ code: string; message: string }>;
+  }>[] = [],
+): never => {
+  console.error(
+    `[record] lifecycle totals refused: ${issues.map((issue) => `${issue.recordKey}:${issue.code}${issue.requirement ? `:${issue.requirement.code}` : ""}`).join(",") || "operation_clock_unavailable"}`,
+  );
+  const ruleReason = issues.find(
+    (issue) => issue.code === beforeSaveRuleRefusedIssueCode && issue.requirement !== undefined,
+  )?.requirement;
   throw new RecordLifecycleRollback({
     kind: "result",
     value: {
@@ -223,6 +241,7 @@ const refuseCalculation = (recordId: string, correlationId: string): never => {
       recordId,
       correlationId,
       reason: "calculation_refused",
+      ...(ruleReason === undefined ? {} : { ruleReason }),
     } satisfies RecordLifecycleRefusal,
   });
 };
@@ -240,20 +259,37 @@ const calculateGeneratedValues = (
   preparation: LockedRelationshipTotalPreparation,
   issuedAt: string,
   settings: RuntimeSettings,
-): Extract<CalculateRelationshipTotalSaveResult, { success: true }> | undefined => {
+): CalculateRelationshipTotalSaveResult | undefined => {
   const clock = operationClock(
     preparation.records.map((record) => record.recordType),
     issuedAt,
     settings?.timeZone,
   );
   if (clock === undefined) return undefined;
-  const calculated = calculateLockedRelationshipTotalSave({
+  const rules = new Map<string, BeforeSaveRuleExecution>();
+  for (const record of preparation.records) {
+    if (record.recordKey === "root") continue;
+    const ruleSet = parseBeforeSaveRuleSet(record.beforeSaveRules, record.recordType.recordTypeId);
+    if (ruleSet === undefined)
+      return {
+        success: false,
+        issues: [
+          {
+            code: beforeSaveRuleUnavailableIssueCode,
+            recordKey: record.recordKey,
+            path: ["rules"],
+          },
+        ],
+      };
+    rules.set(record.recordKey, beginBeforeSaveRuleExecution(ruleSet));
+  }
+  return calculateLockedRelationshipTotalSave({
     command: unchangedSubmission,
     preparation,
     ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
     clock,
+    rules,
   });
-  return calculated.success ? calculated : undefined;
 };
 
 /**
@@ -298,8 +334,8 @@ export const performProtectedRecordDelete = async (
   if (preparation.records.some((record) => record.recordKey !== "root")) {
     const settings = await readOrganizationRuntimeSettings(transaction);
     const calculated = calculateGeneratedValues(preparation, issuedAt, settings);
-    if (calculated === undefined)
-      return refuseCalculation(command.recordId, preparation.correlationId);
+    if (calculated === undefined || !calculated.success)
+      return refuseCalculation(command.recordId, preparation.correlationId, calculated?.issues);
     parentMutations = calculated.parentMutations;
   }
 

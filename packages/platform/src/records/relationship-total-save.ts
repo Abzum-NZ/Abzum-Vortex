@@ -50,6 +50,7 @@ type RelationshipTotalCalculationIssue = Readonly<{
   recordKey: string;
   fieldId?: string;
   path: readonly (string | number)[];
+  requirement?: Readonly<{ code: string; message: string }>;
 }>;
 
 export type RelationshipTotalParentMutation = Readonly<{
@@ -243,7 +244,7 @@ export const calculateLockedRelationshipTotalSave = (
           },
         ],
       };
-    if (execution !== undefined) {
+    if (execution !== undefined && (record.recordKey === "root" || creationRoot !== undefined)) {
       const applied = applyBeforeSaveRules({
         execution,
         recordType: record.recordType,
@@ -264,6 +265,9 @@ export const calculateLockedRelationshipTotalSave = (
               recordKey: record.recordKey,
               ...(applied.reason === "refused" && applied.fieldId !== undefined
                 ? { fieldId: applied.fieldId }
+                : {}),
+              ...(applied.reason === "refused"
+                ? { requirement: { code: applied.code, message: applied.message } }
                 : {}),
               path: ["rules"],
             },
@@ -425,6 +429,64 @@ export const calculateLockedRelationshipTotalSave = (
         values[node.field.fieldId] = evaluated.setValues[node.field.fieldId]!;
       else delete values[node.field.fieldId];
     }
+  }
+
+  // Parent rules see the newly calculated totals. Their requirements are then
+  // checked by the same field finalizer as root requirements.
+  for (const record of records.values()) {
+    if (record.recordKey === "root" || creationRoots.has(record.recordKey)) continue;
+    const execution = input.rules?.get(record.recordKey);
+    if (execution === undefined) continue;
+    const proposedValues = valuesByRecord.get(record.recordKey)!;
+    const applied = applyBeforeSaveRules({
+      execution,
+      recordType: record.recordType,
+      initialCandidate: {
+        ...initialByRecord.get(record.recordKey)!,
+        candidateValues: proposedValues,
+      },
+      ...(input.organizationCurrency === undefined
+        ? {}
+        : { organizationCurrency: input.organizationCurrency }),
+    });
+    if (!applied.success)
+      return {
+        success: false,
+        issues: [
+          {
+            code:
+              applied.reason === "refused"
+                ? beforeSaveRuleRefusedIssueCode
+                : beforeSaveRuleUnavailableIssueCode,
+            recordKey: record.recordKey,
+            ...(applied.reason === "refused" && applied.fieldId !== undefined
+              ? { fieldId: applied.fieldId }
+              : {}),
+            ...(applied.reason === "refused"
+              ? { requirement: { code: applied.code, message: applied.message } }
+              : {}),
+            path: ["rules"],
+          },
+        ],
+      };
+    if (
+      [...new Set([...Object.keys(proposedValues), ...Object.keys(applied.candidateValues)])].some(
+        (fieldId) =>
+          JSON.stringify(applied.candidateValues[fieldId] ?? null) !==
+          JSON.stringify(proposedValues[fieldId] ?? null),
+      )
+    )
+      return {
+        success: false,
+        issues: [
+          {
+            code: beforeSaveRuleUnavailableIssueCode,
+            recordKey: record.recordKey,
+            path: ["rules"],
+          },
+        ],
+      };
+    requirementsByRecord.set(record.recordKey, applied.requirements);
   }
 
   const finalized = new Map<string, Extract<PrepareRecordFieldValuesResult, { success: true }>>();

@@ -1203,6 +1203,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
               refused.correlationId,
               refused.outcome === "conflict" ? "conflict" : "operation_refused",
               `the subject delete was ${refused.outcome}`,
+              refused.outcome === "refused" ? refused.ruleReason : undefined,
             ),
           };
         }
