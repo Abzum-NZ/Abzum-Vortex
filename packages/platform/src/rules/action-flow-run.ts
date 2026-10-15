@@ -1,4 +1,5 @@
 import {
+  flowSchema,
   jsonValueSchema,
   normalizeExactDecimal,
   parseExactDecimal,
@@ -68,6 +69,19 @@ export type ActionFlowOutcome =
 
 /** Runs the action's flow once, on behalf of a host that owns the transaction. */
 export type ActionFlowRunner = (seed: ActionFlowSeed) => ActionFlowOutcome;
+
+/** The library of validated flows of one release; an invalid flow is unavailable, never trusted. */
+export const flowLibraryOf = (flows: ReadonlyMap<string, unknown>): FlowLibrary => {
+  const parsed = new Map<string, FlowDefinition | undefined>();
+  return (flowId) => {
+    if (parsed.has(flowId)) return parsed.get(flowId);
+    const candidate = flows.get(flowId);
+    const result = candidate === undefined ? undefined : flowSchema.safeParse(candidate);
+    const flow = result?.success ? result.data : undefined;
+    parsed.set(flowId, flow?.id === flowId ? flow : undefined);
+    return parsed.get(flowId);
+  };
+};
 
 // ─── The flow's typed view of stored values ──────────────────────────────────────────────────
 
