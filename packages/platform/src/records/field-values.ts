@@ -38,7 +38,7 @@ export type RecordFieldValuePreparationIssue = Readonly<{
   code: RecordFieldValuePreparationIssueCode;
   fieldId?: string;
   path: ValuePath;
-  requirement?: Readonly<{ code: string; message: string }>;
+  requirement?: Readonly<{ code: string; message: string; ruleKey?: string }>;
 }>;
 
 export type RecordFieldValuePendingCheck =
@@ -95,6 +95,7 @@ export type PrepareRecordFieldValuesResult =
     }>;
 
 export type RecordFieldValueRequirement = Readonly<{
+  ruleKey?: string;
   fieldId: string;
   code: string;
   message: string;
@@ -161,7 +162,7 @@ const issue = (
   code: RecordFieldValuePreparationIssueCode,
   path: ValuePath,
   fieldId?: string,
-  requirement?: Readonly<{ code: string; message: string }>,
+  requirement?: Readonly<{ code: string; message: string; ruleKey?: string }>,
 ): undefined => {
   context.issues.push({
     code,
@@ -872,7 +873,11 @@ const finalizeRecordFieldCandidateInternal = (
         "required_field_missing",
         ["candidateValues", requirement.fieldId],
         requirement.fieldId,
-        { code: requirement.code, message: requirement.message },
+        {
+          code: requirement.code,
+          message: requirement.message,
+          ...(requirement.ruleKey === undefined ? {} : { ruleKey: requirement.ruleKey }),
+        },
       );
   }
 
