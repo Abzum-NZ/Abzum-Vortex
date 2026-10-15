@@ -30,6 +30,7 @@ declare
   source_key text;
   rule_module_root_id uuid;
   rule_release_revision bigint;
+  parent_read jsonb;
 begin
   if p_operation is null or p_operation not in ('delete', 'restore')
     or (p_operation = 'restore' and p_root_snapshot is not null) then
@@ -113,18 +114,46 @@ begin
     ) as ordered
     order by ordered.position, ordered.record_key collate "C"
   loop
-    select storage.module_root_id into strict rule_module_root_id
-    from vortex_record.storage_catalogue storage
-    where storage.storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
-      and storage.record_type_id = (prepared_record ->> 'recordTypeId')::uuid
-      and storage.state = 'active';
-    select (item.value ->> 'moduleReleaseRevision')::bigint
-      into strict rule_release_revision
-    from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
-    where (item.value ->> 'recordTypeId')::uuid =
-      (prepared_record ->> 'recordTypeId')::uuid;
+    begin
+      select storage.module_root_id into strict rule_module_root_id
+      from vortex_record.storage_catalogue storage
+      where storage.storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+        and storage.record_type_id = (prepared_record ->> 'recordTypeId')::uuid
+        and storage.state = 'active';
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_STORAGE_LOOKUP_FAILED',
+          detail = pg_catalog.format('storage=%s type=%s cause=%s',
+            prepared_record ->> 'storageContractId',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    begin
+      select (item.value ->> 'moduleReleaseRevision')::bigint
+        into strict rule_release_revision
+      from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') item(value)
+      where (item.value ->> 'recordTypeId')::uuid =
+        (prepared_record ->> 'recordTypeId')::uuid;
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_RELEASE_LOOKUP_FAILED',
+          detail = pg_catalog.format('type=%s cause=%s',
+            prepared_record ->> 'recordTypeId', sqlstate);
+    end;
+    if prepared_record ->> 'recordKey' <> 'root' then
+      select row_read.projection into parent_read
+      from vortex_record.read_record_projection_internal(
+        (prepared_record ->> 'recordTypeId')::uuid,
+        (prepared_record ->> 'recordId')::uuid
+      ) as row_read;
+    else
+      parent_read := null;
+    end if;
     prepared_record := prepared_record || pg_catalog.jsonb_build_object(
       'relationshipSources', '[]'::jsonb,
+      'canRead', prepared_record ->> 'recordKey' = 'root'
+        or coalesce(parent_read ->> 'outcome' = 'allowed', false),
       'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
         rule_module_root_id, rule_release_revision,
         (prepared_record ->> 'recordTypeId')::uuid

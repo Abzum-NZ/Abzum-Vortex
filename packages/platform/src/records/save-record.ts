@@ -362,6 +362,7 @@ export const parseRelationshipTotalPreparation = (
     if (
       !recordType.success ||
       typeof record.recordKey !== "string" ||
+      typeof record.canRead !== "boolean" ||
       typeof record.existingValues !== "object" ||
       record.existingValues === null ||
       Array.isArray(record.existingValues) ||
@@ -409,6 +410,7 @@ export const parseRelationshipTotalPreparation = (
       recordKey: record.recordKey,
       ...(record.recordId === undefined ? {} : { recordId: record.recordId }),
       recordType: recordType.data,
+      canRead: record.canRead as boolean,
       ...(concurrencyNumber === undefined ? {} : { concurrencyNumber }),
       existingValues: record.existingValues as Readonly<Record<string, unknown>>,
       ...(record.beforeSaveRules === undefined ? {} : { beforeSaveRules: record.beforeSaveRules }),
@@ -646,7 +648,6 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const attempted: {
           rules?: BeforeSaveRuleExecution;
-          closureRules?: BeforeSaveRuleExecution[];
         } = {};
         const result = await requests.runChange(
           caller,
@@ -715,7 +716,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 const execution = beginBeforeSaveRuleExecution(ruleSet);
                 closureRules.set(record.recordKey, execution);
               }
-              attempted.closureRules = [...closureRules.values()];
+              attempted.rules = closureRules.get("root")!;
             } else {
               const ruleSet = parseBeforeSaveRuleSet(
                 prepared.beforeSaveRules,
@@ -767,6 +768,38 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               console.error(
                 `[record] save refused RECORD_SAVE_VALUES_INVALID: ${values.issues.map((issue) => ("requirement" in issue && issue.requirement ? `${issue.code}:${issue.requirement.code}` : issue.code)).join(",")}`,
               );
+              if (totalPreparation.outcome === "prepared") {
+                const parentRefusal = values.issues.find(
+                  (issue) =>
+                    "recordKey" in issue &&
+                    issue.recordKey !== "root" &&
+                    (issue.code === beforeSaveRuleRefusedIssueCode ||
+                      issue.requirement !== undefined),
+                );
+                if (parentRefusal !== undefined && "recordKey" in parentRefusal) {
+                  const parent = totalPreparation.records.find(
+                    (record) => record.recordKey === parentRefusal.recordKey,
+                  );
+                  if (parent?.recordId === undefined)
+                    throw contractError("RELATIONSHIP_TOTAL_PARENT_MISSING", parentRefusal);
+                  console.error(
+                    `[record] parent rule refused: rule=${"ruleKey" in parentRefusal ? parentRefusal.ruleKey : parentRefusal.requirement !== undefined && "ruleKey" in parentRefusal.requirement ? parentRefusal.requirement.ruleKey : "unknown"} parent=${parent.recordId} reason=${parentRefusal.requirement?.code ?? parentRefusal.code}`,
+                  );
+                  return safeRefusal(
+                    prepared.correlationId,
+                    "operation_refused",
+                    parent.canRead && parentRefusal.requirement !== undefined
+                      ? {
+                          code: parentRefusal.requirement.code,
+                          message: parentRefusal.requirement.message,
+                        }
+                      : {
+                          code: "related_record_rule_conflict",
+                          message: "This change conflicts with a rule on a related record",
+                        },
+                  );
+                }
+              }
               if (
                 values.issues.some(
                   (issue) =>
@@ -939,10 +972,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           return { kind: "unavailable" };
         }
         const value = result.value as SaveRecordResult;
-        const warnings = [
-          ...(attempted.rules?.warnings ?? []),
-          ...(attempted.closureRules?.flatMap((execution) => execution.warnings) ?? []),
-        ];
+        const warnings = attempted.rules?.warnings ?? [];
         return value.outcome === "saved" && warnings.length > 0
           ? { kind: "available", value, warnings }
           : { kind: "available", value };

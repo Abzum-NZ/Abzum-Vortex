@@ -22,10 +22,18 @@ begin
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') item(value)
     order by item.value ->> 'moduleRootId'
   loop
-    select release.compilation_output #> '{canonical,content}' into strict content
-    from vortex_definition.releases release
-    where release.root_id = (binding ->> 'moduleRootId')::uuid
-      and release.release_revision = (binding ->> 'moduleReleaseRevision')::bigint;
+    begin
+      select release.compilation_output #> '{canonical,content}' into strict content
+      from vortex_definition.releases release
+      where release.root_id = (binding ->> 'moduleRootId')::uuid
+        and release.release_revision = (binding ->> 'moduleReleaseRevision')::bigint;
+    exception
+      when no_data_found or too_many_rows then
+        raise exception using errcode = '55000',
+          message = 'RELATIONSHIP_TOTAL_MODULE_RELEASE_LOOKUP_FAILED',
+          detail = pg_catalog.format('root=%s revision=%s cause=%s',
+            binding ->> 'moduleRootId', binding ->> 'moduleReleaseRevision', sqlstate);
+    end;
     if pg_catalog.jsonb_typeof(content -> 'recordTypes') <> 'array' then
       raise exception using errcode = '55000', message = 'Installed Record definitions are unavailable';
     end if;
@@ -51,10 +59,19 @@ begin
       relationships := relationships || coalesce(record_type -> 'relationships', '[]'::jsonb);
     end loop;
   end loop;
-  select release.compilation_output #> '{canonical,content}' into strict content
-  from vortex_definition.releases release
-  where release.root_id = (installation ->> 'applicationRootId')::uuid
-    and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  begin
+    select release.compilation_output #> '{canonical,content}' into strict content
+    from vortex_definition.releases release
+    where release.root_id = (installation ->> 'applicationRootId')::uuid
+      and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  exception
+    when no_data_found or too_many_rows then
+      raise exception using errcode = '55000',
+        message = 'RELATIONSHIP_TOTAL_APPLICATION_RELEASE_LOOKUP_FAILED',
+        detail = pg_catalog.format('root=%s revision=%s cause=%s',
+          installation ->> 'applicationRootId',
+          installation ->> 'applicationReleaseRevision', sqlstate);
+  end;
   has_installed_rules := has_installed_rules or
     pg_catalog.jsonb_array_length(coalesce(content -> 'rules', '[]'::jsonb)) > 0;
   rule_subject_record_type_ids := rule_subject_record_type_ids || coalesce((

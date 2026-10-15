@@ -27,6 +27,7 @@ type LockedRelationshipTotalRecord = Readonly<{
   recordType: RecordTypeDefinition;
   concurrencyNumber?: number;
   existingValues: Readonly<Record<string, unknown>>;
+  canRead: boolean;
   beforeSaveRules?: unknown;
   relationshipSources: readonly Readonly<{
     relationshipId: string;
@@ -48,9 +49,10 @@ export type LockedRelationshipTotalPreparation = Readonly<{
 type RelationshipTotalCalculationIssue = Readonly<{
   code: string;
   recordKey: string;
+  ruleKey?: string;
   fieldId?: string;
   path: readonly (string | number)[];
-  requirement?: Readonly<{ code: string; message: string }>;
+  requirement?: Readonly<{ code: string; message: string; ruleKey?: string }>;
 }>;
 
 export type RelationshipTotalParentMutation = Readonly<{
@@ -160,12 +162,18 @@ const totalRecordType = (
 
 const issue = (
   recordKey: string,
-  value: Readonly<{ code: string; fieldId?: string; path: readonly (string | number)[] }>,
+  value: Readonly<{
+    code: string;
+    fieldId?: string;
+    path: readonly (string | number)[];
+    requirement?: Readonly<{ code: string; message: string; ruleKey?: string }>;
+  }>,
 ): RelationshipTotalCalculationIssue => ({
   recordKey,
   code: value.code,
   ...(value.fieldId === undefined ? {} : { fieldId: value.fieldId }),
   path: value.path,
+  ...(value.requirement === undefined ? {} : { requirement: value.requirement }),
 });
 
 /**
@@ -263,6 +271,7 @@ export const calculateLockedRelationshipTotalSave = (
                   ? beforeSaveRuleRefusedIssueCode
                   : beforeSaveRuleUnavailableIssueCode,
               recordKey: record.recordKey,
+              ...(applied.reason === "refused" ? { ruleKey: applied.ruleKey } : {}),
               ...(applied.reason === "refused" && applied.fieldId !== undefined
                 ? { fieldId: applied.fieldId }
                 : {}),
@@ -459,6 +468,7 @@ export const calculateLockedRelationshipTotalSave = (
                 ? beforeSaveRuleRefusedIssueCode
                 : beforeSaveRuleUnavailableIssueCode,
             recordKey: record.recordKey,
+            ...(applied.reason === "refused" ? { ruleKey: applied.ruleKey } : {}),
             ...(applied.reason === "refused" && applied.fieldId !== undefined
               ? { fieldId: applied.fieldId }
               : {}),

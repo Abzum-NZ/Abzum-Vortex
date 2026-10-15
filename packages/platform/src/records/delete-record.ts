@@ -222,18 +222,36 @@ const rollBack = (
 const refuseCalculation = (
   recordId: string,
   correlationId: string,
+  preparation: LockedRelationshipTotalPreparation,
   issues: readonly Readonly<{
     code: string;
     recordKey: string;
+    ruleKey?: string;
     requirement?: Readonly<{ code: string; message: string }>;
   }>[] = [],
 ): never => {
   console.error(
     `[record] lifecycle totals refused: ${issues.map((issue) => `${issue.recordKey}:${issue.code}${issue.requirement ? `:${issue.requirement.code}` : ""}`).join(",") || "operation_clock_unavailable"}`,
   );
-  const ruleReason = issues.find(
-    (issue) => issue.code === beforeSaveRuleRefusedIssueCode && issue.requirement !== undefined,
-  )?.requirement;
+  const ruleIssue = issues.find(
+    (issue) => issue.code === beforeSaveRuleRefusedIssueCode || issue.requirement !== undefined,
+  );
+  const parent = preparation.records.find((record) => record.recordKey === ruleIssue?.recordKey);
+  if (ruleIssue !== undefined && parent?.recordId === undefined)
+    throw new Error("RELATIONSHIP_TOTAL_PARENT_MISSING");
+  if (ruleIssue !== undefined)
+    console.error(
+      `[record] lifecycle parent rule refused: rule=${ruleIssue.ruleKey ?? (ruleIssue.requirement !== undefined && "ruleKey" in ruleIssue.requirement ? ruleIssue.requirement.ruleKey : "unknown")} parent=${parent?.recordId ?? "unknown"} reason=${ruleIssue.requirement?.code ?? ruleIssue.code}`,
+    );
+  const ruleReason =
+    ruleIssue === undefined
+      ? undefined
+      : parent?.canRead && ruleIssue.requirement !== undefined
+        ? { code: ruleIssue.requirement.code, message: ruleIssue.requirement.message }
+        : {
+            code: "related_record_rule_conflict",
+            message: "This change conflicts with a rule on a related record",
+          };
   throw new RecordLifecycleRollback({
     kind: "result",
     value: {
@@ -335,7 +353,12 @@ export const performProtectedRecordDelete = async (
     const settings = await readOrganizationRuntimeSettings(transaction);
     const calculated = calculateGeneratedValues(preparation, issuedAt, settings);
     if (calculated === undefined || !calculated.success)
-      return refuseCalculation(command.recordId, preparation.correlationId, calculated?.issues);
+      return refuseCalculation(
+        command.recordId,
+        preparation.correlationId,
+        preparation,
+        calculated?.issues,
+      );
     parentMutations = calculated.parentMutations;
   }
 

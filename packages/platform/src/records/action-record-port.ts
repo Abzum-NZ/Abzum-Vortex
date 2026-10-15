@@ -48,6 +48,7 @@ import {
 } from "./delete-record";
 import {
   calculateLockedRelationshipTotalSave,
+  type LockedRelationshipTotalPreparation,
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import type { RecordFieldValuePendingCheck } from "./field-values";
@@ -374,13 +375,31 @@ const describeIssues = (
         .join("; ");
 
 const ruleReasonFromIssues = (
-  issues: ReadonlyArray<Readonly<{ code: string; requirement?: RuleReason }>>,
-): RuleReason | undefined =>
-  issues.find(
+  issues: ReadonlyArray<
+    Readonly<{ code: string; recordKey?: string; ruleKey?: string; requirement?: RuleReason }>
+  >,
+  preparation?: LockedRelationshipTotalPreparation,
+): RuleReason | undefined => {
+  const issue = issues.find(
     (issue) =>
       issue.requirement !== undefined &&
       (issue.code === "before_save_rule_refused" || issue.code === "required_field_missing"),
-  )?.requirement;
+  );
+  if (issue?.requirement === undefined) return undefined;
+  if (preparation !== undefined && issue.recordKey !== undefined && issue.recordKey !== "root") {
+    const parent = preparation.records.find((record) => record.recordKey === issue.recordKey);
+    if (parent === undefined) throw new Error("RELATIONSHIP_TOTAL_PARENT_MISSING");
+    console.error(
+      `[named-action] parent rule refused: rule=${issue.ruleKey ?? ("ruleKey" in issue.requirement ? issue.requirement.ruleKey : "unknown")} parent=${parent.recordId ?? issue.recordKey} reason=${issue.requirement.code}`,
+    );
+    if (!parent.canRead)
+      return {
+        code: "related_record_rule_conflict",
+        message: "This change conflicts with a rule on a related record",
+      };
+  }
+  return { code: issue.requirement.code, message: issue.requirement.message };
+};
 
 const creationFinalValues = (
   prepared: PreparedAction,
@@ -388,7 +407,6 @@ const creationFinalValues = (
   issuedAt: string,
   organizationCurrency: string | undefined,
   timeZone: string | undefined,
-  ruleExecutions: BeforeSaveRuleExecution[],
 ): Readonly<
   | { values: Record<number, Record<string, JsonValue | null>> }
   | { reason: string; ruleReason?: RuleReason }
@@ -459,7 +477,6 @@ const creationFinalValues = (
         reason: `the created record ${creation.ordinal}'s before-save rules changed a relationship after its targets were locked`,
       };
     values[creation.ordinal] = created;
-    ruleExecutions.push(execution);
   }
   return { values };
 };
@@ -905,7 +922,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                   "operation_refused",
                   `the relationship copy target ${target.recordId}'s rules changed values outside the copy plan`,
                 );
-              attempted.executions.push(execution);
             }
             let closureRules: Map<string, BeforeSaveRuleExecution> | undefined;
             if (totalPreparation.outcome === "prepared") {
@@ -930,7 +946,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                 ) {
                   const execution = beginBeforeSaveRuleExecution(ruleSet);
                   closureRules.set(record.recordKey, execution);
-                  attempted.executions.push(execution);
+                  if (record.recordKey === "root") attempted.executions.push(execution);
                 }
               }
             } else if (Object.keys(composition.submittedValues).length > 0) {
@@ -1004,7 +1020,10 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                   totalPreparation.outcome === "prepared" && clock === undefined
                     ? "the relationship totals have no operation clock for the records' time zone"
                     : `the subject values the action writes did not calculate: ${describeIssues(calculated.issues)}`,
-                  ruleReasonFromIssues(calculated.issues),
+                  ruleReasonFromIssues(
+                    calculated.issues,
+                    totalPreparation.outcome === "prepared" ? totalPreparation : undefined,
+                  ),
                 );
               if (totalPreparation.outcome === "prepared" && root === undefined)
                 return safeRefusal(
@@ -1085,7 +1104,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       issuedAt,
                       settings?.currency,
                       settings?.timeZone,
-                      attempted.executions,
                     );
               if ("reason" in createdFinalValues)
                 return safeRefusal(
