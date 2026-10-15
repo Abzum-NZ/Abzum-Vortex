@@ -6,11 +6,9 @@ import {
   describeFailure,
   fieldIdSchema,
   jsonValueSchema,
-  recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
   sameId,
-  stableDefinitionReleaseVersionSchema,
   type IdentitySession,
   type ExecutionAuthorityContext,
   type JsonValue,
@@ -42,13 +40,10 @@ import {
 } from "./cache-policy";
 import {
   protectedQueryCommandSchema,
-  protectedQueryBoardColumnSchema,
   protectedQueryBoardMembersCommandSchema,
   protectedQueryBoardSelectorSchema,
   protectedQueryGroupedMembersCommandSchema,
   protectedQueryGroupedMembersResultSchema,
-  protectedQueryPageRowSchema,
-  protectedQueryRefusalReasonCodes,
   protectedQueryResultSchema,
   protectedQuerySummaryCommandSchema,
   protectedQuerySummaryResultSchema,
@@ -67,7 +62,13 @@ import {
   type ProtectedQueryBoardSummaryCommand,
   type ProtectedQueryBoardSummaryResult,
 } from "./protected-query-contracts";
-import { recordSystemValuesSchema } from "./record-system-values";
+import {
+  boardColumnPagesReadSchema,
+  groupedMemberPageReadSchema,
+  inputsReadSchema,
+  type pageAnchorSchema,
+  pageReadSchema,
+} from "./protected-query-read-schemas";
 import { readThroughQueryCache, type SharedCacheStore } from "./shared-cache-adapter";
 import {
   parseQueryInputDeclarations,
@@ -184,97 +185,6 @@ const one = (rows: readonly ResultRow[]): unknown => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   return rows[0].result;
 };
-
-const refusedSchema = z
-  .object({ outcome: z.literal("refused"), reasonCode: z.enum(protectedQueryRefusalReasonCodes) })
-  .strict();
-const inputsReadSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      outcome: z.literal("resolved"),
-      moduleReleaseRevision: revisionSchema,
-      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-      inputs: z.unknown(),
-    })
-    .strict(),
-  refusedSchema,
-]);
-const pageAnchorSchema = z
-  .object({
-    sortKey: z.array(z.string().nullable()).max(20),
-    sort: z
-      .array(
-        z
-          .object({
-            fieldId: fieldIdSchema,
-            direction: z.enum(["ascending", "descending"]),
-            pushed: z.boolean(),
-          })
-          .strict(),
-      )
-      .max(20),
-    phase: z.enum(["null", "value"]),
-    recordId: recordIdSchema,
-  })
-  .strict();
-const pageRowsSchema = z
-  .array(
-    z
-      .object({
-        recordId: recordIdSchema,
-        revision: revisionSchema,
-        capabilities: protectedQueryRowCapabilitiesSchema,
-        values: z.record(fieldIdSchema, jsonValueSchema),
-        systemValues: recordSystemValuesSchema.optional(),
-      })
-      .strict(),
-  )
-  .max(200);
-const pageReadSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      outcome: z.literal("completed"),
-      moduleReleaseRevision: revisionSchema,
-      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-      rows: pageRowsSchema,
-      next: pageAnchorSchema.nullable(),
-      opposite: pageAnchorSchema.nullable(),
-    })
-    .strict(),
-  refusedSchema,
-]);
-const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      outcome: z.literal("completed"),
-      moduleReleaseRevision: revisionSchema,
-      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-      groupByFieldIds: z.array(fieldIdSchema).min(1).max(10),
-      groupValues: z.record(fieldIdSchema, jsonValueSchema),
-      rows: z.array(protectedQueryPageRowSchema).max(200),
-      next: z
-        .object({
-          sortKey: z.array(z.string().nullable()).max(20),
-          sort: z
-            .array(
-              z
-                .object({
-                  fieldId: fieldIdSchema,
-                  direction: z.enum(["ascending", "descending"]),
-                  pushed: z.boolean(),
-                })
-                .strict(),
-            )
-            .max(20),
-          phase: z.enum(["null", "value"]),
-          recordId: recordIdSchema,
-        })
-        .strict()
-        .nullable(),
-    })
-    .strict(),
-  refusedSchema,
-]);
 
 /**
  * The user-facing sort, filter and search a request carries, plus the component-declared
@@ -735,29 +645,6 @@ const boardMemberResult = (
   };
 };
 
-const boardColumnPagesReadSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      outcome: z.literal("completed"),
-      moduleReleaseRevision: revisionSchema,
-      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-      columns: z
-        .array(
-          z
-            .object({
-              column: protectedQueryBoardColumnSchema,
-              rows: pageRowsSchema,
-              next: pageAnchorSchema.nullable(),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(13),
-    })
-    .strict(),
-  refusedSchema,
-]);
-
 /** Every displayed column's first member page, read in one database call. */
 const readBoardColumnPages = async (
   transaction: RequestDatabaseTransaction,
@@ -813,9 +700,10 @@ const boardFirstPagesCommand = async (
 > => {
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined) return firstPagesRefusal("request_invalid");
-  const memberCommands = command.selectors.map(
-    (selector): ProtectedQueryBoardMembersCommand => ({ ...command, selector }),
-  );
+  const memberCommands = command.selectors.map((selector): ProtectedQueryBoardMembersCommand => ({
+    ...command,
+    selector,
+  }));
   const filterRefusal = boardMembersFilterInputRefusal(memberCommands[0]!);
   if (filterRefusal !== undefined) return firstPagesRefusal(filterRefusal);
 
