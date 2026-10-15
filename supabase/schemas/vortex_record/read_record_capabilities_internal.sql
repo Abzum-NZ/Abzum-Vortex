@@ -18,6 +18,7 @@ declare
   action_kind text;
   action_loaded jsonb;
   action_decision jsonb;
+  update_bounds jsonb;
   read_declaration jsonb;
   permission_by_id jsonb;
   target_meta jsonb;
@@ -185,14 +186,14 @@ begin
         -- set the record save enforces, narrowed to the fields read_record
         -- projects for this row, so no hidden field is ever reported.
         if action_kind = 'update' then
+          update_bounds := vortex_access.resolve_record_field_bounds_internal(action_decision);
           changeable_field_ids := coalesce((
             select pg_catalog.jsonb_agg(projected.value order by projected.value)
             from pg_catalog.jsonb_array_elements_text(readable_field_ids) as projected(value)
             where exists (
               select 1
               from pg_catalog.jsonb_array_elements_text(
-                vortex_access.resolve_record_field_bounds_internal(action_decision)
-                  -> 'changeableFieldIds'
+                update_bounds -> 'changeableFieldIds'
               ) as changeable(value)
               where pg_catalog.lower(changeable.value) = pg_catalog.lower(projected.value)
             )
