@@ -28,7 +28,7 @@ function personLinkSettingLocation(
 }
 
 /**
- * The optional access flag belongs only to a resolved organization-account projection. Local
+ * An enabled access requirement belongs only to a resolved organization-account projection. Local
  * records belong to the same compiled Module draft, which is contract-checked before returning.
  */
 export function validatePersonLinkApplicationAccess(
@@ -45,7 +45,7 @@ export function validatePersonLinkApplicationAccess(
     for (const field of record.fields as JsonObject[]) {
       if (field.type !== "link") continue;
       const settings = asObject(field.settings);
-      if (settings.application_root_required === undefined) continue;
+      if (settings.application_root_required !== true) continue;
       const location = personLinkSettingLocation(field, qualifiedRecordType, resolution);
       try {
         const reference = String(settings.target);
