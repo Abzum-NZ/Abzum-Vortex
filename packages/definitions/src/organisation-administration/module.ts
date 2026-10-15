@@ -808,7 +808,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
             organization_field: "organization_id",
             revision_field: "revision",
             filterable_fields: ["application_root_id"],
-            sortable_fields: ["key", "label"],
+            sortable_fields: ["key", "label", "source_role_id"],
           },
           fields: [
             {
@@ -857,7 +857,7 @@ export const organisationAdministrationModule: ModuleSourceDocument =
               required: true,
               unique: false,
               filterable: false,
-              sortable: false,
+              sortable: true,
               personal_data: "none",
               public_display: "refused",
               type: "text",
