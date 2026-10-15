@@ -534,6 +534,20 @@ export function ApplicationPageViewContent({
     () => (currentContent === content ? contentPlacementIds : placementIdsOf(currentContent)),
     [content, contentPlacementIds, currentContent],
   );
+  // A placement that only became available after the page loaded has no runtime wiring (its
+  // action, form and data callbacks come from the page's first projection): one full refresh
+  // rebuilds the wiring, so such a control is never visible but inert.
+  const unwiredContentRefreshRef = useRef<ReadonlySet<string> | undefined>(undefined);
+  useEffect(() => {
+    if (currentContent === content) return;
+    for (const placementId of currentContentPlacementIds) {
+      if (contentPlacementIds.has(placementId)) continue;
+      if (unwiredContentRefreshRef.current === currentContentPlacementIds) return;
+      unwiredContentRefreshRef.current = currentContentPlacementIds;
+      router.refresh();
+      return;
+    }
+  }, [content, contentPlacementIds, currentContent, currentContentPlacementIds, router]);
   const [contentRuntimeInputs, frameRuntimeInputs] = useMemo(() => {
     const own: Record<string, unknown> = {};
     const shell: Record<string, unknown> = {};

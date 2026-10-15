@@ -89,7 +89,49 @@ export function usePlacementRefresh({
         requestScope.generations.set(key, request);
         requests.set(key, request);
       }
-      if (requests.size === 0) return;
+      if (requests.size === 0) {
+        // A bound action may have no data placement to reread: the content projection is still
+        // fetched, so its action-bound placements follow the action's availability.
+        if (options?.content !== true) return;
+        let contentResult: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
+        try {
+          contentResult = await rereadApplicationPlacements(
+            {
+              tenantShortName: application.tenantShortName,
+              organizationShortName: application.organizationShortName,
+              applicationKey: application.applicationKey,
+              pageKey,
+              installationRevision: application.installationRevision,
+              search: currentSearch,
+            },
+            [],
+            undefined,
+            undefined,
+            true,
+          );
+        } catch {
+          return;
+        }
+        if (placementRequestsRef.current.key !== requestScope.key) return;
+        if (contentResult.kind === "reload") {
+          router.refresh();
+          return;
+        }
+        if (contentResult.kind !== "available" || contentResult.content === undefined) return;
+        const refreshedContent = contentResult.content;
+        setRefreshedPlacementData((current) => {
+          if (placementRequestsRef.current?.key !== requestScope.key) return current;
+          const same = current?.navigationKey === requestScope.key;
+          return {
+            navigationKey: requestScope.key,
+            data: same ? current.data : {},
+            editFormBaselines: same ? current.editFormBaselines : {},
+            subject: same ? current.subject : undefined,
+            content: refreshedContent,
+          };
+        });
+        return;
+      }
       // A reread of a list's own records (a write, a realtime change, Refresh) ends its cached pages.
       if (tableContinuation === undefined) pageCache.invalidate(placementIds);
 

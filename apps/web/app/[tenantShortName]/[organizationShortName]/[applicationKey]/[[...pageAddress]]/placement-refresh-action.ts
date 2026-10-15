@@ -28,7 +28,6 @@ const placementRefreshAddressSchema = z
 
 const placementIdsSchema = z
   .array(containedComponentIdSchema)
-  .min(1)
   .max(500)
   .transform((placementIds) => [
     ...new Set(placementIds.map((placementId) => placementId.toLowerCase())),
@@ -110,6 +109,8 @@ export async function rereadApplicationPlacements(
   if (
     !address.success ||
     !placementIds.success ||
+    // No placement ids is a content-only refresh: it needs the content flag.
+    (placementIds.data.length === 0 && !includeContent) ||
     boardContinuation?.success === false ||
     tableContinuation?.success === false ||
     (boardContinuation?.success === true && tableContinuation?.success === true)
