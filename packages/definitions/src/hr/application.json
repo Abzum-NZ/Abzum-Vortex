@@ -3776,6 +3776,32 @@
                               "value": "Entitlement (days)"
                             }
                           }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.approved_days_taken"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Approved days taken"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.remaining_days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Remaining days"
+                            }
+                          }
                         }
                       ]
                     },
@@ -4454,6 +4480,32 @@
                             "label": {
                               "kind": "text",
                               "value": "Entitlement (days)"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.approved_days_taken"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Approved days taken"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "group",
+                          "properties": {
+                            "field": {
+                              "kind": "field_reference",
+                              "field": "vortex.hr:leave_entitlement.remaining_days"
+                            },
+                            "label": {
+                              "kind": "text",
+                              "value": "Remaining days"
                             }
                           }
                         }

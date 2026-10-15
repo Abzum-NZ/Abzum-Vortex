@@ -354,6 +354,58 @@
             "settings": {
               "minimum": 0
             }
+          },
+          {
+            "id": "fld_hr_entitlement_taken",
+            "key": "approved_days_taken",
+            "label": "Approved days taken",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "total",
+            "settings": {
+              "relationship": "vortex.hr:leave_request.entitlement",
+              "operation": "sum",
+              "field": "days",
+              "result_type": "whole_number",
+              "filter": {
+                "field": "status",
+                "operator": "equals",
+                "value": "approved"
+              }
+            }
+          },
+          {
+            "id": "fld_hr_entitlement_remaining",
+            "key": "remaining_days",
+            "label": "Remaining days",
+            "required": true,
+            "unique": false,
+            "filterable": true,
+            "sortable": true,
+            "personal_data": "personal",
+            "public_display": "refused",
+            "type": "calculation",
+            "settings": {
+              "result_type": "whole_number",
+              "expression": {
+                "operation": "numeric",
+                "numeric_operation": "subtract",
+                "operands": [
+                  {
+                    "source": "field",
+                    "field": "days"
+                  },
+                  {
+                    "source": "field",
+                    "field": "approved_days_taken"
+                  }
+                ]
+              }
+            }
           }
         ],
         "relationships": [
@@ -899,7 +951,9 @@
           "readable_fields": [
             "employee",
             "year",
-            "days"
+            "days",
+            "approved_days_taken",
+            "remaining_days"
           ],
           "changeable_fields": []
         }
@@ -923,7 +977,9 @@
           "readable_fields": [
             "employee",
             "year",
-            "days"
+            "days",
+            "approved_days_taken",
+            "remaining_days"
           ],
           "changeable_fields": [
             "employee",
@@ -951,7 +1007,9 @@
           "readable_fields": [
             "employee",
             "year",
-            "days"
+            "days",
+            "approved_days_taken",
+            "remaining_days"
           ],
           "changeable_fields": [
             "employee",
@@ -1067,6 +1125,77 @@
                     }
                   }
                 ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "rule_leave_entitlement_taken",
+        "key": "taken_within_entitlement",
+        "execution": "transaction",
+        "runAs": {
+          "kind": "saver"
+        },
+        "triggers": [
+          {
+            "id": "before_save",
+            "type": "BeforeSave",
+            "recordTypeId": "leave_entitlement",
+            "operations": [
+              {
+                "kind": "create"
+              },
+              {
+                "kind": "update"
+              }
+            ],
+            "priority": 100
+          }
+        ],
+        "tasks": [
+          {
+            "id": "taken_exceeds_entitlement",
+            "type": "if",
+            "condition": {
+              "op": "gt",
+              "left": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "approved_days_taken"
+                }
+              },
+              "right": {
+                "op": "reference",
+                "reference": {
+                  "source": "trigger_record",
+                  "field": "days"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "refuse_taken_exceeds",
+                "type": "rule.refuse",
+                "version": "1.0.0",
+                "properties": {
+                  "reason": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "leave_entitlement_exceeded"
+                    }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Taken days cannot exceed entitlement"
+                    }
+                  }
+                }
               }
             ]
           }
@@ -1211,7 +1340,9 @@
         "select": [
           "employee",
           "year",
-          "days"
+          "days",
+          "approved_days_taken",
+          "remaining_days"
         ],
         "filter": null,
         "group_by": [],
