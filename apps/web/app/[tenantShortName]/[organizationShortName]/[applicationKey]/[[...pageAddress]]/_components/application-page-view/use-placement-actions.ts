@@ -16,6 +16,7 @@ import type {
 } from "../../../../../../_lib/application-page";
 import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type { Notice, RefreshedPlacementData, TableContinuationTarget } from "./types";
+import type { TablePageCache } from "./use-table-page-cache";
 import { asComponentBinding } from "./event-values";
 import {
   searchWithoutTablePages,
@@ -44,6 +45,7 @@ export function usePlacementActions({
   router,
   tableContinuationScopeRef,
   commitTablePage,
+  pageCache,
 }: Readonly<{
   applyDispatch: (
     dispatch: Promise<FlowDispatchResult | undefined>,
@@ -73,6 +75,7 @@ export function usePlacementActions({
   router: ReturnType<typeof useRouter>;
   tableContinuationScopeRef: RefObject<{ scopeKey: string; inFlight: Set<string> }>;
   commitTablePage: (placementId: string, request: TablePageRequest) => void;
+  pageCache: TablePageCache;
 }>) {
   /**
    * Runs the flow bound to a display or action event through the same runtime as a form gesture.
@@ -291,6 +294,18 @@ export function usePlacementActions({
         return;
       const parsedId = containedComponentIdSchema.safeParse(placementId);
       if (!parsedId.success) return;
+      // Pointer or focus on First or Last: read that page ahead when it is not held yet.
+      if (event.intent === true) {
+        if (
+          (event.direction === "first" && table.page > 1) ||
+          (event.direction === "last" && table.hasNextPage === true)
+        )
+          pageCache.prefetch(
+            parsedId.data,
+            pageCache.intentRequest(event.direction === "first" ? "first" : "last"),
+          );
+        return;
+      }
 
       const scopeKey = `${navigationKey}\u0000${searchWithoutTablePages(currentSearch)}`;
       let scope = tableContinuationScopeRef.current;
@@ -332,12 +347,24 @@ export function usePlacementActions({
           ...(continuationToken === undefined ? {} : { continuationToken }),
         };
         commitTablePage(parsedId.data, request);
+        const leaving = Object.entries(currentData).find(
+          ([candidate]) => candidate.toLowerCase() === placementKey,
+        )?.[1];
+        if (leaving !== undefined) pageCache.leave(parsedId.data, request, leaving);
         await refreshPlacements([parsedId.data], { placementId: parsedId.data, request });
       } finally {
         scope.inFlight.delete(requestKey);
       }
     },
-    [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements],
+    [
+      busy,
+      commitTablePage,
+      currentData,
+      currentSearch,
+      navigationKey,
+      pageCache,
+      refreshPlacements,
+    ],
   );
 
   return { runBinding, continueBoardColumn, continueTablePage };

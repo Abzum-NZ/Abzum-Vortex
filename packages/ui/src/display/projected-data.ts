@@ -303,6 +303,8 @@ export type DisplaySemanticEvent =
       page: number;
       direction: "first" | "previous" | "next" | "last";
       continuationToken?: string;
+      /** The pointer or focus reached the control: the page may be read ahead, nothing changes. */
+      intent?: true;
     }>
   | Readonly<{
       event: "page_changed";
