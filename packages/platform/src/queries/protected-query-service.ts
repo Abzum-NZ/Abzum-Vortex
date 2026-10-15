@@ -198,6 +198,24 @@ const inputsReadSchema = z.discriminatedUnion("outcome", [
     .strict(),
   refusedSchema,
 ]);
+const pageAnchorSchema = z
+  .object({
+    sortKey: z.array(z.string().nullable()).max(20),
+    sort: z
+      .array(
+        z
+          .object({
+            fieldId: fieldIdSchema,
+            direction: z.enum(["ascending", "descending"]),
+            pushed: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(20),
+    phase: z.enum(["null", "value"]),
+    recordId: recordIdSchema,
+  })
+  .strict();
 const pageReadSchema = z.discriminatedUnion("outcome", [
   z
     .object({
@@ -217,27 +235,8 @@ const pageReadSchema = z.discriminatedUnion("outcome", [
             .strict(),
         )
         .max(200),
-      next: z
-        .object({
-          // Only values of fields the reader is guaranteed to see; empty when
-          // no declared sort field may be pushed, and the scan uses record identity.
-          sortKey: z.array(z.string().nullable()).max(20),
-          sort: z
-            .array(
-              z
-                .object({
-                  fieldId: fieldIdSchema,
-                  direction: z.enum(["ascending", "descending"]),
-                  pushed: z.boolean(),
-                })
-                .strict(),
-            )
-            .max(20),
-          phase: z.enum(["null", "value"]),
-          recordId: recordIdSchema,
-        })
-        .strict()
-        .nullable(),
+      next: pageAnchorSchema.nullable(),
+      opposite: pageAnchorSchema.nullable(),
     })
     .strict(),
   refusedSchema,
@@ -506,7 +505,7 @@ const readPage = async (
       ${command.pageSize}::integer,
       ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
       ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
-      ${JSON.stringify(userQueryInputs(command))}::text::jsonb
+      ${JSON.stringify({ ...userQueryInputs(command), pageDirection: command.pageDirection ?? "forward" })}::text::jsonb
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -615,7 +614,8 @@ const boardMembersCommand = async (
       !sameId(after.applicationRootId, applicationRootId) ||
       !sameId(after.organizationAccountId, scope.organizationAccountId) ||
       !sameId(after.moduleRootId, command.moduleRootId) ||
-      !sameId(after.queryId, command.queryId)
+      !sameId(after.queryId, command.queryId) ||
+      after.direction !== "forward"
     )
       return refusal("cursor_stale");
     // Board pages have one fixed record-identity order. A row-query keyset can
@@ -686,6 +686,7 @@ const boardMembersCommand = async (
           nextContinuationToken: encodeQueryContinuationToken(
             {
               version: 1,
+              direction: "forward",
               organizationId: scope.organizationId,
               applicationRootId,
               organizationAccountId: scope.organizationAccountId,
@@ -733,7 +734,8 @@ const groupedMembersCommand = async (
       !sameId(after.queryId, command.queryId)
     )
       return { outcome: "refused", reasonCode: "cursor_stale" };
-    if (after.sortKey.length !== 0) return { outcome: "refused", reasonCode: "cursor_stale" };
+    if (after.sortKey.length !== 0 || after.direction !== "forward")
+      return { outcome: "refused", reasonCode: "cursor_stale" };
   }
 
   const declared = await readInputs(transaction, command);
@@ -838,6 +840,7 @@ const groupedMembersCommand = async (
   const nextContinuationToken = encodeQueryContinuationToken(
     {
       version: 1,
+      direction: "forward",
       organizationId: scope.organizationId,
       applicationRootId,
       organizationAccountId: scope.organizationAccountId,
@@ -877,6 +880,7 @@ const runCommand = async (
   // A continuation is accepted only for the same actor, installation, query,
   // release and inputs it was issued for.
   let after: QueryContinuation | undefined;
+  const direction = command.pageDirection ?? "forward";
   if (command.continuationToken !== undefined) {
     try {
       after = decodeQueryContinuationToken(command.continuationToken, continuationKey);
@@ -889,7 +893,8 @@ const runCommand = async (
       !sameId(after.applicationRootId, applicationRootId) ||
       !sameId(after.organizationAccountId, scope.organizationAccountId) ||
       !sameId(after.moduleRootId, command.moduleRootId) ||
-      !sameId(after.queryId, command.queryId)
+      !sameId(after.queryId, command.queryId) ||
+      after.direction !== direction
     )
       return refusal("cursor_stale");
   }
@@ -918,18 +923,45 @@ const runCommand = async (
     return refusal("cursor_stale");
 
   const load = async (): Promise<ProtectedQueryResult> => {
-    const page = await readPage(
-      transaction,
-      command,
-      declared.moduleReleaseRevision,
-      inputValues,
-      after,
-    );
-    if (page.outcome === "refused") return refusal(page.reasonCode);
+    let cursor = after;
+    let rows: ProtectedQueryPage["rows"] = [];
+    let nextAnchor: z.infer<typeof pageAnchorSchema> | null = null;
+    let oppositeAnchor: z.infer<typeof pageAnchorSchema> | null = null;
+    let releaseVersion: string | undefined;
+    for (let call = 0; call < 4; call += 1) {
+      const page = await readPage(
+        transaction,
+        { ...command, pageSize: command.pageSize - rows.length },
+        declared.moduleReleaseRevision,
+        inputValues,
+        cursor,
+      );
+      if (page.outcome === "refused") return refusal(page.reasonCode);
+      releaseVersion = page.moduleReleaseVersion;
+      if (oppositeAnchor === null) oppositeAnchor = page.opposite;
+      rows = direction === "forward" ? [...rows, ...page.rows] : [...page.rows, ...rows];
+      nextAnchor = page.next;
+      if (rows.length === command.pageSize || nextAnchor === null) break;
+      cursor = {
+        version: 1,
+        organizationId: scope.organizationId,
+        applicationRootId,
+        organizationAccountId: scope.organizationAccountId,
+        moduleRootId: command.moduleRootId,
+        queryId: command.queryId,
+        moduleReleaseRevision: page.moduleReleaseRevision,
+        inputFingerprint,
+        direction,
+        ...nextAnchor,
+      };
+    }
+    if (releaseVersion === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+    if (rows.length < command.pageSize && nextAnchor !== null)
+      return refusal("dataset_limit_exceeded");
     // Only the declared system values may appear; a row carrying any other is a
     // contract breach, not something to pass on.
     const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
-    for (const row of page.rows) {
+    for (const row of rows) {
       const disclosed = Object.keys(row.systemValues ?? {});
       if (
         disclosed.some((key) => !declaredSystemKeys.has(key)) ||
@@ -939,33 +971,49 @@ const runCommand = async (
         throw new Error("PROTECTED_QUERY_RESULT_INVALID");
     }
 
+    const seal = (
+      anchor: z.infer<typeof pageAnchorSchema>,
+      tokenDirection: "forward" | "backward",
+    ) =>
+      encodeQueryContinuationToken(
+        {
+          version: 1,
+          organizationId: scope.organizationId,
+          applicationRootId,
+          organizationAccountId: scope.organizationAccountId,
+          moduleRootId: command.moduleRootId,
+          queryId: command.queryId,
+          moduleReleaseRevision: declared.moduleReleaseRevision,
+          inputFingerprint,
+          direction: tokenDirection,
+          ...anchor,
+        },
+        continuationKey,
+      );
+    const next =
+      direction === "forward"
+        ? nextAnchor === null
+          ? undefined
+          : seal(nextAnchor, "forward")
+        : after === undefined || oppositeAnchor === null
+          ? undefined
+          : seal(oppositeAnchor, "forward");
+    const previous =
+      direction === "backward"
+        ? nextAnchor === null
+          ? undefined
+          : seal(nextAnchor, "backward")
+        : after === undefined || oppositeAnchor === null
+          ? undefined
+          : seal(oppositeAnchor, "backward");
     return {
       outcome: "completed",
       moduleRootId: command.moduleRootId,
-      moduleReleaseVersion: page.moduleReleaseVersion,
+      moduleReleaseVersion: releaseVersion,
       queryId: command.queryId,
-      rows: page.rows,
-      ...(page.next === null
-        ? {}
-        : {
-            nextContinuationToken: encodeQueryContinuationToken(
-              {
-                version: 1,
-                organizationId: scope.organizationId,
-                applicationRootId,
-                organizationAccountId: scope.organizationAccountId,
-                moduleRootId: command.moduleRootId,
-                queryId: command.queryId,
-                moduleReleaseRevision: page.moduleReleaseRevision,
-                inputFingerprint,
-                sortKey: page.next.sortKey,
-                sort: page.next.sort,
-                phase: page.next.phase,
-                recordId: page.next.recordId,
-              },
-              continuationKey,
-            ),
-          }),
+      rows,
+      ...(next === undefined ? {} : { nextContinuationToken: next }),
+      ...(previous === undefined ? {} : { previousContinuationToken: previous }),
     };
   };
 

@@ -20,7 +20,7 @@ export type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string]
 
 export type TableContinuationTarget = Readonly<{
   placementId: string;
-  request: Readonly<{ page: number; continuationToken?: string }>;
+  request: Readonly<{ page: number; pageDirection: "forward" | "backward"; continuationToken?: string }>;
 }>;
 
 export type ApplicationShellRuntime = NonNullable<PagePuckRendererProps["applicationShellRuntime"]>;

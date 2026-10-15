@@ -30,9 +30,9 @@ const placementIdsSchema = z
   .array(containedComponentIdSchema)
   .min(1)
   .max(500)
-  .transform((placementIds) =>
-    [...new Set(placementIds.map((placementId) => placementId.toLowerCase()))],
-  );
+  .transform((placementIds) => [
+    ...new Set(placementIds.map((placementId) => placementId.toLowerCase())),
+  ]);
 
 const boardContinuationTargetSchema = z
   .object({
@@ -47,13 +47,17 @@ const tableContinuationTargetSchema = z
     request: z
       .object({
         page: z.number().int().min(1).max(100_000),
+        pageDirection: z.enum(["forward", "backward"]),
         continuationToken: z.string().min(1).max(65_536).optional(),
       })
       .strict()
       .superRefine((request, context) => {
         if (
-          (request.page === 1 && request.continuationToken !== undefined) ||
-          (request.page > 1 && request.continuationToken === undefined)
+          (request.page === 1 &&
+            (request.pageDirection !== "forward" || request.continuationToken !== undefined)) ||
+          (request.page > 1 &&
+            request.pageDirection === "forward" &&
+            request.continuationToken === undefined)
         )
           context.addIssue({
             code: "custom",
@@ -121,8 +125,7 @@ export async function rereadApplicationPlacements(
     return { kind: "unavailable" };
 
   const identity = await continueSessionOrEnd(await resolveIdentitySession());
-  if (identity.kind === "temporarily_unavailable")
-    return { kind: "temporarily_unavailable" };
+  if (identity.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -131,8 +134,7 @@ export async function rereadApplicationPlacements(
     address.data.applicationKey,
     address.data.pageKey,
   );
-  if (resolved.kind === "temporarily_unavailable")
-    return { kind: "temporarily_unavailable" };
+  if (resolved.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (resolved.kind !== "application_page") return { kind: "unavailable" };
 
   try {
@@ -154,6 +156,7 @@ export async function rereadApplicationPlacements(
             placementId: tableContinuation.data.placementId,
             request: {
               page: tableContinuation.data.request.page,
+              pageDirection: tableContinuation.data.request.pageDirection,
               ...(tableContinuation.data.request.continuationToken === undefined
                 ? {}
                 : { continuationToken: tableContinuation.data.request.continuationToken }),

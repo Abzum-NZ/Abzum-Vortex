@@ -174,6 +174,8 @@ export const flowReleaseIdentityMatches = (
 export type FlowRecordType = Readonly<{
   /** Lower-case field key or field id, to the field id. */
   fieldIds: ReadonlyMap<string, string>;
+  /** Lower-case choice field id, to each of its options (by value) that a named action sets. */
+  optionActions: ReadonlyMap<string, ReadonlyMap<string, FlowNamedAction>>;
 }>;
 
 /** A named action of a release: the one installed action a task names by its key. */

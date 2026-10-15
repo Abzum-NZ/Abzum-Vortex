@@ -867,6 +867,9 @@ export const readPlacement = async (
         tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
           ? tableContinuation.request.page
           : 1,
+      ...(tableContinuation === undefined || !sameId(tableContinuation.placementId, placementId)
+        ? {}
+        : { pageDirection: tableContinuation.request.pageDirection }),
       ...(tableContinuation === undefined || !sameId(tableContinuation.placementId, placementId) ||
         tableContinuation.request.continuationToken === undefined
         ? {}

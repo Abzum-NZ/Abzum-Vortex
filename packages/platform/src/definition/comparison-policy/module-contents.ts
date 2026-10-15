@@ -463,7 +463,14 @@ export const compareAction = (
     "permission",
     id,
   );
-  for (const key of ["subjectRecordTypeId", "sharing", "precondition", "tasks"])
+  for (const key of [
+    "subjectRecordTypeId",
+    "sharing",
+    "precondition",
+    "tasks",
+    "setsChoiceFieldId",
+    "setsChoiceOption",
+  ])
     pushChange(
       reasons,
       previous[key],
