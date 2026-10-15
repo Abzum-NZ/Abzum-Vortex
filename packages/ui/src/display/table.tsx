@@ -249,10 +249,15 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     );
   if (state.status === "empty")
     return (
-      <>
+      <div data-vortex-display="table" data-vortex-placement-id={placementId}>
         <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
+        {!showSearch ? null : (
+          <div className="mb-2 flex flex-wrap items-start gap-4">
+            <SearchControl accessibleName={accessibleName} events={events} />
+          </div>
+        )}
         <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
-      </>
+      </div>
     );
 
   return (
