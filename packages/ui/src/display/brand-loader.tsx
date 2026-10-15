@@ -11,6 +11,9 @@ export type LoaderMark = Readonly<{ segments: readonly MarkSegment[] }>;
  * The platform mark, drawn as six line segments in the order the loader traces them (all in a
  * 120 x 120 box): the outer triangle's left, right and base sides, then the inner diagonal, the
  * middle bar and the inner leg. A theme that declares a loader mark of its own replaces it.
+ *
+ * Platform default until the next platform theme release carries it (#2666); also the org-level
+ * loader before any application theme exists.
  */
 const PLATFORM_MARK: LoaderMark = {
   segments: [
