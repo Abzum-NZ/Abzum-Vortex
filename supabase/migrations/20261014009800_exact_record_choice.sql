@@ -430,6 +430,12 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   user_search_folded := pg_catalog.lower(user_search);
+  -- An exact record id resolves one identity; the search only narrows pages of a list, so it is
+  -- ignored here while the published filter and the viewer's authority still apply unchanged.
+  if p_exact_record_id is not null then
+    user_search := null;
+    user_search_folded := null;
+  end if;
   if (board_member_mode or group_member_mode) and (
     pg_catalog.jsonb_array_length(user_sort) <> 0
     or user_search is not null
