@@ -42,12 +42,12 @@ begin
     when 'activated_at' then 'time'
     when 'expires_at' then 'time'
     when 'state' then 'text'
-    when 'account_display_name' then 'legacy_text'
+    when 'account_display_name' then 'nullable_text'
     when 'role_key' then 'legacy_text'
     when 'role_label' then 'legacy_text'
     else 'id' end;
   direction_sql := case when p_direction = 'ascending' then 'asc' else 'desc' end;
-  if sort_kind = 'legacy_text' then
+  if sort_kind in ('legacy_text', 'nullable_text') then
     -- A stored release can still request a sort dropped from current publishable definitions.
     candidate_joins := $joins$join vortex_identity.organization_accounts as account
       on account.organization_id = activation.organization_id
@@ -58,14 +58,13 @@ begin
       on role_revision.organization_id = role.organization_id
       and role_revision.role_id = role.role_id and role_revision.revision = role.live_revision$joins$;
   end if;
-  if sort_kind = 'nullable_time' then
-    -- The null flag distinguishes NULL from a real infinity timestamp in both directions.
-    sort_expression := pg_catalog.format('coalesce(%s, ''infinity''::timestamptz)', sort_column);
-    sort_null_expression := pg_catalog.format('(%s is null)', sort_column);
-    order_sql := pg_catalog.format('%s %s, %s %s, activation.role_activation_id %s',
-      sort_expression, direction_sql, sort_null_expression, direction_sql, direction_sql);
-    outer_order_sql := pg_catalog.format('candidate.sort_value %s, candidate.sort_null %s, candidate.record_id %s',
-      direction_sql, direction_sql, direction_sql);
+  if sort_kind = 'nullable_text' then
+    sort_expression := sort_column || ' collate "C"';
+    order_sql := pg_catalog.format('%s %s nulls %s, activation.role_activation_id %s',
+      sort_expression, direction_sql,
+      case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
+    outer_order_sql := pg_catalog.format('candidate.sort_value collate "C" %s nulls %s, candidate.record_id %s',
+      direction_sql, case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
   elsif sort_kind in ('text', 'legacy_text') then
     sort_expression := sort_column || ' collate "C"';
     order_sql := pg_catalog.format('%s %s, activation.role_activation_id %s', sort_expression, direction_sql, direction_sql);
@@ -85,7 +84,7 @@ begin
         pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
         or pg_catalog.jsonb_array_length(p_after -> 'sortKey') is distinct from 1
         or (pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'string'
-          and (sort_kind <> 'nullable_time'
+          and (sort_kind <> 'nullable_text'
             or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'null'))
       )) then
       raise exception using errcode = '22023', message = 'Activation projection cursor is invalid';
@@ -105,11 +104,14 @@ begin
     elsif sort_kind in ('text', 'legacy_text') then
       keyset_sql := pg_catalog.format(' and (%s, activation.role_activation_id) %s ($3 collate "C", $4)',
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
-    elsif sort_kind = 'nullable_time' then
-      keyset_sql := pg_catalog.format(
-        ' and (%s, %s, activation.role_activation_id) %s (coalesce($5, ''infinity''::timestamptz), $5 is null, $4)',
-        sort_expression, sort_null_expression,
-        case when p_direction = 'ascending' then '>' else '<' end);
+    elsif sort_kind = 'nullable_text' then
+      keyset_sql := pg_catalog.format(case when p_direction = 'ascending' then
+        ' and (($3 is null and (account.display_name is not null or (account.display_name is null and activation.role_activation_id > $4)))'
+          || ' or ($3 is not null and (account.display_name collate "C", activation.role_activation_id) > ($3 collate "C", $4)))'
+        else
+        ' and (($3 is null and account.display_name is null and activation.role_activation_id < $4)'
+          || ' or ($3 is not null and (account.display_name is null or (account.display_name collate "C", activation.role_activation_id) < ($3 collate "C", $4))))'
+        end);
     else
       keyset_sql := pg_catalog.format(' and (%s, activation.role_activation_id) %s ($5, $4)',
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);

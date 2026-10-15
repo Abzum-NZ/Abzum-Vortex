@@ -104,20 +104,21 @@ begin
         case when p_direction = 'ascending' then '>' else '<' end);
     elsif after_time is null then
       keyset_sql := case when p_direction = 'ascending'
-        then ' and assignment.expires_at is null and assignment.assignment_id > $4'
-        else ' and (assignment.expires_at is not null or
-          (assignment.expires_at is null and assignment.assignment_id < $4))'
+        then ' and (assignment.expires_at is not null or
+          (assignment.expires_at is null and assignment.assignment_id > $4))'
+        else ' and assignment.expires_at is null and assignment.assignment_id < $4'
         end;
     elsif p_direction = 'ascending' then
-      keyset_sql := ' and ((assignment.expires_at, assignment.assignment_id) > ($5, $4)
-        or assignment.expires_at is null)';
+      keyset_sql := ' and (assignment.expires_at, assignment.assignment_id) > ($5, $4)';
     else
-      keyset_sql := ' and (assignment.expires_at, assignment.assignment_id) < ($5, $4)';
+      keyset_sql := ' and (assignment.expires_at is null or
+        (assignment.expires_at, assignment.assignment_id) < ($5, $4))';
     end if;
   end if;
-  order_sql := pg_catalog.format('%s%s %s, assignment.assignment_id %s',
+  order_sql := pg_catalog.format('%s%s %s nulls %s, assignment.assignment_id %s',
     sort_column, case when p_sort_key = 'state' then ' collate "C"' else '' end,
     case when p_direction = 'ascending' then 'asc' else 'desc' end,
+    case when p_direction = 'ascending' then 'first' else 'last' end,
     case when p_direction = 'ascending' then 'asc' else 'desc' end);
   return query execute $scan$
     select $1, assignment.assignment_id, assignment.revision,
