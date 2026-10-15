@@ -172,9 +172,17 @@ export const loadApplicationPageInternal = async (
 ): Promise<ApplicationPageInternalResult> => {
   const startedReads: Promise<unknown>[] = [];
   try {
-    return await loadApplicationPageJoined(startedReads, session, address, parameters,
-      selectedPlacementIds, boardContinuation, expectedInstallationRevision, tableContinuation,
-      options);
+    return await loadApplicationPageJoined(
+      startedReads,
+      session,
+      address,
+      parameters,
+      selectedPlacementIds,
+      boardContinuation,
+      expectedInstallationRevision,
+      tableContinuation,
+      options,
+    );
   } finally {
     await Promise.allSettled(startedReads);
   }
@@ -499,7 +507,9 @@ const loadApplicationPageJoined = async (
         }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(runtimeDatabasePoolSize(), candidates.length) }, worker));
+    await Promise.all(
+      Array.from({ length: Math.min(runtimeDatabasePoolSize(), candidates.length) }, worker),
+    );
     if (failed) throw failure;
     return Object.freeze(results);
   };
@@ -963,7 +973,6 @@ const loadApplicationPageJoined = async (
               parsedValueFieldId !== undefined && parsedValueFieldId.success
                 ? subjectRow.row.values[parsedValueFieldId.data]
                 : undefined,
-            resolveRecordLinks,
             service: referenceChoices,
             session,
             selection,
@@ -1022,7 +1031,12 @@ const loadApplicationPageJoined = async (
         return state;
       })
       .catch((error: unknown): PageDataState => {
-        logPlacementFailure(address, entry.placementId, "placement_read_failed", describeFailure(error));
+        logPlacementFailure(
+          address,
+          entry.placementId,
+          "placement_read_failed",
+          describeFailure(error),
+        );
         // A defect in data the platform produced is surfaced in development; production degrades
         // to the placement's error state.
         if (process.env.NODE_ENV !== "production") throw error;

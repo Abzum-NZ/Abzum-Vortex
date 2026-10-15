@@ -221,7 +221,9 @@ const recordChoices = async (
     requestedFieldIds: [command.labelFieldId],
     searchableFieldIds: [command.labelFieldId],
     ...(command.search === undefined ? {} : { search: command.search }),
-    pageSize: Math.min(command.pageSize, source.query.pageSize),
+    ...(command.exactRecordId === undefined ? {} : { exactRecordId: command.exactRecordId }),
+    pageSize:
+      command.exactRecordId === undefined ? Math.min(command.pageSize, source.query.pageSize) : 1,
     ...(command.continuationToken === undefined
       ? {}
       : { continuationToken: command.continuationToken }),

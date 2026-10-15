@@ -38,6 +38,8 @@ export const recordReferenceChoiceCommandSchema = z
     pageSize: choicePageSizeSchema,
     /** Opaque continuation issued by the previous page of the same source. */
     continuationToken: choiceContinuationTokenSchema.optional(),
+    /** Resolve one selected record against the same published query and bound input. */
+    exactRecordId: recordIdSchema.optional(),
   })
   .strict();
 export type RecordReferenceChoiceCommand = z.infer<typeof recordReferenceChoiceCommandSchema>;

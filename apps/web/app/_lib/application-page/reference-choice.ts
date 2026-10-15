@@ -1,5 +1,4 @@
-import type {
-  createReferenceChoiceService} from "@vortex/platform/server";
+import type { createReferenceChoiceService } from "@vortex/platform/server";
 import {
   type ReferenceChoiceInputValues,
   type PermittedApplicationsRead,
@@ -8,8 +7,6 @@ import {
   createStoredPageCapabilityService,
   type ReferenceChoiceOption,
   type RecordReferenceChoiceCommand,
-  type RecordLinkResolver,
-  recordLinkLabelKey,
   projectReferenceChoiceInputValues,
 } from "@vortex/platform/server";
 import { FIELD_INPUT_BLOCK_RELEASE, FIELD_INPUT_CONTROL_RELEASES } from "@vortex/platform/server";
@@ -21,6 +18,7 @@ import {
   timestampSchema,
   richTextDocumentSchema,
   recordLinkValueSchema,
+  recordIdSchema,
   type RecordTypeReference,
   type ReferenceChoiceSelectionEvidence,
   sameId,
@@ -74,11 +72,12 @@ export const projectReferenceChoicePage = async (
     return { kind: "refused" };
   if (
     request.installationRevision !== context.applicationReleaseRevision ||
-    request.releaseKey !== [
-      application.releaseVersion,
-      application.contentFingerprint,
-      application.resolutionFingerprint,
-    ].join(":")
+    request.releaseKey !==
+      [
+        application.releaseVersion,
+        application.contentFingerprint,
+        application.resolutionFingerprint,
+      ].join(":")
   )
     return { kind: "reload" };
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
@@ -89,13 +88,13 @@ export const projectReferenceChoicePage = async (
     permissions: platformPermissionSource,
     selection: {
       pageId: pageDefinition.pageId,
-      ...(request.subjectRecordId === undefined ? {} : { subjectRecordId: request.subjectRecordId }),
+      ...(request.subjectRecordId === undefined
+        ? {}
+        : { subjectRecordId: request.subjectRecordId }),
     },
   }).project(session, selection);
-  if (projected.kind === "temporarily_unavailable")
-    return { kind: "temporarily_unavailable" };
-  if (projected.kind !== "available" || projected.value === undefined)
-    return { kind: "refused" };
+  if (projected.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+  if (projected.kind !== "available" || projected.value === undefined) return { kind: "refused" };
   return { kind: "available", page: projected.value, context, selection, dependencies };
 };
 
@@ -215,11 +214,7 @@ export const projectEditField = (
       )
         return undefined;
       const options = settings.options;
-      if (
-        !isRecord(options) ||
-        options.kind !== "list" ||
-        !Array.isArray(options.items)
-      )
+      if (!isRecord(options) || options.kind !== "list" || !Array.isArray(options.items))
         return undefined;
       const optionItems: unknown[] = options.items;
       if (
@@ -296,53 +291,38 @@ export const projectEditField = (
   };
 };
 
-/**
- * Searches the Choice's own Query for the label of a stored value and follows the search's own
- * continuation pages until the exact record id is offered or the search is exhausted. The work is
- * bounded by the records sharing that label, never by the whole choice list. A value that is not
- * offered (unreadable, or its label is not what the Choice searches) is logged with its cause.
- */
-const SELECTED_LABEL_SEARCH_PAGE_LIMIT = 5;
-
-const findOfferedBySearch = async (
+/** Resolves one selected identity through the Choice's published Query. */
+const findOfferedById = async (
   args: Readonly<{
     service: ReturnType<typeof createReferenceChoiceService>;
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
   }>,
   command: RecordReferenceChoiceCommand,
-  search: string,
+  recordId: string,
   matches: (choice: ReferenceChoiceOption) => boolean,
 ): Promise<ReferenceChoiceOption | undefined> => {
-  let continuationToken: string | undefined;
-  // Bounded: a label shared by more than this many pages of records is logged rather than scanned.
-  for (let page = 0; page < SELECTED_LABEL_SEARCH_PAGE_LIMIT; page += 1) {
-    const result = await args.service.run(args.session, args.selection, {
-      ...command,
-      search,
-      ...(continuationToken === undefined ? {} : { continuationToken }),
+  const result = await args.service.run(args.session, args.selection, {
+    ...command,
+    exactRecordId: recordId,
+  });
+  if (
+    result.kind !== "available" ||
+    result.value.outcome !== "completed" ||
+    result.value.kind !== "record_reference"
+  ) {
+    console.error("reference_choice_selected_lookup_refused", {
+      kind: result.kind,
+      outcome: result.kind === "available" ? result.value.outcome : undefined,
     });
-    if (
-      result.kind !== "available" ||
-      result.value.outcome !== "completed" ||
-      result.value.kind !== "record_reference"
-    ) {
-      console.error("reference_choice_selected_lookup_refused", {
-        kind: result.kind,
-        outcome: result.kind === "available" ? result.value.outcome : undefined,
-      });
-      return undefined;
-    }
-    const offered = result.value.choices.find(matches);
-    if (offered !== undefined) return offered;
-    continuationToken = result.value.nextContinuationToken;
-    if (continuationToken === undefined) {
-      console.error("reference_choice_selected_not_offered", { reason: "not_in_search_results" });
-      return undefined;
-    }
+    return undefined;
   }
-  console.error("reference_choice_selected_not_offered", { reason: "label_search_page_limit" });
-  return undefined;
+  const offered = result.value.choices.find(matches);
+  if (offered === undefined)
+    console.error("reference_choice_selected_not_offered", {
+      reason: "query_did_not_offer_record",
+    });
+  return offered;
 };
 
 export type ReferenceChoiceFirstPage = Readonly<{
@@ -369,15 +349,16 @@ export const selectedReferenceChoiceField = (
       : undefined;
 
 /** Projects a record link only when the exact value is still offered by its declared Query. */
-export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
-  firstPage: ReferenceChoiceFirstPage | undefined;
-  field: SelectedReferenceChoiceField | undefined;
-  stored: JsonValue | undefined;
-  resolveRecordLinks: RecordLinkResolver;
-  service: ReturnType<typeof createReferenceChoiceService>;
-  session: IdentitySession;
-  selection: OrganizationSelectionCandidate;
-}>): Promise<Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined> => {
+export const projectSelectedReferenceChoiceEditField = async (
+  args: Readonly<{
+    firstPage: ReferenceChoiceFirstPage | undefined;
+    field: SelectedReferenceChoiceField | undefined;
+    stored: JsonValue | undefined;
+    service: ReturnType<typeof createReferenceChoiceService>;
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+  }>,
+): Promise<Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined> => {
   const first = args.firstPage;
   const field = args.field;
   if (first === undefined || field === undefined || args.stored === undefined) return undefined;
@@ -388,17 +369,21 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
     return undefined;
   const queryTarget = command.source.query.recordType;
-  const queryAllowedTargets = command.allowedRecordTypes.filter((target) => target.state === "resolved");
+  const queryAllowedTargets = command.allowedRecordTypes.filter(
+    (target) => target.state === "resolved",
+  );
   if (
     queryAllowedTargets.length !== command.allowedRecordTypes.length ||
     queryAllowedTargets.length === 0 ||
-    !resolvedFieldTargets.some((target) =>
-      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
-      sameId(target.recordTypeId, queryTarget.recordTypeId),
+    !resolvedFieldTargets.some(
+      (target) =>
+        sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+        sameId(target.recordTypeId, queryTarget.recordTypeId),
     ) ||
-    !queryAllowedTargets.some((target) =>
-      sameId(target.moduleRootId, queryTarget.moduleRootId) &&
-      sameId(target.recordTypeId, queryTarget.recordTypeId),
+    !queryAllowedTargets.some(
+      (target) =>
+        sameId(target.moduleRootId, queryTarget.moduleRootId) &&
+        sameId(target.recordTypeId, queryTarget.recordTypeId),
     )
   )
     return undefined;
@@ -460,9 +445,7 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
       status: "ready",
       values: projectReferenceChoiceInputValues(choices, chosen.key, undefined, {
         ...nextPage,
-        ...(evidence === undefined
-          ? {}
-          : { optionEvidenceOverrides: { [chosen.key]: evidence } }),
+        ...(evidence === undefined ? {} : { optionEvidenceOverrides: { [chosen.key]: evidence } }),
       }),
     },
   });
@@ -470,39 +453,26 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   const onFirstPage = first.choices.find(matches);
   if (onFirstPage !== undefined) return project(first.choices, onFirstPage, undefined);
 
-  // The stored value is named by id: read its label by id, then one search page for that label.
-  const link = { recordTypeId: String(storedValue.recordTypeId), recordId: storedValue.recordId };
-  const labels = await args.resolveRecordLinks([link]);
-  const label = labels?.get(recordLinkLabelKey(link));
-  if (label?.kind !== "record_link") {
-    console.error("reference_choice_selected_not_offered", { reason: "label_not_readable" });
-    return undefined;
-  }
-  const search = label.label.trim().slice(0, 100);
-  if (search === "") {
-    console.error("reference_choice_selected_not_offered", { reason: "label_empty" });
-    return undefined;
-  }
-  const offered = await findOfferedBySearch(args, command, search, matches);
+  const offered = await findOfferedById(args, command, storedValue.recordId, matches);
   if (offered === undefined) return undefined;
-  return project([...first.choices, offered], offered, { search });
+  return project([...first.choices, offered], offered, { exactRecordId: storedValue.recordId });
 };
 
 /**
  * The record a form opens with selected, named by the page address and offered by the Choice's own
  * Query under the viewer's authority. The lookup is bounded: the already-read first page, else one
- * search page named by the record's own label (read for this viewer, so a record they cannot read is
- * never looked up). A value that is not offered selects nothing: the person sees the ordinary
+ * exact identity read. A value that is not offered selects nothing: the person sees the ordinary
  * empty Choice.
  */
-export const projectInitialReferenceChoice = async (args: Readonly<{
-  firstPage: ReferenceChoiceFirstPage;
-  recordId: string;
-  resolveRecordLinks: RecordLinkResolver;
-  service: ReturnType<typeof createReferenceChoiceService>;
-  session: IdentitySession;
-  selection: OrganizationSelectionCandidate;
-}>): Promise<PageDataState | undefined> => {
+export const projectInitialReferenceChoice = async (
+  args: Readonly<{
+    firstPage: ReferenceChoiceFirstPage;
+    recordId: string;
+    service: ReturnType<typeof createReferenceChoiceService>;
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+  }>,
+): Promise<PageDataState | undefined> => {
   const first = args.firstPage;
   const command = first.field.command;
   if (command.kind !== "record_reference" || command.source.query.recordType.state !== "resolved")
@@ -512,9 +482,10 @@ export const projectInitialReferenceChoice = async (args: Readonly<{
     !("organizationAccountId" in choice.value) &&
     sameId(choice.value.recordTypeId, target.recordTypeId) &&
     sameId(choice.value.recordId, args.recordId);
-  const nextPage = first.nextContinuationToken === undefined
-    ? {}
-    : { nextContinuationToken: first.nextContinuationToken };
+  const nextPage =
+    first.nextContinuationToken === undefined
+      ? {}
+      : { nextContinuationToken: first.nextContinuationToken };
   const project = (
     choices: readonly ReferenceChoiceOption[],
     selected: ReferenceChoiceOption,
@@ -530,19 +501,9 @@ export const projectInitialReferenceChoice = async (args: Readonly<{
   const onFirstPage = first.choices.find(matches);
   if (onFirstPage !== undefined) return project(first.choices, onFirstPage, undefined);
 
-  const link = { recordTypeId: String(target.recordTypeId), recordId: args.recordId };
-  const labels = await args.resolveRecordLinks([link]);
-  const label = labels?.get(recordLinkLabelKey(link));
-  if (label?.kind !== "record_link") {
-    console.error("reference_choice_selected_not_offered", { reason: "label_not_readable" });
-    return undefined;
-  }
-  const search = label.label.trim().slice(0, 100);
-  if (search === "") {
-    console.error("reference_choice_selected_not_offered", { reason: "label_empty" });
-    return undefined;
-  }
-  const offered = await findOfferedBySearch(args, command, search, matches);
+  const offered = await findOfferedById(args, command, args.recordId, matches);
   if (offered === undefined) return undefined;
-  return project([...first.choices, offered], offered, { search });
+  return project([...first.choices, offered], offered, {
+    exactRecordId: recordIdSchema.parse(args.recordId),
+  });
 };

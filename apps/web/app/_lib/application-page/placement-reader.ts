@@ -3,7 +3,8 @@ import type {
   createLinkTilesQueryResolver,
   createQueryNoticeQueryResolver,
   createProtectedQueryService,
-  createRecordsTableQueryResolver} from "@vortex/platform/server";
+  createRecordsTableQueryResolver,
+} from "@vortex/platform/server";
 import {
   projectReferenceChoiceInputValues,
   projectRecordDetailData,
@@ -16,7 +17,7 @@ import {
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   type PageSubjectReadResult,
-  type PermittedApplicationsRead
+  type PermittedApplicationsRead,
 } from "@vortex/platform/server";
 import {
   type ApplicationLauncherQueryRow,
@@ -56,13 +57,8 @@ import {
   tablePageParameterName,
   type TablePageRequest,
 } from "../table-page-position";
-import type {
-  collectPlacements} from "./placement-helpers";
-import {
-  projectedUseAvailability,
-  isBoardPlacement,
-  first
-} from "./placement-helpers";
+import type { collectPlacements } from "./placement-helpers";
+import { projectedUseAvailability, isBoardPlacement, first } from "./placement-helpers";
 import { readCalendarPlacement } from "./calendar";
 import { projectChartPlacement } from "./chart";
 import {
@@ -177,9 +173,9 @@ export const projectPlacementBindings = (
  * for it and it never decides the page's availability, so the page may stream it after the frame.
  * Every placement this accepts writes its data entry in {@link readPlacement}.
  */
-export const isStreamablePlacement = (
-  { placement }: ReturnType<typeof collectPlacements>[number],
-): boolean => {
+export const isStreamablePlacement = ({
+  placement,
+}: ReturnType<typeof collectPlacements>[number]): boolean => {
   if (typeof placement.queryId !== "string" || hasReferenceChoiceSource(placement)) return false;
   const block = placement.block;
   const blockIs = (release: Readonly<{ blockId: string }>): boolean =>
@@ -289,12 +285,14 @@ export const readPlacement = async (
     typeof block.blockId === "string" &&
     sameId(block.blockId, CHART_BLOCK_RELEASE.blockId);
   const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
-  if (isLinkTilesBlock && (
-    !isRecord(block) || (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
-      block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion &&
-      block.releaseVersion !== APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion) ||
-    projectedUseAvailability(placement) !== "available"
-  )) {
+  if (
+    isLinkTilesBlock &&
+    (!isRecord(block) ||
+      (block.releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion &&
+        block.releaseVersion !== RECORD_PIN_LINK_TILES_BLOCK_RELEASE.releaseVersion &&
+        block.releaseVersion !== APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE.releaseVersion) ||
+      projectedUseAvailability(placement) !== "available")
+  ) {
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
@@ -304,24 +302,32 @@ export const readPlacement = async (
   const detailContract =
     tableContract === undefined ? readRecordDetailContract(settings) : undefined;
   if (hasReferenceChoiceSource(placement)) {
-    const form = formId === undefined
-      ? undefined
-      : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
+    const form =
+      formId === undefined
+        ? undefined
+        : projectedReferenceChoiceForm(page, context.releaseSet.modules, formId);
     const field = form?.placements.get(placementId);
     if (field === undefined || formId === undefined) {
       logPlacementFailure(address, placementId, "choice_settings_invalid");
       data[placementId] = { status: "disabled", reason: "Choices unavailable" };
       return;
     }
-    const parent = field.dependency === undefined ? undefined :
-      [...(form?.placements ?? [])].find(([, candidate]) =>
-        candidate.fieldKey === field.dependency?.fromField,
-      );
+    const parent =
+      field.dependency === undefined
+        ? undefined
+        : [...(form?.placements ?? [])].find(
+            ([, candidate]) => candidate.fieldKey === field.dependency?.fromField,
+          );
     referenceChoiceInputs.push({
-      placementId, formId, fieldKey: field.fieldKey, releaseVersion: field.releaseVersion,
-      ...(parent === undefined ? {} : {
-        dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] },
-      }),
+      placementId,
+      formId,
+      fieldKey: field.fieldKey,
+      releaseVersion: field.releaseVersion,
+      ...(parent === undefined
+        ? {}
+        : {
+            dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] },
+          }),
     });
     if (field.dependency !== undefined) {
       data[placementId] = {
@@ -358,7 +364,9 @@ export const readPlacement = async (
       ),
     };
     const initialRaw =
-      field.initialValue === undefined ? undefined : first(parameters[field.initialValue.pageParameter]);
+      field.initialValue === undefined
+        ? undefined
+        : first(parameters[field.initialValue.pageParameter]);
     if (initialRaw !== undefined) {
       const initialRecordId = recordIdSchema.safeParse(initialRaw);
       if (!initialRecordId.success) {
@@ -368,12 +376,12 @@ export const readPlacement = async (
       const initial = await projectInitialReferenceChoice({
         firstPage: referenceChoiceFirstPages.get(placementId)!,
         recordId: initialRecordId.data,
-        resolveRecordLinks,
         service: referenceChoices,
         session,
         selection,
       });
-      if (initial === undefined) logPlacementFailure(address, placementId, "choice_initial_value_unavailable");
+      if (initial === undefined)
+        logPlacementFailure(address, placementId, "choice_initial_value_unavailable");
       else data[placementId] = initial;
     }
     return;
@@ -416,7 +424,8 @@ export const readPlacement = async (
     !queryBoundLauncher &&
     !queryBoundSummary &&
     !queryBoundBoard
-  ) return;
+  )
+    return;
   // A Record detail on a detail or public page that binds no query reads its page subject: the
   // one record the page's own address names, of the page's declared record type, through the
   // record read path under the viewer's own authority. A public page shows no more than its
@@ -498,12 +507,16 @@ export const readPlacement = async (
       return;
     }
     const result = await linkTiles.resolve(
-      session, selection, context, queryId, settings, inputValues,
+      session,
+      selection,
+      context,
+      queryId,
+      settings,
+      inputValues,
       isRecord(block) && typeof block.releaseVersion === "string" ? block.releaseVersion : "",
     );
-    data[placementId] = result.status === "ready" && result.values.rows.length === 0
-      ? { status: "empty" }
-      : result;
+    data[placementId] =
+      result.status === "ready" && result.values.rows.length === 0 ? { status: "empty" } : result;
     return;
   }
 
@@ -525,7 +538,12 @@ export const readPlacement = async (
       return;
     }
     data[placementId] = await queryNotices.resolve(
-      session, selection, context, queryId, settings, inputValues,
+      session,
+      selection,
+      context,
+      queryId,
+      settings,
+      inputValues,
     );
     return;
   }
@@ -658,7 +676,9 @@ export const readPlacement = async (
     }
 
     const fieldKeys = new Map(
-      targetRecordType.fields.map((field) => [String(field.fieldId).toLowerCase(), field.key] as const),
+      targetRecordType.fields.map(
+        (field) => [String(field.fieldId).toLowerCase(), field.key] as const,
+      ),
     );
     const launcherRows: ApplicationLauncherQueryRow[] = queryRows.map((row) => {
       const cells: Record<string, { kind: "text"; text: string }> = {};
@@ -732,11 +752,11 @@ export const readPlacement = async (
       const chartRecordType = bound.query.recordType;
       const chartFields = new Map(
         (chartRecordType.state === "resolved"
-          ? context.releaseSet.modules
+          ? (context.releaseSet.modules
               .find((module) => sameId(String(module.rootId), String(chartRecordType.moduleRootId)))
               ?.content.recordTypes.find((recordType) =>
                 sameId(String(recordType.recordTypeId), String(chartRecordType.recordTypeId)),
-              )?.fields ?? []
+              )?.fields ?? [])
           : []
         ).map((field) => [String(field.fieldId).toLowerCase(), field] as const),
       );
@@ -758,9 +778,10 @@ export const readPlacement = async (
         data[placementId] = { status: "error" };
         return;
       }
-      data[placementId] = projection.chart.points.length === 0
-        ? { status: "empty" }
-        : { status: "ready", values: projection.chart };
+      data[placementId] =
+        projection.chart.points.length === 0
+          ? { status: "empty" }
+          : { status: "ready", values: projection.chart };
       return;
     }
 
@@ -781,13 +802,18 @@ export const readPlacement = async (
     const summaryRecordType =
       recordTypeReference.state === "resolved"
         ? context.releaseSet.modules
-            .find((module) => sameId(String(module.rootId), String(recordTypeReference.moduleRootId)))
+            .find((module) =>
+              sameId(String(module.rootId), String(recordTypeReference.moduleRootId)),
+            )
             ?.content.recordTypes.find((recordType) =>
               sameId(String(recordType.recordTypeId), String(recordTypeReference.recordTypeId)),
             )
         : undefined;
     const fieldById = new Map(
-      (summaryRecordType?.fields ?? []).map((field) => [String(field.fieldId).toLowerCase(), field]),
+      (summaryRecordType?.fields ?? []).map((field) => [
+        String(field.fieldId).toLowerCase(),
+        field,
+      ]),
     );
     const values: Array<{
       key: string;
@@ -853,7 +879,8 @@ export const readPlacement = async (
           ? undefined
           : first(parameters[parameter.pageParameter]);
       const declared = declaredInput(parameter.input);
-      const value = raw === undefined || declared === undefined ? undefined : coerceInput(raw, declared);
+      const value =
+        raw === undefined || declared === undefined ? undefined : coerceInput(raw, declared);
       if (parameter.pageParameter !== undefined && value !== undefined)
         pageParameters[parameter.pageParameter] = value;
     }
@@ -925,11 +952,12 @@ export const readPlacement = async (
   }
 
   const queryRecordType = bound.query.recordType;
-  const detailModule = queryRecordType.state === "resolved"
-    ? context.releaseSet.modules.find((module) =>
-        sameId(String(module.rootId), String(queryRecordType.moduleRootId)),
-      )
-    : undefined;
+  const detailModule =
+    queryRecordType.state === "resolved"
+      ? context.releaseSet.modules.find((module) =>
+          sameId(String(module.rootId), String(queryRecordType.moduleRootId)),
+        )
+      : undefined;
   if (detailModule === undefined) {
     logPlacementFailure(address, placementId, "detail_record_type_unavailable");
     data[placementId] = { status: "error" };
