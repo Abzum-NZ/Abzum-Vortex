@@ -20,6 +20,7 @@ declare
   order_sql text;
   after_value text;
   after_record_id uuid;
+  join_sql text;
   scan_sql text;
 begin
   if p_sort_key not in ('record_id', 'key', 'label', 'lifecycle')
@@ -65,6 +66,21 @@ begin
     else pg_catalog.format('%s collate "C" %s, role.role_id %s',
       sort_column, case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
+  join_sql := case when p_sort_key in ('record_id', 'key') then $join$
+    join lateral (
+      select role_revision.*
+      from vortex_access.organization_role_revisions as role_revision
+      where role_revision.organization_id = role.organization_id
+        and role_revision.role_id = role.role_id
+        and role_revision.revision = role.live_revision
+      limit 1
+    ) as role_revision on true
+  $join$ else $join$
+    join vortex_access.organization_role_revisions as role_revision
+      on role_revision.organization_id = role.organization_id
+      and role_revision.role_id = role.role_id
+      and role_revision.revision = role.live_revision
+  $join$ end;
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_roles_administration_scope() as authorized;
@@ -92,10 +108,7 @@ begin
       )
     )
   from vortex_access.organization_roles as role
-  join vortex_access.organization_role_revisions as role_revision
-    on role_revision.organization_id = role.organization_id
-    and role_revision.role_id = role.role_id
-    and role_revision.revision = role.live_revision
+  $scan$ || join_sql || $scan$
   where role.organization_id = $1
     and ($2 is null or role.role_id = any($2))
   $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $5', order_sql);

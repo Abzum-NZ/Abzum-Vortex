@@ -33,8 +33,12 @@ begin
     else 'delegation.delegation_authority_id' end;
   sort_type := case when p_sort_key in ('starts_at', 'expires_at')
     then 'timestamptz' else 'text' end;
-  sort_expression := case when sort_type = 'text'
-    then sort_column || ' collate "C"' else sort_column end;
+  sort_expression := case
+    when p_sort_key = 'expires_at' then
+      '(delegation.expires_at is not null), '
+        || 'coalesce(delegation.expires_at, ''-infinity''::timestamptz)'
+    when sort_type = 'text' then sort_column || ' collate "C"'
+    else sort_column end;
   if p_after is not null then
     if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
       or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
@@ -51,36 +55,39 @@ begin
       if sort_type = 'timestamptz' and after_value is not null then
         perform after_value::timestamptz;
       end if;
-    exception when invalid_text_representation or datetime_field_overflow then
+    exception when invalid_text_representation or invalid_datetime_format
+      or datetime_field_overflow then
       raise exception using errcode = '22023', message = 'Delegation projection cursor is invalid';
     end;
     if p_sort_key = 'record_id' then
       keyset_sql := case when p_direction = 'ascending'
         then ' and delegation.delegation_authority_id > $4'
         else ' and delegation.delegation_authority_id < $4' end;
-    elsif p_direction = 'ascending' then
-      keyset_sql := case when after_value is null
-        then pg_catalog.format(
-          ' and (%s is not null or (%s is null and delegation.delegation_authority_id > $4))',
-          sort_column, sort_column)
-        else pg_catalog.format(
-          ' and (%s, delegation.delegation_authority_id) > ($3::%s, $4)',
-          sort_expression, sort_type) end;
+    elsif p_sort_key = 'expires_at' then
+      keyset_sql := pg_catalog.format(
+        ' and (%s, delegation.delegation_authority_id) %s '
+          || '(($3::timestamptz is not null), '
+          || 'coalesce($3::timestamptz, ''-infinity''::timestamptz), $4)',
+        sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
     else
-      keyset_sql := case when after_value is null
-        then pg_catalog.format(
-          ' and %s is null and delegation.delegation_authority_id < $4', sort_column)
-        else pg_catalog.format(
-          ' and (%s is null or %s < $3::%s or (%s = $3::%s and delegation.delegation_authority_id < $4))',
-          sort_column, sort_expression, sort_type, sort_expression, sort_type) end;
+      keyset_sql := pg_catalog.format(
+        ' and (%s, delegation.delegation_authority_id) %s ($3::%s, $4)',
+        sort_expression, case when p_direction = 'ascending' then '>' else '<' end,
+        sort_type);
     end if;
   end if;
   order_sql := case when p_sort_key = 'record_id'
     then pg_catalog.format('delegation.delegation_authority_id %s',
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
-    else pg_catalog.format('%s %s nulls %s, delegation.delegation_authority_id %s',
+    when p_sort_key = 'expires_at' then pg_catalog.format(
+      '(delegation.expires_at is not null) %s, '
+        || 'coalesce(delegation.expires_at, ''-infinity''::timestamptz) %s, '
+        || 'delegation.delegation_authority_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    else pg_catalog.format('%s %s, delegation.delegation_authority_id %s',
       sort_expression, case when p_direction = 'ascending' then 'asc' else 'desc' end,
-      case when p_direction = 'ascending' then 'first' else 'last' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
 
   begin

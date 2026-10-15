@@ -67,6 +67,7 @@ declare
   order_sql text;
   after_value text;
   after_record_id uuid;
+  join_sql text;
   scan_sql text;
 begin
   if p_sort_key not in ('record_id', 'key', 'label', 'lifecycle')
@@ -112,6 +113,21 @@ begin
     else pg_catalog.format('%s collate "C" %s, role.role_id %s',
       sort_column, case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
+  join_sql := case when p_sort_key in ('record_id', 'key') then $join$
+    join lateral (
+      select role_revision.*
+      from vortex_access.organization_role_revisions as role_revision
+      where role_revision.organization_id = role.organization_id
+        and role_revision.role_id = role.role_id
+        and role_revision.revision = role.live_revision
+      limit 1
+    ) as role_revision on true
+  $join$ else $join$
+    join vortex_access.organization_role_revisions as role_revision
+      on role_revision.organization_id = role.organization_id
+      and role_revision.role_id = role.role_id
+      and role_revision.revision = role.live_revision
+  $join$ end;
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_roles_administration_scope() as authorized;
@@ -139,10 +155,7 @@ begin
       )
     )
   from vortex_access.organization_roles as role
-  join vortex_access.organization_role_revisions as role_revision
-    on role_revision.organization_id = role.organization_id
-    and role_revision.role_id = role.role_id
-    and role_revision.revision = role.live_revision
+  $scan$ || join_sql || $scan$
   where role.organization_id = $1
     and ($2 is null or role.role_id = any($2))
   $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $5', order_sql);
@@ -240,10 +253,7 @@ begin
   end;
   scan_sql := $scan$
     select entry.organization_id,
-      vortex_access.permission_projection_record_id(
-        entry.organization_id, entry.registration_kind, entry.registration_owner_id,
-        entry.owner_kind, entry.owner_id, entry.permission_id
-      ),
+      entry.projected_record_id,
       entry.registration_revision,
       pg_catalog.jsonb_build_object(
         'key', entry.permission_key,
@@ -254,20 +264,28 @@ begin
         'named_action', entry.named_action,
         'administrative', entry.administrative
       )
-    from vortex_access.permission_catalogue_entries as entry
-    join vortex_access.permission_registrations as registration
-      on registration.organization_id = entry.organization_id
-      and registration.registration_kind = entry.registration_kind
-      and registration.registration_owner_id = entry.registration_owner_id
-      and registration.revision = entry.registration_revision
-    where entry.organization_id = $1
-      and registration.state = 'active'
-      and ($2 is null or vortex_access.permission_projection_record_id(
-        entry.organization_id, entry.registration_kind, entry.registration_owner_id,
-        entry.owner_kind, entry.owner_id, entry.permission_id
-      ) = any($2))
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s %s limit $4',
-    record_id_sql, case when p_direction = 'ascending' then 'asc' else 'desc' end);
+    from vortex_access.permission_registrations as registration
+    cross join lateral (
+      select entry.*,
+        vortex_access.permission_projection_record_id(
+          entry.organization_id, entry.registration_kind, entry.registration_owner_id,
+          entry.owner_kind, entry.owner_id, entry.permission_id
+        ) as projected_record_id
+      from vortex_access.permission_catalogue_entries as entry
+      where entry.organization_id = registration.organization_id
+        and entry.registration_kind = registration.registration_kind
+        and entry.registration_owner_id = registration.registration_owner_id
+        and entry.registration_revision = registration.revision
+        and ($2 is null or vortex_access.permission_projection_record_id(
+          entry.organization_id, entry.registration_kind, entry.registration_owner_id,
+          entry.owner_kind, entry.owner_id, entry.permission_id
+        ) = any($2))
+  $scan$ || keyset_sql || pg_catalog.format(
+    ' order by %s %s limit $4) as entry '
+      || 'where registration.organization_id = $1 and registration.state = ''active'' '
+      || 'order by entry.projected_record_id %s limit $4',
+    record_id_sql, case when p_direction = 'ascending' then 'asc' else 'desc' end,
+    case when p_direction = 'ascending' then 'asc' else 'desc' end);
   return query execute scan_sql using scope_row.organization_id, p_record_ids,
     after_record_id, p_limit;
 end
@@ -345,8 +363,12 @@ begin
     else 'delegation.delegation_authority_id' end;
   sort_type := case when p_sort_key in ('starts_at', 'expires_at')
     then 'timestamptz' else 'text' end;
-  sort_expression := case when sort_type = 'text'
-    then sort_column || ' collate "C"' else sort_column end;
+  sort_expression := case
+    when p_sort_key = 'expires_at' then
+      '(delegation.expires_at is not null), '
+        || 'coalesce(delegation.expires_at, ''-infinity''::timestamptz)'
+    when sort_type = 'text' then sort_column || ' collate "C"'
+    else sort_column end;
   if p_after is not null then
     if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
       or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
@@ -363,36 +385,39 @@ begin
       if sort_type = 'timestamptz' and after_value is not null then
         perform after_value::timestamptz;
       end if;
-    exception when invalid_text_representation or datetime_field_overflow then
+    exception when invalid_text_representation or invalid_datetime_format
+      or datetime_field_overflow then
       raise exception using errcode = '22023', message = 'Delegation projection cursor is invalid';
     end;
     if p_sort_key = 'record_id' then
       keyset_sql := case when p_direction = 'ascending'
         then ' and delegation.delegation_authority_id > $4'
         else ' and delegation.delegation_authority_id < $4' end;
-    elsif p_direction = 'ascending' then
-      keyset_sql := case when after_value is null
-        then pg_catalog.format(
-          ' and (%s is not null or (%s is null and delegation.delegation_authority_id > $4))',
-          sort_column, sort_column)
-        else pg_catalog.format(
-          ' and (%s, delegation.delegation_authority_id) > ($3::%s, $4)',
-          sort_expression, sort_type) end;
+    elsif p_sort_key = 'expires_at' then
+      keyset_sql := pg_catalog.format(
+        ' and (%s, delegation.delegation_authority_id) %s '
+          || '(($3::timestamptz is not null), '
+          || 'coalesce($3::timestamptz, ''-infinity''::timestamptz), $4)',
+        sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
     else
-      keyset_sql := case when after_value is null
-        then pg_catalog.format(
-          ' and %s is null and delegation.delegation_authority_id < $4', sort_column)
-        else pg_catalog.format(
-          ' and (%s is null or %s < $3::%s or (%s = $3::%s and delegation.delegation_authority_id < $4))',
-          sort_column, sort_expression, sort_type, sort_expression, sort_type) end;
+      keyset_sql := pg_catalog.format(
+        ' and (%s, delegation.delegation_authority_id) %s ($3::%s, $4)',
+        sort_expression, case when p_direction = 'ascending' then '>' else '<' end,
+        sort_type);
     end if;
   end if;
   order_sql := case when p_sort_key = 'record_id'
     then pg_catalog.format('delegation.delegation_authority_id %s',
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
-    else pg_catalog.format('%s %s nulls %s, delegation.delegation_authority_id %s',
+    when p_sort_key = 'expires_at' then pg_catalog.format(
+      '(delegation.expires_at is not null) %s, '
+        || 'coalesce(delegation.expires_at, ''-infinity''::timestamptz) %s, '
+        || 'delegation.delegation_authority_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    else pg_catalog.format('%s %s, delegation.delegation_authority_id %s',
       sort_expression, case when p_direction = 'ascending' then 'asc' else 'desc' end,
-      case when p_direction = 'ascending' then 'first' else 'last' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
 
   begin
@@ -600,10 +625,10 @@ create index organization_delegations_projection_scope_idx on vortex_access.orga
 
 create index organization_delegations_projection_starts_idx on vortex_access.organization_delegation_authorities (organization_id, starts_at, delegation_authority_id);
 
-create index organization_delegations_projection_expires_idx on vortex_access.organization_delegation_authorities (organization_id, expires_at, delegation_authority_id);
+create index organization_delegations_projection_expires_idx on vortex_access.organization_delegation_authorities (organization_id, (expires_at is not null), (coalesce(expires_at, '-infinity'::timestamptz)), delegation_authority_id);
 
 create index organization_delegations_projection_state_idx on vortex_access.organization_delegation_authorities (organization_id, state collate "C", delegation_authority_id);
 
-create index permission_catalogue_projection_record_idx on vortex_access.permission_catalogue_entries (organization_id, vortex_access.permission_projection_record_id(organization_id, registration_kind, registration_owner_id, owner_kind, owner_id, permission_id));
+create index permission_catalogue_projection_record_idx on vortex_access.permission_catalogue_entries (organization_id, registration_kind, registration_owner_id, registration_revision, vortex_access.permission_projection_record_id(organization_id, registration_kind, registration_owner_id, owner_kind, owner_id, permission_id));
 
 reset role;

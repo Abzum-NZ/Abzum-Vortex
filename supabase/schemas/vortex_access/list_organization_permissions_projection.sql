@@ -50,10 +50,7 @@ begin
   end;
   scan_sql := $scan$
     select entry.organization_id,
-      vortex_access.permission_projection_record_id(
-        entry.organization_id, entry.registration_kind, entry.registration_owner_id,
-        entry.owner_kind, entry.owner_id, entry.permission_id
-      ),
+      entry.projected_record_id,
       entry.registration_revision,
       pg_catalog.jsonb_build_object(
         'key', entry.permission_key,
@@ -64,20 +61,28 @@ begin
         'named_action', entry.named_action,
         'administrative', entry.administrative
       )
-    from vortex_access.permission_catalogue_entries as entry
-    join vortex_access.permission_registrations as registration
-      on registration.organization_id = entry.organization_id
-      and registration.registration_kind = entry.registration_kind
-      and registration.registration_owner_id = entry.registration_owner_id
-      and registration.revision = entry.registration_revision
-    where entry.organization_id = $1
-      and registration.state = 'active'
-      and ($2 is null or vortex_access.permission_projection_record_id(
-        entry.organization_id, entry.registration_kind, entry.registration_owner_id,
-        entry.owner_kind, entry.owner_id, entry.permission_id
-      ) = any($2))
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s %s limit $4',
-    record_id_sql, case when p_direction = 'ascending' then 'asc' else 'desc' end);
+    from vortex_access.permission_registrations as registration
+    cross join lateral (
+      select entry.*,
+        vortex_access.permission_projection_record_id(
+          entry.organization_id, entry.registration_kind, entry.registration_owner_id,
+          entry.owner_kind, entry.owner_id, entry.permission_id
+        ) as projected_record_id
+      from vortex_access.permission_catalogue_entries as entry
+      where entry.organization_id = registration.organization_id
+        and entry.registration_kind = registration.registration_kind
+        and entry.registration_owner_id = registration.registration_owner_id
+        and entry.registration_revision = registration.revision
+        and ($2 is null or vortex_access.permission_projection_record_id(
+          entry.organization_id, entry.registration_kind, entry.registration_owner_id,
+          entry.owner_kind, entry.owner_id, entry.permission_id
+        ) = any($2))
+  $scan$ || keyset_sql || pg_catalog.format(
+    ' order by %s %s limit $4) as entry '
+      || 'where registration.organization_id = $1 and registration.state = ''active'' '
+      || 'order by entry.projected_record_id %s limit $4',
+    record_id_sql, case when p_direction = 'ascending' then 'asc' else 'desc' end,
+    case when p_direction = 'ascending' then 'asc' else 'desc' end);
   return query execute scan_sql using scope_row.organization_id, p_record_ids,
     after_record_id, p_limit;
 end
