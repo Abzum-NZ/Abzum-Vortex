@@ -3,7 +3,8 @@ create or replace function vortex_record.load_record_access_facts_from_installat
   p_action_kind text,
   p_record_id uuid,
   p_expected_concurrency_number bigint,
-  p_installation jsonb
+  p_installation jsonb,
+  p_projection_row jsonb
 )
 returns jsonb
 language plpgsql
@@ -32,6 +33,7 @@ declare
   target_source_sql text;
   target_projection_definition jsonb;
   target_projection_sort_key text;
+  projection_reader_sql text;
   records_by_id jsonb := '{}'::jsonb;
   candidate_edges jsonb := '[]'::jsonb;
   load_contracts uuid[] := array[]::uuid[];
@@ -142,10 +144,14 @@ begin
     target_projection_sort_key := coalesce(target_projection_sort_key, 'record_id');
     -- Shape each protected reader row as the existing view's composite type.
     -- The view supplies the type only: its unbounded reader is never scanned.
+    projection_reader_sql := case when p_projection_row is null then pg_catalog.format(
+      'vortex_record.read_system_projection_rows_internal(%L::uuid, array[$2]::uuid[], %L, ''ascending'', null::jsonb, 1) as projection',
+      (target_meta ->> 'storageContractId')::uuid, target_projection_sort_key
+    ) else
+      'pg_catalog.jsonb_to_record($3) as projection(organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb)'
+    end;
     target_source_sql := pg_catalog.format($source$
-      vortex_record.read_system_projection_rows_internal(
-        %L::uuid, array[$2]::uuid[], %L, 'ascending', null::jsonb, 1
-      ) as projection
+      %s
       cross join lateral pg_catalog.jsonb_populate_record(
         null::record_data.%I,
         pg_catalog.jsonb_build_object(
@@ -171,8 +177,7 @@ begin
           from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
         ), '{}'::jsonb)
       ) as stored$source$,
-      (target_meta ->> 'storageContractId')::uuid,
-      target_projection_sort_key, target_table, target_module_root_id, p_record_type_id,
+      projection_reader_sql, target_table, target_module_root_id, p_record_type_id,
       (target_meta ->> 'storageContractId')::uuid, target_release_revision,
       target_projection_definition #>> '{systemProjection,organizationFieldId}',
       target_projection_definition #>> '{systemProjection,revisionFieldId}',
@@ -266,7 +271,7 @@ begin
 
   execute load_sql
   into record_fact, target_concurrency_number, target_definition_revision
-  using context_organization_id, p_record_id;
+  using context_organization_id, p_record_id, p_projection_row;
 
   if record_fact is null then
     return pg_catalog.jsonb_build_object('outcome', 'missing');
@@ -536,8 +541,28 @@ exception
 end
 $function$;
 
+create or replace function vortex_record.load_record_access_facts_from_installation_internal(
+  p_record_type_id uuid,
+  p_action_kind text,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_installation jsonb
+)
+returns jsonb
+language sql volatile security invoker set search_path = ''
+as $function$
+  select vortex_record.load_record_access_facts_from_installation_internal(
+    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
+    p_installation, null::jsonb
+  )
+$function$;
+
+alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
 alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb) owner to vortex_record_adapter;
 
+revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
+  uuid, text, uuid, bigint, jsonb, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
   uuid, text, uuid, bigint, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

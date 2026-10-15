@@ -35,7 +35,7 @@ declare
 begin
   if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
-    or p_limit is null or p_limit < 1 then
+    or (p_limit is not null and p_limit < 1) then
     raise exception using errcode = '22023', message = 'Activity projection bounds are invalid';
   end if;
   if p_after is not null then
@@ -159,7 +159,7 @@ as $function$
   select projected.*
   from vortex_access.list_organization_activity_entries_projection(
     case when p_record_id is null then null else array[p_record_id] end,
-    'occurred_at', 'descending', null, 1000
+    'occurred_at', 'descending', null, null
   ) as projected
 $function$;
 
