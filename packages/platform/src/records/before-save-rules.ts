@@ -61,6 +61,7 @@ type BeforeSaveRuleApplication =
   | Readonly<{
       success: false;
       reason: "refused";
+      ruleKey: string;
       code: string;
       message: string;
       fieldId?: string;
@@ -165,6 +166,7 @@ export const applyBeforeSaveRules = (input: {
     return {
       success: false,
       reason: "refused",
+      ruleKey: result.refusal.ruleKey,
       code: result.refusal.code,
       message: result.refusal.message,
       ...(result.refusal.fieldId === undefined ? {} : { fieldId: result.refusal.fieldId }),

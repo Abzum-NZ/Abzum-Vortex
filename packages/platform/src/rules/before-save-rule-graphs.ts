@@ -36,6 +36,7 @@ export class BeforeSaveRuleGraphEvaluationError extends Error {
 }
 
 export type BeforeSaveRuleRequirement = Readonly<{
+  ruleKey: string;
   fieldId: string;
   code: string;
   message: string;
@@ -47,6 +48,7 @@ export type BeforeSaveRuleWarning = Readonly<{
 }>;
 
 export type BeforeSaveRuleRefusal = Readonly<{
+  ruleKey: string;
   code: string;
   message: string;
   fieldId?: string;
@@ -283,8 +285,7 @@ export const evaluateBeforeSaveRuleGraphs = (
         ),
     )
     .sort(
-      (left, right) =>
-        left.priority - right.priority || compareFlowText(left.ruleId, right.ruleId),
+      (left, right) => left.priority - right.priority || compareFlowText(left.ruleId, right.ruleId),
     );
   const applicableIds = new Set<string>(applicableGraphs.map((graph) => graph.ruleId));
   if (Object.keys(suppliedByRule).some((ruleId) => !applicableIds.has(ruleId)))
@@ -361,7 +362,12 @@ export const evaluateBeforeSaveRuleGraphs = (
         continue;
       }
       if (node.type === "require_field") {
-        requirements.push({ fieldId: node.fieldId, code: node.code, message: node.message });
+        requirements.push({
+          ruleKey: graph.key,
+          fieldId: node.fieldId,
+          code: node.code,
+          message: node.message,
+        });
         nextNodeId = outgoingEdge(graph, node.nodeId, "next");
         continue;
       }
@@ -374,6 +380,7 @@ export const evaluateBeforeSaveRuleGraphs = (
         return {
           success: false,
           refusal: {
+            ruleKey: graph.key,
             code: node.code,
             message: node.message,
             ...(node.fieldId === undefined ? {} : { fieldId: node.fieldId }),
