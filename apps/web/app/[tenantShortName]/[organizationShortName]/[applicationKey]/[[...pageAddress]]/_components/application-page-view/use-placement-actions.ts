@@ -18,6 +18,10 @@ import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type { Notice, RefreshedPlacementData, TableContinuationTarget } from "./types";
 import { asComponentBinding } from "./event-values";
 import {
+  searchWithoutTablePages,
+  type TablePageRequest,
+} from "../../../../../../_lib/table-page-position";
+import {
   boardPayloadFor,
   boardBucketForSelector,
   mergeBoardContinuation,
@@ -39,6 +43,7 @@ export function usePlacementActions({
   currentSearch,
   router,
   tableContinuationScopeRef,
+  commitTablePage,
 }: Readonly<{
   applyDispatch: (
     dispatch: Promise<FlowDispatchResult | undefined>,
@@ -67,6 +72,7 @@ export function usePlacementActions({
   currentSearch: string;
   router: ReturnType<typeof useRouter>;
   tableContinuationScopeRef: RefObject<{ scopeKey: string; inFlight: Set<string> }>;
+  commitTablePage: (placementId: string, request: TablePageRequest) => void;
 }>) {
   /**
    * Runs the flow bound to a display or action event through the same runtime as a form gesture.
@@ -286,7 +292,7 @@ export function usePlacementActions({
       const parsedId = containedComponentIdSchema.safeParse(placementId);
       if (!parsedId.success) return;
 
-      const scopeKey = `${navigationKey}\u0000${currentSearch}`;
+      const scopeKey = `${navigationKey}\u0000${searchWithoutTablePages(currentSearch)}`;
       let scope = tableContinuationScopeRef.current;
       if (scope.scopeKey !== scopeKey) {
         scope = { scopeKey, inFlight: new Set() };
@@ -320,20 +326,18 @@ export function usePlacementActions({
       if (scope.inFlight.has(requestKey)) return;
       scope.inFlight.add(requestKey);
       try {
-        await refreshPlacements([parsedId.data], {
-          placementId: parsedId.data,
-          request: {
-            page: event.page,
-            pageDirection:
-              direction === "previous" || direction === "last" ? "backward" : "forward",
-            ...(continuationToken === undefined ? {} : { continuationToken }),
-          },
-        });
+        const request: TablePageRequest = {
+          page: event.page,
+          pageDirection: direction === "previous" || direction === "last" ? "backward" : "forward",
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+        };
+        commitTablePage(parsedId.data, request);
+        await refreshPlacements([parsedId.data], { placementId: parsedId.data, request });
       } finally {
         scope.inFlight.delete(requestKey);
       }
     },
-    [busy, currentSearch, navigationKey, refreshPlacements],
+    [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements],
   );
 
   return { runBinding, continueBoardColumn, continueTablePage };

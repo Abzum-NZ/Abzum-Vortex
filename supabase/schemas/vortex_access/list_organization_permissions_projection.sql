@@ -16,30 +16,62 @@ as $function$
 declare
   scope_row record;
   after_record_id uuid;
+  after_sort_key text;
   record_id_sql text := 'vortex_access.permission_projection_record_id('
     || 'entry.organization_id, entry.registration_kind, entry.registration_owner_id, '
     || 'entry.owner_kind, entry.owner_id, entry.permission_id)';
   keyset_sql text := '';
+  sort_sql text;
+  outer_sort_sql text;
+  sort_bind_sql text;
+  direction_sql text;
   scan_sql text;
 begin
-  if p_sort_key is distinct from 'record_id'
+  if p_sort_key is null or p_sort_key not in ('record_id', 'key', 'label', 'administrative')
     or p_direction not in ('ascending', 'descending')
     or p_direction is null
     or (p_limit is not null and p_limit < 1) then
     raise exception using errcode = '22023', message = 'Permission projection bounds are invalid';
   end if;
+  sort_sql := case p_sort_key
+    when 'key' then 'entry.permission_key'
+    when 'label' then 'entry.label'
+    when 'administrative' then 'entry.administrative'
+    else record_id_sql end;
+  outer_sort_sql := case p_sort_key
+    when 'key' then 'entry.permission_key'
+    when 'label' then 'entry.label'
+    when 'administrative' then 'entry.administrative'
+    else 'entry.projected_record_id' end;
+  sort_bind_sql := case when p_sort_key = 'administrative' then '$5::boolean' else '$5' end;
+  direction_sql := case when p_direction = 'ascending' then 'asc' else 'desc' end;
   if p_after is not null then
     if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
-      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string' then
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
+      or (p_sort_key <> 'record_id' and (
+        pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+        or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
+        or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'string'
+      )) then
       raise exception using errcode = '22023', message = 'Permission projection cursor is invalid';
     end if;
     begin
       after_record_id := (p_after ->> 'recordId')::uuid;
+      after_sort_key := p_after -> 'sortKey' ->> 0;
     exception when invalid_text_representation then
       raise exception using errcode = '22023', message = 'Permission projection cursor is invalid';
     end;
-    keyset_sql := pg_catalog.format(' and %s %s $3', record_id_sql,
-      case when p_direction = 'ascending' then '>' else '<' end);
+    if p_sort_key = 'administrative' and after_sort_key not in ('true', 'false') then
+      raise exception using errcode = '22023', message = 'Permission projection cursor is invalid';
+    end if;
+    keyset_sql := case when p_sort_key = 'record_id' then pg_catalog.format(
+      ' and %s %s $3', record_id_sql,
+      case when p_direction = 'ascending' then '>' else '<' end
+    ) else pg_catalog.format(
+      ' and (%s, %s) %s (%s, $3)', sort_sql, record_id_sql,
+      case when p_direction = 'ascending' then '>' else '<' end,
+      sort_bind_sql
+    ) end;
   end if;
   begin
     select authorized.* into strict scope_row
@@ -78,13 +110,13 @@ begin
           entry.owner_kind, entry.owner_id, entry.permission_id
         ) = any($2))
   $scan$ || keyset_sql || pg_catalog.format(
-    ' order by %s %s limit $4) as entry '
+    ' order by %s %s, %s %s limit $4) as entry '
       || 'where registration.organization_id = $1 and registration.state = ''active'' '
-      || 'order by entry.projected_record_id %s limit $4',
-    record_id_sql, case when p_direction = 'ascending' then 'asc' else 'desc' end,
-    case when p_direction = 'ascending' then 'asc' else 'desc' end);
+      || 'order by %s %s, entry.projected_record_id %s limit $4',
+    sort_sql, direction_sql, record_id_sql, direction_sql,
+    outer_sort_sql, direction_sql, direction_sql);
   return query execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_record_id, p_limit;
+    after_record_id, p_limit, after_sort_key;
 end
 $function$;
 

@@ -94,6 +94,14 @@ declare
   access_shared_record_ids uuid[] := array[]::uuid[];
   physical_table_token text;
   storage_scope text;
+  scan_source_sql text;
+  scan_projection_sql text := 'null::jsonb';
+  projection_page_scan boolean := false;
+  projection_sort_key text;
+  projection_batch jsonb;
+  projection_batch_exhausted boolean := false;
+  projection_last_record_id uuid;
+  projection_last_sort_key text[];
   scan_record record;
   examined integer := 0;
   budget_exhausted boolean := false;
@@ -834,6 +842,81 @@ begin
   scan_record_id_direction := case when p_direction = 'forward' then record_id_direction
     when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
 
+  scan_source_sql := pg_catalog.format('record_data.%I as stored', physical_table_token);
+  projection_page_scan := not preview_mode and record_type_item ? 'systemProjection'
+    and pg_catalog.cardinality(sort_ids) = 1
+    and pg_catalog.cardinality(declared_sort_ids) = 1
+    and exists (
+      select 1
+      from pg_catalog.jsonb_array_elements_text(
+        record_type_item #> '{systemProjection,sortableFieldIds}'
+      ) as sortable(id)
+      where pg_catalog.lower(sortable.id) = sort_ids[1]
+    ) and (
+      (record_type_item #>> '{systemProjection,protectedView}' = 'organization_accounts'
+        and fields_by_id -> sort_ids[1] ->> 'key' in ('display_name', 'state'))
+      or (record_type_item #>> '{systemProjection,protectedView}' = 'activity_entry'
+        and fields_by_id -> sort_ids[1] ->> 'key' = 'occurred_at')
+    );
+  if projection_page_scan then
+      projection_sort_key := fields_by_id -> sort_ids[1] ->> 'key';
+      if projection_sort_key is null then
+        raise exception using errcode = '55000',
+          message = 'Protected projection sort field is unavailable';
+      end if;
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
+      into projection_batch
+      from vortex_record.read_system_projection_rows_internal(
+        v_storage_contract_id, null::uuid[], projection_sort_key,
+        scan_directions[1], p_after, scan_limit + 1
+      ) with ordinality as projected(organization_id, record_id, revision, attribute_values, ordinality);
+      projection_batch_exhausted := pg_catalog.jsonb_array_length(projection_batch) > scan_limit;
+      if projection_batch_exhausted then
+        projection_last_record_id := (projection_batch -> (scan_limit - 1) ->> 'record_id')::uuid;
+        projection_last_sort_key := array[
+          projection_batch -> (scan_limit - 1) -> 'attribute_values' ->> projection_sort_key
+        ];
+      end if;
+      -- The registered view contributes its row type only. The bounded reader
+      -- supplies every candidate, including rows later rejected by the query.
+      scan_source_sql := pg_catalog.format($source$
+        pg_catalog.jsonb_to_recordset($11) as projection(
+          organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+        )
+        cross join lateral pg_catalog.jsonb_populate_record(
+          null::record_data.%I,
+          pg_catalog.jsonb_build_object(
+            'organisation_id', projection.organization_id,
+            'module_root_id', %L::uuid,
+            'record_type_id', %L::uuid,
+            'storage_contract_id', %L::uuid,
+            'record_id', projection.record_id,
+            'definition_revision', %L::bigint,
+            'lifecycle_state', 'active',
+            'concurrency_number', projection.revision
+          ) || coalesce((
+            select pg_catalog.jsonb_object_agg(
+              'f_' || pg_catalog.replace(pg_catalog.lower(field.value ->> 'fieldId'), '-', ''),
+              case
+                when field.value ->> 'fieldId' = %L
+                  then pg_catalog.to_jsonb(projection.organization_id::text)
+                when field.value ->> 'fieldId' = %L
+                  then pg_catalog.to_jsonb(projection.revision)
+                else projection.attribute_values -> (field.value ->> 'key')
+              end
+            )
+            from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
+          ), '{}'::jsonb)
+        ) as stored$source$,
+        physical_table_token, p_module_root_id, record_type_id_value,
+        v_storage_contract_id, (resolved ->> 'moduleReleaseRevision')::bigint,
+        record_type_item #>> '{systemProjection,organizationFieldId}',
+        record_type_item #>> '{systemProjection,revisionFieldId}',
+        record_type_item
+      );
+      scan_projection_sql := 'pg_catalog.to_jsonb(projection)';
+  end if;
+
   -- The scan. Identifiers come only from the storage catalogue; every value is
   -- a bound parameter. Nulls order first ascending and last descending. The
   -- order always ends with the record id, so the keyset stays total even when
@@ -991,13 +1074,19 @@ begin
     segment_predicates := array[keyset_sql];
   end if;
 
+  if projection_page_scan then
+    -- The bounded reader has already applied the sealed keyset and order.
+    segment_predicates := array[''];
+  end if;
+
   foreach segment_sql in array segment_predicates loop
   scan_sql := pg_catalog.format(
     'select stored.record_id,
        array[%s]::text[] as sort_key,
        pg_catalog.jsonb_build_object(%s) as filter_values,
-       pg_catalog.jsonb_build_object(%s) as system_values
-     from record_data.%I as stored
+       pg_catalog.jsonb_build_object(%s) as system_values,
+       %s as projection_row
+     from %s
      where stored.organisation_id = $1
        and stored.lifecycle_state = ''active''
        and %s
@@ -1020,7 +1109,8 @@ begin
        group by (filter_pair.pair_number - 1) / 50
      ) as filter_chunk),
     system_columns_sql,
-    physical_table_token,
+    scan_projection_sql,
+    scan_source_sql,
     case when storage_scope = 'application_contained'
       then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
     access_sql,
@@ -1035,7 +1125,7 @@ begin
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
-      filter_parameters, access_parameters
+      filter_parameters, access_parameters, projection_batch
   loop
     examined := examined + 1;
     if examined > scan_limit then
@@ -1071,7 +1161,8 @@ begin
         -- write it or pass it to the owner-only exact-record evaluator.
         page_eligibility_checked := true;
         page_access_loaded := vortex_record.load_record_access_facts_internal(
-          record_type_id_value, 'read', scan_record.record_id, null
+          record_type_id_value, 'read', scan_record.record_id, null,
+          scan_record.projection_row
         );
         if page_access_loaded ->> 'outcome' = 'loaded'
           and pg_catalog.jsonb_typeof(page_access_loaded -> 'declaration') = 'object' then
@@ -1085,7 +1176,7 @@ begin
       select row_read.* into read_row
       from vortex_record.read_record_projection_with_validated_types_internal(
         record_type_id_value, scan_record.record_id, page_declaration, page_eligibility,
-        validated_record_types
+        validated_record_types, scan_record.projection_row
       ) as row_read;
       projection := read_row.projection;
       if validated_record_types is null then
@@ -1218,6 +1309,11 @@ begin
   end loop;
   exit when more_rows or budget_exhausted;
   end loop;
+  if projection_batch_exhausted and not more_rows then
+    budget_exhausted := true;
+    last_examined_sort_key := projection_last_sort_key;
+    last_examined_record_id := projection_last_record_id;
+  end if;
   if row_count > 0 then
     page_capabilities := vortex_record.read_record_capabilities_page_internal(
       record_type_id_value, pg_catalog.to_jsonb(capability_rows)

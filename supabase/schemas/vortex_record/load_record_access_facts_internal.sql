@@ -2,7 +2,8 @@ create or replace function vortex_record.load_record_access_facts_internal(
   p_record_type_id uuid,
   p_action_kind text,
   p_record_id uuid,
-  p_expected_concurrency_number bigint
+  p_expected_concurrency_number bigint,
+  p_projection_row jsonb
 )
 returns jsonb
 language plpgsql
@@ -53,7 +54,8 @@ begin
     else preview_installation end;
 
   return vortex_record.load_record_access_facts_from_installation_internal(
-    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number, installation
+    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
+    installation, p_projection_row
   );
 exception
   when no_data_found then
@@ -65,8 +67,27 @@ exception
 end
 $function$;
 
+create or replace function vortex_record.load_record_access_facts_internal(
+  p_record_type_id uuid,
+  p_action_kind text,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint
+)
+returns jsonb
+language sql volatile security invoker set search_path = ''
+as $function$
+  select vortex_record.load_record_access_facts_internal(
+    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
+    null::jsonb
+  )
+$function$;
+
+alter function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb) owner to vortex_record_adapter;
 alter function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint) owner to vortex_record_adapter;
 
+revoke all on function vortex_record.load_record_access_facts_internal(
+  uuid, text, uuid, bigint, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 revoke all on function vortex_record.load_record_access_facts_internal(
   uuid, text, uuid, bigint
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

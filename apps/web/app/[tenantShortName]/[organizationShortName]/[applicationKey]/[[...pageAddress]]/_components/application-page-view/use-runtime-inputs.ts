@@ -27,6 +27,7 @@ import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type {
   placementEventNamesByPage,
   applicationLauncherPlacementIds} from "./placement-helpers";
+import { tablePageParameterName } from "../../../../../../_lib/table-page-position";
 import {
   boardPayloadFor,
   tablePayloadFor,
@@ -267,15 +268,17 @@ export function useRuntimeInputs({
         if (supportsEvent("sort_changed"))
           events.sort_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "sort_changed") return;
-            setQuery((parameters) =>
-              parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`),
-            );
+            setQuery((parameters) => {
+              parameters.set(`sort.${placementId}`, `${event.columnKey}:${event.direction}`);
+              parameters.delete(tablePageParameterName(placementId));
+            });
           };
         if (supportsEvent("filter_changed"))
           events.filter_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "filter_changed") return;
             setQuery((parameters) => {
               const name = `filter.${placementId}.${event.field}`;
+              parameters.delete(tablePageParameterName(placementId));
               if (event.value === "") parameters.delete(name);
               else parameters.set(name, event.value);
             });
@@ -284,6 +287,7 @@ export function useRuntimeInputs({
           events.search_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "search_changed") return;
             setQuery((parameters) => {
+              parameters.delete(tablePageParameterName(placementId));
               if (event.query.trim() === "") parameters.delete(`search.${placementId}`);
               else parameters.set(`search.${placementId}`, event.query);
             });
