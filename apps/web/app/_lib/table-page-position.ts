@@ -19,23 +19,32 @@ export const tablePageParameterName = (placementId: string): string =>
 /** True for a parameter that holds one placement's page position. */
 export const isTablePageParameter = (name: string): boolean => name.startsWith(PARAMETER_PREFIX);
 
+const PAGE_PATTERN = /^[1-9][0-9]{0,4}$/;
+
 /** The address value for a page request, or undefined for the first page. */
 export const encodeTablePagePosition = (request: TablePageRequest): string | undefined => {
   if (request.page <= 1) return undefined;
-  if (request.continuationToken === undefined) return "last";
-  return `${request.pageDirection}.${request.continuationToken}`;
+  if (request.continuationToken === undefined) return `${request.page}.last`;
+  return `${request.page}.${request.pageDirection}.${request.continuationToken}`;
 };
 
-/** The page request an address value names; a value that is not a position reads page one. */
+/**
+ * The page request an address value names, `<page>.last` or `<page>.<direction>.<token>`, so the
+ * table shows the same page number after a reload; a value that is not a position reads page one.
+ */
 export const parseTablePagePosition = (value: string | undefined): TablePageRequest | undefined => {
-  if (value === "last") return { page: 2, pageDirection: "backward" };
-  const separator = value?.indexOf(".") ?? -1;
-  if (value === undefined || separator < 0) return undefined;
-  const direction = value.slice(0, separator);
-  const token = value.slice(separator + 1);
-  if ((direction !== "forward" && direction !== "backward") || !TOKEN_PATTERN.test(token))
+  const [pageText, direction, token, ...rest] = value?.split(".") ?? [];
+  if (pageText === undefined || !PAGE_PATTERN.test(pageText) || rest.length > 0) return undefined;
+  const page = Number(pageText);
+  if (page < 2) return undefined;
+  if (direction === "last" && token === undefined) return { page, pageDirection: "backward" };
+  if (
+    (direction !== "forward" && direction !== "backward") ||
+    token === undefined ||
+    !TOKEN_PATTERN.test(token)
+  )
     return undefined;
-  return { page: 2, pageDirection: direction, continuationToken: token };
+  return { page, pageDirection: direction, continuationToken: token };
 };
 
 /** The address query without any table page position: what identifies the page itself. */
