@@ -474,9 +474,15 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   const link = { recordTypeId: String(storedValue.recordTypeId), recordId: storedValue.recordId };
   const labels = await args.resolveRecordLinks([link]);
   const label = labels?.get(recordLinkLabelKey(link));
-  if (label?.kind !== "record_link") return undefined;
+  if (label?.kind !== "record_link") {
+    console.error("reference_choice_selected_not_offered", { reason: "label_not_readable" });
+    return undefined;
+  }
   const search = label.label.trim().slice(0, 100);
-  if (search === "") return undefined;
+  if (search === "") {
+    console.error("reference_choice_selected_not_offered", { reason: "label_empty" });
+    return undefined;
+  }
   const offered = await findOfferedBySearch(args, command, search, matches);
   if (offered === undefined) return undefined;
   return project([...first.choices, offered], offered, { search });
@@ -527,9 +533,15 @@ export const projectInitialReferenceChoice = async (args: Readonly<{
   const link = { recordTypeId: String(target.recordTypeId), recordId: args.recordId };
   const labels = await args.resolveRecordLinks([link]);
   const label = labels?.get(recordLinkLabelKey(link));
-  if (label?.kind !== "record_link") return undefined;
+  if (label?.kind !== "record_link") {
+    console.error("reference_choice_selected_not_offered", { reason: "label_not_readable" });
+    return undefined;
+  }
   const search = label.label.trim().slice(0, 100);
-  if (search === "") return undefined;
+  if (search === "") {
+    console.error("reference_choice_selected_not_offered", { reason: "label_empty" });
+    return undefined;
+  }
   const offered = await findOfferedBySearch(args, command, search, matches);
   if (offered === undefined) return undefined;
   return project([...first.choices, offered], offered, { search });
