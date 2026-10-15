@@ -34,9 +34,6 @@ begin
   sort_type := case when p_sort_key in ('starts_at', 'expires_at')
     then 'timestamptz' else 'text' end;
   sort_expression := case
-    when p_sort_key = 'expires_at' then
-      '(delegation.expires_at is not null), '
-        || 'coalesce(delegation.expires_at, ''-infinity''::timestamptz)'
     when sort_type = 'text' then sort_column || ' collate "C"'
     else sort_column end;
   if p_after is not null then
@@ -64,11 +61,15 @@ begin
         then ' and delegation.delegation_authority_id > $4'
         else ' and delegation.delegation_authority_id < $4' end;
     elsif p_sort_key = 'expires_at' then
-      keyset_sql := pg_catalog.format(
-        ' and (%s, delegation.delegation_authority_id) %s '
-          || '(($3::timestamptz is not null), '
-          || 'coalesce($3::timestamptz, ''-infinity''::timestamptz), $4)',
-        sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
+      keyset_sql := case when after_value is null then
+        case when p_direction = 'ascending' then
+          ' and (delegation.expires_at is not null or
+            (delegation.expires_at is null and delegation.delegation_authority_id > $4))'
+        else ' and delegation.expires_at is null and delegation.delegation_authority_id < $4' end
+      when p_direction = 'ascending' then
+        ' and (delegation.expires_at, delegation.delegation_authority_id) > ($3::timestamptz, $4)'
+      else ' and (delegation.expires_at is null or
+        (delegation.expires_at, delegation.delegation_authority_id) < ($3::timestamptz, $4))' end;
     else
       keyset_sql := pg_catalog.format(
         ' and (%s, delegation.delegation_authority_id) %s ($3::%s, $4)',
@@ -80,11 +81,9 @@ begin
     then pg_catalog.format('delegation.delegation_authority_id %s',
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
     when p_sort_key = 'expires_at' then pg_catalog.format(
-      '(delegation.expires_at is not null) %s, '
-        || 'coalesce(delegation.expires_at, ''-infinity''::timestamptz) %s, '
-        || 'delegation.delegation_authority_id %s',
+      'delegation.expires_at %s nulls %s, delegation.delegation_authority_id %s',
       case when p_direction = 'ascending' then 'asc' else 'desc' end,
-      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'first' else 'last' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
     else pg_catalog.format('%s %s, delegation.delegation_authority_id %s',
       sort_expression, case when p_direction = 'ascending' then 'asc' else 'desc' end,

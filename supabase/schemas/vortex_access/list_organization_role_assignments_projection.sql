@@ -54,13 +54,12 @@ begin
       and role_revision.role_id = role.role_id and role_revision.revision = role.live_revision$joins$;
   end if;
   if sort_kind = 'nullable_time' then
-    -- The null flag distinguishes NULL from a real infinity timestamp in both directions.
-    sort_expression := pg_catalog.format('coalesce(%s, ''infinity''::timestamptz)', sort_column);
-    sort_null_expression := pg_catalog.format('(%s is null)', sort_column);
-    order_sql := pg_catalog.format('%s %s, %s %s, assignment.role_assignment_id %s',
-      sort_expression, direction_sql, sort_null_expression, direction_sql, direction_sql);
-    outer_order_sql := pg_catalog.format('candidate.sort_value %s, candidate.sort_null %s, candidate.record_id %s',
-      direction_sql, direction_sql, direction_sql);
+    sort_expression := sort_column;
+    order_sql := pg_catalog.format('%s %s nulls %s, assignment.role_assignment_id %s',
+      sort_expression, direction_sql,
+      case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
+    outer_order_sql := pg_catalog.format('candidate.sort_value %s nulls %s, candidate.record_id %s',
+      direction_sql, case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
   elsif sort_kind in ('text', 'legacy_text') then
     sort_expression := sort_column || ' collate "C"';
     order_sql := pg_catalog.format('%s %s, assignment.role_assignment_id %s', sort_expression, direction_sql, direction_sql);
@@ -101,10 +100,13 @@ begin
       keyset_sql := pg_catalog.format(' and (%s, assignment.role_assignment_id) %s ($3 collate "C", $4)',
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
     elsif sort_kind = 'nullable_time' then
-      keyset_sql := pg_catalog.format(
-        ' and (%s, %s, assignment.role_assignment_id) %s (coalesce($5, ''infinity''::timestamptz), $5 is null, $4)',
-        sort_expression, sort_null_expression,
-        case when p_direction = 'ascending' then '>' else '<' end);
+      keyset_sql := pg_catalog.format(case when p_direction = 'ascending' then
+        ' and (($5 is null and (assignment.expires_at is not null or (assignment.expires_at is null and assignment.role_assignment_id > $4)))'
+          || ' or ($5 is not null and (assignment.expires_at, assignment.role_assignment_id) > ($5, $4)))'
+        else
+        ' and (($5 is null and assignment.expires_at is null and assignment.role_assignment_id < $4)'
+          || ' or ($5 is not null and (assignment.expires_at is null or (assignment.expires_at, assignment.role_assignment_id) < ($5, $4))))'
+        end);
     else
       keyset_sql := pg_catalog.format(' and (%s, assignment.role_assignment_id) %s ($5, $4)',
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
