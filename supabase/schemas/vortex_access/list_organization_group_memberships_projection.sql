@@ -1,47 +1,131 @@
 create or replace function vortex_access.list_organization_group_memberships_projection(
-  p_record_id uuid,
-  p_page_size integer
+  p_record_ids uuid[], p_sort_key text, p_direction text,
+  p_after jsonb, p_limit integer
 )
 returns table (
-  organization_id uuid,
-  record_id uuid,
-  revision bigint,
-  attribute_values jsonb
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
 )
-language plpgsql
-volatile
-security definer
-set search_path = ''
+language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
   scope_row record;
   checked_at timestamptz;
+  sort_column text;
+  sort_kind text;
+  sort_expression text;
+  sort_null_expression text := 'false';
+  candidate_joins text := '';
+  direction_sql text;
+  keyset_sql text := '';
+  order_sql text;
+  outer_order_sql text;
+  after_text text;
+  after_time timestamptz;
+  after_record_id uuid;
+  scan_sql text;
 begin
-  -- The projection keeps today's row visibility inside itself: the same fixed
-  -- platform.organization.groups.read decision the bespoke membership
-  -- administration reader applies is the only visibility, and the caller's
-  -- current organisation is never an input. A viewer the decision refuses sees
-  -- no rows, exactly as a missing or foreign record, so the record adapters
-  -- return their identical refusal and a list page is empty rather than failing.
-  -- The record identity is the membership, the revision is the membership's own
-  -- revision and the attribute names are the lowercase field keys a projection
-  -- record type declares. The temporal state is descriptive and grants no
-  -- permission, exactly as the bespoke reader; grant and revocation evidence is
-  -- never projected.
+  if p_sort_key not in ('record_id', 'starts_at', 'expires_at', 'state', 'account_display_name')
+    or p_sort_key is null or p_direction not in ('ascending', 'descending')
+    or p_direction is null or (p_limit is not null and p_limit < 1)
+    or (p_sort_key <> 'record_id' and p_limit is null) then
+    raise exception using errcode = '22023', message = 'Membership projection bounds are invalid';
+  end if;
+  sort_column := case p_sort_key
+    when 'starts_at' then 'membership.starts_at'
+    when 'expires_at' then 'membership.expires_at'
+    when 'state' then 'membership.state'
+    when 'account_display_name' then 'account.display_name'
+    else 'membership.membership_id' end;
+  sort_kind := case p_sort_key
+    when 'starts_at' then 'time'
+    when 'expires_at' then 'nullable_time'
+    when 'state' then 'text'
+    when 'account_display_name' then 'legacy_text'
+    else 'id' end;
+  direction_sql := case when p_direction = 'ascending' then 'asc' else 'desc' end;
+  if sort_kind = 'legacy_text' then
+    -- A stored release can still request a sort dropped from current publishable definitions.
+    candidate_joins := $joins$join vortex_identity.organization_accounts as account
+      on account.organization_id = membership.organization_id
+      and account.organization_account_id = membership.organization_account_id$joins$;
+  end if;
+  if sort_kind = 'nullable_time' then
+    -- The null flag distinguishes NULL from a real infinity timestamp in both directions.
+    sort_expression := pg_catalog.format('coalesce(%s, ''infinity''::timestamptz)', sort_column);
+    sort_null_expression := pg_catalog.format('(%s is null)', sort_column);
+    order_sql := pg_catalog.format('%s %s, %s %s, membership.membership_id %s',
+      sort_expression, direction_sql, sort_null_expression, direction_sql, direction_sql);
+    outer_order_sql := pg_catalog.format('candidate.sort_value %s, candidate.sort_null %s, candidate.record_id %s',
+      direction_sql, direction_sql, direction_sql);
+  elsif sort_kind in ('text', 'legacy_text') then
+    sort_expression := sort_column || ' collate "C"';
+    order_sql := pg_catalog.format('%s %s, membership.membership_id %s', sort_expression, direction_sql, direction_sql);
+    outer_order_sql := pg_catalog.format('candidate.sort_value collate "C" %s, candidate.record_id %s',
+      direction_sql, direction_sql);
+  else
+    sort_expression := sort_column;
+    order_sql := pg_catalog.format('%s %s, membership.membership_id %s',
+      sort_expression, direction_sql, direction_sql);
+    outer_order_sql := pg_catalog.format('candidate.sort_value %s, candidate.record_id %s',
+      direction_sql, direction_sql);
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
+      or (sort_kind <> 'id' and (
+        pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+        or pg_catalog.jsonb_array_length(p_after -> 'sortKey') is distinct from 1
+        or (pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'string'
+          and (sort_kind <> 'nullable_time'
+            or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'null'))
+      )) then
+      raise exception using errcode = '22023', message = 'Membership projection cursor is invalid';
+    end if;
+    begin
+      after_record_id := (p_after ->> 'recordId')::uuid;
+      after_text := p_after -> 'sortKey' ->> 0;
+      if sort_kind in ('time', 'nullable_time') then
+        after_time := after_text::timestamptz;
+      end if;
+    exception when invalid_text_representation or datetime_field_overflow then
+      raise exception using errcode = '22023', message = 'Membership projection cursor is invalid';
+    end;
+    if sort_kind = 'id' then
+      keyset_sql := pg_catalog.format(' and membership.membership_id %s $4',
+        case when p_direction = 'ascending' then '>' else '<' end);
+    elsif sort_kind in ('text', 'legacy_text') then
+      keyset_sql := pg_catalog.format(' and (%s, membership.membership_id) %s ($3 collate "C", $4)',
+        sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
+    elsif sort_kind = 'nullable_time' then
+      keyset_sql := pg_catalog.format(
+        ' and (%s, %s, membership.membership_id) %s (coalesce($5, ''infinity''::timestamptz), $5 is null, $4)',
+        sort_expression, sort_null_expression,
+        case when p_direction = 'ascending' then '>' else '<' end);
+    else
+      keyset_sql := pg_catalog.format(' and (%s, membership.membership_id) %s ($5, $4)',
+        sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
+    end if;
+  end if;
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_groups_administration_scope() as authorized;
-  exception
-    when insufficient_privilege then
-      return;
+  exception when insufficient_privilege then
+    return;
   end;
   checked_at := pg_catalog.statement_timestamp();
-  return query
-  select
-    scope_row.organization_id,
-    membership.membership_id,
-    membership.revision,
-    pg_catalog.jsonb_build_object(
+  scan_sql := pg_catalog.format($scan$
+    with candidate as materialized (
+      select membership.membership_id as record_id,
+        %s as sort_value, %s as sort_null
+      from vortex_access.organization_group_memberships as membership
+      %s
+      where membership.organization_id = $1
+        and ($2 is null or membership.membership_id = any($2))
+      %s
+      order by %s limit $6
+    )
+    select membership.organization_id, membership.membership_id, membership.revision,
+      pg_catalog.jsonb_build_object(
       'group_id', membership.group_id,
       'organization_account_id', membership.organization_account_id,
       'account_display_name', account.display_name,
@@ -50,32 +134,46 @@ begin
       'state', membership.state,
       'temporal_state', case
         when membership.state = 'revoked' then 'revoked'
-        when membership.starts_at > checked_at then 'scheduled'
-        when membership.expires_at is not null
-          and membership.expires_at <= checked_at then 'expired'
-        else 'active'
-      end
-    )
-  from vortex_access.organization_group_memberships as membership
-  join vortex_identity.organization_accounts as account
-    on account.organization_id = membership.organization_id
-    and account.organization_account_id = membership.organization_account_id
-  where membership.organization_id = scope_row.organization_id
-    and (p_record_id is null or p_record_id = membership.membership_id)
-  order by membership.membership_id;
+        when membership.starts_at > $7 then 'scheduled'
+        when membership.expires_at is not null and membership.expires_at <= $7 then 'expired'
+        else 'active' end
+      )
+    from candidate
+    join vortex_access.organization_group_memberships as membership
+      on membership.organization_id = $1 and membership.membership_id = candidate.record_id
+    join vortex_identity.organization_accounts as account
+      on account.organization_id = membership.organization_id
+      and account.organization_account_id = membership.organization_account_id
+    order by %s
+  $scan$, sort_expression, sort_null_expression, candidate_joins, keyset_sql,
+    order_sql, outer_order_sql);
+  return query execute scan_sql using scope_row.organization_id, p_record_ids,
+    after_text, after_record_id, after_time, p_limit, checked_at;
 end
 $function$;
 
+create or replace function vortex_access.list_organization_group_memberships_projection(p_record_id uuid, p_page_size integer)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language sql volatile security definer set search_path = ''
+as $function$
+  select projected.* from vortex_access.list_organization_group_memberships_projection(
+    case when p_record_id is null then null else array[p_record_id] end,
+    'record_id', 'ascending', null, null
+  ) as projected
+$function$;
+
+revoke all on function vortex_access.list_organization_group_memberships_projection(uuid[], text, text, jsonb, integer)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_organization_group_memberships_projection(uuid[], text, text, jsonb, integer)
+  to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_organization_group_memberships_projection(uuid[], text, text, jsonb, integer) owner to vortex_owner;
+
 revoke all on function vortex_access.list_organization_group_memberships_projection(uuid, integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
-grant execute on function vortex_access.list_organization_group_memberships_projection(
-  uuid, integer
-) to vortex_owner, vortex_record_adapter;
-
+grant execute on function vortex_access.list_organization_group_memberships_projection(uuid, integer)
+  to vortex_owner, vortex_record_adapter, postgres;
 comment on function vortex_access.list_organization_group_memberships_projection(uuid, integer) is
-  'Registered group-membership projection: returns every membership of the current viewer''s organisation under the fixed platform.organization.groups.read decision, with the organisation, the membership identity, the membership revision and the safe projected attribute values keyed by lowercase field key, or no row when the decision refuses the viewer. Grant and revocation evidence is never projected.';
-
-alter function vortex_access.list_organization_group_memberships_projection(p_record_id uuid, p_page_size integer) owner to vortex_owner;
-
-grant execute on function vortex_access.list_organization_group_memberships_projection(p_record_id uuid, p_page_size integer) to postgres;
+  'Registered group memberships projection with original visibility and record-id order; delegates to the bounded reader.';
+alter function vortex_access.list_organization_group_memberships_projection(uuid, integer) owner to vortex_owner;
