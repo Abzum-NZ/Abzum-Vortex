@@ -681,6 +681,18 @@ export function PaginationControl({
 }>): ReactElement | null {
   if (page === undefined) return null;
   const onPage = events?.page_changed;
+  /** Pointer or focus on First or Last lets the page be read ahead; it never changes the page. */
+  const intend = (direction: "first" | "last") => {
+    if (onPage === undefined) return {};
+    const announce = () =>
+      onPage({
+        event: "page_changed",
+        page: direction === "first" ? 1 : (pageCount ?? 2),
+        direction,
+        intent: true,
+      });
+    return { onPointerEnter: announce, onFocus: announce };
+  };
   const numbered = pageCount !== undefined;
   const previousDisabled = numbered ? page <= 1 : hasPreviousPage !== true;
   const nextDisabled = pageCount !== undefined ? page >= pageCount : hasNextPage !== true;
@@ -703,6 +715,7 @@ export function PaginationControl({
               variant="ghost"
               disabled={firstDisabled}
               aria-label="First page"
+              {...intend("first")}
               onClick={() => onPage({ event: "page_changed", page: 1, direction: "first" })}
             >
               First
@@ -768,6 +781,7 @@ export function PaginationControl({
               variant="ghost"
               disabled={nextDisabled}
               aria-label="Last page"
+              {...intend("last")}
               onClick={() => onPage({ event: "page_changed", page: lastTarget, direction: "last" })}
             >
               Last
