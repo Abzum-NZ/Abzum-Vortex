@@ -51,6 +51,11 @@ import {
   describeFailure,
 } from "@vortex/platform/schema";
 import { hasReferenceChoiceSource, projectedReferenceChoiceForm } from "../reference-choices";
+import {
+  parseTablePagePosition,
+  tablePageParameterName,
+  type TablePageRequest,
+} from "../table-page-position";
 import type {
   collectPlacements} from "./placement-helpers";
 import {
@@ -853,31 +858,44 @@ export const readPlacement = async (
         pageParameters[parameter.pageParameter] = value;
     }
     const state = requestState(placementId, parameters);
-    const resolved = await tables.resolve(session, selection, {
-      moduleRootId: bound.module.rootId,
-      queryId: bound.query.queryId,
-      settings,
-      pageParameters,
-      fieldLabels,
-      fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
-      fieldDateTypes: fieldDateTypesOf(bound.module),
-      fieldLinkTypes: fieldLinkTypesOf(bound.module),
-      resolveRecordLinks,
-      page:
-        tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
-          ? tableContinuation.request.page
-          : 1,
-      ...(tableContinuation === undefined || !sameId(tableContinuation.placementId, placementId)
-        ? {}
-        : { pageDirection: tableContinuation.request.pageDirection }),
-      ...(tableContinuation === undefined || !sameId(tableContinuation.placementId, placementId) ||
-        tableContinuation.request.continuationToken === undefined
-        ? {}
-        : { continuationToken: tableContinuation.request.continuationToken }),
-      sort: state.sort,
-      filters: state.filters,
-      search: state.search,
-    });
+    const explicitRequest =
+      tableContinuation !== undefined && sameId(tableContinuation.placementId, placementId)
+        ? tableContinuation.request
+        : undefined;
+    // An explicit page request wins; otherwise the page position in the address is honoured.
+    const addressRequest =
+      explicitRequest === undefined
+        ? parseTablePagePosition(first(parameters[tablePageParameterName(placementId)]))
+        : undefined;
+    const readPage = (request: TablePageRequest | undefined) =>
+      tables.resolve(session, selection, {
+        moduleRootId: bound.module.rootId,
+        queryId: bound.query.queryId,
+        settings,
+        pageParameters,
+        fieldLabels,
+        fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
+        fieldDateTypes: fieldDateTypesOf(bound.module),
+        fieldLinkTypes: fieldLinkTypesOf(bound.module),
+        resolveRecordLinks,
+        page: request?.page ?? 1,
+        ...(request === undefined ? {} : { pageDirection: request.pageDirection }),
+        ...(request?.continuationToken === undefined
+          ? {}
+          : { continuationToken: request.continuationToken }),
+        sort: state.sort,
+        filters: state.filters,
+        search: state.search,
+      });
+    let resolved = await readPage(explicitRequest ?? addressRequest);
+    // A shared link opened by another account, or after an access, sort or filter change, no
+    // longer matches its sealed cursor: it opens the first page without an error.
+    if (
+      addressRequest !== undefined &&
+      resolved.kind === "refused" &&
+      resolved.reasonCode === "cursor_invalid"
+    )
+      resolved = await readPage(undefined);
     if (resolved.kind === "unavailable") {
       console.error(
         "[page] data placement unavailable: class=protected_query code=query_unavailable",

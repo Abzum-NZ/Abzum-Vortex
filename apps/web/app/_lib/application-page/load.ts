@@ -41,6 +41,7 @@ import { createApplicationPageLinkReader } from "../application-page-link";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
+import { isTablePageParameter } from "../table-page-position";
 import {
   getGuidedFormRecordType,
   getGuidedFormStepFields,
@@ -1075,6 +1076,12 @@ const loadApplicationPageJoined = async (
     }),
     data,
     ...(streamed.length === 0 ? {} : { streamedData }),
+    tablePositions: Object.fromEntries(
+      Object.entries(parameters).flatMap(([name, value]) => {
+        const position = first(value);
+        return isTablePageParameter(name) && position !== undefined ? [[name, position]] : [];
+      }),
+    ),
     bindings,
     refreshPlacementsByBinding,
     editFormBaselines,

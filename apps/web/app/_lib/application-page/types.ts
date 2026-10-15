@@ -59,6 +59,11 @@ export type ApplicationPageModel = Readonly<{
    * and the settled state follows on the same response, by stable placement identity.
    */
   streamedData?: Readonly<Record<string, Promise<PageDataState>>>;
+  /**
+   * The table page positions of the address this data was read for, by `page.<placement>`
+   * parameter name. A client that finds its address at another position rereads that table.
+   */
+  tablePositions: Readonly<Record<string, string>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Data placements to re-read after a write from each installed flow binding. */
