@@ -350,6 +350,7 @@
                                                        "vortex.crm.opportunities.opportunity.restore",
                                                        "vortex.crm.opportunities.opportunity.export",
                                                        "vortex.crm.opportunities.opportunity.mark_won",
+                                                       "vortex.crm.opportunities.opportunity.mark_lost",
                                                        "application.crm.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
@@ -423,6 +424,7 @@
                                                        "vortex.crm.opportunities.opportunity_contact.restore",
                                                        "vortex.crm.opportunities.opportunity_contact.export",
                                                        "vortex.crm.opportunities.opportunity.mark_won",
+                                                       "vortex.crm.opportunities.opportunity.mark_lost",
                                                        "application.crm.opportunity.mark_won",
                                                        "vortex.crm.activities.activity.create",
                                                        "vortex.crm.activities.activity.read",
@@ -4214,11 +4216,80 @@
                                              }
                                            },
                                            "slots": {}
+                                         },
+                                         "form_crm_mark_lost": {
+                                           "block": {
+                                             "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                                             "release_version": "1.0.0"
+                                           },
+                                           "settings": {
+                                             "title": {
+                                               "kind": "text",
+                                               "value": "Mark opportunity lost"
+                                             }
+                                           },
+                                           "theme_overrides": {},
+                                           "responsive": {
+                                             "desktop": {
+                                               "visible": false,
+                                               "width": {
+                                                 "kind": "fill"
+                                               },
+                                               "height": {
+                                                 "kind": "content"
+                                               }
+                                             }
+                                           },
+                                           "slots": {
+                                             "content": {
+                                               "placements": {
+                                                 "input_crm_mark_lost_reason": {
+                                                   "block": {
+                                                     "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                                     "release_version": "1.0.0"
+                                                   },
+                                                   "settings": {
+                                                     "name": {
+                                                       "kind": "text",
+                                                       "value": "lost_reason"
+                                                     },
+                                                     "label": {
+                                                       "kind": "text",
+                                                       "value": "Lost reason"
+                                                     },
+                                                     "required": {
+                                                       "kind": "boolean",
+                                                       "value": true
+                                                     }
+                                                   },
+                                                   "theme_overrides": {},
+                                                   "responsive": {
+                                                     "desktop": {
+                                                       "visible": true,
+                                                       "width": {
+                                                         "kind": "fill"
+                                                       },
+                                                       "height": {
+                                                         "kind": "content"
+                                                       }
+                                                     }
+                                                   },
+                                                   "slots": {}
+                                                 }
+                                               },
+                                               "order": {
+                                                 "desktop": [
+                                                   "input_crm_mark_lost_reason"
+                                                 ]
+                                               }
+                                             }
+                                           }
                                          }
                                        },
                                        "order": {
                                          "desktop": [
-                                           "board_crm_pipeline"
+                                           "board_crm_pipeline",
+                                           "form_crm_mark_lost"
                                          ]
                                        }
                                      }
@@ -4319,22 +4390,22 @@
                                                            {
                                                                "from":  "discovery",
                                                                "to":  "lost",
-                                                               "permission":  "vortex.crm.opportunities.opportunity.update"
+                                                               "action":  "vortex.crm.opportunities.opportunity.mark_lost"
                                                            },
                                                            {
                                                                "from":  "qualified",
                                                                "to":  "lost",
-                                                               "permission":  "vortex.crm.opportunities.opportunity.update"
+                                                               "action":  "vortex.crm.opportunities.opportunity.mark_lost"
                                                            },
                                                            {
                                                                "from":  "proposal",
                                                                "to":  "lost",
-                                                               "permission":  "vortex.crm.opportunities.opportunity.update"
+                                                               "action":  "vortex.crm.opportunities.opportunity.mark_lost"
                                                            },
                                                            {
                                                                "from":  "negotiation",
                                                                "to":  "lost",
-                                                               "permission":  "vortex.crm.opportunities.opportunity.update"
+                                                               "action":  "vortex.crm.opportunities.opportunity.mark_lost"
                                                            }
                                                        ],
                                        "time_targets":  [
@@ -5786,7 +5857,7 @@
                          "contractVersion": "1.0.0",
                          "id": "crm_move_opportunity_stage",
                          "key": "crm_move_opportunity_stage",
-                         "description": "Saves the stage a moved pipeline card was dropped into through the one Save record task, the same record save an edit form uses.",
+                         "description": "Saves the stage a moved pipeline card was dropped into through the one Save record task, the same record save an edit form uses. A move into Lost first asks for the reason and passes it to the Mark lost action that owns that stage.",
                          "labels": {
                              "name": "Move opportunity"
                          },
@@ -5805,54 +5876,160 @@
                              "values": {
                                  "type": "json",
                                  "required": true
+                             },
+                             "target_stage": {
+                                 "type": "text",
+                                 "required": true
                              }
                          },
                          "tasks": [
                              {
-                                 "id": "save",
-                                 "type": "record.save",
-                                 "version": "1.0.0",
-                                 "properties": {
-                                     "record_type": {
-                                         "kind": "literal",
-                                         "literal": {
-                                             "type": "text",
-                                             "value": "vortex.crm.opportunities:opportunity"
-                                         }
-                                     },
-                                     "record": {
-                                         "kind": "reference",
+                                 "id": "lost_or_plain",
+                                 "type": "if",
+                                 "condition": {
+                                     "op": "eq",
+                                     "left": {
+                                         "op": "reference",
                                          "reference": {
                                              "source": "input",
-                                             "name": "record"
+                                             "name": "target_stage"
                                          }
                                      },
-                                     "values": {
-                                         "kind": "reference",
-                                         "reference": {
-                                             "source": "input",
-                                             "name": "values"
+                                     "right": {
+                                         "op": "literal",
+                                         "type": "text",
+                                         "value": "lost"
+                                     }
+                                 },
+                                 "then": [
+                                     {
+                                         "id": "lost_form",
+                                         "type": "interface.show_form",
+                                         "version": "1.0.0",
+                                         "properties": {
+                                             "form": {
+                                                 "kind": "literal",
+                                                 "literal": {
+                                                     "type": "text",
+                                                     "value": "form_crm_mark_lost"
+                                                 }
+                                             },
+                                             "inputs": {
+                                                 "kind": "map",
+                                                 "entries": {
+                                                     "lost_reason": {
+                                                         "kind": "literal",
+                                                         "literal": {
+                                                             "type": "text",
+                                                             "value": ""
+                                                         }
+                                                     }
+                                                 }
+                                             }
+                                         }
+                                     },
+                                     {
+                                         "id": "lost_form_cancelled",
+                                         "type": "if",
+                                         "condition": {
+                                             "op": "not",
+                                             "arg": {
+                                                 "op": "reference",
+                                                 "reference": {
+                                                     "source": "task_output",
+                                                     "task": "lost_form",
+                                                     "key": "submitted"
+                                                 }
+                                             }
+                                         },
+                                         "then": [
+                                             {
+                                                 "id": "stop_lost_form_cancelled",
+                                                 "type": "stop",
+                                                 "outcome": "cancelled"
+                                             }
+                                         ]
+                                     },
+                                     {
+                                         "id": "save_lost",
+                                         "type": "record.save",
+                                         "version": "1.0.0",
+                                         "properties": {
+                                             "record_type": {
+                                                 "kind": "literal",
+                                                 "literal": {
+                                                     "type": "text",
+                                                     "value": "vortex.crm.opportunities:opportunity"
+                                                 }
+                                             },
+                                             "record": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "input",
+                                                     "name": "record"
+                                                 }
+                                             },
+                                             "values": {
+                                                 "kind": "literal",
+                                                 "literal": {
+                                                     "type": "json",
+                                                     "value": {
+                                                         "stage": "lost"
+                                                     }
+                                                 }
+                                             },
+                                             "action_inputs": {
+                                                 "kind": "map",
+                                                 "entries": {
+                                                     "lost_reason": {
+                                                         "kind": "reference",
+                                                         "reference": {
+                                                             "source": "task_output",
+                                                             "task": "lost_form",
+                                                             "key": "values",
+                                                             "path": [
+                                                                 "lost_reason"
+                                                             ]
+                                                         }
+                                                     }
+                                                 }
+                                             }
                                          }
                                      }
-                                 }
+                                 ],
+                                 "else": [
+                                     {
+                                         "id": "save",
+                                         "type": "record.save",
+                                         "version": "1.0.0",
+                                         "properties": {
+                                             "record_type": {
+                                                 "kind": "literal",
+                                                 "literal": {
+                                                     "type": "text",
+                                                     "value": "vortex.crm.opportunities:opportunity"
+                                                 }
+                                             },
+                                             "record": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "input",
+                                                     "name": "record"
+                                                 }
+                                             },
+                                             "values": {
+                                                 "kind": "reference",
+                                                 "reference": {
+                                                     "source": "input",
+                                                     "name": "values"
+                                                 }
+                                             }
+                                         }
+                                     }
+                                 ]
                              }
                          ],
-                         "outputs": {
-                             "record": {
-                                 "type": "record_reference",
-                                 "recordTypeIds": [
-                                     "vortex.crm.opportunities:opportunity"
-                                 ],
-                                 "value": {
-                                     "kind": "reference",
-                                     "reference": {
-                                         "source": "task_output",
-                                         "task": "save",
-                                         "key": "record"
-                                     }
-                                 }
-                             }
-                         }
+                         "outputs": {}
                      },
                      {
                          "contractVersion": "1.0.0",
@@ -6703,6 +6880,10 @@
                              "values": {
                                  "kind": "caller",
                                  "name": "values"
+                             },
+                             "target_stage": {
+                                 "kind": "caller",
+                                 "name": "value"
                              }
                          }
                      },

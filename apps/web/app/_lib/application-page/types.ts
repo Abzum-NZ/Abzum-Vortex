@@ -131,6 +131,8 @@ export type ApplicationPagePlacementReadResult =
       data: Readonly<Record<string, PageDataState>>;
       editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>> | null>>;
       subject: ApplicationPageModel["subject"] | null;
+      /** The page's own placements as projected now, present only when the caller asked for them. */
+      content?: Readonly<Record<string, unknown>>;
     }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "unavailable" }>

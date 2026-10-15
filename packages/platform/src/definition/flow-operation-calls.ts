@@ -335,6 +335,95 @@ export function findOperationCallIssue(
   return undefined;
 }
 
+/** The declared inputs of the named action that owns one choice option, by input key. */
+type OwnedActionInputs = ReadonlyMap<string, Readonly<{ required: boolean; type: string }>>;
+
+/** Finds the named action that owns an option of a choice field of a record type. */
+export type OptionActionLookup = (
+  recordTypeId: string,
+  fieldId: string,
+  option: string,
+) => OwnedActionInputs | undefined;
+
+/** The flow literal types an action input of each declared type accepts. */
+const acceptedLiteralTypes: Readonly<Record<string, readonly string[]>> = {
+  text: ["text"],
+  formatted_text: ["text", "formatted_text"],
+  number: ["whole_number", "decimal_number"],
+  decimal_number: ["whole_number", "decimal_number"],
+  money: ["whole_number", "decimal_number", "money"],
+  boolean: ["yes_no"],
+  date: ["date"],
+  date_time: ["date_time"],
+  record_reference: ["text", "record_reference"],
+  organization_account_reference: ["text", "organization_account_reference"],
+};
+
+/**
+ * Checks every Save record task that supplies `action_inputs` against the inputs of the action it
+ * runs. The action is the one that owns the option the task saves, so the saved value must name
+ * that option literally; the supplied map may then name only inputs the action declares, supply
+ * every input it requires (a form's submitted values are supplied by reference), and give a
+ * literal of the declared type.
+ */
+export function findActionInputsIssue(
+  flows: readonly FlowDefinition[],
+  lookup: OptionActionLookup,
+): OperationCallIssue | undefined {
+  for (const flow of flows)
+    for (const task of [
+      ...flowTasks(flow.tasks),
+      ...flowTasks(flow.errors),
+      ...flowTasks(flow.finally),
+    ]) {
+      if (task.type !== "record.save") continue;
+      const properties = (task as Extract<FlowTask, { properties: unknown }>).properties;
+      const supplied = properties.action_inputs;
+      if (supplied === undefined) continue;
+      const issue = (family: DefinitionRuleFailureFamily): OperationCallIssue => ({
+        flowKey: flow.key,
+        taskId: task.id,
+        ruleCode: "vortex.definition.workflow_action_inputs",
+        family,
+      });
+      const values = properties.values;
+      const saved =
+        values?.kind === "literal" &&
+        values.literal.type === "json" &&
+        typeof values.literal.value === "object" &&
+        values.literal.value !== null &&
+        !Array.isArray(values.literal.value)
+          ? Object.entries(values.literal.value)
+          : [];
+      const recordTypeId = literalIdentity(properties.record_type);
+      if (
+        supplied.kind !== "map" ||
+        recordTypeId === undefined ||
+        saved.length !== 1 ||
+        typeof saved[0]![1] !== "string"
+      )
+        return issue("invalid_value");
+      const declared = lookup(recordTypeId, saved[0]![0], saved[0]![1]);
+      if (declared === undefined) return issue("invalid_value");
+      for (const [name, value] of Object.entries(supplied.entries)) {
+        const input = declared.get(name);
+        if (input === undefined) return issue("unknown_property");
+        const accepted = acceptedLiteralTypes[input.type];
+        if (
+          value.kind === "literal" &&
+          accepted !== undefined &&
+          value.literal.type !== "json" &&
+          !accepted.includes(value.literal.type)
+        )
+          return issue("invalid_value");
+      }
+      for (const [name, input] of declared)
+        if (input.required && !Object.hasOwn(supplied.entries, name))
+          return issue("required_value");
+    }
+  return undefined;
+}
+
 /**
  * The registered platform-service operations a set of flows calls, each once, in the order first
  * called. Publication pins the exact release of each in the dependency manifest, because a flow

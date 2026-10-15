@@ -63,6 +63,26 @@ import {
   useFramePageState,
 } from "../../../_components/application-frame-state";
 
+/** Every placement id of the page's own content, nested placements and guided step content included. */
+const placementIdsOf = (content: Readonly<Record<string, unknown>>): ReadonlySet<string> => {
+  const ids = new Set<string>();
+  const visit = (slot: unknown): void => {
+    if (!isRecord(slot) || !isRecord(slot.placements)) return;
+    for (const [placementId, placement] of Object.entries(slot.placements)) {
+      ids.add(placementId);
+      if (isRecord(placement) && isRecord(placement.slots))
+        for (const child of Object.values(placement.slots)) visit(child);
+    }
+  };
+  const composition = content.composition;
+  if (isRecord(composition)) {
+    visit(composition.main);
+    if (isRecord(composition.stepContent))
+      for (const step of Object.values(composition.stepContent)) visit(step);
+  }
+  return ids;
+};
+
 export function ApplicationPageViewContent({
   model,
   content,
@@ -164,6 +184,8 @@ export function ApplicationPageViewContent({
   const choiceDefaultContextsRef = useRef<Record<string, boolean>>({});
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
+  /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
+  const formCancelledRef = useRef(false);
   const { unsavedWorkRegistry, unsavedWork, leavePromptOpen, settleDiscardConfirmation } =
     useUnsavedWorkPrompt({ router });
 
@@ -198,6 +220,13 @@ export function ApplicationPageViewContent({
     refreshedPlacementData.subject !== undefined
       ? (refreshedPlacementData.subject ?? undefined)
       : model.subject;
+  // An action's write re-projects the page's placements on the server (a control follows its action's
+  // availability); until then the content the page was sent with stands.
+  const currentContent =
+    refreshedPlacementData?.navigationKey === navigationKey &&
+    refreshedPlacementData.content !== undefined
+      ? refreshedPlacementData.content
+      : content;
   const currentPageKey = model.pages.find(
     (page) => page.pageId.toLowerCase() === model.pageId.toLowerCase(),
   )?.key;
@@ -289,6 +318,7 @@ export function ApplicationPageViewContent({
     application,
     subject,
     continuingFormsRef,
+    formCancelledRef,
     unsavedWorkRegistry,
     submittedFormsRef,
     router,
@@ -469,6 +499,7 @@ export function ApplicationPageViewContent({
     setFormFeedback,
     choiceEvidenceFor,
     submittedFormsRef,
+    formCancelledRef,
     applyDispatch,
     formBlock,
     initializeChoiceForm,
@@ -500,31 +531,36 @@ export function ApplicationPageViewContent({
   useFramePageState("navigation", model.navigation);
   // The runtime wires every placement of the page's projection. The content renders its own
   // placements; the frame renders the shell's, so it receives their inputs.
-  const contentPlacementIds = useMemo(() => {
-    const ids = new Set<string>();
-    const visit = (slot: unknown): void => {
-      if (!isRecord(slot) || !isRecord(slot.placements)) return;
-      for (const [placementId, placement] of Object.entries(slot.placements)) {
-        ids.add(placementId);
-        if (isRecord(placement) && isRecord(placement.slots))
-          for (const child of Object.values(placement.slots)) visit(child);
-      }
-    };
-    const composition = content.composition;
-    if (isRecord(composition)) {
-      visit(composition.main);
-      if (isRecord(composition.stepContent))
-        for (const step of Object.values(composition.stepContent)) visit(step);
+  const contentPlacementIds = useMemo(() => placementIdsOf(content), [content]);
+  // A placement the server no longer projects (its action is unavailable now) keeps its wiring in
+  // the runtime, but the content renderer must not be handed an input for it.
+  const currentContentPlacementIds = useMemo(
+    () => (currentContent === content ? contentPlacementIds : placementIdsOf(currentContent)),
+    [content, contentPlacementIds, currentContent],
+  );
+  // A placement that only became available after the page loaded has no runtime wiring (its
+  // action, form and data callbacks come from the page's first projection): one full refresh
+  // rebuilds the wiring, so such a control is never visible but inert.
+  const unwiredContentRefreshRef = useRef<ReadonlySet<string> | undefined>(undefined);
+  useEffect(() => {
+    if (currentContent === content) return;
+    for (const placementId of currentContentPlacementIds) {
+      if (contentPlacementIds.has(placementId)) continue;
+      if (unwiredContentRefreshRef.current === currentContentPlacementIds) return;
+      unwiredContentRefreshRef.current = currentContentPlacementIds;
+      router.refresh();
+      return;
     }
-    return ids;
-  }, [content]);
+  }, [content, contentPlacementIds, currentContent, currentContentPlacementIds, router]);
   const [contentRuntimeInputs, frameRuntimeInputs] = useMemo(() => {
     const own: Record<string, unknown> = {};
     const shell: Record<string, unknown> = {};
-    for (const [placementId, input] of Object.entries(runtimeInputs))
-      (contentPlacementIds.has(placementId) ? own : shell)[placementId] = input;
+    for (const [placementId, input] of Object.entries(runtimeInputs)) {
+      if (!contentPlacementIds.has(placementId)) shell[placementId] = input;
+      else if (currentContentPlacementIds.has(placementId)) own[placementId] = input;
+    }
     return [own, Object.keys(shell).length === 0 ? undefined : shell] as const;
-  }, [contentPlacementIds, runtimeInputs]);
+  }, [contentPlacementIds, currentContentPlacementIds, runtimeInputs]);
   useFramePageState("runtimeInputs", frameRuntimeInputs);
   const releaseAdoption = model.adoption;
   const adoption = useMemo(
@@ -588,7 +624,7 @@ export function ApplicationPageViewContent({
               </>
             )
           }
-          composition={content as unknown as ProjectedPageCapability}
+          composition={currentContent as unknown as ProjectedPageCapability}
           registry={platformComponentRegistry}
           fieldInputControlReleases={fieldInputControlReleases}
           platformThemeTokens={platformThemeTokens}

@@ -63,6 +63,7 @@ export function usePlacementRefresh({
     async (
       placementIds: readonly string[],
       tableContinuation?: TableContinuationTarget,
+      options?: Readonly<{ content?: true }>,
     ): Promise<void> => {
       const pageKey = currentPageKey;
       const requestScope = placementRequestsRef.current;
@@ -88,13 +89,56 @@ export function usePlacementRefresh({
         requestScope.generations.set(key, request);
         requests.set(key, request);
       }
-      if (requests.size === 0) return;
+      if (requests.size === 0) {
+        // A bound action may have no data placement to reread: the content projection is still
+        // fetched, so its action-bound placements follow the action's availability.
+        if (options?.content !== true) return;
+        let contentResult: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
+        try {
+          contentResult = await rereadApplicationPlacements(
+            {
+              tenantShortName: application.tenantShortName,
+              organizationShortName: application.organizationShortName,
+              applicationKey: application.applicationKey,
+              pageKey,
+              installationRevision: application.installationRevision,
+              search: currentSearch,
+            },
+            [],
+            undefined,
+            undefined,
+            true,
+          );
+        } catch {
+          return;
+        }
+        if (placementRequestsRef.current.key !== requestScope.key) return;
+        if (contentResult.kind === "reload") {
+          router.refresh();
+          return;
+        }
+        if (contentResult.kind !== "available" || contentResult.content === undefined) return;
+        const refreshedContent = contentResult.content;
+        setRefreshedPlacementData((current) => {
+          if (placementRequestsRef.current?.key !== requestScope.key) return current;
+          const same = current?.navigationKey === requestScope.key;
+          return {
+            navigationKey: requestScope.key,
+            data: same ? current.data : {},
+            editFormBaselines: same ? current.editFormBaselines : {},
+            subject: same ? current.subject : undefined,
+            content: refreshedContent,
+          };
+        });
+        return;
+      }
       // A reread of a list's own records (a write, a realtime change, Refresh) ends its cached pages.
       if (tableContinuation === undefined) pageCache.invalidate(placementIds);
 
       const loadedData = new Map<string, PageDataState>();
       const loadedBaselines = new Map<string, EditFormBaseline | null>();
       const loadedSubjects = new Map<string, ApplicationPageModel["subject"] | null>();
+      let loadedContent: Readonly<Record<string, unknown>> | undefined;
       const requestEntries = [...requests.entries()];
       for (let offset = 0; offset < requestEntries.length; offset += 500) {
         if (placementRequestsRef.current.key !== requestScope.key) return;
@@ -127,6 +171,7 @@ export function usePlacementRefresh({
               batch.map(([, request]) => request.componentId),
               undefined,
               tableContinuation,
+              options?.content,
             ));
           if (tableContinuation !== undefined && result.kind === "available")
             pageCache.settle(tableContinuation, result, cached);
@@ -146,6 +191,8 @@ export function usePlacementRefresh({
           continue;
         }
 
+        if (result.kind === "available" && result.content !== undefined)
+          loadedContent ??= result.content;
         for (const [key, request] of batch) {
           if (!isCurrentComponentRequestGeneration(requestScope.generations.get(key), request))
             continue;
@@ -242,6 +289,7 @@ export function usePlacementRefresh({
           ...(current?.navigationKey === requestScope.key ? current.editFormBaselines : {}),
         };
         let subject = current?.navigationKey === requestScope.key ? current.subject : undefined;
+        let content = current?.navigationKey === requestScope.key ? current.content : undefined;
         let changed = false;
         for (const entry of accepted) {
           if (
@@ -256,8 +304,15 @@ export function usePlacementRefresh({
           if (entry.subject !== undefined) subject = entry.subject;
           changed = true;
         }
+        if (changed && loadedContent !== undefined) content = loadedContent;
         return changed
-          ? { navigationKey: requestScope.key, data, editFormBaselines, subject }
+          ? {
+              navigationKey: requestScope.key,
+              data,
+              editFormBaselines,
+              subject,
+              ...(content === undefined ? {} : { content }),
+            }
           : current;
       });
     },

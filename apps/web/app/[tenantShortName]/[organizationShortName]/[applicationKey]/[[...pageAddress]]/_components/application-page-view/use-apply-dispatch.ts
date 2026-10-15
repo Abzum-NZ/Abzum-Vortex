@@ -33,7 +33,11 @@ export function useApplyDispatch({
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createFullPlatformComponentRegistry>;
   setCompletedGuidedNavigationKey: Dispatch<SetStateAction<string | undefined>>;
-  refreshPlacements: (placementIds: readonly string[], tableContinuation?: TableContinuationTarget) => Promise<void>;
+  refreshPlacements: (
+    placementIds: readonly string[],
+    tableContinuation?: TableContinuationTarget,
+    options?: Readonly<{ content?: true }>,
+  ) => Promise<void>;
   refreshTargetsForBinding: (bindingId: string) => readonly string[];
 }>) {
   /**
@@ -177,7 +181,9 @@ export function useApplyDispatch({
               changedUnderPerson) &&
             sourceBindingId !== undefined
           )
-            void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
+            void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {
+              content: true,
+            });
           return;
         }
         if (server.kind === "refused") {
@@ -189,7 +195,9 @@ export function useApplyDispatch({
           showResult(outcomeNotices.uncertain ?? unavailableNotice);
           if (model.guidedForm !== undefined) setCompletedGuidedNavigationKey(navigationKey);
           if (sourceBindingId !== undefined)
-            void refreshPlacements(refreshTargetsForBinding(sourceBindingId));
+            void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {
+              content: true,
+            });
           return;
         }
         showResult(unavailableNotice);
