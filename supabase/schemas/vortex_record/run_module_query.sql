@@ -169,17 +169,25 @@ declare
   board_option_values text[] := array[]::text[];
   board_option jsonb;
   board_member_matches boolean;
+  -- Every board column this call reads: one for a member page, every displayed
+  -- column for a board's first pages, each read in its own pass below.
+  board_columns_mode boolean := false;
+  board_columns jsonb := '[]'::jsonb;
+  board_column_item jsonb;
+  board_column_position integer := 0;
+  board_column_pages jsonb := '[]'::jsonb;
+  -- The stored choice column, when the reader is guaranteed to see the choice
+  -- field on every scanned row, and the current column's candidate predicate.
+  board_choice_column text;
+  board_scan_sql text := '';
   group_member jsonb;
   group_selector jsonb;
-  group_selector_item jsonb;
-  group_selector_value jsonb;
   group_selector_values jsonb := '{}'::jsonb;
   group_selector_types jsonb := '{}'::jsonb;
   group_candidate_values jsonb;
   group_by_ids text[] := array[]::text[];
   group_key text;
   group_field_type text;
-  group_value_valid boolean;
   group_member_matches boolean;
   preview_mode boolean := false;
 begin
@@ -229,152 +237,46 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   board_member_mode := p_user_inputs ? 'boardMember';
+  board_columns_mode := p_user_inputs ? 'boardColumns';
   group_member_mode := p_user_inputs ? 'groupMember';
-  if board_member_mode and group_member_mode then
+  if (board_member_mode and group_member_mode)
+    or (board_columns_mode and (board_member_mode or group_member_mode)) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
+  -- A board's first pages: every requested column, each from its start.
+  if board_columns_mode and (p_direction <> 'forward' or p_exact_record_id is not null
+    or (p_after is not null and p_after <> 'null'::jsonb)) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  board_member_mode := board_member_mode or board_columns_mode;
   if exists (
     select 1 from pg_catalog.jsonb_object_keys(p_user_inputs) as supplied(key)
     where supplied.key not in (
       'sort', 'filter', 'search', 'sortableFieldIds', 'filterableFieldIds', 'searchableFieldIds',
-      'boardMember', 'groupMember'
+      'boardMember', 'boardColumns', 'groupMember'
     )
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if group_member_mode then
-    group_member := p_user_inputs -> 'groupMember';
-    if pg_catalog.jsonb_typeof(group_member) is distinct from 'object' then
+    group_member := vortex_record.group_member_selector_internal(p_user_inputs -> 'groupMember');
+    if group_member is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
     end if;
-    if group_member - array['values']::text[] <> '{}'::jsonb
-      or not (group_member ? 'values')
-      or pg_catalog.jsonb_typeof(group_member -> 'values') is distinct from 'array' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-    end if;
-    if pg_catalog.jsonb_array_length(group_member -> 'values') not between 1 and 10 then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-    end if;
-    group_selector := group_member -> 'values';
-    for group_selector_item in
-      select item.value from pg_catalog.jsonb_array_elements(group_selector) as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(group_selector_item) is distinct from 'object' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      if group_selector_item - array['fieldId', 'fieldType', 'value']::text[] <> '{}'::jsonb
-        or not (group_selector_item ? 'fieldId')
-        or not (group_selector_item ? 'fieldType')
-        or not (group_selector_item ? 'value')
-        or pg_catalog.jsonb_typeof(group_selector_item -> 'fieldId') is distinct from 'string'
-        or pg_catalog.lower(group_selector_item ->> 'fieldId') !~ uuid_pattern
-        or pg_catalog.lower(group_selector_item ->> 'fieldId') = '00000000-0000-0000-0000-000000000000'
-        or pg_catalog.jsonb_typeof(group_selector_item -> 'fieldType') is distinct from 'string'
-        or group_selector_item ->> 'fieldType' not in (
-          'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
-          'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
-          'link', 'link_to_one_of_several', 'link_to_person'
-        ) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      group_key := pg_catalog.lower(group_selector_item ->> 'fieldId');
-      if group_selector_types ? group_key then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      group_field_type := group_selector_item ->> 'fieldType';
-      group_selector_value := group_selector_item -> 'value';
-      group_value_valid := group_selector_value = 'null'::jsonb;
-      if not group_value_valid then
-        case group_field_type
-          when 'text', 'reference_number', 'email_address', 'phone_number', 'web_address' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string';
-          when 'choice' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and pg_catalog.length(group_selector_value #>> '{}') between 1 and 120;
-          when 'whole_number' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'number'
-              and case when pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'numeric') then
-                (group_selector_value #>> '{}')::numeric = pg_catalog.trunc((group_selector_value #>> '{}')::numeric)
-                and pg_catalog.abs((group_selector_value #>> '{}')::numeric) <= 9007199254740991
-              else false end;
-          when 'decimal_number' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and group_selector_value #>> '{}' ~ '^-?(0|[1-9][0-9]*)(\.[0-9]+)?$';
-          when 'yes_no' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'boolean';
-          when 'date' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and group_selector_value #>> '{}' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-              and pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'date');
-          when 'date_time' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and group_selector_value #>> '{}' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$'
-              and pg_catalog.substr(group_selector_value #>> '{}', 12, 2) between '00' and '23'
-              and pg_catalog.substr(group_selector_value #>> '{}', 15, 2) between '00' and '59'
-              and (pg_catalog.substr(group_selector_value #>> '{}', 17, 1) <> ':'
-                or pg_catalog.substr(group_selector_value #>> '{}', 18, 2) between '00' and '59')
-              and pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'timestamp with time zone');
-          when 'link', 'link_to_one_of_several' then
-            group_value_valid := case when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
-              group_selector_value - array['recordTypeId', 'recordId']::text[] = '{}'::jsonb
-              and group_selector_value ? 'recordTypeId' and group_selector_value ? 'recordId'
-              and pg_catalog.jsonb_typeof(group_selector_value -> 'recordTypeId') = 'string'
-              and pg_catalog.lower(group_selector_value ->> 'recordTypeId') ~ uuid_pattern
-              and pg_catalog.lower(group_selector_value ->> 'recordTypeId') <> '00000000-0000-0000-0000-000000000000'
-              and pg_catalog.jsonb_typeof(group_selector_value -> 'recordId') = 'string'
-              and pg_catalog.lower(group_selector_value ->> 'recordId') ~ uuid_pattern
-              and pg_catalog.lower(group_selector_value ->> 'recordId') <> '00000000-0000-0000-0000-000000000000'
-            else false end;
-          when 'link_to_person' then
-            group_value_valid := case when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
-              group_selector_value - array['organizationAccountId']::text[] = '{}'::jsonb
-              and group_selector_value ? 'organizationAccountId'
-              and pg_catalog.jsonb_typeof(group_selector_value -> 'organizationAccountId') = 'string'
-              and pg_catalog.lower(group_selector_value ->> 'organizationAccountId') ~ uuid_pattern
-              and pg_catalog.lower(group_selector_value ->> 'organizationAccountId') <> '00000000-0000-0000-0000-000000000000'
-            else false end;
-          else
-            group_value_valid := false;
-        end case;
-      end if;
-      if not group_value_valid then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      group_selector_types := group_selector_types || pg_catalog.jsonb_build_object(group_key, group_field_type);
-      group_selector_values := group_selector_values || pg_catalog.jsonb_build_object(group_key, group_selector_value);
-    end loop;
+    group_selector := p_user_inputs #> '{groupMember,values}';
+    group_selector_types := group_member -> 'types';
+    group_selector_values := group_member -> 'values';
   end if;
   if board_member_mode then
-    board_member := p_user_inputs -> 'boardMember';
-    if pg_catalog.jsonb_typeof(board_member) is distinct from 'object'
-      or board_member - array['choiceFieldId', 'column']::text[] <> '{}'::jsonb
-      or not (board_member ? 'choiceFieldId') or not (board_member ? 'column')
-      or pg_catalog.jsonb_typeof(board_member -> 'choiceFieldId') is distinct from 'string'
-      or pg_catalog.lower(board_member ->> 'choiceFieldId') !~ uuid_pattern then
+    board_member := vortex_record.board_column_selector_internal(
+      p_user_inputs -> case when board_columns_mode then 'boardColumns' else 'boardMember' end,
+      board_columns_mode
+    );
+    if board_member is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
-    board_choice_field_id := pg_catalog.lower(board_member ->> 'choiceFieldId');
-    if pg_catalog.jsonb_typeof(board_member -> 'column') is distinct from 'object'
-      or pg_catalog.jsonb_typeof(board_member #> '{column,kind}') is distinct from 'string' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    board_column_kind := board_member #>> '{column,kind}';
-    if board_column_kind = 'option' then
-      if (board_member #> '{column}') - array['kind', 'value']::text[] <> '{}'::jsonb
-        or not ((board_member #> '{column}') ? 'value')
-        or pg_catalog.jsonb_typeof(board_member #> '{column,value}') is distinct from 'string'
-        or coalesce(pg_catalog.length(board_member #>> '{column,value}'), 0) not between 1 and 120 then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      board_column_value := board_member #>> '{column,value}';
-    elsif board_column_kind = 'unassigned' then
-      if (board_member #> '{column}') - array['kind']::text[] <> '{}'::jsonb then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      board_column_value := null;
-    else
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
+    board_choice_field_id := board_member ->> 'choiceFieldId';
+    board_columns := board_member -> 'columns';
   end if;
   -- The list-only sortable and searchable allow-lists contain distinct field
   -- identities. Query preparation validates the filterable allow-list.
@@ -631,9 +533,31 @@ begin
       end if;
       board_option_values := pg_catalog.array_append(board_option_values, board_option ->> 'value');
     end loop;
-    if board_column_kind = 'option'
-      and not (board_column_value collate "C" = any (board_option_values)) then
+    if exists (
+      select 1 from pg_catalog.jsonb_array_elements(board_columns) as requested(value)
+      where requested.value ->> 'kind' = 'option'
+        and not ((requested.value ->> 'value') collate "C" = any (board_option_values))
+    ) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    -- A column reads only its own cards. When the reader is guaranteed to see the
+    -- choice field on every row the scan examines, the stored choice value is the
+    -- readable value, so the column's membership narrows the candidate scan and the
+    -- budget is spent on that column's members only. Otherwise the scan stays
+    -- unnarrowed and membership is decided from each readable projection below, so
+    -- a withheld value never decides which rows are examined.
+    if board_choice_field_id = any (readable_field_ids) then
+      select mapping.* into mapping_row
+      from vortex_record.field_storage_mappings as mapping
+      where mapping.storage_contract_id = v_storage_contract_id
+        and mapping.field_id = board_choice_field_id::uuid;
+      if not found or mapping_row.state is distinct from 'active' then
+        raise exception using errcode = '55000',
+          message = 'Record storage disagrees with the installed definition';
+      end if;
+      if mapping_row.database_value_type = 'text' then
+        board_choice_column := mapping_row.physical_column_token;
+      end if;
     end if;
   end if;
   -- Order: the published sort, or the user's chosen sort when one is supplied,
@@ -1075,6 +999,46 @@ begin
     -- The bounded reader has already applied the sealed keyset and order.
     segment_predicates := array[''];
   end if;
+  -- One pass per requested board column, each with its own page, budget and
+  -- position; every other read makes exactly one pass. The page's access facts,
+  -- eligibility and validated record types stay those of this one invocation.
+  <<column_pass>>
+  loop
+  if board_member_mode then
+    board_column_position := board_column_position + 1;
+    exit column_pass when board_column_position > pg_catalog.jsonb_array_length(board_columns);
+    board_column_item := board_columns -> (board_column_position - 1);
+    board_column_kind := board_column_item ->> 'kind';
+    board_column_value := board_column_item ->> 'value';
+    board_scan_sql := case
+      when board_choice_column is null then ''
+      when board_column_kind = 'option' then pg_catalog.format(
+        ' and stored.%I collate "C" = $13 collate "C"', board_choice_column)
+      else pg_catalog.format(
+        ' and (stored.%1$I is null or not (stored.%1$I collate "C" = any ($14::text[])))',
+        board_choice_column)
+    end;
+    if board_column_position > 1 then
+      examined := 0;
+      budget_exhausted := false;
+      more_rows := false;
+      rows_value := '[]'::jsonb;
+      row_count := 0;
+      capability_rows := array[]::jsonb[];
+      decided_ids := array[]::uuid[];
+      decided_loaded := null;
+      decided_decisions := null;
+      decided_bounds := null;
+      last_examined_sort_key := null;
+      last_examined_record_id := null;
+      last_returned_sort_key := null;
+      last_returned_record_id := null;
+      first_returned_sort_key := null;
+      first_returned_record_id := null;
+      next_value := null;
+      opposite_value := null;
+    end if;
+  end if;
   foreach segment_sql in array segment_predicates loop
   loop
   if projection_page_scan then
@@ -1103,7 +1067,7 @@ begin
        and ($12 is null or stored.record_id = $12)
        and %s
        and (%s)
-        and (case when (%s) then true else false end)%s
+        and (case when (%s) then true else false end)%s%s
      order by %s
      limit $5',
     pg_catalog.array_to_string(sort_key_terms, ', '),
@@ -1127,6 +1091,7 @@ begin
       then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
     access_sql,
     filter_predicate,
+    board_scan_sql,
     segment_sql,
     order_by_sql
   );
@@ -1136,7 +1101,8 @@ begin
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
-      filter_parameters, access_parameters, projection_batch, p_exact_record_id;
+      filter_parameters, access_parameters, projection_batch, p_exact_record_id,
+      board_column_value, board_option_values;
   cursor_position := 0;
   loop
     fetch scan_cursor into scan_record;
@@ -1420,6 +1386,19 @@ begin
     into rows_value
     from pg_catalog.jsonb_array_elements(rows_value) with ordinality as item(value, ordinality);
   end if;
+  exit column_pass when not board_columns_mode;
+  board_column_pages := board_column_pages || pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object('column', board_column_item, 'rows', rows_value, 'next', next_value)
+  );
+  end loop column_pass;
+  if board_columns_mode then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'completed',
+      'moduleReleaseRevision', resolved -> 'moduleReleaseRevision',
+      'moduleReleaseVersion', resolved -> 'moduleReleaseVersion',
+      'columns', board_column_pages
+    );
+  end if;
   if group_member_mode then
     return pg_catalog.jsonb_build_object(
       'outcome', 'completed',
@@ -1502,4 +1481,4 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid)
   to vortex_request;
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, classifies those columns from current readable values, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values or affects scan order or budget; orders board and generic group pages by record identity, returns generic group identity even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; refuses preview member, grouped, aggregate and system projection modes.';
+  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values or affects scan order or budget; orders board and generic group pages by record identity, returns generic group identity even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; refuses preview member, grouped, aggregate and system projection modes.';
