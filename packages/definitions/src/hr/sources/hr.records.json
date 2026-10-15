@@ -1156,46 +1156,83 @@
         ],
         "tasks": [
           {
-            "id": "taken_exceeds_entitlement",
+            "id": "taken_present",
             "type": "if",
             "condition": {
-              "op": "gt",
-              "left": {
-                "op": "reference",
-                "reference": {
-                  "source": "trigger_record",
-                  "field": "approved_days_taken"
-                }
-              },
-              "right": {
-                "op": "reference",
-                "reference": {
-                  "source": "trigger_record",
-                  "field": "days"
-                }
-              }
-            },
-            "then": [
-              {
-                "id": "refuse_taken_exceeds",
-                "type": "rule.refuse",
-                "version": "1.0.0",
-                "properties": {
-                  "reason": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": "leave_entitlement_exceeded"
+              "op": "and",
+              "args": [
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "is_empty",
+                    "arg": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "approved_days_taken"
+                      }
                     }
-                  },
-                  "message": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": "Taken days cannot exceed entitlement"
+                  }
+                },
+                {
+                  "op": "not",
+                  "arg": {
+                    "op": "is_empty",
+                    "arg": {
+                      "op": "reference",
+                      "reference": {
+                        "source": "trigger_record",
+                        "field": "days"
+                      }
                     }
                   }
                 }
+              ]
+            },
+            "then": [
+              {
+                "id": "taken_exceeds_entitlement",
+                "type": "if",
+                "condition": {
+                  "op": "gt",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "approved_days_taken"
+                    }
+                  },
+                  "right": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "days"
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "id": "refuse_taken_exceeds",
+                    "type": "rule.refuse",
+                    "version": "1.0.0",
+                    "properties": {
+                      "reason": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "leave_entitlement_exceeded"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Taken days cannot exceed entitlement"
+                        }
+                      }
+                    }
+                  }
+                ]
               }
             ]
           }
