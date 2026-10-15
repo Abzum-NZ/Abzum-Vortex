@@ -156,6 +156,7 @@ export async function rereadApplicationPlacements(
       tableContinuation?.success === true
         ? {
             placementId: tableContinuation.data.placementId,
+            ...(tableContinuation.data.fromAddress === true ? { fromAddress: true as const } : {}),
             request: {
               page: tableContinuation.data.request.page,
               pageDirection: tableContinuation.data.request.pageDirection,
