@@ -302,6 +302,8 @@ export const projectEditField = (
  * bounded by the records sharing that label, never by the whole choice list. A value that is not
  * offered (unreadable, or its label is not what the Choice searches) is logged with its cause.
  */
+const SELECTED_LABEL_SEARCH_PAGE_LIMIT = 5;
+
 const findOfferedBySearch = async (
   args: Readonly<{
     service: ReturnType<typeof createReferenceChoiceService>;
@@ -313,7 +315,8 @@ const findOfferedBySearch = async (
   matches: (choice: ReferenceChoiceOption) => boolean,
 ): Promise<ReferenceChoiceOption | undefined> => {
   let continuationToken: string | undefined;
-  for (;;) {
+  // Bounded: a label shared by more than this many pages of records is logged rather than scanned.
+  for (let page = 0; page < SELECTED_LABEL_SEARCH_PAGE_LIMIT; page += 1) {
     const result = await args.service.run(args.session, args.selection, {
       ...command,
       search,
@@ -338,6 +341,8 @@ const findOfferedBySearch = async (
       return undefined;
     }
   }
+  console.error("reference_choice_selected_not_offered", { reason: "label_search_page_limit" });
+  return undefined;
 };
 
 export type ReferenceChoiceFirstPage = Readonly<{
