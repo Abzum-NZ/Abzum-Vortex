@@ -24,6 +24,9 @@ declare
   use_exact_row boolean;
   jobs jsonb := '[]'::jsonb;
   decisions jsonb := '[]'::jsonb;
+  bounds_by_route jsonb := '{}'::jsonb;
+  bounds_key text;
+  update_bounds jsonb;
   results jsonb := '[]'::jsonb;
   row_result jsonb;
   decision_item jsonb;
@@ -147,6 +150,30 @@ begin
 
   if jobs <> '[]'::jsonb then
     decisions := vortex_access.evaluate_organization_record_access_page_internal(p_rows, jobs);
+    -- The same permission contributions have the same field policy. Resolve
+    -- each distinct update contribution set once, then reuse its bounds for
+    -- every row admitted through that set.
+    select coalesce(pg_catalog.jsonb_object_agg(
+      distinct_decision.bounds_key,
+      vortex_access.resolve_record_field_bounds_internal(distinct_decision.decision)
+    ), '{}'::jsonb)
+    into bounds_by_route
+    from (
+      select distinct on (
+        pg_catalog.jsonb_build_array(
+          item.value -> 'decision' -> 'organizationId',
+          item.value -> 'decision' -> 'matchedContributions'
+        )::text
+      )
+        pg_catalog.jsonb_build_array(
+          item.value -> 'decision' -> 'organizationId',
+          item.value -> 'decision' -> 'matchedContributions'
+        )::text as bounds_key,
+        item.value -> 'decision' as decision
+      from pg_catalog.jsonb_array_elements(decisions) as item(value)
+      where item.value ->> 'actionKind' = 'update'
+        and item.value -> 'decision' ->> 'outcome' = 'allowed'
+    ) as distinct_decision;
   end if;
 
   for row_index in 1..pg_catalog.jsonb_array_length(p_rows) loop
@@ -169,14 +196,22 @@ begin
       if action_decision ->> 'outcome' = 'allowed' then
         actions := pg_catalog.array_append(actions, action_kind);
         if action_kind = 'update' then
+          bounds_key := pg_catalog.jsonb_build_array(
+            action_decision -> 'organizationId',
+            action_decision -> 'matchedContributions'
+          )::text;
+          update_bounds := bounds_by_route -> bounds_key;
+          if update_bounds is null then
+            raise exception using errcode = '55000',
+              message = 'Page update field bounds are unavailable';
+          end if;
           changeable_field_ids := coalesce((
             select pg_catalog.jsonb_agg(projected.value order by projected.value)
             from pg_catalog.jsonb_array_elements_text(readable_field_ids) as projected(value)
             where exists (
               select 1
               from pg_catalog.jsonb_array_elements_text(
-                vortex_access.resolve_record_field_bounds_internal(action_decision)
-                  -> 'changeableFieldIds'
+                update_bounds -> 'changeableFieldIds'
               ) as changeable(value)
               where pg_catalog.lower(changeable.value) = pg_catalog.lower(projected.value)
             )
