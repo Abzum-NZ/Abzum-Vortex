@@ -412,7 +412,6 @@
             "temporal_state"
           ],
           "sortable_fields": [
-            "account_display_name",
             "starts_at",
             "expires_at",
             "state"
@@ -484,7 +483,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "refused",
@@ -608,8 +607,7 @@
           "sortable_fields": [
             "key",
             "label",
-            "lifecycle",
-            "accepted_permission_count"
+            "lifecycle"
           ]
         },
         "fields": [
@@ -784,7 +782,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
             "type": "whole_number",
@@ -820,8 +818,6 @@
             "temporal_state"
           ],
           "sortable_fields": [
-            "role_key",
-            "role_label",
             "starts_at",
             "expires_at",
             "state"
@@ -878,7 +874,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
@@ -894,7 +890,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "search_priority": "first",
             "personal_data": "none",
             "public_display": "refused",
@@ -1095,9 +1091,6 @@
             "temporal_state"
           ],
           "sortable_fields": [
-            "account_display_name",
-            "role_key",
-            "role_label",
             "activated_at",
             "expires_at",
             "state"
@@ -1154,7 +1147,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "search_priority": "first",
             "personal_data": "personal",
             "public_display": "refused",
@@ -1185,7 +1178,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "search_priority": "normal",
             "personal_data": "none",
             "public_display": "refused",
@@ -1201,7 +1194,7 @@
             "required": false,
             "unique": false,
             "filterable": false,
-            "sortable": true,
+            "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
             "type": "text",
