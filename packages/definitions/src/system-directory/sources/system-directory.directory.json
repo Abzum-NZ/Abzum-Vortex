@@ -1745,8 +1745,7 @@
           ],
           "sortable_fields": [
             "starts_at",
-            "expires_at",
-            "state"
+            "expires_at"
           ]
         },
         "fields": [
@@ -1898,7 +1897,7 @@
             "required": false,
             "unique": false,
             "filterable": true,
-            "sortable": true,
+            "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
             "type": "choice",
