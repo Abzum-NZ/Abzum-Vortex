@@ -4,8 +4,8 @@ import path from "node:path";
 /**
  * Seeds a large, repeatable record set on a local database lane for list-paging measurements.
  *
- * It fills one record type of the CRM application (opportunities) and one of the Service Desk
- * application (cases). The fastest write that stays correct is a set-based clone of one record
+ * By default it fills one record type of the CRM application (opportunities) and one of the
+ * Service Desk application (cases); `--kinds` picks another subset (CRM contacts are also known). The fastest write that stays correct is a set-based clone of one record
  * that the normal write path (`apply_record_changes`, through demo setup) already produced:
  *  - every clone is a row of the record type's own storage table, so the field indexes, the unique
  *    reference-number index and the row-level-security policies cover it exactly like a saved record;
@@ -21,6 +21,7 @@ import path from "node:path";
  * `--count 0` only removes them). Lanes only: the main stack ports are refused.
  *
  * Usage: node tooling/list-paging/seed-list-records.mjs --lane 2 [--count 50000]
+ *          [--kinds opportunity,contact,case]
  */
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -43,10 +44,15 @@ const count = Number(argument("count", "50000"));
 if (!Number.isInteger(count) || count < 0 || count > 500000)
   fail("--count must be 0 to 500000 (0 only removes the seed).");
 
-const kinds = [
+const knownKinds = [
   { key: "opportunity", label: "CRM opportunities" },
+  { key: "contact", label: "CRM contacts" },
   { key: "case", label: "Service Desk cases" },
 ];
+const kindKeys = argument("kinds", "opportunity,case").split(",");
+const kinds = knownKinds.filter((kind) => kindKeys.includes(kind.key));
+if (kinds.length !== kindKeys.length)
+  fail(`--kinds takes a comma-separated subset of ${knownKinds.map((kind) => kind.key).join(", ")}.`);
 
 const sql = postgres(`postgresql://postgres:postgres@127.0.0.1:${port}/postgres`, {
   max: 1,
@@ -106,6 +112,9 @@ const seedKind = async (transaction, kind) => {
         column,
         `'Seed ${kind.key} ' || substr(md5(g.n::text), 1, 8) || ' ' || g.n::text`,
       );
+    } else if (field.unique === true && mapping.database_value_type === "text") {
+      // A unique text value (a contact's email address) gets a per-clone prefix that keeps its form.
+      expressions.set(column, `'seed' || g.n::text || '.' || t.${column}`);
     } else if (field.type === "choice") {
       const values = field.settings.options.map((option) => option.value);
       const list = values.map((value) => `'${String(value).replaceAll("'", "''")}'`).join(",");
