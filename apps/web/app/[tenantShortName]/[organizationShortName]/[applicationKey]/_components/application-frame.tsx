@@ -157,6 +157,14 @@ export function ApplicationFrame({
     },
     [resolvePageHref, router],
   );
+  // A page change the page itself starts (a row opening a record, a flow's Navigate) runs in the
+  // same transition, so it dims the page and shows the progress line exactly as a menu click does.
+  // Back and Forward cannot join it: the router carries those out itself and renders the next
+  // address in full before anything commits, so the frame has no moment to show a busy state.
+  const startPageChange = useCallback<ApplicationFrameStateValue["startPageChange"]>(
+    (navigate) => startPageTransition(navigate),
+    [],
+  );
   // Intent to open a menu page (the pointer rests on its link or focus reaches it) asks the router
   // for an automatic prefetch of that address, never a full one. An automatic prefetch of these
   // dynamic pages carries only the route tree and what lies above the nearest loading boundary
@@ -277,10 +285,18 @@ export function ApplicationFrame({
       setPageState,
       clearPageState,
       navigateToPage,
+      startPageChange,
       applicationSearch,
       applicationSearchPageSubject,
     }),
-    [applicationSearch, applicationSearchPageSubject, clearPageState, navigateToPage, setPageState],
+    [
+      applicationSearch,
+      applicationSearchPageSubject,
+      clearPageState,
+      navigateToPage,
+      setPageState,
+      startPageChange,
+    ],
   );
 
   return (

@@ -37,6 +37,7 @@ import {
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
+import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, Notice } from "./types";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
@@ -220,6 +221,7 @@ export function useFlowRuntime({
       }),
     [application, subject],
   );
+  const startPageChange = useApplicationFrame()?.startPageChange;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
       unsavedWork,
@@ -231,12 +233,15 @@ export function useFlowRuntime({
           if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
             parameters.set(name, String(value));
         const query = parameters.toString();
-        router.push(`${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`);
+        const address = `${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`;
+        // Inside the frame the change runs in its page transition (dimmed page, progress line).
+        if (startPageChange === undefined) router.push(address);
+        else startPageChange(() => router.push(address));
       },
       resolveInternalAddress: (target) =>
         target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
-    [basePath, resolvePageHref, router, unsavedWork],
+    [basePath, resolvePageHref, router, startPageChange, unsavedWork],
   );
   const renderForm = useCallback(
     (
