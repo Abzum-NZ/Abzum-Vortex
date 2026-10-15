@@ -23,12 +23,12 @@ declare
   emitted integer := 0;
   scan_sql text;
   comparison text;
+  sort_column text;
 begin
   if p_sort_key not in ('record_id', 'source_role_id', 'application_root_id', 'key', 'label')
     or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
-    or (p_limit is not null and p_limit < 1)
-    or (p_sort_key in ('key', 'label') and p_limit is null) then
+    or (p_limit is not null and p_limit < 1) then
     raise exception using errcode = '22023',
       message = 'Application role template projection bounds are invalid';
   end if;
@@ -65,48 +65,15 @@ begin
     return;
   end;
 
-  -- Keys and labels live only in compiled JSON. Old releases may still forward
-  -- either sort; materialize that legacy order after the indexed visibility scan.
-  if p_sort_key in ('key', 'label') then
-    return query
-    select projected.*
-    from vortex_access.list_application_role_templates_projection(
-      p_record_ids, 'record_id', 'ascending', null, null
-    ) as projected
-    where p_after is null
-      or (after_text is null and (
-        ((projected.attribute_values ->> p_sort_key) is null and
-          case when p_direction = 'ascending'
-            then projected.record_id > after_record_id
-            else projected.record_id < after_record_id end)
-        or (p_direction = 'ascending' and
-          (projected.attribute_values ->> p_sort_key) is not null)
-      ))
-      or (after_text is not null and (
-        ((projected.attribute_values ->> p_sort_key) is not null and
-          case when p_direction = 'ascending'
-            then ((projected.attribute_values ->> p_sort_key) collate "C", projected.record_id)
-              > (after_text collate "C", after_record_id)
-            else ((projected.attribute_values ->> p_sort_key) collate "C", projected.record_id)
-              < (after_text collate "C", after_record_id) end)
-        or (p_direction = 'descending' and
-          (projected.attribute_values ->> p_sort_key) is null)
-      ))
-    order by
-      case when p_direction = 'ascending'
-        then projected.attribute_values ->> p_sort_key end collate "C" asc nulls first,
-      case when p_direction = 'ascending' then projected.record_id end asc,
-      case when p_direction = 'descending'
-        then projected.attribute_values ->> p_sort_key end collate "C" desc nulls last,
-      case when p_direction = 'descending' then projected.record_id end desc
-    limit p_limit;
-    return;
-  end if;
-
   comparison := case when p_direction = 'ascending' then '>' else '<' end;
+  sort_column := case p_sort_key
+    when 'key' then 'continuity.key collate "C"'
+    when 'label' then 'continuity.label collate "C"'
+    else null end;
   scan_sql := $scan$
     select continuity.application_root_id, continuity.source_role_id,
-      continuity.continuity_revision, registration.revision as registration_revision,
+      continuity.key, continuity.label, continuity.continuity_revision,
+      registration.revision as registration_revision,
       release.compilation_output #> '{canonical,content,roles}' as roles
     from vortex_access.application_role_template_continuities as continuity
     join vortex_access.permission_registrations as registration
@@ -142,6 +109,24 @@ begin
     scan_sql := scan_sql || pg_catalog.format(
       ' and continuity.source_role_id %s $3', comparison
     );
+  elsif p_after is not null and sort_column is not null then
+    if after_text is null then
+      scan_sql := scan_sql || pg_catalog.format(
+        ' and ((%1$s is null and continuity.source_role_id %2$s $3)%3$s)',
+        sort_column, comparison,
+        case when p_direction = 'ascending'
+          then pg_catalog.format(' or %s is not null', sort_column)
+          else '' end
+      );
+    else
+      scan_sql := scan_sql || pg_catalog.format(
+        ' and ((%1$s, continuity.source_role_id) %2$s ($4 collate "C", $3)%3$s)',
+        sort_column, comparison,
+        case when p_direction = 'descending'
+          then pg_catalog.format(' or %s is null', sort_column)
+          else '' end
+      );
+    end if;
   elsif p_after is not null then
     -- Only the delegating old signature uses this order without a cursor.
     raise exception using errcode = '22023',
@@ -150,6 +135,12 @@ begin
   scan_sql := scan_sql || case when p_sort_key in ('record_id', 'source_role_id')
     then pg_catalog.format(' order by continuity.source_role_id %s',
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
+    when sort_column is not null then pg_catalog.format(
+      ' order by %s %s nulls %s, continuity.source_role_id %s',
+      sort_column,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end,
+      case when p_direction = 'ascending' then 'first' else 'last' end,
+      case when p_direction = 'ascending' then 'asc' else 'desc' end)
     else pg_catalog.format(
       ' order by continuity.application_root_id %s, continuity.source_role_id %s',
       case when p_direction = 'ascending' then 'asc' else 'desc' end,
@@ -157,7 +148,7 @@ begin
     end;
 
   for candidate in execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_record_id
+    after_record_id, after_text
   loop
     if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
       continue;
@@ -200,13 +191,18 @@ begin
     if not valid_roles or selected_template is null then
       continue;
     end if;
+    if candidate.key is distinct from selected_template ->> 'key'
+      or candidate.label is distinct from selected_template ->> 'name' then
+      raise exception using errcode = '23514',
+        message = 'Application role template continuity metadata does not match its release';
+    end if;
     return query select scope_row.organization_id,
       candidate.source_role_id, candidate.registration_revision,
       pg_catalog.jsonb_build_object(
         'application_root_id', candidate.application_root_id,
         'source_role_id', candidate.source_role_id,
-        'key', selected_template ->> 'key',
-        'label', selected_template ->> 'name',
+        'key', candidate.key,
+        'label', candidate.label,
         'continuity_revision', candidate.continuity_revision
       );
     emitted := emitted + 1;
