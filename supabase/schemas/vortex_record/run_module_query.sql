@@ -102,7 +102,6 @@ declare
   projection_after jsonb; projection_batch_size integer;
   projection_candidate_count integer := 0; projection_reader_exhausted boolean := false;
   projection_batch_exhausted boolean := false;
-  projection_error_message text;
   projection_last_record_id uuid;
   projection_last_sort_key text[];
   scan_record record;
@@ -853,6 +852,10 @@ begin
     when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
   scan_source_sql := pg_catalog.format('record_data.%I as stored', physical_table_token);
   projection_page_scan := not preview_mode and record_type_item ? 'systemProjection'
+    and coalesce(p_user_inputs -> 'filter', 'null'::jsonb) = 'null'::jsonb
+    and coalesce(query_item -> 'filter', 'null'::jsonb) = 'null'::jsonb
+    and user_search is null
+    and not board_member_mode and not group_member_mode
     and pg_catalog.cardinality(sort_ids) = 1
     and pg_catalog.cardinality(declared_sort_ids) = 1
     and exists (
@@ -861,7 +864,9 @@ begin
         record_type_item #> '{systemProjection,sortableFieldIds}'
       ) as sortable(id)
       where pg_catalog.lower(sortable.id) = sort_ids[1]
-    ) and vortex_record.has_bounded_system_projection_reader_internal(v_storage_contract_id);
+    ) and vortex_record.has_bounded_system_projection_reader_internal(
+      v_storage_contract_id, fields_by_id -> sort_ids[1] ->> 'key'
+    );
   if projection_page_scan then
       projection_sort_key := fields_by_id -> sort_ids[1] ->> 'key';
       if projection_sort_key is null then
@@ -870,19 +875,12 @@ begin
       end if;
       projection_after := p_after;
       projection_batch_size := least(p_page_size + 1, scan_limit);
-      -- Old releases with unsupported sort keys keep the view scan.
-      begin
-        select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
-        into projection_batch
-        from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
-          null::uuid[], projection_sort_key, scan_directions[1], projection_after,
-          projection_batch_size) with ordinality as projected(organization_id, record_id,
-          revision, attribute_values, ordinality);
-      exception when invalid_parameter_value then
-        get stacked diagnostics projection_error_message = message_text;
-        if projection_error_message not like '% projection bounds are invalid' then raise; end if;
-        projection_page_scan := false;
-      end;
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
+      into projection_batch
+      from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
+        null::uuid[], projection_sort_key, scan_directions[1], projection_after,
+        projection_batch_size) with ordinality as projected(organization_id, record_id,
+        revision, attribute_values, ordinality);
   end if;
   if projection_page_scan then
       -- The registered view contributes its row type only. The bounded reader

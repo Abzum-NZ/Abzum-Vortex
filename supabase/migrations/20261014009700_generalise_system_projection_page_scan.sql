@@ -1,7 +1,32 @@
 set local role vortex_owner;
 
+alter table vortex_record.protected_read_model_views
+  add column if not exists cursor_sort_keys text[] not null default '{}'::text[];
+
+update vortex_record.protected_read_model_views as registered
+set cursor_sort_keys = accepted.sort_keys
+from (values
+  ('organization_runtime_settings', array['record_id', 'language']::text[]),
+  ('organization_accounts', array['record_id', 'display_name', 'state']::text[]),
+  ('organization_invitations', array['record_id', 'invited_email', 'expires_at', 'state']::text[]),
+  ('groups', array['record_id', 'key', 'label', 'state']::text[]),
+  ('people', array['record_id', 'starts_at', 'expires_at', 'state', 'account_display_name']::text[]),
+  ('permissions', array['record_id', 'key', 'label', 'administrative']::text[]),
+  ('roles', array['record_id', 'key', 'label', 'lifecycle']::text[]),
+  ('effective_assignments', array['record_id', 'starts_at', 'expires_at', 'state', 'role_key', 'role_label']::text[]),
+  ('role_activations', array['record_id', 'activated_at', 'expires_at', 'state', 'account_display_name', 'role_key', 'role_label']::text[]),
+  ('delegations', array['record_id', 'scope_kind', 'starts_at', 'expires_at', 'state']::text[]),
+  ('tenant_structure', array['record_id', 'short_name', 'display_name', 'state', 'state_changed_at', 'created_at']::text[]),
+  ('tenants', array['record_id', 'short_name', 'display_name', 'state', 'state_changed_at', 'created_at']::text[]),
+  ('tenant_administrators', array['record_id', 'starts_at', 'expires_at', 'state']::text[]),
+  ('installed_applications', array['record_id', 'key', 'name', 'release_revision']::text[]),
+  ('application_role_templates', array['record_id', 'source_role_id', 'key', 'label']::text[]),
+  ('activity_entry', array['occurred_at']::text[])
+) as accepted(model_key, sort_keys)
+where registered.protected_read_model_key = accepted.model_key;
 create or replace function vortex_record.has_bounded_system_projection_reader_internal(
-  p_storage_contract_id uuid
+  p_storage_contract_id uuid,
+  p_sort_key text
 )
 returns boolean
 language sql stable security definer set search_path = ''
@@ -13,6 +38,7 @@ as $function$
     where storage.storage_contract_id = p_storage_contract_id
       and storage.physical_schema_token = 'system_projection'
       and storage.state = 'active'
+      and p_sort_key = any(registered.cursor_sort_keys)
       and pg_catalog.to_regprocedure(pg_catalog.format(
         '%I.%I(uuid[],text,text,jsonb,integer)', registered.reader_schema,
         registered.reader_function
@@ -20,11 +46,11 @@ as $function$
   );
 $function$;
 
-alter function vortex_record.has_bounded_system_projection_reader_internal(uuid)
+alter function vortex_record.has_bounded_system_projection_reader_internal(uuid, text)
   owner to vortex_owner;
-revoke all on function vortex_record.has_bounded_system_projection_reader_internal(uuid)
+revoke all on function vortex_record.has_bounded_system_projection_reader_internal(uuid, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.has_bounded_system_projection_reader_internal(uuid)
+grant execute on function vortex_record.has_bounded_system_projection_reader_internal(uuid, text)
   to vortex_record_adapter;
 
 set local role vortex_record_adapter;
@@ -133,7 +159,6 @@ declare
   projection_after jsonb; projection_batch_size integer;
   projection_candidate_count integer := 0; projection_reader_exhausted boolean := false;
   projection_batch_exhausted boolean := false;
-  projection_error_message text;
   projection_last_record_id uuid;
   projection_last_sort_key text[];
   scan_record record;
@@ -884,6 +909,10 @@ begin
     when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
   scan_source_sql := pg_catalog.format('record_data.%I as stored', physical_table_token);
   projection_page_scan := not preview_mode and record_type_item ? 'systemProjection'
+    and coalesce(p_user_inputs -> 'filter', 'null'::jsonb) = 'null'::jsonb
+    and coalesce(query_item -> 'filter', 'null'::jsonb) = 'null'::jsonb
+    and user_search is null
+    and not board_member_mode and not group_member_mode
     and pg_catalog.cardinality(sort_ids) = 1
     and pg_catalog.cardinality(declared_sort_ids) = 1
     and exists (
@@ -892,7 +921,9 @@ begin
         record_type_item #> '{systemProjection,sortableFieldIds}'
       ) as sortable(id)
       where pg_catalog.lower(sortable.id) = sort_ids[1]
-    ) and vortex_record.has_bounded_system_projection_reader_internal(v_storage_contract_id);
+    ) and vortex_record.has_bounded_system_projection_reader_internal(
+      v_storage_contract_id, fields_by_id -> sort_ids[1] ->> 'key'
+    );
   if projection_page_scan then
       projection_sort_key := fields_by_id -> sort_ids[1] ->> 'key';
       if projection_sort_key is null then
@@ -901,19 +932,12 @@ begin
       end if;
       projection_after := p_after;
       projection_batch_size := least(p_page_size + 1, scan_limit);
-      -- Old releases with unsupported sort keys keep the view scan.
-      begin
-        select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
-        into projection_batch
-        from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
-          null::uuid[], projection_sort_key, scan_directions[1], projection_after,
-          projection_batch_size) with ordinality as projected(organization_id, record_id,
-          revision, attribute_values, ordinality);
-      exception when invalid_parameter_value then
-        get stacked diagnostics projection_error_message = message_text;
-        if projection_error_message not like '% projection bounds are invalid' then raise; end if;
-        projection_page_scan := false;
-      end;
+      select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
+      into projection_batch
+      from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
+        null::uuid[], projection_sort_key, scan_directions[1], projection_after,
+        projection_batch_size) with ordinality as projected(organization_id, record_id,
+        revision, attribute_values, ordinality);
   end if;
   if projection_page_scan then
       -- The registered view contributes its row type only. The bounded reader
@@ -1523,5 +1547,9 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, classifies those columns from current readable values, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values or affects scan order or budget; orders board and generic group pages by record identity, returns generic group identity even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; refuses preview member, grouped, aggregate and system projection modes.';
+
+set local role vortex_owner;
+
+drop function if exists vortex_record.has_bounded_system_projection_reader_internal(uuid);
 
 reset role;
