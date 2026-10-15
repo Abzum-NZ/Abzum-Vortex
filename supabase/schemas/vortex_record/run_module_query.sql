@@ -174,7 +174,6 @@ declare
   board_columns_mode boolean := false;
   board_columns jsonb := '[]'::jsonb;
   board_column_item jsonb;
-  board_column_keys text[] := array[]::text[];
   board_column_position integer := 0;
   board_column_pages jsonb := '[]'::jsonb;
   -- The stored choice column, when the reader is guaranteed to see the choice
@@ -183,15 +182,12 @@ declare
   board_scan_sql text := '';
   group_member jsonb;
   group_selector jsonb;
-  group_selector_item jsonb;
-  group_selector_value jsonb;
   group_selector_values jsonb := '{}'::jsonb;
   group_selector_types jsonb := '{}'::jsonb;
   group_candidate_values jsonb;
   group_by_ids text[] := array[]::text[];
   group_key text;
   group_field_type text;
-  group_value_valid boolean;
   group_member_matches boolean;
   preview_mode boolean := false;
 begin
@@ -263,150 +259,24 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if group_member_mode then
-    group_member := p_user_inputs -> 'groupMember';
-    if pg_catalog.jsonb_typeof(group_member) is distinct from 'object' then
+    group_member := vortex_record.group_member_selector_internal(p_user_inputs -> 'groupMember');
+    if group_member is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
     end if;
-    if group_member - array['values']::text[] <> '{}'::jsonb
-      or not (group_member ? 'values')
-      or pg_catalog.jsonb_typeof(group_member -> 'values') is distinct from 'array' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-    end if;
-    if pg_catalog.jsonb_array_length(group_member -> 'values') not between 1 and 10 then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-    end if;
-    group_selector := group_member -> 'values';
-    for group_selector_item in
-      select item.value from pg_catalog.jsonb_array_elements(group_selector) as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(group_selector_item) is distinct from 'object' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      if group_selector_item - array['fieldId', 'fieldType', 'value']::text[] <> '{}'::jsonb
-        or not (group_selector_item ? 'fieldId')
-        or not (group_selector_item ? 'fieldType')
-        or not (group_selector_item ? 'value')
-        or pg_catalog.jsonb_typeof(group_selector_item -> 'fieldId') is distinct from 'string'
-        or pg_catalog.lower(group_selector_item ->> 'fieldId') !~ uuid_pattern
-        or pg_catalog.lower(group_selector_item ->> 'fieldId') = '00000000-0000-0000-0000-000000000000'
-        or pg_catalog.jsonb_typeof(group_selector_item -> 'fieldType') is distinct from 'string'
-        or group_selector_item ->> 'fieldType' not in (
-          'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
-          'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
-          'link', 'link_to_one_of_several', 'link_to_person'
-        ) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      group_key := pg_catalog.lower(group_selector_item ->> 'fieldId');
-      if group_selector_types ? group_key then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      group_field_type := group_selector_item ->> 'fieldType';
-      group_selector_value := group_selector_item -> 'value';
-      group_value_valid := group_selector_value = 'null'::jsonb;
-      if not group_value_valid then
-        case group_field_type
-          when 'text', 'reference_number', 'email_address', 'phone_number', 'web_address' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string';
-          when 'choice' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and pg_catalog.length(group_selector_value #>> '{}') between 1 and 120;
-          when 'whole_number' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'number'
-              and case when pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'numeric') then
-                (group_selector_value #>> '{}')::numeric = pg_catalog.trunc((group_selector_value #>> '{}')::numeric)
-                and pg_catalog.abs((group_selector_value #>> '{}')::numeric) <= 9007199254740991
-              else false end;
-          when 'decimal_number' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and group_selector_value #>> '{}' ~ '^-?(0|[1-9][0-9]*)(\.[0-9]+)?$';
-          when 'yes_no' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'boolean';
-          when 'date' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and group_selector_value #>> '{}' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-              and pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'date');
-          when 'date_time' then
-            group_value_valid := pg_catalog.jsonb_typeof(group_selector_value) = 'string'
-              and group_selector_value #>> '{}' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$'
-              and pg_catalog.substr(group_selector_value #>> '{}', 12, 2) between '00' and '23'
-              and pg_catalog.substr(group_selector_value #>> '{}', 15, 2) between '00' and '59'
-              and (pg_catalog.substr(group_selector_value #>> '{}', 17, 1) <> ':'
-                or pg_catalog.substr(group_selector_value #>> '{}', 18, 2) between '00' and '59')
-              and pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'timestamp with time zone');
-          when 'link', 'link_to_one_of_several' then
-            group_value_valid := case when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
-              group_selector_value - array['recordTypeId', 'recordId']::text[] = '{}'::jsonb
-              and group_selector_value ? 'recordTypeId' and group_selector_value ? 'recordId'
-              and pg_catalog.jsonb_typeof(group_selector_value -> 'recordTypeId') = 'string'
-              and pg_catalog.lower(group_selector_value ->> 'recordTypeId') ~ uuid_pattern
-              and pg_catalog.lower(group_selector_value ->> 'recordTypeId') <> '00000000-0000-0000-0000-000000000000'
-              and pg_catalog.jsonb_typeof(group_selector_value -> 'recordId') = 'string'
-              and pg_catalog.lower(group_selector_value ->> 'recordId') ~ uuid_pattern
-              and pg_catalog.lower(group_selector_value ->> 'recordId') <> '00000000-0000-0000-0000-000000000000'
-            else false end;
-          when 'link_to_person' then
-            group_value_valid := case when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
-              group_selector_value - array['organizationAccountId']::text[] = '{}'::jsonb
-              and group_selector_value ? 'organizationAccountId'
-              and pg_catalog.jsonb_typeof(group_selector_value -> 'organizationAccountId') = 'string'
-              and pg_catalog.lower(group_selector_value ->> 'organizationAccountId') ~ uuid_pattern
-              and pg_catalog.lower(group_selector_value ->> 'organizationAccountId') <> '00000000-0000-0000-0000-000000000000'
-            else false end;
-          else
-            group_value_valid := false;
-        end case;
-      end if;
-      if not group_value_valid then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end if;
-      group_selector_types := group_selector_types || pg_catalog.jsonb_build_object(group_key, group_field_type);
-      group_selector_values := group_selector_values || pg_catalog.jsonb_build_object(group_key, group_selector_value);
-    end loop;
+    group_selector := p_user_inputs #> '{groupMember,values}';
+    group_selector_types := group_member -> 'types';
+    group_selector_values := group_member -> 'values';
   end if;
   if board_member_mode then
-    -- A member page names one column; a board's first pages name every column.
-    board_member := p_user_inputs -> case when board_columns_mode then 'boardColumns' else 'boardMember' end;
-    if pg_catalog.jsonb_typeof(board_member) is distinct from 'object'
-      or board_member - array['choiceFieldId',
-        case when board_columns_mode then 'columns' else 'column' end]::text[] <> '{}'::jsonb
-      or not (board_member ? 'choiceFieldId')
-      or not (board_member ? case when board_columns_mode then 'columns' else 'column' end)
-      or pg_catalog.jsonb_typeof(board_member -> 'choiceFieldId') is distinct from 'string'
-      or pg_catalog.lower(board_member ->> 'choiceFieldId') !~ uuid_pattern then
+    board_member := vortex_record.board_column_selector_internal(
+      p_user_inputs -> case when board_columns_mode then 'boardColumns' else 'boardMember' end,
+      board_columns_mode
+    );
+    if board_member is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
-    board_choice_field_id := pg_catalog.lower(board_member ->> 'choiceFieldId');
-    board_columns := case when board_columns_mode then board_member -> 'columns'
-      else pg_catalog.jsonb_build_array(board_member -> 'column') end;
-    if pg_catalog.jsonb_typeof(board_columns) is distinct from 'array'
-      or pg_catalog.jsonb_array_length(board_columns) not between 1 and 13 then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    for board_column_item in
-      select item.value from pg_catalog.jsonb_array_elements(board_columns) as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(board_column_item) is distinct from 'object'
-        or pg_catalog.jsonb_typeof(board_column_item -> 'kind') is distinct from 'string'
-        or board_column_item::text = any (board_column_keys) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      board_column_keys := pg_catalog.array_append(board_column_keys, board_column_item::text);
-      if board_column_item ->> 'kind' = 'option' then
-        if board_column_item - array['kind', 'value']::text[] <> '{}'::jsonb
-          or not (board_column_item ? 'value')
-          or pg_catalog.jsonb_typeof(board_column_item -> 'value') is distinct from 'string'
-          or coalesce(pg_catalog.length(board_column_item ->> 'value'), 0) not between 1 and 120 then
-          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-        end if;
-      elsif board_column_item ->> 'kind' = 'unassigned' then
-        if board_column_item - array['kind']::text[] <> '{}'::jsonb then
-          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-        end if;
-      else
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-    end loop;
+    board_choice_field_id := board_member ->> 'choiceFieldId';
+    board_columns := board_member -> 'columns';
   end if;
   -- The list-only sortable and searchable allow-lists contain distinct field
   -- identities. Query preparation validates the filterable allow-list.
