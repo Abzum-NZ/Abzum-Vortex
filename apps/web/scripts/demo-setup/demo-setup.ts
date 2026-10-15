@@ -138,4 +138,5 @@ main()
     );
     process.exitCode = 1;
   })
-  .finally(() => process.exit());
+  // Exit only after both streams have flushed, so a failure's cause is never truncated.
+  .finally(() => process.stdout.write("", () => process.stderr.write("", () => process.exit())));
