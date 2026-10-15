@@ -323,6 +323,7 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   firstPage: ReferenceChoiceFirstPage | undefined;
   field: SelectedReferenceChoiceField | undefined;
   stored: JsonValue | undefined;
+  resolveRecordLinks: RecordLinkResolver;
   service: ReturnType<typeof createReferenceChoiceService>;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
@@ -384,88 +385,58 @@ export const projectSelectedReferenceChoiceEditField = async (args: Readonly<{
   )
     return undefined;
 
-  const seenKeys = new Set<string>();
-  const seenRowIds = new Set<string>();
-  const seenTokens = new Set<string>();
-  let selected: ReferenceChoiceOption | undefined;
-  let selectedEvidence: ReferenceChoiceSelectionEvidence | undefined;
-  let totalChoices = 0;
-  const consumePage = (
-    choices: readonly ReferenceChoiceOption[],
-    requestToken: string | undefined,
-  ): boolean => {
-    if (choices.length > command.pageSize || totalChoices + choices.length > 1_000) return false;
-    totalChoices += choices.length;
-    for (const choice of choices) {
-      const choiceValue = choice.value;
-      if ("organizationAccountId" in choiceValue) return false;
-      const rowId = `${choiceValue.recordTypeId.toLowerCase()}:${choiceValue.recordId.toLowerCase()}`;
-      if (
-        seenKeys.has(choice.key) ||
-        seenRowIds.has(rowId) ||
-        !sameId(choiceValue.recordTypeId, queryTarget.recordTypeId) ||
-        !queryAllowedTargets.some((target) => sameId(target.recordTypeId, choiceValue.recordTypeId))
-      )
-        return false;
-      seenKeys.add(choice.key);
-      seenRowIds.add(rowId);
-      if (
-        sameId(choiceValue.recordTypeId, storedValue.recordTypeId) &&
-        sameId(choiceValue.recordId, storedValue.recordId)
-      ) {
-        if (selected !== undefined) return false;
-        selected = choice;
-        selectedEvidence = requestToken === undefined ? {} : { continuationToken: requestToken };
-      }
-    }
-    return true;
+  const matches = (choice: ReferenceChoiceOption): boolean => {
+    const choiceValue = choice.value;
+    return (
+      !("organizationAccountId" in choiceValue) &&
+      sameId(choiceValue.recordTypeId, queryTarget.recordTypeId) &&
+      queryAllowedTargets.some((target) => sameId(target.recordTypeId, choiceValue.recordTypeId)) &&
+      sameId(choiceValue.recordTypeId, storedValue.recordTypeId) &&
+      sameId(choiceValue.recordId, storedValue.recordId)
+    );
   };
-  if (!consumePage(first.choices, undefined)) return undefined;
-
-  let pageCount = 1;
-  let requestToken = first.nextContinuationToken;
-  while (requestToken !== undefined && selected === undefined) {
-    if (pageCount >= 20 || seenTokens.has(requestToken)) return undefined;
-    seenTokens.add(requestToken);
-    const result = await args.service.run(args.session, args.selection, {
-      ...command,
-      continuationToken: requestToken,
-    });
-    if (result.kind !== "available" || result.value.outcome !== "completed") return undefined;
-    const page = result.value;
-    if (page.kind !== "record_reference" || !consumePage(page.choices, requestToken)) return undefined;
-    pageCount += 1;
-    requestToken = page.nextContinuationToken;
-    if (selected === undefined && requestToken !== undefined && seenTokens.has(requestToken)) return undefined;
-  }
-
-  if (selected === undefined) return undefined;
-  const visibleChoices = [...first.choices];
-  if (!visibleChoices.some((choice) => choice.key === selected?.key)) visibleChoices.push(selected);
-  const selectedToken = selectedEvidence?.continuationToken;
-  const optionEvidenceOverrides = selectedToken === undefined
-    ? {}
-    : { [selected.key]: { continuationToken: selectedToken } };
-  return {
+  const nextPage =
+    first.nextContinuationToken === undefined
+      ? {}
+      : { nextContinuationToken: first.nextContinuationToken };
+  const project = (
+    choices: readonly ReferenceChoiceOption[],
+    chosen: ReferenceChoiceOption,
+    evidence: ReferenceChoiceSelectionEvidence | undefined,
+  ): Readonly<{ key: string; value: JsonValue; data: PageDataState }> => ({
     key: field.key,
-    value: selected.key,
+    value: chosen.key,
     data: {
       status: "ready",
-      values: projectReferenceChoiceInputValues(
-        visibleChoices,
-        selected.key,
-        undefined,
-        {
-          ...(first.nextContinuationToken === undefined
-            ? {}
-            : { nextContinuationToken: first.nextContinuationToken }),
-          ...(Object.keys(optionEvidenceOverrides).length === 0
-            ? {}
-            : { optionEvidenceOverrides }),
-        },
-      ),
+      values: projectReferenceChoiceInputValues(choices, chosen.key, undefined, {
+        ...nextPage,
+        ...(evidence === undefined
+          ? {}
+          : { optionEvidenceOverrides: { [chosen.key]: evidence } }),
+      }),
     },
-  };
+  });
+
+  const onFirstPage = first.choices.find(matches);
+  if (onFirstPage !== undefined) return project(first.choices, onFirstPage, undefined);
+
+  // The stored value is named by id: read its label by id, then one search page for that label.
+  const link = { recordTypeId: String(storedValue.recordTypeId), recordId: storedValue.recordId };
+  const labels = await args.resolveRecordLinks([link]);
+  const label = labels?.get(recordLinkLabelKey(link));
+  if (label?.kind !== "record_link") return undefined;
+  const search = label.label.trim().slice(0, 100);
+  if (search === "") return undefined;
+  const result = await args.service.run(args.session, args.selection, { ...command, search });
+  if (
+    result.kind !== "available" ||
+    result.value.outcome !== "completed" ||
+    result.value.kind !== "record_reference"
+  )
+    return undefined;
+  const offered = result.value.choices.find(matches);
+  if (offered === undefined) return undefined;
+  return project([...first.choices, offered], offered, { search });
 };
 
 /**

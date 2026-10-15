@@ -112,8 +112,6 @@ const refusedBecause = (code: string): typeof REFUSED => {
   console.error(`[page] link tile query refused LINK_TILES_${code}`);
   return REFUSED;
 };
-const maximumPages = 50;
-const maximumRows = 10_000;
 
 const cellKey = (settings: Settings, property: string): string | undefined => {
   const value = Object.hasOwn(settings, property) ? settings[property] : undefined;
@@ -287,26 +285,25 @@ export const createLinkTilesQueryResolver = (
       if (binding === undefined) return refusedBecause("BINDING_NOT_RESOLVED");
       const requested = new Set(binding.command.requestedFieldIds.map((id) => id.toLowerCase()));
       const records = new Set<string>();
-      const cursors = new Set<string>();
       const rows: LinkRow[] = [];
-      let rowCount = 0;
-      let command = binding.command;
-      for (let pageIndex = 0; pageIndex < maximumPages; pageIndex += 1) {
-        const result = await runner.run(session, selection, command);
+      {
+        const result = await runner.run(session, selection, binding.command);
         if (result.kind === "temporarily_unavailable") return ERROR;
         if (result.kind !== "available") return refusedBecause("QUERY_NOT_AVAILABLE");
         const parsed = protectedQueryPageSchema.safeParse(result.value);
         if (!parsed.success) return refusedBecause("PAGE_SHAPE_INVALID");
         const page = parsed.data;
-        rowCount += page.rows.length;
         if (
           !sameId(page.moduleRootId, binding.command.moduleRootId) ||
           !sameId(page.queryId, binding.command.queryId) ||
           page.moduleReleaseVersion !== binding.moduleReleaseVersion ||
-          page.rows.length > binding.command.pageSize ||
-          rowCount > maximumRows
+          page.rows.length > binding.command.pageSize
         )
           return refusedBecause("PAGE_SIZE_EXCEEDED");
+        // Tiles are one page of the query's own page size (at most 200); a query that offers
+        // more is refused loudly rather than silently truncated.
+        if (page.nextContinuationToken !== undefined)
+          return refusedBecause("MORE_THAN_ONE_PAGE");
         for (const row of page.rows) {
           const recordId = row.recordId.toLowerCase();
           const keys = Object.keys(row.values);
@@ -357,32 +354,20 @@ export const createLinkTilesQueryResolver = (
             }),
           );
         }
-        const next = page.nextContinuationToken;
-        if (next === undefined)
-          return Object.freeze({
-            status: "ready",
-            values: Object.freeze({
-              kind: "list",
-              headingKey: binding.mapping.label.key,
-              ...(binding.mapping.description === undefined
-                ? {}
-                : {
-                    secondaryKey: binding.mapping.description.key,
-                  }),
-              rows: Object.freeze(rows),
-            }),
-          });
-        if (next.trim() === "" || cursors.has(next) || pageIndex + 1 === maximumPages)
-          return refusedBecause("CURSOR_REPEATED_OR_EXHAUSTED");
-        cursors.add(next);
-        const continuation = protectedQueryCommandSchema.safeParse({
-          ...binding.command,
-          continuationToken: next,
+        return Object.freeze({
+          status: "ready",
+          values: Object.freeze({
+            kind: "list",
+            headingKey: binding.mapping.label.key,
+            ...(binding.mapping.description === undefined
+              ? {}
+              : {
+                  secondaryKey: binding.mapping.description.key,
+                }),
+            rows: Object.freeze(rows),
+          }),
         });
-        if (!continuation.success) return refusedBecause("CONTINUATION_INVALID");
-        command = continuation.data;
       }
-      return refusedBecause("PAGES_EXHAUSTED");
     } catch (error) {
       return projectionError("link-tiles-query", error);
     }
@@ -563,25 +548,24 @@ async function resolveRecordPins(
       return refusedBecause("RECORD_PIN_BINDING_NOT_RESOLVED");
     const requested = new Set(binding.command.requestedFieldIds.map((id) => id.toLowerCase()));
     const records = new Set<string>();
-    const cursors = new Set<string>();
     const sourceRows: ReturnType<typeof protectedQueryPageSchema.parse>["rows"] = [];
-    let command = binding.command;
-    let complete = false;
-    for (let index = 0; index < maximumPages; index += 1) {
-      const result = await runner.run(session, selection, command);
+    {
+      const result = await runner.run(session, selection, binding.command);
       if (result.kind === "temporarily_unavailable") return ERROR;
       if (result.kind !== "available") return refusedBecause("RECORD_PIN_QUERY_NOT_AVAILABLE");
       const parsed = protectedQueryPageSchema.safeParse(result.value);
       if (!parsed.success) return refusedBecause("RECORD_PIN_PAGE_SHAPE_INVALID");
       const page = parsed.data;
       if (
-        !sameId(page.moduleRootId, command.moduleRootId) ||
-        !sameId(page.queryId, command.queryId) ||
+        !sameId(page.moduleRootId, binding.command.moduleRootId) ||
+        !sameId(page.queryId, binding.command.queryId) ||
         page.moduleReleaseVersion !== binding.moduleReleaseVersion ||
-        page.rows.length > command.pageSize ||
-        sourceRows.length + page.rows.length > maximumRows
+        page.rows.length > binding.command.pageSize
       )
         return refusedBecause("RECORD_PIN_PAGE_SIZE_EXCEEDED");
+      // One page of the query's own page size (at most 200); more is refused, never truncated.
+      if (page.nextContinuationToken !== undefined)
+        return refusedBecause("RECORD_PIN_MORE_THAN_ONE_PAGE");
       for (const row of page.rows) {
         const keys = Object.keys(row.values);
         if (
@@ -594,21 +578,7 @@ async function resolveRecordPins(
         records.add(row.recordId.toLowerCase());
         sourceRows.push(row);
       }
-      const next = page.nextContinuationToken;
-      if (next === undefined) {
-        complete = true;
-        break;
-      }
-      if (next.trim() === "" || cursors.has(next) || index + 1 === maximumPages) return refusedBecause("RECORD_PIN_CURSOR_REPEATED_OR_EXHAUSTED");
-      cursors.add(next);
-      const continuation = protectedQueryCommandSchema.safeParse({
-        ...binding.command,
-        continuationToken: next,
-      });
-      if (!continuation.success) return refusedBecause("RECORD_PIN_CONTINUATION_INVALID");
-      command = continuation.data;
     }
-    if (!complete) return refusedBecause("RECORD_PIN_INCOMPLETE");
     type TargetReadReference =
       | Readonly<{
           kind: "application_page";
