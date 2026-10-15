@@ -1,12 +1,7 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type {
-  createFlowRuntime,
-  parseTablePayload} from "@vortex/ui";
-import type {
-  DisplaySemanticEvent,
-  FlowDispatchResult,
-} from "@vortex/ui";
+import type { createFlowRuntime, parseTablePayload } from "@vortex/ui";
+import type { DisplaySemanticEvent, FlowDispatchResult } from "@vortex/ui";
 import {
   boardColumnContinuationRequestSchema,
   isCurrentComponentRequestGeneration,
@@ -43,23 +38,35 @@ export function usePlacementActions({
   application,
   currentSearch,
   router,
-  tableContinuationHistoryRef,
+  tableContinuationScopeRef,
 }: Readonly<{
-  applyDispatch: (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string, afterAccepted?: () => Promise<Notice | undefined>, sourceBindingId?: string) => Promise<void>;
+  applyDispatch: (
+    dispatch: Promise<FlowDispatchResult | undefined>,
+    formPlacementId?: string,
+    afterAccepted?: () => Promise<Notice | undefined>,
+    sourceBindingId?: string,
+  ) => Promise<void>;
   flowRuntime: ReturnType<typeof createFlowRuntime>;
   formOwners: Readonly<Record<string, string>>;
   busy: boolean;
-  placementRequestsRef: RefObject<{ base: string; key: string; generations: Map<string, ComponentRequestGeneration> }>;
+  placementRequestsRef: RefObject<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>;
   navigationKey: string;
   currentPageKey: string | undefined;
   currentData: ApplicationPageModel["data"];
   boardContinuationInFlightRef: RefObject<Set<string>>;
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
-  refreshPlacements: (placementIds: readonly string[], tableContinuation?: TableContinuationTarget) => Promise<void>;
+  refreshPlacements: (
+    placementIds: readonly string[],
+    tableContinuation?: TableContinuationTarget,
+  ) => Promise<void>;
   application: ApplicationPageModel["invocation"];
   currentSearch: string;
   router: ReturnType<typeof useRouter>;
-  tableContinuationHistoryRef: RefObject<{ scopeKey: string; cursors: Map<string, Map<number, string>>; inFlight: Set<string> }>;
+  tableContinuationScopeRef: RefObject<{ scopeKey: string; inFlight: Set<string> }>;
 }>) {
   /**
    * Runs the flow bound to a display or action event through the same runtime as a form gesture.
@@ -132,8 +139,8 @@ export function usePlacementActions({
         return false;
 
       const displayId =
-        Object.keys(currentData).find((candidate) =>
-          candidate.toLowerCase() === parsedId.data.toLowerCase(),
+        Object.keys(currentData).find(
+          (candidate) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
         ) ?? parsedId.data;
       const currentBoard = boardPayloadFor(currentData[displayId]);
       const currentBucket =
@@ -273,55 +280,56 @@ export function usePlacementActions({
         !Number.isSafeInteger(event.page) ||
         event.page < 1 ||
         event.page > 100_000 ||
-        table.page === undefined ||
-        Math.abs(event.page - table.page) !== 1
+        table.page === undefined
       )
         return;
       const parsedId = containedComponentIdSchema.safeParse(placementId);
       if (!parsedId.success) return;
 
       const scopeKey = `${navigationKey}\u0000${currentSearch}`;
-      let history = tableContinuationHistoryRef.current;
-      if (history.scopeKey !== scopeKey) {
-        history = { scopeKey, cursors: new Map(), inFlight: new Set() };
-        tableContinuationHistoryRef.current = history;
+      let scope = tableContinuationScopeRef.current;
+      if (scope.scopeKey !== scopeKey) {
+        scope = { scopeKey, inFlight: new Set() };
+        tableContinuationScopeRef.current = scope;
       }
       const placementKey = parsedId.data.toLowerCase();
-      let cursors = history.cursors.get(placementKey);
-      if (cursors === undefined) {
-        cursors = new Map();
-        history.cursors.set(placementKey, cursors);
-      }
-
-      let continuationToken: string | undefined;
-      if (event.page === table.page + 1) {
-        continuationToken = table.nextContinuationToken;
-        if (
-          table.hasNextPage !== true ||
-          continuationToken === undefined ||
-          (event.continuationToken !== undefined &&
-            event.continuationToken !== continuationToken)
-        )
-          return;
-        cursors.set(event.page, continuationToken);
-      } else if (event.page > 1) {
-        continuationToken = cursors.get(event.page);
-        if (continuationToken === undefined) return;
-      }
-
-      const requestKey = `${placementKey}\u0000${event.page}`;
-      if (history.inFlight.has(requestKey)) return;
-      history.inFlight.add(requestKey);
+      const direction = event.direction;
+      const continuationToken =
+        direction === "next"
+          ? table.nextContinuationToken
+          : direction === "previous"
+            ? table.previousContinuationToken
+            : undefined;
+      if (
+        (direction === "first" && (table.hasPreviousPage !== true || event.page !== 1)) ||
+        (direction === "last" && (table.hasNextPage !== true || event.page !== 2)) ||
+        (direction === "next" &&
+          (table.hasNextPage !== true ||
+            event.page !== 2 ||
+            continuationToken === undefined ||
+            event.continuationToken !== continuationToken)) ||
+        (direction === "previous" &&
+          (table.hasPreviousPage !== true ||
+            event.page !== 2 ||
+            continuationToken === undefined ||
+            event.continuationToken !== continuationToken))
+      )
+        return;
+      const requestKey = `${placementKey}\u0000${direction}`;
+      if (scope.inFlight.has(requestKey)) return;
+      scope.inFlight.add(requestKey);
       try {
         await refreshPlacements([parsedId.data], {
           placementId: parsedId.data,
           request: {
             page: event.page,
+            pageDirection:
+              direction === "previous" || direction === "last" ? "backward" : "forward",
             ...(continuationToken === undefined ? {} : { continuationToken }),
           },
         });
       } finally {
-        history.inFlight.delete(requestKey);
+        scope.inFlight.delete(requestKey);
       }
     },
     [busy, currentSearch, navigationKey, refreshPlacements],

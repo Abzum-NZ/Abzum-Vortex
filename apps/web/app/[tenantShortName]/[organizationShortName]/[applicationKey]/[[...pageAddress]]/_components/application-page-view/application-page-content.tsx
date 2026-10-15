@@ -168,7 +168,7 @@ export function ApplicationPageViewContent({
     navigationKey,
     placementRequestsRef,
     boardContinuationInFlightRef,
-    tableContinuationHistoryRef,
+    tableContinuationScopeRef,
   } = useNavigationScope({
     model,
     pathname,
@@ -398,7 +398,7 @@ export function ApplicationPageViewContent({
     application,
     currentSearch,
     router,
-    tableContinuationHistoryRef,
+    tableContinuationScopeRef,
   });
 
   const { runtimeInputs } = useRuntimeInputs({

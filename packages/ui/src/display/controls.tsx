@@ -25,14 +25,7 @@ import {
 import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "../components/pagination";
+import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";
 import { TableRow } from "../components/table";
 import { cn } from "../lib/utils";
@@ -58,7 +51,9 @@ export function DisplayHeader({
   return (
     <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-2">
       {title === undefined ? null : (
-        <h2 className="m-0 min-w-0 break-words font-heading text-lg font-semibold text-foreground">{title}</h2>
+        <h2 className="m-0 min-w-0 break-words font-heading text-lg font-semibold text-foreground">
+          {title}
+        </h2>
       )}
       {refresh === undefined ? null : (
         <Button
@@ -664,12 +659,14 @@ export function InlineEditCell({
   );
 }
 
-/** Page position with previous/next controls bound to the declared `page_changed` event. */
+/** Keyset page navigation bound to the declared `page_changed` event. */
 export function PaginationControl({
   page,
   pageCount,
   hasNextPage,
   nextContinuationToken,
+  hasPreviousPage,
+  previousContinuationToken,
   accessibleName,
   events,
 }: Readonly<{
@@ -677,60 +674,96 @@ export function PaginationControl({
   pageCount: number | undefined;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
+  hasPreviousPage?: boolean;
+  previousContinuationToken?: string;
   accessibleName: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
-  if (
-    page === undefined ||
-    (pageCount === undefined && hasNextPage !== true && page <= 1)
-  )
-    return null;
+  if (page === undefined) return null;
   const onPage = events?.page_changed;
-  const previousDisabled = page <= 1;
+  const previousDisabled = pageCount === undefined ? hasPreviousPage !== true : page <= 1;
   const nextDisabled = pageCount === undefined ? hasNextPage !== true : page >= pageCount;
-  const pageLabel = pageCount === undefined ? `Page ${page}` : `Page ${page} of ${pageCount}`;
-  // The shadcn paging links are anchors, so an unavailable page is announced as disabled and taken
-  // out of the tab order instead of carrying the native disabled attribute.
+  const pageLabel = pageCount === undefined ? "Records" : `Page ${page} of ${pageCount}`;
   return (
     <Pagination aria-label={`Pages of ${accessibleName}`} className="mt-2">
-      <PaginationContent>
+      <PaginationContent className="flex-wrap justify-center gap-1">
         {onPage === undefined ? null : (
           <PaginationItem>
-            <PaginationPrevious
-              text="Previous page"
-              aria-disabled={previousDisabled}
-              tabIndex={previousDisabled ? -1 : 0}
-              className={cn(previousDisabled && "pointer-events-none opacity-50")}
-              onClick={() => {
-                if (previousDisabled) return;
-                onPage({ event: "page_changed", page: page - 1 });
-              }}
-            />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={previousDisabled || onPage === undefined}
+              aria-label="First page"
+              onClick={() => onPage({ event: "page_changed", page: 1, direction: "first" })}
+            >
+              First
+            </Button>
+          </PaginationItem>
+        )}
+        {onPage === undefined ? null : (
+          <PaginationItem>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={previousDisabled}
+              aria-label="Previous page"
+              onClick={() =>
+                onPage({
+                  event: "page_changed",
+                  page: 2,
+                  direction: "previous",
+                  ...(previousContinuationToken === undefined
+                    ? {}
+                    : { continuationToken: previousContinuationToken }),
+                })
+              }
+            >
+              Previous
+            </Button>
           </PaginationItem>
         )}
         <PaginationItem>
-          <PaginationLink isActive size="default" aria-label={pageLabel}>
+          <span className="px-2 text-sm" aria-label={pageLabel}>
             {pageLabel}
-          </PaginationLink>
+          </span>
         </PaginationItem>
         {onPage === undefined ? null : (
           <PaginationItem>
-            <PaginationNext
-              text="Next page"
-              aria-disabled={nextDisabled}
-              tabIndex={nextDisabled ? -1 : 0}
-              className={cn(nextDisabled && "pointer-events-none opacity-50")}
-              onClick={() => {
-                if (nextDisabled) return;
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={nextDisabled}
+              aria-label="Next page"
+              onClick={() =>
                 onPage({
                   event: "page_changed",
-                  page: page + 1,
+                  page: 2,
+                  direction: "next",
                   ...(nextContinuationToken === undefined
                     ? {}
                     : { continuationToken: nextContinuationToken }),
-                });
-              }}
-            />
+                })
+              }
+            >
+              Next
+            </Button>
+          </PaginationItem>
+        )}
+        {onPage === undefined ? null : (
+          <PaginationItem>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={nextDisabled}
+              aria-label="Last page"
+              onClick={() => onPage({ event: "page_changed", page: 2, direction: "last" })}
+            >
+              Last
+            </Button>
           </PaginationItem>
         )}
       </PaginationContent>
@@ -751,13 +784,15 @@ const isInteractiveTarget = (target: EventTarget, row: HTMLElement): boolean => 
  * One list row. A row click handler may return the promise of the flow it started; the row stays
  * busy until it settles, so a second click or Enter cannot start the same flow twice.
  */
-export function ClickableRow(props: Readonly<{
-  recordId: string;
-  selected: boolean;
-  activate: ((recordId: string) => unknown) | undefined;
-  openAddress: string | undefined;
-  children: ReactNode;
-}>): ReactElement {
+export function ClickableRow(
+  props: Readonly<{
+    recordId: string;
+    selected: boolean;
+    activate: ((recordId: string) => unknown) | undefined;
+    openAddress: string | undefined;
+    children: ReactNode;
+  }>,
+): ReactElement {
   const { recordId, selected, activate, openAddress, children } = props;
   const [pending, setPending] = useState(false);
   const pendingNow = useRef(false);
