@@ -301,7 +301,8 @@ export function usePlacementActions({
             ? table.previousContinuationToken
             : undefined;
       if (
-        (direction === "first" && (table.hasPreviousPage !== true || event.page !== 1)) ||
+        // First needs only a later page: an empty continuation page has no previous anchor.
+        (direction === "first" && (event.page !== 1 || table.page <= 1)) ||
         (direction === "last" && (table.hasNextPage !== true || event.page !== 2)) ||
         (direction === "next" &&
           (table.hasNextPage !== true ||

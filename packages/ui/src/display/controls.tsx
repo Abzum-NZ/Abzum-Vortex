@@ -681,8 +681,16 @@ export function PaginationControl({
 }>): ReactElement | null {
   if (page === undefined) return null;
   const onPage = events?.page_changed;
-  const previousDisabled = pageCount === undefined ? hasPreviousPage !== true : page <= 1;
-  const nextDisabled = pageCount === undefined ? hasNextPage !== true : page >= pageCount;
+  const numbered = pageCount !== undefined;
+  const previousDisabled = numbered ? page <= 1 : hasPreviousPage !== true;
+  const nextDisabled = pageCount !== undefined ? page >= pageCount : hasNextPage !== true;
+  // First is unavailable only on the first page itself: an empty continuation page (rows deleted
+  // or access changed) has no previous anchor but must still lead back to page one.
+  const firstDisabled = page <= 1;
+  // Numbered lists target real page numbers; keyset tables mark a continuation with page 2.
+  const previousTarget = numbered ? page - 1 : 2;
+  const nextTarget = numbered ? page + 1 : 2;
+  const lastTarget = pageCount ?? 2;
   const pageLabel = pageCount === undefined ? "Records" : `Page ${page} of ${pageCount}`;
   return (
     <Pagination aria-label={`Pages of ${accessibleName}`} className="mt-2">
@@ -693,7 +701,7 @@ export function PaginationControl({
               type="button"
               size="sm"
               variant="ghost"
-              disabled={previousDisabled || onPage === undefined}
+              disabled={firstDisabled}
               aria-label="First page"
               onClick={() => onPage({ event: "page_changed", page: 1, direction: "first" })}
             >
@@ -712,7 +720,7 @@ export function PaginationControl({
               onClick={() =>
                 onPage({
                   event: "page_changed",
-                  page: 2,
+                  page: previousTarget,
                   direction: "previous",
                   ...(previousContinuationToken === undefined
                     ? {}
@@ -740,7 +748,7 @@ export function PaginationControl({
               onClick={() =>
                 onPage({
                   event: "page_changed",
-                  page: 2,
+                  page: nextTarget,
                   direction: "next",
                   ...(nextContinuationToken === undefined
                     ? {}
@@ -760,7 +768,7 @@ export function PaginationControl({
               variant="ghost"
               disabled={nextDisabled}
               aria-label="Last page"
-              onClick={() => onPage({ event: "page_changed", page: 2, direction: "last" })}
+              onClick={() => onPage({ event: "page_changed", page: lastTarget, direction: "last" })}
             >
               Last
             </Button>
