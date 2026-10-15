@@ -425,7 +425,9 @@ begin
   end if;
 
   with target as (
-    select (item.value #>> '{template,roleId}')::uuid as source_role_id
+    select (item.value #>> '{template,roleId}')::uuid as source_role_id,
+      item.value #>> '{template,key}' as role_key,
+      item.value #>> '{template,name}' as role_label
     from pg_catalog.jsonb_array_elements(
       case when raw_result.registration_state = 'active'
         then p_prepared_templates -> 'templates'
@@ -433,7 +435,8 @@ begin
       end
     ) as item(value)
   ), transition as (
-    select continuity.ctid as continuity_row, target.source_role_id as target_role_id
+    select continuity.ctid as continuity_row, target.source_role_id as target_role_id,
+      target.role_key, target.role_label
     from vortex_access.application_role_template_continuities as continuity
     left join target on target.source_role_id = continuity.source_role_id
     where continuity.organization_id = p_organization_id
@@ -442,6 +445,8 @@ begin
   update vortex_access.application_role_template_continuities as continuity
   set state = case when transition.target_role_id is null
         then 'unavailable' else 'available' end,
+      key = coalesce(transition.role_key, continuity.key),
+      label = coalesce(transition.role_label, continuity.label),
       continuity_revision = case
         when transition.target_role_id is not null and continuity.state = 'available'
           then continuity.continuity_revision
@@ -457,11 +462,13 @@ begin
   if raw_result.registration_state = 'active' then
     insert into vortex_access.application_role_template_continuities (
       organization_id, application_root_id, source_role_id, state,
-      continuity_revision, last_processed_registration_revision, changed_at
+      continuity_revision, last_processed_registration_revision, changed_at,
+      key, label
     )
     select p_organization_id, p_application_root_id,
       (item.value #>> '{template,roleId}')::uuid, 'available', 1,
-      raw_result.registration_revision, pg_catalog.statement_timestamp()
+      raw_result.registration_revision, pg_catalog.statement_timestamp(),
+      item.value #>> '{template,key}', item.value #>> '{template,name}'
     from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
     where not exists (
       select 1
