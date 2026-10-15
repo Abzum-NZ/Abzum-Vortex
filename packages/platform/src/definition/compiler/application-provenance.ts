@@ -236,6 +236,17 @@ function applicationSpecialSourceTargets(
           ...sourcePath.slice(3).map((segment) => camelCase(String(segment))),
         ],
       ];
+    if (sourcePath[2] === "loader_mark")
+      return [
+        [
+          "content",
+          "theme",
+          "loaderMark",
+          ...sourcePath
+            .slice(3)
+            .map((segment) => (typeof segment === "number" ? segment : camelCase(segment))),
+        ],
+      ];
     if (sourcePath[2] === "token_overrides" && typeof sourcePath[3] === "string")
       return applicationThemeValueTargets(
         sourcePath,

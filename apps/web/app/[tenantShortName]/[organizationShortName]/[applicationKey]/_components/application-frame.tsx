@@ -326,7 +326,11 @@ export function ApplicationFrame({
             outlet={{
               location: frame.outlet,
               content: (
-                <ContentTransition transitionKey={pathname} busy={pageTransitionPending}>
+                <ContentTransition
+                  transitionKey={pathname}
+                  busy={pageTransitionPending}
+                  loaderMark={model.theme.loaderMark}
+                >
                   <FrozenRouter>{children}</FrozenRouter>
                 </ContentTransition>
               ),
