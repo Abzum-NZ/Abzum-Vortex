@@ -1156,6 +1156,7 @@ begin
     end if;
 
     if passes then
+      page_access_loaded := null;
       if not preview_mode and not page_eligibility_checked then
         -- Keep the reusable decision in this invocation; the request role cannot
         -- write it or pass it to the owner-only exact-record evaluator.
@@ -1176,7 +1177,7 @@ begin
       select row_read.* into read_row
       from vortex_record.read_record_projection_with_validated_types_internal(
         record_type_id_value, scan_record.record_id, page_declaration, page_eligibility,
-        validated_record_types, scan_record.projection_row
+        validated_record_types, scan_record.projection_row, page_access_loaded
       ) as row_read;
       projection := read_row.projection;
       if validated_record_types is null then

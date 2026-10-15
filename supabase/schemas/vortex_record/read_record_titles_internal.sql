@@ -12,6 +12,8 @@ as $function$
 declare
   requested_id uuid;
   loaded jsonb;
+  first_loaded_id uuid;
+  first_loaded jsonb;
   page_declaration jsonb;
   page_eligibility jsonb;
   validated_record_types jsonb;
@@ -44,6 +46,8 @@ begin
           page_declaration, vortex_access.validated_human_request_context(),
           pg_catalog.clock_timestamp()
         );
+        first_loaded_id := requested_id;
+        first_loaded := loaded;
         exit;
       end if;
     end loop;
@@ -53,8 +57,12 @@ begin
     select row_projection.* into row_read
     from vortex_record.read_record_projection_with_validated_types_internal(
       p_record_type_id, requested_id, page_declaration, page_eligibility,
-      validated_record_types
+      validated_record_types, null::jsonb,
+      case when requested_id = first_loaded_id then first_loaded else null::jsonb end
     ) as row_projection;
+    if requested_id = first_loaded_id then
+      first_loaded := null;
+    end if;
     projection := row_read.projection;
     if validated_record_types is null then
       validated_record_types := coalesce(
