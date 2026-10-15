@@ -9,6 +9,7 @@ create index releases_application_name_sort_idx
 create index registrations_installed_revision_sort_idx
   on vortex_access.permission_registrations
   (organization_id, registration_kind, state, source_revision, registration_owner_id);
+-- The ordered indexes must drive each page; join estimates otherwise favor a full sort.
 create or replace function vortex_access.list_installed_applications_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
   p_after jsonb, p_limit integer
@@ -16,7 +17,10 @@ create or replace function vortex_access.list_installed_applications_projection(
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
 )
-language plpgsql volatile security definer set search_path = ''
+language plpgsql volatile security definer
+set search_path = ''
+set enable_sort = off
+set max_parallel_workers_per_gather = 0
 as $function$
 declare
   context_value jsonb;
@@ -24,6 +28,7 @@ declare
   actor_identity_id uuid;
   default_application_root_id uuid;
   sort_column text;
+  sort_record_id text;
   sort_sql text;
   keyset_sql text := '';
   after_text text;
@@ -94,6 +99,10 @@ begin
     when 'name' then '(release.application_address ->> ''name'')'
     when 'release_revision' then 'registration.source_revision'
     else 'root.root_id' end;
+  sort_record_id := case p_sort_key
+    when 'name' then 'release.root_id'
+    when 'release_revision' then 'registration.registration_owner_id'
+    else 'root.root_id' end;
   comparison := case when p_direction = 'ascending' then '>' else '<' end;
   if p_after is not null then
     if p_sort_key = 'record_id' then
@@ -101,13 +110,13 @@ begin
     elsif p_sort_key = 'name' and after_text is null then
       keyset_sql := case when p_direction = 'ascending'
         then ' and (((release.application_address ->> ''name'') is null
-            and root.root_id > $4)
+            and release.root_id > $4)
           or (release.application_address ->> ''name'') is not null)'
         else ' and (release.application_address ->> ''name'') is null
-          and root.root_id < $4' end;
+          and release.root_id < $4' end;
     elsif p_sort_key = 'name' then
       keyset_sql := pg_catalog.format(
-        ' and ((%s collate "C", root.root_id) %s ($3 collate "C", $4)%s)',
+        ' and ((%s collate "C", release.root_id) %s ($3 collate "C", $4)%s)',
         sort_column, comparison,
         case when p_direction = 'descending'
           then ' or (release.application_address ->> ''name'') is null'
@@ -118,17 +127,18 @@ begin
         comparison);
     else
       keyset_sql := pg_catalog.format(
-        ' and (registration.source_revision, root.root_id) %s ($5, $4)',
+        ' and (registration.source_revision, registration.registration_owner_id) %s ($5, $4)',
         comparison);
     end if;
   end if;
-  sort_sql := pg_catalog.format('%s%s %s%s, root.root_id %s',
+  sort_sql := pg_catalog.format('%s%s %s%s, %s %s',
     sort_column,
     case when p_sort_key in ('key', 'name') then ' collate "C"' else '' end,
     case when p_direction = 'ascending' then 'asc' else 'desc' end,
     case when p_sort_key = 'name' then
       case when p_direction = 'ascending' then ' nulls first' else ' nulls last' end
       else '' end,
+    sort_record_id,
     case when p_direction = 'ascending' then 'asc' else 'desc' end);
   if p_sort_key = 'record_id' then
     sort_sql := pg_catalog.format('root.root_id %s',
