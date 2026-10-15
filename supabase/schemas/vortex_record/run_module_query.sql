@@ -99,7 +99,10 @@ declare
   projection_page_scan boolean := false;
   projection_sort_key text;
   projection_batch jsonb;
+  projection_after jsonb; projection_batch_size integer;
+  projection_candidate_count integer := 0; projection_reader_exhausted boolean := false;
   projection_batch_exhausted boolean := false;
+  projection_error_message text;
   projection_last_record_id uuid;
   projection_last_sort_key text[];
   scan_record record;
@@ -637,7 +640,6 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
   end if;
-
   -- Order: the published sort, or the user's chosen sort when one is supplied,
   -- over orderable typed columns, then the record id. A published sort field the
   -- reader is not guaranteed to see is validated but never pushed, so the scan
@@ -750,13 +752,11 @@ begin
     and not board_member_mode and not group_member_mode then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
   end if;
-
   -- The tie-break direction is a property of the declared order, independent
   -- of whether its asynchronous physical index has finished building.
   if pg_catalog.cardinality(sort_ids) > 1 then
     record_id_direction := sort_directions[pg_catalog.cardinality(sort_ids)];
   end if;
-
   if pg_catalog.cardinality(sort_ids) > 1
     and pg_catalog.cardinality(sort_ids) = pg_catalog.cardinality(declared_sort_ids)
     and not (false = any (sort_stored)) then
@@ -843,7 +843,6 @@ begin
       end if;
     end loop;
   end if;
-
   for sort_index in 1 .. pg_catalog.cardinality(sort_directions) loop
     scan_directions := pg_catalog.array_append(scan_directions,
       case when p_direction = 'forward' then sort_directions[sort_index]
@@ -852,42 +851,43 @@ begin
   end loop;
   scan_record_id_direction := case when p_direction = 'forward' then record_id_direction
     when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
-
   scan_source_sql := pg_catalog.format('record_data.%I as stored', physical_table_token);
   projection_page_scan := not preview_mode and record_type_item ? 'systemProjection'
     and pg_catalog.cardinality(sort_ids) = 1
     and pg_catalog.cardinality(declared_sort_ids) = 1
+    -- Single-key page ties use ascending record ids; bounded readers tie in
+    -- their requested direction, so descending page sorts retain the view path.
+    and sort_directions[1] = 'ascending'
     and exists (
       select 1
       from pg_catalog.jsonb_array_elements_text(
         record_type_item #> '{systemProjection,sortableFieldIds}'
       ) as sortable(id)
       where pg_catalog.lower(sortable.id) = sort_ids[1]
-    ) and (
-      (record_type_item #>> '{systemProjection,protectedView}' = 'organization_accounts'
-        and fields_by_id -> sort_ids[1] ->> 'key' in ('display_name', 'state'))
-      or (record_type_item #>> '{systemProjection,protectedView}' = 'activity_entry'
-        and fields_by_id -> sort_ids[1] ->> 'key' = 'occurred_at')
-    );
+    ) and vortex_record.has_bounded_system_projection_reader_internal(v_storage_contract_id);
   if projection_page_scan then
       projection_sort_key := fields_by_id -> sort_ids[1] ->> 'key';
       if projection_sort_key is null then
         raise exception using errcode = '55000',
           message = 'Protected projection sort field is unavailable';
       end if;
-      select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
-      into projection_batch
-      from vortex_record.read_system_projection_rows_internal(
-        v_storage_contract_id, null::uuid[], projection_sort_key,
-        scan_directions[1], p_after, scan_limit + 1
-      ) with ordinality as projected(organization_id, record_id, revision, attribute_values, ordinality);
-      projection_batch_exhausted := pg_catalog.jsonb_array_length(projection_batch) > scan_limit;
-      if projection_batch_exhausted then
-        projection_last_record_id := (projection_batch -> (scan_limit - 1) ->> 'record_id')::uuid;
-        projection_last_sort_key := array[
-          projection_batch -> (scan_limit - 1) -> 'attribute_values' ->> projection_sort_key
-        ];
-      end if;
+      projection_after := p_after;
+      projection_batch_size := least(p_page_size + 1, scan_limit);
+      -- Old releases with unsupported sort keys keep the view scan.
+      begin
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
+        into projection_batch
+        from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
+          null::uuid[], projection_sort_key, scan_directions[1], projection_after,
+          projection_batch_size) with ordinality as projected(organization_id, record_id,
+          revision, attribute_values, ordinality);
+      exception when invalid_parameter_value then
+        get stacked diagnostics projection_error_message = message_text;
+        if projection_error_message not like '% projection bounds are invalid' then raise; end if;
+        projection_page_scan := false;
+      end;
+  end if;
+  if projection_page_scan then
       -- The registered view contributes its row type only. The bounded reader
       -- supplies every candidate, including rows later rejected by the query.
       scan_source_sql := pg_catalog.format($source$
@@ -927,7 +927,6 @@ begin
       );
       scan_projection_sql := 'pg_catalog.to_jsonb(projection)';
   end if;
-
   -- The scan. Identifiers come only from the storage catalogue; every value is
   -- a bound parameter. Nulls order first ascending and last descending. The
   -- order always ends with the record id, so the keyset stays total even when
@@ -946,7 +945,6 @@ begin
       when 'date' then pg_catalog.format(
         'pg_catalog.to_char(%s, ''YYYY-MM-DD'')', sort_value_sql[sort_index])
       else pg_catalog.format('(%s)::text', sort_value_sql[sort_index]) end);
-
     if after_record_id is not null then
       value_sql := case when sort_sql_types[sort_index] = 'text'
         then pg_catalog.format('$3[%s] collate "C"', sort_index)
@@ -982,7 +980,6 @@ begin
     order_by_sql := order_by_sql || ', stored.record_id ' ||
       case when scan_record_id_direction = 'ascending' then 'asc' else 'desc' end;
   end if;
-
   if composite_index_ready then
     segment_predicates := array[]::text[];
     if after_record_id is null then
@@ -1084,13 +1081,26 @@ begin
   else
     segment_predicates := array[keyset_sql];
   end if;
-
   if projection_page_scan then
     -- The bounded reader has already applied the sealed keyset and order.
     segment_predicates := array[''];
   end if;
-
   foreach segment_sql in array segment_predicates loop
+  loop
+  if projection_page_scan then
+    projection_candidate_count := projection_candidate_count + pg_catalog.jsonb_array_length(projection_batch);
+    projection_reader_exhausted := pg_catalog.jsonb_array_length(projection_batch) < projection_batch_size;
+    if pg_catalog.jsonb_array_length(projection_batch) = 0 then
+      exit;
+    end if;
+    projection_last_record_id := (projection_batch -> -1 ->> 'record_id')::uuid;
+    projection_last_sort_key := array[projection_batch -> -1 -> 'attribute_values' ->> projection_sort_key];
+    projection_after := pg_catalog.jsonb_build_object(
+      'sortKey', pg_catalog.to_jsonb(projection_last_sort_key),
+      'phase', case when projection_last_sort_key[1] is null then 'null' else 'value' end,
+      'recordId', projection_last_record_id);
+    projection_batch_exhausted := projection_candidate_count >= scan_limit;
+  end if;
   scan_sql := pg_catalog.format(
     'select stored.record_id,
        array[%s]::text[] as sort_key,
@@ -1357,6 +1367,16 @@ begin
     last_examined_record_id := scan_record.record_id;
   end loop;
   close scan_cursor;
+  exit when not projection_page_scan or more_rows or projection_batch_exhausted
+    or projection_reader_exhausted;
+  projection_batch_size := least(p_page_size + 1, scan_limit - projection_candidate_count);
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
+  into projection_batch
+  from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
+    null::uuid[], projection_sort_key, scan_directions[1], projection_after,
+    projection_batch_size) with ordinality as projected(organization_id, record_id,
+    revision, attribute_values, ordinality);
+  end loop;
   exit when more_rows or budget_exhausted;
   end loop;
   if projection_batch_exhausted and not more_rows then
