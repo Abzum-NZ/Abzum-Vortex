@@ -1,4 +1,8 @@
-import type { ApplicationContent, VersionImpactReason } from "../../schema";
+import {
+  compiledPropsSettings,
+  type ApplicationContent,
+  type VersionImpactReason,
+} from "../../schema";
 import {
   type RecordValue,
   compareUnknownText,
@@ -54,12 +58,12 @@ const presentationPropertyValue = (value: unknown): boolean => {
   }
 };
 
-const reservedItemProps = new Set(["id", "settings", "vortex"]);
+const reservedItemProps = new Set(["id", "vortex"]);
 
-/** The child slots of one compiled item: every prop but `id`, `settings` and `vortex`. */
+/** The child slots of one compiled item: every array prop but `id` and `vortex`. */
 const itemSlots = (item: RecordValue): [string, RecordValue[]][] =>
   Object.entries(asRecord(item.props)).flatMap(([key, value]): [string, RecordValue[]][] =>
-    reservedItemProps.has(key) ? [] : [[key, value as RecordValue[]]],
+    reservedItemProps.has(key) || !Array.isArray(value) ? [] : [[key, value as RecordValue[]]],
   );
 
 const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
@@ -70,7 +74,7 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
-    Object.values(asRecord(props.settings)).every(presentationPropertyValue) &&
+    Object.values(compiledPropsSettings(props)).every(presentationPropertyValue) &&
     itemSlots(item).every(([, children]) =>
       children.every((child) => placementSubtreeIsOptionalPresentation(asRecord(child))),
     )
@@ -97,7 +101,7 @@ const collectPlacementSlot = (
     result.set(placementId, {
       item,
       vortex,
-      settings: asRecord(props.settings),
+      settings: compiledPropsSettings(props),
       parent,
       order: {
         desktop: index,

@@ -6,6 +6,7 @@ import {
   applicationRootIdSchema,
   canonicalJson,
   compiledItemSlots,
+  compiledPropsSettings,
   compiledPageShellId,
   compiledPageZones,
   pageIdSchema,
@@ -302,7 +303,7 @@ const pageFacts = (
           .map(([kind]) => kind.replace(/([A-Z])/g, " $1").toLowerCase())
           .join(", ") || "No additional binding",
       );
-      for (const [propertyKey, value] of Object.entries(item.props.settings).sort(([left], [right]) => left.localeCompare(right))) {
+      for (const [propertyKey, value] of Object.entries(compiledPropsSettings(item.props)).sort(([left], [right]) => left.localeCompare(right))) {
         addProperty(`${placementLabel} / setting ${safeDifferenceLabel(propertyKey)}`, value);
         if (facts.size >= maxPageDifferenceFacts) break;
       }

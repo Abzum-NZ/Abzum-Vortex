@@ -1,15 +1,16 @@
 import { isRecord } from "../catalogue/runtime-primitives";
+import { compiledPropsSettings } from "../definition/application-composition/page-composition";
 
 /** One compiled item met while walking a projected layout: its placement identity and props. */
 export type VisitedPlacement = Readonly<{
   placementId: string;
   /** The item itself: `{ type, props }`. */
   item: Record<string, unknown>;
-  /** The item's Puck props: `id`, `settings`, `vortex` and its child slots. */
+  /** The item's Puck props: `id`, `vortex`, its settings and its child slots. */
   props: Record<string, unknown>;
   /** The item's `props.vortex`: block release, bindings, layout and slot orders. */
   vortex: Record<string, unknown>;
-  /** The item's `props.settings`: its typed canonical setting values. */
+  /** The item's settings: every prop holding a typed canonical setting value. */
   settings: Record<string, unknown>;
 }>;
 
@@ -22,9 +23,9 @@ export type PlacementVisitor<Inherited> = (
   inherited: Inherited,
 ) => Inherited | false;
 
-const reservedProps = new Set(["id", "settings", "vortex"]);
+const reservedProps = new Set(["id", "vortex"]);
 
-/** The child slots of one item's props: every array prop but `id`, `settings` and `vortex`. */
+/** The child slots of one item's props: every array prop but `id` and `vortex`. */
 export const itemPropSlots = (props: Record<string, unknown>): [string, unknown[]][] =>
   Object.entries(props).flatMap(([key, value]): [string, unknown[]][] =>
     reservedProps.has(key) || !Array.isArray(value) ? [] : [[key, value]],
@@ -50,7 +51,7 @@ export const walkPlacements = <Inherited = undefined>(
         item,
         props,
         vortex,
-        settings: isRecord(props.settings) ? props.settings : {},
+        settings: compiledPropsSettings(props),
       },
       inherited as Inherited,
     );

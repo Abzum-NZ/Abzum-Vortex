@@ -390,8 +390,8 @@ export function applicationScope(
     const entries: [string, PlacementEntry][] = [];
     walkPlacementData(
       Array.isArray(layoutValue) ? { content: layoutValue } : layoutValue,
-      ({ placementId, props, vortex }) => {
-        entries.push([placementId, { props, vortex, settings: object(props.settings) }]);
+      ({ placementId, props, vortex, settings }) => {
+        entries.push([placementId, { props, vortex, settings }]);
         return undefined;
       },
     );
@@ -399,8 +399,8 @@ export function applicationScope(
   };
   const pageContentPlacementEntries = (page: JsonObject): [string, PlacementEntry][] => {
     const entries: [string, PlacementEntry][] = [];
-    walkPageComposition(page.composition, ({ placementId, props, vortex }) => {
-      entries.push([placementId, { props, vortex, settings: object(props.settings) }]);
+    walkPageComposition(page.composition, ({ placementId, props, vortex, settings }) => {
+      entries.push([placementId, { props, vortex, settings }]);
       return undefined;
     });
     return entries;
