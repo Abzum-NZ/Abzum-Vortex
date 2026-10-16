@@ -1,4 +1,5 @@
 "use client";
+import { useReportModuleEditorDirty } from "./module-editor-dirty";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
@@ -42,6 +43,7 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
   const buffer = useRef({ baseline, selectedKey, label });
   const selected = choices.find((field) => selectionKey(field) === selectedKey);
   const dirty = selected !== undefined && label !== selected.label;
+  useReportModuleEditorDirty(dirty);
 
   useEffect(() => {
     active.current = true; lifetime.current += 1;

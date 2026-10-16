@@ -29,7 +29,7 @@ const failureMessage = (failure: Failure) => failure === "conflict"
     ? "The version history is unavailable. Sign in with an account that can manage this application, then reload."
     : "The version history is temporarily unavailable. Try again or reload.";
 
-/** The History tab of the workspace: published versions, oldest first, and the review pages for each. */
+/** The Releases tab's published versions, oldest first, and the review pages for each. */
 export function ApplicationReleaseHistory({ initialPage }: {
   initialPage: StudioApplicationHistoryPage;
 }) {
