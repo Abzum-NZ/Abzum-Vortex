@@ -5,12 +5,9 @@
   "workspaces": {
     ".": {
       "includeEntryExports": false,
-      "entry": [
-        "tooling/guard/guard.ts",
-        "tooling/supabase/ensure-local-signing-key.mjs",
-        "tooling/supabase/lane.mjs"
-      ],
-      "project": ["tooling/**/*.{js,mjs,ts}"]
+      "entry": ["tooling/supabase/lane.mjs", "tooling/list-paging/seed-list-records.mjs"],
+      "project": ["tooling/**/*.{js,mjs,ts}"],
+      "ignore": ["tooling/typescript/types/**"]
     },
     "apps/web": {
       "includeEntryExports": false,
@@ -21,9 +18,6 @@
         "scripts/**/*.{js,mjs,ts}"
       ],
       "project": ["**/*.{js,jsx,mjs,ts,tsx}"]
-    },
-    "packages/platform": {
-      "entry": ["src/schema.ts", "src/server.ts"]
     },
     "packages/definitions": {
       "includeEntryExports": false,

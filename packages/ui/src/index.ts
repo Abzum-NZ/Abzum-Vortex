@@ -357,7 +357,6 @@ export {
   resolveVortexMenuColor,
   resolveVortexStyle,
   resolveVortexStyleSelection,
-  resolveThemeFonts,
   VORTEX_MENU_ACCENTS,
   VORTEX_MENU_COLORS,
   VORTEX_STYLES,

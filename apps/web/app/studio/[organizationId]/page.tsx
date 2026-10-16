@@ -37,10 +37,7 @@ function RootTable({
       </TableHeader>
       <TableBody>
         {roots.map((root) => {
-          const base =
-            root.kind === "application"
-              ? `/studio/${organizationId}/${root.rootId}`
-              : `/studio/modules/${organizationId}/${root.rootId}`;
+          const base = `/studio/${organizationId}/${root.rootId}`;
           return (
             <TableRow key={root.rootId}>
               <TableCell>
@@ -57,23 +54,9 @@ function RootTable({
                       Workspace
                     </Link>
                   )}
-                  {root.kind === "application" ? (
-                    <Link className="underline underline-offset-4" href={`${base}/history`}>
-                      Published versions
-                    </Link>
-                  ) : root.draftRevision !== null ? (
-                    <>
-                      <Link className="underline underline-offset-4" href={`${base}/fields`}>
-                        Fields
-                      </Link>
-                      <Link className="underline underline-offset-4" href={`${base}/queries`}>
-                        Saved views
-                      </Link>
-                      <Link className="underline underline-offset-4" href={`${base}/publish`}>
-                        Publish
-                      </Link>
-                    </>
-                  ) : null}
+                  <Link className="underline underline-offset-4" href={`${base}/history`}>
+                    Published versions
+                  </Link>
                 </div>
               </TableCell>
             </TableRow>
@@ -86,12 +69,10 @@ function RootTable({
 
 export default async function StudioOrganizationPage({
   params,
-  searchParams,
 }: Readonly<{
   params: Promise<{ organizationId: string }>;
-  searchParams: Promise<{ notice?: string }>;
 }>) {
-  const [{ organizationId }, { notice }] = await Promise.all([params, searchParams]);
+  const { organizationId } = await params;
   const result = await loadStudioOrganizationHome(organizationId);
   if (result.kind !== "available")
     return (
@@ -105,14 +86,15 @@ export default async function StudioOrganizationPage({
       </main>
     );
 
-  const applications = result.roots.filter((root) => root.kind === "application");
-  const modules = result.roots.filter((root) => root.kind === "module");
+  const applications = result.roots;
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Studio</h1>
-          <p className="text-muted-foreground">Applications and modules in this organization.</p>
+          <p className="text-muted-foreground">
+            Applications in this organization. A module is edited inside the application that owns it.
+          </p>
         </div>
         <Link
           className="underline underline-offset-4"
@@ -121,12 +103,6 @@ export default async function StudioOrganizationPage({
           New application
         </Link>
       </div>
-      {notice === "module-without-application" && (
-        <p role="status" className="rounded-md border border-border bg-card p-3 text-sm text-card-foreground">
-          That module is not used by any application in this organization yet. A module is edited in the
-          Data tab of an application that uses it, so add the module to an application first.
-        </p>
-      )}
       {result.mayHaveMore && (
         <p role="status" className="text-sm text-muted-foreground">
           Showing the first 200 definitions. More may exist in this organization.
@@ -142,19 +118,6 @@ export default async function StudioOrganizationPage({
             <p className="text-muted-foreground">No applications yet. Create one to get started.</p>
           ) : (
             <RootTable roots={applications} organizationId={result.organizationId} />
-          )}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Modules</CardTitle>
-          <CardDescription>Open a module to edit its fields, saved views or publish it.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {modules.length === 0 ? (
-            <p className="text-muted-foreground">No modules yet.</p>
-          ) : (
-            <RootTable roots={modules} organizationId={result.organizationId} />
           )}
         </CardContent>
       </Card>

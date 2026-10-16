@@ -333,7 +333,7 @@ begin
   checked_context := vortex_definition.validated_system_context();
 
   if p_kind is null
-    or p_kind not in ('module', 'application')
+    or p_kind is distinct from 'application'
     or p_root_id is null
     or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_target_release_revision is null

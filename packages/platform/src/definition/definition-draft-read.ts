@@ -32,7 +32,7 @@ const draftReadCommandSchema = z
   })
   .strict();
 
-export type ApplicationDefinitionDraftReadCommand = z.infer<typeof draftReadCommandSchema>;
+type ApplicationDefinitionDraftReadCommand = z.infer<typeof draftReadCommandSchema>;
 export type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 
 const moduleDraftReadCommandSchema = z
@@ -42,7 +42,7 @@ const moduleDraftReadCommandSchema = z
   })
   .strict();
 
-export type ModuleDefinitionDraftReadCommand = z.infer<typeof moduleDraftReadCommandSchema>;
+type ModuleDefinitionDraftReadCommand = z.infer<typeof moduleDraftReadCommandSchema>;
 export type StoredModuleDefinitionDraft = z.infer<typeof storedModuleDefinitionDraftSchema>;
 
 // The protected context also contains trusted transport and identity evidence.

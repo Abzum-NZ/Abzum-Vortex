@@ -39,7 +39,7 @@ const unavailableText = (reason: string): string => {
     case "not_newer":
       return "This version is not newer than the one in use.";
     case "module_set_changed":
-      return "This version changes which modules are used. Only upgrades that keep the same modules can be done here.";
+      return "This version adds or removes modules. Only upgrades that keep the same modules can be done here.";
     case "installation_incomplete":
       return "The current installation is incomplete or cannot be safely brought up to date.";
     case "registration_misaligned":
@@ -201,7 +201,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
           <div><dt className="font-semibold">Selected content fingerprint</dt><dd className="break-all"><code>{snapshot.selected.contentFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Selected resolution fingerprint</dt><dd className="break-all"><code>{snapshot.selected.resolutionFingerprint}</code></dd></div>
         </dl></TechnicalDetails>
-        <p>This page upgrades an application that is already installed, and only when none of its modules change. First installs, older versions and module changes are not available here.</p>
+        <p>This page upgrades an application that is already installed, to a version that keeps the same modules. First installs, older versions and adding or removing modules are not available here.</p>
       </section>
       {expired && <p className="rounded-xl border bg-card text-card-foreground p-3">Your access was checked a while ago. Reload before continuing.</p>}
       {state.command !== null && <section className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">

@@ -339,7 +339,7 @@ export function findOperationCallIssue(
 type OwnedActionInputs = ReadonlyMap<string, Readonly<{ required: boolean; type: string }>>;
 
 /** Finds the named action that owns an option of a choice field of a record type. */
-export type OptionActionLookup = (
+type OptionActionLookup = (
   recordTypeId: string,
   fieldId: string,
   option: string,

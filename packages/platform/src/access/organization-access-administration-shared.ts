@@ -324,7 +324,7 @@ export const requireOne = <Row>(rows: readonly Row[]): Row => {
 };
 
 export const recordedRefusal = Symbol("recordedAccessAdministrationRefusal");
-export type RecordedRefusal = typeof recordedRefusal;
+type RecordedRefusal = typeof recordedRefusal;
 
 export const isRecordedRefusal = (
   row: Readonly<{

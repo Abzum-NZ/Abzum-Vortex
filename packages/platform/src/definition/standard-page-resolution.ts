@@ -16,11 +16,11 @@ import {
 const selectionSchema = z.object({ pageId: pageIdSchema }).strict();
 
 /** Only the requested endpoint is selectable; installed release evidence comes from App. */
-export type InstalledPageIdentitySelection = Readonly<z.input<typeof selectionSchema>>;
+type InstalledPageIdentitySelection = Readonly<z.input<typeof selectionSchema>>;
 
-export type InstalledPageEndpointIdentity = Readonly<{ pageId: string; key: string }>;
+type InstalledPageEndpointIdentity = Readonly<{ pageId: string; key: string }>;
 
-export type InstalledPageSubjectIdentity = Readonly<{
+type InstalledPageSubjectIdentity = Readonly<{
   moduleRootId: string;
   recordTypeId: string;
   moduleReleaseRevision: number;
@@ -30,7 +30,7 @@ export type InstalledPageSubjectIdentity = Readonly<{
 }>;
 
 /** Detached server metadata, never permission authority or a replacement selection policy. */
-export type InstalledPageIdentity = Readonly<{
+type InstalledPageIdentity = Readonly<{
   organizationId: string;
   applicationRootId: string;
   applicationReleaseRevision: number;

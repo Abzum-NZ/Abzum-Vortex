@@ -5,7 +5,6 @@ export {
   parseThemeMode,
   type AppearanceRootProps,
   resolvePlacementTheme,
-  resolveThemeFonts,
   type ApplicationTheme,
   type PlacementThemeScope,
   type ThemeMode,

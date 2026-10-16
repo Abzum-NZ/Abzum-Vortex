@@ -19,7 +19,7 @@ import { installationProblem, type InstallationHumanContext } from "./installati
 import { releaseSetModuleTuples, type InstallationBindings } from "./installation-binding-reader";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 
-export type FirstInstallUnavailableReason =
+type FirstInstallUnavailableReason =
   | "release_not_published"
   | "already_installed"
   | "installation_incomplete"

@@ -58,7 +58,7 @@ const parsePoint = (value: unknown, location: DefinitionRenderErrorLocation): Ch
 };
 
 /** The ready values a chart block accepts. */
-export const parseChartPayload = (
+const parseChartPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): ChartPayload => {

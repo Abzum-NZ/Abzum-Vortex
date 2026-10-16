@@ -5,14 +5,12 @@ import {
   PLATFORM_BLOCK_RELEASES,
 } from "@vortex/platform/server";
 import {
-  applicationModuleKeys,
   platformIdSchema,
   type SessionContext,
   type StoredDefinitionSource,
 } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
-  applicationModuleSources,
   createDatabaseDefinitionPublicationService,
   createDefinitionStore,
   type ImmutableDefinitionPublicationCatalogueDefinition,
@@ -30,7 +28,7 @@ import { DefinitionError } from "@vortex/platform/server";
 import { platformPermissionSource } from "../../app/_lib/platform-permission-source";
 
 /**
- * Publishes the shipped module and application definitions into the target organisation through
+ * Publishes the shipped Application definitions, with their inline Modules, into the target organisation through
  * the ordinary Definition store and publication service. Nothing is written to a table directly:
  * each release is a draft root, a prepared publication and a confirmed publication.
  */
@@ -60,13 +58,6 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
     ],
   },
 };
-
-/**
- * The Module release units every shipped Application's inline Modules publish as. Until one
- * publication carries an Application and its Modules together, each Module is published as its
- * own release first and the Application then pins the release it was compiled against.
- */
-const moduleSources = shippedApplications.flatMap(({ source }) => applicationModuleSources(source));
 
 type TrustedApplicationDescriptor = Readonly<{
   source: Extract<StoredDefinitionSource, { kind: "application" }>;
@@ -143,62 +134,61 @@ export const verifyRecordedShippedApplicationRoots = async (
   });
 };
 
-type ModuleBody = Readonly<{ dependencies?: readonly Readonly<{ module: string }>[] }>;
-
-/** Every Module the selected Applications own or use, with their dependencies, in publish order. */
-const modulesInDependencyOrder = (applicationKeys: readonly string[]): StoredDefinitionSource[] => {
-  const byKey = new Map(moduleSources.map((source) => [source.key, source] as const));
-  const needed = new Set<string>();
-  const visit = (key: string): void => {
-    if (needed.has(key)) return;
-    const source = byKey.get(key);
-    if (source === undefined) throw new Error(`Module ${key} is not owned by a shipped Application`);
-    needed.add(key);
-    for (const dependency of (source.body as ModuleBody).dependencies ?? [])
-      visit(dependency.module);
-  };
-  for (const key of applicationKeys) {
-    const source = shippedApplicationSource(key);
-    if (source.kind === "application") for (const module of applicationModuleKeys(source)) visit(module);
-  }
-  const ordered: StoredDefinitionSource[] = [];
+/**
+ * The selected Applications in publication order: an Application that uses another's Module is
+ * published after the Application that owns it, so it pins that owner's current release.
+ */
+const applicationsInPublicationOrder = (
+  applicationKeys: readonly string[],
+): TrustedApplicationDescriptor[] => {
+  const descriptors = applicationKeys.map(shippedApplicationDescriptor);
+  const ownerOf = new Map(
+    applicationDescriptors.flatMap((descriptor) =>
+      descriptor.source.body.modules.map((module) => [module.key, descriptor.source.key] as const),
+    ),
+  );
+  const ordered: TrustedApplicationDescriptor[] = [];
   const placed = new Set<string>();
-  while (ordered.length < needed.size) {
-    const next = [...needed].find(
-      (key) =>
-        !placed.has(key) &&
-        ((byKey.get(key)!.body as ModuleBody).dependencies ?? []).every((dependency) =>
-          placed.has(dependency.module),
-        ),
+  while (ordered.length < descriptors.length) {
+    const next = descriptors.find(
+      (descriptor) =>
+        !placed.has(descriptor.source.key) &&
+        descriptor.source.body.uses.every((use) => {
+          const owner = ownerOf.get(use.module);
+          if (owner === undefined || !applicationKeys.includes(owner))
+            throw new Error(
+              `${descriptor.source.key} uses ${use.module}, whose owning Application is not selected`,
+            );
+          return placed.has(owner);
+        }),
     );
-    if (next === undefined) throw new Error("Shipped module dependency cycle");
-    placed.add(next);
-    ordered.push(byKey.get(next)!);
+    if (next === undefined)
+      throw new Error("Shipped Applications use each other's Modules in a cycle");
+    placed.add(next.source.key);
+    ordered.push(next);
   }
   return ordered;
 };
 
 /**
- * Publishes one definition source as an initial release, or returns the release the state file
- * already records for it. The created draft root is recorded before it is published, so an
- * interrupted run resumes at publication. A root that exists without any record is refused: the
- * setup never guesses which draft or release it belongs to.
+ * Publishes one shipped Application as an initial release, or returns the release the state file
+ * already records for it. Its inline Modules are released inside that one publication. The
+ * created draft root is recorded before it is published, so an interrupted run resumes at
+ * publication. A root that exists without any record is refused: the setup never guesses which
+ * draft or release it belongs to.
  */
 const publishOne = async (
   facts: SystemContextFacts,
-  source: StoredDefinitionSource,
+  descriptor: TrustedApplicationDescriptor,
   state: SetupState,
   log: (message: string) => void,
-  descriptor?: TrustedApplicationDescriptor,
 ): Promise<PublishedRelease> => {
-  if (source.kind === "application" && (descriptor === undefined || descriptor.source !== source))
-    throw new Error("Application publication requires its trusted shipped descriptor");
+  const source = descriptor.source;
   const recorded = state.releases[source.key];
   if (recorded !== undefined) {
-    if (descriptor !== undefined)
-      await inSystemTransaction(mintSystemContext(facts), (transaction) =>
-        verifyApplicationRoot(transaction, descriptor, recordedRootId(recorded)),
-      );
+    await inSystemTransaction(mintSystemContext(facts), (transaction) =>
+      verifyApplicationRoot(transaction, descriptor, recordedRootId(recorded)),
+    );
     return recorded;
   }
 
@@ -209,19 +199,16 @@ const publishOne = async (
   if (draft === undefined) {
     const created = await inSystemTransaction(context, async (transaction) => {
       const store = createDefinitionStore(transaction, authority, platformPermissionSource);
-      const creation =
-        descriptor === undefined
-          ? store.createRoot({ source })
-          : store.createTrustedApplicationRoot({ source }, descriptor.applicationOriginKind);
-      const created = await creation.catch((error: unknown) => {
-        if (error instanceof DefinitionError && error.code === "DEFINITION_ROOT_ALREADY_EXISTS")
-          throw new Error(
-            `${source.key} already exists in this organisation but the setup state does not record it. Reset the local database (pnpm db:reset) and run the setup again.`,
-          );
-        throw error;
-      });
-      if (descriptor !== undefined)
-        await verifyApplicationRoot(transaction, descriptor, created.rootId);
+      const created = await store
+        .createTrustedApplicationRoot({ source }, descriptor.applicationOriginKind)
+        .catch((error: unknown) => {
+          if (error instanceof DefinitionError && error.code === "DEFINITION_ROOT_ALREADY_EXISTS")
+            throw new Error(
+              `${source.key} already exists in this organisation but the setup state does not record it. Reset the local database (pnpm db:reset) and run the setup again.`,
+            );
+          throw error;
+        });
+      await verifyApplicationRoot(transaction, descriptor, created.rootId);
       return created;
     });
     draft = { rootId: created.rootId, draftRevision: created.draftRevision };
@@ -230,9 +217,8 @@ const publishOne = async (
   } else {
     // A resumed run authors the current shipped source over the unpublished draft.
     const saved = await inSystemTransaction(context, async (transaction) => {
-      const rootId =
-        descriptor === undefined ? platformIdSchema.parse(draft!.rootId) : recordedRootId(draft);
-      if (descriptor !== undefined) await verifyApplicationRoot(transaction, descriptor, rootId);
+      const rootId = recordedRootId(draft);
+      await verifyApplicationRoot(transaction, descriptor, rootId);
       return createDefinitionStore(transaction, authority, platformPermissionSource).saveDraft({
         rootId,
         expectedDraftRevision: draft!.draftRevision,
@@ -245,7 +231,7 @@ const publishOne = async (
   }
   const { rootId, draftRevision } = draft;
   const prepared = await inSystemTransaction(context, async (transaction) => {
-    if (descriptor !== undefined) await verifyApplicationRoot(transaction, descriptor, rootId);
+    await verifyApplicationRoot(transaction, descriptor, rootId);
     return createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
@@ -253,7 +239,7 @@ const publishOne = async (
     ).prepare(context, { rootId, expectedDraftRevision: draftRevision });
   });
   const published = await inSystemTransaction(context, async (transaction) => {
-    if (descriptor !== undefined) await verifyApplicationRoot(transaction, descriptor, rootId);
+    await verifyApplicationRoot(transaction, descriptor, rootId);
     return createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
@@ -274,21 +260,17 @@ const publishOne = async (
   return release;
 };
 
-/** Publishes every module the applications need, then each application. */
+/** Publishes each selected Application, owners of used Modules first. */
 export const publishShippedDefinitions = async (
   facts: SystemContextFacts,
   applicationKeys: readonly string[],
   state: SetupState,
   log: (message: string) => void,
 ): Promise<ReadonlyMap<string, PublishedRelease>> => {
-  // Refuse every recorded selected Application before any Module or Application state changes.
+  // Refuse every recorded selected Application before any state changes.
   await verifyRecordedShippedApplicationRoots(facts, applicationKeys, state);
   const published = new Map<string, PublishedRelease>();
-  for (const module of modulesInDependencyOrder(applicationKeys))
-    published.set(module.key, await publishOne(facts, module, state, log));
-  for (const key of applicationKeys) {
-    const descriptor = shippedApplicationDescriptor(key);
-    published.set(key, await publishOne(facts, descriptor.source, state, log, descriptor));
-  }
+  for (const descriptor of applicationsInPublicationOrder(applicationKeys))
+    published.set(descriptor.source.key, await publishOne(facts, descriptor, state, log));
   return published;
 };
