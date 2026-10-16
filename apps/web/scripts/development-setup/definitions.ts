@@ -4,7 +4,13 @@ import {
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
 } from "@vortex/platform/server";
-import { platformIdSchema, type SessionContext, type StoredDefinitionSource } from "@vortex/platform/schema";
+import {
+  applicationModuleKeys,
+  applicationModuleSources,
+  platformIdSchema,
+  type SessionContext,
+  type StoredDefinitionSource,
+} from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   createDatabaseDefinitionPublicationService,
@@ -12,7 +18,7 @@ import {
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
 } from "@vortex/platform/server";
-import { shippedApplications, shippedModuleSources } from "@vortex/definitions";
+import { shippedApplications } from "@vortex/definitions";
 import {
   developmentBuilderAuthority,
   inSystemTransaction,
@@ -56,10 +62,11 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
 };
 
 /**
- * Every module source available to the development setup. Publishing each shipped Module also
- * validates independently reusable Modules that no Application currently binds.
+ * The Module release units every shipped Application's inline Modules publish as. Until one
+ * publication carries an Application and its Modules together, each Module is published as its
+ * own release first and the Application then pins the release it was compiled against.
  */
-const moduleSources = shippedModuleSources;
+const moduleSources = shippedApplications.flatMap(({ source }) => applicationModuleSources(source));
 
 type TrustedApplicationDescriptor = Readonly<{
   source: Extract<StoredDefinitionSource, { kind: "application" }>;
@@ -137,25 +144,23 @@ export const verifyRecordedShippedApplicationRoots = async (
 };
 
 type ModuleBody = Readonly<{ dependencies?: readonly Readonly<{ module: string }>[] }>;
-type ApplicationBody = Readonly<{ module_bindings?: readonly Readonly<{ module: string }>[] }>;
 
-/** All shipped Modules and their dependencies, in publish order. */
+/** Every Module the selected Applications own or use, with their dependencies, in publish order. */
 const modulesInDependencyOrder = (applicationKeys: readonly string[]): StoredDefinitionSource[] => {
   const byKey = new Map(moduleSources.map((source) => [source.key, source] as const));
   const needed = new Set<string>();
   const visit = (key: string): void => {
     if (needed.has(key)) return;
     const source = byKey.get(key);
-    if (source === undefined) throw new Error(`Module ${key} is not a shipped module`);
+    if (source === undefined) throw new Error(`Module ${key} is not owned by a shipped Application`);
     needed.add(key);
     for (const dependency of (source.body as ModuleBody).dependencies ?? [])
       visit(dependency.module);
   };
-  for (const source of moduleSources) visit(source.key);
-  for (const key of applicationKeys)
-    for (const binding of (shippedApplicationSource(key).body as ApplicationBody).module_bindings ??
-      [])
-      visit(binding.module);
+  for (const key of applicationKeys) {
+    const source = shippedApplicationSource(key);
+    if (source.kind === "application") for (const module of applicationModuleKeys(source)) visit(module);
+  }
   const ordered: StoredDefinitionSource[] = [];
   const placed = new Set<string>();
   while (ordered.length < needed.size) {

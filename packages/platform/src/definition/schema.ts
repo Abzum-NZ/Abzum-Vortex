@@ -18,6 +18,7 @@ export * from "./application-flow-bindings";
 export * from "./canonical-json";
 export * from "./definitions";
 export * from "./definition-source";
+export * from "./application-module-sources";
 export * from "./definition-compilation-contracts";
 export * from "./definition-consumer-read";
 export * from "./definition-history-contracts";

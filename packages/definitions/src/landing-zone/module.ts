@@ -1,10 +1,4 @@
-import {
-  moduleSourceDocumentSchema,
-  type ModuleSourceDocument,
-} from "@vortex/platform/schema";
-import tilesSource from "./sources/landing-zone.tiles.json";
+import tiles from "./modules/tiles.json";
 
 /** The Landing Zone Module provides owner-scoped personal tiles. */
-export const landingZoneModuleSources: readonly ModuleSourceDocument[] = Object.freeze(
-  [tilesSource].map((source) => moduleSourceDocumentSchema.parse(source)),
-);
+export const landingZoneModules: readonly unknown[] = [tiles];

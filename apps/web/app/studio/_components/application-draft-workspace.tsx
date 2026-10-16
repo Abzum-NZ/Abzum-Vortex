@@ -11,7 +11,7 @@ import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -368,7 +368,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
           result.draft.sourceFingerprint !== saved.sourceFingerprint || canonicalJson(result.draft.source) !== canonicalJson(expectedSource)) return;
       const metadata = result.searchMetadata;
       if (metadata.organizationId !== organizationId || metadata.rootId !== current.rootId || metadata.draftRevision !== current.draftRevision ||
-          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(expectedSource.body.module_bindings)) return;
+          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(applicationModuleKeys(expectedSource))) return;
       setSearchMetadata(metadata);
     } catch (error) {
       console.error("[studio] refreshing the module list failed", describeFailure(error));
@@ -379,7 +379,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const currentSearchMetadata = searchMetadata !== null && searchMetadata.organizationId === organizationId &&
     searchMetadata.rootId === state.rootId &&
     searchMetadata.draftRevision === state.draftRevision && searchMetadata.sourceFingerprint === savedPreviewDraft.current.sourceFingerprint &&
-    searchMetadata.bindingsSignature === JSON.stringify(source.body.module_bindings) &&
+    searchMetadata.bindingsSignature === JSON.stringify(applicationModuleKeys(source)) &&
     canonicalJson(state.source) === canonicalJson(savedPreviewDraft.current.source) ? searchMetadata : null;
   const compositionContext = useMemo<StudioCompositionContext>(() => ({
     organizationId, rootId: state.rootId, key: draft.key, draftRevision: state.draftRevision,

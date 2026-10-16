@@ -39,30 +39,14 @@
         }
       ]
     },
-    "module_bindings": [
+    "uses": [
       {
-        "module": "vortex.iam.core",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
+        "application": "vortex.app.organisation_administration",
+        "module": "vortex.system_directory"
       },
       {
-        "module": "vortex.system_directory",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "system_record_display"
-      },
-      {
-        "module": "vortex.organisation_administration",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "system_record_display"
+        "application": "vortex.app.organisation_administration",
+        "module": "vortex.organisation_administration"
       }
     ],
     "permissions": [
@@ -489,11 +473,9 @@
         ]
       }
     ],
-    "queries": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
-    "actions": [],
     "events": [
       {
         "id": "event_iam_administration_action",

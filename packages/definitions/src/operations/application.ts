@@ -9,6 +9,7 @@ import {
   type PlatformBlockReleaseIdentity,
   type SourceItemVortex,
 } from "@vortex/platform/schema";
+import { operationsModules } from "./module";
 import { operationsRunbooks, runbookPageKey, runbookPageText } from "./runbooks";
 
 type JsonObject = Record<string, unknown>;
@@ -498,13 +499,8 @@ export const operationsApplication: ApplicationSourceDocument =
         "Operational incidents with timelines, scope, containment, recovery, evidence, communication, cause, follow-up and verification, plus one reachable runbook for each critical alert code. Operators create incidents, attach alert signals to open incidents, and acknowledge, escalate or resolve them under their own permission.",
       icon: "activity",
       home_page: "operations_signals",
-      module_bindings: [
-        {
-          module: "vortex.operations.incidents",
-          version: { selection: "exact", version: "1.0.0" },
-          purpose: "primary",
-        },
-      ],
+      modules: operationsModules,
+      uses: [],
       permissions: [
         {
           id: "app_permission_operations_open",
@@ -625,11 +621,9 @@ export const operationsApplication: ApplicationSourceDocument =
           })),
         },
       ],
-      queries: [],
       pipelines: [],
       connection_bindings: [],
       interfaces: [],
-      actions: [],
       events: [
         {
           id: "form_submit_operations_new_incident",

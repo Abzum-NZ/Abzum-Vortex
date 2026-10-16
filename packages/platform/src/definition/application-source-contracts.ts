@@ -11,8 +11,6 @@ import {
 import { labelSchema } from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
-  refineActionTaskIds,
-  sourceActionTaskSchema,
   sourceAliasSchema,
   sourceConditionSchema,
   sourceQualifiedFieldSchema,
@@ -20,9 +18,9 @@ import {
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,
 } from "./definition-source-common";
-import { actionInputSchema } from "./module-source-action-inputs";
 import {
   moduleSourcePermissionRecordScopeSchema,
+  sourceApplicationModuleSchema,
   sourcePermissionFieldPolicySchema,
 } from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "../access/permissions";
@@ -133,7 +131,6 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
   return value;
 };
 
-const sourceFilterSchema = z.union([z.null(), sourceConditionSchema]);
 /**
  * The fixed set of application experience pages an application may declare: the page shown
  * when an addressed page is refused or missing, when the application or its installation is
@@ -509,6 +506,14 @@ const sourceApplicationSearchSchema = z
     }
   });
 
+/** One Module another Application owns, named by that Application's key and the Module key. */
+const sourceApplicationUseSchema = z
+  .object({
+    application: sourceProvenanceUnchanged(namespacedKeySchema),
+    module: sourceProvenanceUnchanged(namespacedKeySchema),
+  })
+  .strict();
+
 export const sourceApplicationBodySchema = z
   .object({
     name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
@@ -522,22 +527,17 @@ export const sourceApplicationBodySchema = z
     ),
     home_page: sourceProvenanceTarget(builderKeySchema, ["homePageId"]),
     search: sourceProvenanceUnchanged(sourceApplicationSearchSchema.optional()),
-    module_bindings: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              module: sourceProvenanceTarget(namespacedKeySchema, [
-                "moduleRootId",
-                "resolvedVersion",
-              ]),
-              version: sourceProvenanceUnchanged(versionRequirementSchema, true),
-              purpose: sourceProvenanceUnchanged(builderKeySchema),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(100),
+    /** The Modules this Application owns; each Module key has exactly one owning Application. */
+    modules: sourceProvenanceTarget(
+      z.array(sourceApplicationModuleSchema).max(100),
+      ["moduleBindings/**"],
+      true,
+    ),
+    /** Modules owned by another Application that this Application builds on. */
+    uses: sourceProvenanceTarget(
+      z.array(sourceApplicationUseSchema).max(100),
+      ["moduleBindings/**"],
+      true,
     ),
     permissions: sourceProvenanceUnchanged(
       z
@@ -604,61 +604,6 @@ export const sourceApplicationBodySchema = z
         .max(100),
     ),
     navigation: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).max(100)),
-    queries: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              id: sourceProvenanceTarget(sourceAliasSchema, ["queryId"]),
-              key: sourceProvenanceUnchanged(builderKeySchema),
-              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
-                "recordType/**",
-              ]),
-              select: sourceProvenanceUnchanged(
-                z
-                  .array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"]))
-                  .min(1)
-                  .max(200),
-              ),
-              filter: sourceProvenanceUnchanged(sourceFilterSchema),
-              group_by: sourceProvenanceUnchanged(
-                z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
-              ),
-              aggregates: sourceProvenanceUnchanged(
-                z
-                  .array(
-                    z
-                      .object({
-                        operation: sourceProvenanceUnchanged(
-                          z.enum(["count", "sum", "minimum", "maximum", "average"]),
-                        ),
-                        field: sourceProvenanceTarget(builderKeySchema.optional(), ["fieldId"]),
-                        alias: sourceProvenanceUnchanged(builderKeySchema),
-                      })
-                      .strict(),
-                  )
-                  .max(20),
-              ),
-              sort: sourceProvenanceUnchanged(
-                z
-                  .array(
-                    z
-                      .object({
-                        field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
-                        direction: sourceProvenanceUnchanged(z.enum(["ascending", "descending"])),
-                      })
-                      .strict(),
-                  )
-                  .min(1)
-                  .max(20),
-              ),
-              page_size: sourceProvenanceUnchanged(z.number().int().min(1).max(200)),
-              relationship_hops: sourceProvenanceUnchanged(z.number().int().min(0).max(2)),
-            })
-            .strict(),
-        )
-        .max(100),
-    ),
     pipelines: sourceProvenanceUnchanged(
       z
         .array(
@@ -779,61 +724,6 @@ export const sourceApplicationBodySchema = z
         )
         .max(100),
     ),
-    actions: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              id: sourceProvenanceTarget(sourceAliasSchema, ["actionId"]),
-              key: sourceProvenanceUnchanged(namespacedKeySchema),
-              label: sourceProvenanceUnchanged(labelSchema),
-              record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, [
-                "subjectRecordTypeId",
-              ]),
-              permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["permissionKey"]),
-              permission_alternatives: sourceProvenanceUnchanged(
-                z.array(namespacedKeySchema).min(2).optional(),
-              ),
-              sharing: sourceProvenanceTarget(z.enum(["refused", "allowed"]), ["sharing"]),
-              inputs: sourceProvenanceUnchanged(z.array(actionInputSchema).max(50)),
-              precondition: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
-              tasks: sourceProvenanceUnchanged(
-                z.array(sourceActionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
-              ),
-            })
-            .strict()
-            .superRefine((value, context) => {
-              if (
-                (value.permission === undefined) ===
-                (value.permission_alternatives === undefined)
-              )
-                context.addIssue({
-                  code: "custom",
-                  path: ["permission_alternatives"],
-                  message: "An action requires either one permission or canonical alternatives",
-                });
-              const alternatives = value.permission_alternatives;
-              if (!alternatives) return;
-              if (new Set(alternatives).size !== alternatives.length)
-                context.addIssue({
-                  code: "custom",
-                  path: ["permission_alternatives"],
-                  message: "Action permission alternatives must be unique",
-                });
-              if (
-                alternatives.some(
-                  (permission, index) => index > 0 && alternatives[index - 1]! >= permission,
-                )
-              )
-                context.addIssue({
-                  code: "custom",
-                  path: ["permission_alternatives"],
-                  message: "Action permission alternatives must use canonical order",
-                });
-            }),
-        )
-        .max(100),
-    ),
     events: sourceProvenanceUnchanged(
       z
         .array(
@@ -884,6 +774,28 @@ export const sourceApplicationBodySchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    const moduleKeys = [
+      ...value.modules.map((module) => module.key),
+      ...value.uses.map((use) => use.module),
+    ];
+    if (new Set(moduleKeys).size !== moduleKeys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "Each Module is owned or used once by an Application",
+      });
+    if (new Set(value.modules.map((module) => module.id)).size !== value.modules.length)
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "Module aliases must be unique",
+      });
+    if (moduleKeys.length === 0)
+      context.addIssue({
+        code: "custom",
+        path: ["modules"],
+        message: "An Application owns or uses at least one Module",
+      });
     const experiences = value.experiences ?? [];
     for (const issue of inspectApplicationPageReplacements(
       value.pages.map((page) => ({

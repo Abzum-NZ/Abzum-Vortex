@@ -11,6 +11,7 @@ import {
   type StoredDefinitionSource,
 } from "../schema";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
+import { applicationModuleKeys, applicationModuleSources } from "./application-module-sources";
 import { createApplicationResolutionSnapshot } from "./application-resolution";
 import { applicationSourceContractVersion } from "./application-contract-versions";
 import { compareCanonicalStrings } from "./canonical-json-definition";
@@ -18,6 +19,7 @@ import { compileParsedDefinition } from "./compiler";
 import { compatibleVersion } from "./compiler/resolution";
 import { DefinitionCompilationError } from "./compilation-error";
 import {
+  compileModulesOffline,
   historyDependentCodes,
   renderLocation,
   syntheticActor,
@@ -134,7 +136,7 @@ const compileApplication = async (
 ): Promise<OfflineSourceFailure[]> => {
   const failures: OfflineSourceFailure[] = [];
   const modules: (CompiledModule & { key: string; own: ResolvedDefinition })[] = [];
-  const moduleKeys = [...new Set(source.body.module_bindings.map((binding) => binding.module))];
+  const moduleKeys = applicationModuleKeys(source);
   for (const key of moduleKeys) {
     const module = compiled.get(key);
     if (module === undefined)
@@ -142,8 +144,8 @@ const compileApplication = async (
         resolutionFailure(
           source.key,
           "offline_dependency_not_compiled",
-          `module_bindings > ${key}`,
-          `binds Module ${key}, which is not shipped or failed to compile above`,
+          `modules > ${key}`,
+          `builds on Module ${key}, which is not shipped or failed to compile above`,
         ),
       );
     else modules.push({ ...module, key, own: module.definitions.find((d) => d.key === key)! });
@@ -275,30 +277,79 @@ const compileApplication = async (
 };
 
 /**
+ * Every Module key has exactly one owning Application, and every Module an Application uses is
+ * owned by the Application it names.
+ */
+const ownershipFailures = (
+  applications: readonly ApplicationSourceDocument[],
+): OfflineSourceFailure[] => {
+  const owners = new Map<string, string[]>();
+  for (const application of applications)
+    for (const module of application.body.modules)
+      owners.set(module.key, [...(owners.get(module.key) ?? []), application.key]);
+  const failures: OfflineSourceFailure[] = [];
+  for (const [module, applicationKeys] of owners)
+    if (applicationKeys.length > 1)
+      failures.push(
+        resolutionFailure(
+          module,
+          "offline_module_owned_twice",
+          `modules > ${module}`,
+          `Module ${module} is owned by ${applicationKeys.join(" and ")}; one Application owns each Module`,
+        ),
+      );
+  for (const application of applications)
+    for (const use of application.body.uses)
+      if (!(owners.get(use.module) ?? []).includes(use.application))
+        failures.push(
+          resolutionFailure(
+            application.key,
+            "offline_used_module_not_owned",
+            `uses > ${use.module}`,
+            `uses Module ${use.module} from ${use.application}, which does not own it`,
+          ),
+        );
+  return failures;
+};
+
+/**
  * Runs the publication checks that need no database over shipped Application sources and reports
- * every failure, not the first: the source schema, the Application compile against the Modules
- * compiled offline, the platform block and theme catalogue and its connection releases, and the
- * publish-stage rules for pages, navigation, layout, theme, bindings and permissions.
+ * every failure, not the first: the source schema, Module ownership and use, the compile of each
+ * inline Module against its siblings and the Modules its Application uses, the Application compile
+ * against those Modules, the platform block and theme catalogue and its connection releases, and
+ * the publish-stage rules for pages, navigation, layout, theme, bindings and permissions.
  */
 export const validateApplicationsOffline = async (
   sources: readonly StoredDefinitionSource[],
-  compiled: ReadonlyMap<string, CompiledModule>,
   catalogue: ImmutableDefinitionPublicationCatalogue,
   permissions: PlatformPermissionSource,
-): Promise<OfflineSourceFailure[]> => {
+): Promise<{ failures: OfflineSourceFailure[]; moduleCount: number }> => {
   const failures: OfflineSourceFailure[] = [];
+  const applications: ApplicationSourceDocument[] = [];
   for (const source of sources) {
     if (source.kind !== "application") continue;
     const parsed = applicationSourceDocumentSchema.safeParse(source);
-    if (!parsed.success) {
-      failures.push(unexpected(source.key, "source_schema", parsed.error));
-      continue;
-    }
-    try {
-      failures.push(...(await compileApplication(parsed.data, compiled, catalogue, permissions)));
-    } catch (error) {
-      failures.push(unexpected(source.key, "compile", error));
-    }
+    if (!parsed.success) failures.push(unexpected(source.key, "source_schema", parsed.error));
+    else applications.push(parsed.data);
   }
-  return failures;
+  failures.push(...ownershipFailures(applications));
+  const moduleSources = applications.flatMap((application) => {
+    try {
+      return applicationModuleSources(application);
+    } catch (error) {
+      failures.push(unexpected(application.key, "source_schema", error));
+      return [];
+    }
+  });
+  const modules = compileModulesOffline(moduleSources, permissions);
+  failures.push(...modules.failures);
+  for (const application of applications)
+    try {
+      failures.push(
+        ...(await compileApplication(application, modules.compiled, catalogue, permissions)),
+      );
+    } catch (error) {
+      failures.push(unexpected(application.key, "compile", error));
+    }
+  return { failures, moduleCount: moduleSources.length };
 };
