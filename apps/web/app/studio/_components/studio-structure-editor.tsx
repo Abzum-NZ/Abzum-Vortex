@@ -73,7 +73,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
     run(page !== undefined ? { kind: "remove_page", pageAlias: page.id } : { kind: "remove_shell", shellAlias: shell!.id });
   };
 
-  return <div className="space-y-3 border-t border-border pt-3">
+  return <div className="space-y-3 border-b border-border pb-3">
     <div className="flex flex-wrap gap-2">
       <Button type="button" size="sm" variant={form === "page" ? "secondary" : "outline"} disabled={disabled}
         aria-expanded={form === "page"} onClick={() => openForm(form === "page" ? "none" : "page")}>Add page</Button>

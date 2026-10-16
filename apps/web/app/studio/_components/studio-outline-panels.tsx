@@ -67,9 +67,9 @@ export function StudioStructurePanel({ outline, selectedKey, choose, disabled, h
     return [{ ...outline, children: filterNodes(sections, query) }];
   }, [outline, query, homePageKey]);
   return <StudioPanelShell title="Structure" description="The application, its layouts and its pages." hidden={hidden}>
+    {editor}
     <StudioSearchBox value={query} onChange={setQuery} placeholder="Find a page or layout" label="Find a page or layout" />
     <OutlineList nodes={tree} selectedKey={selectedKey} choose={choose} disabled={disabled} empty="Nothing matches." />
-    {editor}
   </StudioPanelShell>;
 }
 
