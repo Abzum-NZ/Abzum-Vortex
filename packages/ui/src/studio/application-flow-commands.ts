@@ -133,7 +133,7 @@ const newStep = (flow: SourceFlow, taskType: string, used: ReadonlySet<string>):
 
 /** How the inspector edits a setting; each maps to one typed value, chosen by the registry's declared type. */
 export type StudioFlowSettingControl =
-  | "text" | "long_text" | "whole_number" | "decimal_number" | "yes_no" | "date" | "date_time" | "page" | "calculation";
+  | "text" | "long_text" | "whole_number" | "decimal_number" | "yes_no" | "date" | "date_time" | "page" | "record_type" | "calculation";
 
 export type StudioFlowSettingField = Readonly<{
   key: string;
@@ -167,6 +167,7 @@ const plainKinds: Readonly<Partial<Record<FlowTaskPropertyType, PlainKind>>> = {
   builder_key: { control: "text", literal: "text" },
   namespaced_key: { control: "text", literal: "text" },
   page_id: { control: "page", literal: "text" },
+  record_type_id: { control: "record_type", literal: "text" },
   whole_number: { control: "whole_number", literal: "whole_number" },
   decimal_number: { control: "decimal_number", literal: "decimal_number" },
   yes_no: { control: "yes_no", literal: "yes_no" },

@@ -87,6 +87,9 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
   }, [flowSelection, outline, choose]);
   const starts = useMemo(() => flowSelection === null ? [] : describeStudioFlowStarts(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel]);
+  const recordTypes = useMemo(() => source.body.modules.flatMap((module) => module.record_types.map((recordType) => ({
+    key: `${module.key}:${recordType.key}`, label: `${"name" in recordType && typeof recordType.name === "string" ? recordType.name : recordType.key} (${module.name})`,
+  }))), [source]);
   const createChoices = useMemo(() => projectStudioFlowCreateChoices({ rootId, source, catalogue }, controlLabel),
     [rootId, source, catalogue, controlLabel]);
 
@@ -146,7 +149,7 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
 
   const inspector: ReactNode = flowSelection === null || outline === null ? null
     : <StudioFlowInspector key={`${selectionKey}:${epoch}:${stepId ?? ""}`} context={context} selection={flowSelection}
-      lists={outline.lists} stepPath={stepPath} starts={starts} pages={pages} disabled={disabled}
+      lists={outline.lists} stepPath={stepPath} starts={starts} pages={pages} recordTypes={recordTypes} disabled={disabled}
       ownerNote={owner === undefined ? undefined : `This flow belongs to the module ${owner.name}, which this application owns.`}
       onCommand={command} onSelectStep={selectStep} onPendingChange={reportPending} />;
 

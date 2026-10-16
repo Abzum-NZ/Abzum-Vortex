@@ -52,7 +52,8 @@ export const findStudioFlowStepById = (lists: readonly StudioFlowTaskListOutline
 };
 
 /** The shared control a plain flow setting is drawn with. */
-const controlProperty = (field: StudioFlowSettingField): BlockPropertySchemaContract | undefined => {
+const controlProperty = (field: StudioFlowSettingField, recordTypes: readonly Readonly<{ key: string; label: string }>[]):
+  BlockPropertySchemaContract | undefined => {
   const base = { key: field.key, label: field.label, required: field.required };
   switch (field.control) {
     case "text": return { ...base, kind: "text", minLength: 0, maxLength: 160 };
@@ -63,6 +64,7 @@ const controlProperty = (field: StudioFlowSettingField): BlockPropertySchemaCont
     case "decimal_number": return { ...base, kind: "number", integer: false };
     case "yes_no": return { ...base, kind: "boolean" };
     case "page": return { ...base, kind: "page_reference" };
+    case "record_type": return { ...base, kind: "choice", options: recordTypes.map((entry) => ({ ...entry })) };
     default: return undefined;
   }
 };
@@ -76,6 +78,7 @@ const toControl = (field: StudioFlowSettingField, value: StudioFlowSettingValue 
     case "whole_number": case "decimal_number":
       return Number.isFinite(Number(value.value)) ? { kind: "number", value: Number(value.value) } : undefined;
     case "page": return { kind: "page_reference", page: String(value.value) };
+    case "record_type": return { kind: "choice", value: String(value.value) };
     default: return { kind: "text", value: String(value.value) };
   }
 };
@@ -86,6 +89,7 @@ const fromControl = (value: ControlValue | undefined): StudioFlowSettingValue | 
     case "boolean": return { kind: "plain", value: value.value };
     case "number": return { kind: "plain", value: String(value.value) };
     case "page_reference": return { kind: "plain", value: value.page };
+    case "choice": return { kind: "plain", value: value.value };
     case "text": return { kind: "plain", value: value.value };
     default: return null;
   }
@@ -112,7 +116,7 @@ function StepTypePicker({ id, label, types, disabled, onAdd, action }: Readonly<
   </div>;
 }
 
-export function StudioFlowInspector({ context, selection, lists, stepPath, starts, ownerNote, pages, disabled,
+export function StudioFlowInspector({ context, selection, lists, stepPath, starts, ownerNote, pages, recordTypes, disabled,
   onCommand, onSelectStep, onPendingChange }: Readonly<{
   context: StudioFlowContext;
   selection: StudioFlowSelection;
@@ -122,6 +126,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, start
   /** Who owns the flow when it is not the application itself. */
   ownerNote: string | undefined;
   pages: readonly Readonly<{ key: string; label: string }>[];
+  /** The record types of the modules this application owns, as qualified keys and names. */
+  recordTypes: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
   onCommand: StudioFlowRun;
   onSelectStep: (path: StudioFlowPath | null) => void;
@@ -193,8 +199,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, start
   }
 
   const fields = settings?.kind === "available" ? settings.fields : [];
-  const plain = fields.filter((field) => controlProperty(field) !== undefined);
-  const properties = plain.map((field) => controlProperty(field)!);
+  const plain = fields.filter((field) => controlProperty(field, recordTypes) !== undefined);
+  const properties = plain.map((field) => controlProperty(field, recordTypes)!);
   const shown = (field: StudioFlowSettingField): StudioFlowSettingValue | null =>
     edits !== null && Object.hasOwn(edits.values, field.key) ? edits.values[field.key]! : field.value;
   const controlValues: StudioSettingValues = Object.fromEntries(plain.flatMap((field) => {
