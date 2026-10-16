@@ -200,7 +200,7 @@ export function ApplicationReleaseRestore({
         setReceipt(result.receipt);
         setFailure(null);
         setRequiresReload(true);
-        setMessage(`Restore completed at saved draft revision ${result.receipt.draftRevision}. Reload before another restore.`);
+        setMessage("The draft was restored. Reload before restoring again.");
       } else {
         setFailure(result.kind);
         setRequiresReload(true);
@@ -228,9 +228,9 @@ export function ApplicationReleaseRestore({
 
   return <main className="mx-auto max-w-4xl space-y-6 p-6">
     <header className="space-y-3">
-      <h1 className="text-2xl font-semibold">Restore an application release to the saved draft</h1>
-      <p>This action replaces only the saved draft with the selected immutable release and creates one new draft revision. It does not publish, install, or adopt the release.</p>
-      <p>Your original Studio workspace and unsaved edits stay in their own tab. Those buffers may now refer to an older saved revision; this page never reads or discards them. Open a new workspace deliberately before continuing to edit.</p>
+      <h1 className="text-2xl font-semibold">Restore a published version to the draft</h1>
+      <p>This replaces the saved draft with the selected published version and saves it as a new draft. It does not publish or install anything.</p>
+      <p>Any unsaved changes in your workspace are not touched by this page and may be out of date afterwards. Go back to the workspace and choose Revert to saved to load the restored draft.</p>
       <nav aria-label="Restore navigation" className="flex flex-wrap gap-3">
         <a className="underline" href={historyUrl}>Back to published versions</a>
         <a className="underline" href={workspaceUrl}>Back to the workspace</a>
@@ -238,65 +238,66 @@ export function ApplicationReleaseRestore({
     </header>
 
     <section aria-label="Selected release and saved draft" aria-busy={pending !== null} className="space-y-4 rounded-xl border bg-card text-card-foreground p-4">
-      <h2 className="text-xl font-semibold">{staleLabel ? "Last confirmed restore preview" : "Review before restoring"}</h2>
+      <h2 className="text-xl font-semibold">{staleLabel ? "Last confirmed preview" : "Review before restoring"}</h2>
       {displayedLoad !== null ? <>
         <dl className="space-y-3">
-          <div><dt className="font-semibold">Application</dt><dd>{displayedLoad.snapshot.definitionKey}</dd></div>
-          <div><dt className="font-semibold">Selected version and revision</dt><dd>{displayedLoad.metadata.releaseVersion} · revision {displayedLoad.metadata.releaseRevision}</dd></div>
-          <div><dt className="font-semibold">Release status</dt><dd>{displayedLoad.metadata.isCurrent ? "Current published release" : "Earlier published release"}</dd></div>
-          <div><dt className="font-semibold">Published</dt><dd><time dateTime={displayedLoad.metadata.publishedAt}>{displayedLoad.metadata.publishedAt}</time></dd></div>
+          <div><dt className="font-semibold">Selected version</dt><dd>{displayedLoad.metadata.releaseVersion}</dd></div>
+          <div><dt className="font-semibold">Status</dt><dd>{displayedLoad.metadata.isCurrent ? "Current published version" : "Earlier published version"}</dd></div>
+          <div><dt className="font-semibold">Published</dt><dd><time dateTime={displayedLoad.metadata.publishedAt}>{new Date(displayedLoad.metadata.publishedAt).toLocaleString()}</time></dd></div>
           <div><dt className="font-semibold">Published by</dt><dd>{personText(displayedLoad.publishedBy)}</dd></div>
-          <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{displayedLoad.metadata.releaseNote}</dd></div>
-          <div><dt className="font-semibold">Current saved draft revision</dt><dd>{displayedLoad.snapshot.draftRevision}</dd></div>
-          <div><dt className="font-semibold">Current publication anchor</dt><dd>{displayedLoad.snapshot.anchorReleaseRevision}</dd></div>
+          <div><dt className="font-semibold">Note</dt><dd className="whitespace-pre-wrap break-words">{displayedLoad.metadata.releaseNote}</dd></div>
         </dl>
         <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Application technical name</dt><dd className="break-all">{displayedLoad.snapshot.definitionKey}</dd></div>
+          <div><dt className="font-semibold">Selected release revision</dt><dd>{displayedLoad.metadata.releaseRevision}</dd></div>
+          <div><dt className="font-semibold">Current saved draft revision</dt><dd>{displayedLoad.snapshot.draftRevision}</dd></div>
+          <div><dt className="font-semibold">Current publication anchor</dt><dd>{displayedLoad.snapshot.anchorReleaseRevision}</dd></div>
           <div><dt className="font-semibold">Published by (account id)</dt><dd className="break-all">{displayedLoad.metadata.publishedBy}</dd></div>
           <div><dt className="font-semibold">Selected release source fingerprint</dt><dd className="break-all"><code>{displayedLoad.metadata.sourceFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Current saved draft source fingerprint</dt><dd className="break-all"><code>{displayedLoad.snapshot.sourceFingerprint}</code></dd></div>
         </dl></TechnicalDetails>
-        {staleLabel && <p>This preview is the last confirmed snapshot. Reload to confirm the current saved draft before continuing.</p>}
-      </> : <p>The selected release and saved draft could not be loaded. Reload to check them again.</p>}
+        {staleLabel && <p>This is from the last successful load. Reload to confirm the current draft before continuing.</p>}
+      </> : <p>The published version and the saved draft could not be loaded. Reload to try again.</p>}
     </section>
 
     <div className="flex flex-wrap gap-3">
       <Button type="button" variant="outline" size="sm" name="application.release_history.restore.reload" disabled={pending !== null}
         onClick={() => void runReload()}>
-        {pending === "reload" ? "Reloading…" : "Reload saved draft and release"}
+        {pending === "reload" ? "Reloading…" : "Reload"}
       </Button>
     </div>
 
     <form onSubmit={(event) => void runRestore(event)} className="space-y-4 rounded-xl border bg-card text-card-foreground p-4">
-      <h2 className="text-xl font-semibold">Confirm saved-draft restore</h2>
-      <p id="restore-confirmation-help">The selected release will replace the saved draft at the revision shown above. Your workspace buffers remain separate and can become stale.</p>
+      <h2 className="text-xl font-semibold">Confirm the restore</h2>
+      <p id="restore-confirmation-help">The selected version will replace the saved draft. Unsaved changes in your workspace become out of date.</p>
       <label htmlFor="restore-confirmation" className="flex items-start gap-3">
         <Checkbox id="restore-confirmation" checked={confirmation}
           disabled={!ready || pending !== null} aria-describedby="restore-confirmation-help"
           onCheckedChange={(checked) => setConfirmation(checked)} />
-        <span>I understand that this replaces the saved draft with the selected release.</span>
+        <span>I understand that this replaces the saved draft with the selected version.</span>
       </label>
       <Button type="submit" name="application.draft.restore"
         disabled={!ready || pending !== null || !confirmation}
        >
-        {pending === "restore" ? "Restoring…" : "Restore selected release to saved draft"}
+        {pending === "restore" ? "Restoring…" : "Restore this version to the draft"}
       </Button>
     </form>
 
     {receipt !== null && <section aria-label="Committed restore receipt" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
-      <h2 className="text-xl font-semibold">Restore committed</h2>
+      <h2 className="text-xl font-semibold">Restored</h2>
       <dl className="space-y-2">
+        <div><dt className="font-semibold">Restored by</dt><dd>{personText(receipt.restoredByLabel)}</dd></div>
+        <div><dt className="font-semibold">When</dt><dd><time dateTime={receipt.restoredAt}>{new Date(receipt.restoredAt).toLocaleString()}</time></dd></div>
+      </dl>
+      <TechnicalDetails><dl className="space-y-2">
         <div><dt className="font-semibold">New saved draft revision</dt><dd>{receipt.draftRevision}</dd></div>
         <div><dt className="font-semibold">Restored from release revision</dt><dd>{receipt.targetReleaseRevision}</dd></div>
         <div><dt className="font-semibold">Publication anchor</dt><dd>{receipt.publicationAnchor}</dd></div>
-        <div><dt className="font-semibold">Restored by</dt><dd>{personText(receipt.restoredByLabel)}</dd></div>
-        <div><dt className="font-semibold">Database operation time</dt><dd><time dateTime={receipt.restoredAt}>{receipt.restoredAt}</time></dd></div>
-      </dl>
-      <TechnicalDetails><dl className="space-y-2">
         <div><dt className="font-semibold">Restored by (account id)</dt><dd className="break-all">{receipt.restoredBy}</dd></div>
         <div><dt className="font-semibold">Request correlation</dt><dd className="break-all">{receipt.correlationId}</dd></div>
         <div><dt className="font-semibold">Restored source fingerprint</dt><dd className="break-all"><code>{receipt.sourceFingerprint}</code></dd></div>
       </dl></TechnicalDetails>
-      <p>Reload the saved draft before another restore. No release was published or installed.</p>
+      <p>Go back to the workspace and choose Revert to saved to load the restored draft. Nothing was published or installed.</p>
     </section>}
 
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>

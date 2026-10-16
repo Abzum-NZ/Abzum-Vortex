@@ -29,8 +29,11 @@ export type StudioBusy = Readonly<{
   anyRendered: (...except: StudioBusyExcept[]) => boolean;
   isRendered: (key: StudioBusyKey) => boolean;
   anyOfRendered: (...keys: StudioBusyKey[]) => boolean;
-  /** Marks a key busy or idle. Returns whether it changed, and then bumps the preview generation. */
-  report: (key: StudioBusyKey, pending: boolean) => boolean;
+  /**
+   * Marks a key busy or idle. Returns whether it changed. A change bumps the preview generation, unless
+   * `bump` is false (a request that settles keeps the snapshot it was prepared against).
+   */
+  report: (key: StudioBusyKey, pending: boolean, bump?: boolean) => boolean;
   /** Marks a derived key busy before its next render computes it (the first keystroke of an edit). */
   touch: (key: StudioBusyKey) => void;
   /** Clears several keys (a selection change or reopen discards their input). */
@@ -61,10 +64,10 @@ export function useStudioBusy(
   const view = useRef<ReadonlySet<StudioBusyKey>>(rendered);
   view.current = new Set([...rendered, ...derivedKeys.flatMap(([key, on]) => on === true ? [key] : [])]);
   return useMemo<StudioBusy>(() => {
-    const report = (key: StudioBusyKey, pending: boolean): boolean => {
+    const report = (key: StudioBusyKey, pending: boolean, bump = true): boolean => {
       if (live.current.has(key) === pending) return false;
       if (pending) live.current.add(key); else live.current.delete(key);
-      transition.current();
+      if (bump) transition.current();
       setRendered(new Set([...live.current].filter((busyKey) => !derivedNames.current.has(busyKey))));
       return true;
     };

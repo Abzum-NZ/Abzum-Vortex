@@ -28,7 +28,6 @@ import {
   projectStudioFlowPresentationMoves,
   resolveStudioSelectionInspectorContext,
   studioSemanticSelectionKey,
-  type StudioSemanticOutlineNode,
   type StudioStoredApplicationDraft,
   type StudioCompileFailure,
   type StudioCompositionCommand,
@@ -45,7 +44,7 @@ import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/u
 import { reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
-import { createStudioPlacementDescriber, studioKindLabel } from "../_lib/studio-labels";
+import { createStudioPlacementDescriber, studioKindLabel, studioOutlineLabels } from "../_lib/studio-labels";
 import { ApplicationDraftAgentTools, type StudioPublicationOutcome } from "./application-draft-agent-tools";
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
@@ -161,12 +160,6 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         fieldInputControlReleases={props.fieldInputControlReleases}
         platformThemeTokens={props.platformThemeTokens} />;
 }
-
-const outlineLabels = (node: StudioSemanticOutlineNode, into = new Map<string, string>()): Map<string, string> => {
-  if (node.selection !== null) into.set(studioSemanticSelectionKey(node.selection), node.label);
-  for (const child of node.children) outlineLabels(child, into);
-  return into;
-};
 
 function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initialSearchMetadata, pageCompiledSlots, compileFailure,
   platformBlockCatalogue, fieldInputControlReleases, platformThemeTokens }: {
@@ -522,7 +515,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       // Cancellation never releases a potentially mutating request early or clears another owner.
       if (publicationRequest.current === request) {
         publicationRequest.current = null;
-        busy.report("publication", false);
+        busy.report("publication", false, false);
         if (active.current) setPreparing(false);
       }
     }
@@ -688,7 +681,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       if (active.current && requestLifetime === lifetime.current)
         setMessage("The saved draft could not be loaded. Your edits are kept.");
     } finally {
-      busy.report("reopening", false);
+      busy.report("reopening", false, false);
     }
   };
 
@@ -744,10 +737,25 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
     return undefined;
   };
 
+  // The flow editors are drawn only on the Design tab, so leaving it discards their unapplied input (after asking).
+  const changeTab = async (next: StudioWorkspaceTab) => {
+    if (next === tab) return;
+    if (tab === "design" && next !== "design" && busy.anyOf("flowEditor", "flowSetting", "flowAppend")) {
+      if (!await confirm({
+        title: "Leave the flow editor?",
+        description: "Changes you have not applied in the flow editor are discarded if you leave this tab.",
+        confirmLabel: "Discard and leave",
+      })) return;
+      busy.clear("flowEditor", "flowSetting", "flowAppend");
+      setFlowEpoch((value) => value + 1);
+    }
+    setTab(next);
+  };
+
   const describePlacement = useMemo(() => createStudioPlacementDescriber(platformBlockCatalogue), [platformBlockCatalogue]);
   const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source }, describePlacement),
     [state.rootId, source, describePlacement]);
-  const labels = useMemo(() => outlineLabels(outline), [outline]);
+  const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const savedStateLabel = state.isSaving ? "Saving…" : state.isDirty ? "Unsaved changes" : "Saved";
   const pendingNote = busy.isRendered("search")
@@ -763,7 +771,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const canPrepare = readPublicationSnapshot() !== null;
   const noEdit = state.isSaving || workspaceLifetime === 0;
 
-  const flowPane = (disabled: boolean) => selected?.kind === "flow" && inspector.status === "resolved" && <>
+  const flowPane = (disabled: boolean) => tab === "design" && selected?.kind === "flow" && inspector.status === "resolved" && <>
     <ApplicationFlowCanvas key={`canvas-${flowEpoch}`} context={compositionContext} selection={selected}
       disabled={busy.anyRendered("flowSetting") || noEdit}
       onSettingPendingChange={reportFlowSettingPending}
@@ -812,7 +820,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       </div>
       <p role="status" aria-live="polite" className="w-full text-sm text-muted-foreground">{pendingNote} {message}</p>
     </div>
-    <Tabs value={tab} onValueChange={(next) => { if (isWorkspaceTab(next)) setTab(next); }}>
+    <Tabs value={tab} onValueChange={(next) => { if (isWorkspaceTab(next)) void changeTab(next); }}>
       <TabsList variant="line" aria-label="Workspace sections">
         {workspaceTabs.map((entry) => <TabsTrigger key={entry.value} value={entry.value}>{entry.label}</TabsTrigger>)}
       </TabsList>
@@ -838,8 +846,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
               <h2 className="font-semibold">{inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item"}</h2>
               {selectedPage?.type === "dashboard" && <p>Edit this page visually below.</p>}
               {selected?.kind === "application" && <p>{source.body.description}</p>}
-              {selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
-                <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}:${compiled.generation}`} source={source}
+              {/* The visual editors measure their container, so they are drawn only while the Design tab is showing; their edits live in the draft history. */}
+              {tab === "design" && selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
+                <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}`} source={source}
                   compiledSource={compiled.source}
                   platformBlockCatalogue={platformBlockCatalogue}
                   fieldInputControlReleases={fieldInputControlReleases}

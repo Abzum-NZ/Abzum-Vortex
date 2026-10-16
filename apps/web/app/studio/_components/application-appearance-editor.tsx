@@ -22,6 +22,7 @@ type Props = Readonly<{
   onPendingChange: (pending: boolean) => void;
   onApply: (expected: ApplicationSourceDocument, next: ApplicationSourceDocument) => boolean;
 }>;
+import { tokenKindName, tokenName } from "../_lib/studio-labels";
 const inputClass = "w-full";
 
 function TokenControls({ value, disabled, colors, assets, change }: {
@@ -46,7 +47,7 @@ function TokenControls({ value, disabled, colors, assets, change }: {
     case "color_pair": return <>
       {text("Light colour", value.light, (light) => change({ ...value, light }))}
       {text("Dark colour", value.dark, (dark) => change({ ...value, dark }))}
-      <p className="text-sm">Use a six-digit hex colour or oklch(). The registered colour role is preserved.</p>
+      <p className="text-sm">Use a six-digit hex colour such as #1a73e8, or an oklch() colour.</p>
     </>;
     case "typography": return <>
       {text("Font family key", value.family, (family) => change({ ...value, family }))}
@@ -70,9 +71,9 @@ function TokenControls({ value, disabled, colors, assets, change }: {
     case "focus": return <>
       {color(value.color_token, (color_token) => change({ ...value, color_token }))}
       {number("Focus width (rem)", value.width_rem, 0, "any", (width_rem) => change({ ...value, width_rem }))}
-      <p className="text-sm">Focus must remain visible. The server checks width and contrast.</p>
+      <p className="text-sm">The focus outline must stay visible. Width and contrast are checked for you.</p>
     </>;
-    case "asset": return <label className="block space-y-1"><span>Public platform asset</span>
+    case "asset": return <label className="block space-y-1"><span>Image from the platform</span>
       <NativeSelect className={inputClass} value={value.asset_id} disabled={disabled}
         onChange={(event) => {
           const chosen = assets.find((asset) => asset === event.target.value);
@@ -116,7 +117,7 @@ export function ApplicationAppearanceEditor(props: Props) {
     setFeedback(undefined);
     setBusy(false);
     props.onPendingChange(studioAppearanceValueKey(valuesRef.current) !== baselineKey);
-    setMessage("Appearance edits are preserved. Validate again after the saved-draft read finishes.");
+    setMessage("Your appearance changes are kept. Check them again once the draft has loaded.");
   }, [props.validationEpoch, props.onPendingChange, baselineKey]);
 
   useEffect(() => {
@@ -130,7 +131,7 @@ export function ApplicationAppearanceEditor(props: Props) {
     setFeedback(undefined);
     setBusy(true);
     props.onPendingChange(true);
-    setMessage("Reading the pinned theme with current draft permissions…");
+    setMessage("Reading the theme…");
     const request = { rootId: props.rootId, expectedDraftRevision: props.draftRevision, tokenOverrides: initial };
     void validateStudioApplicationAppearance(props.organizationId, request).then((result) => {
       if (!active.current || ticket !== generation.current || epoch !== validationEpoch.current) return;
@@ -140,13 +141,13 @@ export function ApplicationAppearanceEditor(props: Props) {
         setDescriptors(result);
         feedbackEpoch.current = epoch;
         setFeedback(result);
-        setMessage(result.valid ? "Edit an override, then validate it before applying." : "The server found theme validation failures.");
+        setMessage(result.valid ? "Change a value, then check it before applying." : "Some values are not allowed. See below.");
       } else setMessage(result.kind === "conflict"
-        ? "The saved revision changed. Reopen explicitly; local edits are preserved."
-        : "Appearance is unavailable for the current draft, permission or pinned theme.");
+        ? "The saved draft changed. Choose Revert to saved, then try again. Your changes are kept."
+        : "The appearance cannot be read with your access or for this draft's theme.");
     }).catch(() => {
       if (active.current && ticket === generation.current && epoch === validationEpoch.current)
-        setMessage("Appearance could not be verified. Local edits are preserved.");
+        setMessage("The appearance could not be checked. Your changes are kept.");
     }).finally(() => {
       if (active.current && ticket === generation.current && epoch === validationEpoch.current) {
         setBusy(false);
@@ -167,19 +168,19 @@ export function ApplicationAppearanceEditor(props: Props) {
     setFeedback(undefined);
     setBusy(false);
     props.onPendingChange(studioAppearanceValueKey(next) !== baselineKey);
-    setMessage("Unapplied appearance edits. Validate before applying, or discard them.");
+    setMessage("Changes not applied yet. Check them before applying, or discard them.");
   };
   const validate = async () => {
     if (props.disabled || busy) return;
     const request = parseStudioAppearanceRequest({ rootId: props.rootId,
       expectedDraftRevision: props.draftRevision, tokenOverrides: values });
-    if (request === undefined) { setFeedback(undefined); setMessage("Enter valid values for every edited token."); return; }
+    if (request === undefined) { setFeedback(undefined); setMessage("Enter a valid value for every changed setting."); return; }
     const ticket = ++generation.current;
     const epoch = validationEpoch.current;
     setBusy(true);
     props.onPendingChange(true);
     setFeedback(undefined);
-    setMessage("Validating contrast, focus, references and public assets…");
+    setMessage("Checking contrast, focus and images…");
     try {
       const result = await validateStudioApplicationAppearance(props.organizationId, request);
       if (!active.current || ticket !== generation.current || epoch !== validationEpoch.current ||
@@ -192,14 +193,14 @@ export function ApplicationAppearanceEditor(props: Props) {
         setDescriptors(result);
         feedbackEpoch.current = epoch;
         setFeedback(result);
-        setMessage(result.valid ? "Server validation passed. Apply records one local history entry."
-          : "The server found theme validation failures. No changes were applied.");
+        setMessage(result.valid ? "The values are allowed. Apply puts them in your draft."
+          : "Some values are not allowed, so nothing was applied. See below.");
       } else setMessage(result.kind === "conflict"
-        ? "The saved revision changed. Local edits are preserved; reopen explicitly."
-        : "The current draft, permission or theme was refused. No changes were applied.");
+        ? "The saved draft changed. Your changes are kept; choose Revert to saved, then try again."
+        : "This draft, your access or the theme was refused, so nothing was applied.");
     } catch {
       if (active.current && ticket === generation.current && epoch === validationEpoch.current)
-        setMessage("Validation could not be verified. Local edits are preserved.");
+        setMessage("The check could not be completed. Your changes are kept.");
     } finally {
       if (active.current && ticket === generation.current && epoch === validationEpoch.current) {
         setBusy(false);
@@ -215,7 +216,7 @@ export function ApplicationAppearanceEditor(props: Props) {
       : applyStudioAppearance(props.source, props.rootId, props.draftRevision, request, feedback);
     if (next === undefined || !props.onApply(props.source, next)) {
       setFeedback(undefined);
-      setMessage("The draft or submitted values changed. Validate the current appearance again.");
+      setMessage("The draft or the values changed. Check the appearance again.");
     }
   };
   const colors = descriptors?.tokens.filter((token) => token.inherited.kind === "color_pair").map((token) => token.key) ?? [];
@@ -223,7 +224,7 @@ export function ApplicationAppearanceEditor(props: Props) {
   const describe = (code: string) => code.toLowerCase().replaceAll("_", " ");
   return <section className="space-y-4" aria-label="Application appearance" aria-busy={busy}>
     <h2 className="font-semibold">Appearance</h2>
-    <p className="text-sm">Only the current pinned theme's tokens can be overridden. Its release, selection and colour roles remain unchanged.</p>
+    <p className="text-sm">Adjust individual colours, fonts and borders of this application's theme. Everything you leave alone keeps the theme's own value.</p>
     <p role="status" aria-live="polite">{message}</p>
     {failures.filter((failure) => failure.tokenKey === undefined).length > 0 &&
       <ul role="alert" className="list-disc pl-5">
@@ -237,21 +238,21 @@ export function ApplicationAppearanceEditor(props: Props) {
       const errorId = `${id}-${index}-errors`;
       return <fieldset key={token.key} className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"
         aria-describedby={errors.length === 0 ? undefined : errorId}>
-        <legend className="px-1 font-medium">{token.key} ({token.inherited.kind.replaceAll("_", " ")})</legend>
+        <legend className="px-1 font-medium">{tokenName(token.key)} ({tokenKindName(token.inherited.kind)})</legend>
         <label className="flex items-center gap-2"><Checkbox checked={overridden} disabled={props.disabled}
           onCheckedChange={(checked) => {
             const next = { ...values };
             if (checked) next[token.key] = structuredClone(token.inherited);
             else delete next[token.key];
             update(next);
-          }} />Override this token</label>
+          }} />Change this setting</label>
         {value.kind === token.inherited.kind ? <TokenControls value={value}
           disabled={props.disabled || !overridden} colors={colors} assets={descriptors.publicAssetIds}
           change={(next) => update({ ...values, [token.key]: next })} />
-          : <p role="alert">The stored override has an invalid kind. Reset it to the inherited token.</p>}
+          : <p role="alert">The saved value for this setting is not valid. Reset it to the theme's value.</p>}
         <Button type="button" disabled={props.disabled || !overridden} onClick={() => {
           const next = { ...values }; delete next[token.key]; update(next);
-        }}>Reset override</Button>
+        }}>Reset to the theme's value</Button>
         {errors.length > 0 && <ul id={errorId} role="alert" className="list-disc pl-5">
           {errors.map((failure, errorIndex) => <li key={errorIndex}>{describe(failure.code)}.</li>)}
         </ul>}
@@ -259,12 +260,12 @@ export function ApplicationAppearanceEditor(props: Props) {
     })}
     <div className="flex flex-wrap gap-2">
       <Button type="button" disabled={props.disabled || busy}
-        onClick={validate}>Validate appearance</Button>
+        onClick={validate}>Check</Button>
       <Button type="button" disabled={props.disabled || busy || !changed || feedback?.valid !== true || feedbackEpoch.current !== props.validationEpoch}
-        onClick={apply}>Apply appearance</Button>
+        onClick={apply}>Apply</Button>
       <Button type="button" disabled={props.disabled || (!changed && !busy)}
-        onClick={() => update(structuredClone(props.source.body.theme.token_overrides))}>Discard appearance edits</Button>
+        onClick={() => update(structuredClone(props.source.body.theme.token_overrides))}>Discard</Button>
     </div>
-    <p className="text-sm">Applying affects local history only. Save persists through the current protected writer; publication and installation remain separate.</p>
+    <p className="text-sm">Apply puts the change in your draft. Save keeps it. Publishing and installing are separate steps.</p>
   </section>;
 }

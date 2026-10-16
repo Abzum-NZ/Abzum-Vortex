@@ -105,7 +105,7 @@ const loadMessage = (result: StudioApplicationFirstInstallLoadResult): string =>
   }
   if (result.kind === "unavailable") {
     switch (result.reason) {
-      case "release_not_published": return "This exact revision is not currently available as a published release.";
+      case "release_not_published": return "This version is not currently published.";
       case "already_installed": return "This application already has an installed release. Use its upgrade flow.";
       case "installation_incomplete": return "The installation bindings are mixed or incomplete and cannot be safely continued here.";
       case "setup_unavailable": return "The exact release has no supported complete record-policy setup target.";
@@ -136,10 +136,10 @@ const commandMessage = (result: StudioApplicationFirstInstallCommandResult): str
     return "The command completed. Reload the protected installation before continuing.";
   if (result.action === "activated")
     return result.postCommit.kind === "observed"
-      ? `Activation committed at revision ${result.activeAtCommitRevision}; a fresh read observed revision ${result.postCommit.activeReleaseRevision}.`
-      : `Activation committed at revision ${result.activeAtCommitRevision}, but a fresh read was unavailable. Reload before continuing.`;
+      ? "The application is switched on."
+      : "The application was switched on, but its state could not be read back. Reload to confirm.";
   return result.postCommit.kind === "observed"
-    ? `The selected release was already active at commit. A fresh read observed revision ${result.postCommit.activeReleaseRevision}.`
+    ? "This version was already switched on."
     : "Activation returned unchanged, but its fresh observation was unavailable. Reload before continuing.";
 };
 
@@ -494,50 +494,51 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
       <h2 className="font-semibold">Protected reload required</h2>
       <p>The previous action or current authority is stale or uncertain. Use a read-only reload before deciding what to do next.</p>
       <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => void reload()}>
-        Reload protected setup
+        Reload
       </Button>
     </section>}
     {snapshot === null ? <section className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
-      <h2 className="text-lg font-semibold">First installation unavailable</h2>
+      <h2 className="text-lg font-semibold">First install unavailable</h2>
       <p>{loadMessage(load)}</p>
       {!needsReload && <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => void reload()}>
-        Reload current access and installation
+        Reload
       </Button>}
     </section> : <>
       <section aria-label="Exact published release" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <dl className="space-y-2">
-          <div><dt className="font-semibold">Application</dt><dd>{snapshot.selected.definitionKey}</dd></div>
-          <div><dt className="font-semibold">Published version and revision</dt><dd>{snapshot.selected.releaseVersion} · revision {snapshot.selected.releaseRevision}</dd></div>
-          <div><dt className="font-semibold">Validation contract</dt><dd>{snapshot.selected.validationContractVersion}</dd></div>
-          <div><dt className="font-semibold">Registration state</dt><dd>{snapshot.registrationState.replaceAll("_", " ")}</dd></div>
+          <div><dt className="font-semibold">Published version</dt><dd>{snapshot.selected.releaseVersion}</dd></div>
         </dl>
         <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Application technical name</dt><dd>{snapshot.selected.definitionKey}</dd></div>
+          <div><dt className="font-semibold">Release revision</dt><dd>{snapshot.selected.releaseRevision}</dd></div>
+          <div><dt className="font-semibold">Validation contract</dt><dd>{snapshot.selected.validationContractVersion}</dd></div>
+          <div><dt className="font-semibold">Registration state</dt><dd>{snapshot.registrationState.replaceAll("_", " ")}</dd></div>
           <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
           <div><dt className="font-semibold">Application root</dt><dd className="break-all">{snapshot.rootId}</dd></div>
           <div><dt className="font-semibold">Selected content fingerprint</dt><dd className="break-all"><code>{snapshot.selected.contentFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Selected resolution fingerprint</dt><dd className="break-all"><code>{snapshot.selected.resolutionFingerprint}</code></dd></div>
         </dl></TechnicalDetails>
-        <p>The selection is pinned to this exact published revision. The browser snapshot is a compare-and-swap claim, never installation authority.</p>
+        <p>This installs exactly the version shown above.</p>
       </section>
 
       {snapshot.registrationState === "unprepared" || snapshot.registrationState === "registration_aligned_partial"
         ? <section aria-label="Prepare exact first installation" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
-          <h2 className="text-lg font-semibold">Prepare inactive installation</h2>
-          <p>Preparation may commit Access registration before provisioning every exact Module. It does not activate the Application. If the result is uncertain, reload current state instead of repeating preparation.</p>
+          <h2 className="text-lg font-semibold">Prepare the installation</h2>
+          <p>Preparing registers the application and sets up its modules. It does not switch the application on. If the result is unclear, reload instead of preparing again.</p>
           <Button type="button" variant="outline" size="sm" name="application.first_install.prepare" disabled={mutationBlocked}
             aria-busy={pending === "prepare"}
             onClick={() => void prepare()}>
-            {pending === "prepare" ? "Preparing exact release…" : "Prepare this exact published release"}
+            {pending === "prepare" ? "Preparing…" : "Prepare this version"}
           </Button>
         </section>
         : null}
 
       {setup !== null && <section aria-label="Provisioned record policy setup" className="space-y-4">
         <div className="rounded-xl border bg-card text-card-foreground p-4">
-          <h2 className="text-lg font-semibold">Provisioned inactive setup</h2>
-          <p>Registration revision {setup.registrationRevision}. Organization settings revision {setup.organizationLimits.settingsRevision}.</p>
+          <h2 className="text-lg font-semibold">Setup before switching on</h2>
           <p>Allowed actions: {setup.organizationLimits.allowedActions.join(", ")}.</p>
-          <p>Each initial policy is created once. Existing configured policies are read-only here.</p>
+          <p>Each starting policy is created once. A policy that already exists cannot be changed here.</p>
+          <TechnicalDetails><p>Registration revision {setup.registrationRevision}. Organization settings revision {setup.organizationLimits.settingsRevision}.</p></TechnicalDetails>
         </div>
         {setup.targets.map((target, index) => {
           const allowedTargetActions = targetAllowedActions(snapshot, target);
@@ -545,17 +546,19 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
           const page = archivePages[target.storageContractId];
           const inputPrefix = `first-install-${target.storageContractId}`;
           return <article key={target.storageContractId} aria-label={`Record type setup target ${index + 1}`} className="space-y-4 rounded-xl border bg-card text-card-foreground p-4">
-            <h3 className="font-semibold">Target {index + 1}: {target.storageContractId}</h3>
+            <h3 className="font-semibold">Data store {index + 1}</h3>
+            <TechnicalDetails><p className="break-all">Storage contract: {target.storageContractId}</p></TechnicalDetails>
             <p>Scope: {target.storageScope === "organization_shared" ? "Organization-shared" : "Application-contained"}.</p>
-            <p>Bound Module count: {target.sourceBindings.length}.</p>
+            <p>Modules using it: {target.sourceBindings.length}.</p>
             {target.policy.state === "configured" ? <div className="space-y-2 rounded-lg bg-muted p-3">
-              <p>Initial policy is configured at revision {target.policy.policyRevision}. This setup view does not edit it.</p>
+              <p>A starting policy is already set. It cannot be changed here.</p>
+              <TechnicalDetails><p>Policy revision {target.policy.policyRevision}.</p></TechnicalDetails>
               <p>Action: {target.policy.policyBody.action}.</p>
               <p>Maximum age: {target.policy.policyBody.maxAgeDays ?? "unlimited"} days; maximum count: {target.policy.policyBody.maxCount ?? "unlimited"}.</p>
               {target.policy.policyBody.action === "archive_workflow" && <p>Archive workflow {target.policy.policyBody.archiveWorkflowId} through the configured Connection.</p>}
             </div> : allowedTargetActions.length === 0
               ? <p role="status" className="rounded-xl border bg-card text-card-foreground p-3">
-                No policy action allowed by current organization limits can be applied to this target in the selected published release. Activation remains unavailable.
+                None of the actions your organization allows can be used for this data store in this version, so it cannot be switched on yet.
               </p>
               : <form className="space-y-3" onSubmit={(event) => void savePolicy(event, target.storageContractId, draft, snapshot)}>
               <label className="block space-y-1" htmlFor={`${inputPrefix}-action`}>

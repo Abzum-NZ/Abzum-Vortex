@@ -4,7 +4,7 @@ import { Button } from "@vortex/ui/components/button";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { ConditionNode } from "@vortex/platform/schema";
 import {
-  StudioConditionControls, locateStudioVisibilityDraftIssue, parseStudioApplicationConditionContext,
+  StudioConditionControls, parseStudioApplicationConditionContext,
   projectStudioVisibilityEditor, resolveStudioVisibilityTarget, sameStudioVisibilityValue, sameStudioVisibilityCondition,
   validateStudioVisibilityCondition,
   studioSemanticSelectionKey, type StudioApplicationConditionContext, type StudioCompositionContext,
@@ -39,7 +39,7 @@ const sameSnapshot = (left: StudioVisibilityWorkspaceSnapshot, right: StudioVisi
 export function ApplicationVisibilityConditionEditor(props: Props) {
   const [response, setResponse] = useState<Response | null>(null);
   const [buffer, setBuffer] = useState<Buffer | null>(null);
-  const [status, setStatus] = useState("Reading saved field metadata…");
+  const [status, setStatus] = useState("Reading the fields this page can use…");
   const [message, setMessage] = useState("");
   const [reload, setReload] = useState(0);
   const [controlsEpoch, setControlsEpoch] = useState(0);
@@ -51,7 +51,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
   useEffect(() => {
     const requestGeneration = ++generation.current;
     setResponse(null);
-    if (props.busy) { setStatus("Waiting for the saved draft operation."); return; }
+    if (props.busy) { setStatus("Waiting for the save to finish."); return; }
     const snapshot = props.readSnapshot();
     const target = snapshot === null ? undefined : resolveStudioVisibilityTarget(snapshot.context.source, snapshot.selection);
     const savedTarget = snapshot === null ? undefined : resolveStudioVisibilityTarget(snapshot.saved.source, snapshot.selection);
@@ -60,10 +60,10 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       snapshot.saved.organizationId !== snapshot.context.organizationId || snapshot.saved.rootId !== snapshot.context.rootId ||
       snapshot.saved.key !== snapshot.context.key || snapshot.saved.draftRevision !== snapshot.context.draftRevision ||
       JSON.stringify(snapshot.context.source.body.module_bindings) !== JSON.stringify(snapshot.saved.source.body.module_bindings)) {
-      setStatus("This placement needs an existing saved detail page and unchanged saved Module bindings. Its source is preserved.");
+      setStatus("A visibility rule needs a saved detail page and the same modules as the saved draft. Save your changes first.");
       return;
     }
-    setStatus("Reading saved field metadata…");
+    setStatus("Reading the fields this page can use…");
     void resolveStudioApplicationConditionContext(snapshot.context.organizationId, {
       rootId: snapshot.context.rootId, draftRevision: snapshot.context.draftRevision, pageAlias: target.pageAlias,
     }).then((result) => {
@@ -71,16 +71,16 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       if (requestGeneration !== generation.current || current === null || !sameSnapshot(snapshot, current)) return;
       const metadata = result.kind === "available" ? parseStudioApplicationConditionContext(result.context) : undefined;
       if (metadata === undefined) {
-        setStatus(result.kind === "conflict" ? "The saved draft changed. Reopen explicitly; your inputs are preserved."
-          : result.kind === "refused" ? "Saved field metadata is unavailable with current permissions. Your inputs are preserved."
-            : "Saved field metadata is temporarily unavailable. Your inputs are preserved.");
+        setStatus(result.kind === "conflict" ? "The saved draft changed. Choose Revert to saved, then try again. What you typed is kept."
+          : result.kind === "refused" ? "The fields for this rule are not available with your access. What you typed is kept."
+            : "The fields for this rule are temporarily unavailable. What you typed is kept.");
         return;
       }
       if (metadata.sourceFingerprint !== snapshot.saved.sourceFingerprint ||
         metadata.publishedRevision !== (snapshot.saved.publishedRevision ?? null) ||
         metadata.createdAt !== snapshot.saved.createdAt || metadata.updatedAt !== snapshot.saved.updatedAt ||
         projectStudioVisibilityEditor(snapshot.context, snapshot.selection, metadata).kind === "stale") {
-        setStatus("The saved context changed. Reopen explicitly; your inputs are preserved.");
+        setStatus("The saved draft changed. Choose Revert to saved, then try again. What you typed is kept.");
         return;
       }
       const nextResponse = { metadata, snapshot, generation: requestGeneration };
@@ -93,7 +93,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       setStatus("");
     }).catch(() => {
       if (requestGeneration === generation.current)
-        setStatus("Saved field metadata is temporarily unavailable. Your inputs are preserved.");
+        setStatus("The fields for this rule are temporarily unavailable. What you typed is kept.");
     });
     return () => { generation.current += 1; };
   }, [props.context, selectionKey, props.saved, props.busy, reload]);
@@ -123,42 +123,41 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
   const apply = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (latestProps.current.disabled || buffer === null || !isCurrentResponse()) {
-      setMessage("The draft, selection or field context changed. Your inputs are preserved.");
+      setMessage("The draft or your selection changed. What you typed is kept.");
       return;
     }
-    if (!buffer.validation.isValid) { setMessage("Resolve the located condition issues before applying."); return; }
+    if (!buffer.validation.isValid) { setMessage("Fix the problems listed below before applying."); return; }
     const result = props.onCommand(buffer.response.snapshot.context, buffer.response.snapshot.selection,
       buffer.response.metadata, buffer.value, isCurrentResponse);
     if (result.kind === "applied" || result.kind === "noop") {
       props.onPendingChange(false);
       setBuffer(null);
       setControlsEpoch((value) => value + 1);
-      setMessage(result.kind === "applied" ? "Visibility condition applied to one local history entry. Save to persist it."
-        : "The visibility condition is unchanged.");
+      setMessage(result.kind === "applied" ? "Visibility rule changed. Save to keep it."
+        : "The visibility rule is unchanged.");
     } else if (result.kind === "invalid") {
-      setMessage(result.issues.map((issue) => `${issue.path.join("/")}: ${issue.message}`).join(" "));
-    } else setMessage("The condition could not be applied. Your inputs and source are preserved.");
+      setMessage(result.issues.map((issue) => issue.message).join(" "));
+    } else setMessage("The rule could not be applied. What you typed is kept.");
   };
   const discard = () => {
     if (latestProps.current.busy) return;
     props.onPendingChange(false);
     setBuffer(null);
     setControlsEpoch((value) => value + 1);
-    setMessage("Unapplied visibility edits discarded.");
+    setMessage("Unapplied changes to the rule were discarded.");
   };
   const unsupported = model?.kind === "unsupported";
   const value = buffer === null ? model?.kind === "available" ? model.condition : undefined : buffer.value;
-  const target = model?.kind === "available" ? model.target : resolveStudioVisibilityTarget(props.context.source, props.selection);
-  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Placement visibility condition">
-    <h3 className="font-semibold">Visibility condition</h3>
-    <p className="text-sm">Use fields from this detail page's saved Module release. Visibility controls presentation; permissions remain separate.</p>
+  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Visibility rule">
+    <h3 className="font-semibold">Visibility rule</h3>
+    <p className="text-sm">Show this item only when a field on this page has a chosen value. This only hides or shows the item; who may open the page is set separately.</p>
     {status && <p role="status">{status}</p>}
     {buffer !== null && !isCurrentResponse() &&
-      <p role="status">Your unapplied condition remains visible. Apply is held until its saved context is current.</p>}
+      <p role="status">Your unapplied rule is still shown. Apply is held until the page is up to date.</p>}
     <Button type="button" variant="outline" size="sm" disabled={props.busy}
-      onClick={() => setReload((value) => value + 1)}>Reload field metadata</Button>
-    {unsupported && <p role="status">This existing condition or placement is unsupported. Its source is preserved and read-only.</p>}
-    {model?.kind === "stale" && <p role="status">The saved page or Module bindings changed. Save and reload field metadata before editing.</p>}
+      onClick={() => setReload((value) => value + 1)}>Reload fields</Button>
+    {unsupported && <p role="status">This rule cannot be edited here. It is kept as it is.</p>}
+    {model?.kind === "stale" && <p role="status">The saved page or its modules changed. Save, then reload the fields before editing.</p>}
     {model?.kind === "available" && <form onSubmit={apply} className="space-y-3">
       <fieldset disabled={props.disabled || !isCurrentResponse()} className="space-y-3" onInputCapture={() => {
         if (latestProps.current.disabled || response === null || !isCurrentResponse()) return;
@@ -170,21 +169,19 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
             issues: current?.validation.issues ?? [], isValid: false } }));
       }}>
         <StudioConditionControls key={controlsEpoch} {...(value === undefined ? {} : { value })} context={model.controls}
-          label="Placement visibility controls" onChange={update} />
+          label="Visibility rule" onChange={update} />
         <Button type="button" variant="outline" size="sm" disabled={value === undefined}
-          onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove condition</Button>
-        <Button type="submit" disabled={buffer === null || !buffer.validation.isValid}>Apply visibility condition</Button>
+          onClick={() => update(undefined, { condition: undefined, issues: [], isValid: true })}>Remove rule</Button>
+        <Button type="submit" disabled={buffer === null || !buffer.validation.isValid}>Apply rule</Button>
       </fieldset>
     </form>}
     {buffer !== null && <>
       {buffer.validation.issues.length > 0 && <ul role="status" aria-live="polite">
         {buffer.validation.issues.map((issue, index) => <li key={`${issue.pointer}:${index}`}>
-          {[...(target?.path ?? []), "visibility_condition",
-            ...locateStudioVisibilityDraftIssue(issue.path, buffer.value,
-              target?.placement.visibility_condition, buffer.response.metadata)].join("/")}: {issue.message}
+          Visibility rule: {issue.message}
         </li>)}
       </ul>}
-      <Button type="button" variant="outline" size="sm" disabled={props.busy} onClick={discard}>Discard visibility edits</Button>
+      <Button type="button" variant="outline" size="sm" disabled={props.busy} onClick={discard}>Discard</Button>
     </>}
     <p role="status" aria-live="polite">{message}</p>
   </section>;

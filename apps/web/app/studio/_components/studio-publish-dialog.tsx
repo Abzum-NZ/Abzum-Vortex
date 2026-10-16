@@ -101,7 +101,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
           </div>}
       <DialogFooter>
         {published !== null
-          ? <Button type="button" onClick={() => props.onOpenChange(false)}>Close</Button>
+          ? <Button type="button" onClick={() => props.onOpenChange(false)}>Done</Button>
           : <>
             <Button type="button" variant="outline" disabled={publishing} onClick={() => props.onOpenChange(false)}>Cancel</Button>
             {!hasUnsavedChanges && prepared === null && !preparing && props.problem !== ""

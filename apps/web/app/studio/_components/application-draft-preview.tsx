@@ -80,12 +80,12 @@ export const checkSavedPagePreview = (
   | Readonly<{ kind: "unavailable"; message: string }> => {
   if (result.kind !== "available") {
     return { kind: "unavailable", message: result.kind === "conflict"
-      ? "The saved draft changed. Reopen it explicitly before requesting another preview."
+      ? "The saved draft changed. Choose Revert to saved, then preview again."
       : result.kind === "refused"
         ? result.reason === "dependency_unavailable"
-          ? "The saved draft's required release is unavailable. No substitute theme or component is used."
-          : "The selected saved page could not be previewed with the current permissions and source."
-        : "Preview is temporarily unavailable. Your editing inputs are preserved." };
+          ? "A published version this application needs is not available, so nothing can be previewed."
+          : "This page cannot be previewed with your access."
+        : "Preview is temporarily unavailable. Your changes are kept." };
   }
   const sourceFingerprint = fingerprintSchema.safeParse(result.sourceFingerprint);
   const resolutionFingerprint = fingerprintSchema.safeParse(result.resolutionFingerprint);
@@ -93,7 +93,7 @@ export const checkSavedPagePreview = (
     result.organizationId !== current.organizationId || result.key !== current.key ||
     result.sourceFingerprint !== current.sourceFingerprint ||
     result.selection.pageKey !== request.pageKey || result.selection.stepAlias !== request.stepAlias)
-    return { kind: "unavailable", message: "The preview did not match the saved draft. No preview is shown." };
+    return { kind: "unavailable", message: "The preview did not match the saved draft, so it is not shown." };
   const artifact = parseApplicationPreviewArtifact(result.artifact);
   const page = artifact.composition.pages[0];
   const sourcePage = current.source.body.pages.find((item) => item.key === request.pageKey);
@@ -107,7 +107,7 @@ export const checkSavedPagePreview = (
       !Object.hasOwn(page.composition.stepContent, artifact.activeStepId)
       : artifact.activeStepId !== undefined || page.steps !== undefined ||
         !pageCompositionSchema.safeParse(page.composition).success))
-    return { kind: "unavailable", message: "The preview did not match the requested saved page, step, revision and size." };
+    return { kind: "unavailable", message: "The preview did not match the page, step and size you chose, so it is not shown." };
   return { kind: "available", artifact, resolutionFingerprint: resolutionFingerprint.data };
 };
 
@@ -121,7 +121,7 @@ class PreviewRenderBoundary extends Component<{
   override componentDidCatch() { this.props.onUnavailable(); }
   override render() {
     return this.state.unavailable
-      ? <p role="status">This saved page could not be rendered. No substitute content is shown.</p>
+      ? <p role="status">This page could not be shown. No substitute content is used.</p>
       : this.props.children;
   }
 }
@@ -219,7 +219,7 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
       if (isCurrent(request)) setState({ kind: "available", request, artifact, resolutionFingerprint });
     } catch {
       if (isCurrent(request)) setState({ kind: "unavailable", request,
-        message: "The selected saved page preview could not be verified. Your editing inputs are preserved." });
+        message: "The preview could not be completed. Your changes are kept." });
     } finally {
       if (request.generation === generation.current) pending.current = false;
     }
@@ -229,12 +229,12 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
   const visible = state.kind !== "idle" && context !== null &&
     sameContext(state.request.context, context) && isCurrent(state.request) ? state : null;
   const isPending = visible?.kind === "pending";
-  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Saved draft preview"
+  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Preview"
     aria-busy={isPending}>
-    <h2 className="font-semibold">Saved draft preview</h2>
-    <p className="text-sm">Choose a saved page and, for guided forms, a declared step. Interactions are simulations;
+    <h2 className="text-xl font-semibold">Preview</h2>
+    <p className="text-sm">Choose a page and, for guided forms, a step. This shows the page as last saved. Buttons only simulate;
       nothing is saved, published or installed.</p>
-    <label className="block text-sm">Saved page
+    <label className="block text-sm">Page
       <NativeSelect className="ml-2" value={chosen?.pageKey ?? ""}
         disabled={context === null} onChange={(event) => {
           const current = readContext();
@@ -247,11 +247,11 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
             if (firstStep !== undefined) choose({ context: current, pageKey: page.key, stepAlias: firstStep.id });
           }
         }}>
-        {context === null && <option value="">No saved baseline</option>}
+        {context === null && <option value="">Save your changes to choose a page</option>}
         {context?.source.body.pages.map((page) => <option key={page.key} value={page.key}>{page.name}</option>)}
       </NativeSelect>
     </label>
-    {chosenPage?.type === "guided_form" && <label className="block text-sm">Guided step
+    {chosenPage?.type === "guided_form" && <label className="block text-sm">Step
       <NativeSelect className="ml-2" value={chosen?.stepAlias ?? ""}
         onChange={(event) => {
           const current = readContext();
@@ -264,7 +264,7 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
         {chosenPage.steps.map((step) => <option key={step.id} value={step.id}>{step.name}</option>)}
       </NativeSelect>
     </label>}
-    <fieldset className="flex flex-wrap gap-2"><legend className="mb-2 text-sm">Preview size</legend>
+    <fieldset className="flex flex-wrap gap-2"><legend className="mb-2 text-sm">Screen size</legend>
       {breakpoints.map((size) => <Button key={size} type="button"
         aria-pressed={breakpoint === size} onClick={() => {
           if (selectedBreakpoint.current === size) return;
@@ -274,23 +274,23 @@ export function ApplicationDraftPreview({ context, readContext, platformBlockCat
         }}>{size === "desktop" ? "Desktop" : size === "tablet" ? "Tablet" : "Phone"}</Button>)}
     </fieldset>
     <Button type="button" variant="outline" size="sm" disabled={context === null || chosen === null || isPending}
-      onClick={preview}>Preview saved page</Button>
+      onClick={preview}>Show preview</Button>
     <p role="status" aria-live="polite">{context === null
-      ? "Preview requires a verified saved baseline with no unsaved or pending inputs. Finish editing or reopen the saved draft explicitly."
-      : visible?.kind === "pending" ? "Reading the selected saved page preview…"
+      ? "Save your changes first: the preview shows the saved draft."
+      : visible?.kind === "pending" ? "Preparing the preview…"
         : visible?.kind === "unavailable" ? visible.message
-          : visible?.kind === "available" ? `Saved revision ${visible.artifact.draftRevision} preview. ${simulation}`
-            : "Choose a page, step and size, then request its saved preview."}</p>
+          : visible?.kind === "available" ? `Preview of the saved draft. ${simulation}`
+            : "Choose a page and a screen size, then show the preview."}</p>
     {visible?.kind === "available" && <PreviewRenderBoundary key={visible.request.generation}
       onUnavailable={() => {
         if (isCurrent(visible.request)) setState({ kind: "unavailable", request: visible.request,
-          message: "This saved page could not be rendered. No substitute content is shown." });
+          message: "This page could not be shown. No substitute content is used." });
       }}>
       <ApplicationPreview artifact={visible.artifact} registry={registry}
         fieldInputControlReleases={fieldInputControlReleases}
         platformThemeTokens={platformThemeTokens}
         breakpoint={visible.request.breakpoint} onSimulation={() => {
-          if (isCurrent(visible.request)) setSimulation("Simulated interaction only. No business action was performed.");
+          if (isCurrent(visible.request)) setSimulation("Simulated only: nothing was done.");
         }} />
     </PreviewRenderBoundary>}
   </section>;
