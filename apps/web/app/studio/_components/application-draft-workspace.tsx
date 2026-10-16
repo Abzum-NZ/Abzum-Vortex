@@ -28,6 +28,7 @@ import {
   projectStudioFlowPresentationMoves,
   resolveStudioSelectionInspectorContext,
   studioSemanticSelectionKey,
+  traverseStudioSemanticSelectionDraft,
   type StudioStoredApplicationDraft,
   type StudioCompileFailure,
   type StudioCompositionCommand,
@@ -41,6 +42,7 @@ import {
   type StudioFlowSettingCommand,
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
+import type { StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
@@ -61,7 +63,7 @@ import { StandardPageAdoption } from "./standard-page-adoption";
 import { StudioModulesPanel } from "./studio-modules-panel";
 import { useStudioBusy, type StudioBusyExcept } from "./use-studio-busy";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
-import type { StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
+import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
 import {
   sameStudioApplicationSourceImportSnapshot,
   type StudioApplicationSourceImportSnapshot,
@@ -76,6 +78,15 @@ const ApplicationFlowCanvas = dynamic(
 const ApplicationPagePuckEditor = dynamic(
   () => import("@vortex/ui/studio/page-puck-editor").then((module) => module.ApplicationPagePuckEditor),
   { ssr: false });
+
+/** The application frame the canvas draws the page inside, from the compiled draft. */
+const canvasFrameFor = (frames: StudioApplicationCanvasFrames | null, pageAlias: string): StudioCanvasFrame | undefined => {
+  const page = frames?.pages[pageAlias];
+  return frames === null || page === undefined ? undefined : {
+    applicationName: frames.applicationName, shells: frames.shells,
+    theme: frames.theme as StudioCanvasFrame["theme"], navigation: frames.navigation, ...page,
+  };
+};
 
 export type StudioWorkspaceTab = "design" | "preview" | "modules" | "history" | "page-adoption";
 const workspaceTabs: readonly Readonly<{ value: StudioWorkspaceTab; label: string }>[] = [
@@ -95,6 +106,7 @@ type WorkspaceProps = Readonly<{
       initialTab?: string | undefined;
       searchMetadata?: StudioApplicationSearchMetadata | null;
       pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
+      canvasFrames?: StudioApplicationCanvasFrames | null;
       compileFailure?: StudioCompileFailure | null }>);
 
 type PublicationSnapshot = Readonly<{
@@ -126,11 +138,13 @@ class StudioSaveError extends Error {
 type CompiledView = Readonly<{
   source: StudioStoredApplicationDraft["source"];
   slots: StudioApplicationCompiledPageSlots | null;
+  frames: StudioApplicationCanvasFrames | null;
   failure: StudioCompileFailure | null;
   generation: number;
 }>;
 type SavedRecompilation = Readonly<{
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
+  canvasFrames: StudioApplicationCanvasFrames | null;
   searchMetadata: StudioApplicationSearchMetadata | null;
   compileFailure: StudioCompileFailure | null;
 }>;
@@ -155,17 +169,19 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         initialTab={isWorkspaceTab(props.initialTab) ? props.initialTab : "design"}
         initialSearchMetadata={props.searchMetadata ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
+        canvasFrames={props.canvasFrames ?? null}
         compileFailure={props.compileFailure ?? null}
         platformBlockCatalogue={props.platformBlockCatalogue}
         fieldInputControlReleases={props.fieldInputControlReleases}
         platformThemeTokens={props.platformThemeTokens} />;
 }
 
-function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initialSearchMetadata, pageCompiledSlots, compileFailure,
-  platformBlockCatalogue, fieldInputControlReleases, platformThemeTokens }: {
+function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initialSearchMetadata, pageCompiledSlots, canvasFrames,
+  compileFailure, platformBlockCatalogue, fieldInputControlReleases, platformThemeTokens }: {
   organizationId: string; draft: StudioStoredApplicationDraft; initialTab: StudioWorkspaceTab;
   initialSearchMetadata: StudioApplicationSearchMetadata | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
+  canvasFrames: StudioApplicationCanvasFrames | null;
   compileFailure: StudioCompileFailure | null;
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
   fieldInputControlReleases: FieldInputControlReleaseMap;
@@ -182,6 +198,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const publicationEpoch = useRef(0);
   const publicationRequest = useRef<{ epoch: number; cancelled: boolean } | null>(null);
   const [tab, setTab] = useState<StudioWorkspaceTab>(initialTab);
+  const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   const [publishOpen, setPublishOpen] = useState(false);
   const [publicationNote, setPublicationNote] = useState("");
   const [publicationProblem, setPublicationProblem] = useState("");
@@ -216,11 +233,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const [selected, setSelected] = useState(() => selection.getSelection());
   const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(initialSearchMetadata);
   const [compiled, setCompiled] = useState<CompiledView>(() =>
-    ({ source: draft.source, slots: pageCompiledSlots, failure: compileFailure, generation: 0 }));
+    ({ source: draft.source, slots: pageCompiledSlots, frames: canvasFrames, failure: compileFailure, generation: 0 }));
   const searchRefresh = useRef(0);
   const [refreshingSearch, setRefreshingSearch] = useState(false);
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("");
+  // The selection the name and description fields were loaded for; a field loaded for another item is never an unapplied edit.
+  const [labelKey, setLabelKey] = useState("");
   const [description, setDescription] = useState("");
   const [themeOverrideProblems, setThemeOverrideProblems] = useState(false);
   const [appearanceEpoch, setAppearanceEpoch] = useState(0);
@@ -240,9 +259,24 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
     (selected?.kind === "application" || (selected?.kind === "page" && selectedPage !== undefined));
   const currentLabel = selected?.kind === "application" ? source.body.name : selectedPage?.name ?? "";
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
-  useEffect(() => { setLabel(currentLabel); setDescription(source.body.description); },
+  // The canvas draws the selected page, or the page that holds the selected block.
+  const placementPages = useMemo(() => {
+    const owners = new Map<string, string>();
+    traverseStudioSemanticSelectionDraft({ rootId: state.rootId, source }, ({ phase, node }) => {
+      if (phase === "enter" && node.kind === "placement" && node.owner.kind === "page")
+        owners.set(node.selection.placementAlias, node.owner.pageAlias);
+    });
+    return owners;
+  }, [state.rootId, source]);
+  const canvasPageAlias = selected?.kind === "page" ? selected.pageAlias
+    : selected?.kind === "placement" ? placementPages.get(selected.placementAlias) : undefined;
+  const canvasPage = canvasPageAlias === undefined ? undefined
+    : source.body.pages.find((page) => page.id === canvasPageAlias);
+  const canvasPageRef = useRef(canvasPage?.id);
+  canvasPageRef.current = canvasPage?.id;
+  useEffect(() => { setLabel(currentLabel); setDescription(source.body.description); setLabelKey(selectionKey); },
     [selectionKey, currentLabel, source.body.description]);
-  const pendingLabels = editable && (label !== currentLabel ||
+  const pendingLabels = editable && labelKey === selectionKey && (label !== currentLabel ||
     (selected?.kind === "application" && description !== source.body.description));
 
   // Every pending input or in-flight request in the workspace lives in this one place; a change invalidates previews.
@@ -578,9 +612,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const applyPuckPageEdit = (expectedSource: ApplicationSourceDocument,
     nextSource: ApplicationSourceDocument) => {
     const current = history.getState();
-    const currentSelection = selection.getSelection();
-    if (!active.current || busy.any() || current.isSaving ||
-      currentSelection?.kind !== "page" || currentSelection.pageAlias !== selectedPage?.id ||
+    // The canvas edits the draft it was drawn from; any other change in between makes this one stale.
+    if (!active.current || busy.any() || current.isSaving || canvasPageRef.current === undefined ||
       canonicalJson(expectedSource) !== canonicalJson(current.source)) return;
     const parsed = applicationSourceDocumentSchema.safeParse(nextSource);
     if (!parsed.success) {
@@ -615,7 +648,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       const recompiled = returned.recompiled;
       if (recompiled !== null) {
         setCompiled((previous) => ({ source: returned.draft.source, slots: recompiled.pageCompiledSlots,
-          failure: recompiled.compileFailure, generation: previous.generation + 1 }));
+          frames: recompiled.canvasFrames, failure: recompiled.compileFailure, generation: previous.generation + 1 }));
         searchRefresh.current += 1;
         setSearchMetadata(recompiled.searchMetadata);
       } else {
@@ -659,7 +692,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       savedPreviewDraft.current = result.draft;
       setSearchMetadata(result.searchMetadata);
       setCompiled((previous) => ({ source: result.draft.source, slots: result.pageCompiledSlots,
-        failure: result.compileFailure, generation: previous.generation + 1 }));
+        frames: result.canvasFrames, failure: result.compileFailure, generation: previous.generation + 1 }));
       searchRefresh.current += 1;
       discardSourceImport();
       lifetime.current += 1;
@@ -731,6 +764,22 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
     resetFlowPending();
     reportFlowAppendPending(false);
     return true;
+  };
+  // A selection from the outline or the canvas; unapplied input is discarded only after asking.
+  const chooseSelection = async (next: StudioSemanticSelection | null): Promise<boolean> => {
+    if (busy.is("publication") || busy.is("reopening") || history.getState().isSaving || (busy.any("publication", "reopening") &&
+      !await confirm({
+        title: "Switch to another item?",
+        description: "You have changes that are not applied yet. They are discarded if you switch.",
+        confirmLabel: "Discard and switch",
+      }))) return false;
+    // The name fields follow the new selection after it renders (see `labelKey`).
+    return changeSelection(next);
+  };
+  const selectFromCanvas = (alias: string | null): Promise<boolean> => {
+    const pageAlias = canvasPageRef.current;
+    if (alias !== null) return chooseSelection({ kind: "placement", placementAlias: alias });
+    return pageAlias === undefined ? Promise.resolve(false) : chooseSelection({ kind: "page", pageAlias });
   };
   const agentBlockedReason = (): string | undefined => {
     if (!active.current || busy.anyOf("reopening", "publication")) return "The workspace is busy opening or publishing. Try again in a moment.";
@@ -830,70 +879,35 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
         <StudioThreePaneShell
           topBar={null}
           outline={(closeOutline) => <ul><StudioOutline node={outline} selectedKey={selectionKey} disabled={busy.isRendered("publication")} choose={async (node) => {
-                if (busy.is("publication") || busy.is("reopening") || history.getState().isSaving || (busy.any("publication", "reopening") &&
-                  !await confirm({
-                    title: "Switch to another item?",
-                    description: "You have changes that are not applied yet. They are discarded if you switch.",
-                    confirmLabel: "Discard and switch",
-                  }))) return;
-                if (!changeSelection(node.selection)) return;
-                setLabel(currentLabel);
-                setDescription(source.body.description);
-                closeOutline();
+                if (await chooseSelection(node.selection)) closeOutline();
               }} /></ul>}
           canvas={
-            <section className={selected?.kind === "page"
+            <section className={canvasPage !== undefined
               ? "space-y-3 bg-card text-card-foreground"
               : "space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"} aria-label="Selected item">
-              <h2 className="font-semibold">{inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item"}</h2>
-              {selectedPage?.type === "dashboard" && <p>Edit this page visually below.</p>}
+              <h2 className="font-semibold">{canvasPage !== undefined ? labels.get(`page:${canvasPage.id}`) ?? canvasPage.name
+                : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item"}</h2>
               {selected?.kind === "application" && <p>{source.body.description}</p>}
-              {/* The visual editors measure their container, so they are drawn only while the Design tab is showing; their edits live in the draft history. */}
-              {tab === "design" && selected?.kind === "page" && selectedPage !== undefined && inspector.status === "resolved" &&
-                <ApplicationPagePuckEditor key={`${compositionEpoch}:${selectionKey}`} source={source}
+              {selected?.kind === "placement" && canvasPage === undefined &&
+                <p>This block is part of a layout. Change it in the inspector.</p>}
+              {/* The canvas measures its container, so it is drawn only while the Design tab is showing; its edits live in the draft history. */}
+              {tab === "design" && canvasPage !== undefined && inspector.status === "resolved" &&
+                <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source}
                   compiledSource={compiled.source}
                   platformBlockCatalogue={platformBlockCatalogue}
                   fieldInputControlReleases={fieldInputControlReleases}
                   platformThemeTokens={platformThemeTokens}
-                  pageAlias={selectedPage.id} compiledSlots={compiled.slots?.[selectedPage.id]}
+                  pageAlias={canvasPage.id} compiledSlots={compiled.slots?.[canvasPage.id]}
+                  frame={canvasFrameFor(compiled.frames, canvasPage.id)}
+                  selectedPlacementAlias={selected?.kind === "placement" ? selected.placementAlias : null}
+                  onSelectPlacement={selectFromCanvas}
+                  breakpoint={canvasBreakpoint} onBreakpointChange={setCanvasBreakpoint}
                   disabled={locked || noEdit}
                   compileFailure={compiled.failure}
                   validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
                     rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
                   onThemeOverrideProblems={setThemeOverrideProblems}
                   onChange={applyPuckPageEdit} />}
-              {selected?.kind === "placement" && inspector.status === "resolved" &&
-                <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
-                  selection={selected} disabled={busy.anyRendered("composition") || noEdit}
-                  onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
-              {selected?.kind === "placement" && inspector.status === "resolved" &&
-                <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
-                  selection={selected} saved={savedPreviewDraft.current}
-                  busy={busy.anyOfRendered("publication", "search", "sourceImport", "reopening") || state.isSaving}
-                  disabled={busy.anyRendered("condition") || noEdit}
-                  readSnapshot={readVisibilitySnapshot} onPendingChange={reportConditionPending}
-                  onCommand={(expected, expectedSelection, metadata, condition, isCurrentResponse) => {
-                    const current = history.getState();
-                    const currentSelection = selection.getSelection();
-                    if (!active.current || current.isSaving || busy.any("condition") ||
-                      currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
-                      currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
-                    const currentContext: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
-                      draftRevision: current.draftRevision, localLifetime: lifetime.current,
-                      catalogue: platformBlockCatalogue, source: current.source };
-                    const result = applyStudioVisibilityCondition(expected, currentContext, currentSelection, metadata, condition);
-                    if (result.kind !== "applied") return result;
-                    const latest = history.getState();
-                    const latestSelection = selection.getSelection();
-                    if (!active.current || latest.isSaving || busy.any("condition") ||
-                      latest.source !== current.source || latest.rootId !== current.rootId ||
-                      latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
-                      latestSelection?.kind !== "placement" || latestSelection.placementAlias !== currentSelection.placementAlias ||
-                      !isCurrentResponse()) return { kind: "stale" };
-                    if (!history.edit(result.source)) return { kind: "invalid", issues: [] };
-                    setMessage("Visibility rule changed. Save to keep it.");
-                    return result;
-                  }} />}
               {flowPane(busy.anyRendered("flowText", "flowAppend") || noEdit)}
             </section>
           }
@@ -929,9 +943,41 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
                   setLabel(currentLabel); setDescription(source.body.description);
                 }}>Discard</Button>
                 <p className="text-sm">Apply puts the change in your draft. Save keeps it.</p>
-              </form> : <p>{selected?.kind === "flow"
+              </form> : selected?.kind === "placement" ? null : <p>{selected?.kind === "flow"
                 ? "Select a step in the flow to change its text or calculation."
                 : "This item cannot be edited here."}</p>}
+              {selected?.kind === "placement" && inspector.status === "resolved" &&
+                <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
+                  selection={selected} disabled={busy.anyRendered("composition") || noEdit}
+                  onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
+              {selected?.kind === "placement" && inspector.status === "resolved" &&
+                <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
+                  selection={selected} saved={savedPreviewDraft.current}
+                  busy={busy.anyOfRendered("publication", "search", "sourceImport", "reopening") || state.isSaving}
+                  disabled={busy.anyRendered("condition") || noEdit}
+                  readSnapshot={readVisibilitySnapshot} onPendingChange={reportConditionPending}
+                  onCommand={(expected, expectedSelection, metadata, condition, isCurrentResponse) => {
+                    const current = history.getState();
+                    const currentSelection = selection.getSelection();
+                    if (!active.current || current.isSaving || busy.any("condition") ||
+                      currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
+                      currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
+                    const currentContext: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
+                      draftRevision: current.draftRevision, localLifetime: lifetime.current,
+                      catalogue: platformBlockCatalogue, source: current.source };
+                    const result = applyStudioVisibilityCondition(expected, currentContext, currentSelection, metadata, condition);
+                    if (result.kind !== "applied") return result;
+                    const latest = history.getState();
+                    const latestSelection = selection.getSelection();
+                    if (!active.current || latest.isSaving || busy.any("condition") ||
+                      latest.source !== current.source || latest.rootId !== current.rootId ||
+                      latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
+                      latestSelection?.kind !== "placement" || latestSelection.placementAlias !== currentSelection.placementAlias ||
+                      !isCurrentResponse()) return { kind: "stale" };
+                    if (!history.edit(result.source)) return { kind: "invalid", issues: [] };
+                    setMessage("Visibility rule changed. Save to keep it.");
+                    return result;
+                  }} />}
               {selected?.kind === "application" && inspector.status === "resolved" &&
                 <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
                   rootId={state.rootId} draftRevision={state.draftRevision} source={source}
