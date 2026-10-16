@@ -259,13 +259,7 @@ const hasVisibleOwningFormField = (
         (release) => sameId(release.blockId, blockId) && release.releaseVersion === releaseVersion,
       );
       const name = props.name;
-      if (
-        registeredInput &&
-        isRecord(name) &&
-        name.kind === "text" &&
-        name.value === callerInputName
-      )
-        fields.push({ formId, visible });
+      if (registeredInput && name === callerInputName) fields.push({ formId, visible });
     }
     return { currentFormId: formId, ancestorsVisible: visible };
   };
