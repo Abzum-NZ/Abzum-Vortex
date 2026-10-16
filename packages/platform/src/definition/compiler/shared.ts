@@ -26,6 +26,17 @@ export const ID_FIELDS = new Set([
   "connection",
 ]);
 
+/** Every Module an Application source builds on: the Modules it owns, then the Modules it uses. */
+export function applicationModuleKeysOf(body: JsonObject): string[] {
+  return [
+    ...(body.modules as JsonObject[]).map((module) => String(module.key)),
+    ...(body.uses as JsonObject[]).map((use) => String(use.module)),
+  ];
+}
+
+/** An Application accepts the current release of each Module it owns or uses. */
+export const CURRENT_MODULE_RELEASE = { selection: "allowed_range", expression: "*" } as const;
+
 export const DEFAULT_RULE = "vortex.definition.fixed_execution_default";
 export const SYSTEM_RULE = "vortex.definition.system_metadata";
 export const RESOLUTION_RULE = "vortex.definition.immutable_resolution";

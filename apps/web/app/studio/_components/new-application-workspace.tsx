@@ -2,7 +2,6 @@
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
-import { NativeSelect } from "@vortex/ui/components/native-select";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { describeFailure } from "@vortex/platform/schema";
@@ -17,8 +16,8 @@ const inputClass = "w-full";
 export function NewApplicationWorkspace({ organizationId }: { organizationId: string }) {
   const router = useRouter();
   const [inputs, setInputs] = useState<MinimumApplicationInputs>({
-    key: "", name: "", description: "", moduleKey: "", moduleVersionSelection: "exact",
-    moduleVersion: "", roleKey: "", roleName: "", homeName: "",
+    key: "", name: "", description: "", moduleApplication: "", moduleKey: "",
+    roleKey: "", roleName: "", homeName: "",
   });
   const [isCreating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
@@ -38,7 +37,7 @@ export function NewApplicationWorkspace({ organizationId }: { organizationId: st
       Object.entries(current).filter(([name]) => !(name in changes))));
   };
 
-  const textInput = (key: Exclude<keyof MinimumApplicationInputs, "moduleVersionSelection">,
+  const textInput = (key: keyof MinimumApplicationInputs,
     label: string, maxLength: number, hint?: string) => <StudioField label={label} hint={hint} error={fieldErrors[key]}>
       {(control) => <Input {...control} required maxLength={maxLength} value={inputs[key]}
         disabled={isCreating} onChange={(event) => edit({ [key]: event.target.value })} />}
@@ -90,16 +89,9 @@ export function NewApplicationWorkspace({ organizationId }: { organizationId: st
           disabled={isCreating} onChange={(event) => edit({ description: event.target.value })} />}
       </StudioField>
       <fieldset className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4"><legend>Module this application uses</legend>
+        {textInput("moduleApplication", "Technical name of the application that owns the module", 120)}
         {textInput("moduleKey", "Module technical name", 120)}
-        <StudioField label="Which module version">
-          {(control) => <NativeSelect {...control} className={inputClass} value={inputs.moduleVersionSelection} disabled={isCreating}
-            onChange={(event) => edit({ moduleVersionSelection:
-              event.target.value === "allowed_range" ? "allowed_range" : "exact" })}>
-            <option value="exact">One exact version</option><option value="allowed_range">Any version in a range</option>
-          </NativeSelect>}
-        </StudioField>
-        {textInput("moduleVersion", "Version or range", 120)}
-        <p className="text-sm">This records which module the application needs. It does not publish or install the module.</p>
+        <p className="text-sm">This records which module the application builds on. Each published version of this application records the module version it was built with.</p>
       </fieldset>
       {textInput("roleKey", "Access group technical name", 40, "Lowercase letters, digits and underscores.")}
       {textInput("roleName", "Access group name", 60)}

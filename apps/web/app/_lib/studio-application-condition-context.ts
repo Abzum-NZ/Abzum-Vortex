@@ -4,6 +4,7 @@ import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/p
 import {
   applicationRootIdSchema, organizationIdSchema, revisionSchema,
   type IdentitySession,
+  applicationModuleKeys,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
 import { BuilderAuthorityError, createDatabaseDefinitionPublicationService, fingerprintCanonicalValue,
@@ -92,7 +93,7 @@ export const readSavedStudioApplicationConditionContext = async (
           if (matches.length !== 1 || metadata === undefined ||
             !sameUuid(metadata.module.organizationId, scope.organizationId)) return { kind: "temporarily_unavailable" };
           if (metadata.sourceFingerprint !== initial.sourceFingerprint ||
-            metadata.bindingsSignature !== JSON.stringify(initial.source.body.module_bindings)) return { kind: "conflict" };
+            metadata.bindingsSignature !== JSON.stringify(applicationModuleKeys(initial.source))) return { kind: "conflict" };
           if (metadata.bindingsSignature.length > 100_000 || JSON.stringify(metadata).length > 999_000)
             return { kind: "temporarily_unavailable" };
           const final = await readApplicationDefinitionDraft(transaction, scope, command);

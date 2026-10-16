@@ -1,4 +1,5 @@
 "use client";
+import { useReportModuleEditorDirty } from "./module-editor-dirty";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
@@ -63,6 +64,7 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
   const valid = working !== null && localValidation?.isValid === true;
   const staged = !sameModuleBeforeSaveCondition(working, applied);
   const dirty = !sameModuleBeforeSaveCondition(applied, baseline);
+  useReportModuleEditorDirty(dirty || staged);
   const canEdit = context !== undefined && !invalidated;
   const currentResponse = (selection: number, request: number) => active.current &&
     selection === selectionEpoch.current && request === requestEpoch.current;

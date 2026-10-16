@@ -13,7 +13,9 @@ import { connectionTypeSourceDocumentSchema } from "../connections/connection-so
 import {
   moduleSourceContractVersion,
   moduleSourceDocumentSchema,
+  sourceApplicationModuleSchema,
   type ModuleSourceDocument,
+  type SourceApplicationModule,
 } from "./module-source-contracts";
 import { moduleValidationContractVersion } from "./module-contracts";
 import {
@@ -48,6 +50,7 @@ export {
   applicationSourceDocumentSchema,
   connectionTypeSourceDocumentSchema,
   moduleSourceDocumentSchema,
+  sourceApplicationModuleSchema,
   sourceApplicationBodySchema,
   sourcePageDefinitionSchema,
   sourceConditionSchema,
@@ -57,6 +60,10 @@ export {
   sourceProvenanceUnchanged,
 };
 
+/**
+ * Every stored definition source. The Module arm is the internal release unit derived from an
+ * Application's inline Modules (`applicationModuleSources`); nobody authors one directly.
+ */
 export const definitionSourceDocumentSchema = z.discriminatedUnion("kind", [
   moduleSourceDocumentSchema,
   applicationSourceDocumentSchema,
@@ -74,6 +81,7 @@ export type DefinitionSourceDocument = z.infer<typeof definitionSourceDocumentSc
 export type {
   ApplicationSourceDocument,
   ModuleSourceDocument,
+  SourceApplicationModule,
   SourceProvenanceAnnotation,
   SourceApplicationBody,
   SourcePageDefinition,

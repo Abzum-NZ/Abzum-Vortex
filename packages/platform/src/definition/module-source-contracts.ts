@@ -786,10 +786,150 @@ const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
 // Module body and document.
 // ---------------------------------------------------------------------------
 
+/** The fields every Module body declares, inline in an Application or as its internal release unit. */
+const moduleSourceBodyFields = {
+  name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
+  description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+  record_types: sourceProvenanceUnchanged(z.array(moduleSourceRecordTypeSchema).min(1).max(100)),
+  permissions: sourceProvenanceUnchanged(
+    z
+      .array(
+        z
+          .object({
+            id: sourceProvenanceTarget(sourceAliasSchema, ["permissionId"]),
+            key: sourceProvenanceUnchanged(namespacedKeySchema),
+            label: sourceProvenanceUnchanged(labelSchema),
+            description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+            record_type: sourceProvenanceTarget(builderKeySchema.optional(), ["recordTypeId"]),
+            action_kind: sourceProvenanceUnchanged(
+              z.enum([
+                "create",
+                "read",
+                "update",
+                "delete",
+                "restore",
+                "export",
+                "share",
+                "manage",
+                "named",
+              ]),
+            ),
+            named_action: sourceProvenanceUnchanged(builderKeySchema.optional()),
+            administrative: sourceProvenanceUnchanged(z.boolean()),
+            record_scope: sourceProvenanceUnchanged(
+              moduleSourcePermissionRecordScopeSchema.optional(),
+            ),
+            field_policy: sourceProvenanceUnchanged(sourcePermissionFieldPolicySchema.optional()),
+          })
+          .strict()
+          .superRefine((value, context) => {
+            if (value.field_policy !== undefined && value.record_type === undefined)
+              context.addIssue({
+                code: "custom",
+                path: ["field_policy"],
+                message: "Only record permissions may declare a field policy",
+              });
+          }),
+      )
+      .max(100),
+  ),
+  actions: sourceProvenanceUnchanged(z.array(moduleSourceActionSchema).max(100)),
+  events: sourceProvenanceUnchanged(
+    z
+      .array(
+        z
+          .object({
+            id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
+            key: sourceProvenanceUnchanged(namespacedKeySchema),
+            record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
+            carries: sourceProvenanceUnchanged(
+              z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
+            ),
+            personal_or_sensitive_values_allowed: sourceProvenanceUnchanged(z.literal(false)),
+          })
+          .strict(),
+      )
+      .max(100),
+  ),
+  /**
+   * The flows this Module owns (architecture decision 1): its save rules are flows with a
+   * `BeforeSave` trigger and `transaction` execution, and its record actions and reactions are
+   * flows too. Each is authored once, as the same nested task list every flow uses.
+   */
+  flows: sourceProvenanceUnchanged(sourceFlowCollectionSchema, true),
+  extension_points: sourceProvenanceUnchanged(
+    z
+      .array(
+        z
+          .object({
+            id: sourceProvenanceTarget(sourceAliasSchema, ["extensionPointId"]),
+            key: sourceProvenanceUnchanged(builderKeySchema),
+            record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
+            accepts: sourceProvenanceUnchanged(
+              z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
+            ),
+          })
+          .strict(),
+      )
+      .max(100),
+  ),
+  sharing_conditions: sourceProvenanceUnchanged(
+    z.array(moduleSourceSharingConditionSchema).max(100),
+  ),
+  queries: sourceProvenanceUnchanged(z.array(moduleSourceQuerySchema).max(100).default([])),
+};
+
+type ModuleSourceBodyFields = z.infer<z.ZodObject<typeof moduleSourceBodyFields>>;
+
+const refineModuleSourceBody = (value: ModuleSourceBodyFields, context: z.RefinementCtx): void => {
+  // Every named action on a system projection targets a registered protected operation, and no
+  // other record type may target one; standard update is governed by the closed registry.
+  const recordTypes = new Map(value.record_types.map((recordType) => [recordType.key, recordType]));
+  for (const [index, action] of value.actions.entries()) {
+    const recordType = recordTypes.get(action.record_type);
+    if (recordType === undefined) continue;
+    const isProjection = recordType.system_projection !== undefined;
+    const targetsOperation = action.protected_operation !== undefined;
+    if (targetsOperation && !isProjection)
+      context.addIssue({
+        code: "custom",
+        path: ["actions", index, "protected_operation"],
+        message: "Only a system projection record type action targets a protected operation",
+      });
+    else if (isProjection && !targetsOperation)
+      context.addIssue({
+        code: "custom",
+        path: ["actions", index, "tasks"],
+        message: "A system projection record type action targets a registered protected operation",
+      });
+  }
+};
+
+/**
+ * One Module authored inside its Application source (`modules`). The Module key is global: one
+ * Application owns it, and any other Application that needs it names it in `uses`. A Module never
+ * declares its dependencies: the compiler derives them from the qualified references it makes to
+ * its sibling Modules and to the Modules its Application uses.
+ */
+export const sourceApplicationModuleSchema = z
+  .object({
+    id: sourceProvenanceUnchanged(sourceAliasSchema),
+    key: sourceProvenanceUnchanged(namespacedKeySchema),
+    ...moduleSourceBodyFields,
+  })
+  .strict()
+  .superRefine(refineModuleSourceBody);
+
+export type SourceApplicationModule = z.infer<typeof sourceApplicationModuleSchema>;
+
+/**
+ * The internal Module release unit derived from an Application's inline Module: the same body plus
+ * its owning Application and the dependencies derived from its references. It is never authored.
+ */
 const moduleSourceBodySchema = z
   .object({
-    name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
-    description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
+    ...moduleSourceBodyFields,
+    owner_application: sourceProvenanceUnchanged(namespacedKeySchema),
     dependencies: sourceProvenanceUnchanged(
       z
         .array(
@@ -807,93 +947,6 @@ const moduleSourceBodySchema = z
         )
         .max(100),
     ),
-    record_types: sourceProvenanceUnchanged(z.array(moduleSourceRecordTypeSchema).min(1).max(100)),
-    permissions: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              id: sourceProvenanceTarget(sourceAliasSchema, ["permissionId"]),
-              key: sourceProvenanceUnchanged(namespacedKeySchema),
-              label: sourceProvenanceUnchanged(labelSchema),
-              description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
-              record_type: sourceProvenanceTarget(builderKeySchema.optional(), ["recordTypeId"]),
-              action_kind: sourceProvenanceUnchanged(
-                z.enum([
-                  "create",
-                  "read",
-                  "update",
-                  "delete",
-                  "restore",
-                  "export",
-                  "share",
-                  "manage",
-                  "named",
-                ]),
-              ),
-              named_action: sourceProvenanceUnchanged(builderKeySchema.optional()),
-              administrative: sourceProvenanceUnchanged(z.boolean()),
-              record_scope: sourceProvenanceUnchanged(
-                moduleSourcePermissionRecordScopeSchema.optional(),
-              ),
-              field_policy: sourceProvenanceUnchanged(sourcePermissionFieldPolicySchema.optional()),
-            })
-            .strict()
-            .superRefine((value, context) => {
-              if (value.field_policy !== undefined && value.record_type === undefined)
-                context.addIssue({
-                  code: "custom",
-                  path: ["field_policy"],
-                  message: "Only record permissions may declare a field policy",
-                });
-            }),
-        )
-        .max(100),
-    ),
-    actions: sourceProvenanceUnchanged(z.array(moduleSourceActionSchema).max(100)),
-    events: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              id: sourceProvenanceTarget(sourceAliasSchema, ["eventId"]),
-              key: sourceProvenanceUnchanged(namespacedKeySchema),
-              record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
-              carries: sourceProvenanceUnchanged(
-                z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
-              ),
-              personal_or_sensitive_values_allowed: sourceProvenanceUnchanged(z.literal(false)),
-            })
-            .strict(),
-        )
-        .max(100),
-    ),
-    /**
-     * The flows this Module owns (architecture decision 1): its save rules are flows with a
-     * `BeforeSave` trigger and `transaction` execution, and its record actions and reactions are
-     * flows too. Each is authored once, as the same nested task list every flow uses.
-     */
-    flows: sourceProvenanceUnchanged(sourceFlowCollectionSchema, true),
-    extension_points: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              id: sourceProvenanceTarget(sourceAliasSchema, ["extensionPointId"]),
-              key: sourceProvenanceUnchanged(builderKeySchema),
-              record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
-              accepts: sourceProvenanceUnchanged(
-                z.array(z.enum(["field", "action", "choice_option", "link_target"])).min(1),
-              ),
-            })
-            .strict(),
-        )
-        .max(100),
-    ),
-    sharing_conditions: sourceProvenanceUnchanged(
-      z.array(moduleSourceSharingConditionSchema).max(100),
-    ),
-    queries: sourceProvenanceUnchanged(z.array(moduleSourceQuerySchema).max(100).default([])),
     // Optional rather than defaulted so an authored source that declares no contributions
     // keeps the exact fingerprint it had before contributions existed.
     contributions: sourceProvenanceUnchanged(
@@ -902,30 +955,7 @@ const moduleSourceBodySchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    // Every named action on a system projection targets a registered protected operation, and no
-    // other record type may target one; standard update is governed by the closed registry.
-    const recordTypes = new Map(
-      value.record_types.map((recordType) => [recordType.key, recordType]),
-    );
-    for (const [index, action] of value.actions.entries()) {
-      const recordType = recordTypes.get(action.record_type);
-      if (recordType === undefined) continue;
-      const isProjection = recordType.system_projection !== undefined;
-      const targetsOperation = action.protected_operation !== undefined;
-      if (targetsOperation && !isProjection)
-        context.addIssue({
-          code: "custom",
-          path: ["actions", index, "protected_operation"],
-          message: "Only a system projection record type action targets a protected operation",
-        });
-      else if (isProjection && !targetsOperation)
-        context.addIssue({
-          code: "custom",
-          path: ["actions", index, "tasks"],
-          message:
-            "A system projection record type action targets a registered protected operation",
-        });
-    }
+    refineModuleSourceBody(value, context);
     // Contributions resolve their target by a local dependency key, so a Module that
     // declares contributions needs unambiguous keys. Modules without contributions keep
     // their existing acceptance unchanged.

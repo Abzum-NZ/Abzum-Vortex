@@ -836,6 +836,15 @@ export const compareModuleContents = (
     "module",
     "description",
   );
+  pushChange(
+    reasons,
+    previous.ownerApplication,
+    candidate.ownerApplication,
+    "major",
+    "component_key_changed",
+    "module",
+    "key",
+  );
   compareKeyed(
     reasons,
     previous.dependencies as RecordValue[],
