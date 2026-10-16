@@ -94,8 +94,11 @@ const installationFailure = (error: unknown): DefinitionError<InstalledRuntimeCo
  */
 export type HumanInstalledRuntimeContextDependencies = Readonly<{
   activeInstallationReader: InstalledRuntimeActiveInstallationReader;
-  /** The organisation and application the human request scope resolved for this person. */
-  scope: Readonly<{ organizationId: string; applicationRootId: string }>;
+  /**
+   * The organisation and application the human request scope resolved for this person, and the
+   * preview of that application the request runs instead of its installation, if any.
+   */
+  scope: Readonly<{ organizationId: string; applicationRootId: string; previewInstallationId?: string }>;
 }>;
 
 /** Reads the active installation and proves it belongs to the organisation and application the request resolved. */

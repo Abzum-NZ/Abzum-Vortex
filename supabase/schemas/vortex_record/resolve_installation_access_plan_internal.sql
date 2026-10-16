@@ -141,7 +141,7 @@ begin
     select release.compilation_output #> '{canonical,content}',
       release.validation_contract_version
     into strict release_content, release_validation_contract_version
-    from vortex_definition.releases as release
+    from vortex_definition.runtime_releases as release
     where release.root_id = module_root_value
       and release.release_revision = release_revision_value;
 
@@ -156,7 +156,8 @@ begin
     loop
       record_type_id_value := (record_type_item ->> 'recordTypeId')::uuid;
       release_storage_contract_value := (record_type_item ->> 'storageContractId')::uuid;
-      if preview_installation_id_value is null then
+      -- A preview isolates its record storage; a system projection is read as it is.
+      if preview_installation_id_value is null or record_type_item ? 'systemProjection' then
         storage_contract_value := release_storage_contract_value;
       else
         select (binding.value ->> 'previewStorageContractId')::uuid
@@ -372,19 +373,11 @@ begin
     end loop;
   end loop;
 
-  if preview_installation_id_value is null then
-    select release.compilation_output #> '{canonical,content}'
-    into strict release_content
-    from vortex_definition.releases as release
-    where release.root_id = application_root_id_value
-      and release.release_revision = application_release_revision_value;
-  else
-    release_content := p_installation #> '{candidate,compilation,canonical,content}';
-    if pg_catalog.jsonb_typeof(release_content) is distinct from 'object' then
-      raise exception using errcode = '55000',
-        message = 'Preview Application candidate is unavailable';
-    end if;
-  end if;
+  select release.compilation_output #> '{canonical,content}'
+  into strict release_content
+  from vortex_definition.runtime_releases as release
+  where release.root_id = application_root_id_value
+    and release.release_revision = application_release_revision_value;
 
   for permission_item in
     select item.value

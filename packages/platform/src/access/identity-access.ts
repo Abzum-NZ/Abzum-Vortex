@@ -428,12 +428,22 @@ export const organizationLauncherResolutionSchema = z.discriminatedUnion("kind",
   z.object({ kind: z.literal("invalid_session_state") }).strict(),
 ]);
 
+/** A preview of an Application draft, which a request of that Application may run instead of its installation. */
+const selectedPreviewInstallationIdSchema = z
+  .uuid()
+  .refine((value) => value !== "00000000-0000-0000-0000-000000000000");
+
 export const organizationSelectionCandidateSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema.optional(),
+    previewInstallationId: selectedPreviewInstallationIdSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => value.previewInstallationId === undefined || value.applicationRootId !== undefined,
+    { path: ["previewInstallationId"], message: "A preview is selected only with its Application" },
+  );
 
 export const selectedOrganizationScopeSchema = z
   .object({
@@ -441,6 +451,7 @@ export const selectedOrganizationScopeSchema = z
     organizationId: organizationIdSchema,
     organizationAccountId: organizationAccountIdSchema,
     applicationRootId: applicationRootIdSchema.optional(),
+    previewInstallationId: selectedPreviewInstallationIdSchema.optional(),
     accessVersion: revisionSchema,
   })
   .strict();

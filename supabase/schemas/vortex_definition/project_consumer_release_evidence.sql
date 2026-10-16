@@ -58,7 +58,7 @@ as $function$
           dependency.dependency_reference collate "C",
           dependency.dependency_version collate "C"
       )
-      from vortex_definition.release_dependencies as dependency
+      from vortex_definition.runtime_release_dependencies as dependency
       where dependency.root_id = release.root_id
         and dependency.release_revision = release.release_revision
     ), '[]'::jsonb),
@@ -73,8 +73,8 @@ as $function$
         ) order by dependency.dependency_reference collate "C",
           target.root_id, target.release_revision
       )
-      from vortex_definition.release_dependencies as dependency
-      join vortex_definition.releases as target
+      from vortex_definition.runtime_release_dependencies as dependency
+      join vortex_definition.runtime_releases as target
         on target.root_id = dependency.target_root_id
         and target.release_revision = dependency.target_release_revision
       where dependency.root_id = release.root_id
@@ -83,7 +83,7 @@ as $function$
     ), '[]'::jsonb)
   )
   from vortex_definition.roots as root
-  join vortex_definition.releases as release
+  join vortex_definition.runtime_releases as release
     on release.root_id = root.root_id
     and release.release_revision = p_release_revision
   where root.root_id = p_root_id

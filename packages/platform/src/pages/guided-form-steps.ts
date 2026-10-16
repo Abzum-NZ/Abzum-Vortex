@@ -12,6 +12,7 @@ import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
+  placementSettings,
   type InstalledRuntimeContext,
 } from "../definition/index";
 import type { QueryContinuationKey } from "../queries/index";
@@ -35,8 +36,8 @@ import {
   type PlatformId,
   type RecordTypeDefinition,
   type SelectedOrganizationScope,
-  compiledPropsSettings,
   isRecord,
+  itemPropSlots,
   sameId,
   walkPlacementData,
   resolveShellLayout,
@@ -242,7 +243,7 @@ const guidedStepFieldForPlacement = (
   props: Record<string, unknown>,
   recordType: RecordTypeDefinition,
 ): Omit<GuidedFormStepField, "placementId"> | undefined => {
-  const settings = compiledPropsSettings(props);
+  const settings = placementSettings(props);
   const name = settings.name;
   const parsedKey =
     isRecord(name) && name.kind === "text" ? builderKeySchema.safeParse(name.value) : undefined;
@@ -411,9 +412,7 @@ const collectStepFields = (
           allFieldKeys.add(field.fieldKey);
           fields.push({ ...field, placementId });
         }
-        for (const [key, child] of Object.entries(props))
-          if (key !== "id" && key !== "vortex" && Array.isArray(child) && !visitItems(child, owner))
-            return false;
+        for (const [, child] of itemPropSlots(props)) if (!visitItems(child, owner)) return false;
       }
       return true;
     };
@@ -942,7 +941,7 @@ export const guidedFormInputData = (
         const value = entry === undefined ? undefined : byId[String(entry.field.fieldId)];
         if (entry !== undefined && value !== undefined) {
           const blockId = isRecord(vortex.block) ? String(vortex.block.blockId) : "";
-          const settings: Record<string, unknown> = compiledPropsSettings(props);
+          const settings: Record<string, unknown> = placementSettings(props);
           const control = sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId)
             ? isRecord(settings.control) && settings.control.kind === "choice"
               ? settings.control.value

@@ -26,6 +26,7 @@ import {
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
   CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
   FORM_CONTAINER_BLOCK_RELEASE,
+  placementSettings as typedPlacementSettings,
 } from "@vortex/platform/server";
 import type { createReferenceChoiceService } from "@vortex/platform/server";
 import {
@@ -59,14 +60,15 @@ export type ProjectedReferenceChoiceForm = Readonly<{
   placements: ReadonlyMap<string, ReferenceChoiceFormField>;
 }>;
 
-/** The parts of a placed item a choice source is read from: its Vortex metadata and settings. */
-type PlacedParts = Readonly<{ vortex: Record<string, unknown>; settings: Record<string, unknown> }>;
+/** The parts of a placed item a choice source is read from: its Vortex metadata and its props. */
+type PlacedParts = Readonly<{ vortex: Record<string, unknown>; props: Record<string, unknown> }>;
 
 const blockOf = (placement: PlacedParts): Record<string, unknown> | undefined =>
   isRecord(placement.vortex.block) ? placement.vortex.block : undefined;
 
+/** The placement's typed settings, read by its block release's declaration. */
 const settingsOf = (placement: PlacedParts): Readonly<Record<string, BlockPropertyValueContract>> =>
-  placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
+  typedPlacementSettings(placement.props);
 
 /** True only for the immutable choice-input release that declares a query source. */
 export const hasReferenceChoiceSource = (placement: PlacedParts): boolean => {

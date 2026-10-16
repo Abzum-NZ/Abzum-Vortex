@@ -17,14 +17,7 @@ declare
   prepared_plan jsonb;
   board_summary_mode boolean := false;
   board_summary jsonb;
-  preview_address text;
 begin
-  preview_address := nullif(
-    pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
-  );
-  if preview_address is not null then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
-  end if;
   if p_module_root_id is null or p_query_id is null
     or p_module_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_query_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -90,4 +83,4 @@ grant execute on function vortex_record.run_module_query_summary(uuid, uuid, big
   to vortex_request;
 
 comment on function vortex_record.run_module_query_summary(uuid, uuid, bigint, jsonb, jsonb) is
-  'Runs one bounded database-backed installed Module query summary or protected board summary. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, refuses every explicit preview address before preparation, and refuses neutrally above 100000 candidate rows.';
+  'Runs one bounded database-backed installed Module query summary or protected board summary. It validates the request, prepares one protected read-scan access plan, and delegates the summary to the owner-only aggregate function, normalizes unreadable board choices to one unassigned bucket, summarises the own records of a preview for a preview request, and refuses neutrally above 100000 candidate rows.';

@@ -1,8 +1,5 @@
-import {
-  compiledPropsSettings,
-  type ApplicationContent,
-  type VersionImpactReason,
-} from "../../schema";
+import type { ApplicationContent, VersionImpactReason } from "../../schema";
+import { placementSettings } from "../application-composition-catalogue";
 import {
   type RecordValue,
   compareUnknownText,
@@ -58,13 +55,13 @@ const presentationPropertyValue = (value: unknown): boolean => {
   }
 };
 
-const reservedItemProps = new Set(["id", "vortex"]);
-
-/** The child slots of one compiled item: every array prop but `id` and `vortex`. */
-const itemSlots = (item: RecordValue): [string, RecordValue[]][] =>
-  Object.entries(asRecord(item.props)).flatMap(([key, value]): [string, RecordValue[]][] =>
-    reservedItemProps.has(key) || !Array.isArray(value) ? [] : [[key, value as RecordValue[]]],
+/** The child slots of one compiled item: exactly the slots its `vortex.slotOrders` orders. */
+const itemSlots = (item: RecordValue): [string, RecordValue[]][] => {
+  const props = asRecord(item.props);
+  return Object.keys(asRecord(asRecord(props.vortex).slotOrders)).map(
+    (key): [string, RecordValue[]] => [key, props[key] as RecordValue[]],
   );
+};
 
 const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
   const props = asRecord(item.props);
@@ -74,7 +71,7 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
-    Object.values(compiledPropsSettings(props)).every(presentationPropertyValue) &&
+    Object.values(placementSettings(props)).every(presentationPropertyValue) &&
     itemSlots(item).every(([, children]) =>
       children.every((child) => placementSubtreeIsOptionalPresentation(asRecord(child))),
     )
@@ -101,7 +98,7 @@ const collectPlacementSlot = (
     result.set(placementId, {
       item,
       vortex,
-      settings: compiledPropsSettings(props),
+      settings: placementSettings(props),
       parent,
       order: {
         desktop: index,

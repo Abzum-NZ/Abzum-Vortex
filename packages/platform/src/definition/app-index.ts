@@ -28,6 +28,8 @@ export {
 } from "./installation-coordinator-contracts";
 
 export { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
+export { runtimeContextSelection, runtimePreviewOf, type RuntimePreview } from "./preview-runtime-context";
+export { previewApplicationKey } from "./preview-application-key";
 
 export { createProtectedOperationExecutor } from "./protected-operation-executor";
 
@@ -35,7 +37,6 @@ export { createFlowOrchestrator, type FlowOrchestrator } from "./flow-orchestrat
 export type { FlowNamedAction, FlowOrchestratorResponse, FlowRecordType, FlowRelease, FlowRunExpectation, FlowUnavailableNotice } from "./flow-orchestrator-types";
 export type { FlowSubject } from "../rules/index";
 
-export { createFlowTestRunner } from "./flow-test-run";
 
 export { createFormContinuationService } from "./form-continuation";
 

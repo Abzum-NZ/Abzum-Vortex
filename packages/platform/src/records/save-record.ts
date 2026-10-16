@@ -455,10 +455,11 @@ const persist = async (
   finalValues: Readonly<Record<string, unknown>>,
   activityId: string,
   occurrenceId: string,
-  parentMutations: readonly RelationshipTotalParentMutation[] = [],
+  parentMutations: readonly RelationshipTotalParentMutation[],
+  preview: boolean,
 ): Promise<StoredResult> => {
   if (recordType.systemProjection !== undefined) {
-    if (command.previewInstallationId !== undefined)
+    if (preview)
       return { outcome: "refused", reasonCode: "field_refused" };
     const registration = writableSystemProjection(recordType);
     if (
@@ -637,6 +638,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         return { kind: "unavailable" };
       }
 
+      const preview = selection.previewInstallationId !== undefined;
       let activityId: string;
       let occurrenceId: string | undefined;
       try {
@@ -653,15 +655,9 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           caller,
           selection,
           async (transaction, _scope, issuedAt) => {
-            await transaction.query`
-              select pg_catalog.set_config(
-                'vortex_record.preview_installation_id',
-                ${command.data.previewInstallationId ?? ""},
-                true
-              )
-            `;
+            // A preview request's own selection addresses its isolated storage.
             const totalPreparation =
-              command.data.previewInstallationId === undefined
+              !preview
                 ? await prepareRelationshipTotals(transaction, command.data, activityId)
                 : { outcome: "not_required" as const };
             if (totalPreparation.outcome === "restart") return restartRelationshipTotalSave;
@@ -849,7 +845,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 check.kind !== "record_reference" &&
                 check.kind !== "person_reference" &&
                 !(
-                  command.data.previewInstallationId !== undefined &&
+                  preview &&
                   check.kind === "choice_permission"
                 ),
             );
@@ -917,6 +913,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               activityId,
               occurrenceId,
               "parentMutations" in values ? values.parentMutations : [],
+              preview,
             );
             if (stored.outcome === "restart") return restartRelationshipTotalSave;
             if (stored.outcome === "refused_recorded") return recordedRefusal;

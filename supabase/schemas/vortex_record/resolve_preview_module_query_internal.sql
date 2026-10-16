@@ -107,7 +107,7 @@ begin
     release.source_contract_version
   into query_compilation_output, query_content, query_release_version, query_validation_contract_version,
     query_source_contract_version
-  from vortex_definition.releases as release
+  from vortex_definition.runtime_releases as release
   where release.root_id = p_module_root_id
     and release.release_revision = query_release_revision;
   if not found
@@ -191,7 +191,7 @@ begin
       release.validation_contract_version, release.source_contract_version
     into record_type_compilation_output, record_type_content, record_type_validation_contract_version,
       record_type_source_contract_version
-    from vortex_definition.releases as release
+    from vortex_definition.runtime_releases as release
     where release.root_id = record_type_module_root_id
       and release.release_revision = record_type_release_revision;
     if not found then

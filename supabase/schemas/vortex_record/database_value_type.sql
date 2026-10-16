@@ -43,3 +43,4 @@ alter function vortex_record.database_value_type(jsonb) owner to vortex_owner;
 
 
 REVOKE ALL ON FUNCTION vortex_record.database_value_type(p_field jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION vortex_record.database_value_type(p_field jsonb) TO vortex_record_adapter;

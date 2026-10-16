@@ -45,7 +45,11 @@ export const createPlacementReadServices = (input: Readonly<{
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
       return createHumanInstalledPageBundleContextLoader({
         transaction,
-        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        scope: {
+          organizationId: scope.organizationId,
+          applicationRootId: scope.applicationRootId,
+          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+        },
       });
     },
   });

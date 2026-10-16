@@ -42,8 +42,8 @@ export const organizationChooserPlacementId = "a9e6994c-ddd1-4398-8997-ccba4df76
 
 const heading = (placementId: string, text: string, level: "one" | "two") =>
   platformPageItem(HEADING_BLOCK_RELEASE, placementId, {
-    text: { kind: "text", value: text },
-    level: { kind: "choice", value: level },
+    text,
+    level,
   });
 
 const chooserPage = (
@@ -78,9 +78,9 @@ export const organizationChooserPage = chooserPage(
       APPLICATION_LAUNCHER_BLOCK_RELEASE,
       organizationChooserPlacementId,
       {
-        title: { kind: "text", value: "Available organisations" },
-        name_key: { kind: "text", value: "name" },
-        icon_key: { kind: "text", value: "icon" },
+        title: "Available organisations",
+        name_key: "name",
+        icon_key: "icon",
       },
       ["side_panel"],
     ),

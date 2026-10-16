@@ -19,10 +19,6 @@ import {
 import { recordLinkValueSchema } from "./module-field-values";
 import { safeErrorResponseSchema } from "./safe-error-contracts";
 
-const previewRecordInstallationIdSchema = z
-  .uuid()
-  .refine((value) => value !== "00000000-0000-0000-0000-000000000000");
-
 const sharedScopeFields = {
   organizationId: organizationIdSchema,
   moduleRootId: moduleRootIdSchema,
@@ -56,7 +52,6 @@ const saveRecordCommandFields = {
   commandId: platformIdSchema,
   recordTypeId: recordTypeIdSchema,
   submittedValues: submittedRecordValuesSchema,
-  previewInstallationId: previewRecordInstallationIdSchema.optional(),
 };
 
 export const saveRecordCommandSchema = z.discriminatedUnion("operation", [
@@ -472,29 +467,6 @@ export type RecordChangeResult = z.infer<typeof recordChangeResultSchema>;
 export type RecordScope = z.infer<typeof recordScopeSchema>;
 export type SaveRecordCommand = z.infer<typeof saveRecordCommandSchema>;
 
-export const previewRecordReadCommandV1Schema = z
-  .object({
-    contractVersion: z.literal("1.0.0"),
-    previewInstallationId: previewRecordInstallationIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    recordId: recordIdSchema,
-  })
-  .strict();
-
-export const previewRecordReadResultV1Schema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      outcome: z.literal("allowed"),
-      recordId: recordIdSchema,
-      concurrencyNumber: revisionSchema,
-      values: z.record(fieldIdSchema, jsonValueSchema),
-    })
-    .strict(),
-  z.object({ outcome: z.literal("refused") }).strict(),
-]);
-
-export type PreviewRecordReadCommandV1 = z.infer<typeof previewRecordReadCommandV1Schema>;
-export type PreviewRecordReadResultV1 = z.infer<typeof previewRecordReadResultV1Schema>;
 export type TransferRecordOwnershipCommand = z.infer<
   typeof transferRecordOwnershipCommandSchema
 >;
