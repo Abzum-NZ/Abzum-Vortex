@@ -25,7 +25,7 @@ async function ApplicationStartLoader({ route }: { route: Route }) {
   if (theme === undefined) return null;
   return (
     <div
-      {...createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens, "system")}
+      {...createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
       className="grid min-h-svh place-items-center"
       aria-busy="true"
     >

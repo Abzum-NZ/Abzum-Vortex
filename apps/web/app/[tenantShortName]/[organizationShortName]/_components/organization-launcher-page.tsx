@@ -66,7 +66,6 @@ export function OrganizationLauncherPage({
         platformThemeTokens={platformThemeTokens}
         pageId={page.pageId}
         applicationSurface
-        themeMode="system"
         applicationShellRuntime={{
           applicationName: "Applications",
           applicationHref: launcherHref,

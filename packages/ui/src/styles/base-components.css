@@ -7,7 +7,6 @@
  * every one of them from the resolved theme on the root element and on each themed container.
  */
 [data-vortex-style] {
-  color-scheme: light dark;
   --spacing: var(--vortex-component-spacing, 0.25rem);
 }
 
