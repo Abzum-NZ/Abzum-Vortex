@@ -127,18 +127,14 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): BoardCellValue
     case "choice": {
       if (typeof value !== "string") return undefined;
       const option = field.settings.options.find((candidate) => candidate.value === value);
-      return option === undefined || option.requiredPermissionId !== undefined
-        ? undefined
-        : { kind: "text", text: option.label };
+      return option === undefined ? undefined : { kind: "text", text: option.label };
     }
     case "several_choices": {
       if (typeof value !== "object" || !Array.isArray(value)) return undefined;
       const labels = value.map((candidate) => {
         if (typeof candidate !== "string") return undefined;
         const option = field.settings.options.find((entry) => entry.value === candidate);
-        return option === undefined || option.requiredPermissionId !== undefined
-          ? undefined
-          : option.label;
+        return option?.label;
       });
       return labels.every((label): label is string => label !== undefined)
         ? { kind: "text", text: labels.join(", ") }
