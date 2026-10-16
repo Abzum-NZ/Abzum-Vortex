@@ -26,7 +26,8 @@ import { argumentValue, openLane, personaEmails, type LaneFacts } from "./lane";
  * session cookies are kept, in memory; nothing about the session is printed.
  *
  * Usage: pnpm --filter @vortex/web list:page-timing -- --lane 5 --base-url http://127.0.0.1:3275
- *          [--runs 20] [--persona owner|member|viewer] [--output page-timing.md]
+ *          [--runs 20] [--persona owner|member|viewer] [--pages crm_pipeline,service_desk_case_board]
+ *          [--output page-timing.md]
  */
 
 const budgetMilliseconds = 500;
@@ -65,6 +66,11 @@ const targets: readonly Target[] = [
     application: casesApplication,
     page: "service_desk_case_detail",
     recordKey: "case",
+  },
+  {
+    label: "Service Desk case board",
+    application: casesApplication,
+    page: "service_desk_case_board",
   },
   { label: "Organisation groups", application: groupsApplication, page: "iam_roles_groups" },
 ];
@@ -217,7 +223,9 @@ const measure = async (
 ): Promise<Result[]> => {
   const results: Result[] = [];
   const root = `/${encodeURIComponent(facts.tenantShortName)}/${encodeURIComponent(facts.organizationShortName)}`;
+  const pages = argumentValue("pages")?.split(",");
   for (const target of targets) {
+    if (pages !== undefined && !pages.includes(target.page)) continue;
     const application = `${root}/${encodeURIComponent(target.application)}`;
     let path = `${application}/${encodeURIComponent(target.page)}`;
     if (target.recordKey !== undefined)
