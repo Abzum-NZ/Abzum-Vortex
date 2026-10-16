@@ -5,11 +5,11 @@ immutable
 strict
 set search_path = ''
 as $function$
-  -- A version-8 UUID from the MD5 of the parts joined by the unit separator, with the RFC 9562
-  -- variant bits. Studio's in-memory draft compile derives exactly the same value.
+  -- A name-based (version-3) UUID from the MD5 of the parts joined by the unit separator, with
+  -- the RFC 9562 variant bits. Studio's in-memory draft compile derives exactly the same value.
   select (
     pg_catalog.substr(source.digest_hex, 1, 12)
-    || '8'
+    || '3'
     || pg_catalog.substr(source.digest_hex, 14, 3)
     || pg_catalog.substr(
       '89ab',

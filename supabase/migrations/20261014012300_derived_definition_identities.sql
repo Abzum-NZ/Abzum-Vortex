@@ -1,6 +1,6 @@
 -- Draft compile uses the draft's own modules (#2733).
 -- A new source identity and a new owned Module root get a derived permanent identity instead of a
--- random one: a version-8 UUID from their owner and position. Studio compiles a draft's inline
+-- random one: a name-based (version-3) UUID from their owner and position. Studio compiles a draft's inline
 -- Modules in memory with the publication's own steps and derives the identities a publication
 -- has not yet recorded exactly as these functions will record them. Recorded identities keep
 -- their values.
@@ -13,11 +13,11 @@ immutable
 strict
 set search_path = ''
 as $function$
-  -- A version-8 UUID from the MD5 of the parts joined by the unit separator, with the RFC 9562
-  -- variant bits. Studio's in-memory draft compile derives exactly the same value.
+  -- A name-based (version-3) UUID from the MD5 of the parts joined by the unit separator, with
+  -- the RFC 9562 variant bits. Studio's in-memory draft compile derives exactly the same value.
   select (
     pg_catalog.substr(source.digest_hex, 1, 12)
-    || '8'
+    || '3'
     || pg_catalog.substr(source.digest_hex, 14, 3)
     || pg_catalog.substr(
       '89ab',
