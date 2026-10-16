@@ -49,31 +49,6 @@ export const validateProjectedAvailabilityTree = (
     projectedAvailability(item.props.vortex, { ...location, placementId: item.props.id });
 };
 
-/** Every placement must use exactly a release its materialised dependency manifest pins. */
-export const validatePlacementDependencies = (
-  layout: CompiledLayout,
-  dependencies: ApplicationContent["platformBlockDependencies"],
-  location: DefinitionRenderErrorLocation,
-): void => {
-  const releases = new Set(
-    dependencies.map((dependency) => `${dependency.blockId}@${dependency.releaseVersion}`),
-  );
-  for (const item of compiledItemTree(layout.content)) {
-    const block = item.props.vortex.block;
-    if (!releases.has(`${block.blockId}@${block.releaseVersion}`))
-      throw new DefinitionRenderError(
-        "MISMATCHED_RELEASE",
-        `Placement '${item.props.id}' does not match the materialised platform-block dependency manifest`,
-        {
-          ...location,
-          placementId: item.props.id,
-          blockId: block.blockId,
-          releaseVersion: block.releaseVersion,
-        },
-      );
-  }
-};
-
 const requireUniqueShell = (
   shells: readonly ApplicationShell[],
   shellId: string,
@@ -144,7 +119,7 @@ export const renderedPageOf = (
  * Checks a materialised composition's dependency manifest against the registry: each pinned
  * release appears once and is exactly the registered release.
  */
-export const validateMaterialisedDependencies = (
+const validateMaterialisedDependencies = (
   composition: MaterialisedApplicationComposition,
   registry: PlatformComponentRegistry,
 ): void => {

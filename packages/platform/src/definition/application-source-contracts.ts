@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { previewApplicationKeyNamespace } from "./preview-application-key";
 import { applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
@@ -987,7 +988,13 @@ export const applicationSourceDocumentSchema = z
   .object({
     source_contract_version: sourceProvenanceUnchanged(z.literal(applicationSourceContractVersion)),
     root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId"]),
-    key: sourceProvenanceUnchanged(namespacedKeySchema),
+    // The preview namespace addresses previews of drafts, so no Application can take it.
+    key: sourceProvenanceUnchanged(
+      namespacedKeySchema.refine(
+        (key) => !key.startsWith(`${previewApplicationKeyNamespace}.`),
+        { message: "The preview key namespace is reserved for previews" },
+      ),
+    ),
     kind: sourceProvenanceUnchanged(z.literal("application")),
     body: sourceProvenanceUnchanged(
       z.preprocess(inspectSourceBounds, sourceApplicationBodySchema),

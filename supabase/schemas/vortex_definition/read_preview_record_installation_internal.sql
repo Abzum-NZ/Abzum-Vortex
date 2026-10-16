@@ -26,9 +26,6 @@ begin
   where preview.preview_installation_id = p_preview_installation_id
     and preview.organization_id = (context_value ->> 'organizationId')::uuid
     and preview.application_root_id = (context_value ->> 'applicationRootId')::uuid
-    and preview.previewer_identity_id = (context_value ->> 'identityId')::uuid
-    and preview.previewer_organization_account_id =
-      (context_value ->> 'organizationAccountId')::uuid
     and preview.expires_at > pg_catalog.statement_timestamp()
   for key share;
   if not found then
@@ -37,9 +34,12 @@ begin
 
   select coalesce(pg_catalog.jsonb_agg(
     pg_catalog.jsonb_build_object(
+      'organizationId', preview_row.organization_id,
+      'applicationRootId', preview_row.application_root_id,
       'moduleRootId', item.value -> 'moduleRootId',
-      'moduleReleaseRevision', item.value -> 'moduleReleaseRevision',
       'bindingRevision', 1,
+      'applicationReleaseRevision', preview_row.application_release_revision,
+      'moduleReleaseRevision', item.value -> 'moduleReleaseRevision',
       'state', 'active'
     ) order by item.value ->> 'moduleRootId' collate "C"
   ), '[]'::jsonb)
@@ -47,19 +47,15 @@ begin
   from pg_catalog.jsonb_array_elements(preview_row.resolved_modules) as item(value);
 
   return pg_catalog.jsonb_build_object(
-    'previewInstallationId', preview_row.preview_installation_id,
     'organizationId', preview_row.organization_id,
     'applicationRootId', preview_row.application_root_id,
-    'applicationReleaseRevision', preview_row.draft_revision,
+    'applicationReleaseRevision', preview_row.application_release_revision,
     'moduleBindings', module_bindings_value,
-    'candidate', preview_row.candidate,
-    'resolvedModules', preview_row.resolved_modules,
+    'previewInstallationId', preview_row.preview_installation_id,
     'storageIdentities', preview_row.storage_identities
   );
 end
 $function$;
-alter function vortex_definition.read_preview_record_installation_internal(uuid) owner to vortex_owner;
-
 
 alter function vortex_definition.read_preview_record_installation_internal(uuid)
   owner to vortex_owner;
@@ -67,6 +63,6 @@ alter function vortex_definition.read_preview_record_installation_internal(uuid)
 revoke all on function vortex_definition.read_preview_record_installation_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_definition.read_preview_record_installation_internal(uuid)
-  to vortex_record_adapter;
+  to vortex_record_adapter, vortex_owner;
 comment on function vortex_definition.read_preview_record_installation_internal(uuid) is
-  'Private owner-only preview installation reader for the protected Record port, restricted to the exact human identity, organisation account and Application context until expiry.';
+  'The installation of one unexpired preview for a builder of its Application in the validated human request: the active installation shape with the preview''s exact release pins, its address and its isolated storage identities.';

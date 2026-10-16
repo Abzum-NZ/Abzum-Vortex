@@ -6,6 +6,7 @@ import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
+  placementSettings,
 } from "@vortex/platform/server";
 import {
   type PageDefinition,
@@ -35,19 +36,20 @@ export const first = (value: string | readonly string[] | undefined): string | u
   typeof value === "string" ? value : value?.[0];
 
 /**
- * One placed item of a projected page: the item itself and, read from it, its Vortex metadata
- * (`props.vortex`) and its settings (every prop holding a typed canonical value).
+ * One placed item of a projected page: the item itself and, read from it, its props, its Vortex
+ * metadata (`props.vortex`) and its typed settings, read by its block release's declaration.
  */
 type PlacedItem = Readonly<{
   placementId: string;
   item: Record<string, unknown>;
+  props: Record<string, unknown>;
   vortex: Record<string, unknown>;
   settings: Record<string, unknown>;
   formId?: string;
 }>;
 
 /** The parts of a placed item the placement predicates read. */
-type PlacedItemParts = Pick<PlacedItem, "vortex" | "settings">;
+type PlacedItemParts = Pick<PlacedItem, "vortex" | "props" | "settings">;
 
 /** Reads only the projected body; shell chrome and permission reasons do not count as content. */
 export const projectedBodyContentAvailable = (
@@ -238,7 +240,7 @@ export const collectPlacements = (projected: Readonly<Record<string, unknown>>):
   const found: PlacedItem[] = [];
   walkPageComposition(
     projected.composition,
-    ({ placementId, item, vortex, settings }, formId: string | undefined) => {
+    ({ placementId, item, props, vortex }, formId: string | undefined) => {
       const block = vortex.block;
       const owner =
         isRecord(block) &&
@@ -249,8 +251,9 @@ export const collectPlacements = (projected: Readonly<Record<string, unknown>>):
       found.push({
         placementId,
         item,
+        props,
         vortex,
-        settings,
+        settings: placementSettings(props),
         ...(owner === undefined ? {} : { formId: owner }),
       });
       return owner;

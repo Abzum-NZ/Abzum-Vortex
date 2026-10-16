@@ -54,6 +54,7 @@ const newer = (left: string, right: string): boolean => {
 
 const editableKinds = new Set<BlockPropertySchemaContract["kind"]>([
   "text", "url", "number", "boolean", "choice", "icon", "field_reference", "query_reference", "page_reference",
+  "record_type_reference",
 ]);
 
 /** Whether Studio's typed setting controls edit a setting of this declaration, nested settings included. */
@@ -190,6 +191,11 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
     return Object.freeze({ reference: `${module.key}:${query.key}`, label: query.label ?? query.key,
       fields: Object.freeze(fields) });
   }));
+
+/** The record types of the application's own Modules in the draft, as `<module>:<record>`. */
+export const studioSourceRecordTypes = (source: ApplicationSourceDocument): readonly Readonly<{ key: string; label: string }>[] =>
+  Object.freeze((source.body.modules ?? []).flatMap((module) => module.record_types.map((record) =>
+    Object.freeze({ key: `${module.key}:${record.key}`, label: record.name }))));
 
 /** Every field of the application's own record types, for a block that reads no query. */
 export const studioSourceFields = (source: ApplicationSourceDocument): readonly StudioQueryField[] =>

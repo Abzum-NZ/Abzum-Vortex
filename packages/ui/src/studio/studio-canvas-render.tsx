@@ -5,8 +5,10 @@ import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
   canonicalThemeTokenValue,
-  typedSourceSettings,
-  type BlockPropertyValueContract,
+  findFieldInputBinding,
+  plainSettingValue,
+  releaseSettingDeclarations,
+  typedSettingValue,
   type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "../registry";
@@ -15,12 +17,14 @@ import { studioReleaseReadsQuery } from "./contextual-palette";
 /**
  * The Studio canvas renders the stored items Puck holds with the one Puck config. A block's render
  * function takes a compiled item's props, so each canvas component reads its stored item for
- * drawing only: its typed settings over the settings its last compiled version holds (defaults the
- * author left out, references the compiler resolved), and its stored block, layout and theme in
- * their canonical spelling. Nothing here is written to Puck's data.
+ * drawing only: its plain settings over the plain settings its last compiled version holds
+ * (defaults the author left out, settings the compiler derived, references it resolved), and its
+ * stored block, layout and theme in their canonical spelling. A stored value is drawn only when it
+ * is already a compiled value of its declaration, so an unresolved reference draws as compiled.
+ * Nothing here is written to Puck's data.
  */
 
-type CompiledSettings = Readonly<Record<string, Readonly<Record<string, BlockPropertyValueContract>>>>;
+type CompiledSettings = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 
 const CompiledSettingsContext = createContext<CompiledSettings>({});
 
@@ -66,11 +70,8 @@ export function StudioCanvasRecordsProvider({
   return <CanvasRecordsContext.Provider value={records}>{children}</CanvasRecordsContext.Provider>;
 }
 
-/** What the canvas says in place of a data block's records, or nothing when it has them. */
+/** What the canvas says in place of a current data block's records, or nothing when it has them. */
 const recordsNote = (records: StudioCanvasRecords, id: string): string | undefined => {
-  const saved = records.saved.get(id);
-  if (saved === undefined || saved !== records.current.get(id))
-    return records.updating ? "Updating the canvas…" : "Save to show this block's records.";
   if (records.state === "loading") return "Reading records…";
   if (records.state === "not_installed") return "Install this application to show its records here.";
   if (records.state === "unavailable") return "Records could not be read just now.";
@@ -89,7 +90,7 @@ type StoredVortex = Readonly<{
 const renderProps = (
   props: Readonly<Record<string, unknown>>,
   release: PlatformBlockRelease | undefined,
-  compiled: Readonly<Record<string, BlockPropertyValueContract>> | undefined,
+  compiled: Readonly<Record<string, unknown>> | undefined,
   /** The stored item is exactly the one `compiled` was compiled from, so its compiled settings stand alone. */
   exact = false,
 ): Record<string, unknown> => {
@@ -97,13 +98,14 @@ const renderProps = (
   const result: Record<string, unknown> = { ...props };
   if (release !== undefined) {
     const authored: Record<string, unknown> = {};
-    for (const property of release.properties) {
-      if (props[property.key] !== undefined) authored[property.key] = props[property.key];
+    for (const property of releaseSettingDeclarations(release)) {
+      const value = props[property.key];
+      if (value !== undefined && typedSettingValue(value, property) !== undefined)
+        authored[property.key] = value;
       delete result[property.key];
     }
     // A block added since the last compile draws with its release's defaults, as publication writes them.
-    Object.assign(result, compiled ?? catalogueDefaults(release),
-      exact && compiled !== undefined ? {} : typedSourceSettings(authored, release.properties).settings);
+    Object.assign(result, compiled ?? catalogueDefaults(release), exact && compiled !== undefined ? {} : authored);
   }
   result.vortex = {
     block: { blockId: vortex.block?.block_id, releaseVersion: vortex.block?.release_version },
@@ -115,9 +117,10 @@ const renderProps = (
   return result;
 };
 
-const catalogueDefaults = (release: PlatformBlockRelease): Record<string, BlockPropertyValueContract> =>
+/** The release's declared defaults, as the plain values a compiled item carries. */
+const catalogueDefaults = (release: PlatformBlockRelease): Record<string, unknown> =>
   Object.fromEntries(release.properties.flatMap((property) =>
-    property.defaultValue === undefined ? [] : [[property.key, property.defaultValue]]));
+    property.defaultValue === undefined ? [] : [[property.key, plainSettingValue(property.defaultValue)]]));
 
 /**
  * The slot fields only, without Puck's `allow` lists: a block dropped or moved into any slot
@@ -156,6 +159,17 @@ function CanvasBlock({
     return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Adding the block…</div>;
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   const release = releaseOf(registry, props);
+  // A block whose drawing needs what the compiler derives (an automatic field input's control, a
+  // data block's resolved fields) is drawn only from a compile of exactly this block. Until then
+  // it shows that a save draws it; it is never drawn from settings the compiler has not seen.
+  const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
+  if (release !== undefined && !current &&
+    (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release)))
+    return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground"
+      data-vortex-canvas-pending={id}>
+      <p className="font-medium text-foreground">{release.name}</p>
+      <p>{records.updating ? "Updating the canvas…" : "Save to show this block."}</p>
+    </div>;
   const drawn = renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined);
   if (release === undefined || !studioReleaseReadsQuery(release)) return render(drawn);
   // A data block draws the records its saved version reads, and says so when it has none to show.

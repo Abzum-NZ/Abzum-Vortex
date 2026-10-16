@@ -513,7 +513,11 @@ export async function invokeInstalledFlow(
       if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
       return createHumanInstalledPageBundleContextLoader({
         transaction,
-        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        scope: {
+          organizationId: scope.organizationId,
+          applicationRootId: scope.applicationRootId,
+          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+        },
       });
     },
     resolveTargetApplication: async (session, sourceSelection, applicationKey) => {
@@ -657,6 +661,7 @@ export async function invokeInstalledFlow(
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
+                ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
               },
             }).load();
             const application = current.releaseSet.application;
@@ -747,6 +752,7 @@ export async function invokeInstalledFlow(
               scope: {
                 organizationId: scope.organizationId,
                 applicationRootId: scope.applicationRootId,
+                ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
               },
             }).load();
             const application = current.releaseSet.application;
@@ -885,7 +891,11 @@ export async function invokeInstalledFlow(
         throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
       const installation = await createHumanInstalledPageBundleContextLoader({
         transaction,
-        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        scope: {
+          organizationId: scope.organizationId,
+          applicationRootId: scope.applicationRootId,
+          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+        },
       }).load();
       const releaseSet = installation.releaseSet;
       const application = releaseSet.application;
@@ -1099,6 +1109,7 @@ export async function invokeInstalledFlow(
   const selection = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
+    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
   };
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.

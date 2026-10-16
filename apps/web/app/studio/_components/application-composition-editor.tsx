@@ -14,6 +14,7 @@ import {
   describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
   studioSemanticSelectionKey,
+  studioBlockChoices,
   studioSettingProblems,
   StudioQueryPicker,
   StudioSettingFields,
@@ -24,8 +25,6 @@ import {
   type StudioCompositionOutcome,
   type StudioCompositionSettings,
   type StudioCompositionSettingsModel,
-  type StudioQueryChoice,
-  type StudioQueryField,
   type StudioSemanticSelection,
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
@@ -34,11 +33,8 @@ type Props = Readonly<{
   context: StudioCompositionContext;
   selection: StudioSemanticSelection;
   disabled: boolean;
-  /** The queries a block can read: the application's own, then the borrowed ones. */
-  queries: readonly StudioQueryChoice[];
-  /** Every field of the application's own record types, for blocks that read no query. */
-  fields: readonly StudioQueryField[];
-  pages: StudioSettingChoices["pages"];
+  /** What reference settings can point at, read from the draft being edited. */
+  choices: StudioSettingChoices;
   onPendingChange: (pending: boolean) => void;
   onCommand: (expected: StudioCompositionContext, selection: StudioSemanticSelection,
     command: StudioCompositionCommand) => StudioCompositionOutcome;
@@ -140,10 +136,8 @@ function PlacementCompositionEditor(props: Props) {
 
   // The reference settings point at the fields of the data the block reads, or, for a block that
   // reads none, at the application's own fields.
-  const choices = useMemo((): StudioSettingChoices => {
-    const chosen = props.queries.find((query) => query.reference === settingsInputs.query);
-    return { fields: chosen?.fields ?? props.fields, queries: props.queries, pages: props.pages };
-  }, [props.queries, props.fields, props.pages, settingsInputs.query]);
+  const choices = useMemo(() => studioBlockChoices(props.choices, settingsInputs.query),
+    [props.choices, settingsInputs.query]);
 
   if (model.kind !== "available" || inputs === null) return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
     <h3 className="font-semibold">Item order and size</h3>
@@ -287,7 +281,7 @@ function PlacementCompositionEditor(props: Props) {
     {settingsModel.kind === "available" ? <form className="space-y-3" onSubmit={applySettings} aria-label="Settings">
       <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty}>
         <legend className="font-medium">Settings</legend>
-        {settingsModel.readsQuery && <StudioQueryPicker id={`${settingsId}-query`} queries={props.queries}
+        {settingsModel.readsQuery && <StudioQueryPicker id={`${settingsId}-query`} queries={props.choices.queries}
           value={settingsInputs.query ?? ""} disabled={props.disabled || dirty || moveDirty}
           onChange={(query) => updateSettings({ ...settingsInputs, query: query === "" ? null : query })} />}
         <StudioSettingFields idPrefix={settingsId} properties={settingsModel.properties} values={settingsInputs.settings}

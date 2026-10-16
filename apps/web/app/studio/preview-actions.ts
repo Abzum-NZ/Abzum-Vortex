@@ -2,12 +2,12 @@
 
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import {
-  previewSavedStudioApplication,
+  provisionStudioApplicationPreview,
   type StudioApplicationPreviewResult,
 } from "../_lib/studio-application-preview";
 
-/** Returns an inert artifact for a selected saved page, never browser source or unsaved edits. */
-export async function previewStudioApplicationHomepage(
+/** Provisions the running preview of the saved draft; never browser source or unsaved edits. */
+export async function previewStudioApplication(
   organizationId: string,
   candidate: unknown,
 ): Promise<StudioApplicationPreviewResult> {
@@ -15,8 +15,9 @@ export async function previewStudioApplicationHomepage(
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active")
       return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" } : { kind: "refused", reason: "context_refused" };
-    return await previewSavedStudioApplication(resolved.session, organizationId, candidate);
+        ? { kind: "temporarily_unavailable" }
+        : { kind: "refused", reason: "permission_refused" };
+    return await provisionStudioApplicationPreview(resolved.session, organizationId, candidate);
   } catch {
     return { kind: "temporarily_unavailable" };
   }

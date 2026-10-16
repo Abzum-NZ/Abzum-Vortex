@@ -1,6 +1,6 @@
 import {
+  compiledItemSettings,
   compiledItemSlots,
-  compiledPropsSettings,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   type BlockPropertyValueContract,
@@ -68,6 +68,28 @@ export class DefinitionRenderError extends Error {
       message: this.message,
       location: this.location,
     };
+  }
+}
+
+/**
+ * The typed settings of one placement's props, read by its release's declaration: each declared
+ * property and derived property the props hold. A held value that is not a value of its
+ * declaration fails closed as an invalid composition at that placement.
+ */
+export function placementSettings(
+  props: Readonly<Record<string, unknown>>,
+  release: PlatformBlockRelease,
+  location: DefinitionRenderErrorLocation,
+): Readonly<Record<string, BlockPropertyValueContract>> {
+  try {
+    return compiledItemSettings(props, release);
+  } catch (error) {
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      error instanceof Error ? error.message : "Invalid placement setting",
+      location,
+      { cause: error },
+    );
   }
 }
 
@@ -231,7 +253,7 @@ export function validatePlacementSlots(
   const repeatableSlots = new Map<string, PlatformBlockRelease["slots"][number]>();
   for (const declaration of metadata.slots) {
     if (declaration.repeats === undefined) continue;
-    for (const identity of repeatableSlotItemIdentities(declaration, compiledPropsSettings(item.props)))
+    for (const identity of repeatableSlotItemIdentities(declaration, placementSettings(item.props, metadata, location)))
       repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
   }
 
@@ -369,7 +391,11 @@ export function validatePlacementTree(
         );
       }
 
-      validateAccessibleName(compiledPropsSettings(item.props), registration.metadata.capabilities, placementLocation);
+      validateAccessibleName(
+        placementSettings(item.props, registration.metadata, placementLocation),
+        registration.metadata.capabilities,
+        placementLocation,
+      );
       validatePlacementSlots(item, registration.metadata, registry, placementLocation, options);
 
       const layouts = [vortex.responsive.desktop, vortex.responsive.tablet, vortex.responsive.phone];

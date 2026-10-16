@@ -1,4 +1,6 @@
 import type { BlockPropertySchemaContract, FieldInputControlKey } from "./application-composition/block-property-schema";
+import type { BlockPropertyValueContract } from "./application-composition/block-property-values";
+import { compiledItemSettings } from "./application-composition/page-composition";
 import { type PlatformBlockRelease, platformBlockReleaseSchema, type ImmutablePlatformBlockCatalogue, immutablePlatformBlockCatalogueSchema } from "./application-composition/platform-block-release";
 import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "./application-composition-release-identities";
 import { platformBlockReleaseContentHash } from "./catalogue-release-content-hashes";
@@ -326,62 +328,16 @@ const derivedFieldInputRelease = (
   });
 };
 
-const derivedChoiceOptionsProperty: BlockPropertySchemaContract = {
-  kind: "list",
-  key: "options",
-  label: "Options",
-  help: "Declared field values offered by this input",
-  required: false,
-  minimumItems: 0,
-  maximumItems: 200,
-  item: {
-    kind: "group",
-    key: "option",
-    label: "Option",
-    required: true,
-    properties: [
-      {
-        kind: "text",
-        key: "key",
-        label: "Value",
-        help: "Exact option value declared by the module field",
-        required: true,
-        minLength: 1,
-        maxLength: 120,
-      },
-      {
-        kind: "text",
-        key: "label",
-        label: "Label",
-        required: true,
-        minLength: 1,
-        maxLength: 120,
-      },
-    ],
-  },
-};
+/** One setting the automatic field input declares among its derived properties. */
+const derivedFieldInputProperty = (key: string): BlockPropertySchemaContract =>
+  FIELD_INPUT_BLOCK_RELEASE.derivedProperties?.find((property) => property.key === key) ??
+  (() => {
+    throw new Error(`The automatic field input declares no derived property '${key}'`);
+  })();
 
-const severalChoicesMaximumSelectionsProperty: BlockPropertySchemaContract = {
-  key: "maximum_selections",
-  label: "Maximum selections",
-  kind: "number",
-  integer: true,
-  minimum: 1,
-  maximum: 200,
-  required: false,
-};
-
-const dateTimeDisplayTimeZoneProperty: BlockPropertySchemaContract = {
-  key: "display_time_zone",
-  label: "Display time zone",
-  kind: "choice",
-  options: [
-    { key: "person", label: "Person" },
-    { key: "organization", label: "Organization" },
-    { key: "utc", label: "UTC" },
-  ],
-  required: false,
-};
+const derivedChoiceOptionsProperty = derivedFieldInputProperty("options");
+const severalChoicesMaximumSelectionsProperty = derivedFieldInputProperty("maximum_selections");
+const dateTimeDisplayTimeZoneProperty = derivedFieldInputProperty("display_time_zone");
 
 /**
  * The existing input release each derived automatic field control delegates to. The compiler
@@ -516,4 +472,36 @@ export const IMMUTABLE_PLATFORM_BLOCK_CATALOGUE: ImmutablePlatformBlockCatalogue
       },
       releases: PLATFORM_BLOCK_RELEASES,
     }),
+  );
+
+const platformBlockReleasesByIdentity: ReadonlyMap<string, PlatformBlockRelease> = new Map(
+  PLATFORM_BLOCK_RELEASES.map((entry) => [
+    `${entry.blockId.toLowerCase()}:${entry.releaseVersion}`,
+    entry,
+  ]),
+);
+
+/**
+ * The registered platform block release a compiled placement's `vortex.block` names. Every
+ * installed application depends only on registered releases, so an unknown one fails loudly.
+ */
+export const placementBlockRelease = (block: unknown): PlatformBlockRelease => {
+  const reference = (block ?? {}) as { blockId?: unknown; releaseVersion?: unknown };
+  const found = platformBlockReleasesByIdentity.get(
+    `${String(reference.blockId).toLowerCase()}:${String(reference.releaseVersion)}`,
+  );
+  if (found === undefined)
+    throw new TypeError(
+      `Placement names unregistered block release '${String(reference.blockId)}:${String(reference.releaseVersion)}'`,
+    );
+  return found;
+};
+
+/** The typed settings of one compiled placement, read by its registered release's declaration. */
+export const placementSettings = (
+  props: Readonly<Record<string, unknown>>,
+): Record<string, BlockPropertyValueContract> =>
+  compiledItemSettings(
+    props,
+    placementBlockRelease((props.vortex as { block?: unknown } | undefined)?.block),
   );

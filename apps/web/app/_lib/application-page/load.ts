@@ -11,7 +11,12 @@ import {
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
 } from "@vortex/platform/server";
-import { FORM_CONTAINER_BLOCK_RELEASE, runtimeDatabasePoolSize } from "@vortex/platform/server";
+import {
+  FORM_CONTAINER_BLOCK_RELEASE,
+  runtimeContextSelection,
+  runtimeDatabasePoolSize,
+  runtimePreviewOf,
+} from "@vortex/platform/server";
 import {
   describeFailure,
   type IdentitySession,
@@ -105,7 +110,11 @@ export const loadInstalledContext = (
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
       return createHumanInstalledPageBundleContextLoader({
         transaction,
-        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+        scope: {
+          organizationId: scope.organizationId,
+          applicationRootId: scope.applicationRootId,
+          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+        },
       }).load();
     },
   );
@@ -123,10 +132,7 @@ export const readPageProjections = cache(
     subjectRecordId: string | undefined,
   ) => {
     const dependencies = requestDependencies();
-    const selection: OrganizationSelectionCandidate = {
-      organizationId: context.organizationId,
-      applicationRootId: context.applicationRootId,
-    };
+    const selection: OrganizationSelectionCandidate = runtimeContextSelection(context);
     const projectedPageRead = createStoredPageCapabilityService({
       ...dependencies,
       context,
@@ -197,6 +203,7 @@ const loadApplicationPageJoined = async (
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
+    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
   };
 
   // The installed context is read once, under the person's own verified request scope. The address
@@ -229,7 +236,7 @@ const loadApplicationPageJoined = async (
   // The offered release is read under the viewer's own application scope. A refusal or an absent
   // target reads as "nothing to adopt"; publishing a release alone never changes this page.
   const adoptionRead =
-    selectedPlacementIds === undefined
+    selectedPlacementIds === undefined && runtimePreviewOf(context) === undefined
       ? readApplicationReleaseAdoption(session, {
           organizationId: context.organizationId,
           applicationRootId: context.applicationRootId,
