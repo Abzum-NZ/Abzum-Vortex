@@ -1,6 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
@@ -40,7 +40,7 @@ import {
   type StudioFlowRemoveCommand,
   type StudioFlowSettingCommand,
 } from "@vortex/ui/studio";
-import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
+import { createAppearanceRootProps, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { readStudioCanvasRecords, reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
@@ -66,8 +66,14 @@ import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-tool
 import { StudioInspector } from "./studio-inspector";
 import { StudioReleasesPanel } from "./studio-releases-panel";
 import {
-  StudioBlockOutlinePanel, StudioComingNextPanel, StudioFlowsPanel, StudioMenuPanel, StudioStructurePanel,
+  StudioBlockOutlinePanel, StudioComingNextPanel, StudioFlowsPanel, StudioStructurePanel,
 } from "./studio-outline-panels";
+import { StudioMenuPanel } from "./studio-menu-panel";
+import { StudioThemePanel, type StudioThemeChangeOutcome } from "./studio-theme-panel";
+import { useStudioDraftTheme } from "./use-studio-draft-theme";
+import { applyStudioMenuCommand, studioMenuPosition, type StudioMenuCommand, type StudioMenuResult } from "../_lib/application-menu";
+import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
+import type { StudioThemeOptions } from "../_lib/studio-theme-options";
 import {
   isStudioRailKey, isStudioReleasesSection, railShowsCanvas, studioRailTabs, studioReleasesSections,
   type StudioRailKey, type StudioReleasesSection,
@@ -93,12 +99,16 @@ const ApplicationPagePuckEditor = dynamic(
   () => import("@vortex/ui/studio/page-puck-editor").then((module) => module.ApplicationPagePuckEditor),
   { ssr: false });
 
-/** The application frame the canvas draws the page inside, from the compiled draft. */
-const canvasFrameFor = (frames: StudioApplicationCanvasFrames | null, pageAlias: string): StudioCanvasFrame | undefined => {
+/**
+ * The application frame the canvas draws the page inside: the compiled draft's shell, with the
+ * draft's menu and theme as they are edited, so Menu and Theme changes show before a save.
+ */
+const canvasFrameFor = (frames: StudioApplicationCanvasFrames | null, pageAlias: string,
+  source: ApplicationSourceDocument, theme: StudioCanvasFrame["theme"] | undefined): StudioCanvasFrame | undefined => {
   const page = frames?.pages[pageAlias];
-  return frames === null || page === undefined ? undefined : {
+  return frames === null || page === undefined || theme === undefined ? undefined : {
     applicationName: frames.applicationName, shells: frames.shells,
-    theme: frames.theme as StudioCanvasFrame["theme"], navigation: frames.navigation, ...page,
+    theme, navigation: studioDraftNavigation(source, frames.pages), ...page,
   };
 };
 
@@ -117,6 +127,8 @@ type WorkspaceProps = Readonly<{
   | Readonly<{ mode: "new"; organizationId: string }>
   | Readonly<{ mode: "existing"; organizationId: string; draft: StudioStoredApplicationDraft;
       place: StudioWorkspacePlace;
+      /** What the Theme tab offers, from the checked-in shadcn catalogue. */
+      themeOptions: StudioThemeOptions;
       initialTab?: string | undefined;
       initialSection?: string | undefined;
       /** The key of a module to open in the Data tab. */
@@ -189,6 +201,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new"
     ? <NewApplicationWorkspace organizationId={props.organizationId} />
     : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft} place={props.place}
+        themeOptions={props.themeOptions}
         initialTab={isStudioRailKey(props.initialTab) ? props.initialTab : "structure"}
         initialSection={isStudioReleasesSection(props.initialSection) ? props.initialSection : "history"}
         initialModule={props.initialModule ?? null}
@@ -205,8 +218,9 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 
 function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule, applications,
   initialSearchMetadata, initialBorrowedQueries, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
-  platformThemeTokens }: {
+  platformThemeTokens, themeOptions }: {
   organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
+  themeOptions: StudioThemeOptions;
   initialTab: StudioRailKey; initialSection: StudioReleasesSection; initialModule: string | null;
   applications: readonly StudioModuleOwnerApplication[];
   initialSearchMetadata: StudioApplicationSearchMetadata | null;
@@ -234,6 +248,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [previewPending, setPreviewPending] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
+  // The canvas previews the application in light or dark; the running application keeps its own toggle.
+  const [canvasAppearance, setCanvasAppearance] = useState<"light" | "dark">("light");
   const [publishOpen, setPublishOpen] = useState(false);
   const [publicationNote, setPublicationNote] = useState("");
   const [publicationProblem, setPublicationProblem] = useState("");
@@ -295,6 +311,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const sourceImportGeneration = useRef(0);
 
   const source = useMemo(() => applicationSourceDocumentSchema.parse(state.source), [state.source]);
+  const draftTheme = useStudioDraftTheme({ organizationId, rootId: draft.rootId, theme: source.body.theme,
+    compiledTheme: compiled.frames?.theme as StudioCanvasFrame["theme"] | undefined, compiledSourceTheme: compiled.source.body.theme });
   const inspector = resolveStudioSelectionInspectorContext({ rootId: state.rootId, source }, selected);
   const selectedPage = selected?.kind === "page"
     ? source.body.pages.find((page) => page.id === selected.pageAlias) : undefined;
@@ -313,8 +331,14 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return owners;
   }, [state.rootId, source, platformBlockCatalogue]);
   const selectedOwner = selected?.kind === "placement" ? placementOwners.get(selected.placementAlias) : undefined;
+  // A menu entry shows the page it opens; the Menu and Theme tabs otherwise show the home page, so
+  // their changes are seen in the application's frame.
+  const selectedEntry = selected?.kind === "navigation" ? studioMenuPosition(source, selected.navigationItemAlias)?.item : undefined;
+  const pageAliasOfKey = (key: string | undefined) => source.body.pages.find((page) => page.key === key)?.id;
   const canvasPageAlias = selected?.kind === "page" ? selected.pageAlias
-    : selectedOwner?.kind === "page" ? selectedOwner.pageAlias : undefined;
+    : selectedOwner?.kind === "page" ? selectedOwner.pageAlias
+      : selectedEntry?.type === "page" ? pageAliasOfKey(selectedEntry.page) ?? pageAliasOfKey(source.body.home_page)
+        : tab === "menu" || tab === "theme" ? pageAliasOfKey(source.body.home_page) : undefined;
   const canvasPage = canvasPageAlias === undefined ? undefined
     : source.body.pages.find((page) => page.id === canvasPageAlias);
   const canvasPageRef = useRef(canvasPage?.id);
@@ -1147,6 +1171,39 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return result;
   };
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
+  // The Menu tab's one edit path, the same as Structure's: a checked command taken by the draft history.
+  const commandMenu = (command: StudioMenuCommand): StudioMenuResult => {
+    if (!active.current || busy.any() || history.getState().isSaving)
+      return { kind: "refused", message: "Apply or discard the change that is waiting, or let the save finish, then try again." };
+    const result = applyStudioMenuCommand(history.getState().source, command);
+    if (result.kind !== "applied") return result;
+    if (!history.edit(result.source))
+      return { kind: "refused", message: "The draft history did not accept this change, so nothing was changed." };
+    changeSelection(result.select === null ? null : { kind: "navigation", navigationItemAlias: result.select });
+    setMessage(result.message);
+    return result;
+  };
+  // A Theme tab change: resolved with publication's checks first, then one edit of the draft's theme selection.
+  const changeThemeSelection = async (next: ApplicationSourceDocument["body"]["theme"]["selection"], what: string):
+    Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>> => {
+    const waiting = { kind: "refused", message: "Apply or discard the change that is waiting, or let the save finish, then try again." } as const;
+    const before = history.getState();
+    if (!active.current || busy.any("appearance") || before.isSaving) return waiting;
+    const candidate = applicationSourceDocumentSchema.parse(structuredClone(before.source));
+    candidate.body.theme.selection = next;
+    const result = await draftTheme.resolve(candidate.body.theme);
+    if (result.kind !== "available")
+      return { kind: "refused", message: result.kind === "refused"
+        ? "The theme could not be checked for this draft with your access, so nothing was changed."
+        : "The theme could not be checked just now, so nothing was changed. Try again." };
+    if (!result.valid) return { kind: "refused", message: `${what}: refused, so nothing was changed.`, problems: result.problems };
+    // The check is asynchronous: the change applies only to the draft it was checked against.
+    if (!active.current || history.getState().source !== before.source || busy.any("appearance") || history.getState().isSaving)
+      return { kind: "refused", message: "The draft changed while the theme was checked, so nothing was changed. Try again." };
+    if (!history.edit(candidate)) return { kind: "refused", message: "The draft history did not accept this change, so nothing was changed." };
+    setMessage(`${what}. Save to keep it.`);
+    return { kind: "applied", message: `${what}. The canvas shows it; save to keep it.` };
+  };
 
   const panels = <>
     <StudioStructurePanel {...outlinePanelProps} hidden={tab !== "structure"}
@@ -1159,16 +1216,19 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       <div ref={setPaletteHost} />
       {canvasPage === undefined && <p className="text-sm text-muted-foreground">Choose a page in Structure to add blocks to it.</p>}
     </StudioPanelShell>
-    <StudioMenuPanel {...outlinePanelProps} hidden={tab !== "menu"} />
+    <StudioMenuPanel source={source} hidden={tab !== "menu"}
+      selectedAlias={selected?.kind === "navigation" ? selected.navigationItemAlias : null}
+      onSelect={(alias) => { void chooseSelection(alias === null ? null : { kind: "navigation", navigationItemAlias: alias }); }}
+      onCommand={commandMenu} disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />
     <StudioDataPanel hidden={tab !== "data"} source={source} applications={applications}
       open={moduleKey} onOpen={(next) => { void openModule(next); }}
       search={<ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
         disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}
         onPendingChange={reportSearchPending} onRefresh={refreshSearchMetadata} onApply={applySearch} />} />
     <StudioFlowsPanel {...outlinePanelProps} hidden={tab !== "flows"} />
-    <StudioPanelShell title="Theme" hidden={tab !== "theme"}
-      description="Colours, type and corners for the whole application. Save to see them on the canvas.">
-      <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
+    <StudioThemePanel hidden={tab !== "theme"} selection={source.body.theme.selection} options={themeOptions}
+      disabled={busy.anyRendered("appearance") || state.isSaving || workspaceLifetime === 0} onChange={changeThemeSelection}
+      advanced={<ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
         rootId={state.rootId} draftRevision={state.draftRevision} source={source}
         validationEpoch={appearanceValidationEpoch}
         disabled={busy.anyRendered("appearance") || state.isSaving} onPendingChange={reportAppearancePending}
@@ -1180,8 +1240,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           const applied = history.edit(next);
           if (applied) setMessage("Appearance changed. Save to keep it.");
           return applied;
-        }} />
-    </StudioPanelShell>
+        }} />} />
     <StudioComingNextPanel title="Access" description="Who can see each page and block." hidden={tab !== "access"}>
       Roles, their permissions and each role&apos;s home page will be set here next. Today a selected block&apos;s
       visibility rule is set in the inspector.
@@ -1214,7 +1273,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     } : undefined}
     note={selected?.kind === "placement" ? undefined : selected?.kind === "flow"
       ? "Select a step in the flow to change its text or calculation."
-      : selected === null ? undefined : "This item cannot be edited here."}>
+      : selected === null ? undefined : selected.kind === "navigation" ? "Change this menu entry in the Menu tab."
+        : "This item cannot be edited here."}>
     {selected?.kind === "placement" && inspector.status === "resolved" &&
       <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
         selection={selected} disabled={busy.anyRendered("composition") || noEdit}
@@ -1237,15 +1297,19 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" &&
       <p className="text-sm text-muted-foreground">Choose a page in Structure to arrange it here.</p>}
     {/* The canvas measures its container, so it is drawn only while it is showing; its edits live in the draft history. */}
-    {canvasPage !== undefined && inspector.status === "resolved" &&
-      <div style={{ zoom: canvasZoom / 100 }}>
+    {canvasPage !== undefined && draftTheme.problem.length > 0 && <p role="alert" className="text-sm text-destructive">{draftTheme.problem}</p>}
+    {canvasPage !== undefined && (inspector.status === "resolved" || selected === null) &&
+      // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
+      <div {...createAppearanceRootProps(canvasAppearance)} style={{ ...createAppearanceRootProps(canvasAppearance).style, zoom: canvasZoom / 100 }}>
+        {/* A newly chosen icon library loads before the canvas draws with it; only the canvas waits. */}
+        <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Drawing the canvas with the new theme…</p>}>
         <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source}
           compiledSource={compiled.source}
           platformBlockCatalogue={platformBlockCatalogue}
           fieldInputControlReleases={fieldInputControlReleases}
           platformThemeTokens={platformThemeTokens}
           pageAlias={canvasPage.id} compiledSlots={compiled.slots?.[canvasPage.id]}
-          frame={canvasFrameFor(compiled.frames, canvasPage.id)}
+          frame={canvasFrameFor(compiled.frames, canvasPage.id, source, draftTheme.theme)}
           selectedPlacementAlias={selected?.kind === "placement" ? selected.placementAlias : null}
           onSelectPlacement={selectFromCanvas}
           breakpoint={canvasBreakpoint}
@@ -1258,6 +1322,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           readRecords={readCanvasRecords} updating={compiling}
           palette={addTargets === null ? undefined
             : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
+        </Suspense>
       </div>}
     {flowPane(busy.anyRendered("flowText", "flowAppend") || noEdit)}
   </section>;
@@ -1289,6 +1354,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       canvas={({ inspectorOpen, toggleInspector }) => <>
         <StudioCanvasToolbar title={centreTitle} breakpoint={canvasBreakpoint} onBreakpoint={setCanvasBreakpoint}
           zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={canvasShown && canvasPage !== undefined}
+          appearance={canvasAppearance} onAppearance={setCanvasAppearance}
           inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} />
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {canvasCentre}

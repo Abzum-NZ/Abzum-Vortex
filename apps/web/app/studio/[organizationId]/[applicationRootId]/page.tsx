@@ -6,6 +6,7 @@ import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { ApplicationDraftWorkspace, type StudioWorkspacePlace } from "../../_components/application-draft-workspace";
 import { findPinnedPlatformThemeRelease } from "../../_lib/pinned-platform-theme-release";
 import { loadStudioOrganizationHome } from "../../../_lib/studio-organization-home";
+import { studioThemeOptions } from "../../_lib/studio-theme-catalogue";
 import {
   FIELD_INPUT_CONTROL_RELEASES,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
@@ -51,6 +52,7 @@ export default async function StudioApplicationPage({ params, searchParams }: {
     ? home.roots.map((root) => ({ key: root.key, rootId: root.rootId, name: root.name })) : [];
   return <ApplicationDraftWorkspace key={`${result.organizationId}:${result.draft.rootId}`}
     mode="existing" organizationId={result.organizationId} draft={result.draft} place={place}
+    themeOptions={studioThemeOptions}
     initialTab={tab} initialSection={section}
     initialModule={module} applications={applications}
     searchMetadata={result.searchMetadata} borrowedQueries={result.borrowedQueries} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}

@@ -1,11 +1,13 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
   sameId,
   saveDefinitionDraftCommandSchema,
+  sourceApplicationThemeSchema,
   sourceThemeTokenValueSchema,
   translateDefinitionRuleFailures,
   type ApplicationContent,
@@ -37,6 +39,8 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
+import { tokenName } from "./_lib/studio-labels";
+import type { StudioThemeResolution } from "./_lib/studio-theme-options";
 
 const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
   mapWebError(cause, { route: "studio/actions", operation, code, fallback });
@@ -265,5 +269,52 @@ export async function validateStudioPlacementThemeOverrides(
   } catch (error) {
     console.error("STUDIO_PLACEMENT_THEME_CHECK_FAILED", error);
     return { kind: "temporarily_unavailable" };
+  }
+}
+
+const themeFailureWords: Readonly<Record<string, string>> = {
+  INSUFFICIENT_CONTRAST: "does not have enough contrast to be read",
+  HIDDEN_FOCUS: "would hide the focus outline",
+  TRANSLUCENT_BACKGROUND: "is see-through where a solid colour is needed",
+  UNKNOWN_THEME_OPTION: "is not an option of the pinned shadcn catalogue",
+  REFUSED_THEME_OPTION: "is refused by the platform's readability check",
+};
+const themeDimensionWords: Readonly<Record<string, string>> = {
+  style: "The style", baseColor: "The base colour", theme: "The theme colour", chartColor: "The chart colour",
+  radius: "The radius", menuColor: "The menu colour", menuAccent: "The menu accent", iconLibrary: "The icon library",
+  bodyFont: "The font", headingFont: "The heading font",
+};
+const describeThemeFailure = (failure: Readonly<{ code: string; tokenKey?: string | undefined }>): string => {
+  const words = themeFailureWords[failure.code] ?? `is refused (${failure.code.toLowerCase().replaceAll("_", " ")})`;
+  if (failure.tokenKey === undefined) return `This combination ${words}.`;
+  const subject = themeDimensionWords[failure.tokenKey] ?? `The colour “${tokenName(failure.tokenKey)}”`;
+  return `${subject} ${words} with these settings.`;
+};
+
+const themeRequestSchema = z.object({ rootId: z.string().min(1).max(200), theme: sourceApplicationThemeSchema }).strict();
+
+/**
+ * Resolves a candidate application theme with the producer publication uses, for the Theme tab's
+ * check before an edit and for the canvas, which draws the draft's theme as it is edited. The
+ * theme must keep the draft's pinned base release; only its selection and overrides change.
+ */
+export async function resolveStudioApplicationTheme(organizationId: string, candidate: unknown): Promise<StudioThemeResolution> {
+  const request = themeRequestSchema.safeParse(candidate);
+  if (!request.success) return refuse("resolve-theme", "STUDIO_THEME_REQUEST_INVALID", { kind: "refused" } as const, request.error);
+  const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId, { compile: false });
+  if (loaded.kind !== "available") return { kind: loaded.kind };
+  const draft = loaded.draft;
+  if (draft.rootId !== request.data.rootId ||
+    canonicalJson(draft.source.body.theme.base) !== canonicalJson(request.data.theme.base))
+    return refuse("resolve-theme", "STUDIO_THEME_BASE_MISMATCH", { kind: "refused" } as const);
+  try {
+    const release = findPinnedPlatformThemeRelease(request.data.theme.base);
+    if (release === undefined) return refuse("resolve-theme", "STUDIO_THEME_RELEASE_UNKNOWN", { kind: "refused" } as const);
+    const result = materialiseApplicationTheme(request.data.theme, draft.key, release);
+    if (result.valid) return { kind: "available", valid: true, theme: result.theme };
+    console.error(`[studio] theme resolution refused: ${result.failures.map((failure) => `${failure.code}:${failure.tokenKey ?? ""}`).slice(0, 8).join(",")}`);
+    return { kind: "available", valid: false, problems: [...new Set(result.failures.map(describeThemeFailure))].slice(0, 6) };
+  } catch (error) {
+    return refuse("resolve-theme", "STUDIO_THEME_RESOLUTION_FAILED", { kind: "temporarily_unavailable" } as const, error);
   }
 }
