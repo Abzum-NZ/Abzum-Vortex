@@ -1153,7 +1153,10 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
       }
       const node: unknown = content.find((value: unknown) => object(object(value).props).id === alias);
       const props = object(object(node).props);
-      const metadata = object(props.vortex);
+      // Drop Puck's copy of the old layout: the adapter would read a stale copy that differs
+      // from the authored layout as a Puck edit and write the old layout back.
+      const metadata = { ...object(props.vortex) };
+      delete metadata.responsive;
       const authored = object(metadata.authored);
       props.vortex = {
         ...metadata,
