@@ -53,6 +53,7 @@ import {
   normaliseModuleFieldValue,
   normaliseModuleTypedValue,
 } from "./values";
+import { moduleDependencies } from "../module-dependencies";
 
 function compileModule(
   source: JsonObject,
@@ -511,7 +512,8 @@ function compileModule(
       relationshipHops: query.relationship_hops,
     };
   });
-  const dependencies = (body.dependencies as JsonObject[]).map((dependency) => {
+  const derivedDependencies = moduleDependencies(source) as unknown as JsonObject[];
+  const dependencies = derivedDependencies.map((dependency) => {
     const requirement = dependency.version as Parameters<typeof compatibleVersion>[0];
     const target = resolution.definition(String(dependency.module), "module");
     return {
@@ -523,7 +525,7 @@ function compileModule(
     };
   });
   const dependencyByKey = new Map(
-    (body.dependencies as JsonObject[]).map((dependency, index) => [
+    derivedDependencies.map((dependency, index) => [
       String(dependency.dependency_key),
       dependencies[index]!,
     ]),

@@ -19,6 +19,7 @@ import { compileParsedDefinition } from "./compiler";
 import { DefinitionCompilationError } from "./compilation-error";
 import { extractModuleSourceIdentityRequirements } from "./source-identities";
 import { validateDefinitionSet } from "./validation";
+import { moduleDependencies } from "./module-dependencies";
 
 /** One reason a shipped source would be refused at publication, located on the offending part. */
 export type OfflineSourceFailure = Readonly<{
@@ -104,7 +105,7 @@ const compileModule = (
   compiled: ReadonlyMap<string, CompiledModule>,
   permissions: PlatformPermissionSource,
 ): { module?: CompiledModule; failures: OfflineSourceFailure[] } => {
-  const dependencies = source.body.dependencies.flatMap((entry) => {
+  const dependencies = moduleDependencies(source).flatMap((entry) => {
     const dependency = compiled.get(entry.module);
     return dependency === undefined ? [] : [dependency];
   });
@@ -245,9 +246,10 @@ export const compileModulesOffline = (
     const source = modules.get(key);
     if (source === undefined || started.has(key)) return;
     started.add(key);
-    for (const dependency of source.body.dependencies) visit(dependency.module);
+    const declared = moduleDependencies(source);
+    for (const dependency of declared) visit(dependency.module);
     if (notCompilable.has(key)) return;
-    const missing = source.body.dependencies.filter((entry) => !compiled.has(entry.module));
+    const missing = declared.filter((entry) => !compiled.has(entry.module));
     if (missing.length > 0) {
       failures.push({
         definitionKey: key,

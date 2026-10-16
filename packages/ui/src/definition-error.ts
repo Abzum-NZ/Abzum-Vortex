@@ -1,5 +1,6 @@
 import {
   compiledItemSlots,
+  compiledPropsSettings,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   type BlockPropertyValueContract,
@@ -230,7 +231,7 @@ export function validatePlacementSlots(
   const repeatableSlots = new Map<string, PlatformBlockRelease["slots"][number]>();
   for (const declaration of metadata.slots) {
     if (declaration.repeats === undefined) continue;
-    for (const identity of repeatableSlotItemIdentities(declaration, item.props.settings))
+    for (const identity of repeatableSlotItemIdentities(declaration, compiledPropsSettings(item.props)))
       repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
   }
 
@@ -368,7 +369,7 @@ export function validatePlacementTree(
         );
       }
 
-      validateAccessibleName(item.props.settings, registration.metadata.capabilities, placementLocation);
+      validateAccessibleName(compiledPropsSettings(item.props), registration.metadata.capabilities, placementLocation);
       validatePlacementSlots(item, registration.metadata, registry, placementLocation, options);
 
       const layouts = [vortex.responsive.desktop, vortex.responsive.tablet, vortex.responsive.phone];

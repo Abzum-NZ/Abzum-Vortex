@@ -5,7 +5,7 @@ import type {
   ApplicationCompilationOutput,
   ApplicationSourceDocument,
 } from "../../schema";
-import { satisfies } from "semver";
+import { gt, lt, satisfies } from "semver";
 import {
   compareDefinitionVersionImpactWithEvidence,
   compareDefinitionVersionImpact,
@@ -221,14 +221,18 @@ export function publicationCompatibilityRule(
         );
         continue;
       }
+      // One Application publication assigns one version to the Application and every inline
+      // Module it releases, from all of their changes together. So a candidate's version must be
+      // new, and at least what its own changes require; an Application whose only changes are in
+      // its Modules is released at the version their changes assign.
       if (result.outcome === "no_change") {
+        if (gt(output.artifact.exactVersion, result.currentVersion)) continue;
         failures.push(
           failure(output, "vortex.definition.publication_change_required", "invalid_value"),
         );
         continue;
       }
-      const candidateVersion = result.assignedVersion;
-      if (output.artifact.exactVersion !== candidateVersion) {
+      if (lt(output.artifact.exactVersion, result.assignedVersion)) {
         failures.push(
           failure(output, "vortex.definition.candidate_version_binding", "incompatible_version"),
         );

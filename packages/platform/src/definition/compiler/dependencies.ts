@@ -1,12 +1,13 @@
 import type { DefinitionCompilationOutput } from "../../schema";
 import type { Resolution } from "./resolution";
 import { applicationModuleKeysOf, asObject, fail, type JsonObject } from "./shared";
+import { moduleDependencies } from "../module-dependencies";
 
 export function dependencyOrder(source: JsonObject): string[] {
   const body = asObject(source.body);
   if (source.kind === "module")
     return [
-      ...(body.dependencies as JsonObject[]).map((entry) => String(entry.module)),
+      ...moduleDependencies(source).map((entry) => entry.module),
       String(source.key),
     ];
   if (source.kind === "application")
@@ -22,7 +23,7 @@ export function resolvedDependencies(source: JsonObject, resolution: Resolution)
   const body = asObject(source.body);
   const keys =
     source.kind === "module"
-      ? (body.dependencies as JsonObject[]).map((entry) => String(entry.module))
+      ? moduleDependencies(source).map((entry) => entry.module)
       : source.kind === "application"
         ? [
             ...applicationModuleKeysOf(body),

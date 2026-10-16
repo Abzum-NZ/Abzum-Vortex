@@ -21,10 +21,6 @@ export const conflictMessage = (reason: string | undefined, subject: string): st
         ? `The saved draft changed since you opened it. ${subject}`
         : `The draft changed or already exists. ${subject}`;
 
-/** A Module draft save the server refused: the reason the person can act on, without a subject. */
-export const moduleSaveRefusal = (reason: string | undefined): string =>
-  refusalMessage(reason, "").trim();
-
 export type StudioUnavailableKind =
   | "refused" | "conflict" | "temporarily_unavailable"
   | "validation_failed" | "dependency_unavailable" | "no_change";

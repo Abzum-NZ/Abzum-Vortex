@@ -251,15 +251,14 @@ const hasVisibleOwningFormField = (
       formId !== undefined &&
       isRecord(block) &&
       typeof block.blockId === "string" &&
-      typeof block.releaseVersion === "string" &&
-      isRecord(props.settings)
+      typeof block.releaseVersion === "string"
     ) {
       const blockId = block.blockId;
       const releaseVersion = block.releaseVersion;
       const registeredInput = inputReleases.some(
         (release) => sameId(release.blockId, blockId) && release.releaseVersion === releaseVersion,
       );
-      const name = props.settings.name;
+      const name = props.name;
       if (
         registeredInput &&
         isRecord(name) &&

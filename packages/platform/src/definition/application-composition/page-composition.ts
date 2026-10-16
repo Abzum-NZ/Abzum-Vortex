@@ -97,11 +97,66 @@ export const sourceResponsivePlacementSchema = z
   })
   .strict();
 
+/** The canonical form of one authored placement layout: only a grid width changes its keys. */
+export const canonicalPlacementLayout = (value: Record<string, unknown>): Record<string, unknown> => {
+  const width = value.width as Record<string, unknown>;
+  return {
+    visible: value.visible,
+    width:
+      width.kind === "grid"
+        ? { kind: "grid", startColumn: width.start_column, span: width.span }
+        : width,
+    height: value.height,
+  };
+};
+
+/** The complete canonical responsive layout of an authored one: each missing size inherits. */
+export const canonicalResponsivePlacement = (
+  authored: Readonly<Record<string, unknown>>,
+): Record<"desktop" | "tablet" | "phone", Record<string, unknown>> => {
+  const desktop = authored.desktop as Record<string, unknown>;
+  const tablet = (authored.tablet as Record<string, unknown> | undefined) ?? desktop;
+  const phone = (authored.phone as Record<string, unknown> | undefined) ?? tablet;
+  return {
+    desktop: canonicalPlacementLayout(desktop),
+    tablet: canonicalPlacementLayout(tablet),
+    phone: canonicalPlacementLayout(phone),
+  };
+};
+
+/** The canonical form of one authored theme token value: only multi-word keys change case. */
+export const canonicalThemeTokenValue = (value: Record<string, unknown>): unknown => {
+  switch (value.kind) {
+    case "typography":
+      return {
+        kind: value.kind,
+        family: value.family,
+        sizeRem: value.size_rem,
+        lineHeight: value.line_height,
+        weight: value.weight,
+      };
+    case "border":
+      return {
+        kind: value.kind,
+        widthRem: value.width_rem,
+        style: value.style,
+        colorToken: value.color_token,
+      };
+    case "focus":
+      return { kind: value.kind, colorToken: value.color_token, widthRem: value.width_rem };
+    case "asset":
+      return { kind: value.kind, assetId: value.asset_id };
+    default:
+      return value;
+  }
+};
+
 /**
  * The compiled, engine-facing layout takes Puck 0.23's data shape, exactly as the runtime renders
- * it. An item is `{ type, props }`: `type` is the block release's renderer key, `props.id` the
- * placement identity, `props.settings` the typed canonical setting values, every other prop but
- * `vortex` one child slot (an array of items, in desktop order), and `props.vortex` the resolved
+ * it, and the same shape as the authored item. An item is `{ type, props }`: `type` is the block
+ * release's renderer key, `props.id` the placement identity, every other prop but `vortex` either
+ * one setting (its typed canonical value, an object tagged with its `kind`) or one child slot (an
+ * array of items, in desktop order), and `props.vortex` the resolved
  * Vortex metadata: the exact block release, access and data bindings, theme overrides, the complete
  * responsive layout and the complete tablet and phone order of every child slot.
  */
@@ -120,9 +175,9 @@ export type CompiledItemVortex = {
 
 export type CompiledItemProps = {
   id: string;
-  settings: Record<string, BlockPropertyValueContract>;
   vortex: CompiledItemVortex;
-  [slotKey: string]: unknown;
+  /** One setting (its typed canonical value) or one child slot (an array of items). */
+  [key: string]: unknown;
 };
 
 export type CompiledItem = { type: string; props: CompiledItemProps };
@@ -138,14 +193,38 @@ export type ProjectedItem = {
   };
 };
 
-/** The props of an item that are not child slots. */
-export const compiledItemReservedProps: ReadonlySet<string> = new Set(["id", "settings", "vortex"]);
+/** The props of an item that are neither settings nor child slots. */
+export const compiledItemReservedProps: ReadonlySet<string> = new Set(["id", "vortex"]);
 
-/** The item's child slots, in prop order: every prop but `id`, `settings` and `vortex`. */
+/** The item's child slots, in prop order: every array prop but `id` and `vortex`. */
 export const compiledItemSlots = (item: CompiledItem): [string, CompiledItem[]][] =>
   Object.entries(item.props).flatMap(([key, value]): [string, CompiledItem[]][] =>
-    compiledItemReservedProps.has(key) ? [] : [[key, value as CompiledItem[]]],
+    compiledItemReservedProps.has(key) || !Array.isArray(value)
+      ? []
+      : [[key, value as CompiledItem[]]],
   );
+
+/**
+ * The settings of an item's props, keyed by property: every kind-tagged object prop but `vortex`.
+ * A setting is a kind-tagged object and a slot an array, so no release is needed to tell them
+ * apart, and the settings the compiler derives beyond the block's own declarations (a field
+ * input's control, name and requirement) are read like any other. Props a renderer receives
+ * besides the item's own (Puck's context, host wrappers) carry no kind and are not settings.
+ */
+export const compiledPropsSettings = (
+  props: Readonly<Record<string, unknown>>,
+): Record<string, BlockPropertyValueContract> =>
+  Object.fromEntries(
+    Object.entries(props).filter(
+      ([key, value]) =>
+        !compiledItemReservedProps.has(key) &&
+        value !== undefined &&
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        typeof (value as { kind?: unknown }).kind === "string",
+    ),
+  ) as Record<string, BlockPropertyValueContract>;
 
 /** Every item in the list and their descendants, depth first in desktop order. */
 export const compiledItemTree = (
@@ -218,17 +297,16 @@ export const compiledItemSchema: z.ZodType<CompiledItem> = z.lazy(() =>
       props: z
         .object({
           id: containedComponentIdSchema,
-          settings: z.record(builderKeySchema, blockPropertyValueSchema),
           vortex: compiledItemVortexSchema,
         })
-        .catchall(z.array(compiledItemSchema))
+        .catchall(z.union([z.array(compiledItemSchema), blockPropertyValueSchema]))
         .superRefine((props, context) => {
           const zones = new Map<string, readonly CompiledItem[]>();
           for (const [key, value] of Object.entries(props)) {
             if (compiledItemReservedProps.has(key)) continue;
             if (!builderKeySchema.safeParse(key).success)
-              context.addIssue({ code: "custom", path: [key], message: "Invalid slot key" });
-            zones.set(key, value as CompiledItem[]);
+              context.addIssue({ code: "custom", path: [key], message: "Invalid prop key" });
+            if (Array.isArray(value)) zones.set(key, value as CompiledItem[]);
           }
           refineZoneOrders(
             props.vortex.slotOrders as Record<string, BreakpointOrder>,
