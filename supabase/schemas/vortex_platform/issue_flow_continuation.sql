@@ -27,10 +27,7 @@ begin
     or pg_catalog.length(p_release_key) not between 1 and 200
     or p_state is null
     or pg_catalog.jsonb_typeof(p_state) <> 'object'
-    -- The largest suspended run is an Access role change waiting for its second confirmation: the
-    -- prepared evidence carries each permission's registration entry up to three times (about
-    -- 4 KB a permission), so 4 MiB holds a role of about a thousand permissions.
-    or pg_catalog.pg_column_size(p_state) > 4194304
+    or pg_catalog.pg_column_size(p_state) > 262144
     or p_elapsed_milliseconds is null
     or p_elapsed_milliseconds not between 0 and 3600000
     or p_lifetime_seconds is null
