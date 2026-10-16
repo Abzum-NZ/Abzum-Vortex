@@ -11,6 +11,7 @@ import {
   type RecordsDisplayFormat,
 } from "../schema";
 import type { ProtectedQueryRow } from "../queries/index";
+import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 
 /**
@@ -19,7 +20,7 @@ import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-
  */
 export type ProjectedCellValue =
   | Readonly<{ kind: "text"; text: string }>
-  | Readonly<{ kind: "number"; value: number }>
+  | Readonly<{ kind: "number"; value: number; formatted: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
   | Readonly<{ kind: "link"; address: string; label: string }>
@@ -54,9 +55,7 @@ const asRecordLink = (value: JsonValue): RecordLinkReference | undefined => {
   const { recordTypeId, recordId } = value;
   if (keys.length === 1 && typeof value.organizationAccountId === "string")
     return { organizationAccountId: value.organizationAccountId };
-  return keys.length === 2 &&
-    typeof recordTypeId === "string" &&
-    typeof recordId === "string"
+  return keys.length === 2 && typeof recordTypeId === "string" && typeof recordId === "string"
     ? { recordTypeId, recordId }
     : undefined;
 };
@@ -209,6 +208,12 @@ const projectLink = (value: string, linkType: LinkFieldType): ProjectedCellValue
   return { kind: "text", text: value };
 };
 
+const numberCell = (value: number, grouped: boolean): ProjectedCellValue => ({
+  kind: "number",
+  value,
+  formatted: grouped ? formatDecimal(value) : String(value),
+});
+
 /**
  * Maps one stored value to a closed display value by the declared format. A value that does not
  * fit its declared format is shown as plain text, and a formatted-text document is shown as rich text,
@@ -222,7 +227,8 @@ const projectCell = (
   recordLinks?: ProjectedRecordLinks,
   linkType?: LinkFieldType,
 ): ProjectedCellValue => {
-  const format = declaredFormat === "automatic" && dateType !== undefined ? dateType : declaredFormat;
+  const format =
+    declaredFormat === "automatic" && dateType !== undefined ? dateType : declaredFormat;
   if (value === null) return empty;
   if (linkType !== undefined && typeof value === "string" && value.trim().length > 0)
     return projectLink(value, linkType);
@@ -262,7 +268,9 @@ const projectCell = (
   const document = richTextDocumentSchema.safeParse(value);
   if (document.success) return { kind: "rich_text", document: document.data };
   if (typeof value === "object" && !Array.isArray(value) && "blocks" in value)
-    console.error(`[page] formatted text value is not a valid document: RICH_TEXT_DOCUMENT_INVALID issues=${document.error.issues.length}`);
+    console.error(
+      `[page] formatted text value is not a valid document: RICH_TEXT_DOCUMENT_INVALID issues=${document.error.issues.length}`,
+    );
   // A money value is its exact amount with its currency code.
   if (
     typeof value === "object" &&
@@ -270,12 +278,14 @@ const projectCell = (
     typeof value.amount === "string" &&
     typeof value.currency === "string"
   )
-    return { kind: "text", text: `${value.currency} ${value.amount}` };
+    return { kind: "text", text: formatMoney({ currency: value.currency, amount: value.amount }) };
   switch (format) {
     case "number":
     case "currency":
     case "percent":
-      if (typeof value === "number" && Number.isFinite(value)) return { kind: "number", value };
+      if (typeof value === "number" && Number.isFinite(value)) return numberCell(value, true);
+      if (typeof value === "string" && isExactDecimal(value))
+        return { kind: "number", value: Number(value), formatted: formatDecimal(value) };
       break;
     case "boolean":
       if (typeof value === "boolean") return { kind: "boolean", value };
@@ -285,7 +295,7 @@ const projectCell = (
       if (typeof value === "string" && value.length > 0) return projectDate(value);
       break;
     case "automatic":
-      if (typeof value === "number" && Number.isFinite(value)) return { kind: "number", value };
+      if (typeof value === "number" && Number.isFinite(value)) return numberCell(value, false);
       if (typeof value === "boolean") return { kind: "boolean", value };
       break;
     case "text":

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { formatDecimal, formatMoney } from "./value-format";
+
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
@@ -100,17 +102,15 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): BoardCellValue
       return typeof value === "string" ? { kind: "text", text: value } : undefined;
     case "whole_number":
       return typeof value === "number" && Number.isSafeInteger(value)
-        ? { kind: "number", value }
+        ? { kind: "number", value, formatted: formatDecimal(value) }
         : undefined;
     case "decimal_number": {
       const decimal = exactDecimalTextSchema.safeParse(value);
-      return decimal.success ? { kind: "text", text: decimal.data } : undefined;
+      return decimal.success ? { kind: "text", text: formatDecimal(decimal.data) } : undefined;
     }
     case "money": {
       const money = moneyValueSchema.safeParse(value);
-      return money.success
-        ? { kind: "text", text: `${money.data.currency} ${money.data.amount}` }
-        : undefined;
+      return money.success ? { kind: "text", text: formatMoney(money.data) } : undefined;
     }
     case "yes_no":
       return typeof value === "boolean" ? { kind: "boolean", value } : undefined;
@@ -203,7 +203,7 @@ const metricValue = (
     return typeof result.value === "number" &&
       Number.isSafeInteger(result.value) &&
       result.value >= 0
-      ? { kind: "number", value: result.value }
+      ? { kind: "number", value: result.value, formatted: formatDecimal(result.value) }
       : undefined;
   if (result.value === null || result.valueCount === 0) return { kind: "empty" };
   if (field === undefined) return undefined;
@@ -232,20 +232,18 @@ const metricValue = (
         : undefined;
     case "whole_number":
       if (typeof result.value === "number" && Number.isSafeInteger(result.value))
-        return { kind: "number", value: result.value };
+        return { kind: "number", value: result.value, formatted: formatDecimal(result.value) };
       {
         const exact = exactDecimalTextSchema.safeParse(result.value);
-        return exact.success ? { kind: "text", text: exact.data } : undefined;
+        return exact.success ? { kind: "text", text: formatDecimal(exact.data) } : undefined;
       }
     case "decimal_number": {
       const exact = exactDecimalTextSchema.safeParse(result.value);
-      return exact.success ? { kind: "text", text: exact.data } : undefined;
+      return exact.success ? { kind: "text", text: formatDecimal(exact.data) } : undefined;
     }
     case "money": {
       const money = moneyValueSchema.safeParse(result.value);
-      return money.success
-        ? { kind: "text", text: `${money.data.currency} ${money.data.amount}` }
-        : undefined;
+      return money.success ? { kind: "text", text: formatMoney(money.data) } : undefined;
     }
     case "date":
     case "date_time":
@@ -279,7 +277,7 @@ const projectMetrics = (
 
 type BoardCellValue =
   | Readonly<{ kind: "text"; text: string }>
-  | Readonly<{ kind: "number"; value: number }>
+  | Readonly<{ kind: "number"; value: number; formatted: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
   | Readonly<{ kind: "rich_text"; document: ReturnType<typeof richTextDocumentSchema.parse> }>

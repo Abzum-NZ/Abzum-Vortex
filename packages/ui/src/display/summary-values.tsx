@@ -1,14 +1,14 @@
 import type { ReactElement } from "react";
-import { Card } from "../components/card";
 import { DisplayCellView } from "./cell";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
+import { MetricCard } from "./metric-card";
 import type { SummaryPayload } from "./projected-data";
 
 /**
- * Shared browser-safe display component for labelled summary values, rendered as shadcn Cards
- * inside a named region. Renders stable-keyed values, each in its own small card.
+ * Shared browser-safe display component for labelled summary values, rendered as metric cards
+ * inside a named region. Renders stable-keyed values, each in its own card.
  * Never executes or fetches a Query.
  */
 export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>): ReactElement {
@@ -36,27 +36,19 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-          <dl className="m-0 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {values.values.map((item) => (
-              <Card
-                key={item.key}
-                size="sm"
-                data-vortex-summary-key={item.key}
-                className="min-w-0 gap-1 px-(--card-spacing)"
-              >
-                <dt className="text-sm text-muted-foreground">{item.label}</dt>
-                <dd className="break-words font-heading text-base font-medium">
-                  {item.value.kind === "unavailable" ? (
-                    <span role="status" data-vortex-summary-value-state="unavailable">
-                      Unavailable
-                    </span>
-                  ) : (
-                    <DisplayCellView value={item.value} />
-                  )}
-                </dd>
-              </Card>
+              <MetricCard key={item.key} label={item.label} data-vortex-summary-key={item.key}>
+                {item.value.kind === "unavailable" ? (
+                  <span role="status" data-vortex-summary-value-state="unavailable">
+                    Unavailable
+                  </span>
+                ) : (
+                  <DisplayCellView value={item.value} />
+                )}
+              </MetricCard>
             ))}
-          </dl>
+          </div>
         </section>
       )}
     </DisplayStateContainer>
