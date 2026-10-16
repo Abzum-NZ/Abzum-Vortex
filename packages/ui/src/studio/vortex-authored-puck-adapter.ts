@@ -2,22 +2,28 @@ import type { ComponentData, Content, Data } from "@puckeditor/core";
 import {
   applicationPuckRootShellSchema,
   immutablePlatformBlockCatalogueSchema,
-  isRepeatableSlotIdentity,
-  repeatableSlotItemIdentities,
-  repeatableSlotKey,
+  isSourceItemShape,
+  plainSourceSettingValue,
+  readSourceItem,
+  reservedItemPropKeys,
   sourceApplicationShellSchema,
-  sourceBlockPropertyValueSchema,
-  sourcePlacementSlotSchema,
+  sourceItemSchema,
   sourceResponsivePlacementSchema,
+  sourceSlotBreakpointOrders,
   sourceThemeTokenValueSchema,
-  validateComponentSettings,
   type PlatformBlockRelease,
+  type SourceApplicationShell,
+  type SourceBlockPropertyValueContract,
+  type SourceItem,
+  type SourceItemVortex,
+  type SourcePageZone,
+  type SourceSlotOrder,
 } from "@vortex/platform/schema";
 
-type SourceSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
-type SourcePlacement = SourceSlot["placements"][string];
-type SourceShell = ReturnType<typeof sourceApplicationShellSchema.parse>;
-type SourceOrder = SourceSlot["order"];
+type Zone = { items: SourceItem[]; order: SourceSlotOrder | undefined };
+/** The private Puck order of one slot: its desktop order and any authored tablet and phone order. */
+type PuckOrder = { desktop: string[]; tablet?: string[] | undefined; phone?: string[] | undefined };
+type TypedSettings = Record<string, SourceBlockPropertyValueContract>;
 type Reservations = ReadonlyMap<string, ReadonlySet<string>>;
 type SlotIdentity =
   Readonly<{ kind: "root" }> | Readonly<{ kind: "child"; parentAlias: string; slotKey: string }>;
@@ -42,18 +48,17 @@ export class AuthoredPuckSettingRefusal extends TypeError {
   }
 }
 
-const object = (value: unknown): Record<string, unknown> => {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return refuse();
+const plainObject = (value: unknown): value is Record<string, unknown> => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) return refuse();
-  if (
-    Object.values(Object.getOwnPropertyDescriptors(value)).some(
-      (property) => property.get !== undefined || property.set !== undefined,
-    )
-  )
-    refuse();
-  return value as Record<string, unknown>;
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  return Object.values(Object.getOwnPropertyDescriptors(value)).every(
+    (property) => property.get === undefined && property.set === undefined,
+  );
 };
+
+const object = (value: unknown): Record<string, unknown> =>
+  plainObject(value) ? value : refuse();
 
 const closed = (value: unknown, keys: readonly string[]): Record<string, unknown> => {
   const record = object(value);
@@ -100,11 +105,11 @@ const sameJsonValue = (left: unknown, right: unknown): boolean => {
     key === otherKeys[index] && sameJsonValue(a[key], b[key]));
 };
 
-// Puck slots use the same declared key the page renderer passes to the component.
-const puckSlotKey = (sourceKey: string): string => sourceKey;
+const sameList = (left: readonly string[], right: readonly string[]): boolean =>
+  left.length === right.length && left.every((id, index) => id === right[index]);
 
-const puckResponsive = (value: SourcePlacement["responsive"]) => {
-  const layout = (source: SourcePlacement["responsive"]["desktop"]) => ({
+const puckResponsive = (value: SourceItemVortex["responsive"]) => {
+  const layout = (source: SourceItemVortex["responsive"]["desktop"]) => ({
     visible: source.visible,
     width:
       source.width.kind === "grid"
@@ -118,7 +123,7 @@ const puckResponsive = (value: SourcePlacement["responsive"]) => {
   return { desktop, tablet, phone };
 };
 
-const puckThemeOverrides = (values: SourcePlacement["theme_overrides"]) =>
+const puckThemeOverrides = (values: SourceItemVortex["theme_overrides"]) =>
   Object.fromEntries(
     Object.entries(values).map(([key, value]) => {
       switch (value.kind) {
@@ -147,7 +152,7 @@ const puckThemeOverrides = (values: SourcePlacement["theme_overrides"]) =>
     }),
   );
 
-const sourceThemeOverrides = (candidate: unknown): SourcePlacement["theme_overrides"] => {
+const sourceThemeOverrides = (candidate: unknown): SourceItemVortex["theme_overrides"] => {
   const values = object(candidate);
   const source = Object.fromEntries(
     Object.entries(values)
@@ -194,10 +199,10 @@ const sourceThemeOverrides = (candidate: unknown): SourcePlacement["theme_overri
   );
   return Object.fromEntries(
     Object.entries(source).map(([key, value]) => [key, sourceThemeTokenValueSchema.parse(value)]),
-  ) as SourcePlacement["theme_overrides"];
+  ) as SourceItemVortex["theme_overrides"];
 };
 
-const sourceResponsive = (candidate: unknown): SourcePlacement["responsive"] => {
+const sourceResponsive = (candidate: unknown): SourceItemVortex["responsive"] => {
   const responsive = closed(candidate, ["desktop", "tablet", "phone"]);
   const layout = (raw: unknown) => {
     const value = closed(raw, ["visible", "width", "height"]);
@@ -215,70 +220,79 @@ const sourceResponsive = (candidate: unknown): SourcePlacement["responsive"] => 
   });
 };
 
-const sourcePropertyValue = (candidate: unknown): unknown => {
+// A Puck setting value is the typed source value or, for a compiled value the canvas shows, its
+// canonical spelling. Each reference kind names its source key and its canonical key.
+const referenceKeys: Readonly<Record<string, readonly [source: string, canonical: string]>> = {
+  asset_reference: ["asset_id", "assetId"],
+  icon: ["icon_key", "iconKey"],
+  theme_token: ["token", "tokenKey"],
+  field_reference: ["field", "fieldId"],
+  relationship_reference: ["relationship", "relationshipId"],
+  action_reference: ["action", "actionKey"],
+  page_reference: ["page", "pageId"],
+  query_reference: ["query", "queryId"],
+  pipeline_reference: ["pipeline", "pipelineId"],
+  record_type_reference: ["record_type", "recordType"],
+};
+
+const sourcePropertyValue = (candidate: unknown): SourceBlockPropertyValueContract => {
   const raw = object(candidate);
-  const source = sourceBlockPropertyValueSchema.safeParse(raw);
-  if (source.success) return source.data;
-  switch (raw.kind) {
-    case "asset_reference":
-      return { kind: raw.kind, asset_id: raw.assetId };
-    case "icon":
-      return { kind: raw.kind, icon_key: raw.iconKey };
-    case "theme_token":
-      return { kind: raw.kind, token: raw.tokenKey };
-    case "field_reference":
-      return { kind: raw.kind, field: raw.fieldId };
-    case "relationship_reference":
-      return { kind: raw.kind, relationship: raw.relationshipId };
-    case "action_reference":
-      return { kind: raw.kind, action: raw.actionKey };
-    case "page_reference":
-      return { kind: raw.kind, page: raw.pageId };
-    case "query_reference":
-      return { kind: raw.kind, query: raw.queryId };
-    case "pipeline_reference":
-      return { kind: raw.kind, pipeline: raw.pipelineId };
-    case "record_type_reference":
-      return { kind: raw.kind, record_type: raw.recordType };
-    case "record_reference":
+  const kind = text(raw.kind);
+  if (Object.hasOwn(referenceKeys, kind)) {
+    const [sourceKey, canonicalKey] = referenceKeys[kind]!;
+    const value = Object.hasOwn(raw, sourceKey)
+      ? closed(raw, ["kind", sourceKey])[sourceKey]
+      : closed(raw, ["kind", canonicalKey])[canonicalKey];
+    return { kind, [sourceKey]: text(value) } as unknown as SourceBlockPropertyValueContract;
+  }
+  switch (kind) {
+    case "record_reference": {
+      const source = Object.hasOwn(raw, "record_type") || Object.hasOwn(raw, "record_id");
+      const value = source
+        ? closed(raw, ["kind", "record_type", "record_id"])
+        : closed(raw, ["kind", "recordType", "recordId"]);
       return {
-        kind: raw.kind,
-        record_type: raw.recordType,
-        record_id: raw.recordId,
+        kind,
+        record_type: text(source ? value.record_type : value.recordType),
+        record_id: text(source ? value.record_id : value.recordId),
       };
+    }
     case "group":
       return {
-        kind: raw.kind,
+        kind,
         properties: Object.fromEntries(
-          Object.entries(object(raw.properties)).map(([key, value]) => [
-            key,
-            sourcePropertyValue(value),
-          ]),
+          Object.entries(object(closed(raw, ["kind", "properties"]).properties)).map(
+            ([key, value]) => [key, sourcePropertyValue(value)],
+          ),
         ),
       };
     case "list": {
-      if (!Array.isArray(raw.items)) return refuse();
-      return { kind: raw.kind, items: raw.items.map(sourcePropertyValue) };
+      const items = closed(raw, ["kind", "items"]).items;
+      if (!Array.isArray(items)) return refuse();
+      return { kind, items: items.map(sourcePropertyValue) };
     }
     default:
-      return sourceBlockPropertyValueSchema.parse(raw);
+      return {
+        kind,
+        value: closed(raw, ["kind", "value"]).value,
+      } as unknown as SourceBlockPropertyValueContract;
   }
 };
 
 const sourceSettings = (
   candidate: unknown,
   allowed: ReadonlySet<string>,
-  original: SourcePlacement["settings"] | undefined,
+  original: TypedSettings | undefined,
   compiled: Readonly<Record<string, unknown>>,
-): SourcePlacement["settings"] => Object.fromEntries(
+): TypedSettings => Object.fromEntries(
   Object.entries(object(candidate)).flatMap(([key, value]) => {
     if (value === undefined) return [];
     if (!allowed.has(key) && Object.hasOwn(compiled, key)) return [];
     if (original?.[key] === undefined && Object.hasOwn(compiled, key) &&
       sameJsonValue(value, compiled[key])) return [];
-    return [[key, sourceBlockPropertyValueSchema.parse(sourcePropertyValue(value))]];
+    return [[key, sourcePropertyValue(value)]];
   }),
-) as SourcePlacement["settings"];
+);
 
 const sameSlot = (left: SlotIdentity, right: SlotIdentity): boolean =>
   left.kind === "root"
@@ -287,14 +301,27 @@ const sameSlot = (left: SlotIdentity, right: SlotIdentity): boolean =>
       left.parentAlias === right.parentAlias &&
       left.slotKey === right.slotKey;
 
-const sameOrder = (left: SourceOrder, right: SourceOrder): boolean =>
+const sameOrder = (left: PuckOrder, right: PuckOrder): boolean =>
   (["desktop", "tablet", "phone"] as const).every((breakpoint) => {
     const a = left[breakpoint];
     const b = right[breakpoint];
-    return a === undefined
-      ? b === undefined
-      : b !== undefined && a.length === b.length && a.every((id, index) => id === b[index]);
+    return a === undefined ? b === undefined : b !== undefined && sameList(a, b);
   });
+
+const puckOrderOf = (items: readonly SourceItem[], order: SourceSlotOrder | undefined): PuckOrder => ({
+  desktop: items.map((item) => item.props.id),
+  ...(order?.tablet === undefined ? {} : { tablet: [...order.tablet] }),
+  ...(order?.phone === undefined ? {} : { phone: [...order.phone] }),
+});
+
+/** The authored tablet and phone order of a Puck order; undefined when neither is declared. */
+const slotOrderOf = (order: PuckOrder): SourceSlotOrder | undefined =>
+  order.tablet === undefined && order.phone === undefined
+    ? undefined
+    : {
+        ...(order.tablet === undefined ? {} : { tablet: order.tablet }),
+        ...(order.phone === undefined ? {} : { phone: order.phone }),
+      };
 
 /** Retain surviving explicit order and insert new children at their desktop positions. */
 const adjustedOrder = (saved: readonly string[], desktop: readonly string[]): string[] => {
@@ -316,9 +343,9 @@ const adjustedOrder = (saved: readonly string[], desktop: readonly string[]): st
  */
 const sourceOrder = (
   desktop: string[],
-  original: SourceOrder | undefined,
-  hints: readonly SourceOrder[],
-): SourceOrder => {
+  original: PuckOrder | undefined,
+  hints: readonly PuckOrder[],
+): PuckOrder => {
   let saved = original;
   if (hints.length > 0) {
     saved = hints[0]!;
@@ -331,9 +358,29 @@ const sourceOrder = (
   };
 };
 
+/** One authored slot order: closed, and each declared breakpoint a permutation of the slot. */
+const parseSlotOrder = (candidate: unknown, desktop: readonly string[]): SourceSlotOrder => {
+  const order = closed(candidate, ["tablet", "phone"]);
+  const result: SourceSlotOrder = {};
+  for (const breakpoint of ["tablet", "phone"] as const) {
+    const value = order[breakpoint];
+    if (value === undefined) continue;
+    if (!Array.isArray(value)) return refuse();
+    const ids = value.map(text);
+    if (
+      ids.length !== desktop.length ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !desktop.includes(id))
+    )
+      refuse();
+    result[breakpoint] = ids;
+  }
+  return result;
+};
+
 /**
  * A source-native, private Studio bridge. It resolves no identities and performs
- * no reads or writes. A caller applies the returned authored region to its own
+ * no reads or writes. A caller applies the returned authored zone to its own
  * current, revision-bound document before using ordinary draft history/save.
  */
 export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
@@ -345,49 +392,71 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
         release,
       ]),
     );
-    const releaseFor = (placement: SourcePlacement): PlatformBlockRelease =>
-      releases.get(`${placement.block.block_id}:${placement.block.release_version}`) ?? refuse();
+    const releaseOf = (block: unknown): PlatformBlockRelease => {
+      const reference = object(block);
+      return releases.get(`${text(reference.block_id)}:${text(reference.release_version)}`) ??
+        refuse();
+    };
+    const releaseFor = (item: SourceItem): PlatformBlockRelease =>
+      releaseOf(item.props.vortex.block);
 
-    // Bound the raw placement tree before recursive source parsing or conversion.
+    // Bound the raw item tree before recursive source parsing or conversion.
     const boundSource = (candidate: unknown): void => {
       const pending = [{ value: candidate, depth: 1, exit: false }];
       const ancestors = new Set<object>();
       let count = 0;
       while (pending.length > 0) {
         const { value, depth, exit } = pending.pop()!;
-        const slot = object(value);
+        if (!Array.isArray(value)) return refuse();
         if (exit) {
-          ancestors.delete(slot);
+          ancestors.delete(value);
           continue;
         }
-        if (ancestors.has(slot)) refuse();
-        ancestors.add(slot);
+        if (ancestors.has(value)) refuse();
+        ancestors.add(value);
         pending.push({ value, depth, exit: true });
-        for (const placementValue of Object.values(object(slot.placements))) {
+        for (const raw of value) {
           count += 1;
           if (
             count > catalogue.compositionPolicy.maximumPlacements ||
             depth > catalogue.compositionPolicy.maximumDepth
           )
             refuse();
-          const placement = object(placementValue);
-          for (const child of Object.values(object(placement.slots)))
-            pending.push({ value: child, depth: depth + 1, exit: false });
+          const props = object(object(raw).props);
+          for (const [key, child] of Object.entries(props))
+            if (
+              !reservedItemPropKeys.has(key) &&
+              Array.isArray(child) &&
+              child.length > 0 &&
+              child.every((entry: unknown) => plainObject(entry) && isSourceItemShape(entry))
+            )
+              pending.push({ value: child, depth: depth + 1, exit: false });
         }
       }
     };
 
-    const parseSlot = (candidate: unknown): SourceSlot => {
-      boundSource(candidate);
-      return sourcePlacementSlotSchema.parse(candidate);
+    const parseZone = (candidate: unknown): Zone => {
+      const zone = closed(candidate, ["items", "order"]);
+      boundSource(zone.items);
+      const items = sourceItemSchema.array().parse(zone.items);
+      const order =
+        zone.order === undefined
+          ? undefined
+          : parseSlotOrder(zone.order, items.map((item) => item.props.id));
+      return { items, order };
     };
 
-    const parseShell = (candidate: unknown): SourceShell => {
-      boundSource(object(candidate).layout);
+    const parseShell = (candidate: unknown): SourceApplicationShell => {
+      boundSource(object(object(candidate).layout).content);
       return sourceApplicationShellSchema.parse(candidate);
     };
 
-    const reservationsFor = (shell: SourceShell): Reservations => {
+    const shellZone = (shell: SourceApplicationShell): Zone => ({
+      items: shell.layout.content,
+      order: shell.layout.root.props.vortex.slot_orders.content,
+    });
+
+    const reservationsFor = (shell: SourceApplicationShell): Reservations => {
       const reservations = new Map<string, Set<string>>();
       for (const slot of shell.content_slots) {
         const keys = reservations.get(slot.parent_placement) ?? new Set<string>();
@@ -397,58 +466,46 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
       return reservations;
     };
 
-    const slotDeclarations = (placement: SourcePlacement, release: PlatformBlockRelease) => {
-      const declarations = new Map<string, PlatformBlockRelease["slots"][number]>();
-      for (const declaration of release.slots) {
-        if (declaration.repeats === undefined) {
-          declarations.set(declaration.key, declaration);
-          continue;
-        }
-        const identities = repeatableSlotItemIdentities(declaration, placement.settings);
-        if (
-          new Set(identities).size !== identities.length ||
-          identities.some((identity) => !isRepeatableSlotIdentity(declaration.key, identity))
-        )
-          refuse();
-        for (const identity of identities)
-          declarations.set(repeatableSlotKey(declaration.key, identity), declaration);
-      }
-      return declarations;
-    };
-
-    const validateTree = (slot: SourceSlot, reservations: Reservations): void => {
+    const validateTree = (zone: Zone, reservations: Reservations): void => {
       const seen = new Set<string>();
       const visit = (
-        current: SourceSlot,
+        items: readonly SourceItem[],
+        order: SourceSlotOrder | undefined,
         parentDeclaration?: PlatformBlockRelease["slots"][number],
         responsiveOrderAllowed = true,
       ): void => {
-        const tablet = current.order.tablet ?? current.order.desktop;
-        const phone = current.order.phone ?? tablet;
+        const orders = sourceSlotBreakpointOrders(items, order);
         if (
           !responsiveOrderAllowed &&
-          (!sameOrder({ desktop: tablet }, { desktop: current.order.desktop }) ||
-            !sameOrder({ desktop: phone }, { desktop: current.order.desktop }))
+          (!sameList(orders.tablet, orders.desktop) || !sameList(orders.phone, orders.desktop))
         )
           refuse();
-        for (const [alias, placement] of Object.entries(current.placements)) {
+        for (const item of items) {
+          const alias = item.props.id;
           if (seen.has(alias)) refuse();
           seen.add(alias);
-          const release = releaseFor(placement);
+          const release = releaseFor(item);
+          if (item.type !== release.rendererKey) refuse();
           if (
             parentDeclaration !== undefined &&
             !parentDeclaration.allowedChildCategories.includes(release.paletteGroup)
           )
             refuse();
-          for (const value of Object.values(placement.settings))
-            sourceBlockPropertyValueSchema.parse(value);
-          const failure = validateComponentSettings(placement.settings, release.properties)[0];
+          const reading = readSourceItem(item, release);
+          if (
+            reading.unknownKeys.length > 0 ||
+            reading.malformedSlots.length > 0 ||
+            reading.repeatableFailures.length > 0
+          )
+            refuse();
+          const failure = reading.settingFailures[0];
           if (failure !== undefined)
             throw new AuthoredPuckSettingRefusal(release.name, failure.path, failure.family);
 
-          const desktop = placement.responsive.desktop;
-          const tabletLayout = placement.responsive.tablet ?? desktop;
-          const phoneLayout = placement.responsive.phone ?? tabletLayout;
+          const vortex = item.props.vortex;
+          const desktop = vortex.responsive.desktop;
+          const tabletLayout = vortex.responsive.tablet ?? desktop;
+          const phoneLayout = vortex.responsive.phone ?? tabletLayout;
           if (
             !release.capabilities.responsiveVisibility &&
             (tabletLayout.visible !== desktop.visible || phoneLayout.visible !== desktop.visible)
@@ -460,36 +517,39 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
               refuse();
           }
 
-          const declarations = slotDeclarations(placement, release);
-          if (Object.keys(placement.slots).some((key) => !declarations.has(key))) refuse();
-          for (const [key, declaration] of declarations) {
-            const child = Object.hasOwn(placement.slots, key) ? placement.slots[key] : undefined;
+          const slotOrders = vortex.slot_orders ?? {};
+          if (Object.keys(slotOrders).some((key) => reading.slots.get(key)?.items === undefined))
+            refuse();
+          for (const [key, { declaration, items: child }] of reading.slots) {
             const reserved = reservations.get(alias)?.has(key) === true;
             if (declaration.required && declaration.repeats === undefined && !reserved) {
-              if (child === undefined || Object.keys(child.placements).length === 0) refuse();
+              if (child === undefined || child.length === 0) refuse();
             }
-            if (reserved && (child === undefined || Object.keys(child.placements).length > 0))
-              refuse();
+            if (reserved && (child === undefined || child.length > 0)) refuse();
             if (child !== undefined)
-              visit(child, declaration, release.capabilities.responsiveOrder);
+              visit(child, slotOrders[key], declaration, release.capabilities.responsiveOrder);
           }
         }
       };
-      visit(slot);
+      visit(zone.items, zone.order);
     };
 
     const toContent = (
-      slot: SourceSlot,
+      items: readonly SourceItem[],
+      order: SourceSlotOrder | undefined,
       identity: SlotIdentity,
       runtimeSettings?: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
-    ): Content =>
-      slot.order.desktop.map((id) => {
-        const { settings, slots, ...metadata } = slot.placements[id]!;
-        const release = releaseFor(slot.placements[id]!);
+    ): Content => {
+      const slotOrder = puckOrderOf(items, order);
+      return items.map((item) => {
+        const release = releaseFor(item);
+        const reading = readSourceItem(item, release);
+        const { slot_orders: slotOrders, ...metadata } = item.props.vortex;
+        const id = item.props.id;
         const compiledSettings = runtimeSettings?.[id] ?? {};
         const props: Record<string, unknown> & { id: string } = {
           id,
-          settings: { ...clone(compiledSettings), ...clone(settings) },
+          settings: { ...clone(compiledSettings), ...clone(reading.settings) },
           vortex: {
             block: {
               blockId: metadata.block.block_id,
@@ -500,25 +560,27 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             authored: clone(metadata),
             compiledSettings: clone(compiledSettings),
             slot: clone(identity),
-            baselineOrder: clone(slot.order),
-            order: clone(slot.order),
+            baselineOrder: clone(slotOrder),
+            order: clone(slotOrder),
           },
         };
-        for (const [key, child] of Object.entries(slots))
-          props[puckSlotKey(key)] = toContent(child, {
-            kind: "child",
-            parentAlias: id,
-            slotKey: key,
-          }, runtimeSettings);
+        for (const [key, { items: child }] of reading.slots)
+          if (child !== undefined)
+            props[key] = toContent(child, slotOrders?.[key], {
+              kind: "child",
+              parentAlias: id,
+              slotKey: key,
+            }, runtimeSettings);
         return { type: release.rendererKey, props } satisfies ComponentData;
       });
+    };
 
     const dataFor = (
-      slot: SourceSlot,
+      zone: Zone,
       reservations: Reservations,
       runtimeSettings?: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
     ): Data => {
-      validateTree(slot, reservations);
+      validateTree(zone, reservations);
       return {
         root: {
           props: {
@@ -528,25 +590,26 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
           },
           readOnly: { gap: true, padding: true },
         } as unknown as Data["root"],
-        content: toContent(slot, { kind: "root" }, runtimeSettings),
+        content: toContent(zone.items, zone.order, { kind: "root" }, runtimeSettings),
         zones: {},
       };
     };
 
-    const inverse = (
-      original: SourceSlot,
-      candidate: unknown,
-      reservations: Reservations,
-    ): SourceSlot => {
+    const inverse = (original: Zone, candidate: unknown, reservations: Reservations): Zone => {
       validateTree(original, reservations);
-      const baselinePlacements = new Map<string, SourcePlacement>();
-      const index = (slot: SourceSlot): void => {
-        for (const [id, placement] of Object.entries(slot.placements)) {
-          baselinePlacements.set(id, placement);
-          for (const child of Object.values(placement.slots)) index(child);
+      const baselineItems = new Map<string, SourceItem>();
+      const index = (items: readonly SourceItem[]): void => {
+        for (const item of items) {
+          baselineItems.set(item.props.id, item);
+          for (const [, { items: child }] of readSourceItem(item, releaseFor(item)).slots)
+            if (child !== undefined) index(child);
         }
       };
-      index(original);
+      index(original.items);
+      const baselineReading = (id: string) => {
+        const item = baselineItems.get(id);
+        return item === undefined ? undefined : { item, reading: readSourceItem(item, releaseFor(item)) };
+      };
 
       const data = closed(candidate, ["root", "content", "zones"]);
       const root = closed(data.root, ["props", "readOnly"]);
@@ -568,8 +631,8 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
       closed(data.zones, []);
 
       // Puck-generated ids are opaque. Keep authored aliases and translate new ids to unique
-      // source-safe aliases before they enter source records or private order declarations.
-      const aliases = new Set(baselinePlacements.keys());
+      // source-safe aliases before they enter source items or private order declarations.
+      const aliases = new Set(baselineItems.keys());
       const assignedAliases = new Set<string>();
       const aliasByPuckId = new Map<string, string>();
       const pending = [{ value: data.content, depth: 1, exit: false }];
@@ -596,7 +659,7 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
           const props = object(node.props);
           const puckId = text(props.id);
           if (aliasByPuckId.has(puckId)) refuse();
-          const knownSourceId = baselinePlacements.has(puckId) && !assignedAliases.has(puckId);
+          const knownSourceId = baselineItems.has(puckId) && !assignedAliases.has(puckId);
           const safeNewId = sourceAliasPattern.test(puckId) && !aliases.has(puckId) &&
             !assignedAliases.has(puckId);
           const alias = knownSourceId || safeNewId
@@ -611,7 +674,7 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
         }
       }
 
-      const parseOrder = (candidateOrder: unknown): SourceOrder => {
+      const parseOrder = (candidateOrder: unknown): PuckOrder => {
         const order = closed(candidateOrder, ["desktop", "tablet", "phone"]);
         const list = (value: unknown): string[] => {
           if (!Array.isArray(value)) return refuse();
@@ -622,7 +685,7 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
           if (new Set(ids).size !== ids.length || ids.some((id) => !aliases.has(id))) refuse();
           return ids;
         };
-        const result: SourceOrder = {
+        const result: PuckOrder = {
           desktop: list(order.desktop),
           ...(order.tablet === undefined ? {} : { tablet: list(order.tablet) }),
           ...(order.phone === undefined ? {} : { phone: list(order.phone) }),
@@ -655,13 +718,12 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
       };
       const fromContent = (
         content: unknown,
-        baseline: SourceSlot | undefined,
+        baseline: PuckOrder | undefined,
         destination: SlotIdentity,
-      ): SourceSlot => {
+      ): Zone => {
         if (!Array.isArray(content)) return refuse();
-        const placements: SourceSlot["placements"] = {};
-        const desktop: string[] = [];
-        const hints: SourceOrder[] = [];
+        const items: SourceItem[] = [];
+        const hints: PuckOrder[] = [];
         for (const raw of content) {
           const node = closed(raw, ["type", "props", "readOnly"]);
           const props = object(node.props);
@@ -684,10 +746,9 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
           const origin = slot === undefined ? destination : parseSlotIdentity(slot);
           const originalOrder =
             baselineOrder === undefined
-              ? (baseline?.order ?? { desktop: [] })
+              ? (baseline ?? { desktop: [] })
               : parseOrder(baselineOrder);
           const editedOrder = order === undefined ? undefined : parseOrder(order);
-          const slots: SourcePlacement["slots"] = {};
           const fields =
             authored === undefined
               ? {
@@ -698,7 +759,7 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
                   theme_overrides: sourceThemeOverrides(renderMetadata.themeOverrides),
                   responsive: sourceResponsive(renderMetadata.responsive),
                 }
-              : closed(authored, [
+              : { ...closed(authored, [
                   "block",
                   "view_permission",
                   "use_permission",
@@ -706,9 +767,9 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
                   "query",
                   "theme_overrides",
                   "responsive",
-                ]);
+                ]) };
           // An edited Puck layout replaces only the authored responsive field; an unchanged one
-          // keeps the authored placement untouched.
+          // keeps the authored item untouched.
           if (
             authored !== undefined &&
             renderMetadata.responsive !== undefined &&
@@ -731,71 +792,89 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
                     key,
                     sourceThemeTokenValueSchema.parse(value),
                   ]),
-                ) as SourcePlacement["theme_overrides"],
+                ) as SourceItemVortex["theme_overrides"],
               ),
             )
           ) {
             fields.theme_overrides = sourceThemeOverrides(renderMetadata.themeOverrides);
           }
-          // First parse the source fields without accepting any private Puck properties.
-          const authoredBlock = object(fields.block);
-          const release = releases.get(
-            `${text(authoredBlock.block_id)}:${text(authoredBlock.release_version)}`,
-          ) ?? refuse();
+          // First read the source fields without accepting any private Puck properties.
+          const release = releaseOf(fields.block);
+          if (text(node.type) !== release.rendererKey) refuse();
           const compiledSettings = compiledSettingsValue === undefined
             ? {} : object(compiledSettingsValue);
-          const fieldSlot = sourcePlacementSlotSchema.parse({
-            placements: {
-              [id]: {
-                ...fields,
-                settings: sourceSettings(props.settings, new Set(release.properties.map((property) =>
-                  property.key)), baselinePlacements.get(id)?.settings, compiledSettings),
-                slots: {},
-              },
-            },
-            order: { desktop: [id] },
-          });
-          const placement = fieldSlot.placements[id]!;
-          if (text(node.type) !== release.rendererKey) refuse();
-          const declarations = slotDeclarations(placement, release);
-          const allowed = [
-            "id",
-            "settings",
-            "vortex",
-            ...[...declarations.keys()].map(puckSlotKey),
-          ];
+          const baselineEntry = baselineReading(id);
+          const settings = sourceSettings(props.settings, new Set(release.properties.map(
+            (property) => property.key)), baselineEntry?.reading.settings, compiledSettings);
+          if (Object.keys(settings).some((key) => reservedItemPropKeys.has(key))) refuse();
+          const plainSettings = Object.fromEntries(
+            Object.entries(settings).map(([key, value]) => [key, plainSourceSettingValue(value)]),
+          );
+          const vortex = fields as unknown as SourceItemVortex;
+          const reading = readSourceItem(
+            { type: release.rendererKey, props: { id, ...plainSettings, vortex } },
+            release,
+          );
+          if (reading.repeatableFailures.length > 0 || reading.unknownKeys.length > 0) refuse();
+          // A setting must read back as the same typed value, so its kind matches its declaration.
+          for (const [key, value] of Object.entries(settings))
+            if (reading.settings[key] !== undefined && !sameJsonValue(reading.settings[key], value))
+              refuse();
+          const allowed = ["id", "settings", "vortex", ...reading.slots.keys()];
           closed(props, allowed);
           if (node.readOnly !== undefined) {
             const readOnly = closed(node.readOnly, allowed);
             if (Object.values(readOnly).some((value) => typeof value !== "boolean")) refuse();
           }
-          for (const key of declarations.keys()) {
-            const privateKey = puckSlotKey(key);
-            const child = Object.hasOwn(props, privateKey) ? props[privateKey] : undefined;
-            if (child !== undefined)
-              slots[key] = fromContent(child, baselinePlacements.get(id)?.slots[key], {
-                kind: "child",
-                parentAlias: id,
-                slotKey: key,
-              });
+          const slotProps: Record<string, SourceItem[]> = {};
+          const slotOrders: Record<string, SourceSlotOrder> = {};
+          for (const key of reading.slots.keys()) {
+            const child = Object.hasOwn(props, key) ? props[key] : undefined;
+            if (child === undefined) continue;
+            const baselineChild = baselineEntry?.reading.slots.get(key)?.items;
+            const childZone = fromContent(
+              child,
+              baselineChild === undefined
+                ? undefined
+                : puckOrderOf(baselineChild, baselineEntry!.item.props.vortex.slot_orders?.[key]),
+              { kind: "child", parentAlias: id, slotKey: key },
+            );
+            slotProps[key] = childZone.items;
+            if (childZone.order !== undefined) slotOrders[key] = childZone.order;
           }
-          placements[id] = { ...placement, slots };
-          desktop.push(id);
+          items.push({
+            type: release.rendererKey,
+            props: {
+              id,
+              ...plainSettings,
+              ...slotProps,
+              vortex: {
+                ...vortex,
+                ...(Object.keys(slotOrders).length === 0 ? {} : { slot_orders: slotOrders }),
+              },
+            },
+          });
           if (
             editedOrder !== undefined &&
             sameSlot(origin, destination) &&
-            (baseline === undefined || sameOrder(originalOrder, baseline.order))
+            (baseline === undefined || sameOrder(originalOrder, baseline))
           )
             hints.push(editedOrder);
         }
-        return sourcePlacementSlotSchema.parse({
-          placements,
-          order: sourceOrder(desktop, baseline?.order, hints),
-        });
+        const desktop = items.map((item) => item.props.id);
+        return { items, order: slotOrderOf(sourceOrder(desktop, baseline, hints)) };
       };
-      const result = fromContent(data.content, original, { kind: "root" });
-      validateTree(result, reservations);
-      return clone(result);
+      const result = fromContent(
+        data.content,
+        puckOrderOf(original.items, original.order),
+        { kind: "root" },
+      );
+      const parsed: Zone = {
+        items: sourceItemSchema.array().parse(result.items),
+        order: result.order,
+      };
+      validateTree(parsed, reservations);
+      return clone(parsed);
     };
 
     // Never surface source values, raw schema issues, references or private metadata in errors.
@@ -810,22 +889,30 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
 
     return Object.freeze({
       toPuckData: (
-        sourceSlot: unknown,
+        sourceZone: unknown,
         runtimeSettings?: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
-      ): Data => safe(() => dataFor(parseSlot(sourceSlot), new Map(), runtimeSettings)),
-      fromPuckData: (originalSourceSlot: unknown, data: unknown): SourceSlot =>
-        safe(() => inverse(parseSlot(originalSourceSlot), data, new Map())),
+      ): Data => safe(() => dataFor(parseZone(sourceZone), new Map(), runtimeSettings)),
+      fromPuckData: (originalSourceZone: unknown, data: unknown): SourcePageZone =>
+        safe(() => inverse(parseZone(originalSourceZone), data, new Map())),
       toPuckShell: (sourceShell: unknown): Data =>
         safe(() => {
           const shell = parseShell(sourceShell);
-          return dataFor(shell.layout, reservationsFor(shell));
+          return dataFor(shellZone(shell), reservationsFor(shell));
         }),
-      fromPuckShell: (originalSourceShell: unknown, data: unknown): SourceShell =>
+      fromPuckShell: (originalSourceShell: unknown, data: unknown): SourceApplicationShell =>
         safe(() => {
           const shell = parseShell(originalSourceShell);
+          const zone = inverse(shellZone(shell), data, reservationsFor(shell));
           return sourceApplicationShellSchema.parse({
             ...shell,
-            layout: inverse(shell.layout, data, reservationsFor(shell)),
+            layout: {
+              root: {
+                props: {
+                  vortex: { slot_orders: zone.order === undefined ? {} : { content: zone.order } },
+                },
+              },
+              content: zone.items,
+            },
           });
         }),
     });

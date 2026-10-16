@@ -7,7 +7,6 @@ import {
   setSourcePageSlot,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
-  sourcePlacementSlotSchema,
   type ApplicationSourceDocument,
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
@@ -192,9 +191,16 @@ function ApplicationPageSlotPuckEditor({
   const sourceRef = useRef(source);
   sourceRef.current = source;
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
-  const slot = page === undefined ? undefined : sourcePageSlotAt(page, at);
+  // A zone is read fresh from its page, so it is kept per page object and address.
+  const slot = useMemo(
+    () => (page === undefined ? undefined : sourcePageSlotAt(page, at)),
+    [page, at.key],
+  );
   const originalPage = compiledSource.body.pages.find((candidate) => candidate.id === pageAlias);
-  const originalSlot = originalPage === undefined ? undefined : sourcePageSlotAt(originalPage, at);
+  const originalSlot = useMemo(
+    () => (originalPage === undefined ? undefined : sourcePageSlotAt(originalPage, at)),
+    [originalPage, at.key],
+  );
   const runtimeSettings = useMemo(() => {
     if (originalSlot === undefined || compiledSlot === undefined) return undefined;
     const authoredData = adapter.toPuckData(originalSlot);
@@ -209,7 +215,7 @@ function ApplicationPageSlotPuckEditor({
   const [themeProblems, setThemeProblems] = useState<readonly StudioPlacementThemeFailure[]>([]);
   const [themeCheckNote, setThemeCheckNote] = useState("");
   const placementOverrides = useMemo(
-    () => (slot === undefined ? [] : placementsWithThemeOverrides(slot)),
+    () => (slot === undefined ? [] : placementsWithThemeOverrides(slot.items)),
     [slot],
   );
   const themeCheckKey = JSON.stringify([source.body.theme, placementOverrides]);
@@ -258,7 +264,7 @@ function ApplicationPageSlotPuckEditor({
       const next = structuredClone(current);
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
       const nextSlot = nextPage === undefined ? undefined : sourcePageSlotAt(nextPage, at);
-      if (nextSlot === undefined || !clearPlacementThemeOverrides(nextSlot, alias))
+      if (nextSlot === undefined || !clearPlacementThemeOverrides(nextSlot.items, alias))
         throw new TypeError("The block is not on this page content slot.");
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
@@ -285,7 +291,7 @@ function ApplicationPageSlotPuckEditor({
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
       if (
         nextPage === undefined ||
-        !setSourcePageSlot(nextPage, at, sourcePlacementSlotSchema.parse(editedSlot))
+        !setSourcePageSlot(nextPage, at, editedSlot)
       )
         throw new TypeError("The selected page is unavailable.");
       syncPlatformBlockDependencies(next);

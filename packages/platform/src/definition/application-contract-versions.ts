@@ -1,5 +1,5 @@
 import { DefinitionError } from "./definition-error";
-export const applicationSourceContractVersion = "2.0.0" as const;
+export const applicationSourceContractVersion = "3.0.0" as const;
 export const applicationValidationContractVersion = "2.0.0" as const;
 
 export const applicationContractVersionErrorCodes = [

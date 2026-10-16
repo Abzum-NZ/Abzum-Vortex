@@ -1,13 +1,17 @@
-import type { z } from "zod";
-import type { sourcePlacementSlotSchema } from "./application-composition/page-composition";
+import {
+  type SourceItem,
+  type SourcePageData,
+  type SourceSlotOrder,
+  sourcePageRootSlots,
+} from "./application-composition/source-composition";
 import type { ApplicationSourceDocument } from "./application-source-contracts";
 
 type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
-type SourceSlot = z.infer<typeof sourcePlacementSlotSchema>;
 
 /**
- * One editable content slot of an authored page: the page's main slot, one shell content slot, a
- * guided step, or one shell content slot of a guided step. `key` is unique within its page.
+ * One editable content zone of an authored page: the page's content in the default frame, one
+ * shell content slot (a root slot of the page data), a guided step, or one shell content slot of
+ * a guided step. `key` is unique within its page.
  */
 export type PageSlotAddress = Readonly<{
   key: string;
@@ -15,6 +19,11 @@ export type PageSlotAddress = Readonly<{
   step?: string;
   slot?: string;
 }>;
+
+/** The items of one page zone and that zone's authored tablet and phone order. */
+export type SourcePageZone = Readonly<{ items: SourceItem[]; order: SourceSlotOrder | undefined }>;
+
+const contentZone = "content";
 
 const addressKey = (step: string | undefined, slot: string | undefined): string =>
   step === undefined ? (slot ?? "main") : slot === undefined ? step : `${step}/${slot}`;
@@ -26,44 +35,58 @@ const address = (step: string | undefined, slot: string | undefined): PageSlotAd
   ...(slot === undefined ? {} : { slot }),
 });
 
-/** Every content slot of the authored page, in authored order. */
+const dataAddresses = (data: SourcePageData, step: string | undefined): PageSlotAddress[] =>
+  data.root.props.vortex.shell === null
+    ? [address(step, undefined)]
+    : sourcePageRootSlots(data).map(([slot]) => address(step, slot));
+
+/** Every content zone of the authored page, in authored order. */
 export const sourcePageSlotAddresses = (page: SourcePage): readonly PageSlotAddress[] => {
   const composition = page.composition;
-  if ("main" in composition) return [address(undefined, undefined)];
-  if ("content" in composition)
-    return Object.keys(composition.content).map((slot) => address(undefined, slot));
-  if (composition.shell_kind === "default")
-    return Object.keys(composition.step_content).map((step) => address(step, undefined));
-  return Object.entries(composition.step_content).flatMap(([step, content]) =>
-    Object.keys(content).map((slot) => address(step, slot)),
+  if (!("step_content" in composition)) return dataAddresses(composition, undefined);
+  return Object.entries(composition.step_content).flatMap(([step, data]) =>
+    dataAddresses(data, step),
   );
 };
 
-/** The authored slot at the address, or undefined when the page has no such slot. */
-export const sourcePageSlotAt = (page: SourcePage, at: PageSlotAddress): SourceSlot | undefined => {
+const dataAt = (page: SourcePage, at: PageSlotAddress): SourcePageData | undefined => {
   const composition = page.composition;
-  if ("main" in composition) return composition.main;
-  if ("content" in composition)
-    return at.slot === undefined ? undefined : composition.content[at.slot];
-  if (at.step === undefined) return undefined;
-  const stepContent = composition.step_content[at.step];
-  if (composition.shell_kind === "default") return stepContent as SourceSlot | undefined;
-  return at.slot === undefined
-    ? undefined
-    : (stepContent as Record<string, SourceSlot> | undefined)?.[at.slot];
+  if (!("step_content" in composition)) return at.step === undefined ? composition : undefined;
+  return at.step === undefined ? undefined : composition.step_content[at.step];
 };
 
-/** Replaces the authored slot at the address in place; false when the page has no such slot. */
+const zoneKeyAt = (data: SourcePageData, at: PageSlotAddress): string | undefined => {
+  if (data.root.props.vortex.shell === null) return at.slot === undefined ? contentZone : undefined;
+  return at.slot !== undefined && Array.isArray(data.root.props[at.slot]) ? at.slot : undefined;
+};
+
+/** The authored zone at the address, or undefined when the page has no such zone. */
+export const sourcePageSlotAt = (
+  page: SourcePage,
+  at: PageSlotAddress,
+): SourcePageZone | undefined => {
+  const data = dataAt(page, at);
+  const zone = data === undefined ? undefined : zoneKeyAt(data, at);
+  if (data === undefined || zone === undefined) return undefined;
+  const items =
+    zone === contentZone && data.root.props.vortex.shell === null
+      ? data.content
+      : (data.root.props[zone] as SourceItem[]);
+  return { items, order: data.root.props.vortex.slot_orders[zone] };
+};
+
+/** Replaces the authored zone at the address in place; false when the page has no such zone. */
 export const setSourcePageSlot = (
   page: SourcePage,
   at: PageSlotAddress,
-  value: SourceSlot,
+  value: SourcePageZone,
 ): boolean => {
-  if (sourcePageSlotAt(page, at) === undefined) return false;
-  const composition = page.composition;
-  if ("main" in composition) composition.main = value;
-  else if ("content" in composition) composition.content[at.slot!] = value;
-  else if (composition.shell_kind === "default") composition.step_content[at.step!] = value;
-  else composition.step_content[at.step!]![at.slot!] = value;
+  const data = dataAt(page, at);
+  const zone = data === undefined ? undefined : zoneKeyAt(data, at);
+  if (data === undefined || zone === undefined) return false;
+  if (zone === contentZone && data.root.props.vortex.shell === null) data.content = value.items;
+  else data.root.props[zone] = value.items;
+  if (value.order === undefined) delete data.root.props.vortex.slot_orders[zone];
+  else data.root.props.vortex.slot_orders[zone] = value.order;
   return true;
 };

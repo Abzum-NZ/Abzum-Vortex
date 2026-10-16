@@ -9,10 +9,13 @@ import {
   describeFailure,
   placementSlotSchema,
   sourcePageSlotAddresses,
+  sourceItemChildSlots,
+  sourcePageShell,
   sourcePageSlotAt,
-  sourcePlacementSlotSchema,
   type OrganizationId,
   type PageSlotAddress,
+  type SourceItem,
+  type SourcePageZone,
   type StoredDefinitionDraft,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
@@ -76,7 +79,6 @@ type StudioApplicationLoadResult =
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
-type AuthoredSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 
 /** Exact compiled page slots keyed by authored page alias, then by page slot address key. */
 export type StudioApplicationCompiledPageSlots = Readonly<
@@ -102,7 +104,8 @@ const compiledPageSlot = (
   };
   const composition = compiled.composition;
   if (composition === undefined) return undefined;
-  if ("main" in sourceComposition)
+  const shellAlias = sourcePageShell(sourceComposition);
+  if (!("step_content" in sourceComposition) && shellAlias === null)
     return composition.main === undefined ? undefined : placementSlotSchema.parse(composition.main);
 
   let stepContent: unknown = undefined;
@@ -111,13 +114,13 @@ const compiledPageSlot = (
     const compiledStepId = compiled.steps?.[stepIndex]?.id;
     if (compiledStepId === undefined || composition.stepContent === undefined) return undefined;
     stepContent = composition.stepContent[String(compiledStepId)];
-    if (sourceComposition.shell_kind === "default")
+    if (shellAlias === null)
       return stepContent === undefined ? undefined : placementSlotSchema.parse(stepContent);
   }
 
-  if (!("shell" in sourceComposition) || composition.shellId === undefined || at.slot === undefined)
+  if (shellAlias === null || composition.shellId === undefined || at.slot === undefined)
     return undefined;
-  const sourceShell = source.body.shells.find((candidate) => candidate.id === sourceComposition.shell);
+  const sourceShell = source.body.shells.find((candidate) => candidate.id === shellAlias);
   const sourceSlot = sourceShell?.content_slots.find((candidate) => candidate.id === at.slot);
   const canonical = content as {
     shells?: readonly {
@@ -142,27 +145,32 @@ const compiledPageSlot = (
   return runtimeSlot === undefined ? undefined : placementSlotSchema.parse(runtimeSlot);
 };
 
+/**
+ * The authored zone and its compiled slot hold the same items in the same desktop order, with the
+ * same child slots. Authored items are in desktop order; compiled placements are keyed by resolved
+ * id and ordered by `order.desktop`. A child slot the author left empty compiles to an empty slot.
+ */
 const assertCompiledSlotMatches = (
-  authored: unknown,
+  authored: readonly SourceItem[],
   compiled: CompiledSlot,
 ): void => {
-  const sourceSlot: AuthoredSlot = sourcePlacementSlotSchema.parse(authored);
-  const sourceIds = sourceSlot.order.desktop;
   const compiledIds = compiled.order.desktop;
-  if (sourceIds.length !== compiledIds.length)
+  if (authored.length !== compiledIds.length)
     throw new Error("Studio authored and compiled page placements do not match");
-  for (const [index, alias] of sourceIds.entries()) {
-    const sourcePlacement = sourceSlot.placements[alias];
+  for (const [index, item] of authored.entries()) {
     const compiledPlacement = compiled.placements[compiledIds[index]!];
-    if (sourcePlacement === undefined || compiledPlacement === undefined)
+    if (compiledPlacement === undefined)
       throw new Error("Studio authored and compiled page placements do not match");
-    const sourceSlotKeys = Object.keys(sourcePlacement.slots);
-    const compiledSlotKeys = Object.keys(compiledPlacement.slots);
-    if (sourceSlotKeys.length !== compiledSlotKeys.length ||
-      sourceSlotKeys.some((key) => !Object.hasOwn(compiledPlacement.slots, key)))
+    const sourceSlots = new Map(sourceItemChildSlots(item));
+    const compiledSlots = Object.entries(compiledPlacement.slots);
+    const filled = compiledSlots.filter(([, slot]) => slot.order.desktop.length > 0);
+    if (filled.length !== sourceSlots.size ||
+      filled.some(([key]) => !sourceSlots.has(key)) ||
+      compiledSlots.some(([key, slot]) => slot.order.desktop.length === 0 &&
+        !(Array.isArray(item.props[key]) && (item.props[key] as unknown[]).length === 0)))
       throw new Error("Studio authored and compiled page slots do not match");
-    for (const key of sourceSlotKeys)
-      assertCompiledSlotMatches(sourcePlacement.slots[key], compiledPlacement.slots[key]!);
+    for (const [key, children] of sourceSlots)
+      assertCompiledSlotMatches(children, compiledPlacement.slots[key]!);
   }
 };
 
@@ -185,7 +193,10 @@ const pageCompiledSlotsFor = (
       const runtimeSlot = compiledPageSlot(source, page, canonical, content.pages![index], at);
       if (runtimeSlot === undefined)
         throw new Error("Studio compiled page slot does not match its authored draft");
-      assertCompiledSlotMatches(sourcePageSlotAt(page, at), runtimeSlot);
+      const zone: SourcePageZone | undefined = sourcePageSlotAt(page, at);
+      if (zone === undefined)
+        throw new Error("Studio authored page slot is missing");
+      assertCompiledSlotMatches(zone.items, runtimeSlot);
       slots[at.key] = runtimeSlot;
     }
     result[page.id] = slots;

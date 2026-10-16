@@ -3,8 +3,6 @@ import { blockPaletteGroupSchema } from "../../catalogue/catalogues";
 import { labelSchema } from "../../catalogue/common";
 import {
   sourceAliasSchema,
-  sourceQualifiedConditionSchema,
-  sourceQualifiedQueryReferenceSchema,
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,
 } from "../definition-source-common";
@@ -17,22 +15,9 @@ import {
   shellIdSchema,
 } from "../../catalogue/identifiers";
 import { positiveFiniteSchema } from "./shared";
-import {
-  type BlockPropertyValueContract,
-  blockPropertyValueSchema,
-  type SourceBlockPropertyValueContract,
-  sourceBlockPropertyValueSchema,
-} from "./block-property-values";
-import {
-  platformBlockDependenciesSchema,
-  platformBlockReferenceSchema,
-  sourcePlatformBlockReferenceSchema,
-} from "./platform-block-release";
-import {
-  themeTokenValueSchema,
-  sourceThemeTokenValueSchema,
-  applicationThemeSchema,
-} from "./theme";
+import { type BlockPropertyValueContract, blockPropertyValueSchema } from "./block-property-values";
+import { platformBlockDependenciesSchema, platformBlockReferenceSchema } from "./platform-block-release";
+import { themeTokenValueSchema, applicationThemeSchema } from "./theme";
 
 const widthSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
@@ -125,22 +110,6 @@ type PlacementSlot = {
   order: { desktop: string[]; tablet: string[]; phone: string[] };
 };
 
-type SourceBlockPlacement = {
-  block: z.infer<typeof sourcePlatformBlockReferenceSchema>;
-  view_permission?: z.infer<typeof namespacedKeySchema> | undefined;
-  use_permission?: z.infer<typeof namespacedKeySchema> | undefined;
-  visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
-  query?: z.infer<typeof builderKeySchema> | undefined;
-  settings: Record<string, SourceBlockPropertyValueContract>;
-  theme_overrides: Record<string, z.infer<typeof sourceThemeTokenValueSchema>>;
-  responsive: z.infer<typeof sourceResponsivePlacementSchema>;
-  slots: Record<string, SourcePlacementSlot>;
-};
-type SourcePlacementSlot = {
-  placements: Record<string, SourceBlockPlacement>;
-  order: { desktop: string[]; tablet?: string[] | undefined; phone?: string[] | undefined };
-};
-
 const sameMembers = (actual: readonly string[], expected: readonly string[]): boolean =>
   actual.length === expected.length &&
   new Set(actual).size === actual.length &&
@@ -188,75 +157,6 @@ export const placementSlotSchema: z.ZodType<PlacementSlot> = z.lazy(() =>
             path: ["order", breakpoint],
             message: "Each breakpoint order must be one complete placement permutation",
           });
-    }),
-);
-
-export const sourceBlockPlacementSchema: z.ZodType<SourceBlockPlacement> = z.lazy(() =>
-  z
-    .object({
-      block: sourceProvenanceUnchanged(sourcePlatformBlockReferenceSchema),
-      view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), [
-        "viewPermissionKey",
-      ]),
-      use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
-      visibility_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
-      query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema.optional(), ["queryId"]),
-      settings: sourceProvenanceUnchanged(
-        z.record(builderKeySchema, sourceBlockPropertyValueSchema),
-      ),
-      theme_overrides: sourceProvenanceUnchanged(
-        z.record(builderKeySchema, sourceThemeTokenValueSchema),
-      ),
-      responsive: sourceProvenanceUnchanged(sourceResponsivePlacementSchema),
-      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, sourcePlacementSlotSchema)),
-    })
-    .strict(),
-);
-
-export const sourcePlacementSlotSchema: z.ZodType<SourcePlacementSlot> = z.lazy(() =>
-  z
-    .object({
-      placements: sourceProvenanceUnchanged(
-        z.record(sourceAliasSchema, sourceBlockPlacementSchema),
-      ),
-      order: sourceProvenanceUnchanged(
-        z
-          .object({
-            desktop: sourceProvenanceUnchanged(
-              z.array(
-                sourceProvenanceTarget(sourceAliasSchema, [
-                  "order/desktop/#",
-                  "order/tablet/#",
-                  "order/phone/#",
-                ]),
-              ),
-            ),
-            tablet: sourceProvenanceUnchanged(
-              z
-                .array(
-                  sourceProvenanceTarget(sourceAliasSchema, ["order/tablet/#", "order/phone/#"]),
-                )
-                .optional(),
-            ),
-            phone: sourceProvenanceUnchanged(
-              z.array(sourceProvenanceTarget(sourceAliasSchema, ["order/phone/#"])).optional(),
-            ),
-          })
-          .strict(),
-      ),
-    })
-    .strict()
-    .superRefine((value, context) => {
-      const placements = Object.keys(value.placements);
-      for (const breakpoint of ["desktop", "tablet", "phone"] as const) {
-        const order = value.order[breakpoint];
-        if (order !== undefined && !sameMembers(order, placements))
-          context.addIssue({
-            code: "custom",
-            path: ["order", breakpoint],
-            message: "Each declared breakpoint order must be one complete placement permutation",
-          });
-      }
     }),
 );
 
@@ -316,7 +216,7 @@ export const applicationPuckRootShellSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-const sourceApplicationShellPresentationSchema = z
+export const sourceApplicationShellPresentationSchema = z
   .object({
     sidebar: sourceProvenanceUnchanged(
       z
@@ -351,17 +251,6 @@ const collectCanonicalPlacementSlots = (
   return result;
 };
 
-const collectSourcePlacementSlots = (
-  slot: SourcePlacementSlot,
-  result = new Map<string, Record<string, SourcePlacementSlot>>(),
-): Map<string, Record<string, SourcePlacementSlot>> => {
-  for (const [placementId, placement] of Object.entries(slot.placements)) {
-    result.set(placementId, placement.slots);
-    for (const child of Object.values(placement.slots)) collectSourcePlacementSlots(child, result);
-  }
-  return result;
-};
-
 export const canonicalPlacementEntries = (
   slot: PlacementSlot,
   result: [string, BlockPlacement][] = [],
@@ -369,17 +258,6 @@ export const canonicalPlacementEntries = (
   for (const [placementId, placement] of Object.entries(slot.placements)) {
     result.push([placementId, placement]);
     for (const child of Object.values(placement.slots)) canonicalPlacementEntries(child, result);
-  }
-  return result;
-};
-
-export const sourcePlacementEntries = (
-  slot: SourcePlacementSlot,
-  result: [string, SourceBlockPlacement][] = [],
-): [string, SourceBlockPlacement][] => {
-  for (const [placementId, placement] of Object.entries(slot.placements)) {
-    result.push([placementId, placement]);
-    for (const child of Object.values(placement.slots)) sourcePlacementEntries(child, result);
   }
   return result;
 };
@@ -441,63 +319,6 @@ export const applicationShellSchema = z
     }
   });
 
-export const sourceApplicationShellSchema = z
-  .object({
-    id: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
-    key: sourceProvenanceUnchanged(builderKeySchema),
-    name: sourceProvenanceUnchanged(labelSchema),
-    presentation: sourceProvenanceUnchanged(sourceApplicationShellPresentationSchema),
-    layout: sourceProvenanceUnchanged(sourcePlacementSlotSchema),
-    content_slots: sourceProvenanceUnchanged(z.array(sourceShellContentSlotSchema).min(1)),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const ids = value.content_slots.map((slot) => slot.id);
-    const keys = value.content_slots.map((slot) => slot.key);
-    const targets = value.content_slots.map(
-      (slot) => `${slot.parent_placement}:${slot.parent_slot}`,
-    );
-    if (new Set(ids).size !== ids.length)
-      context.addIssue({
-        code: "custom",
-        path: ["content_slots"],
-        message: "Shell content-slot aliases must be unique",
-      });
-    if (new Set(keys).size !== keys.length)
-      context.addIssue({
-        code: "custom",
-        path: ["content_slots"],
-        message: "Shell content-slot keys must be unique",
-      });
-    if (new Set(targets).size !== targets.length)
-      context.addIssue({
-        code: "custom",
-        path: ["content_slots"],
-        message: "A shell location can expose only one content slot",
-      });
-    const placements = collectSourcePlacementSlots(value.layout);
-    for (const [index, slot] of value.content_slots.entries()) {
-      const target = placements.get(slot.parent_placement)?.[slot.parent_slot];
-      if (target === undefined)
-        context.addIssue({
-          code: "custom",
-          path: ["content_slots", index, "parent_slot"],
-          message: "A shell content slot must target a declared slot on one shell placement",
-        });
-      else if (
-        Object.keys(target.placements).length > 0 ||
-        target.order.desktop.length > 0 ||
-        (target.order.tablet?.length ?? 0) > 0 ||
-        (target.order.phone?.length ?? 0) > 0
-      )
-        context.addIssue({
-          code: "custom",
-          path: ["content_slots", index, "parent_slot"],
-          message: "An exposed shell content slot must reserve an empty target for page content",
-        });
-    }
-  });
-
 export const pageCompositionSchema = z.discriminatedUnion("shellKind", [
   z
     .object({
@@ -510,22 +331,6 @@ export const pageCompositionSchema = z.discriminatedUnion("shellKind", [
       shellKind: sourceProvenanceUnchanged(z.literal("application")),
       shellId: sourceProvenanceUnchanged(shellIdSchema),
       content: sourceProvenanceUnchanged(z.record(containedComponentIdSchema, placementSlotSchema)),
-    })
-    .strict(),
-]);
-
-export const sourcePageCompositionSchema = z.discriminatedUnion("shell_kind", [
-  z
-    .object({
-      shell_kind: sourceProvenanceUnchanged(z.literal("default")),
-      main: sourceProvenanceUnchanged(sourcePlacementSlotSchema),
-    })
-    .strict(),
-  z
-    .object({
-      shell_kind: sourceProvenanceUnchanged(z.literal("application")),
-      shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
-      content: sourceProvenanceUnchanged(z.record(sourceAliasSchema, sourcePlacementSlotSchema)),
     })
     .strict(),
 ]);
@@ -549,26 +354,6 @@ export const guidedFormPageCompositionSchema = z.discriminatedUnion("shellKind",
           containedComponentIdSchema,
           z.record(containedComponentIdSchema, placementSlotSchema),
         ),
-      ),
-    })
-    .strict(),
-]);
-
-export const sourceGuidedFormPageCompositionSchema = z.discriminatedUnion("shell_kind", [
-  z
-    .object({
-      shell_kind: sourceProvenanceUnchanged(z.literal("default")),
-      step_content: sourceProvenanceUnchanged(
-        z.record(sourceAliasSchema, sourcePlacementSlotSchema),
-      ),
-    })
-    .strict(),
-  z
-    .object({
-      shell_kind: sourceProvenanceUnchanged(z.literal("application")),
-      shell: sourceProvenanceTarget(sourceAliasSchema, ["shellId"]),
-      step_content: sourceProvenanceUnchanged(
-        z.record(sourceAliasSchema, z.record(sourceAliasSchema, sourcePlacementSlotSchema)),
       ),
     })
     .strict(),

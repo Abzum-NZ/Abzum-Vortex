@@ -86,8 +86,8 @@ export const minimumApplicationSource = (
         type: "dashboard",
         permission: permissionKey,
         composition: {
-          shell_kind: "default",
-          main: { placements: {}, order: { desktop: [] } },
+          root: { props: { vortex: { shell: null, slot_orders: {} } } },
+          content: [],
         },
       }],
       navigation: [],

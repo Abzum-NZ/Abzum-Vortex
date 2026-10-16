@@ -1,4 +1,12 @@
-import type { ApplicationRootId, ApplicationSourceDocument } from "@vortex/platform/schema";
+import {
+  isSourceItemShape,
+  reservedItemPropKeys,
+  sourcePageRootSlots,
+  type ApplicationRootId,
+  type ApplicationSourceDocument,
+  type SourceItem,
+  type SourcePageData,
+} from "@vortex/platform/schema";
 
 /** The editable Application source and its permanent Definition root identity. */
 export type StudioApplicationSelectionDraft = Readonly<{
@@ -63,9 +71,9 @@ export type StudioSemanticSelectionTraversalNode =
       label: string;
       selection: Extract<StudioSemanticSelection, { kind: "placement" }>;
       owner: StudioSemanticPlacementOwner;
-      /** The placed block's release and settings, so a surface can name the item for a person. */
+      /** The placed block's release and plain authored settings, so a surface can name the item. */
       block: Readonly<{ block_id: string; release_version: string }>;
-      settings: SourcePlacementSlot["placements"][string]["settings"];
+      settings: Readonly<Record<string, unknown>>;
     }>;
 
 export type StudioSemanticSelectionTraversalEvent = Readonly<{
@@ -76,8 +84,6 @@ export type StudioSemanticSelectionTraversalEvent = Readonly<{
 export type StudioSemanticSelectionTraversalListener = (
   event: StudioSemanticSelectionTraversalEvent,
 ) => void;
-
-type SourcePlacementSlot = ApplicationSourceDocument["body"]["shells"][number]["layout"];
 
 type SelectionIndex = Readonly<{
   applicationRootId: ApplicationRootId;
@@ -113,6 +119,21 @@ const authoredLabel = (value: string | undefined, fallback: string): string => {
   return label ? label : fallback;
 };
 
+/**
+ * The item's child slots read from its props alone: every array prop that holds only items,
+ * including an empty one. Every other prop but `id` and `vortex` is a plain setting.
+ */
+const itemPropsByRole = (item: SourceItem) => {
+  const slots: [string, SourceItem[]][] = [];
+  const settings: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(item.props)) {
+    if (reservedItemPropKeys.has(key)) continue;
+    if (Array.isArray(value) && value.every(isSourceItemShape)) slots.push([key, value]);
+    else settings[key] = value;
+  }
+  return { slots, settings };
+};
+
 const readableKey = (value: string | undefined, fallback: string): string => {
   const key = value?.trim().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
   if (!key) return fallback;
@@ -138,15 +159,15 @@ export const traverseStudioSemanticSelectionDraft = (
   };
 
   const placementSlot = (
-    slot: SourcePlacementSlot,
+    items: readonly SourceItem[],
     owner: StudioSemanticPlacementOwner,
     slotAlias: string,
     label: string,
   ): void => {
     visit(Object.freeze({ kind: "slot", slotAlias, label }), () => {
-      for (const placementAlias of slot.order.desktop) {
-        const placement = slot.placements[placementAlias];
-        if (placement === undefined) continue;
+      for (const item of items) {
+        const placementAlias = item.props.id;
+        const { slots, settings } = itemPropsByRole(item);
         const selection = Object.freeze({ kind: "placement", placementAlias } as const);
         visit(
           Object.freeze({
@@ -155,13 +176,13 @@ export const traverseStudioSemanticSelectionDraft = (
             selection,
             owner,
             block: Object.freeze({
-              block_id: String(placement.block.block_id),
-              release_version: String(placement.block.release_version),
+              block_id: String(item.props.vortex.block.block_id),
+              release_version: String(item.props.vortex.block.release_version),
             }),
-            settings: placement.settings,
+            settings,
           }),
           () => {
-            for (const [slotKey, childSlot] of Object.entries(placement.slots))
+            for (const [slotKey, childSlot] of slots)
               placementSlot(childSlot, owner, slotKey, readableKey(slotKey, "Content"));
           },
         );
@@ -172,11 +193,14 @@ export const traverseStudioSemanticSelectionDraft = (
   const shellForAlias = (alias: string) =>
     draft.source.body.shells.find((shell) => shell.id === alias);
 
-  const pageSlots = (
-    slots: Readonly<Record<string, SourcePlacementSlot>>,
-    shellAlias: string,
-    owner: StudioSemanticPlacementOwner,
-  ): void => {
+  /** One page's (or one guided step's) data: the default frame's content or each shell slot. */
+  const pageData = (data: SourcePageData, owner: StudioSemanticPlacementOwner): void => {
+    const shellAlias = data.root.props.vortex.shell;
+    if (shellAlias === null) {
+      placementSlot(data.content, owner, "main", "Main");
+      return;
+    }
+    const slots = Object.fromEntries(sourcePageRootSlots(data));
     const shell = shellForAlias(shellAlias);
     const visited = new Set<string>();
     for (const contentSlot of shell?.content_slots ?? []) {
@@ -238,7 +262,7 @@ export const traverseStudioSemanticSelectionDraft = (
               label: authoredLabel(shell.name, "Layout"),
               selection,
             }),
-            () => placementSlot(shell.layout, owner, "layout", "Layout"),
+            () => placementSlot(shell.layout.content, owner, "layout", "Layout"),
           );
         }
       });
@@ -262,24 +286,12 @@ export const traverseStudioSemanticSelectionDraft = (
                       label: authoredLabel(step.name, "Step"),
                     }),
                     () => {
-                      if (composition.shell_kind === "default") {
-                        const stepSlot = composition.step_content[step.id];
-                        if (stepSlot === undefined) return;
-                        placementSlot(stepSlot, pageOwner, "main", "Main");
-                      } else {
-                        const stepSlots = composition.step_content[step.id];
-                        if (stepSlots === undefined) return;
-                        pageSlots(stepSlots, composition.shell, pageOwner);
-                      }
+                      const stepData = composition.step_content[step.id];
+                      if (stepData !== undefined) pageData(stepData, pageOwner);
                     },
                   );
                 }
-              } else {
-                const composition = page.composition;
-                if (composition.shell_kind === "default")
-                  placementSlot(composition.main, pageOwner, "main", "Main");
-                else pageSlots(composition.content, composition.shell, pageOwner);
-              }
+              } else pageData(page.composition, pageOwner);
             },
           );
         }

@@ -16,6 +16,7 @@ import {
   type StoredDefinitionDraft,
 } from "../schema";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
+import { applicationSourceContractVersion } from "./application-contract-versions";
 import type { z } from "zod";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { compileParsedDefinition } from "./compiler";
@@ -206,7 +207,7 @@ export const compileCandidate = (
     if (resolution.contractVersion !== "3.0.0" || dependencies.composition === undefined)
       return refuse("DEFINITION_COMPILATION_REFUSED");
     const request = {
-      sourceContractVersion: "2.0.0" as const,
+      sourceContractVersion: applicationSourceContractVersion,
       validationContractVersion: "2.0.0" as const,
       source: candidate.draft.source,
       resolution,

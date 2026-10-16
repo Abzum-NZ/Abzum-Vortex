@@ -7,6 +7,8 @@ import type {
 } from "../schema";
 
 import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
+import { isSourceItemShape } from "./application-composition/source-composition";
+import { reservedItemPropKeys } from "./application-composition/platform-block-release";
 
 export type SourceIdentityRequirement = Readonly<{
   definitionKey: string;
@@ -214,18 +216,23 @@ export function extractApplicationSourceIdentityRequirements(
     for (const component of collection(collectionKey))
       addIdentified(kind, "content", "content", component, aliases(component));
   };
-  const addPlacementSlot = (slotValue: unknown): void => {
-    const slot = objectValue(slotValue);
-    const placements = objectValue(slot?.placements);
-    if (placements === undefined) return;
-    for (const [placementOwner, placementValue] of Object.entries(placements)) {
-      const placement = objectValue(placementValue);
-      if (placement === undefined) continue;
-      add("block_placement", "content", "content", placementOwner, [placementOwner]);
-      const childSlots = objectValue(placement.slots);
-      if (childSlots !== undefined)
-        for (const childSlot of Object.values(childSlots)) addPlacementSlot(childSlot);
+  // Every authored item names one block placement by its alias, at any depth of any slot.
+  const addItems = (itemsValue: unknown): void => {
+    if (!Array.isArray(itemsValue)) return;
+    for (const item of itemsValue) {
+      if (!isSourceItemShape(item)) continue;
+      add("block_placement", "content", "content", item.props.id, [item.props.id]);
+      for (const [key, child] of Object.entries(item.props))
+        if (!reservedItemPropKeys.has(key)) addItems(child);
     }
+  };
+  // Page data places items in its content and in each root slot.
+  const addPageData = (dataValue: unknown): void => {
+    const data = objectValue(dataValue);
+    addItems(data?.content);
+    const rootProps = objectValue(objectValue(data?.root)?.props);
+    if (rootProps !== undefined)
+      for (const [key, items] of Object.entries(rootProps)) if (key !== "vortex") addItems(items);
   };
 
   add("root", "document", "document", "root", [source.key, source.root_alias]);
@@ -247,7 +254,7 @@ export function extractApplicationSourceIdentityRequirements(
     addIdentified("shell", "content", "content", shell);
     for (const contentSlot of objects(shell.content_slots))
       addIdentified("shell_content_slot", "content", "content", contentSlot);
-    addPlacementSlot(shell.layout);
+    addItems(objectValue(shell.layout)?.content);
   }
 
   for (const page of collection("pages")) {
@@ -259,21 +266,8 @@ export function extractApplicationSourceIdentityRequirements(
         addIdentified("guided_step", `page_owner:${pageOwner}`, `page:${pageKey}`, step);
     const composition = objectValue(page.composition);
     const stepContent = objectValue(composition?.step_content);
-    if (stepContent !== undefined) {
-      if (composition?.shell_kind === "default") {
-        for (const slot of Object.values(stepContent)) addPlacementSlot(slot);
-      } else {
-        for (const stepSlotsValue of Object.values(stepContent)) {
-          const stepSlots = objectValue(stepSlotsValue);
-          if (stepSlots !== undefined)
-            for (const slot of Object.values(stepSlots)) addPlacementSlot(slot);
-        }
-      }
-    } else if (composition?.shell_kind === "default") addPlacementSlot(composition.main);
-    else {
-      const content = objectValue(composition?.content);
-      if (content !== undefined) for (const slot of Object.values(content)) addPlacementSlot(slot);
-    }
+    if (stepContent !== undefined) for (const data of Object.values(stepContent)) addPageData(data);
+    else addPageData(composition);
   }
 
   for (const definition of collection("interfaces")) {

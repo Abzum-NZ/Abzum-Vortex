@@ -1,8 +1,12 @@
 import {
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
+  sourceItemChildSlots,
+  sourcePageZones,
   type ApplicationRootId,
   type ApplicationSourceDocument,
+  type SourceItem,
+  type SourcePageData,
 } from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
@@ -146,52 +150,34 @@ const placementCandidates = (
   alias: string,
 ): InspectorCandidate[] => {
   const matches: InspectorCandidate[] = [];
-  const visitSlot = (
-    slot: ApplicationSourceDocument["body"]["shells"][number]["layout"],
-    path: SourcePath,
-  ): void => {
-    for (const [placementAlias, placement] of Object.entries(slot.placements)) {
-      const placementPath = [...path, "placements", placementAlias] as const;
-      if (placementAlias === alias)
+  const visitItems = (items: readonly SourceItem[], path: SourcePath): void => {
+    items.forEach((item, index) => {
+      const itemPath = [...path, index] as const;
+      if (item.props.id === alias)
         matches.push({
-          alias: placementAlias,
-          label: `Item ${readableKey(placementAlias, "item")}`,
-          sourcePath: placementPath,
+          alias: item.props.id,
+          label: `Item ${readableKey(item.props.id, "item")}`,
+          sourcePath: itemPath,
         });
-      for (const [slotKey, childSlot] of Object.entries(placement.slots))
-        visitSlot(childSlot, [...placementPath, "slots", slotKey]);
-    }
+      for (const [slotKey, children] of sourceItemChildSlots(item))
+        visitItems(children, [...itemPath, "props", slotKey]);
+    });
+  };
+  const visitData = (data: SourcePageData, path: SourcePath): void => {
+    for (const [zone, items] of sourcePageZones(data))
+      visitItems(items, zone === "content" ? [...path, "content"] : [...path, "root", "props", zone]);
   };
 
   source.body.shells.forEach((shell, index) =>
-    visitSlot(shell.layout, ["body", "shells", index, "layout"]),
+    visitItems(shell.layout.content, ["body", "shells", index, "layout", "content"]),
   );
 
   source.body.pages.forEach((page, index) => {
-    const pagePath = ["body", "pages", index] as const;
+    const compositionPath = ["body", "pages", index, "composition"] as const;
     if (page.type === "guided_form") {
-      const composition = page.composition;
-      if (composition.shell_kind === "default") {
-        for (const [stepAlias, content] of Object.entries(composition.step_content))
-          visitSlot(content, [...pagePath, "composition", "step_content", stepAlias]);
-      } else {
-        for (const [stepAlias, content] of Object.entries(composition.step_content)) {
-          for (const [slotAlias, slot] of Object.entries(content))
-            visitSlot(slot, [
-              ...pagePath,
-              "composition",
-              "step_content",
-              stepAlias,
-              slotAlias,
-            ]);
-        }
-      }
-    } else if (page.composition.shell_kind === "default") {
-      visitSlot(page.composition.main, [...pagePath, "composition", "main"]);
-    } else {
-      for (const [slotAlias, slot] of Object.entries(page.composition.content))
-        visitSlot(slot, [...pagePath, "composition", "content", slotAlias]);
-    }
+      for (const [stepAlias, data] of Object.entries(page.composition.step_content))
+        visitData(data, [...compositionPath, "step_content", stepAlias]);
+    } else visitData(page.composition, compositionPath);
   });
 
   return matches;

@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "2.0.0",
+  "source_contract_version": "3.0.0",
   "root_alias": "app_organisation_administration",
   "key": "vortex.app.organisation_administration",
   "kind": "application",
@@ -88,9 +88,22 @@
         "record_type": "vortex.system_directory:person",
         "action_kind": "read",
         "administrative": false,
-        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
         "field_policy": {
-          "readable_fields": ["organization_id", "revision", "display_name", "state", "language", "time_zone"],
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "display_name",
+            "state",
+            "language",
+            "time_zone"
+          ],
           "changeable_fields": []
         }
       },
@@ -102,9 +115,22 @@
         "record_type": "vortex.system_directory:organization_invitation",
         "action_kind": "read",
         "administrative": false,
-        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
         "field_policy": {
-          "readable_fields": ["organization_id", "revision", "invited_email", "state", "invited_at", "expires_at"],
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "invited_email",
+            "state",
+            "invited_at",
+            "expires_at"
+          ],
           "changeable_fields": []
         }
       }
@@ -150,21 +176,21 @@
         "id": "nav_organisation",
         "type": "heading",
         "label": "Organisation",
-        "icon":  "building-2",
+        "icon": "building-2",
         "children": [
-        {
-          "id": "nav_activity",
-          "type": "page",
-          "label": "Activity",
-          "icon": "circle",
-          "page": "activity",
-          "permission": "application.organisation_administration.open"
-        },
+          {
+            "id": "nav_activity",
+            "type": "page",
+            "label": "Activity",
+            "icon": "circle",
+            "page": "activity",
+            "permission": "application.organisation_administration.open"
+          },
           {
             "id": "nav_overview",
             "type": "page",
             "label": "Overview",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "organisation_overview",
             "permission": "platform.organization.accounts.read"
           },
@@ -172,7 +198,7 @@
             "id": "nav_accounts",
             "type": "page",
             "label": "Organisation accounts",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "organisation_accounts",
             "permission": "application.organisation_administration.open"
           },
@@ -180,7 +206,7 @@
             "id": "nav_invitations",
             "type": "page",
             "label": "Invitations",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "organisation_invitations",
             "permission": "platform.organization.invitations.read"
           },
@@ -188,7 +214,7 @@
             "id": "nav_runtime_settings",
             "type": "page",
             "label": "Runtime settings",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "organisation_runtime_settings",
             "permission": "platform.organization.runtime_settings.read"
           }
@@ -198,13 +224,13 @@
         "id": "nav_content",
         "type": "heading",
         "label": "Organisation content",
-        "icon":  "building-2",
+        "icon": "building-2",
         "children": [
           {
             "id": "nav_notices",
             "type": "page",
             "label": "Notices",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "organisation_notices",
             "permission": "application.organisation_administration.organisation_notice.read"
           },
@@ -212,7 +238,7 @@
             "id": "nav_record_notice",
             "type": "page",
             "label": "Record notice",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "record_organisation_notice",
             "permission": "application.organisation_administration.organisation_notice.record_notice"
           },
@@ -220,7 +246,7 @@
             "id": "nav_privacy_cases",
             "type": "page",
             "label": "Privacy request cases",
-            "icon":  "life-buoy",
+            "icon": "life-buoy",
             "page": "privacy_request_cases",
             "permission": "application.organisation_administration.privacy_request_case.read"
           },
@@ -228,14 +254,14 @@
             "id": "nav_record_privacy_request",
             "type": "page",
             "label": "Record privacy request",
-            "icon":  "life-buoy",
+            "icon": "life-buoy",
             "page": "record_privacy_request_case",
             "permission": "application.organisation_administration.privacy_request_case.record_privacy_request"
           }
         ]
       }
     ],
-    "queries":  [],
+    "queries": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
@@ -304,20 +330,20 @@
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
-    {
-      "id": "event_new_notice",
-      "key": "vortex.app.organisation_administration.new_notice",
-      "record_type": "vortex.organisation_administration:organisation_notice",
-      "carries": [],
-      "personal_or_sensitive_values_allowed": false
-    },
-    {
-      "id": "event_new_privacy_request",
-      "key": "vortex.app.organisation_administration.new_privacy_request",
-      "record_type": "vortex.organisation_administration:privacy_request_case",
-      "carries": [],
-      "personal_or_sensitive_values_allowed": false
-    }
+      {
+        "id": "event_new_notice",
+        "key": "vortex.app.organisation_administration.new_notice",
+        "record_type": "vortex.organisation_administration:organisation_notice",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_new_privacy_request",
+        "key": "vortex.app.organisation_administration.new_privacy_request",
+        "record_type": "vortex.organisation_administration:privacy_request_case",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      }
     ],
     "public_addresses": [],
     "platform_block_dependencies": [],
@@ -326,123 +352,59 @@
         "id": "shell_organisation_administration",
         "key": "organisation_administration_shell",
         "name": "Organisation administration shell",
-        "presentation":  {
-            "sidebar":  {
-                "collapsible":  "icon",
-                "default_collapsed":  false
-            },
-            "top_bar":  {
-                "breadcrumbs":  true,
-                "organization_switcher":  true,
-                "application_switcher":  true,
-                "account_menu":  true
-            }
+        "presentation": {
+          "sidebar": {
+            "collapsible": "icon",
+            "default_collapsed": false
+          },
+          "top_bar": {
+            "breadcrumbs": true,
+            "organization_switcher": true,
+            "application_switcher": true,
+            "account_menu": true
+          }
         },
         "layout": {
-          "placements": {
-            "shell_root": {
-              "block": {
-                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                "release_version": "1.3.0"
-              },
-              "settings": {
-                "direction": {
-                  "kind": "choice",
-                  "value": "column"
-                },
-                "gap": {
-                  "kind": "choice",
-                  "value": "medium"
-                },
-                "padding": {
-                  "kind": "choice",
-                  "value": "medium"
-                },
-                "content_width": {
-                  "kind": "choice",
-                  "value": "fill"
-                }
-              },
-              "theme_overrides": {},
-              "responsive": {
-                "desktop": {
-                  "visible": true,
-                  "width": {
-                    "kind": "fill"
-                  },
-                  "height": {
-                    "kind": "content"
-                  }
-                }
-              },
-              "slots": {
-                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
-                "content": {
-                  "placements": {
-                    "shell_body": {
-                      "block": {
-                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                        "release_version": "1.2.0"
-                      },
-                      "settings": {
-                        "direction": {
-                          "kind": "choice",
-                          "value": "row"
-                        },
-                        "gap": {
-                          "kind": "choice",
-                          "value": "medium"
-                        },
-                        "menu_width": {
-                          "kind": "number",
-                          "value": 16
-                        },
-                        "menu_placement": {
-                          "kind": "choice",
-                          "value": "sticky"
-                        },
-                        "content_landmark": {
-                          "kind": "boolean",
-                          "value": true
-                        },
-                        "tablet_menu_width": {
-                          "kind": "number",
-                          "value": 14
-                        },
-                        "phone_direction": {
-                          "kind": "choice",
-                          "value": "column"
-                        },
-                        "phone_menu_placement": {
-                          "kind": "choice",
-                          "value": "flow"
-                        }
-                      },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {
-                        "menu": {
-                          "placements": {
-                            "shell_navigation": {
+          "root": {
+            "props": {
+              "vortex": {
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": [
+            {
+              "type": "platform.renderer.container",
+              "props": {
+                "id": "shell_root",
+                "direction": "column",
+                "gap": "medium",
+                "padding": "medium",
+                "content_width": "fill",
+                "header": [],
+                "content": [
+                  {
+                    "type": "platform.renderer.container",
+                    "props": {
+                      "id": "shell_body",
+                      "direction": "row",
+                      "gap": "medium",
+                      "menu_width": 16,
+                      "menu_placement": "sticky",
+                      "content_landmark": true,
+                      "tablet_menu_width": 14,
+                      "phone_direction": "column",
+                      "phone_menu_placement": "flow",
+                      "menu": [
+                        {
+                          "type": "platform.renderer.application_navigation",
+                          "props": {
+                            "id": "shell_navigation",
+                            "title": "Organisation Administration",
+                            "vortex": {
                               "block": {
                                 "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
                                 "release_version": "1.0.0"
-                              },
-                              "settings": {
-                                "title": {
-                                  "kind": "text",
-                                  "value": "Organisation Administration"
-                                }
                               },
                               "theme_overrides": {},
                               "responsive": {
@@ -455,39 +417,54 @@
                                     "kind": "content"
                                   }
                                 }
-                              },
-                              "slots": {}
+                              }
                             }
-                          },
-                          "order": {
-                            "desktop": [
-                              "shell_navigation"
-                            ]
                           }
+                        }
+                      ],
+                      "content": [],
+                      "vortex": {
+                        "block": {
+                          "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                          "release_version": "1.2.0"
                         },
-                        "content": {
-                          "placements": {},
-                          "order": {
-                            "desktop": []
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
                           }
                         }
                       }
                     }
+                  }
+                ],
+                "vortex": {
+                  "block": {
+                    "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                    "release_version": "1.3.0"
                   },
-                  "order": {
-                    "desktop": [
-                      "shell_body"
-                    ]
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
                   }
                 }
               }
             }
-          },
-          "order": {
-            "desktop": [
-              "shell_root"
-            ]
-          }
+          ]
         },
         "content_slots": [
           {
@@ -520,128 +497,69 @@
         "permission": "application.organisation_administration.open",
         "query": "vortex.organisation_administration:activity_entries",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "activity_table": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
-                  },
-                  "settings": {
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:activity_entry.occurred_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Occurred"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:activity_entry.actor_kind"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Actor kind"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:activity_entry.actor"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Actor"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:activity_entry.action"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Action"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:activity_entry.subject_count"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Subjects"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:activity_entry.changed_field_count"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Changed fields"
-                            }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "activity_table",
+                    "columns": [
+                      {
+                        "field": "vortex.organisation_administration:activity_entry.occurred_at",
+                        "label": "Occurred"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:activity_entry.actor_kind",
+                        "label": "Actor kind"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:activity_entry.actor",
+                        "label": "Actor"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:activity_entry.action",
+                        "label": "Action"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:activity_entry.subject_count",
+                        "label": "Subjects"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:activity_entry.changed_field_count",
+                        "label": "Changed fields"
+                      }
+                    ],
+                    "title": "Activity (last 90 days)",
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.2.0"
+                      },
+                      "query": "vortex.organisation_administration:activity_entries",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
                           }
                         }
-                      ]
-                    },
-                    "title": {
-                      "kind": "text",
-                      "value": "Activity (last 90 days)"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
                       }
                     }
-                  },
-                  "slots": {},
-                  "query": "vortex.organisation_administration:activity_entries"
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "activity_table"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -651,48 +569,43 @@
         "type": "dashboard",
         "permission": "platform.organization.accounts.read",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "overview_text": {
-                  "block": {
-                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Organisation overview"
-                    },
-                    "text": {
-                      "kind": "text",
-                      "value": "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, invitation and runtime-settings displays are read live from protected Identity and Access read models. Role grants, group membership and assignments are managed in the IAM application."
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "overview_text",
+                    "title": "Organisation overview",
+                    "text": "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, invitation and runtime-settings displays are read live from protected Identity and Access read models. Role grants, group membership and assignments are managed in the IAM application.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.0.0"
                       },
-                      "height": {
-                        "kind": "content"
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "overview_text"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -702,176 +615,101 @@
         "type": "dashboard",
         "permission": "application.organisation_administration.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "accounts_text": {
-                  "block": {
-                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Organisation accounts"
-                    },
-                    "text": {
-                      "kind": "text",
-                      "value": "Organisation accounts are read live from protected Identity and Access data; no account directory is copied into this application. Role grants run in the IAM application, never here."
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "accounts_text",
+                    "title": "Organisation accounts",
+                    "text": "Organisation accounts are read live from protected Identity and Access data; no account directory is copied into this application. Role grants run in the IAM application, never here.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.0.0"
                       },
-                      "height": {
-                        "kind": "content"
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 },
-                "accounts_region": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.4.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Organisation accounts"
-                    },
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:person.display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Display name"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:person.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:person.language"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Language"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:person.time_zone"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Time zone"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "row_actions": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_suspend_account"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Suspend account"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_reactivate_account"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Reactivate account"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_close_account"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Close account"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "accounts_region",
+                    "title": "Organisation accounts",
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:person.display_name",
+                        "label": "Display name"
                       },
-                      "height": {
-                        "kind": "content"
+                      {
+                        "field": "vortex.system_directory:person.state",
+                        "label": "State"
+                      },
+                      {
+                        "field": "vortex.system_directory:person.language",
+                        "label": "Language"
+                      },
+                      {
+                        "field": "vortex.system_directory:person.time_zone",
+                        "label": "Time zone"
+                      }
+                    ],
+                    "row_actions": [
+                      {
+                        "event_id": "event_suspend_account",
+                        "label": "Suspend account"
+                      },
+                      {
+                        "event_id": "event_reactivate_account",
+                        "label": "Reactivate account"
+                      },
+                      {
+                        "event_id": "event_close_account",
+                        "label": "Close account"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.4.0"
+                      },
+                      "query": "vortex.system_directory:people",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {},
-                  "query": "vortex.system_directory:people"
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "accounts_text",
-                  "accounts_region"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -881,287 +719,201 @@
         "type": "dashboard",
         "permission": "platform.organization.invitations.read",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "invitations_text": {
-                  "block": {
-                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Invitations"
-                    },
-                    "text": {
-                      "kind": "text",
-                      "value": "Pending and past invitations are read live from protected Identity and Access data. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control."
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "invitations_text",
+                    "title": "Invitations",
+                    "text": "Pending and past invitations are read live from protected Identity and Access data. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.0.0"
                       },
-                      "height": {
-                        "kind": "content"
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 },
-                "invitations_region": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.4.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Invitations"
-                    },
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization_invitation.invited_email"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Invited email"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization_invitation.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization_invitation.invited_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Invited at"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization_invitation.expires_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Expires at"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "row_actions": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_revoke_invitation"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Revoke invitation"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "invitations_region",
+                    "title": "Invitations",
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:organization_invitation.invited_email",
+                        "label": "Invited email"
                       },
-                      "height": {
-                        "kind": "content"
+                      {
+                        "field": "vortex.system_directory:organization_invitation.state",
+                        "label": "State"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_invitation.invited_at",
+                        "label": "Invited at"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_invitation.expires_at",
+                        "label": "Expires at"
+                      }
+                    ],
+                    "row_actions": [
+                      {
+                        "event_id": "event_revoke_invitation",
+                        "label": "Revoke invitation"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.4.0"
+                      },
+                      "query": "vortex.system_directory:organization_invitations",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {},
-                  "query": "vortex.system_directory:organization_invitations"
+                  }
                 },
-                "form_create_invitation": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Create invitation"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "input_create_invitation_invited_email": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "invited_email"
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_create_invitation",
+                    "title": "Create invitation",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_invitation_invited_email",
+                          "name": "invited_email",
+                          "label": "Invited email",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
                             },
-                            "label": {
-                              "kind": "text",
-                              "value": "Invited email"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
                               }
                             }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_invitation_expires_at": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "expires_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Expires at"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "button_create_invitation": {
-                          "block": {
-                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "label": {
-                              "kind": "text",
-                              "value": "Create invitation"
-                            },
-                            "action_kind": {
-                              "kind": "choice",
-                              "value": "action"
-                            },
-                            "variant": {
-                              "kind": "choice",
-                              "value": "primary"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
+                          }
                         }
                       },
-                      "order": {
-                        "desktop": [
-                          "input_create_invitation_invited_email",
-                          "input_create_invitation_expires_at",
-                          "button_create_invitation"
-                        ]
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_invitation_expires_at",
+                          "name": "expires_at",
+                          "label": "Expires at",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_create_invitation",
+                          "label": "Create invitation",
+                          "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "invitations_text",
-                  "invitations_region",
-                  "form_create_invitation"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1171,167 +923,98 @@
         "type": "dashboard",
         "permission": "platform.organization.runtime_settings.read",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "settings_text": {
-                  "block": {
-                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Runtime settings"
-                    },
-                    "text": {
-                      "kind": "text",
-                      "value": "View the organisation's runtime settings. Select the settings record to edit it through the protected record save."
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "settings_text",
+                    "title": "Runtime settings",
+                    "text": "View the organisation's runtime settings. Select the settings record to edit it through the protected record save.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.0.0"
                       },
-                      "height": {
-                        "kind": "content"
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 },
-                "settings_region": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.3.0"
-                  },
-                  "settings": {
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "settings_region",
                     "row_click": {
-                      "kind": "group",
-                      "properties": {
-                        "event_id": {
-                          "kind": "text",
-                          "value": "event_open_organization_settings"
-                        }
-                      }
+                      "event_id": "event_open_organization_settings"
                     },
-                    "title": {
-                      "kind": "text",
-                      "value": "Current runtime settings"
-                    },
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.language"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Language"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.time_zone"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Time zone"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.currency"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Currency"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.date_format"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Date format"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.number_format"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Number format"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.default_application_root_id"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Default application"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+                    "title": "Current runtime settings",
+                    "columns": [
+                      {
+                        "field": "vortex.organisation_administration:organization_settings.language",
+                        "label": "Language"
                       },
-                      "height": {
-                        "kind": "content"
+                      {
+                        "field": "vortex.organisation_administration:organization_settings.time_zone",
+                        "label": "Time zone"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:organization_settings.currency",
+                        "label": "Currency"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:organization_settings.date_format",
+                        "label": "Date format"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:organization_settings.number_format",
+                        "label": "Number format"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:organization_settings.default_application_root_id",
+                        "label": "Default application"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.3.0"
+                      },
+                      "query": "vortex.organisation_administration:organization_settings",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {},
-                  "query": "vortex.organisation_administration:organization_settings"
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "settings_text",
-                  "settings_region"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1342,267 +1025,227 @@
         "record_type": "vortex.organisation_administration:organization_settings",
         "permission": "platform.organization.runtime_settings.manage",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "form_organization_settings": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Edit runtime settings"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "input_organization_settings_language": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.language"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_organization_settings",
+                    "title": "Edit runtime settings",
+                    "content": [
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_organization_settings_language",
+                          "field": "vortex.organisation_administration:organization_settings.language",
+                          "label": "Language",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
-                            "label": {
-                              "kind": "text",
-                              "value": "Language"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
                               }
                             }
-                          },
-                          "slots": {}
-                        },
-                        "input_organization_settings_time_zone": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.time_zone"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Time zone"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_organization_settings_currency": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.currency"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Currency"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_organization_settings_date_format": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.date_format"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Date format"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_organization_settings_number_format": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.number_format"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Number format"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_organization_settings_default_application_root_id": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organization_settings.default_application_root_id"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Default application"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "submit_organization_settings": {
-                          "block": {
-                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "label": {
-                              "kind": "text",
-                              "value": "Save settings"
-                            },
-                            "action_kind": {
-                              "kind": "choice",
-                              "value": "submit"
-                            },
-                            "variant": {
-                              "kind": "choice",
-                              "value": "primary"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
+                          }
                         }
                       },
-                      "order": {
-                        "desktop": [
-                          "input_organization_settings_language",
-                          "input_organization_settings_time_zone",
-                          "input_organization_settings_currency",
-                          "input_organization_settings_date_format",
-                          "input_organization_settings_number_format",
-                          "input_organization_settings_default_application_root_id",
-                          "submit_organization_settings"
-                        ]
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_organization_settings_time_zone",
+                          "field": "vortex.organisation_administration:organization_settings.time_zone",
+                          "label": "Time zone",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_organization_settings_currency",
+                          "field": "vortex.organisation_administration:organization_settings.currency",
+                          "label": "Currency",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_organization_settings_date_format",
+                          "field": "vortex.organisation_administration:organization_settings.date_format",
+                          "label": "Date format",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_organization_settings_number_format",
+                          "field": "vortex.organisation_administration:organization_settings.number_format",
+                          "label": "Number format",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_organization_settings_default_application_root_id",
+                          "field": "vortex.organisation_administration:organization_settings.default_application_root_id",
+                          "label": "Default application",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "submit_organization_settings",
+                          "label": "Save settings",
+                          "action_kind": "submit",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "form_organization_settings"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1614,104 +1257,89 @@
         "permission": "application.organisation_administration.organisation_notice.read",
         "query": "vortex.organisation_administration:organisation_notices",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "notices_table": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
-                  },
-                  "settings": {
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organisation_notice.title"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Title"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organisation_notice.body"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Body"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organisation_notice.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organisation_notice.published_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Published"
-                            }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "notices_table",
+                    "columns": [
+                      {
+                        "field": "vortex.organisation_administration:organisation_notice.title",
+                        "label": "Title"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:organisation_notice.body",
+                        "label": "Body"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:organisation_notice.state",
+                        "label": "State"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:organisation_notice.published_at",
+                        "label": "Published"
+                      }
+                    ],
+                    "title": "Organisation notices",
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.2.0"
+                      },
+                      "query": "vortex.organisation_administration:organisation_notices",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
                           }
                         }
-                      ]
-                    },
-                    "title": {
-                      "kind": "text",
-                      "value": "Organisation notices"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
                       }
                     }
-                  },
-                  "slots": {},
-                  "query": "vortex.organisation_administration:organisation_notices"
+                  }
                 },
-        "button_new_notice": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.organisation_administration.organisation_notice.record_notice", "settings": {"label": {"kind": "text", "value": "New notice"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
-              },
-              "order": {
-                "desktop": [
-                  "notices_table",
-            "button_new_notice"
-                ]
+                {
+                  "type": "platform.renderer.button",
+                  "props": {
+                    "id": "button_new_notice",
+                    "label": "New notice",
+                    "action_kind": "action",
+                    "variant": "secondary",
+                    "vortex": {
+                      "block": {
+                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version": "1.0.0"
+                      },
+                      "view_permission": "application.organisation_administration.organisation_notice.record_notice",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1722,151 +1350,124 @@
         "record_type": "vortex.organisation_administration:organisation_notice",
         "permission": "application.organisation_administration.organisation_notice.record_notice",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "notice_form": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Record organisation notice"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "notice_title_input": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:organisation_notice.title"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "notice_form",
+                    "title": "Record organisation notice",
+                    "content": [
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "notice_title_input",
+                          "field": "vortex.organisation_administration:organisation_notice.title",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
                               }
                             }
-                          },
-                          "slots": {}
-                        },
-                        "notice_body_input": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "body"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Notice text"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "multiline": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "notice_submit": {
-                          "block": {
-                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "label": {
-                              "kind": "text",
-                              "value": "Publish notice"
-                            },
-                            "action_kind": {
-                              "kind": "choice",
-                              "value": "submit"
-                            },
-                            "variant": {
-                              "kind": "choice",
-                              "value": "primary"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
+                          }
                         }
                       },
-                      "order": {
-                        "desktop": [
-                          "notice_title_input",
-                          "notice_body_input",
-                          "notice_submit"
-                        ]
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "notice_body_input",
+                          "name": "body",
+                          "label": "Notice text",
+                          "required": true,
+                          "multiline": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "notice_submit",
+                          "label": "Publish notice",
+                          "action_kind": "submit",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "notice_form"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1878,117 +1479,93 @@
         "permission": "application.organisation_administration.privacy_request_case.read",
         "query": "vortex.organisation_administration:privacy_request_cases",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "privacy_cases_table": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.2.0"
-                  },
-                  "settings": {
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:privacy_request_case.subject"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Subject"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:privacy_request_case.request_kind"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Request kind"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:privacy_request_case.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:privacy_request_case.received_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Received"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:privacy_request_case.closed_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Closed"
-                            }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "privacy_cases_table",
+                    "columns": [
+                      {
+                        "field": "vortex.organisation_administration:privacy_request_case.subject",
+                        "label": "Subject"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:privacy_request_case.request_kind",
+                        "label": "Request kind"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:privacy_request_case.state",
+                        "label": "State"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:privacy_request_case.received_at",
+                        "label": "Received"
+                      },
+                      {
+                        "field": "vortex.organisation_administration:privacy_request_case.closed_at",
+                        "label": "Closed"
+                      }
+                    ],
+                    "title": "Privacy request cases",
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.2.0"
+                      },
+                      "query": "vortex.organisation_administration:privacy_request_cases",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
                           }
                         }
-                      ]
-                    },
-                    "title": {
-                      "kind": "text",
-                      "value": "Privacy request cases"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
                       }
                     }
-                  },
-                  "slots": {},
-                  "query": "vortex.organisation_administration:privacy_request_cases"
+                  }
                 },
-        "button_new_privacy_request": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.organisation_administration.privacy_request_case.record_privacy_request", "settings": {"label": {"kind": "text", "value": "New privacy request"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
-              },
-              "order": {
-                "desktop": [
-                  "privacy_cases_table",
-            "button_new_privacy_request"
-                ]
+                {
+                  "type": "platform.renderer.button",
+                  "props": {
+                    "id": "button_new_privacy_request",
+                    "label": "New privacy request",
+                    "action_kind": "action",
+                    "variant": "secondary",
+                    "vortex": {
+                      "block": {
+                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version": "1.0.0"
+                      },
+                      "view_permission": "application.organisation_administration.privacy_request_case.record_privacy_request",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1999,139 +1576,121 @@
         "record_type": "vortex.organisation_administration:privacy_request_case",
         "permission": "application.organisation_administration.privacy_request_case.record_privacy_request",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_organisation_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "privacy_form": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Record privacy request case"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "privacy_subject_input": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:privacy_request_case.subject"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "privacy_details_input": {
-                          "block": {
-                            "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.organisation_administration:privacy_request_case.details"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "privacy_submit": {
-                          "block": {
-                            "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "label": {
-                              "kind": "text",
-                              "value": "Open privacy request"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "privacy_form",
+                    "title": "Record privacy request case",
+                    "content": [
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "privacy_subject_input",
+                          "field": "vortex.organisation_administration:privacy_request_case.subject",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
                             },
-                            "action_kind": {
-                              "kind": "choice",
-                              "value": "submit"
-                            },
-                            "variant": {
-                              "kind": "choice",
-                              "value": "primary"
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
                               }
                             }
-                          },
-                          "slots": {}
+                          }
                         }
                       },
-                      "order": {
-                        "desktop": [
-                          "privacy_subject_input",
-                          "privacy_details_input",
-                          "privacy_submit"
-                        ]
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "privacy_details_input",
+                          "field": "vortex.organisation_administration:privacy_request_case.details",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "privacy_submit",
+                          "label": "Open privacy request",
+                          "action_kind": "submit",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "privacy_form"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       }
     ],
@@ -2237,9 +1796,7 @@
           "organization_account_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:person"
-            ]
+            "recordTypeIds": ["vortex.system_directory:person"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -2295,9 +1852,7 @@
           "organization_account_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:person"
-            ]
+            "recordTypeIds": ["vortex.system_directory:person"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -2353,9 +1908,7 @@
           "organization_account_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:person"
-            ]
+            "recordTypeIds": ["vortex.system_directory:person"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -2466,9 +2019,7 @@
           "invitation_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization_invitation"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization_invitation"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -2524,9 +2075,7 @@
           "record_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.organisation_administration:organization_settings"
-            ]
+            "recordTypeIds": ["vortex.organisation_administration:organization_settings"]
           }
         },
         "variables": {},
@@ -2572,9 +2121,7 @@
           "record": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.organisation_administration:organization_settings"
-            ]
+            "recordTypeIds": ["vortex.organisation_administration:organization_settings"]
           },
           "values": {
             "type": "json",
@@ -2616,9 +2163,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.organisation_administration:organization_settings"
-            ],
+            "recordTypeIds": ["vortex.organisation_administration:organization_settings"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -2632,68 +2177,68 @@
         "errors": [],
         "finally": []
       },
-    {
-      "contractVersion": "1.0.0",
-      "id": "navigate_new_notice",
-      "key": "navigate_new_notice",
-      "description": "Opens the organisation notice form.",
-      "labels": {
-        "name": "New notice"
-      },
-      "execution": "interactive",
-      "runAs": {
-        "kind": "initiator"
-      },
-      "inputs": {},
-      "tasks": [
-        {
-          "id": "open_page",
-          "type": "interface.navigate",
-          "version": "1.0.0",
-          "properties": {
-            "page": {
-              "kind": "literal",
-              "literal": {
-                "type": "text",
-                "value": "record_organisation_notice"
+      {
+        "contractVersion": "1.0.0",
+        "id": "navigate_new_notice",
+        "key": "navigate_new_notice",
+        "description": "Opens the organisation notice form.",
+        "labels": {
+          "name": "New notice"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "record_organisation_notice"
+                }
               }
             }
           }
-        }
-      ],
-      "outputs": {}
-    },
-    {
-      "contractVersion": "1.0.0",
-      "id": "navigate_new_privacy_request",
-      "key": "navigate_new_privacy_request",
-      "description": "Opens the privacy request form.",
-      "labels": {
-        "name": "New privacy request"
+        ],
+        "outputs": {}
       },
-      "execution": "interactive",
-      "runAs": {
-        "kind": "initiator"
-      },
-      "inputs": {},
-      "tasks": [
-        {
-          "id": "open_page",
-          "type": "interface.navigate",
-          "version": "1.0.0",
-          "properties": {
-            "page": {
-              "kind": "literal",
-              "literal": {
-                "type": "text",
-                "value": "record_privacy_request_case"
+      {
+        "contractVersion": "1.0.0",
+        "id": "navigate_new_privacy_request",
+        "key": "navigate_new_privacy_request",
+        "description": "Opens the privacy request form.",
+        "labels": {
+          "name": "New privacy request"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "record_privacy_request_case"
+                }
               }
             }
           }
-        }
-      ],
-      "outputs": {}
-    }
+        ],
+        "outputs": {}
+      }
     ],
     "flow_bindings": [
       {
@@ -2845,22 +2390,22 @@
           }
         }
       },
-    {
-      "id": "binding_new_notice",
-      "control": "button_new_notice",
-      "event_id": "event_new_notice",
-      "event": "action",
-      "flow": "navigate_new_notice",
-      "inputs": {}
-    },
-    {
-      "id": "binding_new_privacy_request",
-      "control": "button_new_privacy_request",
-      "event_id": "event_new_privacy_request",
-      "event": "action",
-      "flow": "navigate_new_privacy_request",
-      "inputs": {}
-    }
+      {
+        "id": "binding_new_notice",
+        "control": "button_new_notice",
+        "event_id": "event_new_notice",
+        "event": "action",
+        "flow": "navigate_new_notice",
+        "inputs": {}
+      },
+      {
+        "id": "binding_new_privacy_request",
+        "control": "button_new_privacy_request",
+        "event_id": "event_new_privacy_request",
+        "event": "action",
+        "flow": "navigate_new_privacy_request",
+        "inputs": {}
+      }
     ]
   }
 }
