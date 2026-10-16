@@ -171,7 +171,6 @@
             "unique": false,
             "filterable": true,
             "sortable": false,
-            "search_priority": "normal",
             "personal_data": "none",
             "public_display": "allowed",
             "type": "link_to_person",
@@ -187,10 +186,10 @@
             "label": "Author",
             "required": false,
             "unique": false,
-            "filterable": false,
+            "filterable": true,
             "sortable": false,
             "personal_data": "none",
-            "public_display": "refused",
+            "public_display": "allowed",
             "type": "link",
             "settings": {
               "target": "vortex.system_directory:person",
@@ -198,7 +197,8 @@
               "on_parent_delete": "empty_optional",
               "application_root_required": true,
               "legacy_person_field": "author"
-            }
+            },
+            "search_priority": "normal"
           },
           {
             "id": "fld_article_files",
@@ -351,7 +351,7 @@
             "status",
             "public",
             "review_date",
-            "author",
+            "author_person",
             "attachments"
           ],
           "changeable_fields": [
@@ -360,7 +360,7 @@
             "status",
             "public",
             "review_date",
-            "author",
+            "author_person",
             "attachments"
           ]
         }
@@ -388,7 +388,7 @@
             "status",
             "public",
             "review_date",
-            "author",
+            "author_person",
             "attachments"
           ],
           "changeable_fields": []
@@ -417,7 +417,7 @@
             "status",
             "public",
             "review_date",
-            "author",
+            "author_person",
             "attachments"
           ],
           "changeable_fields": [
@@ -426,7 +426,7 @@
             "status",
             "public",
             "review_date",
-            "author",
+            "author_person",
             "attachments"
           ]
         }
@@ -494,7 +494,7 @@
             "status",
             "public",
             "review_date",
-            "author",
+            "author_person",
             "attachments"
           ],
           "changeable_fields": []
@@ -811,7 +811,7 @@
           "status",
           "public",
           "review_date",
-          "author"
+          "author_person"
         ],
         "filter": null,
         "group_by": [],

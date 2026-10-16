@@ -360,7 +360,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   const personType = recordType(hrSet, "vortex.system_directory", "person");
   const ownerSession = nominatedOwnerSession(facts.stewardIdentityId);
   const saveRecord = createRecordSaveService({ identityAuthorityId: facts.identityAuthorityId });
-  const personOwner = { organizationAccountId: facts.stewardOrganizationAccountId };
+  const personOwner = {
+    recordTypeId: personType.recordTypeId,
+    recordId: facts.stewardOrganizationAccountId,
+  };
   const readOwnerGroup = async (applicationRootId: string): Promise<string> => {
     const result = await createHumanOrganizationRequestService({
       identityAuthorityId: facts.identityAuthorityId,
@@ -468,7 +471,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
           recordId: companyIds[contact.companyIndex]!,
         },
         email_consent: index % 3 !== 2,
-        relationship_owner: personOwner,
+        relationship_owner_person: personOwner,
       },
       crmOwnerGroupId,
     );
@@ -525,7 +528,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       due_at: dueAt.toISOString(),
       completed: false,
       regarding: { recordTypeId: contactType.recordTypeId, recordId: contactId },
-      owner: personOwner,
+      owner_person: personOwner,
     });
   }
 
@@ -659,7 +662,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         },
         status: serviceCase.status,
         priority: serviceCase.priority,
-        owner: personOwner,
+        owner_person: personOwner,
         service_level: { recordTypeId: serviceLevelType.recordTypeId, recordId: serviceLevelId },
         opened_at: openedAt.toISOString(),
         first_response_due_at: firstResponseDueAt.toISOString(),

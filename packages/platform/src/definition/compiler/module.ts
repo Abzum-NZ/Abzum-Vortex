@@ -138,7 +138,7 @@ function compileModule(
       if (
         matches.length !== 1 ||
         mappedLegacyFields.has(String(legacyKey)) ||
-        field.required === true ||
+        (field.required === true && matches[0]?.required === true) ||
         linkSettings.application_root_required !==
           (matches[0]?.settings as JsonObject | undefined)?.application_root_required
       ) {

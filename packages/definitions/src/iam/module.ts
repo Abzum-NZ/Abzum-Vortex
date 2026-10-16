@@ -107,7 +107,7 @@ const requestReadable = [
   "title",
   "request_type",
   "state",
-  "beneficiary",
+  "beneficiary_person",
   "target_role_key",
   "target_group_key",
   "target_group",
@@ -535,7 +535,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
           "title",
           "request_type",
           "state",
-          "beneficiary",
+          "beneficiary_person",
           "submitted_at"
         ],
         "filter": null,
