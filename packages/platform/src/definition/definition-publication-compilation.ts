@@ -229,7 +229,7 @@ export const compileApplicationCandidate = (
   return { request, output: compileParsedDefinition(request, dependencyOutputs, permissions), dependencyOutputs };
 };
 
-export const compileCandidate = (
+const compileCandidate = (
   candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
