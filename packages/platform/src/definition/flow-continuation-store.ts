@@ -163,7 +163,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async begin(key) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_platform.begin_flow_effect_with_origin(
+            select vortex_platform.begin_flow_effect(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
               ${key.principal.kind}::text,
@@ -183,7 +183,7 @@ export const createDatabaseFlowStores = (): Readonly<{
       async complete(key, outcome, outputs) {
         const rows = await withRuntimeTransaction((transaction) =>
           transaction.query`
-            select vortex_platform.complete_flow_effect_with_origin(
+            select vortex_platform.complete_flow_effect(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
               ${key.principal.kind}::text,

@@ -35,8 +35,8 @@ begin
   end if;
 
   return vortex_platform.complete_flow_effect(
-    p_run_id, p_organization_id, p_identity_id, p_task_path, p_iteration,
-    p_outcome, p_outputs
+    p_run_id, p_organization_id, 'person', p_identity_id,
+    'person', p_identity_id, p_task_path, p_iteration, p_outcome, p_outputs
   );
 end
 $function$;
