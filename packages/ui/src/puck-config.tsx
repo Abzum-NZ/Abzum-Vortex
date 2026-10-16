@@ -171,10 +171,12 @@ export type VortexPlacementMeta = Readonly<{
 
 type PlacementSettings = Readonly<Record<string, BlockPropertyValueContract>>;
 
-/** Props every component of the config receives. Slot props are `SlotComponent` functions. */
+/**
+ * Props every component of the config receives: the compiled item's props. Each declared setting is
+ * its own prop holding its typed value; slot props are `SlotComponent` functions.
+ */
 export type VortexPuckComponentProps = Readonly<{
   id: string;
-  settings: PlacementSettings;
   vortex: VortexPlacementMeta;
   puck: PuckContext;
   /** Host-owned wrapper additions; the page runtime passes grid-item geometry here. */
@@ -531,6 +533,19 @@ const renderPropertyEditor = (
   }
 };
 
+/** The declared settings among a placement's props: each declared property's own prop. */
+const placementSettingsOf = (
+  release: PlatformBlockRelease,
+  props: Readonly<Record<string, unknown>>,
+): PlacementSettings => {
+  const settings: Record<string, BlockPropertyValueContract> = {};
+  for (const property of release.properties) {
+    const value = ownEntry(props, property.key);
+    if (value !== undefined) settings[property.key] = value as BlockPropertyValueContract;
+  }
+  return settings;
+};
+
 /** The names of the slot fields a placement of this release has, given its settings. */
 const declaredSlotKeys = (
   release: PlatformBlockRelease,
@@ -589,10 +604,9 @@ function PlacementBlock(props: {
     );
   const release = registration.metadata;
   const Implementation = implementationFor(release);
-  // Puck writes `undefined` for untouched fields; a declared setting is either present or absent.
-  const settings = Object.fromEntries(
-    Object.entries(componentProps.settings ?? {}).filter(([, value]) => value !== undefined),
-  );
+  // Each declared setting is its own prop; Puck writes `undefined` for an untouched field, and a
+  // declared setting is either present or absent.
+  const settings = placementSettingsOf(release, componentProps);
   validateAccessibleName(settings, release.capabilities, location);
 
   // A placement whose use is unavailable stays viewable but never receives an invocable callback,
@@ -1102,13 +1116,9 @@ export function createVortexPuckConfig(
           },
         },
       },
-      settings: {
-        type: "object",
-        label: "Settings",
-        objectFields: Object.fromEntries(
-          release.properties.map((property) => [property.key, propertyField(property)]),
-        ),
-      },
+      ...Object.fromEntries(
+        release.properties.map((property) => [property.key, propertyField(property)]),
+      ),
     };
     for (const slot of release.slots) {
       const allow = slot.allowedChildCategories.flatMap(
@@ -1133,7 +1143,7 @@ export function createVortexPuckConfig(
     components[rendererKey] = {
       label: release.name,
       defaultProps: {
-        settings: defaults,
+        ...defaults,
         vortex: {
           block: { blockId: release.blockId, releaseVersion: release.releaseVersion },
           themeOverrides: {},
@@ -1149,7 +1159,7 @@ export function createVortexPuckConfig(
       resolveFields: (data: { props: Record<string, unknown> }) =>
         buildFields(
           release,
-          hasRepeatableSlot ? ((data.props.settings ?? {}) as PlacementSettings) : defaults,
+          hasRepeatableSlot ? placementSettingsOf(release, data.props) : defaults,
           (data.props.vortex as { responsive?: unknown } | undefined)?.responsive,
         ),
       render: (componentProps) => (
