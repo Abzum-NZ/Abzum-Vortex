@@ -177,7 +177,7 @@ const historyLimit = 10_000;
 export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("2.0.0"),
+    validationContractVersion: z.literal("3.0.0"),
     history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
     candidate: applicationDraftSchema,
   })

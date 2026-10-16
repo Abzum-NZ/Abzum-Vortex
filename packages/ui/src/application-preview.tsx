@@ -2,7 +2,9 @@ import type { CSSProperties, ReactElement } from "react";
 import {
   componentSemanticEventKindSchema,
   flowEffectKindSchema,
+  compiledItemTree,
   materialisedApplicationCompositionSchema,
+  type CompiledLayout,
   type ComponentSemanticEventKind,
   type FlowEffectKind,
 } from "@vortex/platform/schema";
@@ -15,9 +17,10 @@ import {
   type DefinitionRenderErrorLocation,
 } from "./definition-error";
 import {
-  resolveRootPlacementSlot,
+  materialisedPageOf,
+  selectRenderedLayout,
+  validatePlacementDependencies,
   type MaterialisedApplicationComposition,
-  type PlacementSlot,
 } from "./page-composition";
 import { PagePuckRenderer } from "./page-puck-renderer";
 import { cn } from "./lib/utils";
@@ -261,47 +264,25 @@ export const parseApplicationPreviewArtifact = (value: unknown): ApplicationPrev
   });
 };
 
-const collectPlacementIds = (slot: PlacementSlot, into: Set<string>): void => {
-  for (const [placementId, placement] of Object.entries(slot.placements)) {
-    into.add(placementId);
-    for (const child of Object.values(placement.slots)) collectPlacementIds(child, into);
-  }
-};
-
 /**
  * Checks, before rendering, what the shared renderer would otherwise refuse while rendering: every
  * placement must use the exact release its dependency manifest pins, and a draft preview carries
  * no permission-projected availability. A refusal is then shown as a preview outcome.
  */
 const validatePreviewPlacements = (
-  slot: PlacementSlot,
+  layout: CompiledLayout,
   dependencies: MaterialisedApplicationComposition["platformBlockDependencies"],
   location: DefinitionRenderErrorLocation,
 ): void => {
-  const releases = new Set(
-    dependencies.map((dependency) => `${dependency.blockId}@${dependency.releaseVersion}`),
-  );
-  for (const [placementId, placement] of Object.entries(slot.placements)) {
-    const placementLocation = {
-      ...location,
-      placementId,
-      blockId: placement.block.blockId,
-      releaseVersion: placement.block.releaseVersion,
-    };
-    if (!releases.has(`${placement.block.blockId}@${placement.block.releaseVersion}`))
-      throw new DefinitionRenderError(
-        "MISMATCHED_RELEASE",
-        `Placement '${placementId}' does not match the draft's platform-block dependency manifest`,
-        placementLocation,
-      );
-    if ("availability" in placement || "unavailableReason" in placement)
+  validatePlacementDependencies(layout, dependencies, location);
+  for (const item of compiledItemTree(layout.content)) {
+    const vortex = item.props.vortex as Readonly<Record<string, unknown>>;
+    if ("availability" in vortex || "unavailableReason" in vortex)
       throw new DefinitionRenderError(
         "INVALID_COMPOSITION",
-        `Placement '${placementId}' carries permission-projected availability in a draft preview`,
-        placementLocation,
+        `Placement '${item.props.id}' carries permission-projected availability in a draft preview`,
+        { ...location, placementId: item.props.id },
       );
-    for (const [slotKey, child] of Object.entries(placement.slots))
-      validatePreviewPlacements(child, dependencies, { ...placementLocation, slotKey });
   }
 };
 
@@ -311,26 +292,20 @@ const validatePreviewPlacements = (
  * rather than failing the render.
  */
 const validatePreviewRuntimeInputs = (
-  slot: PlacementSlot,
+  layout: CompiledLayout,
   registry: PlatformComponentRegistry,
   runtimeInputs: RuntimeInputsByPlacement,
   location: DefinitionRenderErrorLocation,
 ): void => {
-  for (const [placementId, placement] of Object.entries(slot.placements)) {
-    const placementLocation = {
-      ...location,
-      placementId,
-      blockId: placement.block.blockId,
-      releaseVersion: placement.block.releaseVersion,
-    };
+  for (const item of compiledItemTree(layout.content)) {
+    const placementId = item.props.id;
+    const block = item.props.vortex.block;
     if (Object.hasOwn(runtimeInputs, placementId))
-      registry
-        .get(placement.block.blockId, placement.block.releaseVersion)
-        ?.parsePayload(runtimeInputs[placementId], placementLocation);
-    for (const [slotKey, child] of Object.entries(placement.slots))
-      validatePreviewRuntimeInputs(child, registry, runtimeInputs, {
-        ...placementLocation,
-        slotKey,
+      registry.get(block.blockId, block.releaseVersion)?.parsePayload(runtimeInputs[placementId], {
+        ...location,
+        placementId,
+        blockId: block.blockId,
+        releaseVersion: block.releaseVersion,
       });
   }
 };
@@ -404,19 +379,17 @@ export function ApplicationPreview({
   };
   const composition = artifact.composition;
 
-  let resolvedSlot: PlacementSlot | undefined;
+  let resolvedSlot: CompiledLayout | undefined;
+  let rendered: ReturnType<typeof materialisedPageOf> | undefined;
   let renderFailure: DefinitionRenderError | undefined;
   try {
-    resolvedSlot = resolveRootPlacementSlot({
-      composition,
-      registry,
-      pageId: artifact.pageId,
-      ...(artifact.activeStepId === undefined ? {} : { activeStepId: artifact.activeStepId }),
-    });
+    rendered = materialisedPageOf(composition, artifact.pageId, registry);
+    resolvedSlot = selectRenderedLayout(rendered.page, artifact.activeStepId);
     validatePreviewPlacements(resolvedSlot, composition.platformBlockDependencies, location);
     validatePlacementTree(resolvedSlot, registry, location, { allowEmptyRequiredSlots: false });
   } catch (error) {
     resolvedSlot = undefined;
+    rendered = undefined;
     renderFailure =
       error instanceof DefinitionRenderError
         ? error
@@ -428,7 +401,8 @@ export function ApplicationPreview({
   }
 
   const availablePlacementIds = new Set<string>();
-  if (resolvedSlot !== undefined) collectPlacementIds(resolvedSlot, availablePlacementIds);
+  if (resolvedSlot !== undefined)
+    for (const item of compiledItemTree(resolvedSlot.content)) availablePlacementIds.add(item.props.id);
 
   // One generic runtime-input map per placement. The renderer hands each entry to the placement's
   // own registration, which is the only thing that decides what that block accepts. A placement
@@ -538,9 +512,11 @@ export function ApplicationPreview({
           )}
         </AlertDescription>
       </Alert>
-      {renderFailure === undefined && resolvedSlot !== undefined ? (
+      {renderFailure === undefined && rendered !== undefined ? (
         <PagePuckRenderer
-          composition={composition}
+          composition={rendered.page}
+          {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
+          theme={composition.theme}
           registry={registry}
           fieldInputControlReleases={fieldInputControlReleases}
           platformThemeTokens={platformThemeTokens}

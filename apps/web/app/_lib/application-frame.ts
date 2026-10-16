@@ -9,6 +9,7 @@ import {
 } from "@vortex/platform/server";
 import {
   sameId,
+  compiledPageShellId,
   splitProjectedPage,
   type ApplicationShell,
   type PlatformBlockRelease,
@@ -148,8 +149,7 @@ export const loadApplicationFrame = cache(
     if (projected.kind !== "available" || projected.value === undefined) return undefined;
     if (navigation.kind !== "available") return undefined;
 
-    const shellId =
-      "shellId" in pageDefinition.composition ? pageDefinition.composition.shellId : undefined;
+    const shellId = compiledPageShellId(pageDefinition.composition) ?? undefined;
     const shell =
       shellId === undefined
         ? undefined

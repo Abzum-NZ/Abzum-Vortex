@@ -10,7 +10,12 @@ import {
 import {
   type PageDefinition,
   type ApplicationShell,
+  type CompiledItem,
+  type CompiledLayout,
   type FlowTask,
+  compiledItemSlots,
+  compiledPageRootSlots,
+  compiledPageShellId,
   flowTaskChildLists,
   isRecord,
   sameId,
@@ -29,91 +34,110 @@ export const pageSubjectParameter = "record_id";
 export const first = (value: string | readonly string[] | undefined): string | undefined =>
   typeof value === "string" ? value : value?.[0];
 
+/**
+ * One placed item of a projected page: the item itself and, read from it, its Vortex metadata
+ * (`props.vortex`) and its settings (`props.settings`).
+ */
+export type PlacedItem = Readonly<{
+  placementId: string;
+  item: Record<string, unknown>;
+  vortex: Record<string, unknown>;
+  settings: Record<string, unknown>;
+  formId?: string;
+}>;
+
+/** The parts of a placed item the placement predicates read. */
+export type PlacedItemParts = Pick<PlacedItem, "vortex" | "settings">;
+
 /** Reads only the projected body; shell chrome and permission reasons do not count as content. */
 export const projectedBodyContentAvailable = (
   definition: Exclude<PageDefinition, { type: "guided_form" }>,
   shells: readonly ApplicationShell[],
   projected: Readonly<Record<string, unknown>>,
 ): boolean => {
-  type Slot = ApplicationShell["layout"];
   const breakpoints = ["desktop", "tablet", "phone"] as const;
   type Visibility = Record<(typeof breakpoints)[number], boolean>;
   // The stored Page service has already parsed and projected this canonical composition.
-  const main = (projected.composition as { main: Slot }).main;
-  const visibleContent = (slot: Slot, ancestors: Visibility): boolean =>
-    Object.values(slot.placements).some((placement) =>
-      breakpoints.some((breakpoint) =>
-        ancestors[breakpoint] && placement.responsive[breakpoint].visible,
+  const layout = projected.composition as CompiledLayout;
+  const visibleContent = (items: readonly CompiledItem[], ancestors: Visibility): boolean =>
+    items.some((item) =>
+      breakpoints.some(
+        (breakpoint) => ancestors[breakpoint] && item.props.vortex.responsive[breakpoint].visible,
       ),
     );
   const visible: Visibility = { desktop: true, tablet: true, phone: true };
   const composition = definition.composition;
-  if (composition.shellKind === "default") return visibleContent(main, visible);
+  const shellId = compiledPageShellId(composition);
+  if (shellId === null) return visibleContent(layout.content, visible);
 
-  const shell = shells.find((candidate) => candidate.shellId === composition.shellId);
+  const shell = shells.find((candidate) => candidate.shellId === shellId);
   if (shell === undefined) throw new Error("Page body composition unavailable");
+  const filled = new Set(compiledPageRootSlots(composition).map(([slotId]) => slotId));
   const targets = new Map<string, Set<string>>();
   for (const binding of shell.contentSlots) {
-    if (!Object.hasOwn(composition.content, String(binding.slotId))) continue;
+    if (!filled.has(String(binding.slotId))) continue;
     const id = String(binding.parentPlacementId).toLowerCase();
     const slots = targets.get(id) ?? new Set<string>();
     slots.add(binding.parentSlotKey);
     targets.set(id, slots);
   }
-  const visit = (slot: Slot, ancestors: Visibility): boolean =>
-    Object.entries(slot.placements).some(([placementId, placement]) => {
+  const visit = (items: readonly CompiledItem[], ancestors: Visibility): boolean =>
+    items.some((item) => {
+      const responsive = item.props.vortex.responsive;
       const effective: Visibility = {
-        desktop: ancestors.desktop && placement.responsive.desktop.visible,
-        tablet: ancestors.tablet && placement.responsive.tablet.visible,
-        phone: ancestors.phone && placement.responsive.phone.visible,
+        desktop: ancestors.desktop && responsive.desktop.visible,
+        tablet: ancestors.tablet && responsive.tablet.visible,
+        phone: ancestors.phone && responsive.phone.visible,
       };
-      return Object.entries(placement.slots).some(([slotKey, child]) =>
-        (targets.get(placementId.toLowerCase())?.has(slotKey) === true &&
-          visibleContent(child, effective)) || visit(child, effective),
+      return compiledItemSlots(item).some(
+        ([slotKey, children]) =>
+          (targets.get(item.props.id.toLowerCase())?.has(slotKey) === true &&
+            visibleContent(children, effective)) ||
+          visit(children, effective),
       );
     });
-  return visit(main, visible);
+  return visit(layout.content, visible);
 };
 
-export const isBoardPlacement = (placement: unknown): boolean => {
-  if (!isRecord(placement) || !isRecord(placement.block)) return false;
+export const isBoardPlacement = ({ vortex }: Pick<PlacedItem, "vortex">): boolean => {
+  if (!isRecord(vortex.block)) return false;
   return (
-    typeof placement.block.blockId === "string" &&
-    sameId(placement.block.blockId, BOARD_BLOCK_RELEASE.blockId) &&
-    (placement.block.releaseVersion === BOARD_BLOCK_RELEASE.releaseVersion ||
-      placement.block.releaseVersion === BOARD_BLOCK_RELEASE_1_1_0.releaseVersion)
+    typeof vortex.block.blockId === "string" &&
+    sameId(vortex.block.blockId, BOARD_BLOCK_RELEASE.blockId) &&
+    (vortex.block.releaseVersion === BOARD_BLOCK_RELEASE.releaseVersion ||
+      vortex.block.releaseVersion === BOARD_BLOCK_RELEASE_1_1_0.releaseVersion)
   );
 };
 
-export const isTablePlacement = (placement: unknown): boolean =>
-  isRecord(placement) &&
-  isRecord(placement.block) &&
-  typeof placement.block.blockId === "string" &&
-  sameId(placement.block.blockId, TABLE_BLOCK_RELEASE.blockId);
+export const isTablePlacement = ({ vortex }: Pick<PlacedItem, "vortex">): boolean =>
+  isRecord(vortex.block) &&
+  typeof vortex.block.blockId === "string" &&
+  sameId(vortex.block.blockId, TABLE_BLOCK_RELEASE.blockId);
 
-export const projectedUseAvailability = (placement: unknown): "available" | "unavailable" | "invalid" => {
-  if (!isRecord(placement)) return "invalid";
-  const hasAvailability = Object.hasOwn(placement, "availability");
-  const hasReason = Object.hasOwn(placement, "unavailableReason");
+export const projectedUseAvailability = ({
+  vortex,
+}: Pick<PlacedItem, "vortex">): "available" | "unavailable" | "invalid" => {
+  const hasAvailability = Object.hasOwn(vortex, "availability");
+  const hasReason = Object.hasOwn(vortex, "unavailableReason");
   if (!hasAvailability && !hasReason) return "available";
   if (
     hasAvailability &&
     hasReason &&
-    placement.availability === "unavailable" &&
-    placement.unavailableReason === "operation_unavailable"
+    vortex.availability === "unavailable" &&
+    vortex.unavailableReason === "operation_unavailable"
   )
     return "unavailable";
   return "invalid";
 };
 
-export const isUnboundReferenceChoicePlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
-  if (!hasReferenceChoiceSource(placement) || !isRecord(placement.settings)) return false;
+export const isUnboundReferenceChoicePlacement = (placement: PlacedItemParts): boolean => {
+  if (!hasReferenceChoiceSource(placement)) return false;
   const source = placement.settings.choice_source;
   return isRecord(source) && isRecord(source.properties) && !Object.hasOwn(source.properties, "input");
 };
 
-export const isEditFieldPlacement = (placement: Readonly<Record<string, unknown>>): boolean => {
-  const block = placement.block;
+export const isEditFieldPlacement = (placement: PlacedItemParts): boolean => {
+  const block = placement.vortex.block;
   return (
     isUnboundReferenceChoicePlacement(placement) ||
     (isRecord(block) &&
@@ -179,11 +203,11 @@ export const selectedReadInputTypes = (flow: InstalledFlow): ReadonlyMap<string,
 };
 
 export const fieldForPlacement = (
-  placement: Readonly<Record<string, unknown>>,
+  placement: PlacedItemParts,
   modules: InstalledRuntimeContext["releaseSet"]["modules"],
 ): Readonly<{ module: ModuleRelease; field: ModuleField }> | undefined => {
   const settings = placement.settings;
-  if (!isRecord(settings) || !isRecord(settings.field)) return undefined;
+  if (!isRecord(settings.field)) return undefined;
   const reference = settings.field;
   if (reference.kind !== "field_reference" || typeof reference.fieldId !== "string")
     return undefined;
@@ -197,10 +221,10 @@ export const fieldForPlacement = (
   return undefined;
 };
 
-export const fieldControl = (placement: Readonly<Record<string, unknown>>): string | undefined => {
+export const fieldControl = (placement: PlacedItemParts): string | undefined => {
   const settings = placement.settings;
-  const block = placement.block;
-  return isRecord(settings) && isRecord(block) &&
+  const block = placement.vortex.block;
+  return isRecord(block) &&
     typeof block.blockId === "string" &&
     sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
     isRecord(settings.control) && settings.control.kind === "choice" &&
@@ -209,25 +233,26 @@ export const fieldControl = (placement: Readonly<Record<string, unknown>>): stri
     : undefined;
 };
 
-/** Every placement of the projected page with its stable identity, in document order. */
-export const collectPlacements = (
-  projected: Readonly<Record<string, unknown>>,
-): Array<
-  Readonly<{ placementId: string; placement: Record<string, unknown>; formId?: string }>
-> => {
-  const found: Array<{ placementId: string; placement: Record<string, unknown>; formId?: string }> =
-    [];
+/** Every placed item of the projected page with its stable identity, in document order. */
+export const collectPlacements = (projected: Readonly<Record<string, unknown>>): PlacedItem[] => {
+  const found: PlacedItem[] = [];
   walkPageComposition(
     projected.composition,
-    ({ placementId, placement }, formId: string | undefined) => {
-      const block = placement.block;
+    ({ placementId, item, props, vortex }, formId: string | undefined) => {
+      const block = vortex.block;
       const owner =
         isRecord(block) &&
         typeof block.blockId === "string" &&
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
           ? placementId
           : formId;
-      found.push({ placementId, placement, ...(owner === undefined ? {} : { formId: owner }) });
+      found.push({
+        placementId,
+        item,
+        vortex,
+        settings: isRecord(props.settings) ? props.settings : {},
+        ...(owner === undefined ? {} : { formId: owner }),
+      });
       return owner;
     },
   );

@@ -16,7 +16,10 @@ import {
 } from "../../catalogue/identifiers";
 import { positiveFiniteSchema } from "./shared";
 import { type BlockPropertyValueContract, blockPropertyValueSchema } from "./block-property-values";
-import { platformBlockDependenciesSchema, platformBlockReferenceSchema } from "./platform-block-release";
+import {
+  platformBlockDependenciesSchema,
+  platformBlockReferenceSchema,
+} from "./platform-block-release";
 import { themeTokenValueSchema, applicationThemeSchema } from "./theme";
 
 const widthSchema = z.discriminatedUnion("kind", [
@@ -94,71 +97,294 @@ export const sourceResponsivePlacementSchema = z
   })
   .strict();
 
-type BlockPlacement = {
+/**
+ * The compiled, engine-facing layout takes Puck 0.23's data shape, exactly as the runtime renders
+ * it. An item is `{ type, props }`: `type` is the block release's renderer key, `props.id` the
+ * placement identity, `props.settings` the typed canonical setting values, every other prop but
+ * `vortex` one child slot (an array of items, in desktop order), and `props.vortex` the resolved
+ * Vortex metadata: the exact block release, access and data bindings, theme overrides, the complete
+ * responsive layout and the complete tablet and phone order of every child slot.
+ */
+export type BreakpointOrder = { tablet: string[]; phone: string[] };
+
+export type CompiledItemVortex = {
   block: z.infer<typeof platformBlockReferenceSchema>;
-  viewPermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
-  usePermissionKey?: z.infer<typeof namespacedKeySchema> | undefined;
+  viewPermissionKey?: string | undefined;
+  usePermissionKey?: string | undefined;
   visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
-  queryId?: z.infer<typeof queryIdSchema> | undefined;
-  settings: Record<string, BlockPropertyValueContract>;
+  queryId?: string | undefined;
   themeOverrides: Record<string, z.infer<typeof themeTokenValueSchema>>;
   responsive: z.infer<typeof responsivePlacementSchema>;
-  slots: Record<string, PlacementSlot>;
+  slotOrders: Record<string, BreakpointOrder>;
 };
-type PlacementSlot = {
-  placements: Record<string, BlockPlacement>;
-  order: { desktop: string[]; tablet: string[]; phone: string[] };
+
+export type CompiledItemProps = {
+  id: string;
+  settings: Record<string, BlockPropertyValueContract>;
+  vortex: CompiledItemVortex;
+  [slotKey: string]: unknown;
 };
+
+export type CompiledItem = { type: string; props: CompiledItemProps };
+
+/** A compiled item after permission projection: an unavailable use is marked on its metadata. */
+export type ProjectedItem = {
+  type: string;
+  props: CompiledItemProps & {
+    vortex: CompiledItemVortex & {
+      availability?: "unavailable" | undefined;
+      unavailableReason?: "operation_unavailable" | undefined;
+    };
+  };
+};
+
+/** The props of an item that are not child slots. */
+export const compiledItemReservedProps: ReadonlySet<string> = new Set(["id", "settings", "vortex"]);
+
+/** The item's child slots, in prop order: every prop but `id`, `settings` and `vortex`. */
+export const compiledItemSlots = (item: CompiledItem): [string, CompiledItem[]][] =>
+  Object.entries(item.props).flatMap(([key, value]): [string, CompiledItem[]][] =>
+    compiledItemReservedProps.has(key) ? [] : [[key, value as CompiledItem[]]],
+  );
+
+/** Every item in the list and their descendants, depth first in desktop order. */
+export const compiledItemTree = (
+  items: readonly CompiledItem[],
+  result: CompiledItem[] = [],
+): CompiledItem[] => {
+  for (const item of items) {
+    result.push(item);
+    for (const [, children] of compiledItemSlots(item)) compiledItemTree(children, result);
+  }
+  return result;
+};
+
+const breakpointOrderSchema = z
+  .object({
+    tablet: z.array(containedComponentIdSchema),
+    phone: z.array(containedComponentIdSchema),
+  })
+  .strict();
 
 const sameMembers = (actual: readonly string[], expected: readonly string[]): boolean =>
   actual.length === expected.length &&
   new Set(actual).size === actual.length &&
   actual.every((entry) => expected.includes(entry));
 
-export const blockPlacementSchema: z.ZodType<BlockPlacement> = z.lazy(() =>
+/** Every zone has exactly one complete tablet and phone order, each a permutation of its items. */
+const refineZoneOrders = (
+  orders: Readonly<Record<string, BreakpointOrder>>,
+  zones: ReadonlyMap<string, readonly CompiledItem[]>,
+  context: z.RefinementCtx,
+  path: (string | number)[],
+): void => {
+  if (!sameMembers(Object.keys(orders), [...zones.keys()]))
+    context.addIssue({
+      code: "custom",
+      path,
+      message: "Every slot has exactly one breakpoint order",
+    });
+  for (const [zone, items] of zones) {
+    const order = orders[zone];
+    if (order === undefined) continue;
+    const ids = items.map((item) => item.props.id);
+    for (const breakpoint of ["tablet", "phone"] as const)
+      if (!sameMembers(order[breakpoint], ids))
+        context.addIssue({
+          code: "custom",
+          path: [...path, zone, breakpoint],
+          message: "Each breakpoint order must be one complete permutation of its slot",
+        });
+  }
+};
+
+const compiledItemVortexSchema = z
+  .object({
+    block: platformBlockReferenceSchema,
+    viewPermissionKey: namespacedKeySchema.optional(),
+    usePermissionKey: namespacedKeySchema.optional(),
+    visibilityCondition: conditionNodeSchema.optional(),
+    queryId: queryIdSchema.optional(),
+    themeOverrides: z.record(builderKeySchema, themeTokenValueSchema),
+    responsive: responsivePlacementSchema,
+    slotOrders: z.record(builderKeySchema, breakpointOrderSchema),
+  })
+  .strict();
+
+export const compiledItemSchema: z.ZodType<CompiledItem> = z.lazy(() =>
   z
     .object({
-      block: sourceProvenanceUnchanged(platformBlockReferenceSchema),
-      viewPermissionKey: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
-      usePermissionKey: sourceProvenanceUnchanged(namespacedKeySchema.optional()),
-      visibilityCondition: sourceProvenanceUnchanged(conditionNodeSchema.optional()),
-      queryId: sourceProvenanceUnchanged(queryIdSchema.optional()),
-      settings: sourceProvenanceUnchanged(z.record(builderKeySchema, blockPropertyValueSchema)),
-      themeOverrides: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
-      responsive: sourceProvenanceUnchanged(responsivePlacementSchema),
-      slots: sourceProvenanceUnchanged(z.record(builderKeySchema, placementSlotSchema)),
+      type: namespacedKeySchema,
+      props: z
+        .object({
+          id: containedComponentIdSchema,
+          settings: z.record(builderKeySchema, blockPropertyValueSchema),
+          vortex: compiledItemVortexSchema,
+        })
+        .catchall(z.array(compiledItemSchema))
+        .superRefine((props, context) => {
+          const zones = new Map<string, readonly CompiledItem[]>();
+          for (const [key, value] of Object.entries(props)) {
+            if (compiledItemReservedProps.has(key)) continue;
+            if (!builderKeySchema.safeParse(key).success)
+              context.addIssue({ code: "custom", path: [key], message: "Invalid slot key" });
+            zones.set(key, value as CompiledItem[]);
+          }
+          refineZoneOrders(
+            props.vortex.slotOrders as Record<string, BreakpointOrder>,
+            zones,
+            context,
+            ["vortex", "slotOrders"],
+          );
+        }),
     })
     .strict(),
-);
+) as unknown as z.ZodType<CompiledItem>;
 
-export const placementSlotSchema: z.ZodType<PlacementSlot> = z.lazy(() =>
-  z
-    .object({
-      placements: sourceProvenanceUnchanged(
-        z.record(containedComponentIdSchema, blockPlacementSchema),
-      ),
-      order: sourceProvenanceUnchanged(
-        z
+const compiledItemsSchema = z.array(compiledItemSchema);
+
+/** The compiled root zone of a layout. */
+export const compiledRootZone = "content";
+
+/**
+ * A resolved layout: one Puck data tree in the platform frame, with the complete tablet and phone
+ * order of its root zone. A shell's layout has this shape, and so has every page once its shell is
+ * resolved and its guided step selected: that is what the renderer draws.
+ */
+export type CompiledLayout = {
+  root: { props: { vortex: { slotOrders: { content: BreakpointOrder } } } };
+  content: CompiledItem[];
+};
+
+export const compiledLayoutSchema: z.ZodType<CompiledLayout> = z
+  .object({
+    root: z
+      .object({
+        props: z
           .object({
-            desktop: sourceProvenanceUnchanged(z.array(containedComponentIdSchema)),
-            tablet: sourceProvenanceUnchanged(z.array(containedComponentIdSchema)),
-            phone: sourceProvenanceUnchanged(z.array(containedComponentIdSchema)),
+            vortex: z
+              .object({ slotOrders: z.object({ content: breakpointOrderSchema }).strict() })
+              .strict(),
           })
           .strict(),
+      })
+      .strict(),
+    content: compiledItemsSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    refineZoneOrders(
+      value.root.props.vortex.slotOrders as Record<string, BreakpointOrder>,
+      new Map([[compiledRootZone, value.content as CompiledItem[]]]),
+      context,
+      ["root", "props", "vortex", "slotOrders"],
+    );
+  }) as unknown as z.ZodType<CompiledLayout>;
+
+/**
+ * One page's (or one guided step's) compiled Puck data. In the platform default frame
+ * (`shellId` null) the blocks are `content`. In an application shell `content` is empty and each
+ * shell content slot the page fills is a root slot prop named by the content slot's identity.
+ */
+export type PageComposition = {
+  root: {
+    props: {
+      vortex: { shellId: string | null; slotOrders: Record<string, BreakpointOrder> };
+      [contentSlotId: string]: unknown;
+    };
+  };
+  content: CompiledItem[];
+};
+
+/** The root slots of compiled page data: every root prop but `vortex`. */
+export const compiledPageRootSlots = (data: PageComposition): [string, CompiledItem[]][] =>
+  Object.entries(data.root.props).flatMap(([key, value]): [string, CompiledItem[]][] =>
+    key === "vortex" ? [] : [[key, value as CompiledItem[]]],
+  );
+
+/** Every zone of compiled page data with its items: `content` in the default frame, else root slots. */
+export const compiledPageZones = (data: PageComposition): [string, CompiledItem[]][] =>
+  data.root.props.vortex.shellId === null
+    ? [[compiledRootZone, data.content]]
+    : compiledPageRootSlots(data);
+
+export const pageCompositionSchema: z.ZodType<PageComposition> = z
+  .object({
+    root: z
+      .object({
+        props: z
+          .object({
+            vortex: z
+              .object({
+                shellId: shellIdSchema.nullable(),
+                slotOrders: z.record(z.string().min(1), breakpointOrderSchema),
+              })
+              .strict(),
+          })
+          .catchall(compiledItemsSchema),
+      })
+      .strict(),
+    content: compiledItemsSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const data = value as unknown as PageComposition;
+    const rootSlots = compiledPageRootSlots(data);
+    if (data.root.props.vortex.shellId === null && rootSlots.length > 0)
+      context.addIssue({
+        code: "custom",
+        path: ["root", "props"],
+        message: "A page in the default frame places its blocks in content, not in root slots",
+      });
+    if (data.root.props.vortex.shellId !== null && data.content.length > 0)
+      context.addIssue({
+        code: "custom",
+        path: ["content"],
+        message: "A page in an application shell places its blocks in the shell's content slots",
+      });
+    refineZoneOrders(data.root.props.vortex.slotOrders, new Map(compiledPageZones(data)), context, [
+      "root",
+      "props",
+      "vortex",
+      "slotOrders",
+    ]);
+  }) as unknown as z.ZodType<PageComposition>;
+
+/** One page frame with an exact, separately ordered content tree for every guided step. */
+export type GuidedFormPageComposition = { stepContent: Record<string, PageComposition> };
+
+export const guidedFormPageCompositionSchema: z.ZodType<GuidedFormPageComposition> = z
+  .object({ stepContent: z.record(containedComponentIdSchema, pageCompositionSchema) })
+  .strict()
+  .superRefine((value, context) => {
+    const shells = new Set(
+      Object.values(value.stepContent as Record<string, PageComposition>).map(
+        (step) => step.root.props.vortex.shellId,
       ),
-    })
-    .strict()
-    .superRefine((value, context) => {
-      const placements = Object.keys(value.placements);
-      for (const breakpoint of ["desktop", "tablet", "phone"] as const)
-        if (!sameMembers(value.order[breakpoint], placements))
-          context.addIssue({
-            code: "custom",
-            path: ["order", breakpoint],
-            message: "Each breakpoint order must be one complete placement permutation",
-          });
-    }),
-);
+    );
+    if (shells.size > 1)
+      context.addIssue({
+        code: "custom",
+        path: ["stepContent"],
+        message: "Every step of a guided form uses the same frame",
+      });
+  }) as unknown as z.ZodType<GuidedFormPageComposition>;
+
+export type AnyPageComposition = PageComposition | GuidedFormPageComposition;
+
+/** The compiled Puck data of every step of a guided form, or the page's one data otherwise. */
+export const compiledPageDataOf = (composition: AnyPageComposition): PageComposition[] =>
+  "stepContent" in composition ? Object.values(composition.stepContent) : [composition];
+
+/** The application shell a page's frame uses, or null for the platform default frame. */
+export const compiledPageShellId = (composition: AnyPageComposition): string | null =>
+  compiledPageDataOf(composition)[0]?.root.props.vortex.shellId ?? null;
+
+/** Every item a page places, in every step and zone, depth first. */
+export const compiledPageItems = (composition: AnyPageComposition): CompiledItem[] =>
+  compiledPageDataOf(composition).flatMap((data) =>
+    compiledPageZones(data).flatMap(([, items]) => compiledItemTree(items)),
+  );
 
 export const shellContentSlotSchema = z
   .object({
@@ -241,37 +467,14 @@ export const sourceApplicationShellPresentationSchema = z
   })
   .strict();
 
-const collectCanonicalPlacementSlots = (
-  slot: PlacementSlot,
-  result = new Map<string, Record<string, PlacementSlot>>(),
-): Map<string, Record<string, PlacementSlot>> => {
-  for (const [placementId, placement] of Object.entries(slot.placements)) {
-    result.set(placementId, placement.slots);
-    for (const child of Object.values(placement.slots))
-      collectCanonicalPlacementSlots(child, result);
-  }
-  return result;
-};
-
-export const canonicalPlacementEntries = (
-  slot: PlacementSlot,
-  result: [string, BlockPlacement][] = [],
-): [string, BlockPlacement][] => {
-  for (const [placementId, placement] of Object.entries(slot.placements)) {
-    result.push([placementId, placement]);
-    for (const child of Object.values(placement.slots)) canonicalPlacementEntries(child, result);
-  }
-  return result;
-};
-
 export const applicationShellSchema = z
   .object({
-    shellId: sourceProvenanceUnchanged(shellIdSchema),
-    key: sourceProvenanceUnchanged(builderKeySchema),
-    name: sourceProvenanceUnchanged(labelSchema),
-    presentation: sourceProvenanceUnchanged(applicationShellPresentationSchema),
-    layout: sourceProvenanceUnchanged(placementSlotSchema),
-    contentSlots: sourceProvenanceUnchanged(z.array(shellContentSlotSchema).min(1)),
+    shellId: shellIdSchema,
+    key: builderKeySchema,
+    name: labelSchema,
+    presentation: applicationShellPresentationSchema,
+    layout: compiledLayoutSchema,
+    contentSlots: z.array(shellContentSlotSchema).min(1),
   })
   .strict()
   .superRefine((value, context) => {
@@ -298,21 +501,21 @@ export const applicationShellSchema = z
         path: ["contentSlots"],
         message: "A shell location can expose only one content slot",
       });
-    const placements = collectCanonicalPlacementSlots(value.layout);
+    const items = new Map(
+      compiledItemTree((value.layout as CompiledLayout).content).map((item) => [
+        item.props.id,
+        item,
+      ]),
+    );
     for (const [index, slot] of value.contentSlots.entries()) {
-      const target = placements.get(slot.parentPlacementId)?.[slot.parentSlotKey];
-      if (target === undefined)
+      const target = items.get(slot.parentPlacementId)?.props[slot.parentSlotKey];
+      if (!Array.isArray(target))
         context.addIssue({
           code: "custom",
           path: ["contentSlots", index, "parentSlotKey"],
           message: "A shell content slot must target a declared slot on one shell placement",
         });
-      else if (
-        Object.keys(target.placements).length > 0 ||
-        target.order.desktop.length > 0 ||
-        target.order.tablet.length > 0 ||
-        target.order.phone.length > 0
-      )
+      else if (target.length > 0)
         context.addIssue({
           code: "custom",
           path: ["contentSlots", index, "parentSlotKey"],
@@ -321,51 +524,9 @@ export const applicationShellSchema = z
     }
   });
 
-export const pageCompositionSchema = z.discriminatedUnion("shellKind", [
-  z
-    .object({
-      shellKind: sourceProvenanceUnchanged(z.literal("default")),
-      main: sourceProvenanceUnchanged(placementSlotSchema),
-    })
-    .strict(),
-  z
-    .object({
-      shellKind: sourceProvenanceUnchanged(z.literal("application")),
-      shellId: sourceProvenanceUnchanged(shellIdSchema),
-      content: sourceProvenanceUnchanged(z.record(containedComponentIdSchema, placementSlotSchema)),
-    })
-    .strict(),
-]);
-
-/** One page shell with an exact, separately ordered content tree for every guided step. */
-export const guidedFormPageCompositionSchema = z.discriminatedUnion("shellKind", [
-  z
-    .object({
-      shellKind: sourceProvenanceUnchanged(z.literal("default")),
-      stepContent: sourceProvenanceUnchanged(
-        z.record(containedComponentIdSchema, placementSlotSchema),
-      ),
-    })
-    .strict(),
-  z
-    .object({
-      shellKind: sourceProvenanceUnchanged(z.literal("application")),
-      shellId: sourceProvenanceUnchanged(shellIdSchema),
-      stepContent: sourceProvenanceUnchanged(
-        z.record(
-          containedComponentIdSchema,
-          z.record(containedComponentIdSchema, placementSlotSchema),
-        ),
-      ),
-    })
-    .strict(),
-]);
-
-export type BlockPlacementContract = z.infer<typeof blockPlacementSchema>;
 export type ApplicationShell = z.infer<typeof applicationShellSchema>;
 export type ApplicationPuckRootShell = z.infer<typeof applicationPuckRootShellSchema>;
-export type PageComposition = z.infer<typeof pageCompositionSchema>;
-export type GuidedFormPageComposition = z.infer<typeof guidedFormPageCompositionSchema>;
+export type ResponsivePlacement = z.infer<typeof responsivePlacementSchema>;
 
 /** The compiled composition one renderer input carries: dependencies, shells, pages and theme. */
 export const materialisedApplicationCompositionSchema = z

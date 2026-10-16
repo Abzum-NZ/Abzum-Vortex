@@ -111,9 +111,12 @@ const settingLeafTargets = (value: unknown, rest: Path): Path[] => {
   }
 };
 
-/** The canonical order leaves one authored order position feeds, including inherited ones. */
+/**
+ * The canonical tablet and phone order leaves one authored order position feeds. A desktop
+ * position is an item's place in its slot array; a missing tablet or phone order inherits it.
+ */
 const orderTargets = (
-  canonicalSlot: Path,
+  canonicalOrder: Path,
   breakpoint: "desktop" | "tablet" | "phone",
   index: number,
   order: Readonly<{ tablet?: unknown; phone?: unknown }> | undefined,
@@ -121,32 +124,35 @@ const orderTargets = (
   const inherited =
     breakpoint === "desktop"
       ? [
-          "desktop",
           ...(order?.tablet === undefined ? ["tablet"] : []),
           ...(order?.tablet === undefined && order?.phone === undefined ? ["phone"] : []),
         ]
       : breakpoint === "tablet"
         ? ["tablet", ...(order?.phone === undefined ? ["phone"] : [])]
         : ["phone"];
-  return inherited.map((target) => [...canonicalSlot, "order", target, index]);
+  return inherited.map((target) => [...canonicalOrder, target, index]);
 };
+
+/** The compiled slot one authored item list becomes: its item array and its order. */
+type CanonicalZone = Readonly<{ items: Path; order: Path }>;
+
+const slotOrderPath = (holder: Path, key: string): Path => [...holder, "slotOrders", key];
 
 /**
  * The canonical leaves one authored leaf inside an item list feeds. `itemsRoot` is the source path
- * of the list, `canonicalSlot` the compiled slot it becomes and `order` the list's authored tablet
- * and phone order.
+ * of the list, `zone` the compiled slot it becomes and `order` the list's authored tablet and
+ * phone order. Each item keeps its array position, so its compiled item is at the same index.
  */
 function itemTargets(
   source: ApplicationSourceDocument,
   canonical: unknown,
   sourcePath: Path,
   itemsRoot: Path,
-  canonicalSlot: Path,
+  canonicalZone: CanonicalZone,
   order: Readonly<{ tablet?: unknown; phone?: unknown }> | undefined,
-  resolution: Resolution,
 ): Target[] | undefined {
   let root = itemsRoot;
-  let slot = canonicalSlot;
+  let zone = canonicalZone;
   let slotOrder = order;
   while (true) {
     const index = sourcePath[root.length];
@@ -155,30 +161,31 @@ function itemTargets(
     const item = asObject(valueAtPath(source, itemPath));
     const props = asObject(item.props);
     const vortex = asObject(props.vortex);
-    const placement: Path = [
-      ...slot,
-      "placements",
-      resolution.id(source.key, "block_placement", String(props.id), "content"),
-    ];
+    const placement: Path = [...zone.items, index];
+    const canonicalVortex: Path = [...placement, "props", "vortex"];
     const suffix = sourcePath.slice(itemPath.length);
     const plain = (paths: Path[]): Target[] => paths.map((path) => ({ path, setting: false }));
-    if (suffix[0] === "type") return plain([[...placement, "block", "blockId"]]);
+    if (suffix[0] === "type") return plain([[...placement, "type"]]);
     if (suffix[0] !== "props") return undefined;
     const prop = suffix[1];
-    if (prop === "id") return plain(orderTargets(slot, "desktop", index, slotOrder));
+    if (prop === "id")
+      return plain([
+        [...placement, "props", "id"],
+        ...orderTargets(zone.order, "desktop", index, slotOrder),
+      ]);
     if (prop === "vortex") {
       const field = suffix[2];
       if (field === "block")
         return plain([
-          [...placement, "block", suffix[3] === "block_id" ? "blockId" : "releaseVersion"],
+          [...canonicalVortex, "block", suffix[3] === "block_id" ? "blockId" : "releaseVersion"],
         ]);
-      if (field === "view_permission") return plain([[...placement, "viewPermissionKey"]]);
-      if (field === "use_permission") return plain([[...placement, "usePermissionKey"]]);
-      if (field === "query") return plain([[...placement, "queryId"]]);
+      if (field === "view_permission") return plain([[...canonicalVortex, "viewPermissionKey"]]);
+      if (field === "use_permission") return plain([[...canonicalVortex, "usePermissionKey"]]);
+      if (field === "query") return plain([[...canonicalVortex, "queryId"]]);
       if (field === "visibility_condition") {
         const targets = conditionSourceTargets(source as unknown as JsonObject, sourcePath, {
           sourceRoot: [...itemPath, "props", "vortex", "visibility_condition"],
-          canonicalRoot: [...placement, "visibilityCondition"],
+          canonicalRoot: [...canonicalVortex, "visibilityCondition"],
         });
         return targets === undefined ? undefined : plain(targets);
       }
@@ -187,7 +194,7 @@ function itemTargets(
           applicationThemeValueTargets(
             sourcePath,
             [...itemPath, "props", "vortex", "theme_overrides", suffix[3]],
-            [...placement, "themeOverrides", suffix[3]],
+            [...canonicalVortex, "themeOverrides", suffix[3]],
           ),
         );
       if (field === "responsive" && typeof suffix[3] === "string") {
@@ -206,7 +213,7 @@ function itemTargets(
         ];
         return plain(
           inherited.map((target) => [
-            ...placement,
+            ...canonicalVortex,
             "responsive",
             target,
             ...suffix
@@ -223,7 +230,7 @@ function itemTargets(
       )
         return plain(
           orderTargets(
-            [...placement, "slots", suffix[3]],
+            slotOrderPath(canonicalVortex, suffix[3]),
             suffix[4],
             suffix[5],
             asObject(asObject(vortex.slot_orders)[suffix[3]]),
@@ -232,52 +239,75 @@ function itemTargets(
       return undefined;
     }
     if (typeof prop !== "string") return undefined;
-    const compiled = asObject(valueAtPath(canonical, placement));
-    if (Object.hasOwn(asObject(compiled.slots), prop)) {
+    const compiledProps = asObject(valueAtPath(canonical, [...placement, "props"]));
+    if (prop !== "settings" && Array.isArray(compiledProps[prop])) {
       root = [...itemPath, "props", prop];
-      slot = [...placement, "slots", prop];
+      zone = {
+        items: [...placement, "props", prop],
+        order: slotOrderPath(canonicalVortex, prop),
+      };
       const orders = vortex.slot_orders === undefined ? {} : asObject(vortex.slot_orders);
       slotOrder = orders[prop] === undefined ? undefined : asObject(orders[prop]);
       continue;
     }
-    const setting = asObject(compiled.settings)[prop];
+    const setting = asObject(compiledProps.settings)[prop];
     if (setting === undefined) return undefined;
     return settingLeafTargets(setting, suffix.slice(2)).map((path) => ({
-      path: [...placement, "settings", prop, ...path],
+      path: [...placement, "props", "settings", prop, ...path],
       setting: true,
     }));
   }
 }
 
-/** The authored zone a page-data leaf belongs to and the compiled slot it becomes. */
+/** The authored zone a page-data leaf belongs to and the compiled zone it becomes. */
 function pageDataTargets(
   source: ApplicationSourceDocument,
   canonical: unknown,
   sourcePath: Path,
   dataRoot: Path,
-  canonicalRoot: Path,
+  canonicalData: Path,
   resolution: Resolution,
 ): Target[] | undefined {
   const data = asObject(valueAtPath(source, dataRoot));
   const vortex = asObject(asObject(asObject(data.root).props).vortex);
   const orders = asObject(vortex.slot_orders);
-  const shell = vortex.shell;
+  const isShell = vortex.shell !== null;
   const suffix = sourcePath.slice(dataRoot.length);
-  const zoneSlot = (zone: string): Path =>
-    shell === null
-      ? canonicalRoot
-      : [...canonicalRoot, resolution.id(source.key, "shell_content_slot", zone, "content")];
+  const canonicalRootVortex: Path = [...canonicalData, "root", "props", "vortex"];
+  const zoneKey = (zone: string): string =>
+    isShell ? resolution.id(source.key, "shell_content_slot", zone, "content") : zone;
   const zoneOrder = (zone: string) =>
     orders[zone] === undefined ? undefined : asObject(orders[zone]);
+  const zoneTarget = (zone: string): CanonicalZone => ({
+    items:
+      zone === "content" && !isShell
+        ? [...canonicalData, "content"]
+        : [...canonicalData, "root", "props", zoneKey(zone)],
+    order: slotOrderPath(canonicalRootVortex, zoneKey(zone)),
+  });
+  const vortexSuffix = suffix.join("/");
+  if (vortexSuffix === "root/props/vortex/shell")
+    return [{ path: [...canonicalRootVortex, "shellId"], setting: false }];
+  if (
+    vortexSuffix.startsWith("root/props/vortex/slot_orders/") &&
+    typeof suffix[4] === "string" &&
+    (suffix[5] === "tablet" || suffix[5] === "phone") &&
+    typeof suffix[6] === "number"
+  )
+    return orderTargets(
+      zoneTarget(suffix[4]).order,
+      suffix[5],
+      suffix[6],
+      zoneOrder(suffix[4]),
+    ).map((path) => ({ path, setting: false }));
   if (suffix[0] === "content")
     return itemTargets(
       source,
       canonical,
       sourcePath,
       [...dataRoot, "content"],
-      zoneSlot("content"),
+      zoneTarget("content"),
       zoneOrder("content"),
-      resolution,
     );
   if (suffix[0] !== "root" || suffix[1] !== "props" || typeof suffix[2] !== "string")
     return undefined;
@@ -287,9 +317,8 @@ function pageDataTargets(
       canonical,
       sourcePath,
       [...dataRoot, "root", "props", suffix[2]],
-      zoneSlot(suffix[2]),
+      zoneTarget(suffix[2]),
       zoneOrder(suffix[2]),
-      resolution,
     );
   return undefined;
 }
@@ -318,24 +347,28 @@ export function applicationCompositionProvenance(
     const order = asObject(
       asObject(asObject(asObject(source.body.shells[index]?.layout.root).props).vortex).slot_orders,
     ).content;
+    const zone: CanonicalZone = {
+      items: [...canonicalLayout, "content"],
+      order: [...canonicalLayout, "root", "props", "vortex", "slotOrders", "content"],
+    };
     if (suffix[0] === "content")
       targets = itemTargets(
         source,
         canonical,
         sourcePath,
         [...layoutRoot, "content"],
-        canonicalLayout,
+        zone,
         order === undefined ? undefined : asObject(order),
-        resolution,
       );
     else if (
       suffix.join("/").startsWith("root/props/vortex/slot_orders/content/") &&
       (suffix[5] === "tablet" || suffix[5] === "phone") &&
       typeof suffix[6] === "number"
     )
-      targets = orderTargets(canonicalLayout, suffix[5], suffix[6], asObject(order)).map(
-        (path) => ({ path, setting: false }),
-      );
+      targets = orderTargets(zone.order, suffix[5], suffix[6], asObject(order)).map((path) => ({
+        path,
+        setting: false,
+      }));
   } else {
     const page = source.body.pages[index];
     const compositionRoot: Path = ["body", "pages", index, "composition"];
@@ -344,46 +377,16 @@ export function applicationCompositionProvenance(
     let canonicalData = canonicalRoot;
     if (page !== undefined && "step_content" in page.composition) {
       const step = sourcePath[5];
-      if (sourcePath[4] === "step_content" && typeof step === "string") {
-        dataRoot = [...compositionRoot, "step_content", step];
-        canonicalData = [
-          ...canonicalRoot,
-          "stepContent",
-          resolution.id(source.key, "guided_step", step, `page:${page.key}`),
-        ];
-      }
-    }
-    const suffix = sourcePath.slice(dataRoot.length);
-    const shell = asObject(asObject(asObject(valueAtPath(source, dataRoot)).root).props).vortex;
-    const isShell = asObject(shell).shell !== null;
-    const vortexSuffix = suffix.join("/");
-    // The compiled slot a zone becomes: the step's or page's main slot, or one content slot.
-    const zoneBase =
-      canonicalData !== canonicalRoot
-        ? canonicalData
-        : [...canonicalRoot, isShell ? "content" : "main"];
-    if (vortexSuffix === "root/props/vortex/shell")
-      targets = [
-        { path: [...canonicalRoot, "shellKind"], setting: false },
-        ...(isShell ? [{ path: [...canonicalRoot, "shellId"], setting: false }] : []),
+      if (sourcePath[4] !== "step_content" || typeof step !== "string")
+        return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      dataRoot = [...compositionRoot, "step_content", step];
+      canonicalData = [
+        ...canonicalRoot,
+        "stepContent",
+        resolution.id(source.key, "guided_step", step, `page:${page.key}`),
       ];
-    else if (
-      vortexSuffix.startsWith("root/props/vortex/slot_orders/") &&
-      typeof suffix[4] === "string" &&
-      (suffix[5] === "tablet" || suffix[5] === "phone") &&
-      typeof suffix[6] === "number"
-    ) {
-      const zone = suffix[4];
-      const slot = isShell
-        ? [...zoneBase, resolution.id(source.key, "shell_content_slot", zone, "content")]
-        : zoneBase;
-      targets = orderTargets(
-        slot,
-        suffix[5],
-        suffix[6],
-        asObject(asObject(asObject(shell).slot_orders)[zone]),
-      ).map((path) => ({ path, setting: false }));
-    } else targets = pageDataTargets(source, canonical, sourcePath, dataRoot, zoneBase, resolution);
+    }
+    targets = pageDataTargets(source, canonical, sourcePath, dataRoot, canonicalData, resolution);
   }
   if (targets === undefined || targets.length === 0)
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
@@ -420,7 +423,6 @@ export function applicationCompositionProvenance(
       resolved =
         sourceResolvesIdentity(sourcePath, positions) ||
         last === "shell" ||
-        last === "type" ||
         last === "view_permission" ||
         last === "use_permission" ||
         (sourcePath.includes("slot_orders") && typeof last === "number") ||

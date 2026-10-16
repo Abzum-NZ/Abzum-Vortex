@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { recordIdSchema, sameId } from "@vortex/platform/schema";
+import { compiledItemTree, recordIdSchema, sameId } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
   ContentTransition,
@@ -40,20 +40,9 @@ import { PrefetchKind } from "next/dist/client/components/router-reducer/router-
 type ApplicationSearch = NonNullable<PagePuckRendererProps["applicationSearch"]>;
 type Registration = Readonly<{ owner: FramePageStateOwner; value: unknown }>;
 
-/** Every placement identity in a projected slot tree. */
-const placementIdsOf = (
-  slot: ApplicationFrameModel["frame"]["composition"]["main"],
-): Set<string> => {
-  const ids = new Set<string>();
-  const visit = (current: typeof slot): void => {
-    for (const [placementId, placement] of Object.entries(current.placements)) {
-      ids.add(placementId);
-      for (const child of Object.values(placement.slots)) visit(child);
-    }
-  };
-  visit(slot);
-  return ids;
-};
+/** Every placement identity in a projected layout. */
+const placementIdsOf = (layout: ApplicationFrameModel["frame"]["composition"]): Set<string> =>
+  new Set(compiledItemTree(layout.content).map((item) => item.props.id));
 
 /** The search expression an address asks for: none, one, or a refused repeated value. */
 const expressionOf = (parameters: URLSearchParams): string | undefined => {
@@ -258,7 +247,7 @@ export function ApplicationFrame({
       : model.shells.find((candidate) => sameId(candidate.shellId, frame.shellId!));
   // The page runtime wires every placement of its projection; the frame takes the inputs of the
   // placements it renders itself (a definition may place data, form or action blocks in its shell).
-  const framePlacementIds = useMemo(() => placementIdsOf(frame.composition.main), [frame]);
+  const framePlacementIds = useMemo(() => placementIdsOf(frame.composition), [frame]);
   const frameRuntimeInputs = useMemo(() => {
     const inputs = pageState.runtimeInputs;
     if (inputs === undefined) return undefined;
@@ -310,7 +299,6 @@ export function ApplicationFrame({
             registry={registry}
             fieldInputControlReleases={model.fieldInputControlReleases}
             platformThemeTokens={model.platformThemeTokens}
-            shells={model.shells}
             {...(shell === undefined ? {} : { shell })}
             theme={model.theme}
             applicationShellRuntime={applicationShellRuntime}

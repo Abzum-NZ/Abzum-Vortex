@@ -22,7 +22,9 @@ import {
 } from "./normalisation";
 
 type PlacementContext = {
-  placement: RecordValue;
+  item: RecordValue;
+  vortex: RecordValue;
+  settings: RecordValue;
   parent: string;
   order: Record<"desktop" | "tablet" | "phone", number>;
   publicPage: boolean;
@@ -52,50 +54,106 @@ const presentationPropertyValue = (value: unknown): boolean => {
   }
 };
 
-const placementSubtreeIsOptionalPresentation = (placement: RecordValue): boolean =>
-  placement.viewPermissionKey === undefined &&
-  placement.usePermissionKey === undefined &&
-  placement.visibilityCondition === undefined &&
-  placement.queryId === undefined &&
-  Object.values(asRecord(placement.settings)).every(presentationPropertyValue) &&
-  Object.values(asRecord(placement.slots)).every((slot) =>
-    Object.values(asRecord(asRecord(slot).placements)).every((child) =>
-      placementSubtreeIsOptionalPresentation(asRecord(child)),
-    ),
+const reservedItemProps = new Set(["id", "settings", "vortex"]);
+
+/** The child slots of one compiled item: every prop but `id`, `settings` and `vortex`. */
+const itemSlots = (item: RecordValue): [string, RecordValue[]][] =>
+  Object.entries(asRecord(item.props)).flatMap(([key, value]): [string, RecordValue[]][] =>
+    reservedItemProps.has(key) ? [] : [[key, value as RecordValue[]]],
   );
+
+const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
+  const props = asRecord(item.props);
+  const vortex = asRecord(props.vortex);
+  return (
+    vortex.viewPermissionKey === undefined &&
+    vortex.usePermissionKey === undefined &&
+    vortex.visibilityCondition === undefined &&
+    vortex.queryId === undefined &&
+    Object.values(asRecord(props.settings)).every(presentationPropertyValue) &&
+    itemSlots(item).every(([, children]) =>
+      children.every((child) => placementSubtreeIsOptionalPresentation(asRecord(child))),
+    )
+  );
+};
 
 const pageIsCompatibleAddition = (page: RecordValue): boolean =>
   page.type !== "public" && page.replacementOfPageId === undefined;
 
 const collectPlacementSlot = (
-  slotValue: unknown,
+  itemsValue: unknown,
+  orderValue: unknown,
   parent: string,
   flags: Pick<PlacementContext, "publicPage" | "guidedStep"> & { pageId?: string },
   result: Map<string, PlacementContext>,
 ): void => {
-  const slot = asRecord(slotValue);
-  const placements = asRecord(slot.placements);
-  const order = asRecord(slot.order);
-  for (const [placementId, placementValue] of Object.entries(placements)) {
-    const placement = asRecord(placementValue);
+  const items = itemsValue as RecordValue[];
+  const order = asRecord(orderValue);
+  for (const [index, itemValue] of items.entries()) {
+    const item = asRecord(itemValue);
+    const props = asRecord(item.props);
+    const vortex = asRecord(props.vortex);
+    const placementId = String(props.id);
     result.set(placementId, {
-      placement,
+      item,
+      vortex,
+      settings: asRecord(props.settings),
       parent,
       order: {
-        desktop: (order.desktop as unknown[]).indexOf(placementId),
+        desktop: index,
         tablet: (order.tablet as unknown[]).indexOf(placementId),
         phone: (order.phone as unknown[]).indexOf(placementId),
       },
       ...flags,
     });
-    for (const [slotKey, childSlot] of Object.entries(asRecord(placement.slots)))
+    for (const [slotKey, children] of itemSlots(item))
       collectPlacementSlot(
-        childSlot,
+        children,
+        asRecord(vortex.slotOrders)[slotKey],
         `${parent}/placement:${placementId}/slot:${slotKey}`,
         flags,
         result,
       );
   }
+};
+
+/** The root vortex metadata of compiled page data. */
+const dataVortex = (data: unknown): RecordValue =>
+  asRecord(asRecord(asRecord(asRecord(data).root).props).vortex);
+
+/** The application shell a compiled page uses, or null for the platform default frame. */
+const compositionShellId = (composition: RecordValue): string | null => {
+  const data =
+    composition.stepContent === undefined
+      ? composition
+      : Object.values(asRecord(composition.stepContent))[0];
+  const shellId = dataVortex(data).shellId;
+  return typeof shellId === "string" ? shellId : null;
+};
+
+/** Collects one compiled page data's zones under the parent the old placement owned them by. */
+const collectPageData = (
+  dataValue: unknown,
+  base: string,
+  flags: Pick<PlacementContext, "publicPage" | "guidedStep"> & { pageId?: string },
+  result: Map<string, PlacementContext>,
+): void => {
+  const data = asRecord(dataValue);
+  const vortex = dataVortex(data);
+  const orders = asRecord(vortex.slotOrders);
+  if (typeof vortex.shellId !== "string") {
+    collectPlacementSlot(data.content, orders.content, `${base}/default`, flags, result);
+    return;
+  }
+  for (const [slotId, items] of Object.entries(asRecord(asRecord(data.root).props)))
+    if (slotId !== "vortex")
+      collectPlacementSlot(
+        items,
+        orders[slotId],
+        `${base}/shell:${vortex.shellId}/slot:${slotId}`,
+        flags,
+        result,
+      );
 };
 
 const collectPlacements = (contentValue: ApplicationContent): Map<string, PlacementContext> => {
@@ -104,9 +162,8 @@ const collectPlacements = (contentValue: ApplicationContent): Map<string, Placem
   const shells = content.shells as RecordValue[];
   const shellConsumers = new Map<string, { publicPage: boolean; guidedStep: boolean }>();
   for (const page of content.pages as RecordValue[]) {
-    const composition = asRecord(page.composition);
-    if (composition.shellKind !== "application") continue;
-    const shellId = String(composition.shellId);
+    const shellId = compositionShellId(asRecord(page.composition));
+    if (shellId === null) continue;
     const current = shellConsumers.get(shellId) ?? { publicPage: false, guidedStep: false };
     shellConsumers.set(shellId, {
       publicPage: current.publicPage || page.type === "public",
@@ -118,46 +175,27 @@ const collectPlacements = (contentValue: ApplicationContent): Map<string, Placem
       publicPage: false,
       guidedStep: false,
     };
-    collectPlacementSlot(shell.layout, `shell:${String(shell.shellId)}:root`, consumers, result);
+    const layout = asRecord(shell.layout);
+    collectPlacementSlot(
+      layout.content,
+      asRecord(dataVortex(layout).slotOrders).content,
+      `shell:${String(shell.shellId)}:root`,
+      consumers,
+      result,
+    );
   }
   for (const page of content.pages as RecordValue[]) {
     const pageId = String(page.pageId);
     const composition = asRecord(page.composition);
-    const publicPage = page.type === "public";
-    const guidedStep = page.type === "guided_form";
-    if ("stepContent" in composition) {
-      for (const [stepId, stepValue] of Object.entries(asRecord(composition.stepContent))) {
-        if (composition.shellKind === "default")
-          collectPlacementSlot(
-            stepValue,
-            `page:${pageId}/step:${stepId}/default`,
-            { publicPage, guidedStep, pageId },
-            result,
-          );
-        else
-          for (const [slotId, slot] of Object.entries(asRecord(stepValue)))
-            collectPlacementSlot(
-              slot,
-              `page:${pageId}/step:${stepId}/shell:${String(composition.shellId)}/slot:${slotId}`,
-              { publicPage, guidedStep, pageId },
-              result,
-            );
-      }
-    } else if (composition.shellKind === "default")
-      collectPlacementSlot(
-        composition.main,
-        `page:${pageId}/default`,
-        { publicPage, guidedStep, pageId },
-        result,
-      );
-    else
-      for (const [slotId, slot] of Object.entries(asRecord(composition.content)))
-        collectPlacementSlot(
-          slot,
-          `page:${pageId}/shell:${String(composition.shellId)}/slot:${slotId}`,
-          { publicPage, guidedStep, pageId },
-          result,
-        );
+    const flags = {
+      publicPage: page.type === "public",
+      guidedStep: page.type === "guided_form",
+      pageId,
+    };
+    if (composition.stepContent !== undefined)
+      for (const [stepId, data] of Object.entries(asRecord(composition.stepContent)))
+        collectPageData(data, `page:${pageId}/step:${stepId}`, flags, result);
+    else collectPageData(composition, `page:${pageId}`, flags, result);
   }
   return result;
 };
@@ -183,7 +221,7 @@ const comparePlacements = (
       const presentationOnly =
         !current.publicPage &&
         !current.guidedStep &&
-        placementSubtreeIsOptionalPresentation(current.placement);
+        placementSubtreeIsOptionalPresentation(current.item);
       reasons.push(
         makeReason(
           presentationOnly ? "minor" : "major",
@@ -215,8 +253,8 @@ const comparePlacements = (
       );
     pushChange(
       reasons,
-      before.placement.responsive,
-      after.placement.responsive,
+      before.vortex.responsive,
+      after.vortex.responsive,
       "patch",
       "presentation_changed",
       "block_placement",
@@ -225,8 +263,8 @@ const comparePlacements = (
     );
     pushChange(
       reasons,
-      before.placement.themeOverrides,
-      after.placement.themeOverrides,
+      before.vortex.themeOverrides,
+      after.vortex.themeOverrides,
       "patch",
       "presentation_changed",
       "block_placement",
@@ -236,8 +274,8 @@ const comparePlacements = (
     for (const key of ["viewPermissionKey", "usePermissionKey"])
       pushChange(
         reasons,
-        before.placement[key],
-        after.placement[key],
+        before.vortex[key],
+        after.vortex[key],
         "major",
         "permission_changed",
         "block_placement",
@@ -246,8 +284,8 @@ const comparePlacements = (
       );
     pushChange(
       reasons,
-      before.placement.visibilityCondition,
-      after.placement.visibilityCondition,
+      before.vortex.visibilityCondition,
+      after.vortex.visibilityCondition,
       "major",
       "permission_changed",
       "block_placement",
@@ -256,19 +294,22 @@ const comparePlacements = (
     );
     pushChange(
       reasons,
-      before.placement.queryId,
-      after.placement.queryId,
+      before.vortex.queryId,
+      after.vortex.queryId,
       "major",
       "existing_behavior_changed",
       "block_placement",
       "behavior",
       id,
     );
-    for (const key of ["block", "settings"])
+    for (const [previousValue, candidateValue] of [
+      [before.vortex.block, after.vortex.block],
+      [before.settings, after.settings],
+    ] as const)
       pushChange(
         reasons,
-        before.placement[key],
-        after.placement[key],
+        previousValue,
+        candidateValue,
         "major",
         "existing_behavior_changed",
         "block_placement",
@@ -381,11 +422,9 @@ const compareShells = (
       );
     },
     (shell) => {
-      const placements = asRecord(asRecord(shell.layout).placements);
+      const items = asRecord(shell.layout).content as RecordValue[];
       return (shell.contentSlots as RecordValue[]).every((slot) => slot.required === false) &&
-        Object.values(placements).every((placement) =>
-          placementSubtreeIsOptionalPresentation(asRecord(placement)),
-        )
+        items.every((item) => placementSubtreeIsOptionalPresentation(asRecord(item)))
         ? "minor"
         : "major";
     },
@@ -398,15 +437,18 @@ const compareCompositionOwnership = (
   pageId: unknown,
 ): void => {
   if (
-    previousComposition.shellKind !== "application" ||
-    candidateComposition.shellKind !== "application"
+    compositionShellId(previousComposition) === null ||
+    compositionShellId(candidateComposition) === null
   )
     return;
+  /** The shell content slots one compiled page data fills: its root slot props. */
+  const filledSlots = (data: unknown): string[] =>
+    Object.keys(asRecord(asRecord(asRecord(data).root).props)).filter((key) => key !== "vortex");
   const compareSlotKeys = (previousValue: unknown, candidateValue: unknown): void =>
     compareSet(
       reasons,
-      Object.keys(asRecord(previousValue)),
-      Object.keys(asRecord(candidateValue)),
+      filledSlots(previousValue),
+      filledSlots(candidateValue),
       "page",
       pageId,
       "ownership",
@@ -433,7 +475,7 @@ const compareCompositionOwnership = (
         compareSlotKeys(previousSteps[stepId], candidateSteps[stepId]);
     return;
   }
-  compareSlotKeys(previousComposition.content, candidateComposition.content);
+  compareSlotKeys(previousComposition, candidateComposition);
 };
 
 const comparePage = (
@@ -488,8 +530,8 @@ const comparePage = (
   const afterComposition = asRecord(candidate.composition);
   pushChange(
     reasons,
-    { shellKind: beforeComposition.shellKind, shellId: beforeComposition.shellId ?? null },
-    { shellKind: afterComposition.shellKind, shellId: afterComposition.shellId ?? null },
+    { shellId: compositionShellId(beforeComposition) },
+    { shellId: compositionShellId(afterComposition) },
     "major",
     "ownership_changed",
     "page",
@@ -569,12 +611,15 @@ export const normaliseApplicationContent = (content: ApplicationContent): Applic
   const comparisonContent = structuredClone(content);
   // Empty internal containers have no display effect. Children and exposed
   // shell-slot declarations independently carry their meaningful changes.
-  for (const { placement } of collectPlacements(comparisonContent).values())
-    placement.slots = Object.fromEntries(
-      Object.entries(asRecord(placement.slots)).filter(
-        ([, slot]) => Object.keys(asRecord(asRecord(slot).placements)).length > 0,
-      ),
-    );
+  for (const { item, vortex } of collectPlacements(comparisonContent).values()) {
+    const props = asRecord(item.props);
+    const slotOrders = asRecord(vortex.slotOrders);
+    for (const [slotKey, children] of itemSlots(item))
+      if (children.length === 0) {
+        delete props[slotKey];
+        delete slotOrders[slotKey];
+      }
+  }
   const common = normaliseApplicationSharedContent(comparisonContent);
   const value = asRecord(comparisonContent);
   return {
