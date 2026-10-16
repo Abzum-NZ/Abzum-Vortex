@@ -558,6 +558,9 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             themeOverrides: puckThemeOverrides(metadata.theme_overrides),
             responsive: puckResponsive(metadata.responsive),
             authored: clone(metadata),
+            // The authored settings travel with the item, so a copy Puck makes of it (duplicate)
+            // keeps every setting the original declared, including those equal to a default.
+            authoredSettings: clone(settings),
             compiledSettings: clone(compiledSettings),
             slot: clone(identity),
             baselineOrder: clone(slotOrder),
@@ -736,13 +739,14 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             "themeOverrides",
             "responsive",
             "authored",
+            "authoredSettings",
             "compiledSettings",
             "slot",
             "baselineOrder",
             "order",
           ]);
-          const { order, slot, baselineOrder, authored, compiledSettings: compiledSettingsValue,
-            ...renderMetadata } = metadata;
+          const { order, slot, baselineOrder, authored, authoredSettings,
+            compiledSettings: compiledSettingsValue, ...renderMetadata } = metadata;
           const origin = slot === undefined ? destination : parseSlotIdentity(slot);
           const originalOrder =
             baselineOrder === undefined
@@ -805,7 +809,9 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             ? {} : object(compiledSettingsValue);
           const baselineEntry = baselineReading(id);
           const settings = sourceSettings(props.settings, new Set(release.properties.map(
-            (property) => property.key)), baselineEntry?.reading.settings, compiledSettings);
+            (property) => property.key)), baselineEntry?.reading.settings ??
+              (authoredSettings === undefined ? undefined
+                : object(authoredSettings) as Parameters<typeof sourceSettings>[2]), compiledSettings);
           if (Object.keys(settings).some((key) => reservedItemPropKeys.has(key))) refuse();
           const plainSettings = Object.fromEntries(
             Object.entries(settings).map(([key, value]) => [key, plainSourceSettingValue(value)]),

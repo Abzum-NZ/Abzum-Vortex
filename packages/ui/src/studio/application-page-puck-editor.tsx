@@ -4,6 +4,7 @@ import { Puck, type Data } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import {
   applicationSourceDocumentSchema,
+  canonicalJson,
   setSourcePageSlot,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
@@ -14,11 +15,13 @@ import {
 import type { placementSlotSchema } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
-import {
-  createFullPlatformComponentRegistry,
-  createVortexPuckAdapter,
-  getVortexPuckConfig,
-} from "@vortex/ui";
+import { createFullPlatformComponentRegistry } from "../combined-registry";
+import { createVortexPuckAdapter } from "../vortex-puck-adapter";
+import { getVortexPuckConfig } from "../puck-config";
+import { contentConfigFor } from "../shell-outlet";
+import type { Breakpoint } from "../definition-error";
+
+export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/button";
 import { Label } from "../components/label";
@@ -36,8 +39,12 @@ import {
   AuthoredPuckSettingRefusal,
   createVortexAuthoredPuckAdapter,
 } from "./vortex-authored-puck-adapter";
+import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
+
+export type { StudioCanvasFrame } from "./studio-canvas-bridge";
 
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
+type SourceSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 const record = (value: unknown): Record<string, unknown> => {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("Compiled Puck page data is invalid.");
@@ -99,6 +106,15 @@ export type ApplicationPagePuckEditorProps = Readonly<{
     expectedSource: ApplicationSourceDocument,
     source: ApplicationSourceDocument,
   ) => void;
+  /** The block selected in the workspace, shown selected on the canvas. */
+  selectedPlacementAlias: string | null;
+  /** A block clicked on the canvas (`null`: the page itself); `false` keeps the workspace selection. */
+  onSelectPlacement: (alias: string | null) => Promise<boolean>;
+  /** The screen size the canvas shows; the workspace keeps it while pages change. */
+  breakpoint: Breakpoint;
+  onBreakpointChange: (breakpoint: Breakpoint) => void;
+  /** The application frame the page is drawn inside, when the draft compiled. */
+  frame?: StudioCanvasFrame | undefined;
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
@@ -128,19 +144,30 @@ const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void 
   source.body.platform_block_dependencies = kept;
 };
 
+const slotHolds = (slot: SourceSlot, alias: string): boolean =>
+  Object.hasOwn(slot.placements, alias) ||
+  Object.values(slot.placements).some((placement) =>
+    Object.values(placement.slots).some((child) => slotHolds(child, alias)));
+
 export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps) {
   const page = props.source.body.pages.find((candidate) => candidate.id === props.pageAlias);
   const addresses = page === undefined ? [] : sourcePageSlotAddresses(page);
   const [selectedKey, setSelectedKey] = useState("");
-  const at = addresses.find((candidate) => candidate.key === selectedKey) ?? addresses[0];
+  // A block selected in the outline is shown in the content slot that holds it.
+  const holding = props.selectedPlacementAlias === null || page === undefined ? undefined
+    : addresses.find((candidate) => slotHolds(sourcePageSlotAt(page, candidate)!, props.selectedPlacementAlias!));
+  useEffect(() => {
+    if (holding !== undefined && holding.key !== selectedKey) setSelectedKey(holding.key);
+  }, [holding?.key]);
+  const at = addresses.find((candidate) => candidate.key === selectedKey) ?? holding ?? addresses[0];
   const selectorId = `puck-slot-${props.pageAlias}`;
   if (at === undefined)
-    return <p role="status">This page has no content slot to edit visually.</p>;
+    return <p role="status">This page has no content area to arrange.</p>;
   return (
     <div className="space-y-3">
       {addresses.length < 2 ? null : (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={selectorId}>Content slot</Label>
+          <Label htmlFor={selectorId}>Content area</Label>
           <NativeSelect
             id={selectorId}
             value={at.key}
@@ -159,6 +186,27 @@ export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps)
   );
 }
 
+const breakpoints: readonly Readonly<{ value: Breakpoint; label: string; width: string }>[] = [
+  { value: "desktop", label: "Desktop", width: "100%" },
+  { value: "tablet", label: "Tablet", width: "820px" },
+  { value: "phone", label: "Phone", width: "390px" },
+];
+
+/** Why a content area that does not convert exactly is not editable on the canvas. */
+const roundTripProblem = (
+  adapter: ReturnType<typeof createVortexAuthoredPuckAdapter>,
+  slot: SourceSlot,
+  runtimeSettings: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
+): string | undefined => {
+  try {
+    const back = adapter.fromPuckData(slot, adapter.toPuckData(slot, runtimeSettings));
+    return canonicalJson(back) === canonicalJson(slot)
+      ? undefined : "STUDIO_CANVAS_ROUND_TRIP_MISMATCH: the content converts back differently";
+  } catch (error: unknown) {
+    return `STUDIO_CANVAS_ROUND_TRIP_FAILED: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
 function ApplicationPageSlotPuckEditor({
   source,
   compiledSource,
@@ -173,21 +221,27 @@ function ApplicationPageSlotPuckEditor({
   validateThemeOverrides,
   onThemeOverrideProblems,
   onChange,
+  selectedPlacementAlias,
+  onSelectPlacement,
+  frame,
+  breakpoint,
+  onBreakpointChange,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
     () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
   );
   const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
+  // The content renders inside the frame's outlet, exactly as a running page's content does.
   const config = useMemo(
-    () => getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens),
+    () => contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)),
     [registry, fieldInputControlReleases, platformThemeTokens],
   );
   const adapter = useMemo(() => createVortexAuthoredPuckAdapter(catalogue), [catalogue]);
   const runtimeAdapter = useMemo(() => createVortexPuckAdapter(catalogue), [catalogue]);
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
-  const [canvasGeneration, setCanvasGeneration] = useState(0);
+  const [resync, setResync] = useState(0);
   const sourceRef = useRef(source);
   sourceRef.current = source;
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
@@ -211,6 +265,21 @@ function ApplicationPageSlotPuckEditor({
     if (slot === undefined || runtimeSettings === undefined) return undefined;
     return adapter.toPuckData(slot, runtimeSettings);
   }, [runtimeSettings, slot]);
+  // Checked once per opened content area: a content area that would not convert back exactly is
+  // shown read-only rather than risking a silent change to the definition.
+  // Checked whenever the content area or its compiled settings change, and closed until it passes:
+  // a content area that would not convert back exactly is shown read-only rather than risking a
+  // silent change to the definition. Without compiled settings there is nothing to check yet.
+  const readOnlyCause = useMemo(() =>
+    slot === undefined || runtimeSettings === undefined
+      ? "STUDIO_CANVAS_ROUND_TRIP_PENDING: no compiled version to check against"
+      : roundTripProblem(adapter, slot, runtimeSettings), [slot, runtimeSettings]);
+  useEffect(() => {
+    if (readOnlyCause !== undefined && runtimeSettings !== undefined)
+      console.error(`[studio] canvas content area ${pageAlias}/${at.key} is read-only`, readOnlyCause);
+  }, [readOnlyCause]);
+  const shown = useMemo(() => data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint), [data, breakpoint]);
+  const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
 
   const [themeProblems, setThemeProblems] = useState<readonly StudioPlacementThemeFailure[]>([]);
   const [themeCheckNote, setThemeCheckNote] = useState("");
@@ -278,7 +347,10 @@ function ApplicationPageSlotPuckEditor({
     }
   };
 
+  // Every canvas change goes back through the definition: Puck's data is converted to the
+  // authored content area, placed in the current draft and validated before the history takes it.
   const change = (candidate: Data) => {
+    if (!editable) return;
     try {
       const current = sourceRef.current;
       const matches = current.body.pages.filter((item) => item.id === pageAlias);
@@ -286,13 +358,12 @@ function ApplicationPageSlotPuckEditor({
       const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
       if (matches.length !== 1 || targetSlot === undefined)
         throw new TypeError("The selected page is unavailable.");
-      const editedSlot = adapter.fromPuckData(targetSlot, candidate);
+      const editedSlot = sourcePlacementSlotSchema.parse(adapter.fromPuckData(targetSlot, candidate));
+      // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
+      if (canonicalJson(editedSlot) === canonicalJson(targetSlot)) return;
       const next = structuredClone(current);
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
-      if (
-        nextPage === undefined ||
-        !setSourcePageSlot(nextPage, at, editedSlot)
-      )
+      if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))
         throw new TypeError("The selected page is unavailable.");
       syncPlatformBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
@@ -301,8 +372,8 @@ function ApplicationPageSlotPuckEditor({
       onChange(current, parsed.data);
     } catch (error: unknown) {
       console.error("Failed to apply Puck page changes", error);
-      // Puck keeps the refused block in its own state; remounting restores the accepted draft.
-      setCanvasGeneration((generation) => generation + 1);
+      // Puck keeps the refused change in its own state; show the accepted draft again.
+      setResync((generation) => generation + 1);
       setMessage(
         error instanceof AuthoredPuckSettingRefusal
           ? `This page change could not be applied. ${error.message}. The saved draft and current edits are preserved.`
@@ -312,12 +383,12 @@ function ApplicationPageSlotPuckEditor({
   };
 
   if (page === undefined || slot === undefined)
-    return <p role="status">This page content slot is unavailable.</p>;
-  if (data === undefined)
+    return <p role="status">This page content area is unavailable.</p>;
+  if (data === undefined || shown === undefined)
     return (
-      <section className="space-y-3" aria-label="Visual page editor">
+      <section className="space-y-3" aria-label="Page canvas">
         <p role="status">
-          This page needs a current compiled version before visual editing is available.
+          This page needs a current compiled version before it can be arranged on the canvas.
         </p>
         {compileFailure === null || compileFailure === undefined ? null : (
           <CompileFailureNotice
@@ -331,15 +402,28 @@ function ApplicationPageSlotPuckEditor({
       </section>
     );
 
+  const width = breakpoints.find((entry) => entry.value === breakpoint)!.width;
   return (
-    <section className="space-y-3" aria-label="Visual page editor" aria-busy={disabled}>
-      <header className="space-y-1">
-        <h3 className="font-semibold">Visual page editor</h3>
+    <section className="space-y-3" aria-label="Page canvas" aria-busy={disabled}>
+      <div className="flex flex-wrap items-center gap-2">
+        <div role="group" aria-label="Screen size" className="flex gap-1">
+          {breakpoints.map((entry) => (
+            <Button key={entry.value} type="button" size="sm"
+              variant={breakpoint === entry.value ? "secondary" : "outline"}
+              aria-pressed={breakpoint === entry.value}
+              onClick={() => onBreakpointChange(entry.value)}>
+              {entry.label}
+            </Button>
+          ))}
+        </div>
         <p className="text-sm text-muted-foreground">
-          Arrange blocks and edit their declared settings. Save the draft before preparing a
-          release.
+          {readOnlyCause !== undefined
+            ? "This part of the page can't be arranged on the canvas yet, so it is shown read-only to keep it exactly as it is. Its blocks can still be changed in the inspector."
+            : breakpoint === "desktop"
+              ? "Click a block to select it. Drag blocks to rearrange them."
+              : `This is the ${breakpoint} layout and order. Rearrange blocks on Desktop, or change this screen's order in the inspector.`}
         </p>
-      </header>
+      </div>
       {message.length === 0 ? null : <p role="status">{message}</p>}
       {themeCheckNote.length === 0 ? null : <p role="status">{themeCheckNote}</p>}
       {themeProblems.length === 0 ? null : (
@@ -357,21 +441,36 @@ function ApplicationPageSlotPuckEditor({
           </ul>
         </div>
       )}
-      <Puck
-        key={canvasGeneration}
-        config={config}
-        data={data}
-        onChange={change}
-        permissions={{
-          drag: !disabled,
-          duplicate: !disabled,
-          delete: !disabled,
-          edit: !disabled,
-          insert: !disabled,
-        }}
-        height="72vh"
-        headerTitle={page.name}
-      />
+      <div className="overflow-x-auto rounded-xl border border-border bg-muted/30 p-2">
+        <div className="mx-auto overflow-hidden rounded-lg bg-background" style={{ width, maxWidth: "100%" }}>
+          <Puck
+            config={config}
+            data={shown}
+            onChange={change}
+            iframe={{ enabled: false }}
+            metadata={{ breakpoint }}
+            permissions={{
+              drag: editable,
+              duplicate: editable,
+              delete: editable,
+              edit: false,
+              insert: false,
+            }}
+          >
+            <StudioCanvasBridge
+              data={shown}
+              resync={resync}
+              selectedAlias={selectedPlacementAlias}
+              onSelect={onSelectPlacement}
+              frame={frame}
+              breakpoint={breakpoint}
+              registry={registry}
+              fieldInputControlReleases={fieldInputControlReleases}
+              platformThemeTokens={platformThemeTokens}
+            />
+          </Puck>
+        </div>
+      </div>
     </section>
   );
 }

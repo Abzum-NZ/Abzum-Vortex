@@ -1041,6 +1041,7 @@ export const materialiseApplicationComposition = (
           organizationSwitcher: shell.presentation.top_bar.organization_switcher,
           applicationSwitcher: shell.presentation.top_bar.application_switcher,
           accountMenu: shell.presentation.top_bar.account_menu,
+          appearanceToggle: shell.presentation.top_bar.appearance_toggle,
         },
       },
       layout,

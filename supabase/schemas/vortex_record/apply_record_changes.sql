@@ -438,10 +438,14 @@ begin
     -- A replay never re-prepares: an existing receipt short-circuits the
     -- creation plan, the relationship-total preparation and the copy plan, and
     -- the subject step below answers from the stored receipt.
+    action_context := vortex_record.resolve_named_action_context_internal(
+      action_owner_kind, action_owner_id, action_release_revision,
+      action_id_value, p_record_type_id
+    );
     if not vortex_record.command_receipt_exists_internal('named_action', effective_command_id) then
       creation_plan := vortex_record.named_action_creation_plan_internal(
         action_owner_kind, action_owner_id, action_release_revision,
-        action_id_value, p_record_type_id, action_creations
+        action_id_value, p_record_type_id, action_creations, action_context
       );
       if creation_plan ->> 'outcome' = 'unsupported' then
         return pg_catalog.jsonb_build_object(
@@ -619,7 +623,7 @@ begin
     if not vortex_record.command_receipt_exists_internal('named_action', effective_command_id) then
       copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
         action_owner_kind, action_owner_id, action_release_revision,
-        action_id_value, p_record_type_id, p_record_id, action_inputs
+        action_id_value, p_record_type_id, p_record_id, action_inputs, action_context
       );
       if copy_plan ->> 'outcome' = 'refused' then
         return pg_catalog.jsonb_build_object(
@@ -637,10 +641,6 @@ begin
       );
     end if;
 
-    action_context := vortex_record.resolve_named_action_context_internal(
-      action_owner_kind, action_owner_id, action_release_revision,
-      action_id_value, p_record_type_id
-    );
     if coalesce((action_context ->> 'rulesUnsupported')::boolean, false)
       or pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
       or exists (

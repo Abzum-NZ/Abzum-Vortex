@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 import { SHADCN_FONT_VARIABLE_CLASSES } from "./catalogue-fonts";
 import {
+  APPEARANCE_COOKIE,
+  AppearanceProvider,
+  createAppearanceRootProps,
   createThemeRootProps,
+  parseThemeMode,
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
 } from "@vortex/ui";
@@ -15,14 +20,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * The registered platform theme's variables, as the theme renderer emits them, following the
- * person's colour-scheme preference. The bootstrap landing, sign-in, organisation chooser and
+ * The registered platform theme's variables, as the theme renderer emits them. The bootstrap landing, sign-in, organisation chooser and
  * error pages read them before any organisation is known, so they reveal no organisation theme.
  */
 const PLATFORM_THEME_STYLE = createThemeRootProps(
   undefined,
   DEFAULT_PLATFORM_THEME_RELEASE.tokens,
-  "system",
 ).style;
 
 /**
@@ -32,15 +35,21 @@ const PLATFORM_THEME_STYLE = createThemeRootProps(
  */
 const PLATFORM_VORTEX_STYLE = createVortexStyleRootProps(resolveVortexStyleSelection());
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  // The viewer's appearance choice (one cookie, all applications), so the first server render is right.
+  const appearance = parseThemeMode((await cookies()).get(APPEARANCE_COOKIE)?.value);
+  const appearanceRoot = createAppearanceRootProps(appearance);
   return (
     <html
       lang="en"
       className={SHADCN_FONT_VARIABLE_CLASSES.join(" ")}
       {...PLATFORM_VORTEX_STYLE}
-      style={{ ...PLATFORM_THEME_STYLE, ...PLATFORM_VORTEX_STYLE.style }}
+      data-vortex-theme-mode={appearanceRoot["data-vortex-theme-mode"]}
+      style={{ ...PLATFORM_THEME_STYLE, ...PLATFORM_VORTEX_STYLE.style, ...appearanceRoot.style }}
     >
-      <body>{children}</body>
+      <body>
+        <AppearanceProvider initial={appearance}>{children}</AppearanceProvider>
+      </body>
     </html>
   );
 }

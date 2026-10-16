@@ -1,9 +1,7 @@
 import { Suspense, type ReactNode } from "react";
-import { applicationInstallAddressSchema, DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
+import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
 import { BrandLoader, createThemeRootProps } from "@vortex/ui";
-import { loadApplicationInstallMetadata } from "../../../_lib/application-install-metadata";
 import { loadApplicationFrame, loadApplicationStartTheme } from "../../../_lib/application-frame";
-import { ApplicationInstallGuidance } from "./_components/application-install-guidance";
 import { ApplicationFrame } from "./_components/application-frame";
 
 export const dynamic = "force-dynamic";
@@ -13,23 +11,6 @@ type Route = Readonly<{
   applicationKey: string;
 }>;
 type Props = Readonly<{ children: ReactNode; params: Promise<Route> }>;
-
-/** Adds one optional guide without rebuilding, keying or resetting the ordinary Page children. */
-async function CurrentInstallGuidance({ route }: { route: Route }) {
-  const candidate = applicationInstallAddressSchema.safeParse(route);
-  const metadata = candidate.success
-    ? await loadApplicationInstallMetadata(candidate.data)
-    : undefined;
-  return metadata?.kind === "available" ? (
-    <ApplicationInstallGuidance
-      applicationPath={metadata.manifest.id}
-      manifestUrl={metadata.manifestUrl}
-      initialManifest={JSON.stringify(metadata.manifest)}
-      snapshot={metadata.snapshot}
-      validUntil={metadata.validUntil}
-    />
-  ) : null;
-}
 
 /**
  * The loader drawn while the frame is composed: the application's own mark in its own theme, as
@@ -44,7 +25,7 @@ async function ApplicationStartLoader({ route }: { route: Route }) {
   if (theme === undefined) return null;
   return (
     <div
-      {...createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens, "system")}
+      {...createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
       className="grid min-h-svh place-items-center"
       aria-busy="true"
     >
@@ -71,9 +52,6 @@ export default async function ApplicationLayout({ children, params }: Props) {
   const route = await params;
   return (
     <>
-      <Suspense fallback={null}>
-        <CurrentInstallGuidance route={route} />
-      </Suspense>
       <Suspense fallback={<ApplicationStartLoader route={route} />}>
         <CurrentApplicationFrame route={route}>{children}</CurrentApplicationFrame>
       </Suspense>

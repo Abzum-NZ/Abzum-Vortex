@@ -35,6 +35,7 @@ export const organizationLauncherShell = applicationShellSchema.parse({
       organizationSwitcher: true,
       applicationSwitcher: false,
       accountMenu: true,
+      appearanceToggle: true,
     },
   },
   layout: {

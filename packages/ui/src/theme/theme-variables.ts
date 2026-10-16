@@ -14,7 +14,7 @@ import {
 export type ApplicationTheme = ApplicationContent["theme"];
 type ThemeTokenValue = ApplicationTheme["tokens"][string];
 
-/** Appearance selection. `system` follows the person's browser colour-scheme preference. */
+/** The viewer's appearance choice. `system` follows the person's browser colour-scheme preference. */
 export type ThemeMode = "light" | "dark" | "system";
 
 /** Resolved, validated #594 theme tokens keyed by builder key. */
@@ -497,11 +497,31 @@ const COLOR_SCHEME: Readonly<Record<ThemeMode, string>> = {
   system: "light dark",
 };
 
+/** The cookie that holds the viewer's appearance choice, read by the server render. */
+export const APPEARANCE_COOKIE = "vortex-appearance";
+
+/** The appearance a cookie value names; anything else is the system preference. */
+export function parseThemeMode(value: string | undefined): ThemeMode {
+  return value === "light" || value === "dark" ? value : "system";
+}
+
 export type ThemeRootProps = Readonly<{
   style: CSSProperties;
   "data-vortex-theme": "";
+}>;
+
+export type AppearanceRootProps = Readonly<{
+  style: CSSProperties;
   "data-vortex-theme-mode": ThemeMode;
 }>;
+
+/**
+ * The viewer's appearance on the document root. Themed containers inherit the colour scheme and the
+ * stylesheet's mode selectors match through this ancestor, so it is the one place appearance is set.
+ */
+export function createAppearanceRootProps(mode: ThemeMode): AppearanceRootProps {
+  return { style: { colorScheme: COLOR_SCHEME[mode] }, "data-vortex-theme-mode": mode };
+}
 
 /**
  * Props that mount the theme on a runtime page or preview canvas container. The shared
@@ -510,7 +530,6 @@ export type ThemeRootProps = Readonly<{
 export function createThemeRootProps(
   theme: ApplicationTheme | undefined,
   platformThemeTokens: PlatformThemeTokens,
-  mode: ThemeMode = "light",
 ): ThemeRootProps {
   // The theme's own loader cycle replaces the platform's 5s token; a theme without one keeps it.
   const loaderCycle = theme?.loaderMark?.cycleSeconds;
@@ -522,13 +541,8 @@ export function createThemeRootProps(
     ...(loaderCycle !== undefined && Number.isFinite(loaderCycle) && loaderCycle > 0
       ? { "--vortex-loader-cycle": `${loaderCycle}s` }
       : {}),
-    colorScheme: COLOR_SCHEME[mode],
   };
-  return {
-    style,
-    "data-vortex-theme": "",
-    "data-vortex-theme-mode": mode,
-  };
+  return { style, "data-vortex-theme": "" };
 }
 
 /**

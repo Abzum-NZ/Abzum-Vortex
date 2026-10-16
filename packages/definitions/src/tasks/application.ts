@@ -89,6 +89,7 @@ const shell = {
       organization_switcher: true,
       application_switcher: true,
       account_menu: true,
+      appearance_toggle: true,
     },
   },
   layout: {

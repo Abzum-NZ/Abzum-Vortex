@@ -348,10 +348,15 @@ export {
   type ApplicationPreviewSimulatedEffect,
 } from "./application-preview";
 
+export { AppearanceProvider } from "./navigation/appearance-toggle";
+
 // Theme variables and shared component styles
 export {
   ALL_UI_STYLES_CSS,
+  APPEARANCE_COOKIE,
+  createAppearanceRootProps,
   createThemeRootProps,
+  parseThemeMode,
   createVortexStyleRootProps,
   DEFAULT_VORTEX_MENU_ACCENT,
   DEFAULT_VORTEX_MENU_COLOR,
@@ -364,6 +369,7 @@ export {
   VORTEX_MENU_ACCENTS,
   VORTEX_MENU_COLORS,
   VORTEX_STYLES,
+  type AppearanceRootProps,
   type ThemeMode,
   type ThemeRootProps,
   type PlatformThemeTokens,

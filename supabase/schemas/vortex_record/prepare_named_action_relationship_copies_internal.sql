@@ -5,7 +5,8 @@ create or replace function vortex_record.prepare_named_action_relationship_copie
   p_action_id uuid,
   p_subject_record_type_id uuid,
   p_subject_record_id uuid,
-  p_inputs jsonb
+  p_inputs jsonb,
+  p_action_context jsonb
 )
 returns jsonb
 language plpgsql
@@ -41,10 +42,8 @@ begin
     or pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object' then
     raise exception using errcode = '22023', message = 'Relationship copy is invalid';
   end if;
-  action_context := vortex_record.resolve_named_action_context_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_subject_record_type_id
-  );
+  -- The caller resolved this exact installed action once for its whole step.
+  action_context := p_action_context;
   if not exists (
     select 1 from pg_catalog.jsonb_array_elements(
       action_context -> 'action' -> 'tasks'
@@ -262,16 +261,15 @@ begin
 end
 $function$;
 
-alter function vortex_record.prepare_named_action_relationship_copies_internal(text,uuid,bigint,uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.prepare_named_action_relationship_copies_internal(text,uuid,bigint,uuid,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb
+  text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb
+  text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
 ) to vortex_record_adapter;
-
 comment on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb
+  text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
 ) is
-  'Private named-action step: re-derives every record.changes task from the installed action and the supplied inputs, locks every target row and then every linked row in canonical order before any counter, data version or edge identity, and plans only the selected, declared, readable many-to-one subject edges the target does not already hold. Returns null when the action has no such task, a refused outcome for a request it cannot honour, and raises only on a broken invariant.';
+  'Private named-action step: re-derives every record.changes task from the installed action its caller resolved and the supplied inputs, locks every target row and then every linked row in canonical order before any counter, data version or edge identity, and plans only the selected, declared, readable many-to-one subject edges the target does not already hold. Returns null when the action has no such task, a refused outcome for a request it cannot honour, and raises only on a broken invariant.';

@@ -330,10 +330,10 @@ export function applicationCompositionProvenance(
       );
     else if (
       suffix.join("/").startsWith("root/props/vortex/slot_orders/content/") &&
-      (suffix[6] === "tablet" || suffix[6] === "phone") &&
-      typeof suffix[7] === "number"
+      (suffix[5] === "tablet" || suffix[5] === "phone") &&
+      typeof suffix[6] === "number"
     )
-      targets = orderTargets(canonicalLayout, suffix[6], suffix[7], asObject(order)).map(
+      targets = orderTargets(canonicalLayout, suffix[5], suffix[6], asObject(order)).map(
         (path) => ({ path, setting: false }),
       );
   } else {

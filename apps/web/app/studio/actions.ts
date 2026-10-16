@@ -54,7 +54,7 @@ export async function reviewStudioApplicationSource(
     if (!request.success)
       return refuse("review-application-source", "STUDIO_SOURCE_REVIEW_REQUEST_INVALID",
         { kind: "invalid" } as const, request.error);
-    const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
+    const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId, { compile: false });
     if (loaded.kind !== "available") return loaded;
     const draft = loaded.draft;
     if (!sameId(draft.rootId, request.data.rootId) || !sameId(loaded.organizationId, organizationId))
@@ -153,7 +153,7 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   const loaded = await loadStudioApplicationDraft(organizationId, saved.draft.rootId);
   const recompiled = loaded.kind === "available" && loaded.draft.draftRevision === saved.draft.draftRevision &&
     loaded.draft.sourceFingerprint === saved.draft.sourceFingerprint
-    ? { pageCompiledSlots: loaded.pageCompiledSlots, searchMetadata: loaded.searchMetadata, compileFailure: loaded.compileFailure }
+    ? { pageCompiledSlots: loaded.pageCompiledSlots, canvasFrames: loaded.canvasFrames, searchMetadata: loaded.searchMetadata, compileFailure: loaded.compileFailure }
     : null;
   if (recompiled === null)
     console.error("[studio] save-application STUDIO_SAVE_RECOMPILE_UNAVAILABLE: the saved revision could not be read back");
@@ -172,7 +172,7 @@ export async function validateStudioApplicationAppearance(
   const request = parseStudioAppearanceRequest(candidate);
   if (request === undefined)
     return refuse("validate-appearance", "STUDIO_APPEARANCE_REQUEST_INVALID", { kind: "refused" } as const);
-  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId);
+  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId, { compile: false });
   if (loaded.kind !== "available") return loaded;
   const draft = loaded.draft;
   if (draft.rootId !== request.rootId)
@@ -238,7 +238,7 @@ export async function validateStudioPlacementThemeOverrides(
 ): Promise<StudioPlacementThemeResult> {
   const request = parseStudioPlacementThemeRequest(candidate);
   if (request === undefined) return { kind: "refused" };
-  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId);
+  const loaded = await loadStudioApplicationDraft(organizationId, request.rootId, { compile: false });
   if (loaded.kind !== "available") return loaded;
   const draft = loaded.draft;
   if (draft.rootId !== request.rootId) return { kind: "refused" };

@@ -22,6 +22,7 @@ import {
 import { Button } from "../components/button";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { Icon } from "../icons/icon";
+import { AppearanceToggle } from "./appearance-toggle";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
 
 export type ApplicationWebMcpRuntime = Readonly<{
@@ -288,6 +289,7 @@ export function ApplicationShellRoot({
               <ApplicationSwitcher shellName={shell.name} runtime={runtime} />
             ) : null}
             {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}
+            {presentation.topBar.appearanceToggle ? <AppearanceToggle /> : null}
             {presentation.topBar.accountMenu ? <ApplicationAccountMenu /> : null}
           </div>
         </header>

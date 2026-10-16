@@ -10,25 +10,22 @@ import {
 } from "react";
 import { describeFailure, type BoardColumnSelector } from "@vortex/platform/schema";
 import { Button } from "../components/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../components/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Icon } from "../icons/icon";
 import { cellValueToText, DisplayCellView } from "./cell";
-import { DisplayHeader, RowActionControl } from "./controls";
+import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
+import { MetricCard } from "./metric-card";
 import type { BoardBucketPayload, BoardPayload, DisplaySemanticEvent } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
 
@@ -56,30 +53,47 @@ type BoardMover = Readonly<{
 
 const countText = (count: number): string => new Intl.NumberFormat("en").format(count);
 
+function MetricValue({
+  value,
+}: Readonly<{ value: BoardPayload["aggregates"][number]["value"] }>): ReactElement {
+  return value.kind === "unavailable" ? (
+    <span role="status">Unavailable</span>
+  ) : (
+    <DisplayCellView value={value} />
+  );
+}
+
 function BoardMetrics({
   metrics,
 }: Readonly<{ metrics: BoardPayload["aggregates"] }>): ReactElement | null {
   if (metrics.length === 0) return null;
   return (
-    <dl className="grid gap-2 sm:grid-cols-2" aria-label="Protected totals">
+    <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Protected totals">
       {metrics.map((metric) => (
-        <Card
-          key={metric.key}
-          size="sm"
-          className="gap-1 px-(--card-spacing)"
-          data-vortex-board-metric="true"
-        >
-          <dt className="text-sm text-muted-foreground">{metric.label}</dt>
-          <dd className="font-heading text-base font-medium">
-            {metric.value.kind === "unavailable" ? (
-              <span role="status">Unavailable</span>
-            ) : (
-              <DisplayCellView value={metric.value} />
-            )}
-          </dd>
-        </Card>
+        <MetricCard key={metric.key} label={metric.label} data-vortex-board-metric="true">
+          <MetricValue value={metric.value} />
+        </MetricCard>
       ))}
-    </dl>
+    </div>
+  );
+}
+
+/** A column's own totals as compact muted lines in its header, never a card inside the column. */
+function ColumnMetrics({
+  metrics,
+}: Readonly<{ metrics: BoardPayload["aggregates"] }>): ReactElement | null {
+  if (metrics.length === 0) return null;
+  return (
+    <div role="group" aria-label="Protected totals" className="flex flex-col">
+      {metrics.map((metric) => (
+        <p key={metric.key} className="m-0 text-muted-foreground" data-vortex-board-metric="true">
+          {metric.label}:{" "}
+          <span className="font-medium text-foreground">
+            <MetricValue value={metric.value} />
+          </span>
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -110,8 +124,8 @@ function BoardColumn({
   const canContinue =
     events?.page_changed !== undefined && page?.nextContinuationToken !== undefined;
   return (
-    <Card
-      className="min-w-64 flex-1 basis-64 gap-0"
+    <div
+      className="flex min-w-64 flex-1 basis-64 flex-col gap-3"
       data-vortex-board-column="true"
       {...(mover === undefined || bucket.selector.kind !== "option"
         ? {}
@@ -128,14 +142,14 @@ function BoardColumn({
             },
           })}
     >
-      <CardHeader className="border-b">
-        <CardTitle>{bucket.label}</CardTitle>
-        <CardDescription>
+      <header className="flex flex-col">
+        <h3 className="m-0 font-medium">{bucket.label}</h3>
+        <p className="m-0 text-muted-foreground">
           {countText(bucket.values.rowCount)} {bucket.values.rowCount === 1 ? "record" : "records"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 pt-3">
-        <BoardMetrics metrics={bucket.values.aggregates} />
+        </p>
+        <ColumnMetrics metrics={bucket.values.aggregates} />
+      </header>
+      <div className="flex flex-col gap-3">
         {page === null ? (
           <p className="text-sm text-muted-foreground" role="status">
             Cards have not been loaded.
@@ -177,7 +191,7 @@ function BoardColumn({
                 <li key={row.recordId} data-vortex-board-card="">
                   <Card
                     size="sm"
-                    className={moving ? "gap-0 opacity-60" : "gap-0"}
+                    className={moving ? "opacity-60" : undefined}
                     aria-busy={moving}
                     data-vortex-board-card-moving={moving ? "true" : undefined}
                     {...(idle
@@ -194,8 +208,8 @@ function BoardColumn({
                         }
                       : {})}
                   >
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">
+                    <CardHeader>
+                      <CardTitle className="min-w-0 break-words">
                         {titleField === undefined || title.length === 0 ? (
                           "Untitled item"
                         ) : (
@@ -203,46 +217,34 @@ function BoardColumn({
                         )}
                       </CardTitle>
                       {events?.row_action === undefined && !movable ? null : (
-                        <CardAction className="flex gap-1">
-                          <RowActionControl
-                            recordId={row.recordId}
-                            revision={row.revision}
+                        <CardAction>
+                          <CardActionsMenu
+                            card={card}
                             name={accessibleTitle}
                             events={events}
+                            mover={movable ? mover : undefined}
+                            disabled={mover?.movingRecordId !== undefined}
                           />
-                          {!movable ? null : (
-                            <CardMoveMenu
-                              card={card}
-                              name={accessibleTitle}
-                              mover={mover}
-                              disabled={mover.movingRecordId !== undefined}
-                            />
-                          )}
                         </CardAction>
                       )}
                     </CardHeader>
-                    {moving ? (
-                      <p
-                        role="status"
-                        className="px-(--card-spacing) pb-2 text-sm text-muted-foreground"
-                      >
-                        Moving…
-                      </p>
-                    ) : null}
-                    {details.length === 0 ? null : (
-                      <CardContent className="pt-0">
-                        <dl className="grid gap-2">
-                          {details.map((field) => (
-                            <div key={field.key} className="grid gap-0.5">
-                              <dt className="text-xs text-muted-foreground">{field.label}</dt>
-                              <dd className="text-sm">
-                                <DisplayCellView value={field.value} />
-                              </dd>
-                            </div>
-                          ))}
-                        </dl>
+                    {moving || details.length > 0 ? (
+                      <CardContent className="flex flex-col">
+                        {moving ? (
+                          <p role="status" className="m-0 text-muted-foreground">
+                            Moving…
+                          </p>
+                        ) : null}
+                        {details.map((field) => (
+                          <p key={field.key} className="m-0 flex min-w-0 justify-between gap-2">
+                            <span className="min-w-0 text-muted-foreground">{field.label}</span>
+                            <span className="shrink-0 whitespace-nowrap text-right">
+                              <DisplayCellView value={field.value} />
+                            </span>
+                          </p>
+                        ))}
                       </CardContent>
-                    )}
+                    ) : null}
                   </Card>
                 </li>
               );
@@ -273,47 +275,67 @@ function BoardColumn({
             Show more
           </Button>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
-/** The keyboard and pointer alternative to dragging: a menu of the columns the card may move to. */
-function CardMoveMenu({
+/**
+ * The card's one actions menu: Open, plus the keyboard and pointer alternative to dragging, the
+ * columns the card may move to. It is an icon trigger, so it never takes room from the title.
+ */
+function CardActionsMenu({
   card,
   name,
+  events,
   mover,
   disabled,
 }: Readonly<{
   card: BoardMoveCard;
   name: string;
-  mover: BoardMover;
+  events: DisplayRenderProps<BoardPayload>["events"];
+  mover: BoardMover | undefined;
   disabled: boolean;
 }>): ReactElement | null {
-  const targets = mover.targets.filter((target) => target.key !== card.bucketKey);
-  if (targets.length === 0) return null;
+  const onRowAction = events?.row_action;
+  const targets = mover?.targets.filter((target) => target.key !== card.bucketKey) ?? [];
+  if (onRowAction === undefined && targets.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
           <Button
-            variant="outline"
-            size="sm"
-            aria-label={`Move ${name}`}
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Actions for ${name}`}
             disabled={disabled}
             data-vortex-board-move={card.recordId}
           />
         }
       >
-        Move
-        <Icon name="chevron-down" />
+        <Icon name="more-horizontal" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        {targets.map((target) => (
-          <DropdownMenuItem key={target.key} onClick={() => void mover.move(card, target)}>
-            {target.label}
+      <DropdownMenuContent align="end">
+        {onRowAction === undefined ? null : (
+          <DropdownMenuItem
+            onClick={() =>
+              onRowAction({ event: "row_action", recordId: card.recordId, revision: card.revision })
+            }
+          >
+            Open
           </DropdownMenuItem>
-        ))}
+        )}
+        {onRowAction === undefined || targets.length === 0 ? null : <DropdownMenuSeparator />}
+        {mover === undefined || targets.length === 0 ? null : (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Move to</DropdownMenuLabel>
+            {targets.map((target) => (
+              <DropdownMenuItem key={target.key} onClick={() => void mover.move(card, target)}>
+                {target.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

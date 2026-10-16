@@ -3425,7 +3425,8 @@
             "breadcrumbs": true,
             "organization_switcher": true,
             "application_switcher": true,
-            "account_menu": true
+            "account_menu": true,
+            "appearance_toggle": true
           }
         },
         "layout": {
@@ -3590,7 +3591,8 @@
             "breadcrumbs": true,
             "organization_switcher": false,
             "application_switcher": false,
-            "account_menu": false
+            "account_menu": false,
+            "appearance_toggle": true
           }
         },
         "layout": {

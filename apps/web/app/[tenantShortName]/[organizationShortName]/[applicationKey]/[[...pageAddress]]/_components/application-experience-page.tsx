@@ -55,7 +55,6 @@ export function ApplicationExperiencePage({
       }}
     >
       <PagePuckRenderer
-        themeMode="system"
         composition={page}
         registry={platformComponentRegistry}
         fieldInputControlReleases={fieldInputControlReleases}
