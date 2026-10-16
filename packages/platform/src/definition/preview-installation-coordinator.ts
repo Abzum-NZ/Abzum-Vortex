@@ -29,7 +29,10 @@ import {
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
-type InstallerRequests = Pick<ReturnType<typeof createHumanOrganizationRequestService>, "runChange">;
+type InstallerRequests = Pick<
+  ReturnType<typeof createHumanOrganizationRequestService>,
+  "runChange"
+>;
 
 type PreviewInstallationDraftRehearsal = Readonly<{
   rehearseApplicationPreview(
@@ -185,7 +188,10 @@ export const createPreviewInstallationCoordinator = (
         (transaction, authority, context) =>
           dependencies
             .draftRehearsal(transaction, authority)
-            .rehearseApplicationPreview(context, { rootId: applicationRootId, expectedDraftRevision }),
+            .rehearseApplicationPreview(context, {
+              rootId: applicationRootId,
+              expectedDraftRevision,
+            }),
       );
       return builderRequest(
         session.data,

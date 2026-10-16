@@ -33,7 +33,10 @@ const previewRequestSchema = z
 /** The running preview of a saved draft: where it opens, which draft it runs and until when. */
 export type StudioApplicationPreviewResult =
   | Readonly<{ kind: "provisioned"; href: string; draftRevision: number; expiresAt: string }>
-  | Readonly<{ kind: "refused"; reason: "invalid_request" | "permission_refused" | "not_installed" }>
+  | Readonly<{
+      kind: "refused";
+      reason: "invalid_request" | "permission_refused" | "not_installed";
+    }>
   | Readonly<{ kind: "conflict" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -49,9 +52,13 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
     from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
   `;
   const row = rows[0];
-  if (rows.length !== 1 || row === undefined || row.outcome !== "available" ||
+  if (
+    rows.length !== 1 ||
+    row === undefined ||
+    row.outcome !== "available" ||
     (row.application_origin_kind !== "ordinary" &&
-      row.application_origin_kind !== "platform_system_application"))
+      row.application_origin_kind !== "platform_system_application")
+  )
     throw new ContextRefused();
   return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
 };
@@ -61,7 +68,12 @@ const coordinator = () =>
     installerRequests: humanOrganizationRequests(),
     releaseCatalogue: installedReleaseCatalogue,
     builderAuthority: (transaction, scope) =>
-      createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource }),
+      createBuilderAuthority({
+        transaction,
+        scope,
+        targetFacts,
+        permissions: platformPermissionSource,
+      }),
     draftRehearsal: (transaction, authority) =>
       createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority),
   });
@@ -114,7 +126,9 @@ export const provisionStudioApplicationPreview = async (
   }
   const launcher = await loadOrganizationLauncher(session);
   if (launcher.kind !== "available") return { kind: "temporarily_unavailable" };
-  const entry = launcher.entries.find((item) => sameId(item.organizationId, preview.organizationId));
+  const entry = launcher.entries.find((item) =>
+    sameId(item.organizationId, preview.organizationId),
+  );
   if (entry === undefined) return { kind: "refused", reason: "permission_refused" };
   // The preview's own address: its home page opens there, as an installed Application's does.
   return {

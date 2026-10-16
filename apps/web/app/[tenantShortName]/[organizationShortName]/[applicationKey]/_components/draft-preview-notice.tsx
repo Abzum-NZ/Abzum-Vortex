@@ -25,8 +25,8 @@ export function DraftPreviewNotice({
       <Icon name="eye" />
       <p className="min-w-0 flex-1">
         <strong>Preview of draft revision {draftRevision}.</strong> It runs on a copy of your
-        organisation&apos;s records; nothing saved here reaches the installed application. It
-        ends {until}.
+        organisation&apos;s records; nothing saved here reaches the installed application. It ends{" "}
+        {until}.
       </p>
       <Button variant="outline" size="sm" nativeButton={false} render={<Link href={studioHref} />}>
         <Icon name="chevron-left" />

@@ -90,9 +90,13 @@ export const loadHumanPreviewRuntimeContext = async (
   const rows = await transaction.query<DatabaseRow & { readonly source: unknown }>`
     select vortex_definition.read_preview_runtime_source() as source
   `;
-  const source = previewRuntimeSourceSchema.safeParse(rows.length === 1 ? rows[0]?.source : undefined);
+  const source = previewRuntimeSourceSchema.safeParse(
+    rows.length === 1 ? rows[0]?.source : undefined,
+  );
   if (!source.success)
-    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", { cause: source.error });
+    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", {
+      cause: source.error,
+    });
   const { installation, correlationId } = source.data;
   if (
     installation.previewInstallationId === undefined ||
