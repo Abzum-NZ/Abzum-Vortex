@@ -135,7 +135,7 @@
       heading: computed.getPropertyValue("--font-heading-family").trim(),
       primary: computed.getPropertyValue("--primary").trim(),
       background: computed.getPropertyValue("--background").trim(),
-      spacing: computed.getPropertyValue("--vortex-component-spacing").trim(),
+      spacing: computed.getPropertyValue("--spacing").trim(),
     };
     probe.remove();
     const tokens = { fonts, radii: [...radii], spacing, density, theme };
