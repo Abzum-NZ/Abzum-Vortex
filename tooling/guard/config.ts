@@ -61,6 +61,13 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Migration files that share a version; a fresh reset fails on the duplicate key",
   },
+  "migration-version-order": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "A new migration whose version is not above the highest on origin/main (skipped when origin/main is absent)",
+  },
   "function-uuid": {
     tier: "blocking",
     owner: "lead",
@@ -120,6 +127,7 @@ export const scannedRuleIds = new Set([
   "migration-mismatch",
   "migration-orphan",
   "migration-version-duplicate",
+  "migration-version-order",
   "sql-identifier-length",
   "function-uuid",
   "migration-owner-role",

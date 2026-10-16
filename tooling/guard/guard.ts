@@ -423,6 +423,44 @@ for (const file of migrationFiles) {
   if (first) add("migration-version-duplicate", file, 1, `${version} also used by ${first}`);
   else migrationVersions.set(version, file);
 }
+// A migration added by this branch must sort after every migration already on origin/main, or a
+// database that applied the higher version would need an out-of-order apply. Only added files are
+// compared, so a branch that is merely behind main, and main itself, never fail.
+function gitOutput(args: string[]): string | undefined {
+  try {
+    return execFileSync("git", args, { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString(
+      "utf8",
+    );
+  } catch {
+    return undefined;
+  }
+}
+const mainMigrationList = gitOutput([
+  "ls-tree",
+  "--name-only",
+  "origin/main",
+  `${paths.migrations}`,
+]);
+if (mainMigrationList === undefined)
+  console.warn("migration-version-order skipped: origin/main is not available locally");
+else {
+  const versionOf = (file: string) => basename(file).split("_")[0];
+  const mainFiles = new Set(mainMigrationList.split("\n").filter(Boolean).map(normalize));
+  const mainVersions = [...mainFiles].filter((file) => file.endsWith(".sql")).map(versionOf);
+  const highest = mainVersions.reduce((a, b) => (b > a ? b : a), "");
+  for (const file of migrationFiles) {
+    if (mainFiles.has(file) || baselineMigrationFiles.has(file)) continue;
+    const version = versionOf(file);
+    if (version > highest) continue;
+    const next = (BigInt(highest) + 100n).toString();
+    add(
+      "migration-version-order",
+      file,
+      1,
+      `version ${version} is not above ${highest}, the highest on origin/main; rebase, then rename to a version above it, for example ${next}_${basename(file).split("_").slice(1).join("_")}`,
+    );
+  }
+}
 // Postgres silently truncates identifiers past 63 bytes, so a longer name diverges from its file.
 const sqlIdentifier = String.raw`(?:"(?:[^"]|"")+"|[\p{L}_][\p{L}\p{N}_$]*)`;
 const createdIdentifierPattern = new RegExp(

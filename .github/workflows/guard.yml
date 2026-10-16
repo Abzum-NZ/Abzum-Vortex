@@ -8,6 +8,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The migration-version-order guard rule compares against origin/main, which a default
+      # pull_request checkout does not fetch.
+      - run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
       - uses: pnpm/action-setup@v4
         with:
           version: 12.6.0
