@@ -24,7 +24,7 @@ begin
   loop
     begin
       select release.compilation_output #> '{canonical,content}' into strict content
-      from vortex_definition.releases release
+      from vortex_definition.runtime_releases release
       where release.root_id = (binding ->> 'moduleRootId')::uuid
         and release.release_revision = (binding ->> 'moduleReleaseRevision')::bigint;
     exception
@@ -61,7 +61,7 @@ begin
   end loop;
   begin
     select release.compilation_output #> '{canonical,content}' into strict content
-    from vortex_definition.releases release
+    from vortex_definition.runtime_releases release
     where release.root_id = (installation ->> 'applicationRootId')::uuid
       and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
   exception

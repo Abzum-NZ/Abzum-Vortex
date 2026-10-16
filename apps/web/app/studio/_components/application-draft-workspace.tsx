@@ -50,7 +50,8 @@ import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSnapshot } from "./application-visibility-condition-editor";
 import { ApplicationFlowEditor } from "./application-flow-editor";
-import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./application-draft-preview";
+import { previewStudioApplication } from "../preview-actions";
+import type { SavedDraftContext } from "./application-draft-agent-tools";
 import { ApplicationSourceImport } from "./application-source-import";
 import { ApplicationSearchEditor } from "./application-search-editor";
 import { StudioPublishDialog } from "./studio-publish-dialog";
@@ -78,7 +79,7 @@ import {
   sameStudioApplicationSourceImportSnapshot,
   type StudioApplicationSourceImportSnapshot,
 } from "../_lib/application-source-import";
-import { conflictMessage, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
+import { conflictMessage, previewProblem, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
 import { NewApplicationWorkspace } from "./new-application-workspace";
 import { StudioStructureEditor } from "./studio-structure-editor";
 import { applyStudioStructureCommand, type StudioStructureCommand, type StudioStructureResult } from "../_lib/application-structure";
@@ -222,7 +223,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [tab, setTab] = useState<StudioRailKey>(initialTab);
   const [releasesSection, setReleasesSection] = useState<StudioReleasesSection>(initialSection);
   const [moduleKey, setModuleKey] = useState<string | null>(initialModule);
-  const [previewing, setPreviewing] = useState(false);
+  const [previewPending, setPreviewPending] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   const [publishOpen, setPublishOpen] = useState(false);
@@ -602,17 +603,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     setPublishOpen(false);
   };
 
-  const readPreviewContext = useCallback((): SavedHomepagePreviewContext | null => {
+  const readSavedDraftContext = useCallback((): SavedDraftContext | null => {
     const current = history.getState();
     const saved = savedPreviewDraft.current;
     if (!active.current || busy.any() || current.isSaving || current.isDirty ||
       saved.organizationId !== organizationId || saved.rootId !== current.rootId ||
       saved.key !== draft.key || saved.draftRevision !== current.draftRevision) return null;
-    return {
-      organizationId, rootId: current.rootId, key: saved.key, draftRevision: current.draftRevision,
-      sourceFingerprint: saved.sourceFingerprint, source: current.source,
-      localLifetime: lifetime.current, generation: previewGeneration.current,
-    };
+    return { organizationId, rootId: current.rootId, draftRevision: current.draftRevision, source: current.source };
   }, [organizationId, draft.key, history, busy]);
 
   const readVisibilitySnapshot = useCallback((): StudioVisibilityWorkspaceSnapshot | null => {
@@ -872,8 +869,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return undefined;
   };
 
-  // The centre draws the canvas for every rail tab except Data and Releases, and not while previewing.
-  const canvasShown = !previewing && railShowsCanvas(tab);
+  // The centre draws the canvas for every rail tab except Data and Releases.
+  const canvasShown = railShowsCanvas(tab);
   // The flow editors are drawn only with the canvas, so leaving it discards their unapplied input (after asking).
   const leaveCanvas = async (): Promise<boolean> => {
     if (!busy.anyOf("flowEditor", "flowSetting", "flowAppend")) return true;
@@ -887,9 +884,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return true;
   };
   const changeTab = async (next: StudioRailKey): Promise<boolean> => {
-    if (next === tab && !previewing) return true;
+    if (next === tab) return true;
     if (canvasShown && !railShowsCanvas(next) && !await leaveCanvas()) return false;
-    setPreviewing(false);
     setTab(next);
     return true;
   };
@@ -1011,15 +1007,36 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return true;
   };
 
-  // Preview shows the saved draft, so it saves first; a save that does not go through keeps the canvas.
-  const togglePreview = async () => {
-    if (previewing) { setPreviewing(false); return; }
-    if (canvasShown && !await leaveCanvas()) return;
-    if (history.getState().isDirty) {
-      const result = await save();
-      if (result?.kind !== "saved") return;
+  // Preview runs the saved draft as its own Application in a new tab, so it saves first. The tab is
+  // opened at once, while the press still counts as the person's, and is closed if nothing runs.
+  const openPreview = async () => {
+    if (previewPending) return;
+    const previewTab = window.open("", "_blank");
+    setPreviewPending(true);
+    try {
+      if (history.getState().isDirty) {
+        const result = await save();
+        if (result?.kind !== "saved") { previewTab?.close(); return; }
+      }
+      const current = history.getState();
+      setMessage("Starting the preview of the saved draft…");
+      const result = await previewStudioApplication(organizationId, {
+        rootId: current.rootId, draftRevision: current.draftRevision,
+      });
+      if (result.kind !== "provisioned") {
+        previewTab?.close();
+        setMessage(previewProblem(result));
+        return;
+      }
+      if (previewTab === null) window.open(result.href, "_blank", "noopener");
+      else previewTab.location.href = result.href;
+      setMessage(`Preview of draft revision ${result.draftRevision} opened in a new tab.`);
+    } catch {
+      previewTab?.close();
+      setMessage("The preview could not be started. Your changes are kept.");
+    } finally {
+      if (active.current) setPreviewPending(false);
     }
-    setPreviewing(true);
   };
 
   // Another module replaces the open module editor, so its unapplied input is discarded only after asking.
@@ -1055,8 +1072,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     : ownerShellKey === undefined ? undefined : labels.get(ownerShellKey);
   const outlineOwnerKey = canvasPage !== undefined ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
     : ownerShellKey;
-  const centreTitle = previewing ? "Preview of the saved draft"
-    : tab === "data" ? (moduleKey === null ? "Data" : `Module ${moduleKey}`)
+  const centreTitle = tab === "data" ? (moduleKey === null ? "Data" : `Module ${moduleKey}`)
       : tab === "releases" ? studioReleasesSections.find((entry) => entry.value === releasesSection)!.label
         : canvasPage !== undefined ? pageLabel(canvasPage.id, canvasPage.name)
           : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item";
@@ -1194,7 +1210,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       select={changeSelection} command={commandComposition} save={save}
       readPreparedConfirmation={() => preparedRef.current?.confirmation}
       prepare={() => requestPublication("prepare")} publish={(releaseNote) => requestPublication("publish", releaseNote)}
-      readPreview={readPreviewContext} />
+      readSavedDraft={readSavedDraftContext} />
     <StudioFrame tabs={studioRailTabs} activeTab={tab} onTabChange={changeTab}
       topBar={<StudioTopBar
         location={{ organizationName: place.organizationName, organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
@@ -1206,24 +1222,19 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         onRevert={() => { void reopen(); }} revertDisabled={busy.anyOfRendered("publication", "reopening") || state.isSaving}
         onSave={() => { void save(); }} saveDisabled={!state.isDirty || themeOverrideProblems || state.isSaving || locked}
         backToAppHref={place.applicationHref}
-        onPreview={() => { void togglePreview(); }} previewing={previewing}
-        previewDisabled={!previewing && (state.isSaving || locked || themeOverrideProblems)}
+        onPreview={() => { void openPreview(); }} previewPending={previewPending}
+        previewDisabled={state.isSaving || locked || themeOverrideProblems}
         onPublish={openPublish} publishDisabled={busy.isRendered("reopening") || state.isSaving || locked} />}
       panel={panels}
       inspector={inspectorPanel}
       canvas={({ inspectorOpen, toggleInspector }) => <>
         <StudioCanvasToolbar title={centreTitle} breakpoint={canvasBreakpoint} onBreakpoint={setCanvasBreakpoint}
           zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={canvasShown && canvasPage !== undefined}
-          previewing={previewing} onEndPreview={() => setPreviewing(false)}
           inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} />
         <div className="min-h-0 flex-1 overflow-auto p-4">
-          {previewing && <ApplicationDraftPreview context={readPreviewContext()} readContext={readPreviewContext}
-            platformBlockCatalogue={platformBlockCatalogue}
-            fieldInputControlReleases={fieldInputControlReleases}
-            platformThemeTokens={platformThemeTokens} />}
           {canvasCentre}
           {/* A module editor keeps its unapplied input while another tab is open. */}
-          <div hidden={tab !== "data" || previewing}>
+          <div hidden={tab !== "data"}>
             {moduleKey === null
               ? <p className="text-sm text-muted-foreground">Choose a module in the Data panel.</p>
               : <ModuleFieldsEditor key={`${moduleKey}:${workspaceLifetime}`} organizationId={organizationId}
@@ -1231,14 +1242,14 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
                 disabled={noEdit || busy.anyRendered("moduleField")}
                 onPendingChange={reportModuleFieldPending} onApply={applyModuleField} />}
           </div>
-          {tab === "releases" && !previewing && releasesSection === "history" &&
+          {tab === "releases" && releasesSection === "history" &&
             <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision} />}
-          {tab === "releases" && !previewing && releasesSection === "page-adoption" &&
+          {tab === "releases" && releasesSection === "page-adoption" &&
             <StandardPageAdoption organizationId={organizationId} rootId={state.rootId}
               disabledReason={state.isDirty || locked ? "Save your changes first; a choice here changes the saved draft." : undefined}
               onSaved={() => { void reopen(); }} />}
           {/* The import keeps its unapplied input (and its pending flag) while another tab is open. */}
-          <section hidden={tab !== "releases" || previewing || releasesSection !== "import"} aria-label="Import from source"
+          <section hidden={tab !== "releases" || releasesSection !== "import"} aria-label="Import from source"
             className="space-y-3">
             <p className="text-sm text-muted-foreground">Replace the draft with a source document. This is for advanced use; the change is checked before it reaches your draft.</p>
             <ApplicationSourceImport key={sourceImportPanelEpoch}

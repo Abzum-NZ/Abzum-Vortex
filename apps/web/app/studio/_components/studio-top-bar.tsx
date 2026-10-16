@@ -18,7 +18,7 @@ export type StudioLocation = Readonly<{
 
 /** Studio's top bar: where you are, whether the draft is saved, and the commands that act on the whole draft. */
 export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRedo, undoDisabled, onUndo, onRedo,
-  onRevert, revertDisabled, onSave, saveDisabled, backToAppHref, onPreview, previewDisabled, previewing,
+  onRevert, revertDisabled, onSave, saveDisabled, backToAppHref, onPreview, previewDisabled, previewPending,
   onPublish, publishDisabled }: Readonly<{
   location: StudioLocation;
   savedStateLabel: string;
@@ -29,7 +29,7 @@ export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRe
   onRevert: () => void; revertDisabled: boolean;
   onSave: () => void; saveDisabled: boolean;
   backToAppHref: string | undefined;
-  onPreview: () => void; previewDisabled: boolean; previewing: boolean;
+  onPreview: () => void; previewDisabled: boolean; previewPending: boolean;
   onPublish: () => void; publishDisabled: boolean;
 }>) {
   return <header className="shrink-0 border-b border-border bg-background">
@@ -62,8 +62,9 @@ export function StudioTopBar({ location, savedStateLabel, status, canUndo, canRe
         {backToAppHref === undefined ? null
           : <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={backToAppHref} />}>
             <Icon name="chevron-left" />Back to app</Button>}
-        <Button type="button" variant={previewing ? "secondary" : "outline"} size="sm" aria-pressed={previewing}
-          disabled={previewDisabled} onClick={onPreview}><Icon name="eye" />Preview</Button>
+        <Button type="button" variant="outline" size="sm" aria-busy={previewPending}
+          title="Save the draft and run it in a new tab" disabled={previewDisabled || previewPending}
+          onClick={onPreview}><Icon name="eye" />Preview</Button>
         <Button type="button" size="sm" disabled={publishDisabled} onClick={onPublish}>Publish…</Button>
         <AppearanceToggle />
       </div>

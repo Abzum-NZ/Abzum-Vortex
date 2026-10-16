@@ -28,6 +28,7 @@ declare
   shape_fingerprint text;
   scope_index_columns text;
   index_token text;
+  live_table_token text;
   storage_identities jsonb := '[]'::jsonb;
 begin
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
@@ -35,12 +36,24 @@ begin
     or p_module_release_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023', message = 'Preview storage selector is invalid';
   end if;
-  select release.* into strict release_row
-  from vortex_definition.releases as release
-  join vortex_definition.roots as root on root.root_id = release.root_id
-  where release.root_id = p_module_root_id
-    and release.release_revision = p_module_release_revision
+  -- The preview's own rehearsed release of an owned Module, or else the stored release.
+  select (pg_catalog.jsonb_populate_record(
+    null::vortex_definition.releases, preview_release.release
+  )).* into release_row
+  from vortex_definition.preview_releases as preview_release
+  join vortex_definition.roots as root on root.root_id = preview_release.root_id
+  where preview_release.preview_installation_id = p_preview_installation_id
+    and preview_release.root_id = p_module_root_id
+    and preview_release.release_revision = p_module_release_revision
     and root.kind = 'module';
+  if not found then
+    select release.* into strict release_row
+    from vortex_definition.releases as release
+    join vortex_definition.roots as root on root.root_id = release.root_id
+    where release.root_id = p_module_root_id
+      and release.release_revision = p_module_release_revision
+      and root.kind = 'module';
+  end if;
   if release_row.validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
     or release_row.source_contract_version
       is distinct from release_row.validation_contract_version
@@ -68,9 +81,12 @@ begin
     raise exception using errcode = '23514', message = 'Module record storage identities are duplicated';
   end if;
 
+  -- A system projection is the platform's own read model, which a preview reads as it is: it
+  -- has no storage of its own to isolate.
   for record_type in
     select item.value
     from pg_catalog.jsonb_array_elements(record_types) as item(value)
+    where not item.value ? 'systemProjection'
     order by item.value ->> 'storageContractId'
   loop
     begin
@@ -104,6 +120,12 @@ begin
     );
     shape_fingerprint := vortex_record.storage_meaning_fingerprint(preview_record_type);
 
+    -- The live storage this record type's records are copied from, when it has any.
+    select catalogue.physical_table_token into live_table_token
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = storage_id
+      and catalogue.physical_schema_token = 'record_data'
+      and catalogue.state = 'active';
     perform vortex_record.create_record_storage_table_internal(
       preview_storage_id, p_module_root_id, record_type_id_value,
       storage_scope_value, ownership_mode_value
@@ -148,7 +170,10 @@ begin
       execute pg_catalog.format(
         'alter table record_data.%I add column %I %s%s',
         table_token, column_token, sql_type,
-        case when (field_value ->> 'required')::boolean then ' not null' else '' end
+        -- Copied live records have no value for a field the draft adds, so only fresh storage
+        -- enforces a required field in the table; the save path enforces it for every record.
+        case when (field_value ->> 'required')::boolean and live_table_token is null
+          then ' not null' else '' end
       );
       insert into vortex_record.field_storage_mappings (
         storage_contract_id, field_id, physical_column_token, database_value_type,
@@ -172,6 +197,12 @@ begin
         );
       end if;
     end loop;
+
+    if live_table_token is not null then
+      perform vortex_record.copy_live_records_to_preview_internal(
+        p_preview_installation_id, storage_id, preview_storage_id
+      );
+    end if;
 
     insert into vortex_record.preview_storage_bindings (
       preview_installation_id, storage_contract_id, module_root_id,
@@ -206,4 +237,4 @@ revoke all on function vortex_record.provision_preview_module_storage(uuid, uuid
 grant execute on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
   to vortex_owner;
 comment on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint) is
-  'Creates fresh empty Record storage for every record type in one exact published Module release, without provisioning its live release identities.';
+  'Creates isolated Record storage for every record type of one exact Module release of a preview, its rehearsed release or a stored one, seeded with a copy of the organisation''s live records, without provisioning its live release identities.';

@@ -3,6 +3,7 @@ import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
 import { BrandLoader, createThemeRootProps } from "@vortex/ui";
 import { loadApplicationFrame, loadApplicationStartTheme } from "../../../_lib/application-frame";
 import { ApplicationFrame } from "./_components/application-frame";
+import { DraftPreviewNotice } from "./_components/draft-preview-notice";
 
 export const dynamic = "force-dynamic";
 type Route = Readonly<{
@@ -40,7 +41,13 @@ async function CurrentApplicationFrame({ route, children }: { route: Route; chil
     route.organizationShortName,
     route.applicationKey,
   );
-  return frame === undefined ? children : <ApplicationFrame model={frame}>{children}</ApplicationFrame>;
+  if (frame === undefined) return children;
+  return (
+    <>
+      {frame.preview === undefined ? null : <DraftPreviewNotice {...frame.preview} />}
+      <ApplicationFrame model={frame}>{children}</ApplicationFrame>
+    </>
+  );
 }
 
 /**

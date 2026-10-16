@@ -5,6 +5,7 @@ import {
   prepareDefinitionPublicationCommandSchema,
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
+  type PublishDefinitionResult,
   type SessionContext,
   type VersionImpact,
   type VersionImpactReason,
@@ -41,7 +42,11 @@ import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-def
 export type ApplicationPublicationState = PreparedState &
   Readonly<{ moduleOutputs: readonly ModuleOutput[] }>;
 
-type ModuleStep = Readonly<{ output: ModuleOutput; reasons: readonly VersionImpactReason[] }>;
+type ModuleStep = Readonly<{
+  output: ModuleOutput;
+  reasons: readonly VersionImpactReason[];
+  release: PublishDefinitionResult;
+}>;
 
 /** Reads and checks the Application draft a publication is for; any other kind is refused. */
 export const applicationCandidate = (
@@ -169,7 +174,7 @@ const releaseInlineModules = async (
     const reasons = impact.outcome === "no_change" ? [] : impact.reasons;
     const output = compileCandidate(module, dependencies, resolution, true, catalogue.permissions);
     if (output.kind !== "module") return refuse("DEFINITION_COMPILATION_REFUSED");
-    await transaction.appendModuleRelease({
+    const release = await transaction.appendModuleRelease({
       draft: module.draft,
       compilationOutput: output,
       assignedVersion: version,
@@ -179,7 +184,7 @@ const releaseInlineModules = async (
       validationContractVersion: "3.0.0",
       releaseNote,
     });
-    steps.push({ output, reasons });
+    steps.push({ output, reasons, release });
   }
   return steps;
 };
@@ -333,4 +338,58 @@ export const planApplicationPublication = async (
     resolutionSnapshot: application.resolution,
     moduleOutputs: modules.map((module) => module.output),
   };
+};
+
+/** The internal releases a preview rehearsal writes are undone; the note only labels them. */
+const previewReleaseNote = "Rehearsed for a preview";
+
+/** One release a preview runs: its stored row and dependency rows, read back as JSON. */
+export type RehearsedPreviewRelease = Readonly<{ release: unknown; dependencies: unknown }>;
+
+/**
+ * The draft exactly as its publication would release it: every inline Module that changed and
+ * then the Application are compiled and appended through the publication path, read back as the
+ * stored rows, and the whole rehearsal is undone. Nothing is released; a preview runs these rows.
+ * A draft identical to its current release rehearses nothing and previews that release.
+ */
+export const rehearseApplicationPreview = async (
+  context: SessionContext,
+  transaction: DefinitionPublicationTransaction,
+  catalogue: DefinitionPublicationCatalogue,
+  candidate: DefinitionPublicationCandidate,
+  roots: ReadonlyMap<string, OwnedModuleRoot>,
+): Promise<readonly RehearsedPreviewRelease[]> => {
+  const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
+  const version =
+    latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
+  return transaction.rehearse(async () => {
+    const modules = await releaseInlineModules(
+      context,
+      transaction,
+      catalogue,
+      candidate,
+      roots,
+      version,
+      previewReleaseNote,
+    );
+    const pins = modules.map((module) => ({
+      rootId: String(module.release.rootId),
+      releaseRevision: module.release.releaseRevision,
+    }));
+    if (candidate.draft.publishedRevision !== candidate.draft.draftRevision) {
+      const application = await compileApplication(transaction, catalogue, candidate, version, true);
+      const release = await transaction.appendRelease({
+        draft: candidate.draft,
+        compilationOutput: application.output,
+        assignedVersion: version,
+        reasons: publicationReasons(candidate, roots, modules, application),
+        dependencyManifest: application.manifest,
+        resolutionSnapshot: application.resolution,
+        validationContractVersion: applicationValidationContractVersion,
+        releaseNote: previewReleaseNote,
+      });
+      pins.push({ rootId: String(release.rootId), releaseRevision: release.releaseRevision });
+    }
+    return transaction.readRehearsedReleases(String(candidate.draft.rootId), pins);
+  });
 };

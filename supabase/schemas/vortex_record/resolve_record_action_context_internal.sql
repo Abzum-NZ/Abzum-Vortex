@@ -66,7 +66,7 @@ begin
     module_root_id_value := (binding_item ->> 'moduleRootId')::uuid;
     module_release_revision_value := (binding_item ->> 'moduleReleaseRevision')::bigint;
     select release.record_content into strict module_content
-    from vortex_definition.releases as release
+    from vortex_definition.runtime_releases as release
     where release.root_id = module_root_id_value
       and release.release_revision = module_release_revision_value;
 
@@ -175,18 +175,10 @@ begin
     );
   end loop;
 
-  if preview_installation_id_value is null then
-    select release.record_content into strict application_content
-    from vortex_definition.releases as release
-    where release.root_id = application_root_id_value
-      and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
-  else
-    application_content :=
-      installation #> '{candidate,compilation,canonical,content}';
-    if pg_catalog.jsonb_typeof(application_content) is distinct from 'object' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused');
-    end if;
-  end if;
+  select release.record_content into strict application_content
+  from vortex_definition.runtime_releases as release
+  where release.root_id = application_root_id_value
+    and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
   for permission_item in
     select item.value
     from pg_catalog.jsonb_array_elements(
