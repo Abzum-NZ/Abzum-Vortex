@@ -232,8 +232,8 @@ export function ApplicationReleaseRestore({
       <p>This action replaces only the saved draft with the selected immutable release and creates one new draft revision. It does not publish, install, or adopt the release.</p>
       <p>Your original Studio workspace and unsaved edits stay in their own tab. Those buffers may now refer to an older saved revision; this page never reads or discards them. Open a new workspace deliberately before continuing to edit.</p>
       <nav aria-label="Restore navigation" className="flex flex-wrap gap-3">
-        <a className="underline" href={historyUrl}>Return to release history</a>
-        <a className="underline" href={workspaceUrl} target="_blank" rel="noopener noreferrer">Open a new workspace tab</a>
+        <a className="underline" href={historyUrl}>Back to published versions</a>
+        <a className="underline" href={workspaceUrl}>Back to the workspace</a>
       </nav>
     </header>
 

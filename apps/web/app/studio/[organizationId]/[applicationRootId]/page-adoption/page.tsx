@@ -1,21 +1,9 @@
-import { loadStudioStandardPageAdoption } from "../../../../_lib/studio-standard-page-adoption";
-import { StandardPageAdoption } from "../../../_components/standard-page-adoption";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function StudioStandardPageAdoptionPage({
-  params,
-  searchParams,
-}: Readonly<{
+/** Page adoption is a tab of the workspace; this address opens it there. */
+export default async function StudioStandardPageAdoptionPage({ params }: Readonly<{
   params: Promise<{ organizationId: string; applicationRootId: string }>;
-  searchParams: Promise<{ result?: string }>;
 }>) {
-  const [{ organizationId, applicationRootId }, search] = await Promise.all([params, searchParams]);
-  const result = await loadStudioStandardPageAdoption(organizationId, applicationRootId);
-  return (
-    <StandardPageAdoption
-      result={result}
-      {...(search.result !== undefined ? { message: search.result } : {})}
-    />
-  );
+  const { organizationId, applicationRootId } = await params;
+  redirect(`/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(applicationRootId)}?tab=page-adoption`);
 }

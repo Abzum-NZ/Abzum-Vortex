@@ -155,7 +155,7 @@ const placementCandidates = (
       if (placementAlias === alias)
         matches.push({
           alias: placementAlias,
-          label: `Placement ${readableKey(placementAlias, "item")}`,
+          label: `Item ${readableKey(placementAlias, "item")}`,
           sourcePath: placementPath,
         });
       for (const [slotKey, childSlot] of Object.entries(placement.slots))

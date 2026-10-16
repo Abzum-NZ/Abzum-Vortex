@@ -53,13 +53,13 @@ export function StudioThreePaneShell({ topBar, outline, canvas, inspector }: Rea
   }, []);
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
   return <div className="space-y-4">
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-background py-2">
+    {(topBar !== null || !wide) && <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-background py-2">
       {topBar}
       {!wide && <div className="flex gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => setOutlineOpen(true)}>Outline</Button>
         <Button type="button" variant="outline" size="sm" onClick={() => setInspectorOpen(true)}>Inspector</Button>
       </div>}
-    </div>
+    </div>}
     <div className={wide ? "grid grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(16rem,22rem)] items-start gap-4" : "space-y-4"}>
       {wide && <nav aria-label="Application outline" className="max-h-[75vh] min-w-0 space-y-3 overflow-y-auto pr-1">
         <h2 className="font-semibold">Outline</h2><PaneSlot host={hosts?.outline ?? null} /></nav>}

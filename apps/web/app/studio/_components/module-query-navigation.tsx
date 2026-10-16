@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { moduleRootIdSchema, organizationIdSchema } from "@vortex/platform/schema";
 
-/** A separate-tab entry into the authored Module query filter editor. */
+/** An entry into the module's saved view filter editor. */
 export function ModuleQueryNavigation() {
   const params = useParams<{ organizationId?: string; moduleRootId?: string }>();
   const organization = organizationIdSchema.safeParse(params.organizationId);
@@ -12,9 +13,9 @@ export function ModuleQueryNavigation() {
   const href = `/studio/modules/${encodeURIComponent(organization.data)}/${encodeURIComponent(root.data)}/queries`;
   return (
     <nav aria-label="Module tools" className="border-t border-border px-6 py-3">
-      <a href={href} target="_blank" rel="noopener noreferrer" className="underline">
-        Edit Module query filters
-      </a>
+      <Link href={href} className="underline">
+        Edit saved view filters
+      </Link>
     </nav>
   );
 }
