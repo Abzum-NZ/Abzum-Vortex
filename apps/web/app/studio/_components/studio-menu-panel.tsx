@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   DEFAULT_SHADCN_ICON_LIBRARY, isShadcnIconLibrary, VORTEX_ICON_NAMES, type ApplicationSourceDocument, type VortexIconName,
 } from "@vortex/platform/schema";
@@ -65,8 +65,11 @@ export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, di
       if (previous?.type === "heading")
         return run({ kind: "move", alias, headingAlias: previous.id, index: previous.children.length });
     }
-    setFeedback({ kind: "refused", message: key === "ArrowRight"
+    setFeedback({ kind: "refused", message: key === "ArrowRight" && item.type === "heading"
+      ? `The heading “${item.label}” cannot go under another heading: the menu has one level of headings.`
+      : key === "ArrowRight"
       ? "Alt and Right arrow puts an entry under the heading just above it; there is none."
+      : key === "ArrowLeft" ? "The entry is not under a heading."
       : "The entry is already at that end." });
     return false;
   };
@@ -142,6 +145,8 @@ export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, di
         </StudioField>
         <Button type="submit" size="sm" disabled={disabled}>Add</Button>
       </form>
+      {/* A newly chosen icon library loads before its icons draw; only this list waits for it, not Studio. */}
+      <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading the icon library…</p>}>
       {source.body.navigation.length === 0
         ? <p className="text-sm text-muted-foreground">This application has no menu entries yet.</p>
         : <ul aria-label="Menu entries" className="space-y-0.5">{source.body.navigation.map((item) => row(item, 0))}</ul>}
@@ -153,6 +158,7 @@ export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, di
         className={feedback.kind === "refused" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>{feedback.message}</p>}
       {selected !== undefined && <StudioMenuEntryEditor key={selected.item.id} source={source} item={selected.item}
         position={selected} disabled={disabled} run={run} moveBy={moveBy} />}
+      </Suspense>
     </IconLibraryProvider>
   </StudioPanelShell>;
 }

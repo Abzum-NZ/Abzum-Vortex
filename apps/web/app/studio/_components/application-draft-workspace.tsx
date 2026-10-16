@@ -1,6 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
@@ -1250,7 +1250,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     } : undefined}
     note={selected?.kind === "placement" ? undefined : selected?.kind === "flow"
       ? "Select a step in the flow to change its text or calculation."
-      : selected === null ? undefined : "This item cannot be edited here."}>
+      : selected === null ? undefined : selected.kind === "navigation" ? "Change this menu entry in the Menu tab."
+        : "This item cannot be edited here."}>
     {selected?.kind === "placement" && inspector.status === "resolved" &&
       <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
         selection={selected} disabled={busy.anyRendered("composition") || noEdit}
@@ -1277,6 +1278,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     {canvasPage !== undefined && (inspector.status === "resolved" || selected === null) &&
       // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
       <div {...createAppearanceRootProps(canvasAppearance)} style={{ ...createAppearanceRootProps(canvasAppearance).style, zoom: canvasZoom / 100 }}>
+        {/* A newly chosen icon library loads before the canvas draws with it; only the canvas waits. */}
+        <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Drawing the canvas with the new theme…</p>}>
         <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source}
           compiledSource={compiled.source}
           platformBlockCatalogue={platformBlockCatalogue}
@@ -1296,6 +1299,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           readRecords={readCanvasRecords} updating={compiling}
           palette={addTargets === null ? undefined
             : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
+        </Suspense>
       </div>}
     {flowPane(busy.anyRendered("flowText", "flowAppend") || noEdit)}
   </section>;
