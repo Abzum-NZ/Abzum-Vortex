@@ -2,8 +2,10 @@ import { z } from "zod";
 import { correlationIdSchema, descriptionSchema, labelSchema } from "../catalogue/common";
 import {
   actorIdSchema,
+  applicationRootIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
+  fingerprintSchema,
   organizationIdSchema,
   revisionSchema,
   roleActivationPolicyIdSchema,
@@ -12,7 +14,6 @@ import {
 import {
   affectedRoleAssignmentManifestSchema,
   affectedRoleAssignmentSchema,
-  preparedApplicationRoleTemplatesSchema,
   roleActivationPolicyReferenceSchema,
   roleActivationPolicyRevisionSchema,
   rolePermissionEntrySchema,
@@ -117,8 +118,21 @@ const roleIdentityFields = {
   roleId: roleIdSchema,
 };
 
+/**
+ * The Application registration a template role change is prepared from. The writer reads the
+ * source role's live permissions from this exact registration revision, so the evidence names the
+ * registration instead of carrying its entries.
+ */
+export const organizationRoleTemplateSourceSchema = z
+  .object({
+    applicationRootId: applicationRootIdSchema,
+    registrationRevision: revisionSchema,
+    catalogueFingerprint: fingerprintSchema,
+  })
+  .strict();
+
 const currentTemplateFields = {
-  preparedTemplates: preparedApplicationRoleTemplatesSchema,
+  templateSource: organizationRoleTemplateSourceSchema,
   sourceRoleId: roleIdSchema,
   templateContinuityRevision: revisionSchema,
   permissions: roleChangePermissionSetSchema,
@@ -199,31 +213,11 @@ const hasTemplateEvidence = (
   candidate.operation === "accept_new_application_role" ||
   candidate.operation === "accept_application_role_revision";
 
-const isApplicationAcceptance = (
-  candidate: z.infer<typeof organizationRoleChangeCandidateSchema>,
-): boolean =>
-  candidate.operation === "accept_new_application_role" ||
-  candidate.operation === "accept_application_role_revision";
-
-const permissionEvidenceMatches = (
-  permission: z.infer<typeof rolePermissionEntrySchema>,
-  source: z.infer<
-    typeof preparedApplicationRoleTemplatesSchema
-  >["templates"][number]["livePermissions"][number],
-  registrationRevision: number,
-  catalogueFingerprint: string,
-): boolean =>
-  JSON.stringify(permissionIdentity(permission)) ===
-    JSON.stringify([
-      normalizedUuid(source.applicationRootId),
-      source.ownerKind,
-      normalizedUuid(source.ownerId),
-      normalizedUuid(source.permission.permissionId),
-    ]) &&
-  permission.acceptedRegistrationRevision === registrationRevision &&
-  permission.catalogueFingerprint === catalogueFingerprint &&
-  permission.meaningFingerprint === source.meaningFingerprint;
-
+/**
+ * Every permission of a template role change references the named registration revision and
+ * catalogue. Whether the set is exactly the template's live projection is the writer's check: it
+ * reads that projection from the registration in the same transaction.
+ */
 const addTemplateEvidenceIssues = (
   candidate: Extract<
     z.infer<typeof organizationRoleChangeCandidateSchema>,
@@ -236,58 +230,18 @@ const addTemplateEvidenceIssues = (
   >,
   context: z.RefinementCtx,
 ) => {
-  const prepared = candidate.preparedTemplates;
-  const registrationRevision =
-    prepared.preparationBasis.kind === "current_active_registration"
-      ? prepared.preparationBasis.registrationRevision
-      : undefined;
+  const source = candidate.templateSource;
   if (
-    registrationRevision === undefined ||
-    normalizedUuid(prepared.permissionRegistration.organizationId) !==
-      normalizedUuid(candidate.organizationId)
-  ) {
-    context.addIssue({
-      code: "custom",
-      path: ["candidate", "preparedTemplates"],
-      message: "Role acceptance requires current same-organization template evidence",
-    });
-    return;
-  }
-
-  const selected = prepared.templates.filter(
-    (entry) => normalizedUuid(entry.template.roleId) === normalizedUuid(candidate.sourceRoleId),
-  );
-  if (selected.length !== 1) {
-    context.addIssue({
-      code: "custom",
-      path: ["candidate", "sourceRoleId"],
-      message: "Role acceptance requires one exact prepared source role",
-    });
-    return;
-  }
-
-  const livePermissions = selected[0]!.livePermissions;
-  const matches = candidate.permissions.map((permission) =>
-    livePermissions.filter((source) =>
-      permissionEvidenceMatches(
-        permission,
-        source,
-        registrationRevision,
-        prepared.permissionRegistration.applicationCatalogueFingerprint,
-      ),
-    ),
-  );
-  if (
-    matches.some((entries) => entries.length !== 1) ||
-    (isApplicationAcceptance(candidate) && candidate.permissions.length !== livePermissions.length)
+    candidate.permissions.some(
+      (permission) =>
+        permission.acceptedRegistrationRevision !== source.registrationRevision ||
+        permission.catalogueFingerprint !== source.catalogueFingerprint,
+    )
   )
     context.addIssue({
       code: "custom",
       path: ["candidate", "permissions"],
-      message:
-        candidate.operation === "create_custom_from_template"
-          ? "A custom template copy may contain only current live template permissions"
-          : "Application role acceptance requires the complete current live template projection",
+      message: "Template role permissions must come from the named Application registration",
     });
 };
 
