@@ -378,6 +378,14 @@ const selectModuleRelease = async (
   return exact as ResolvableModuleRelease;
 };
 
+/** The release of Module `key` that a dependant accepting any version resolves to now. */
+export const selectCurrentModuleRelease = (
+  reader: DefinitionPublicationReader,
+  candidate: DefinitionCandidateDraft,
+  key: string,
+): Promise<ResolvableModuleRelease> =>
+  selectModuleRelease(reader, candidate, key, [{ selection: "allowed_range", expression: "*" }]);
+
 const verifyConnectionRelease = (
   expectedKey: string,
   release: ResolvableConnectionTypeRelease,

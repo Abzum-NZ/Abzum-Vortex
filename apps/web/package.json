@@ -21,7 +21,6 @@
     "@vortex/definitions": "workspace:*",
     "@vortex/platform": "workspace:*",
     "@vortex/ui": "workspace:*",
-    "@xyflow/react": "catalog:",
     "next": "16.3.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",

@@ -11,6 +11,7 @@ import {
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { Input } from "../components/input";
+import { Item, ItemActions, ItemContent, ItemHeader, ItemTitle } from "../components/item";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { Textarea } from "../components/textarea";
@@ -266,10 +267,10 @@ function ListControl({ id, property, value, onChange, choices, disabled }: Contr
   return <div className="space-y-2">
     {items.length === 0 && <p className="text-sm text-muted-foreground">No entries yet.</p>}
     <ol className="space-y-2">
-      {items.map((item, index) => <li key={index} className="space-y-2 border border-border p-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium">{property.item.label} {index + 1}</span>
-          <div className="flex gap-1">
+      {items.map((item, index) => <Item key={index} render={<li />} variant="outline" size="sm">
+        <ItemHeader className="flex-wrap gap-2">
+          <ItemTitle>{property.item.label} {index + 1}</ItemTitle>
+          <ItemActions className="gap-1">
             <Button type="button" variant="outline" size="sm" disabled={disabled || index === 0}
               aria-label={`Move ${property.item.label} ${index + 1} earlier`} onClick={() => move(index, -1)}>Up</Button>
             <Button type="button" variant="outline" size="sm" disabled={disabled || index === items.length - 1}
@@ -277,15 +278,17 @@ function ListControl({ id, property, value, onChange, choices, disabled }: Contr
             <Button type="button" variant="outline" size="sm" disabled={disabled}
               aria-label={`Remove ${property.item.label} ${index + 1}`}
               onClick={() => write(items.filter((_, position) => position !== index))}>Remove</Button>
-          </div>
-        </div>
-        <SettingControl id={`${id}-${index}`} property={property.item} value={item} choices={choices} disabled={disabled}
-          onChange={(next) => {
-            const replacement = next ?? initialValue(property.item, choices);
-            if (replacement === undefined) return;
-            write(items.map((entry, position) => position === index ? replacement : entry));
-          }} />
-      </li>)}
+          </ItemActions>
+        </ItemHeader>
+        <ItemContent className="basis-full">
+          <SettingControl id={`${id}-${index}`} property={property.item} value={item} choices={choices} disabled={disabled}
+            onChange={(next) => {
+              const replacement = next ?? initialValue(property.item, choices);
+              if (replacement === undefined) return;
+              write(items.map((entry, position) => position === index ? replacement : entry));
+            }} />
+        </ItemContent>
+      </Item>)}
     </ol>
     <Button type="button" variant="outline" size="sm" disabled={disabled || fresh === undefined || items.length >= property.maximumItems}
       onClick={() => { if (fresh !== undefined) write([...items, fresh]); }}>Add {property.item.label.toLowerCase()}</Button>

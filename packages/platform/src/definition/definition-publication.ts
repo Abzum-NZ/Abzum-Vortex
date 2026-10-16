@@ -20,6 +20,8 @@ import {
   type Revision,
 } from "../schema";
 import { applicationModuleKeys } from "./application-module-sources";
+import { applicationModuleSources } from "./application-module-lowering";
+import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import {
   requireBuilderAuthority,
@@ -40,19 +42,12 @@ import {
   type DefinitionPublicationRepository,
   type PreparedDefinitionPublication,
 } from "./definition-publication-contracts";
-import {
-  type ResolvedDependencies,
-  resolveDependencies,
-  assertNoCycle,
-  buildResolution,
-} from "./definition-dependency-resolution";
-import {
-  validateDraftCandidate,
-  compileApplicationCandidate,
-} from "./definition-publication-compilation";
+import type { ResolvedDependencies } from "./definition-dependency-resolution";
+import { validateDraftCandidate } from "./definition-publication-compilation";
 import {
   applicationCandidate,
   materializeInlineModules,
+  compileApplicationWithInlineModules,
   planApplicationPublication,
   rehearseApplicationPreview,
   type RehearsedPreviewRelease,
@@ -63,6 +58,8 @@ const preparationReleaseNote = "Rehearsed by publication preparation";
 
 export type ApplicationDraftCompilation = Readonly<{
   compilation: ApplicationCompilationOutput;
+  /** The exact Module releases the draft compiled against, its own inline Modules held in memory. */
+  moduleReleases: readonly ResolvableModuleRelease[];
   conditionContexts: readonly ApplicationDraftConditionContext[];
   /** The root's current published release revision; preview only labels it and never reads it. */
   currentReleaseRevision: Revision | null;
@@ -315,38 +312,46 @@ export const createDefinitionPublicationService = (
       // Another definition kind at this root is refused exactly like a missing draft.
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
         refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const dependencies = await resolveDependencies(reader, catalogue, candidate);
-      await assertNoCycle(reader, candidate, dependencies.modules);
-      const currentVersion = candidate.currentReleaseVersion ?? "1.0.0";
-      const resolution = buildResolution(candidate, dependencies, currentVersion);
-      // The compile is a pure function of exactly what this key names, so the same draft revision
-      // under the same resolved dependencies is compiled once. Authorisation, the candidate
-      // validation and the dependency resolution above run on every call.
+      // The compile is a pure function of the draft and the stored definitions it reads: its own
+      // inline Modules' roots and the current release of every Module it uses. The same draft
+      // revision over the same of those is compiled once; authorisation and the candidate
+      // validation above run on every call.
+      const source = candidate.draft.source;
+      const inlineKeys = new Set(applicationModuleSources(source).map((module) => module.key));
+      const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
+      const ownedRoots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const usedAnchors = [];
+      for (const moduleKey of applicationModuleKeys(source).filter((key) => !inlineKeys.has(key))) {
+        const page = await overlay.readModuleReleasePage(candidate.draft.organizationId, moduleKey);
+        usedAnchors.push([moduleKey, page.rootId, page.anchorReleaseRevision]);
+      }
       const cacheKey = applicationDraftCompilationKey([
         candidate.draft.organizationId.toLowerCase(),
         candidate.draft.rootId.toLowerCase(),
         candidate.draft.draftRevision,
         candidate.draft.sourceFingerprint,
         candidate.draft.publishedRevision ?? null,
-        currentVersion,
-        resolution.fingerprint,
-        dependencies.composition?.fingerprint ?? null,
-        dependencies.modules.map((release) => [
-          release.rootId,
-          release.releaseRevision,
-          release.contentFingerprint,
-          release.resolutionFingerprint,
+        candidate.currentReleaseVersion,
+        ownedRoots.map((root) => [
+          root.key,
+          root.rootId,
+          root.draftRevision,
+          root.currentReleaseRevision,
+          root.sourceFingerprint,
         ]),
-        dependencies.connections.map((release) => [release.rootId, release.contentFingerprint]),
+        usedAnchors,
       ]);
       const cached = readCachedApplicationDraftCompilation(cacheKey);
       if (cached !== undefined) return cached;
-      const compilation = compileApplicationCandidate(
+      // The draft's own inline Modules are compiled from the draft, in memory, by the
+      // publication's own steps; nothing is written.
+      const compiled = await compileApplicationWithInlineModules(
+        context,
+        overlay,
+        catalogue,
         candidate,
-        dependencies,
-        resolution,
-        catalogue.permissions,
-      ).output;
+      );
+      const compilation = compiled.output;
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
@@ -354,11 +359,12 @@ export const createDefinitionPublicationService = (
         return refuse("DEFINITION_COMPILATION_REFUSED");
       return retainApplicationDraftCompilation(cacheKey, {
         compilation,
+        moduleReleases: compiled.dependencies.modules,
         conditionContexts: projectDraftConditionContexts(
           candidate.draft.source,
           candidate.draft.sourceFingerprint,
-          dependencies,
-          resolution,
+          compiled.dependencies,
+          compiled.resolution,
         ),
         currentReleaseRevision: candidate.draft.publishedRevision ?? null,
       });

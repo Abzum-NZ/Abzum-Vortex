@@ -325,7 +325,7 @@ export type InlineRecordTypeReference = Readonly<{
     | Readonly<{ kind: "record_type"; moduleKey: string; recordKey: string; fieldKey?: string }>
     | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>
     | Readonly<{ kind: "page"; pageAlias: string }>
-    | Readonly<{ kind: "flow"; flowAlias: string }>
+    | Readonly<{ kind: "flow"; flowAlias: string; moduleKey: string | null }>
     | Readonly<{ kind: "menu"; navigationAlias: string }>
     | Readonly<{ kind: "none" }>;
 }>;
@@ -379,7 +379,8 @@ const describePlace = (source: ApplicationSourceDocument, path: Path): InlineRec
       case "permissions": return { label: `Permission ${itemName} in ${module.name}`, open: { kind: "none" } };
       case "actions": return { label: `Action ${itemName} in ${module.name}`, open: { kind: "none" } };
       case "events": return { label: `Event ${itemName} in ${module.name}`, open: { kind: "none" } };
-      case "flows": return { label: `Rule or flow ${itemName} in ${module.name}`, open: { kind: "none" } };
+      case "flows": return { label: `Rule or flow ${itemName} in ${module.name}`,
+        open: typeof item?.id === "string" ? { kind: "flow", flowAlias: item.id, moduleKey: module.key } : { kind: "none" } };
       case "extension_points": return { label: `Extension point ${itemName} in ${module.name}`, open: { kind: "none" } };
       case "sharing_conditions": return { label: `Sharing condition ${itemName} in ${module.name}`, open: { kind: "none" } };
       default: return { label: `Module ${module.name}`, open: { kind: "none" } };
@@ -391,7 +392,7 @@ const describePlace = (source: ApplicationSourceDocument, path: Path): InlineRec
   }
   if (section === "flows" && typeof index === "number") {
     const flow = body.flows[index]!;
-    return { label: `Flow ${Object.values(flow.labels)[0] ?? flow.key.replaceAll("_", " ")}`, open: { kind: "flow", flowAlias: flow.id } };
+    return { label: `Flow ${Object.values(flow.labels)[0] ?? flow.key.replaceAll("_", " ")}`, open: { kind: "flow", flowAlias: flow.id, moduleKey: null } };
   }
   if (section === "navigation") {
     const entry = navigationAt(source, path);

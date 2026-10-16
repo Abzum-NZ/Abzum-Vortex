@@ -172,7 +172,7 @@ function CanvasBlock({
   const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
   if (release !== undefined && !current &&
     (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release)))
-    return <Item variant="outline" size="sm" className="border-dashed" data-vortex-canvas-pending={id}>
+    return <Item variant="outline" className="border-dashed" data-vortex-canvas-pending={id}>
       <ItemContent>
         <ItemTitle>{release.name}</ItemTitle>
         <ItemDescription>{records.updating ? "Updating the canvas…" : "Save to show this block."}</ItemDescription>
