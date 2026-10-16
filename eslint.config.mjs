@@ -31,6 +31,7 @@ export default tseslint.config(
         document: "readonly",
         getComputedStyle: "readonly",
         SVGElement: "readonly",
+        window: "readonly",
       },
     },
   },

@@ -3,6 +3,7 @@
 import { safeHttpsUrlMaximumLength, safeHttpsUrlSchema } from "@vortex/platform/schema";
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./alert";
+import { Button } from "./button";
 
 export type NoticeSeverity = "info" | "success" | "warning" | "critical";
 
@@ -117,15 +118,15 @@ export function Notice({
         </div>
         {dismissible ? (
           <AlertAction>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               aria-label="Dismiss notice"
               onClick={() => setDismissed(true)}
-              style={{ color: "var(--vortex-text)" }}
-              className="shrink-0 rounded px-2 py-1 text-sm underline underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Dismiss
-            </button>
+            </Button>
           </AlertAction>
         ) : null}
       </Alert>

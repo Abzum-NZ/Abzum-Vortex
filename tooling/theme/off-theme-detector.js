@@ -15,6 +15,9 @@
  * - `style-variant`: a shadcn component part (`cn-*` class) whose radius, padding or font differs
  *   from what the active style variant gives the same part without the extra utility classes or
  *   inline style the renderer added.
+ * - `dark-mode`: a themed root where the shadcn `dark:` variant or the light-dark() colour scheme
+ *   disagrees with the mode of the nearest root carrying `data-vortex-theme-mode` (or a `.dark` /
+ *   `.light` class); a light root nested in a dark document must render light, and the reverse.
  *
  * It never changes the page except for probe elements it removes again at once.
  */
@@ -119,7 +122,8 @@
         ),
       ),
     );
-    const spacing = px(read("width:calc(var(--spacing, 0.25rem) * 1)", "width"));
+    // Read over 100 units so sub-pixel layout rounding does not distort one unit.
+    const spacing = px(read("width:calc(var(--spacing, 0.25rem) * 100)", "width")) / 100;
     const density = DENSITY_TOKENS.map((name) =>
       px(read(`width:var(${name}, 0px)`, "width")),
     ).filter((value) => value > 0);
@@ -137,6 +141,31 @@
     const tokens = { fonts, radii: [...radii], spacing, density, theme };
     tokenCache.set(root, tokens);
     return tokens;
+  };
+
+  /**
+   * A style variant may rescale `--radius` for a part of the page (a sidebar, a menu); a corner is
+   * judged against the radius tokens of the `--radius` in force on the element itself, as well as
+   * the root's.
+   */
+  const radiusCache = new Map();
+  const radiiFor = (element, tokens) => {
+    const local = getComputedStyle(element).getPropertyValue("--radius").trim();
+    if (local === "" || local === tokens.theme.radius) return tokens.radii;
+    const cached = radiusCache.get(local);
+    if (cached !== undefined) return cached;
+    const probe = document.createElement("div");
+    probe.style.cssText = `position:absolute;visibility:hidden;--radius:${local}`;
+    document.body.appendChild(probe);
+    const radii = RADIUS_FACTORS.map((factor) => {
+      probe.style.borderTopLeftRadius = `calc(var(--radius) * ${factor})`;
+      return px(getComputedStyle(probe).borderTopLeftRadius);
+    });
+    probe.remove();
+    // Variant values resolved on an ancestor keep the root's radius, so both scales are valid here.
+    const both = [...tokens.radii, ...radii];
+    radiusCache.set(local, both);
+    return both;
   };
 
   const findings = [];
@@ -173,10 +202,10 @@
     const box = element.getBoundingClientRect();
     return box.width > 0 && box.height > 0;
   };
-  const radiusOk = (value, tokens) => {
+  const radiusOk = (value, radii) => {
     const radius = px(value);
     if (radius === 0 || radius >= 999 || value.trim().endsWith("%")) return true;
-    return tokens.radii.some((token) => Math.abs(token - radius) <= TOLERANCE);
+    return radii.some((token) => Math.abs(token - radius) <= TOLERANCE);
   };
   const paddingOk = (value, tokens) => {
     const padding = px(value);
@@ -271,7 +300,7 @@
     if (!tokens.fonts.has(font)) report("font-family", element, `"${style.fontFamily}"`);
     for (const corner of CORNERS) {
       const value = style.getPropertyValue(corner);
-      if (!radiusOk(value, tokens)) {
+      if (px(value) !== 0 && !radiusOk(value, radiiFor(element, tokens))) {
         report("border-radius", element, `${corner} ${value}`);
         break;
       }
@@ -286,6 +315,46 @@
     if ([...element.classList].some((name) => name.startsWith("cn-")))
       for (const difference of variantDifferences(element, style))
         report("style-variant", element, difference);
+  }
+
+  // Dark mode follows the nearest mode root. Probes in each themed and mode root read the shadcn
+  // `dark:` variant (`dark:text-muted-foreground`, which the application search uses) against the
+  // same colour set directly, and the light-dark() colour scheme.
+  const MODE_ROOT = "[data-vortex-theme-mode], .dark, .light";
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const expectedDark = (element) => {
+    const root = element.closest(MODE_ROOT);
+    if (root === null) return prefersDark;
+    if (root.classList.contains("dark")) return true;
+    if (root.classList.contains("light")) return false;
+    const mode = root.getAttribute("data-vortex-theme-mode");
+    return mode === "dark" || (mode === "system" && prefersDark);
+  };
+  const modeRoots = new Set([
+    documentRoot,
+    ...document.querySelectorAll(`${MODE_ROOT}, [data-vortex-theme][data-vortex-style]`),
+  ]);
+  for (const root of modeRoots) {
+    const host = root === documentRoot ? document.body : root;
+    const probe = document.createElement("div");
+    probe.className = "dark:text-muted-foreground";
+    probe.style.cssText =
+      "position:absolute;visibility:hidden;background-color:light-dark(rgb(0, 0, 0), rgb(255, 255, 255))";
+    const reference = document.createElement("div");
+    reference.style.cssText = "position:absolute;visibility:hidden;color:var(--muted-foreground)";
+    host.append(probe, reference);
+    const computed = getComputedStyle(probe);
+    const variantDark = computed.color === getComputedStyle(reference).color;
+    const schemeDark = computed.backgroundColor === "rgb(255, 255, 255)";
+    const wanted = expectedDark(probe);
+    probe.remove();
+    reference.remove();
+    if (variantDark !== wanted || schemeDark !== wanted)
+      report(
+        "dark-mode",
+        root,
+        `nearest mode root is ${wanted ? "dark" : "light"}; dark: variant ${variantDark ? "dark" : "light"}, colour scheme ${schemeDark ? "dark" : "light"}`,
+      );
   }
 
   const active = tokensOf(activeRoot).theme;

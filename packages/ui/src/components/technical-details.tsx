@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "../lib/utils";
+import { Button } from "./button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
 
 /** Collapsed section that keeps identifiers, revisions and raw source out of the builder's way. */
@@ -9,8 +10,8 @@ function TechnicalDetails({ title = "Technical details", className, children }: 
   title?: string; className?: string; children: ReactNode;
 }) {
   return (
-    <Collapsible className={cn("rounded-lg border bg-muted/30 text-sm", className)}>
-      <CollapsibleTrigger className="w-full px-3 py-2 text-left font-medium underline-offset-2 hover:underline">
+    <Collapsible className={cn("border bg-muted/30 text-sm", className)}>
+      <CollapsibleTrigger render={<Button variant="ghost" size="sm" className="w-full justify-start" />}>
         {title}
       </CollapsibleTrigger>
       <CollapsibleContent className="px-3 pb-3">{children}</CollapsibleContent>
