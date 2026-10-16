@@ -47,6 +47,7 @@ import {
   storedItemRelease,
   storedZoneFromPuck,
   validateStoredZone,
+  withCopiedFlowBindings,
 } from "./stored-composition";
 import { StudioCanvasCompiledSettings, studioCanvasConfig } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
@@ -386,13 +387,14 @@ function ApplicationPageSlotPuckEditor({
       const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
       if (matches.length !== 1 || targetSlot === undefined)
         throw new TypeError("The selected page is unavailable.");
-      const editedSlot = storedZoneFromPuck(catalogue, targetSlot, candidate);
+      const { zone: editedSlot, copies } = storedZoneFromPuck(catalogue, targetSlot, candidate);
       // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
       if (zoneJson(editedSlot) === zoneJson(targetSlot)) return;
       const next = structuredClone(current);
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
       if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))
         throw new TypeError("The selected page is unavailable.");
+      next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
       syncPlatformBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;

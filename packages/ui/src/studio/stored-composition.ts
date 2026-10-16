@@ -19,10 +19,10 @@ import {
  */
 
 /** One stored slot: its items in desktop order and its authored tablet and phone order. */
-export type StoredZone = { items: SourceItem[]; order: SourceSlotOrder | undefined };
+type StoredZone = { items: SourceItem[]; order: SourceSlotOrder | undefined };
 type Location = readonly (string | number)[];
 /** Shell placements whose named slot is reserved for page content and must stay empty. */
-export type StoredReservations = ReadonlyMap<string, ReadonlySet<string>>;
+type StoredReservations = ReadonlyMap<string, ReadonlySet<string>>;
 
 const settingReasons: Readonly<Record<string, string>> = {
   required_value: "needs a value",
@@ -250,7 +250,7 @@ export const validateStoredZone = (
 };
 
 /** The reserved targets of a shell: each content slot's parent placement and slot. */
-export const storedShellReservations = (shell: SourceApplicationShell): StoredReservations => {
+const storedShellReservations = (shell: SourceApplicationShell): StoredReservations => {
   const reservations = new Map<string, Set<string>>();
   for (const slot of shell.content_slots) {
     const keys = reservations.get(slot.parent_placement) ?? new Set<string>();
@@ -286,7 +286,7 @@ export const validateStoredShell = (
  * One slot's declared tablet or phone order after its members changed: surviving blocks keep their
  * authored order and each new block takes its desktop position.
  */
-export const adjustedOrder = (saved: readonly string[], desktop: readonly string[]): string[] => {
+const adjustedOrder = (saved: readonly string[], desktop: readonly string[]): string[] => {
   const present = new Set(desktop);
   const result = saved.filter((id) => present.has(id));
   const kept = new Set(result);
@@ -336,13 +336,14 @@ const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
  * The stored slot a canvas edit produced. Puck's data is the stored data; Puck itself only adds a
  * root and, on Duplicate, generated ids. Generated ids become unique block names, a copied block's
  * slot orders follow its copied children, and every declared tablet and phone order keeps its
- * authored sequence while blocks join or leave its slot. The result is judged like any stored slot.
+ * authored sequence while blocks join or leave its slot. The result is judged like any stored slot,
+ * and every copy Duplicate made is named, with each copied descendant, beside its original.
  */
 export const storedZoneFromPuck = (
   catalogue: ImmutablePlatformBlockCatalogue,
   baseline: StoredZone,
   candidate: unknown,
-): StoredZone => {
+): Readonly<{ zone: StoredZone; copies: ReadonlyMap<string, string> }> => {
   const data = closed(candidate, ["root", "content", "zones"], []);
   const root = closed(data.root, ["props", "readOnly"], ["root"]);
   if (root.props !== undefined) closed(root.props, [], ["root", "props"]);
@@ -431,5 +432,72 @@ export const storedZoneFromPuck = (
   };
   adjustNested(items);
   const order = adjustedSlotOrder(baseline.order, items.map((item) => item.props.id));
-  return validateStoredZone(catalogue, order === undefined ? { items } : { items, order });
+  const zone = validateStoredZone(catalogue, order === undefined ? { items } : { items, order });
+  return { zone, copies: copiesOf(zone.items, baselineAliases) };
+};
+
+/** The item with every block name and slot order left out, to compare a copy with its original. */
+const withoutIdentity = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(withoutIdentity);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => key !== "id" && key !== "slot_orders")
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, entry]) => [key, withoutIdentity(entry)]));
+};
+
+/**
+ * The blocks Duplicate copied, as original name to copy name, descendants included. Puck places a
+ * copy right after its original; a new block there with the same type and content is that copy.
+ */
+const copiesOf = (items: readonly SourceItem[], baseline: ReadonlySet<string>): Map<string, string> => {
+  const copies = new Map<string, string>();
+  const pair = (original: SourceItem, copy: SourceItem): void => {
+    copies.set(original.props.id, copy.props.id);
+    const copiedSlots = new Map(childSlotsOf(copy.props));
+    for (const [key, children] of childSlotsOf(original.props)) {
+      const copied = copiedSlots.get(key);
+      if (copied === undefined || copied.length !== children.length) continue;
+      children.forEach((child, index) => pair(child as SourceItem, copied[index] as SourceItem));
+    }
+  };
+  const visit = (list: readonly SourceItem[]): void => {
+    list.forEach((item, index) => {
+      const previous = index === 0 ? undefined : list[index - 1]!;
+      if (previous !== undefined && !baseline.has(item.props.id) && baseline.has(previous.props.id) &&
+        item.type === previous.type &&
+        JSON.stringify(withoutIdentity(item)) === JSON.stringify(withoutIdentity(previous)))
+        pair(previous, item);
+      for (const [, children] of childSlotsOf(item.props)) visit(children as SourceItem[]);
+    });
+  };
+  visit(items);
+  return copies;
+};
+
+type SourceFlowBinding = Readonly<{ id: string; control: string; event_id: string }> & Record<string, unknown>;
+
+/**
+ * A copied control works like its original: each flow binding of an original gains a copy bound to
+ * the copied block, under its own binding and event names, so the copy is never left unbound.
+ */
+export const withCopiedFlowBindings = <Binding extends SourceFlowBinding>(
+  bindings: readonly Binding[],
+  copies: ReadonlyMap<string, string>,
+): Binding[] => {
+  if (copies.size === 0) return [...bindings];
+  const taken = new Set(bindings.flatMap((binding) => [binding.id, binding.event_id]));
+  const fresh = (base: string): string => {
+    const name = generatedAlias(`${base}_copy`, taken);
+    taken.add(name);
+    return name;
+  };
+  const result = [...bindings];
+  for (const binding of bindings) {
+    const copy = copies.get(binding.control);
+    if (copy !== undefined)
+      result.push({ ...structuredClone(binding), id: fresh(binding.id), control: copy,
+        event_id: fresh(binding.event_id) });
+  }
+  return result;
 };
