@@ -11,8 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@vortex/ui/components/button";
-import { Input } from "@vortex/ui/components/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@vortex/ui/components/input-group";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@vortex/ui/components/sheet";
 import { Icon, type VortexIconName } from "@vortex/ui";
 import { cn } from "@vortex/ui/lib/utils";
@@ -306,16 +310,19 @@ export function StudioSearchBox({ value, onChange, placeholder, label }: Readonl
   label: string;
 }>) {
   return (
-    <div className="relative">
-      <Icon name="search" className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder}
-        aria-label={label} className="px-8" />
+    <InputGroup>
+      <InputGroupInput value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder}
+        aria-label={label} />
+      <InputGroupAddon>
+        <Icon name="search" />
+      </InputGroupAddon>
       {value.length === 0 ? null : (
-        <Button type="button" variant="ghost" size="icon-xs" aria-label={`Clear ${label.toLowerCase()}`}
-          onClick={() => onChange("")} className="absolute top-1/2 right-1 -translate-y-1/2">
-          <Icon name="close" />
-        </Button>
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton size="icon-xs" aria-label={`Clear ${label.toLowerCase()}`} onClick={() => onChange("")}>
+            <Icon name="close" />
+          </InputGroupButton>
+        </InputGroupAddon>
       )}
-    </div>
+    </InputGroup>
   );
 }

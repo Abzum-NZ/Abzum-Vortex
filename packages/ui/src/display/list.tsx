@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { DisplayCellView } from "./cell";
 import {
   DisplayHeader,
@@ -56,10 +57,11 @@ export function ListDisplay(props: DisplayRenderProps<ListPayload>): ReactElemen
               const secondary =
                 values.secondaryKey === undefined ? undefined : row.cells[values.secondaryKey];
               return (
-                <li
+                <Item
                   key={row.recordId}
-                  data-vortex-record-id={row.recordId}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 hover:border-foreground"
+                  variant="outline"
+                  size="sm"
+                  render={<li data-vortex-record-id={row.recordId} />}
                 >
                   <SelectionControl
                     row={row}
@@ -67,18 +69,20 @@ export function ListDisplay(props: DisplayRenderProps<ListPayload>): ReactElemen
                     selected={values.selectedRecordIds?.includes(row.recordId) ?? false}
                     events={events}
                   />
-                  <div className="flex min-w-0 flex-1 flex-col break-words">
-                    <span className="font-semibold">
+                  <ItemContent className="min-w-0 break-words">
+                    <ItemTitle>
                       <DisplayCellView value={heading ?? { kind: "empty" }} />
-                    </span>
+                    </ItemTitle>
                     {secondary === undefined ? null : (
-                      <span className="text-muted-foreground">
+                      <ItemDescription>
                         <DisplayCellView value={secondary} />
-                      </span>
+                      </ItemDescription>
                     )}
-                  </div>
-                  <RowActionControl recordId={row.recordId} name={name} events={events} />
-                </li>
+                  </ItemContent>
+                  <ItemActions>
+                    <RowActionControl recordId={row.recordId} name={name} events={events} />
+                  </ItemActions>
+                </Item>
               );
             })}
           </ul>

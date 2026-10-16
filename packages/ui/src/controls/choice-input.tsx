@@ -7,12 +7,11 @@ import {
   ComboboxContent,
   ComboboxEmpty,
   ComboboxInput,
-  ComboboxInputAddon,
-  ComboboxInputGroup,
   ComboboxItem,
   ComboboxList,
   ComboboxTrigger,
 } from "../components/combobox";
+import { InputGroup, InputGroupAddon } from "../components/input-group";
 import { Button } from "../components/button";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "../components/field";
 import { RadioGroup, RadioGroupItem } from "../components/radio-group";
@@ -252,7 +251,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
             required={required}
             disabled={disabled}
           >
-            <ComboboxInputGroup>
+            <InputGroup>
               <ComboboxInput
                 id={ids.control}
                 placeholder={placeholder}
@@ -262,14 +261,14 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
                 aria-required={ariaRequired}
                 aria-invalid={error !== undefined}
               />
-              <ComboboxInputAddon>
+              <InputGroupAddon align="inline-end">
                 <ComboboxTrigger aria-label={"Show " + label + " options"} disabled={disabled} />
                 <ComboboxClear
                   aria-label={"Clear " + label + " selection"}
                   disabled={disabled || selectedOption === null}
                 />
-              </ComboboxInputAddon>
-            </ComboboxInputGroup>
+              </InputGroupAddon>
+            </InputGroup>
             <ComboboxContent>
               <ComboboxList>
                 {(item: ChoiceOption) => (

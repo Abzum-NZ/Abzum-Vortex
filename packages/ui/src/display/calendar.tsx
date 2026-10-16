@@ -3,6 +3,7 @@
 import type { ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/button";
+import { Card, CardContent, CardDescription, CardHeader } from "../components/card";
 import {
   DisplayHeader,
   RecordsEmptyState,
@@ -353,28 +354,33 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                     )
                   : [];
                 return (
-                  <div
+                  <Card
                     key={day}
+                    size="sm"
                     role="group"
                     aria-label={dayLabel(day)}
-                    className={`min-h-24 min-w-0 overflow-hidden rounded-md border p-1 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
+                    className={`min-h-24 min-w-0 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
                   >
-                    <div className={`mb-1 text-xs font-medium ${values.view === "month" ? "text-right" : ""}`}>
-                      {values.view === "week" ? dayLabel(day) : Number(day.slice(8, 10))}
-                    </div>
-                    <ul className="space-y-1">
-                      {items.map((item) => (
-                        <li key={item.recordId}>
-                          <CalendarItemButton
-                            item={item}
-                            timeZone={values.timeZone}
-                            events={events}
-                            showTime={values.view === "week"}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                    <CardHeader className={values.view === "month" ? "text-right" : undefined}>
+                      <CardDescription>
+                        {values.view === "week" ? dayLabel(day) : Number(day.slice(8, 10))}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="flex flex-col gap-1">
+                        {items.map((item) => (
+                          <li key={item.recordId}>
+                            <CalendarItemButton
+                              item={item}
+                              timeZone={values.timeZone}
+                              events={events}
+                              showTime={values.view === "week"}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -406,12 +412,13 @@ const CalendarItemButton = ({
     </>
   );
   return events?.row_action === undefined ? (
-    <span className="block rounded px-1 py-1 text-xs">{content}</span>
+    <span className="block px-1 py-1 text-xs">{content}</span>
   ) : (
     <Button
       type="button"
       variant="ghost"
-      className="h-auto w-full justify-start whitespace-normal px-1 py-1 text-left text-xs"
+      size="xs"
+      className="h-auto w-full justify-start whitespace-normal text-left"
       aria-label={`Open ${label}${startTime === "" ? "" : ` at ${startTime}`}`}
       onClick={() => events.row_action?.({ event: "row_action", recordId: item.recordId })}
     >

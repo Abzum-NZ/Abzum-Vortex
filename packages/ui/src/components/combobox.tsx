@@ -3,60 +3,26 @@
 import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { Icon } from "../icons/icon";
-import { Button } from "./button";
+import { InputGroupButton, InputGroupInput } from "./input-group";
 import { cn } from "../lib/utils";
 import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 const Combobox = ComboboxPrimitive.Root;
 
-function ComboboxInputGroup({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="input-group"
-      role="group"
-      className={cn("cn-input-group group/input-group relative flex w-full min-w-0 items-center", className)}
-      {...props}
-    />
-  );
-}
-
-function ComboboxInputAddon({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="input-group-addon"
-      data-align="inline-end"
-      role="group"
-      className={cn(
-        "cn-input-group-addon cn-input-group-addon-align-inline-end flex items-center",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-function ComboboxInput({ className, ...props }: ComboboxPrimitive.Input.Props) {
-  return (
-    <ComboboxPrimitive.Input
-      data-slot="input-group-control"
-      className={cn(
-        "cn-input cn-input-group-input min-w-0 flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0",
-        className,
-      )}
-      {...props}
-    />
-  );
+/** The combobox's text input, drawn as the shadcn input group's control. */
+function ComboboxInput(props: ComboboxPrimitive.Input.Props) {
+  return <ComboboxPrimitive.Input render={<InputGroupInput />} {...props} />;
 }
 
 function ComboboxTrigger({ className, ...props }: ComboboxPrimitive.Trigger.Props) {
   return (
     <ComboboxPrimitive.Trigger
       data-slot="combobox-trigger"
-      render={<Button type="button" variant="ghost" size="icon-xs" />}
-      className={cn("cn-combobox-trigger cn-input-group-button cn-input-group-button-size-icon-xs", className)}
+      render={<InputGroupButton size="icon-xs" variant="ghost" />}
+      className={cn("cn-combobox-trigger", className)}
       {...props}
     >
-      <Icon name="chevron-down" className="cn-combobox-trigger-icon" />
+      <Icon name="chevron-down" className="cn-combobox-trigger-icon pointer-events-none" />
     </ComboboxPrimitive.Trigger>
   );
 }
@@ -65,11 +31,11 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
   return (
     <ComboboxPrimitive.Clear
       data-slot="combobox-clear"
-      render={<Button type="button" variant="ghost" size="icon-xs" />}
-      className={cn("cn-combobox-clear cn-input-group-button cn-input-group-button-size-icon-xs", className)}
+      render={<InputGroupButton variant="ghost" size="icon-xs" />}
+      className={cn("cn-combobox-clear", className)}
       {...props}
     >
-      <Icon name="close" className="cn-combobox-clear-icon" />
+      <Icon name="close" className="cn-combobox-clear-icon pointer-events-none" />
     </ComboboxPrimitive.Clear>
   );
 }
@@ -171,8 +137,6 @@ export {
   ComboboxContent,
   ComboboxEmpty,
   ComboboxInput,
-  ComboboxInputAddon,
-  ComboboxInputGroup,
   ComboboxItem,
   ComboboxList,
   ComboboxPortal,
