@@ -492,21 +492,21 @@
       --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:focus-visible {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -515,7 +515,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:focus-visible {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -540,22 +540,22 @@
     background-color: var(--muted);
     color: var(--muted-foreground);
   }
-  :scope .cn-badge-variant-ghost:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):hover {
+  :scope .cn-badge-variant-ghost:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):hover {
     background-color: var(--muted);
   }
   @supports (color: color-mix(in lab, red, red)) {
-    :scope .cn-badge-variant-ghost:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):hover {
+    :scope .cn-badge-variant-ghost:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):hover {
       background-color: color-mix(in oklab, var(--muted) 50%, transparent);
     }
   }
 }
 @media (prefers-color-scheme: dark) {
   @media (hover: hover) {
-    :scope .cn-badge-variant-ghost:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):hover {
+    :scope .cn-badge-variant-ghost:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):hover {
       background-color: var(--muted);
     }
     @supports (color: color-mix(in lab, red, red)) {
-      :scope .cn-badge-variant-ghost:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):hover {
+      :scope .cn-badge-variant-ghost:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):hover {
         background-color: color-mix(in oklab, var(--muted) 50%, transparent);
       }
     }
@@ -648,7 +648,7 @@
       --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -657,7 +657,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -666,7 +666,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -675,7 +675,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -720,29 +720,29 @@
   &[aria-expanded="true"] {
     color: var(--foreground);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     border-color: var(--input);
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       border-color: var(--input);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:hover {
       @media (hover: hover) {
         background-color: var(--input);
@@ -753,7 +753,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:hover {
         @media (hover: hover) {
           background-color: var(--input);
@@ -794,22 +794,22 @@
   color: var(--foreground);
 }
 @media (hover: hover) {
-  :scope .cn-button-variant-ghost:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):hover {
+  :scope .cn-button-variant-ghost:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):hover {
     background-color: var(--muted);
   }
   @supports (color: color-mix(in lab, red, red)) {
-    :scope .cn-button-variant-ghost:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):hover {
+    :scope .cn-button-variant-ghost:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):hover {
       background-color: color-mix(in oklab, var(--muted) 50%, transparent);
     }
   }
 }
 @media (prefers-color-scheme: dark) {
   @media (hover: hover) {
-    :scope .cn-button-variant-ghost:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):hover {
+    :scope .cn-button-variant-ghost:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):hover {
       background-color: var(--muted);
     }
     @supports (color: color-mix(in lab, red, red)) {
-      :scope .cn-button-variant-ghost:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):hover {
+      :scope .cn-button-variant-ghost:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):hover {
         background-color: color-mix(in oklab, var(--muted) 50%, transparent);
       }
     }
@@ -841,21 +841,21 @@
       --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:hover {
       @media (hover: hover) {
         background-color: var(--destructive);
@@ -866,7 +866,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:hover {
         @media (hover: hover) {
           background-color: var(--destructive);
@@ -877,7 +877,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:focus-visible {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -886,7 +886,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:focus-visible {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -1220,21 +1220,21 @@
       border-color: var(--primary);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -1243,7 +1243,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -1252,7 +1252,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -1261,7 +1261,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -1284,13 +1284,13 @@
       border-color: var(--primary);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
       background-color: var(--primary);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
         background-color: var(--primary);
       }
@@ -1315,28 +1315,28 @@
     --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
   }
 }
-:scope .cn-checkbox-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)[data-invalid] {
+:scope .cn-checkbox-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))[data-invalid] {
   border-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-checkbox-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *))[data-invalid] {
+  :scope .cn-checkbox-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))[data-invalid] {
     border-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
     }
   }
 }
-:scope .cn-checkbox-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)[data-invalid] {
+:scope .cn-checkbox-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))[data-invalid] {
   --tw-ring-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     --tw-ring-color: color-mix(in oklab, var(--destructive) 40%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-checkbox-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *))[data-invalid] {
+  :scope .cn-checkbox-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))[data-invalid] {
     --tw-ring-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       --tw-ring-color: color-mix(in oklab, var(--destructive) 40%, transparent);
@@ -1351,11 +1351,11 @@
 :scope .cn-checkbox-aria[data-invalid]:where([data-selected="true"]) {
   border-color: var(--primary);
 }
-:scope .cn-checkbox-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):where([data-selected="true"]) {
+:scope .cn-checkbox-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):where([data-selected="true"]) {
   background-color: var(--primary);
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-checkbox-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):where([data-selected="true"]) {
+  :scope .cn-checkbox-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):where([data-selected="true"]) {
     background-color: var(--primary);
   }
 }
@@ -1602,21 +1602,21 @@
   &:has(*[data-slot="combobox-chip"]) {
     padding-inline: var(--vs-9e3c4784, var(--spacing, 0.25rem));
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:has(*[aria-invalid="true"]) {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -1625,7 +1625,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:has(*[aria-invalid="true"]) {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -1634,7 +1634,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:has(*[aria-invalid="true"]) {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -1643,7 +1643,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:has(*[aria-invalid="true"]) {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -1928,7 +1928,7 @@
       color: var(--destructive);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[data-variant="destructive"] {
       &:focus {
         background-color: var(--destructive);
@@ -1939,7 +1939,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[data-variant="destructive"] {
         &:focus {
           background-color: var(--destructive);
@@ -2524,7 +2524,7 @@
       color: var(--destructive);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[data-variant="destructive"] {
       &:focus {
         background-color: var(--destructive);
@@ -2535,7 +2535,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[data-variant="destructive"] {
         &:focus {
           background-color: var(--destructive);
@@ -2888,7 +2888,7 @@
       padding: var(--vs-0b9dbf8e, calc(var(--spacing, 0.25rem) * 2.5));
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:has(*:where([data-state="checked"]), *:where([data-checked]:not([data-checked="false"]))) {
       border-color: var(--primary);
       @supports (color: color-mix(in lab, red, red)) {
@@ -2897,7 +2897,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:has(*:where([data-state="checked"]), *:where([data-checked]:not([data-checked="false"]))) {
         border-color: var(--primary);
         @supports (color: color-mix(in lab, red, red)) {
@@ -2906,7 +2906,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:has(*:where([data-state="checked"]), *:where([data-checked]:not([data-checked="false"]))) {
       background-color: var(--primary);
       @supports (color: color-mix(in lab, red, red)) {
@@ -2915,7 +2915,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:has(*:where([data-state="checked"]), *:where([data-checked]:not([data-checked="false"]))) {
         background-color: var(--primary);
         @supports (color: color-mix(in lab, red, red)) {
@@ -2935,28 +2935,28 @@
     background-color: color-mix(in oklab, var(--primary) 5%, transparent);
   }
 }
-:scope .cn-field-label-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):has(:where([data-selected="true"])) {
+:scope .cn-field-label-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):has(:where([data-selected="true"])) {
   border-color: var(--primary);
   @supports (color: color-mix(in lab, red, red)) {
     border-color: color-mix(in oklab, var(--primary) 20%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-field-label-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):has(:where([data-selected="true"])) {
+  :scope .cn-field-label-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):has(:where([data-selected="true"])) {
     border-color: var(--primary);
     @supports (color: color-mix(in lab, red, red)) {
       border-color: color-mix(in oklab, var(--primary) 20%, transparent);
     }
   }
 }
-:scope .cn-field-label-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):has(:where([data-selected="true"])) {
+:scope .cn-field-label-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):has(:where([data-selected="true"])) {
   background-color: var(--primary);
   @supports (color: color-mix(in lab, red, red)) {
     background-color: color-mix(in oklab, var(--primary) 10%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-field-label-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):has(:where([data-selected="true"])) {
+  :scope .cn-field-label-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):has(:where([data-selected="true"])) {
     background-color: var(--primary);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--primary) 10%, transparent);
@@ -3121,21 +3121,21 @@
     font-size: var(--vs-eb4efa16, var(--text-sm, 0.875rem));
     line-height: var(--vs-2f130822, var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875))));
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:disabled {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
@@ -3144,7 +3144,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:disabled {
         background-color: var(--input);
         @supports (color: color-mix(in lab, red, red)) {
@@ -3153,7 +3153,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -3162,7 +3162,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -3171,7 +3171,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -3180,7 +3180,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -3208,7 +3208,7 @@
       --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:has(*[aria-invalid="true"]) {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -3217,7 +3217,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:has(*[aria-invalid="true"]) {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -3283,21 +3283,21 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[data-active="true"] {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
@@ -3308,7 +3308,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[data-active="true"] {
         &[aria-invalid="true"] {
           --tw-ring-color: var(--destructive);
@@ -3487,7 +3487,7 @@
   :where(*[data-slot="tooltip-content"]) & {
     color: var(--background);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     :where(*[data-slot="tooltip-content"]) & {
       background-color: var(--background);
       @supports (color: color-mix(in lab, red, red)) {
@@ -3496,7 +3496,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       :where(*[data-slot="tooltip-content"]) & {
         background-color: var(--background);
         @supports (color: color-mix(in lab, red, red)) {
@@ -3640,7 +3640,7 @@
       color: var(--destructive);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[data-variant="destructive"] {
       &:focus {
         background-color: var(--destructive);
@@ -3651,7 +3651,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[data-variant="destructive"] {
         &:focus {
           background-color: var(--destructive);
@@ -4272,21 +4272,21 @@
   &[data-size="sm"] {
     padding-block: calc(var(--spacing, 0.25rem) * 0.5);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:hover {
       @media (hover: hover) {
         background-color: var(--input);
@@ -4297,7 +4297,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:hover {
         @media (hover: hover) {
           background-color: var(--input);
@@ -4308,7 +4308,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -4317,7 +4317,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -4326,7 +4326,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -4335,7 +4335,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -4524,21 +4524,21 @@
       border-color: var(--vs-d6c76b50, var(--primary));
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -4547,7 +4547,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -4556,7 +4556,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -4565,7 +4565,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -4588,13 +4588,13 @@
       border-color: var(--vs-d6c76b50, var(--primary));
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
       background-color: var(--primary);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
         background-color: var(--primary);
       }
@@ -4619,28 +4619,28 @@
     --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
   }
 }
-:scope .cn-radio-group-item-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)[data-invalid] {
+:scope .cn-radio-group-item-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))[data-invalid] {
   border-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-radio-group-item-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *))[data-invalid] {
+  :scope .cn-radio-group-item-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))[data-invalid] {
     border-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
     }
   }
 }
-:scope .cn-radio-group-item-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)[data-invalid] {
+:scope .cn-radio-group-item-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))[data-invalid] {
   --tw-ring-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     --tw-ring-color: color-mix(in oklab, var(--destructive) 40%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-radio-group-item-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *))[data-invalid] {
+  :scope .cn-radio-group-item-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))[data-invalid] {
     --tw-ring-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       --tw-ring-color: color-mix(in oklab, var(--destructive) 40%, transparent);
@@ -4655,11 +4655,11 @@
 :scope .cn-radio-group-item-aria[data-invalid]:where([data-selected="true"]) {
   border-color: var(--vs-d6c76b50, var(--primary));
 }
-:scope .cn-radio-group-item-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):where([data-selected="true"]) {
+:scope .cn-radio-group-item-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):where([data-selected="true"]) {
   background-color: var(--primary);
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-radio-group-item-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):where([data-selected="true"]) {
+  :scope .cn-radio-group-item-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):where([data-selected="true"]) {
     background-color: var(--primary);
   }
 }
@@ -4770,21 +4770,21 @@
       gap: calc(var(--spacing, 0.25rem) * 1.5);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:hover {
       @media (hover: hover) {
         background-color: var(--input);
@@ -4795,7 +4795,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:hover {
         @media (hover: hover) {
           background-color: var(--input);
@@ -4806,7 +4806,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -4815,7 +4815,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -4824,7 +4824,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -4833,7 +4833,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -5737,7 +5737,7 @@
   &[data-size="sm"] {
     width: var(--vs-201a5589, 24px);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -5746,7 +5746,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -5755,7 +5755,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -5764,7 +5764,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -5779,7 +5779,7 @@
   &:where([data-state="unchecked"]), &:where([data-unchecked]:not([data-unchecked="false"])) {
     background-color: var(--input);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:where([data-state="unchecked"]), &:where([data-unchecked]:not([data-unchecked="false"])) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
@@ -5788,7 +5788,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:where([data-state="unchecked"]), &:where([data-unchecked]:not([data-unchecked="false"])) {
         background-color: var(--input);
         @supports (color: color-mix(in lab, red, red)) {
@@ -5819,42 +5819,42 @@
     --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
   }
 }
-:scope .cn-switch-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):not(:where([data-selected="true"])) {
+:scope .cn-switch-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):not(:where([data-selected="true"])) {
   background-color: var(--input);
   @supports (color: color-mix(in lab, red, red)) {
     background-color: color-mix(in oklab, var(--input) 80%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-switch-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):not(:where([data-selected="true"])) {
+  :scope .cn-switch-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):not(:where([data-selected="true"])) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 80%, transparent);
     }
   }
 }
-:scope .cn-switch-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)[data-invalid] {
+:scope .cn-switch-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))[data-invalid] {
   border-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-switch-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *))[data-invalid] {
+  :scope .cn-switch-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))[data-invalid] {
     border-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
     }
   }
 }
-:scope .cn-switch-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)[data-invalid] {
+:scope .cn-switch-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))[data-invalid] {
   --tw-ring-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     --tw-ring-color: color-mix(in oklab, var(--destructive) 40%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-switch-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *))[data-invalid] {
+  :scope .cn-switch-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))[data-invalid] {
     --tw-ring-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       --tw-ring-color: color-mix(in oklab, var(--destructive) 40%, transparent);
@@ -5887,13 +5887,13 @@
       translate: var(--tw-translate-x) var(--tw-translate-y);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
       background-color: var(--primary-foreground);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
         background-color: var(--primary-foreground);
       }
@@ -5911,13 +5911,13 @@
       translate: var(--tw-translate-x) var(--tw-translate-y);
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:where([data-state="unchecked"]), &:where([data-unchecked]:not([data-unchecked="false"])) {
       background-color: var(--foreground);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:where([data-state="unchecked"]), &:where([data-unchecked]:not([data-unchecked="false"])) {
         background-color: var(--foreground);
       }
@@ -5932,11 +5932,11 @@
   --tw-translate-x: 0px;
   translate: var(--tw-translate-x) var(--tw-translate-y);
 }
-:scope .cn-switch-thumb-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):not(:where([data-selected="true"])) {
+:scope .cn-switch-thumb-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):not(:where([data-selected="true"])) {
   background-color: var(--foreground);
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-switch-thumb-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):not(:where([data-selected="true"])) {
+  :scope .cn-switch-thumb-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):not(:where([data-selected="true"])) {
     background-color: var(--foreground);
   }
 }
@@ -5948,11 +5948,11 @@
   --tw-translate-x: calc(100% - 2px);
   translate: var(--tw-translate-x) var(--tw-translate-y);
 }
-:scope .cn-switch-thumb-aria:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *):where([data-selected="true"]) {
+:scope .cn-switch-thumb-aria:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)):where([data-selected="true"]) {
   background-color: var(--primary-foreground);
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-switch-thumb-aria:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)):where([data-selected="true"]) {
+  :scope .cn-switch-thumb-aria:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))):where([data-selected="true"]) {
     background-color: var(--primary-foreground);
   }
 }
@@ -6154,21 +6154,21 @@
     font-size: var(--vs-eb4efa16, var(--text-sm, 0.875rem));
     line-height: var(--vs-2f130822, var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875))));
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:disabled {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
@@ -6177,7 +6177,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:disabled {
         background-color: var(--input);
         @supports (color: color-mix(in lab, red, red)) {
@@ -6186,7 +6186,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -6195,7 +6195,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -6204,7 +6204,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -6213,7 +6213,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -6262,7 +6262,7 @@
   &[data-state="on"] {
     background-color: var(--muted);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -6271,7 +6271,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -6544,21 +6544,21 @@
   &:has(>[data-align=block-start]) {
     flex-direction: column;
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:has(*:disabled) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
@@ -6567,7 +6567,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:has(*:disabled) {
         background-color: var(--input);
         @supports (color: color-mix(in lab, red, red)) {
@@ -6576,7 +6576,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:has(*:is([data-slot][aria-invalid=true])) {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -6585,7 +6585,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:has(*:is([data-slot][aria-invalid=true])) {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -6734,21 +6734,21 @@
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: transparent;
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: transparent;
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:disabled {
       background-color: transparent;
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:disabled {
         background-color: transparent;
       }
@@ -6775,21 +6775,21 @@
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: transparent;
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: transparent;
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:disabled {
       background-color: transparent;
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:disabled {
         background-color: transparent;
       }
@@ -6996,22 +6996,22 @@
   background-color: oklch(from var(--primary) 0.93 calc(c * 0.4) h);
   color: var(--foreground);
 }
-:is(:scope .cn-bubble-variant-tinted:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) > *)[data-slot="bubble-content"] {
+:is(:scope .cn-bubble-variant-tinted:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) > *)[data-slot="bubble-content"] {
   background-color: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
 }
 @media (prefers-color-scheme: dark) {
-  :is(:scope .cn-bubble-variant-tinted:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) > *)[data-slot="bubble-content"] {
+  :is(:scope .cn-bubble-variant-tinted:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) > *)[data-slot="bubble-content"] {
     background-color: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
   }
 }
 :scope .cn-bubble-variant-tinted > [data-slot=bubble-content]:is(button, a):hover {
   background-color: oklch(from var(--primary) 0.88 calc(c * 0.5) h);
 }
-:scope .cn-bubble-variant-tinted:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) > [data-slot=bubble-content]:is(button, a):hover {
+:scope .cn-bubble-variant-tinted:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) > [data-slot=bubble-content]:is(button, a):hover {
   background-color: oklch(from var(--primary) 0.35 calc(c * 0.5) h);
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-bubble-variant-tinted:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) > [data-slot=bubble-content]:is(button, a):hover {
+  :scope .cn-bubble-variant-tinted:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) > [data-slot=bubble-content]:is(button, a):hover {
     background-color: oklch(from var(--primary) 0.35 calc(c * 0.5) h);
   }
 }
@@ -7023,14 +7023,14 @@
   background-color: var(--muted);
   color: var(--foreground);
 }
-:scope .cn-bubble-variant-outline:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) > [data-slot=bubble-content]:is(button, a):hover {
+:scope .cn-bubble-variant-outline:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) > [data-slot=bubble-content]:is(button, a):hover {
   background-color: var(--input);
   @supports (color: color-mix(in lab, red, red)) {
     background-color: color-mix(in oklab, var(--input) 30%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-bubble-variant-outline:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) > [data-slot=bubble-content]:is(button, a):hover {
+  :scope .cn-bubble-variant-outline:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) > [data-slot=bubble-content]:is(button, a):hover {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
@@ -7061,7 +7061,7 @@
   &>[data-slot=bubble-content]:is(button,a):hover {
     color: var(--foreground);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &>[data-slot=bubble-content]:is(button,a):hover {
       background-color: var(--muted);
       @supports (color: color-mix(in lab, red, red)) {
@@ -7070,7 +7070,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &>[data-slot=bubble-content]:is(button,a):hover {
         background-color: var(--muted);
         @supports (color: color-mix(in lab, red, red)) {
@@ -7087,14 +7087,14 @@
   }
   color: var(--destructive);
 }
-:is(:scope .cn-bubble-variant-destructive:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) > *)[data-slot="bubble-content"] {
+:is(:scope .cn-bubble-variant-destructive:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) > *)[data-slot="bubble-content"] {
   background-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :is(:scope .cn-bubble-variant-destructive:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) > *)[data-slot="bubble-content"] {
+  :is(:scope .cn-bubble-variant-destructive:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) > *)[data-slot="bubble-content"] {
     background-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
@@ -7107,14 +7107,14 @@
     background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
   }
 }
-:scope .cn-bubble-variant-destructive:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) > [data-slot=bubble-content]:is(button, a):hover {
+:scope .cn-bubble-variant-destructive:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) > [data-slot=bubble-content]:is(button, a):hover {
   background-color: var(--destructive);
   @supports (color: color-mix(in lab, red, red)) {
     background-color: color-mix(in oklab, var(--destructive) 30%, transparent);
   }
 }
 @media (prefers-color-scheme: dark) {
-  :scope .cn-bubble-variant-destructive:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) > [data-slot=bubble-content]:is(button, a):hover {
+  :scope .cn-bubble-variant-destructive:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) > [data-slot=bubble-content]:is(button, a):hover {
     background-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--destructive) 30%, transparent);
@@ -7451,14 +7451,14 @@
   &[data-invalid] {
     border-color: var(--destructive);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 20%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 20%, transparent);
@@ -7474,13 +7474,13 @@
   &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
     background-color: var(--vs-d8c9437e, var(--muted));
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
       background-color: var(--vs-75ef041a, var(--muted));
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:where([data-state="checked"]), &:where([data-checked]:not([data-checked="false"])) {
         background-color: var(--vs-75ef041a, var(--muted));
       }
@@ -7507,27 +7507,27 @@
   &:is(:is(:where(.group\/questionnaire-choice):where([data-state="checked"]), :where(.group\/questionnaire-choice):where([data-checked]:not([data-checked="false"]))) *) {
     color: var(--primary-foreground);
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:is(:is(:where(.group\/questionnaire-choice):where([data-state="checked"]), :where(.group\/questionnaire-choice):where([data-checked]:not([data-checked="false"]))) *) {
       background-color: var(--primary);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:is(:is(:where(.group\/questionnaire-choice):where([data-state="checked"]), :where(.group\/questionnaire-choice):where([data-checked]:not([data-checked="false"]))) *) {
         background-color: var(--primary);
       }
@@ -7623,21 +7623,21 @@
     font-size: var(--vs-eb4efa16, var(--text-sm, 0.875rem));
     line-height: var(--vs-2f130822, var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875))));
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     background-color: var(--input);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--input) 30%, transparent);
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
         background-color: color-mix(in oklab, var(--input) 30%, transparent);
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &:disabled {
       background-color: var(--input);
       @supports (color: color-mix(in lab, red, red)) {
@@ -7646,7 +7646,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &:disabled {
         background-color: var(--input);
         @supports (color: color-mix(in lab, red, red)) {
@@ -7655,7 +7655,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       border-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -7664,7 +7664,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         border-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {
@@ -7673,7 +7673,7 @@
       }
     }
   }
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     &[aria-invalid="true"] {
       --tw-ring-color: var(--destructive);
       @supports (color: color-mix(in lab, red, red)) {
@@ -7682,7 +7682,7 @@
     }
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       &[aria-invalid="true"] {
         --tw-ring-color: var(--destructive);
         @supports (color: color-mix(in lab, red, red)) {

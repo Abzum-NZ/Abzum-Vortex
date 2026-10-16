@@ -5,6 +5,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
+import { Button } from "./button";
 import { Separator } from "./separator";
 import { Icon } from "../icons/icon";
 
@@ -56,24 +57,23 @@ function SidebarProvider({
   );
 }
 
-function SidebarTrigger({ className, ...props }: React.ComponentProps<"button">) {
+function SidebarTrigger({ className, ...props }: React.ComponentProps<typeof Button>) {
   const context = React.useContext(SidebarContext);
   return (
-    <button
-      type="button"
+    <Button
       data-sidebar="trigger"
+      data-slot="sidebar-trigger"
+      variant="ghost"
+      size="icon-sm"
       aria-label={context?.open === false ? "Expand sidebar" : "Collapse sidebar"}
       aria-pressed={context?.open === false}
       disabled={context === null || context.collapsible === "none"}
       onClick={context?.toggle}
-      className={cn(
-        "inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50",
-        className,
-      )}
+      className={cn(className)}
       {...props}
     >
       <Icon name="panel-left" aria-hidden="true" />
-    </button>
+    </Button>
   );
 }
 

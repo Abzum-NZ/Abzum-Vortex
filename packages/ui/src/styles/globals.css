@@ -33,15 +33,44 @@ body {
   color: var(--vortex-text);
 }
 
+/*
+ * The document root carries the current theme (the platform default outside applications, the
+ * application's own theme inside one), so the root itself and everything portalled to the body
+ * paint the theme's body font rather than the browser's serif default.
+ */
+html {
+  font-family: var(--font-sans-family);
+}
+
 body {
-  font-family: var(--vortex-font-family);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Sonner injects its own system font stack on the toast region; the toast follows the theme font. */
+[data-vortex-style] [data-sonner-toaster] {
+  font-family: var(--font-sans-family);
 }
 
 @layer base {
   a {
     color: inherit;
+  }
+
+  /*
+   * Form controls take the theme's font rather than the browser's control font, everywhere a
+   * themed root reaches (the document root, so Studio's own frame too). Zero specificity, so a
+   * component style or utility still decides.
+   */
+  :where([data-vortex-theme]) :where(button, input, select, textarea, optgroup) {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  /* A fieldset groups controls without the browser's own inset, as in shadcn's preflight. */
+  :where([data-vortex-theme]) :where(fieldset) {
+    margin: 0;
+    padding: 0;
   }
 }
 
@@ -61,45 +90,46 @@ body {
 @source "../../../../apps";
 
 /*
- * shadcn components use the dark: variant. It follows the colour scheme the theme bridge resolves,
- * the same one its light-dark() variables follow: a .dark ancestor or a dark-mode themed container
- * (data-vortex-theme-mode="dark"), or the person's dark preference anywhere outside a light-mode
- * themed container (the system-mode root and system-mode containers).
+ * shadcn components use the dark: variant. It follows the nearest themed root, the same colour
+ * scheme its light-dark() variables follow: every themed root (the document root, an application
+ * surface, a Studio canvas) carries its own data-vortex-theme-mode (or a .dark / .light class), and
+ * the root nearest to an element decides. A root in dark mode is dark; a root in system mode follows
+ * the person's preference; a light root nested in a dark document stays light, and the reverse.
+ * The selectors look one nested root deep, which covers a canvas inside the document; the compiled
+ * component rules in shared-components.css and style-variants.css use the same two selectors.
  */
 @custom-variant dark {
-  &:where(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *) {
+  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
     @slot;
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *)) {
+    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
       @slot;
     }
   }
 }
 
-/*
- * The exact negation of the dark variant above. An element is not dark when it is outside every
- * dark-mode container and either the browser prefers light or it sits inside a light-mode themed
- * container, so the two
- * preference branches are nested inside the one container test: a `@slot` in either of them
- * matches only outside a dark container.
- */
+/* The exact negation of the dark variant above. */
 @custom-variant not-dark {
-  &:where(:not(.dark, .dark *, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="dark"] *)) {
+  &:not(:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))) {
     @media (prefers-color-scheme: light) {
       @slot;
     }
     @media (prefers-color-scheme: dark) {
-      &:where([data-vortex-theme-mode="light"], [data-vortex-theme-mode="light"] *) {
+      &:not(:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))) {
         @slot;
       }
     }
   }
 }
 
-/* A .dark ancestor resolves the bridge's light-dark() variables to their dark values too. */
+/* A .dark or .light root resolves the bridge's light-dark() variables to its own scheme too. */
 :where(.dark) {
   color-scheme: dark;
+}
+
+:where(.light) {
+  color-scheme: light;
 }
 
 @layer base {
@@ -172,7 +202,6 @@ body {
 }
 
 @theme inline {
-  --spacing: var(--vortex-component-spacing, 0.25rem);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
