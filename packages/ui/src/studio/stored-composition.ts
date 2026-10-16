@@ -334,7 +334,7 @@ const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
 
 /**
  * The stored slot a canvas edit produced. Puck's data is the stored data; Puck itself only adds a
- * root and, on Duplicate, generated ids. Generated ids become unique block names, a copied block's
+ * root holding its config's root defaults and, on Duplicate, generated ids. Generated ids become unique block names, a copied block's
  * slot orders follow its copied children, and every declared tablet and phone order keeps its
  * authored sequence while blocks join or leave its slot. The result is judged like any stored slot,
  * and every copy Duplicate made is named, with each copied descendant, beside its original.
@@ -343,10 +343,14 @@ export const storedZoneFromPuck = (
   catalogue: ImmutablePlatformBlockCatalogue,
   baseline: StoredZone,
   candidate: unknown,
+  /** The root props the canvas gave Puck: its config's root defaults, which Puck writes back. */
+  rootProps: Readonly<Record<string, unknown>>,
 ): Readonly<{ zone: StoredZone; copies: ReadonlyMap<string, string> }> => {
   const data = closed(candidate, ["root", "content", "zones"], []);
   const root = closed(data.root, ["props", "readOnly"], ["root"]);
-  if (root.props !== undefined) closed(root.props, [], ["root", "props"]);
+  if (root.props !== undefined &&
+    JSON.stringify(withoutIdentity(root.props)) !== JSON.stringify(withoutIdentity(rootProps)))
+    refuse(["root", "props"], "changed the page root, which the canvas does not edit");
   if (root.readOnly !== undefined) closed(root.readOnly, [], ["root", "readOnly"]);
   if (data.zones !== undefined) closed(data.zones, [], ["zones"]);
   boundItems(catalogue, data.content, []);
@@ -475,18 +479,19 @@ const copiesOf = (items: readonly SourceItem[], baseline: ReadonlySet<string>): 
   return copies;
 };
 
-type SourceFlowBinding = Readonly<{ id: string; control: string; event_id: string }> & Record<string, unknown>;
+type SourceFlowBinding = Readonly<{ id: string; control: string }> & Record<string, unknown>;
 
 /**
  * A copied control works like its original: each flow binding of an original gains a copy bound to
- * the copied block, under its own binding and event names, so the copy is never left unbound.
+ * the copied block under its own binding name, raising the same application event, so the copy is
+ * never left unbound.
  */
 export const withCopiedFlowBindings = <Binding extends SourceFlowBinding>(
   bindings: readonly Binding[],
   copies: ReadonlyMap<string, string>,
 ): Binding[] => {
   if (copies.size === 0) return [...bindings];
-  const taken = new Set(bindings.flatMap((binding) => [binding.id, binding.event_id]));
+  const taken = new Set(bindings.map((binding) => binding.id));
   const fresh = (base: string): string => {
     const name = generatedAlias(`${base}_copy`, taken);
     taken.add(name);
@@ -496,8 +501,30 @@ export const withCopiedFlowBindings = <Binding extends SourceFlowBinding>(
   for (const binding of bindings) {
     const copy = copies.get(binding.control);
     if (copy !== undefined)
-      result.push({ ...structuredClone(binding), id: fresh(binding.id), control: copy,
-        event_id: fresh(binding.event_id) });
+      result.push({ ...structuredClone(binding), id: fresh(binding.id), control: copy });
   }
   return result;
+};
+
+/**
+ * A binding belongs to its control: the bindings of blocks the canvas deleted go with them, as
+ * Duplicate copies them with a copied block. Undo restores both, because history holds the whole
+ * draft.
+ */
+export const withoutFlowBindingsOf = <Binding extends SourceFlowBinding>(
+  bindings: readonly Binding[],
+  removed: ReadonlySet<string>,
+): Binding[] => bindings.filter((binding) => !removed.has(binding.control));
+
+/** Every block name in a slot, at any depth. */
+export const storedZoneAliases = (zone: StoredZone): Set<string> => {
+  const aliases = new Set<string>();
+  const visit = (items: readonly SourceItem[]): void => {
+    for (const item of items) {
+      aliases.add(item.props.id);
+      for (const [, children] of childSlotsOf(item.props)) visit(children as SourceItem[]);
+    }
+  };
+  visit(zone.items);
+  return aliases;
 };

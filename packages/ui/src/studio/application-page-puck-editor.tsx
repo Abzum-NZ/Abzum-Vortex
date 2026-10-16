@@ -47,7 +47,9 @@ import {
   storedItemRelease,
   storedZoneFromPuck,
   validateStoredZone,
+  storedZoneAliases,
   withCopiedFlowBindings,
+  withoutFlowBindingsOf,
 } from "./stored-composition";
 import { StudioCanvasCompiledSettings, studioCanvasConfig } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
@@ -291,11 +293,13 @@ function ApplicationPageSlotPuckEditor({
       return { problem: `STUDIO_CANVAS_COMPILED_MISMATCH: ${error instanceof Error ? error.message : String(error)}` };
     }
   }, [catalogue, compiledSlot, originalSlot]);
-  // Puck's data is the stored content area itself; Puck only needs a root beside it.
+  // Puck's data is the stored content area itself; Puck only needs a root beside it, holding the
+  // config's root defaults that Puck writes into it anyway.
+  const rootProps = useMemo(() => ({ ...config.root?.defaultProps }), [config]);
   const data = useMemo((): Data | undefined =>
     slot === undefined || compiled.settings === undefined ? undefined
-      : { root: { props: {} }, content: slot.items as unknown as Data["content"] },
-  [compiled.settings, slot]);
+      : { root: { props: rootProps }, content: slot.items as unknown as Data["content"] },
+  [compiled.settings, slot, rootProps]);
   // Checked whenever the content area or its compiled version changes, and closed until it passes.
   // Without a compiled version there is nothing to draw yet.
   const readOnlyCause = useMemo(() =>
@@ -387,14 +391,17 @@ function ApplicationPageSlotPuckEditor({
       const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
       if (matches.length !== 1 || targetSlot === undefined)
         throw new TypeError("The selected page is unavailable.");
-      const { zone: editedSlot, copies } = storedZoneFromPuck(catalogue, targetSlot, candidate);
+      const { zone: editedSlot, copies } = storedZoneFromPuck(catalogue, targetSlot, candidate, rootProps);
       // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
       if (zoneJson(editedSlot) === zoneJson(targetSlot)) return;
       const next = structuredClone(current);
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
       if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))
         throw new TypeError("The selected page is unavailable.");
-      next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
+      const kept = storedZoneAliases(editedSlot);
+      const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
+      next.body.flow_bindings = withoutFlowBindingsOf(
+        withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
       syncPlatformBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
