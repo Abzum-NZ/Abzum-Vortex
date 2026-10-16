@@ -4,7 +4,8 @@ create or replace function vortex_record.named_action_creation_plan_internal(
   p_action_release_revision bigint,
   p_action_id uuid,
   p_record_type_id uuid,
-  p_creations jsonb
+  p_creations jsonb,
+  p_action_context jsonb
 )
 returns jsonb
 language plpgsql
@@ -32,10 +33,8 @@ declare
   expected_plan jsonb := '[]'::jsonb;
   supplied_plan jsonb := '[]'::jsonb;
 begin
-  action_context := vortex_record.resolve_named_action_context_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id
-  );
+  -- The caller resolved this exact installed action once for its whole step.
+  action_context := p_action_context;
 
   -- #569: a create-bearing command may also change the subject's own links.
   -- The inversion this used to guard against (the subject's relationship edge
@@ -252,8 +251,36 @@ exception
 end
 $function$;
 
+create or replace function vortex_record.named_action_creation_plan_internal(
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_record_type_id uuid,
+  p_creations jsonb
+)
+returns jsonb
+language sql volatile security invoker set search_path = ''
+as $function$
+  select vortex_record.named_action_creation_plan_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision, p_action_id,
+    p_record_type_id, p_creations,
+    vortex_record.resolve_named_action_context_internal(
+      p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+      p_action_id, p_record_type_id
+    )
+  )
+$function$;
+
+alter function vortex_record.named_action_creation_plan_internal(text,uuid,bigint,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
 alter function vortex_record.named_action_creation_plan_internal(text,uuid,bigint,uuid,uuid,jsonb) owner to vortex_record_adapter;
 
+revoke all on function vortex_record.named_action_creation_plan_internal(
+  text, uuid, bigint, uuid, uuid, jsonb, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.named_action_creation_plan_internal(
+  text, uuid, bigint, uuid, uuid, jsonb, jsonb
+) to vortex_record_adapter;
 revoke all on function vortex_record.named_action_creation_plan_internal(
   text, uuid, bigint, uuid, uuid, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
@@ -262,6 +289,10 @@ grant execute on function vortex_record.named_action_creation_plan_internal(
 ) to vortex_record_adapter;
 
 comment on function vortex_record.named_action_creation_plan_internal(
+  text, uuid, bigint, uuid, uuid, jsonb, jsonb
+) is
+  'Private named-action step over the installed action its caller resolved: resolves every record.create task against the exact active installation, refuses an unsupported creation shape, and returns the creation plan the command must supply back verbatim.';
+comment on function vortex_record.named_action_creation_plan_internal(
   text, uuid, bigint, uuid, uuid, jsonb
 ) is
-  'Private named-action step: resolves every record.create task of the installed action against the exact active installation, refuses an unsupported creation shape, and returns the creation plan the command must supply back verbatim.';
+  'Private named-action step: resolves the installed action and delegates to the variant that takes it.';

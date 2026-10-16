@@ -9,7 +9,8 @@ create or replace function vortex_record.prepare_named_action_set_announce_inter
   p_record_id uuid,
   p_expected_concurrency_number bigint,
   p_inputs jsonb,
-  p_activity_id uuid
+  p_activity_id uuid,
+  p_read_loaded jsonb
 )
 returns jsonb
 language plpgsql
@@ -32,6 +33,8 @@ declare
   target_meta jsonb;
   target_loaded jsonb;
   target_decision jsonb;
+  record_type_meta jsonb;
+  reused_read_facts boolean := false;
 begin
   if p_preview is null or p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -104,7 +107,7 @@ begin
   end if;
   creation_plan := vortex_record.named_action_creation_plan_internal(
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id, null
+    p_action_id, p_record_type_id, null, action_context
   );
   if creation_plan ->> 'outcome' <> 'planned' then
     return pg_catalog.jsonb_build_object(
@@ -112,11 +115,51 @@ begin
       'correlationId', context_value -> 'correlationId'
     );
   end if;
-  loaded := vortex_record.load_named_action_facts_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id, p_record_id,
-    case when p_preview then null else p_expected_concurrency_number end
-  );
+  -- A preview of a record its caller has just read in this invocation reuses
+  -- that read's facts when they are exactly the facts the named loader would
+  -- build: the record alone, with no inherited owner, no edge and no
+  -- relationship route on any of the action's permissions. Only the fixed
+  -- record adapter can pass them; the action's own decision is still made below.
+  record_type_meta := p_read_loaded -> 'recordTypeMeta';
+  if p_preview and p_read_loaded ->> 'outcome' = 'loaded'
+    and not (p_read_loaded ? 'previewInstallationId')
+    and (p_read_loaded ->> 'isSystemProjection')::boolean is false
+    and p_read_loaded -> 'context' = context_value
+    and pg_catalog.jsonb_typeof(record_type_meta) = 'object'
+    and pg_catalog.lower(record_type_meta ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
+    and coalesce(record_type_meta ->> 'ownershipMode', '') <> 'inherited'
+    and p_read_loaded #> '{facts,binding}' = action_context #> '{declaration,recordBinding}'
+    and pg_catalog.jsonb_array_length(p_read_loaded #> '{facts,records}') = 1
+    and p_read_loaded #>> '{facts,records,0,recordScope,recordId}' = pg_catalog.lower(p_record_id::text)
+    and p_read_loaded #> '{facts,edges}' = '[]'::jsonb
+    and pg_catalog.jsonb_typeof(action_context #> '{declaration,requiredPermissions}') = 'array'
+    and not exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(action_context #> '{declaration,requiredPermissions}') as required(value)
+      cross join lateral pg_catalog.jsonb_array_elements(
+        case when pg_catalog.jsonb_typeof(p_read_loaded -> 'accessPermissions'
+            -> pg_catalog.lower(required.value ->> 'permissionId') -> 'recordScope' -> 'routes') = 'array'
+          then p_read_loaded -> 'accessPermissions'
+            -> pg_catalog.lower(required.value ->> 'permissionId') -> 'recordScope' -> 'routes'
+          else '[{"kind": "relationship"}]'::jsonb end
+      ) as route(value)
+      where route.value ->> 'kind' = 'relationship'
+    ) then
+    loaded := pg_catalog.jsonb_build_object(
+      'outcome', 'loaded',
+      'declaration', action_context -> 'declaration',
+      'facts', p_read_loaded -> 'facts',
+      'concurrencyNumber', p_read_loaded -> 'concurrencyNumber',
+      'fieldValues', p_read_loaded -> 'fieldValues'
+    );
+    reused_read_facts := true;
+  else
+    loaded := vortex_record.load_named_action_facts_internal(
+      p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+      p_action_id, p_record_type_id, p_record_id,
+      case when p_preview then null else p_expected_concurrency_number end
+    );
+  end if;
   if loaded ->> 'outcome' = 'conflict' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
@@ -131,8 +174,11 @@ begin
       'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
     );
   end if;
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, loaded -> 'facts'
+  -- Read facts reused above keep the record types their read decision
+  -- validated in this invocation; the named loader's own facts are validated in full.
+  decision := vortex_access.evaluate_record_access_with_validated_types_internal(
+    loaded -> 'declaration', p_record_id, loaded -> 'facts', null,
+    case when reused_read_facts then loaded #> '{facts,recordTypes}' end
   );
   if decision ->> 'outcome' <> 'allowed' then
     if p_preview then
@@ -158,7 +204,7 @@ begin
   -- actual new edge are evaluated; a no-op copy does not save its target.
   copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id, p_record_id, p_inputs
+    p_action_id, p_record_type_id, p_record_id, p_inputs, action_context
   );
   if copy_plan ->> 'outcome' = 'refused' then
     return pg_catalog.jsonb_build_object(
@@ -271,12 +317,43 @@ exception
 end
 $function$;
 
+create or replace function vortex_record.prepare_named_action_set_announce_internal(
+  p_preview boolean,
+  p_command_id uuid,
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_inputs jsonb,
+  p_activity_id uuid
+)
+returns jsonb
+language sql volatile security invoker set search_path = ''
+as $function$
+  select vortex_record.prepare_named_action_set_announce_internal(
+    p_preview, p_command_id, p_action_owner_kind, p_action_owner_id,
+    p_action_release_revision, p_action_id, p_record_type_id, p_record_id,
+    p_expected_concurrency_number, p_inputs, p_activity_id, null::jsonb
+  )
+$function$;
+
+alter function vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid,jsonb) owner to vortex_record_adapter;
 alter function vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid) owner to vortex_record_adapter;
 
+revoke all on function vortex_record.prepare_named_action_set_announce_internal(
+  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 revoke all on function vortex_record.prepare_named_action_set_announce_internal(
   boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_named_action_set_announce_internal(
+  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb
+) is
+  'Private named-action preparation: replays or refuses by command receipt, then returns the facts, permission decision and bounds of the exact installed action, writing nothing; a preview may reuse the read facts its fixed adapter caller loaded for the same record in this invocation when they are exactly the facts the named loader would build.';
+comment on function vortex_record.prepare_named_action_set_announce_internal(
   boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid
 ) is
-  'Private named-action preparation: replays or refuses by command receipt, then returns the facts, permission decision and bounds of the exact installed action, writing nothing.';
+  'Private named-action preparation without caller read facts: delegates to the variant that takes them.';

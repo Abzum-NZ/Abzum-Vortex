@@ -45,6 +45,32 @@ const readableSubjectSchema = z
   })
   .passthrough();
 
+/**
+ * The page subject from one fixed read's projection and capabilities: the same record must answer
+ * both, and anything else is one neutral refusal.
+ */
+export const pageSubjectFromRead = (
+  result: unknown,
+  capabilitiesCandidate: unknown,
+  recordId: string,
+): PageSubjectReadResult => {
+  const readable = readableSubjectSchema.safeParse(result);
+  const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(capabilitiesCandidate);
+  if (
+    !readable.success ||
+    !capabilities.success ||
+    readable.data.recordId.toLowerCase() !== recordId.toLowerCase()
+  )
+    return { kind: "refused" };
+  const row = protectedQueryRowSchema.safeParse({
+    recordId: readable.data.recordId,
+    values: readable.data.values,
+    revision: readable.data.concurrencyNumber,
+    capabilities: capabilities.data,
+  });
+  return row.success ? { kind: "read", row: row.data } : { kind: "refused" };
+};
+
 /** Reuses the fixed subject read only inside an already verified human request transaction. */
 export const readPageSubjectInTransaction = async (
   transaction: RequestDatabaseTransaction,
@@ -63,23 +89,7 @@ export const readPageSubjectInTransaction = async (
         ) as value
       ) as subject
     `;
-    const stored = rows[0];
-    const readable = readableSubjectSchema.safeParse(stored?.result);
-    const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(stored?.capabilities);
-    // The same record must answer both reads; anything else is one neutral refusal.
-    if (
-      !readable.success ||
-      !capabilities.success ||
-      readable.data.recordId.toLowerCase() !== recordId.data.toLowerCase()
-    )
-      return { kind: "refused" };
-    const row = protectedQueryRowSchema.safeParse({
-      recordId: readable.data.recordId,
-      values: readable.data.values,
-      revision: readable.data.concurrencyNumber,
-      capabilities: capabilities.data,
-    });
-    return row.success ? { kind: "read", row: row.data } : { kind: "refused" };
+    return pageSubjectFromRead(rows[0]?.result, rows[0]?.capabilities, recordId.data);
   } catch {
     return { kind: "temporarily_unavailable" };
   }

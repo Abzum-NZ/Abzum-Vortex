@@ -1273,6 +1273,14 @@ export const previewNamedActionAvailability = async (
   } finally {
     await transaction.query`set local role vortex_request`;
   }
+  return availabilityFromPreview(preview, issuedAt, run);
+};
+
+const availabilityFromPreview = (
+  preview: ActionPreparation,
+  issuedAt: string,
+  run: ActionFlowRunner,
+): NamedActionAvailability => {
   if (preview.outcome === "permission_refused") return { kind: "refused", cause: "permission" };
   if (preview.outcome !== "previewed") {
     const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
@@ -1286,4 +1294,72 @@ export const previewNamedActionAvailability = async (
   return outcome.kind === "collected"
     ? { kind: "available" }
     : { kind: "undecided", reason: outcome.reason };
+};
+
+/** A page subject read together with the availability of every named action bound to it. */
+export type SubjectWithNamedActionAvailability = Readonly<{
+  /** The subject projection and capabilities, as `vortex_record.read_record_with_capabilities` returns them. */
+  record: unknown;
+  capabilities: unknown;
+  /** Keyed by lower-case action id; empty when the subject is not readable. */
+  availability: ReadonlyMap<string, NamedActionAvailability>;
+}>;
+
+/**
+ * Reads a page subject and previews every named action its placements are bound to in one fixed
+ * adapter call: one read decision for the record, and each action's own preview for the record's
+ * current concurrency number with no inputs, exactly as `previewNamedActionAvailability` previews
+ * it, inside a transaction the caller already verified. Nothing is written. A subject the viewer
+ * cannot read previews nothing.
+ */
+export const readSubjectWithNamedActionAvailability = async (
+  transaction: RequestDatabaseTransaction,
+  subject: Readonly<{ recordTypeId: string; recordId: string }>,
+  actions: readonly ExecuteNamedActionCommand["action"][],
+  issuedAt: string,
+  runFor: (action: ExecuteNamedActionCommand["action"]) => ActionFlowRunner,
+): Promise<SubjectWithNamedActionAvailability> => {
+  const requests = actions.map((action) => ({
+    commandId: randomUUID(),
+    activityId: randomUUID(),
+    ownerKind: action.ownerKind,
+    ownerId: action.ownerId,
+    releaseRevision: action.releaseRevision,
+    actionId: action.actionId,
+  }));
+  let rows: readonly ResultRow[];
+  await transaction.query`set local role vortex_runtime`;
+  try {
+    rows = await transaction.query<ResultRow>`
+      select vortex_record.read_record_with_action_previews(
+        ${subject.recordTypeId}::uuid, ${subject.recordId}::uuid,
+        ${JSON.stringify(requests)}::text::jsonb
+      ) as value
+    `;
+  } finally {
+    await transaction.query`set local role vortex_request`;
+  }
+  const value = one(rows).value;
+  if (typeof value !== "object" || value === null)
+    throw new Error("NAMED_ACTION_PREVIEWS_RESULT_INVALID");
+  const read = value as Record<string, unknown>;
+  const previews = Array.isArray(read.previews) ? (read.previews as unknown[]) : undefined;
+  if (previews === undefined) throw new Error("NAMED_ACTION_PREVIEWS_RESULT_INVALID");
+  const availability = new Map<string, NamedActionAvailability>();
+  for (const action of actions) {
+    const key = action.actionId.toLowerCase();
+    if (availability.has(key)) continue;
+    const entry = previews.find(
+      (item) =>
+        typeof item === "object" &&
+        item !== null &&
+        String((item as Record<string, unknown>).actionId).toLowerCase() === key,
+    ) as Record<string, unknown> | undefined;
+    if (entry === undefined) continue;
+    availability.set(
+      key,
+      availabilityFromPreview(parsePreparation(entry.preview), issuedAt, runFor(action)),
+    );
+  }
+  return { record: read.record, capabilities: read.capabilities, availability };
 };

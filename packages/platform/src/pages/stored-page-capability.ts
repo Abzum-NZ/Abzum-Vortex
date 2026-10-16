@@ -9,6 +9,7 @@ import {
   conditionNodeSchema,
   applicationRootIdSchema,
   executeNamedActionCommandSchema,
+  installedNamedActionReferenceSchema,
   organizationRecordAccessDeclarationSchema,
   pageIdSchema,
   revisionSchema,
@@ -36,7 +37,11 @@ import {
   flowLibraryOf,
   TypedConditionEvaluationError,
 } from "../rules/index";
-import { previewNamedActionAvailability } from "../records/action-record-port";
+import {
+  previewNamedActionAvailability,
+  readSubjectWithNamedActionAvailability,
+  type NamedActionAvailability,
+} from "../records/action-record-port";
 import { installedNamedActions } from "../definition/installed-named-actions";
 import type { FlowNamedAction } from "../definition/flow-orchestrator-types";
 import {
@@ -62,8 +67,19 @@ import {
   type ProjectedPageCapability,
 } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
-import { readPageSubjectInTransaction, type PageSubjectReadResult } from "./page-subject-read";
+import {
+  pageSubjectFromRead,
+  readPageSubjectInTransaction,
+  type PageSubjectReadResult,
+} from "./page-subject-read";
 import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
+import type { RequestDatabaseTransaction } from "../db/index";
+
+/** The page subject and, when it is readable, its bound named actions' availability by action id. */
+type SubjectWithAvailability = Readonly<{
+  subject: PageSubjectReadResult;
+  availability: ReadonlyMap<string, NamedActionAvailability>;
+}>;
 
 /** Address candidates select a page and its subject; organisation, installation and release come from context. */
 export type StoredPageCapabilitySelection = Readonly<{
@@ -562,7 +578,65 @@ export const createStoredPageCapabilityService = (
     stored: FixedAuthenticatedPageCapability,
   ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     // This cache belongs to one projection transaction, never another page, actor or release.
-    let subjectRead: Promise<PageSubjectReadResult> | undefined;
+    let subjectRead:
+      | Readonly<{
+          recordTypeId: string;
+          recordId: string;
+          read: Promise<SubjectWithAvailability>;
+        }>
+      | undefined;
+    // The page subject, read once, together with the preview of every named action the page's
+    // placements are bound to on it: one read decision for the record serves them all.
+    const readSubject = (
+      transaction: RequestDatabaseTransaction,
+      recordTypeId: string,
+      recordId: string,
+    ): Promise<SubjectWithAvailability> => {
+      if (subjectRead !== undefined)
+        return sameId(subjectRead.recordTypeId, recordTypeId) &&
+          sameId(subjectRead.recordId, recordId)
+          ? subjectRead.read
+          : readPageSubjectInTransaction(transaction, { recordTypeId, recordId }).then(
+              (subject) => ({ subject, availability: new Map() }),
+            );
+      const actions = new Map<string, FlowNamedAction["action"]>();
+      for (const placementId of Object.keys(stored.placements)) {
+        const bound = boundActions.get(placementId.toLowerCase());
+        if (bound !== undefined && sameId(bound.subjectRecordTypeId, recordTypeId))
+          actions.set(
+            bound.action.actionId.toLowerCase(),
+            installedNamedActionReferenceSchema.parse(bound.action),
+          );
+      }
+      const read = (async (): Promise<SubjectWithAvailability> => {
+        if (actions.size === 0)
+          return {
+            subject: await readPageSubjectInTransaction(transaction, { recordTypeId, recordId }),
+            availability: new Map(),
+          };
+        try {
+          const combined = await readSubjectWithNamedActionAvailability(
+            transaction,
+            { recordTypeId, recordId },
+            [...actions.values()],
+            (dependencies.clock ?? (() => new Date()))().toISOString(),
+            (action) => (seed) =>
+              collectActionFlowTasks(flowLibrary(), action.actionId, randomUUID(), seed),
+          );
+          return {
+            subject: pageSubjectFromRead(combined.record, combined.capabilities, recordId),
+            availability: combined.availability,
+          };
+        } catch (error) {
+          console.error(
+            `[page] page subject read with action previews failed: ${describeFailure(error)}`,
+          );
+          return { subject: { kind: "temporarily_unavailable" }, availability: new Map() };
+        }
+      })();
+      subjectRead = { recordTypeId, recordId, read };
+      return read;
+    };
     // One preview per bound action, however many placements share it.
     const availabilities = new Map<string, Promise<boolean | undefined>>();
     return createAuthenticatedPageCapabilityService({
@@ -592,11 +666,11 @@ export const createStoredPageCapabilityService = (
         let decision = availabilities.get(key);
         if (decision === undefined) {
           decision = (async () => {
-            subjectRead ??= readPageSubjectInTransaction(transaction, {
-              recordTypeId: action.subjectRecordTypeId,
-              recordId: subjectRecordId,
-            });
-            const read = await subjectRead;
+            const { subject: read, availability: previewed } = await readSubject(
+              transaction,
+              action.subjectRecordTypeId,
+              subjectRecordId,
+            );
             // A transient failure is not a decision: it fails the projection instead of hiding controls.
             if (read.kind === "temporarily_unavailable")
               throw new Error("PAGE_SUBJECT_READ_UNAVAILABLE");
@@ -611,12 +685,16 @@ export const createStoredPageCapabilityService = (
               expectedConcurrencyNumber: read.row.revision,
               inputs: {},
             });
-            const availability = await previewNamedActionAvailability(
-              transaction,
-              command,
-              (dependencies.clock ?? (() => new Date()))().toISOString(),
-              (seed) => collectActionFlowTasks(flowLibrary(), command.action.actionId, randomUUID(), seed),
-            );
+            // Previewed together with the subject read; an action that was not is previewed alone.
+            const availability =
+              previewed.get(key) ??
+              (await previewNamedActionAvailability(
+                transaction,
+                command,
+                (dependencies.clock ?? (() => new Date()))().toISOString(),
+                (seed) =>
+                  collectActionFlowTasks(flowLibrary(), command.action.actionId, randomUUID(), seed),
+              ));
             if (availability.kind === "undecided") {
               console.info(
                 `[page] action availability undecided for placement ${placementId}: ${availability.reason}`,
@@ -771,11 +849,11 @@ export const createStoredPageCapabilityService = (
           const fieldsById = new Map(fields.map((field) => [field.fieldId.toLowerCase(), field]));
           if (fieldsById.size !== fields.length || [...fieldIds].some((id) => !fieldsById.has(id)))
             return false;
-          subjectRead ??= readPageSubjectInTransaction(transaction, {
-            recordTypeId: recordType.recordTypeId,
-            recordId: subjectRecordId,
-          });
-          const read = await subjectRead;
+          const { subject: read } = await readSubject(
+            transaction,
+            recordType.recordTypeId,
+            subjectRecordId,
+          );
           if (read.kind !== "read") return false;
           const values: Record<string, JsonValue> = {};
           for (const id of fieldIds) {
