@@ -7,9 +7,7 @@ import {
   type ApplicationContent,
   type ApplicationShell,
   type ProjectedApplicationFrame,
-  type ProjectedNavigation,
 } from "@vortex/platform/schema";
-import { collectNavigationPermissionKeys, projectNavigation } from "@vortex/platform/server";
 
 const emptyLayout = {
   root: { props: { vortex: { slotOrders: { content: { tablet: [], phone: [] } } } } },
@@ -20,16 +18,15 @@ type SourcePages = readonly Readonly<{ id: string; key: string; type: string }>[
 
 /**
  * The application frame each page of a compiled draft draws inside: the page's shell with its
- * content removed, the application theme, and the menu as the builder designed it. Studio's canvas
- * renders the page being edited inside this frame with the same renderer the running application
- * uses. The menu shows every item the definition declares (a design view, not a viewer's projection),
+ * content removed, and the compiled application theme. Studio's canvas renders the page being
+ * edited inside this frame with the same renderer the running application uses; it draws the menu
+ * and theme from the draft as it is edited (`studio-draft-navigation.ts`, `use-studio-draft-theme.ts`),
  * and the frame carries no records.
  */
 export type StudioApplicationCanvasFrames = Readonly<{
   applicationName: string;
   shells: readonly ApplicationShell[];
   theme: ApplicationContent["theme"];
-  navigation: ProjectedNavigation;
   /** Keyed by authored page alias. */
   pages: Readonly<Record<string, Readonly<{
     pageId: string;
@@ -65,14 +62,10 @@ export const studioCanvasFramesFor = (
         shell).frame,
     };
   });
-  const everyItem = Object.fromEntries(
-    collectNavigationPermissionKeys(content.navigation).map((key) => [key, true]),
-  );
   return {
     applicationName: content.name,
     shells,
     theme: content.theme,
-    navigation: projectNavigation(content.navigation, everyItem),
     pages,
   };
 };

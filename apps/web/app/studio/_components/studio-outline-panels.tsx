@@ -6,7 +6,7 @@ import { StudioOutline } from "./studio-outline";
 
 /**
  * The rail panels drawn from the one semantic outline of the draft: Structure (the application, its
- * layouts and pages), Outline (the blocks of what the canvas shows), Menu and Flows. Each is a view of
+ * layouts and pages), Outline (the blocks of what the canvas shows) and Flows. Each is a view of
  * the same tree, so a selection made in any of them is the workspace's one selection.
  */
 
@@ -89,15 +89,6 @@ export function StudioBlockOutlinePanel({ outline, selectedKey, choose, disabled
         <OutlineList nodes={blocks} selectedKey={selectedKey} choose={choose} disabled={disabled}
           empty={query.length > 0 ? "No block matches." : "This has no blocks yet."} />
       </>}
-  </StudioPanelShell>;
-}
-
-export function StudioMenuPanel({ outline, selectedKey, choose, disabled, hidden }: PanelProps) {
-  const navigation = sectionOf(outline, "navigation");
-  return <StudioPanelShell title="Menu" description="The application's navigation, as people see it." hidden={hidden}>
-    <OutlineList nodes={navigation?.children ?? []} selectedKey={selectedKey} choose={choose} disabled={disabled}
-      empty="This application has no menu entries yet." />
-    <ComingNextNote>Adding, moving and renaming menu entries here comes next. Until then the menu changes with the application's pages.</ComingNextNote>
   </StudioPanelShell>;
 }
 

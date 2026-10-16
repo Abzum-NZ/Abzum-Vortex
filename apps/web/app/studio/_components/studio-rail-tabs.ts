@@ -8,7 +8,7 @@ export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
   { key: "structure", label: "Structure", icon: "sitemap", width: 16 },
   { key: "outline", label: "Outline", icon: "list-tree", width: 18 },
   { key: "blocks", label: "Blocks", icon: "blocks", width: 18 },
-  { key: "menu", label: "Menu", icon: "menu", width: 18 },
+  { key: "menu", label: "Menu", icon: "menu", width: 22 },
   { key: "data", label: "Data", icon: "database", width: 20 },
   { key: "flows", label: "Flows", icon: "workflow", width: 16 },
   { key: "theme", label: "Theme", icon: "palette", width: 24 },
