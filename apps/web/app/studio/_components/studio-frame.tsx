@@ -99,7 +99,8 @@ const readWideOnServer = () => false;
  */
 function PaneSlot({ host }: Readonly<{ host: HTMLDivElement | null }>) {
   const attach = useCallback((slot: HTMLDivElement | null) => {
-    if (slot !== null && host !== null) slot.appendChild(host);
+    // The slot holds exactly the current host: one a re-run effect replaced does not stay behind it.
+    if (slot !== null && host !== null) slot.replaceChildren(host);
   }, [host]);
   return <div ref={attach} className="contents" />;
 }
@@ -203,13 +204,17 @@ export function StudioFrame<Key extends string>({
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
+  // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
+  // and a new host would remount every panel and lose its unapplied input.
+  const madeHosts = useRef<PaneHosts | null>(null);
   useEffect(() => {
     const create = () => {
       const host = document.createElement("div");
       host.className = "flex h-full min-h-0 flex-col";
       return host;
     };
-    setHosts({ panel: create(), inspector: create() });
+    madeHosts.current ??= { panel: create(), inspector: create() };
+    setHosts(madeHosts.current);
   }, []);
   const choose = async (key: Key) => {
     if (key === activeTab) {
