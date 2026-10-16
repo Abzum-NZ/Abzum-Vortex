@@ -465,7 +465,7 @@ const plainSource = (source: unknown): void => {
     const entry = pending.pop()!;
     const value = entry.value;
     if (value === null || typeof value !== "object") {
-      if (value !== undefined && typeof value !== "string" && typeof value !== "number" &&
+      if (value !== undefined && value !== null && typeof value !== "string" && typeof value !== "number" &&
         typeof value !== "boolean") return refuse();
       continue;
     }
