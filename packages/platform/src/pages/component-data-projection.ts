@@ -148,7 +148,7 @@ export type ProjectedComponentData<Values> =
 export type ComponentDataProjectionInput = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
   fieldLabels?: Readonly<Record<string, string>>;
-  /** Options in definition order for choice fields; several-choice options are limited to those the viewer may use. */
+  /** Every declared option in definition order for choice fields, used only to label stored values. */
   fieldChoiceLabels?: Readonly<
     Record<string, readonly Readonly<{ value: string; label: string }>[]>
   >;
