@@ -148,7 +148,7 @@ $function$;
 alter function vortex_record.ensure_application_lifecycle_policies(uuid, uuid, bigint, jsonb) owner to vortex_owner;
 
 revoke all on function vortex_record.ensure_application_lifecycle_policies(uuid, uuid, bigint, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
 grant execute on function vortex_record.ensure_application_lifecycle_policies(uuid, uuid, bigint, jsonb)
   to vortex_request;
 
