@@ -44,8 +44,9 @@ export const projectPlacementRecordTypes = (input: {
     if (!current.some((candidate) => sameId(candidate, placementId)))
       dataPlacementsByRecordType.set(key, [...current, placementId]);
   };
-  for (const { placementId, placement } of allPlacements) {
-    const block = placement.block;
+  for (const placement of allPlacements) {
+    const { placementId } = placement;
+    const block = placement.vortex.block;
     const isAttachmentListBlock =
       isRecord(block) &&
       typeof block.blockId === "string" &&
@@ -54,7 +55,7 @@ export const projectPlacementRecordTypes = (input: {
     if (isAttachmentListBlock) {
       if (
         pageDefinition.type === "detail" &&
-        placement.queryId === undefined &&
+        placement.vortex.queryId === undefined &&
         pageSubjectRecordTypeId !== undefined
       ) {
         recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
@@ -92,7 +93,8 @@ export const projectPlacementRecordTypes = (input: {
       !isBoardBlock && !isQueryNoticeBlock && !isLinkTilesBlock
     ) continue;
 
-    const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
+    const queryId =
+      typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
     const recordTypeId =
       queryId === undefined
         ? detailContract === undefined || pageDefinition.type === "form"
@@ -109,7 +111,8 @@ export const projectPlacementRecordTypes = (input: {
   if (pageSubjectRecordTypeId !== undefined) {
     for (const formId of editFormPlacementIds) {
       const formDataPlacementIds = [formId];
-      for (const { placementId, placement, formId: ownerFormId } of allPlacements) {
+      for (const placement of allPlacements) {
+        const { placementId, formId: ownerFormId } = placement;
         if (ownerFormId === undefined || !sameId(ownerFormId, formId)) continue;
         if (!isEditFieldPlacement(placement)) continue;
         recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);

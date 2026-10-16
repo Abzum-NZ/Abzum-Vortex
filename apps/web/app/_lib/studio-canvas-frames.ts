@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  compiledPageShellId,
   sameId,
   splitProjectedPage,
   type ApplicationContent,
@@ -10,7 +11,10 @@ import {
 } from "@vortex/platform/schema";
 import { collectNavigationPermissionKeys, projectNavigation } from "@vortex/platform/server";
 
-const emptySlot = { placements: {}, order: { desktop: [], tablet: [], phone: [] } };
+const emptyLayout = {
+  root: { props: { vortex: { slotOrders: { content: { tablet: [], phone: [] } } } } },
+  content: [],
+};
 
 type SourcePages = readonly Readonly<{ id: string; key: string; type: string }>[];
 
@@ -47,7 +51,7 @@ export const studioCanvasFramesFor = (
     const compiled = content.pages[index];
     if (compiled === undefined || compiled.key !== sourcePage.key || compiled.type !== sourcePage.type)
       throw new Error("Studio compiled page does not match its authored draft");
-    const shellId = "shellId" in compiled.composition ? compiled.composition.shellId : undefined;
+    const shellId = compiledPageShellId(compiled.composition) ?? undefined;
     const shell = shellId === undefined ? undefined
       : shells.find((candidate) => sameId(String(candidate.shellId), String(shellId)));
     if (shellId !== undefined && shell === undefined)
@@ -57,7 +61,7 @@ export const studioCanvasFramesFor = (
       pageName: compiled.name,
       // The frame is the shell alone: its content slots are reserved and empty in the compiled
       // shell, and the canvas draws the page being edited in the outlet they declare.
-      frame: splitProjectedPage({ pageId: compiled.pageId, composition: { main: shell?.layout ?? emptySlot } },
+      frame: splitProjectedPage({ pageId: compiled.pageId, composition: shell?.layout ?? emptyLayout },
         shell).frame,
     };
   });

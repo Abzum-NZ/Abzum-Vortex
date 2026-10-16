@@ -36,7 +36,17 @@ import {
 import { labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import { actionInputValueTypes, applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { permissionDeclarationSchema } from "../access/permissions";
-import { applicationShellSchema, canonicalPlacementEntries, guidedFormPageCompositionSchema, pageCompositionSchema } from "./application-composition/page-composition";
+import {
+  applicationShellSchema,
+  compiledItemTree,
+  compiledPageDataOf,
+  compiledPageRootSlots,
+  compiledPageShellId,
+  guidedFormPageCompositionSchema,
+  pageCompositionSchema,
+  type AnyPageComposition,
+  type CompiledItem,
+} from "./application-composition/page-composition";
 import { applicationThemeSchema } from "./application-composition/theme";
 import { platformBlockDependenciesSchema } from "./application-composition/platform-block-release";
 import type { ComponentSettingValue } from "./application-composition/block-property-schema";
@@ -650,13 +660,14 @@ const declaresGatedPlacement = (value: unknown): boolean => {
  * condition or a query.
  */
 export function isPresentationOnlyApplicationExperience(
-  page: Readonly<{ composition: Readonly<{ shellKind: string; shellId?: string }> }>,
+  page: Readonly<{ composition: AnyPageComposition }>,
   shells: readonly Readonly<{ shellId: string; layout: unknown }>[],
 ): boolean {
   const composition = page.composition;
   if (declaresGatedPlacement(composition)) return false;
-  if (composition.shellKind !== "application") return true;
-  const shell = shells.find((candidate) => candidate.shellId === composition.shellId);
+  const shellId = compiledPageShellId(composition);
+  if (shellId === null) return true;
+  const shell = shells.find((candidate) => candidate.shellId === shellId);
   return shell !== undefined && !declaresGatedPlacement(shell.layout);
 }
 
@@ -1050,90 +1061,49 @@ export const applicationContentSchema = applicationSharedContentSchema
         message: "Shell content-slot identities must be unique across the application",
       });
 
-    const placementEntries = value.shells.flatMap((shell) =>
-      canonicalPlacementEntries(shell.layout),
+    const placedItems: CompiledItem[] = value.shells.flatMap((shell) =>
+      compiledItemTree(shell.layout.content),
     );
     const shellsById = new Map(value.shells.map((shell) => [String(shell.shellId), shell]));
-    const validateShellContent = (
-      content: Record<string, { placements: Record<string, unknown> }>,
-      shell: (typeof value.shells)[number],
-      path: (string | number)[],
-    ) => {
-      const allowed = new Set(shell.contentSlots.map((slot) => String(slot.slotId)));
-      const required = shell.contentSlots
-        .filter((slot) => slot.required)
-        .map((slot) => String(slot.slotId));
-      const supplied = Object.keys(content);
-      if (supplied.some((slotId) => !allowed.has(slotId)))
-        context.addIssue({
-          code: "custom",
-          path,
-          message: "Page content may bind only slots declared by its shell",
-        });
-      if (
-        required.some((slotId) => {
-          const slot = content[slotId];
-          return slot === undefined || Object.keys(slot.placements).length === 0;
-        })
-      )
-        context.addIssue({
-          code: "custom",
-          path,
-          message: "Page content must bind non-empty content to every required shell slot",
-        });
-    };
     for (const [pageIndex, page] of value.pages.entries()) {
       const composition = page.composition;
-      if ("stepContent" in composition) {
-        if (composition.shellKind === "default") {
-          for (const slot of Object.values(composition.stepContent))
-            placementEntries.push(...canonicalPlacementEntries(slot));
-          continue;
+      const shellId = compiledPageShellId(composition);
+      const shell = shellId === null ? undefined : shellsById.get(String(shellId));
+      if (shellId !== null && shell === undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["pages", pageIndex, "composition"],
+          message: "A page shell must resolve inside the same application",
+        });
+      for (const data of compiledPageDataOf(composition)) {
+        if (shell !== undefined) {
+          const supplied = new Map(compiledPageRootSlots(data));
+          const allowed = new Set(shell.contentSlots.map((slot) => String(slot.slotId)));
+          if ([...supplied.keys()].some((slotId) => !allowed.has(slotId)))
+            context.addIssue({
+              code: "custom",
+              path: ["pages", pageIndex, "composition"],
+              message: "Page content may bind only slots declared by its shell",
+            });
+          if (
+            shell.contentSlots.some(
+              (slot) => slot.required && (supplied.get(String(slot.slotId))?.length ?? 0) === 0,
+            )
+          )
+            context.addIssue({
+              code: "custom",
+              path: ["pages", pageIndex, "composition"],
+              message: "Page content must bind non-empty content to every required shell slot",
+            });
         }
-        const shell = shellsById.get(String(composition.shellId));
-        if (shell === undefined)
-          context.addIssue({
-            code: "custom",
-            path: ["pages", pageIndex, "composition", "shellId"],
-            message: "A page shell must resolve inside the same application",
-          });
-        for (const [stepId, content] of Object.entries(composition.stepContent)) {
-          if (shell !== undefined)
-            validateShellContent(content, shell, [
-              "pages",
-              pageIndex,
-              "composition",
-              "stepContent",
-              stepId,
-            ]);
-          for (const slot of Object.values(content))
-            placementEntries.push(...canonicalPlacementEntries(slot));
-        }
-        continue;
-      }
-      if (composition.shellKind === "default")
-        placementEntries.push(...canonicalPlacementEntries(composition.main));
-      else {
-        const shell = shellsById.get(String(composition.shellId));
-        if (shell === undefined)
-          context.addIssue({
-            code: "custom",
-            path: ["pages", pageIndex, "composition", "shellId"],
-            message: "A page shell must resolve inside the same application",
-          });
-        else
-          validateShellContent(composition.content, shell, [
-            "pages",
-            pageIndex,
-            "composition",
-            "content",
-          ]);
-        for (const slot of Object.values(composition.content))
-          placementEntries.push(...canonicalPlacementEntries(slot));
+        placedItems.push(
+          ...compiledItemTree(data.content),
+          ...compiledPageRootSlots(data).flatMap(([, items]) => compiledItemTree(items)),
+        );
       }
     }
 
-    const placementIds = placementEntries.map(([placementId]) => placementId);
+    const placementIds = placedItems.map((item) => item.props.id);
     if (new Set(placementIds).size !== placementIds.length)
       context.addIssue({
         code: "custom",
@@ -1147,8 +1117,8 @@ export const applicationContentSchema = applicationSharedContentSchema
       ),
     );
     const used = new Set<string>();
-    for (const [, placement] of placementEntries) {
-      const identity = `${placement.block.blockId}@${placement.block.releaseVersion}`;
+    for (const item of placedItems) {
+      const identity = `${item.props.vortex.block.blockId}@${item.props.vortex.block.releaseVersion}`;
       used.add(identity);
       if (!manifest.has(identity))
         context.addIssue({
@@ -1216,7 +1186,7 @@ export const applicationDraftSchema = z
 export const publishedApplicationDefinitionSchema = z
   .object({
     publication: publishedApplicationReferenceSchema.extend({
-      validationContractVersion: z.literal("2.0.0"),
+      validationContractVersion: z.literal("3.0.0"),
     }),
     content: applicationContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),

@@ -9,6 +9,7 @@ import {
   type VersionImpact,
   type VersionImpactReason,
 } from "../schema";
+import { applicationValidationContractVersion } from "./application-contract-versions";
 import { applicationModuleSources } from "./application-module-lowering";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import { compileCandidate, validateCandidate } from "./definition-publication-compilation";
@@ -224,7 +225,7 @@ const publicationReasons = (
   if (latest === null) return [];
   const own = compareDefinitionVersionImpactWithEvidence({
     kind: "application",
-    validationContractVersion: "2.0.0",
+    validationContractVersion: applicationValidationContractVersion,
     historyEvidence: candidate.historyEvidence,
     candidate: application.output.canonical,
   });

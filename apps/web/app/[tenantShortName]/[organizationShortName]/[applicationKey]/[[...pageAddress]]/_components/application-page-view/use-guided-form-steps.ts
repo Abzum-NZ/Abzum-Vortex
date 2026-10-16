@@ -13,7 +13,7 @@ import type {
 } from "../../../../../../_lib/application-page";
 import type { Notice, GuidedFormActions } from "./types";
 import { asComponentBinding } from "./event-values";
-import { placementIdsInSlot } from "./placement-helpers";
+import { placementIdsInLayout } from "./placement-helpers";
 import { unavailableNotice } from "./notices";
 
 export function useGuidedFormSteps({
@@ -58,7 +58,7 @@ export function useGuidedFormSteps({
     const composition = model.page.composition;
     if (!guidedForm || !isRecord(composition) || !isRecord(composition.stepContent))
       return undefined;
-    return placementIdsInSlot(composition.stepContent[guidedForm.activeStepId]);
+    return placementIdsInLayout(composition.stepContent[guidedForm.activeStepId]);
   }, [model.guidedForm, model.page]);
   const guidedActiveFormIds = useMemo(
     () =>

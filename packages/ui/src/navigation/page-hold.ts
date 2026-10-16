@@ -1,3 +1,4 @@
+import { walkPageComposition } from "@vortex/platform/schema";
 import { readMotionSeconds } from "./motion-tokens";
 
 /**
@@ -95,38 +96,17 @@ export const primaryStreamedPlacement = (
 ): string | undefined => {
   const streamedIds = new Map(Object.keys(streamed).map((id) => [id.toLowerCase(), id]));
   if (streamedIds.size === 0) return undefined;
-  const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-    typeof value === "object" && value !== null && !Array.isArray(value);
-  // A projected slot holds `placements` by identity and their `order` per breakpoint; each
-  // placement holds its own `slots`. The first breakpoint's order is the document order.
-  const visit = (value: unknown): string | undefined => {
-    if (!isObject(value)) return undefined;
-    const placements = value.placements;
-    if (isObject(placements)) {
-      const order = isObject(value.order)
-        ? Object.values(value.order).find((ids): ids is readonly string[] => Array.isArray(ids))
-        : undefined;
-      const ids = [
-        ...(order ?? []),
-        ...Object.keys(placements).filter((id) => !(order ?? []).includes(id)),
-      ];
-      for (const id of ids) {
-        const own = streamedIds.get(id.toLowerCase());
-        if (own !== undefined) return own;
-        const placement = placements[id];
-        if (!isObject(placement) || !isObject(placement.slots)) continue;
-        for (const slot of Object.values(placement.slots)) {
-          const found = visit(slot);
-          if (found !== undefined) return found;
-        }
-      }
-      return undefined;
-    }
-    for (const child of Object.values(value)) {
-      const found = visit(child);
-      if (found !== undefined) return found;
-    }
-    return undefined;
-  };
-  return visit(isObject(content) && isObject(content.composition) ? content.composition : content);
+  // A projected composition is Puck data: each item list is in document (desktop) order and each
+  // item holds its child slots, so a depth-first walk meets placements in document order.
+  let found: string | undefined;
+  const composition =
+    typeof content === "object" && content !== null && "composition" in content
+      ? (content as Readonly<Record<string, unknown>>).composition
+      : content;
+  walkPageComposition(composition, ({ placementId }) => {
+    if (found !== undefined) return false;
+    found = streamedIds.get(placementId.toLowerCase());
+    return found === undefined ? undefined : false;
+  });
+  return found;
 };

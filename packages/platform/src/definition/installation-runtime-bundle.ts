@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { applicationContentSchema } from "./application-contracts";
-import { placementSlotSchema } from "./application-composition/page-composition";
+import { compiledLayoutSchema } from "./application-composition/page-composition";
 import { jsonValueSchema } from "../catalogue/common";
 import {
   applicationDefinitionConsumerReadResultSchema,
@@ -117,11 +117,11 @@ const installationRuntimeBundleApplicationPageContentSchema = applicationContent
   .strict();
 
 const installationRuntimeBundleResolvedRootsSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("page"), main: placementSlotSchema }).strict(),
+  z.object({ kind: z.literal("page"), main: compiledLayoutSchema }).strict(),
   z
     .object({
       kind: z.literal("guided"),
-      stepContent: z.record(z.string(), placementSlotSchema),
+      stepContent: z.record(z.string(), compiledLayoutSchema),
     })
     .strict(),
 ]);

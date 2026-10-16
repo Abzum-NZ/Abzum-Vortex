@@ -55,8 +55,9 @@ const visiblePlacementIds = (page: Readonly<Record<string, unknown>>): ReadonlyS
   const visible = new Set<string>();
   walkPageComposition(
     page.composition,
-    ({ placementId, placement }, ancestors: Visibility) => {
-      const responsive = placement.responsive;
+    (placement, ancestors: Visibility) => {
+      const { placementId } = placement;
+      const responsive = placement.vortex.responsive;
       if (!isRecord(responsive)) return false;
       const effective: Visibility = {
         desktop:

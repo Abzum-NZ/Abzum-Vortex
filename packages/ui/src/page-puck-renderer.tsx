@@ -1,12 +1,13 @@
 // The render-only entry: the main entry would also bundle the whole editor for every page view.
 import { Render } from "@puckeditor/core/rsc";
 import type { CSSProperties, MouseEvent, ReactElement, ReactNode } from "react";
+import type { Data } from "@puckeditor/core";
 import {
+  compiledItemTree,
   resolveShadcnIconLibrary,
   type ApplicationShell,
   type ApplicationPuckRootShell,
-  type PageDefinition,
-  type PageComposition,
+  type CompiledLayout,
   type ProjectedNavigation,
   type ShellOutletLocation,
 } from "@vortex/platform/schema";
@@ -35,7 +36,7 @@ import {
   VortexPuckThemeScopeProvider,
   type VortexPuckMetadata,
 } from "./puck-config";
-import { createVortexPuckAdapter } from "./vortex-puck-adapter";
+import { computeSlotOrderCss } from "./layout-styles";
 import {
   contentConfigFor,
   frameConfigFor,
@@ -43,40 +44,14 @@ import {
   withShellOutlet,
 } from "./shell-outlet";
 import {
-  resolveRootPlacementSlotWithContext,
-  validatePlacementDependencies,
+  selectRenderedLayout,
   validateProjectedAvailabilityTree,
-  type GuidedFormComposition,
-  type MaterialisedApplicationComposition,
-  type ProjectedPageCapability,
-  type PlacementSlot,
+  type RenderedPage,
 } from "./page-composition";
-
-const collectPlacementIds = (slot: PlacementSlot, ids: Set<string> = new Set()): Set<string> => {
-  for (const [id, placement] of Object.entries(slot.placements)) {
-    ids.add(id);
-    for (const child of Object.values(placement.slots)) collectPlacementIds(child, ids);
-  }
-  return ids;
-};
-
-const adapters = new WeakMap<
-  PlatformComponentRegistry,
-  ReturnType<typeof createVortexPuckAdapter>
->();
-const adapterFor = (registry: PlatformComponentRegistry) => {
-  let adapter = adapters.get(registry);
-  if (adapter === undefined) {
-    adapter = createVortexPuckAdapter(registry.toPlatformBlockCatalogue());
-    adapters.set(registry, adapter);
-  }
-  return adapter;
-};
 
 type ResolvedPageInputs = Readonly<{
   composition: PagePuckRendererProps["composition"];
-  shells: PagePuckRendererProps["shells"];
-  selectedShell: PagePuckRendererProps["shell"];
+  shell: PagePuckRendererProps["shell"];
   registry: PlatformComponentRegistry;
   pageId: string | undefined;
   activeStepId: string | undefined;
@@ -84,8 +59,9 @@ type ResolvedPageInputs = Readonly<{
 }>;
 
 type ResolvedPageData = Readonly<{
-  slot: PlacementSlot;
-  data: ReturnType<ReturnType<typeof createVortexPuckAdapter>["toPuckData"]>;
+  layout: CompiledLayout;
+  data: Data;
+  orderCss: string;
 }>;
 
 const resolvedPages = new WeakMap<
@@ -94,41 +70,34 @@ const resolvedPages = new WeakMap<
 >();
 
 /**
- * The resolved, validated Puck data of one page. It depends only on the immutable definition
- * inputs (composition, shells, registry, page, step and breakpoint), so it is computed once per
- * distinct set of them; runtime inputs reach the blocks through Puck metadata and never repeat it.
+ * The validated Puck data of one rendered page. The page's layout already is Puck data, so the
+ * renderer draws it directly: it only selects the active guided step and supplies the page root's
+ * frame props. It depends only on the immutable inputs (page, shell, registry, step and
+ * breakpoint), so it is computed once per distinct set of them; runtime inputs reach the blocks
+ * through Puck metadata and never repeat it.
  */
 const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
-  const { composition, shells, selectedShell, registry, pageId, activeStepId, breakpoint } = inputs;
+  const { composition, shell, registry, pageId, activeStepId, breakpoint } = inputs;
   const entries = resolvedPages.get(composition) ?? [];
   const cached = entries.find(
     (entry) =>
-      entry.inputs.shells === shells &&
-      entry.inputs.selectedShell === selectedShell &&
+      entry.inputs.shell === shell &&
       entry.inputs.registry === registry &&
       entry.inputs.pageId === pageId &&
       entry.inputs.activeStepId === activeStepId &&
       entry.inputs.breakpoint === breakpoint,
   );
   if (cached !== undefined) return cached.resolved;
-  const resolved = resolveRootPlacementSlotWithContext({
-    composition,
-    shells: shells ?? [],
-    registry,
-    ...(pageId === undefined ? {} : { pageId }),
-    ...(activeStepId === undefined ? {} : { activeStepId }),
-  });
-  const { slot, permissionProjected } = resolved;
-  const shell = selectedShell ?? resolved.shell;
+  const layout = selectRenderedLayout(composition, activeStepId);
   const location = {
     ...(pageId === undefined ? {} : { pageId }),
     ...(activeStepId === undefined ? {} : { stepId: activeStepId }),
     ...(breakpoint === undefined ? {} : { breakpoint }),
   };
-  if ("pages" in composition && Array.isArray(composition.pages))
-    validatePlacementDependencies(slot, composition.platformBlockDependencies, location);
-  validatePlacementTree(slot, registry, location, { allowEmptyRequiredSlots: permissionProjected });
-  validateProjectedAvailabilityTree(slot, location);
+  // A permission-projected layout may hold a required slot the viewer was refused every child
+  // of; publication itself refuses an empty required slot.
+  validatePlacementTree(layout, registry, location, { allowEmptyRequiredSlots: true });
+  validateProjectedAvailabilityTree(layout, location);
   const rootShell: ApplicationPuckRootShell =
     shell === undefined
       ? { kind: "default" }
@@ -140,8 +109,15 @@ const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
           presentation: shell.presentation,
         };
   const result: ResolvedPageData = {
-    slot,
-    data: adapterFor(registry).toPuckData(slot, breakpoint, rootShell),
+    layout,
+    data: {
+      root: {
+        props: { gap: "medium", padding: "medium", applicationShell: rootShell },
+      } as unknown as Data["root"],
+      content: layout.content as unknown as Data["content"],
+      zones: {},
+    },
+    orderCss: computeSlotOrderCss(layout, breakpoint),
   };
   entries.push({ inputs, resolved: result });
   resolvedPages.set(composition, entries);
@@ -149,12 +125,8 @@ const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
 };
 
 export type PagePuckRendererProps = Readonly<{
-  composition:
-    | MaterialisedApplicationComposition
-    | PageDefinition
-    | PageComposition
-    | GuidedFormComposition
-    | ProjectedPageCapability;
+  /** The one page input: its layout already resolved into its frame, or one per guided step. */
+  composition: RenderedPage;
   /**
    * Explicit breakpoint for preview canvases, rendered with that breakpoint's inline geometry and
    * order. Omit it for a live page, which adapts to the visitor's width (#1010).
@@ -163,8 +135,7 @@ export type PagePuckRendererProps = Readonly<{
   registry: PlatformComponentRegistry;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
-  shells?: readonly ApplicationShell[];
-  /** The selected definition shell for a page already projected by the server. */
+  /** The application shell that frames the page; absent for the platform default frame. */
   shell?: ApplicationShell;
   pageId?: string;
   activeStepId?: string;
@@ -204,10 +175,7 @@ export type PagePuckRendererProps = Readonly<{
   onPrefetchPage?: (pageId: string) => void;
   /** Internal page identity currently shown, for a navigation placement's current-page state. */
   currentPageId?: string;
-  /**
-   * Resolved #594 application theme. Defaults to the materialised composition's theme;
-   * without one the readable platform defaults apply.
-   */
+  /** Resolved #594 application theme; without one the readable platform defaults apply. */
   theme?: ApplicationTheme | undefined;
   /** Organisation or viewer BCP 47 locale for date presentation. */
   locale?: string | undefined;
@@ -242,8 +210,7 @@ export function PagePuckRenderer({
   registry,
   fieldInputControlReleases,
   platformThemeTokens,
-  shells,
-  shell: selectedShell,
+  shell,
   pageId,
   activeStepId,
   guidedStepNavigation,
@@ -269,10 +236,9 @@ export function PagePuckRenderer({
   outlet,
   contentRegion = false,
 }: PagePuckRendererProps): ReactElement {
-  const { slot, data } = resolvedPageData({
+  const { layout, data, orderCss } = resolvedPageData({
     composition,
-    shells,
-    selectedShell,
+    shell,
     registry,
     pageId,
     activeStepId,
@@ -284,8 +250,12 @@ export function PagePuckRenderer({
     ...(breakpoint === undefined ? {} : { breakpoint }),
   };
   if (runtimeInputs !== undefined)
-    assertRuntimeInputKeysArePlacements(collectPlacementIds(slot), runtimeInputs, location);
-  const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
+    assertRuntimeInputKeysArePlacements(
+      new Set(compiledItemTree(layout.content).map((item) => item.props.id)),
+      runtimeInputs,
+      location,
+    );
+  const applicationTheme = theme;
   const tokens = applicationTheme?.tokens ?? {};
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
   const themeRootProps = createThemeRootProps(applicationTheme, platformThemeTokens);
@@ -303,8 +273,7 @@ export function PagePuckRenderer({
     ...(applicationSearch === undefined ? {} : { applicationSearch }),
     ...(applicationSearchPageSubject === undefined ? {} : { applicationSearchPageSubject }),
   };
-  const guidedSteps =
-    "steps" in composition && Array.isArray(composition.steps) ? composition.steps : undefined;
+  const guidedSteps = composition.steps;
   const stepIndex =
     activeStepId === undefined
       ? -1
@@ -357,10 +326,12 @@ export function PagePuckRenderer({
         </Button>
       </nav>
     );
+  const order = orderCss.length === 0 ? null : <style>{orderCss}</style>;
   if (contentRegion)
     return (
       <>
         {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
+        {order}
         <Render config={contentConfigFor(baseConfig)} data={data} metadata={metadata} />
         {guidedSummary}
         {guidedNavigation}
@@ -384,6 +355,7 @@ export function PagePuckRenderer({
       {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
       <div className={className} style={style}>
         <VortexPuckThemeScopeProvider scope={{ application: tokens, inherited: tokens }}>
+          {order}
           {rendered}
         </VortexPuckThemeScopeProvider>
       </div>

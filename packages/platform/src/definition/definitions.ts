@@ -185,6 +185,10 @@ export const walkDefinitionContract = (
     case "object":
       for (const [key, child] of Object.entries(definition.shape))
         walk(child, (value as Record<string, unknown>)[key], [...path, key]);
+      // Declared catch-all members (a compiled item's child slots) are contract positions too.
+      if (definition.catchall !== undefined)
+        for (const [key, entry] of Object.entries(value as Record<string, unknown>))
+          if (!(key in definition.shape)) walk(definition.catchall, entry, [...path, key]);
       return;
     case "array":
       (value as unknown[]).forEach((entry, index) =>

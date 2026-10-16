@@ -63,7 +63,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         controls
           .filter(
             ([, placement]) =>
-              String(object(placement.block).blockId) ===
+              String(object(placement.vortex.block).blockId) ===
               String(FORM_CONTAINER_BLOCK_RELEASE.blockId),
           )
           .map(([id]) => id.toLowerCase()),
@@ -86,7 +86,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const seenFields = new Set<string>();
       let inputMismatch = false;
       for (const [, placement] of controls) {
-        if (!inputBlocks.has(String(object(placement.block).blockId))) continue;
+        if (!inputBlocks.has(String(object(placement.vortex.block).blockId))) continue;
         const candidate = object(placement.settings).name;
         const name = candidate === undefined ? {} : object(candidate);
         const key = name.kind === "text" ? String(name.value) : "";
@@ -101,20 +101,13 @@ export function applicationPageRules(scope: ApplicationScope): void {
         ? object(composition.stepContent)[String(summaryStep.id)]
         : undefined;
       const summaryPlacements = summaryStep
-        ? [
-            ...(composition.shellKind === "application"
-              ? Object.values(object(summaryContent)).flatMap((slotValue) =>
-                  collectPlacementEntries(slotValue),
-                )
-              : collectPlacementEntries(summaryContent)),
-            ...pageShellPlacementEntries(page),
-          ]
+        ? [...collectPlacementEntries(summaryContent), ...pageShellPlacementEntries(page)]
         : [];
       const summaryForms = new Set(
         summaryPlacements
           .filter(
             ([, placement]) =>
-              String(object(placement.block).blockId) ===
+              String(object(placement.vortex.block).blockId) ===
               String(FORM_CONTAINER_BLOCK_RELEASE.blockId),
           )
           .map(([id]) => id.toLowerCase()),
@@ -150,8 +143,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
     // engine actually applies. The Query engine refuses a request for an unselected field.
     for (const placement of placements) {
       const bound =
-        placement.queryId === undefined ? undefined : moduleQueries.get(String(placement.queryId));
-      const block = object(placement.block);
+        placement.vortex.queryId === undefined
+          ? undefined
+          : moduleQueries.get(String(placement.vortex.queryId));
+      const block = object(placement.vortex.block);
       const blockKey = registeredBlockReleases.get(
         `${String(block.blockId)}:${String(block.releaseVersion)}`,
       )?.key;
@@ -350,12 +345,13 @@ export function applicationPageRules(scope: ApplicationScope): void {
       let publicBlockReferencesSafe = true;
       for (const placement of placements) {
         if (
-          (placement.viewPermissionKey !== undefined &&
-            !publicPermissionSafe(placement.viewPermissionKey)) ||
-          (placement.usePermissionKey && !publicPermissionSafe(placement.usePermissionKey))
+          (placement.vortex.viewPermissionKey !== undefined &&
+            !publicPermissionSafe(placement.vortex.viewPermissionKey)) ||
+          (placement.vortex.usePermissionKey &&
+            !publicPermissionSafe(placement.vortex.usePermissionKey))
         )
           publicBlockReferencesSafe = false;
-        walkValues(placement.visibilityCondition, (entry) => {
+        walkValues(placement.vortex.visibilityCondition, (entry) => {
           if (entry.source === "field" && !pagePublicFields.has(String(entry.fieldId)))
             publicBlockReferencesSafe = false;
         });
@@ -383,8 +379,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
           }
         };
         walkValues(placement.settings, inspectPublicSetting);
-        if (placement.queryId) {
-          const query = moduleQueries.get(String(placement.queryId));
+        if (placement.vortex.queryId) {
+          const query = moduleQueries.get(String(placement.vortex.queryId));
           if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
             publicBlockReferencesSafe = false;
         }

@@ -9,7 +9,7 @@ as $function$
 begin
   case p_kind
     when 'application' then
-      return array['2.0.0'];
+      return array['3.0.0'];
     when 'module' then
       return array['2.0.0', '3.0.0'];
     when 'record_type' then

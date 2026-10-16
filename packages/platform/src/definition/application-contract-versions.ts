@@ -1,6 +1,6 @@
 import { DefinitionError } from "./definition-error";
 export const applicationSourceContractVersion = "3.0.0" as const;
-export const applicationValidationContractVersion = "2.0.0" as const;
+export const applicationValidationContractVersion = "3.0.0" as const;
 
 export const applicationContractVersionErrorCodes = [
   "UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION",

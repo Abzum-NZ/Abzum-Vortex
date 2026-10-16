@@ -27,7 +27,6 @@ import {
   readSourceItem,
   sourcePageDataOf,
   sourcePageRootSlots,
-  sourcePageShell,
   type SourcePageData,
 } from "../schema";
 import { FIELD_INPUT_CONTROL_RELEASES } from "./application-composition-catalogue";
@@ -74,7 +73,6 @@ const requireValue = <Value>(
   ruleCode: DefinitionCompilerRefusalCode,
   family: ConstructorParameters<typeof DefinitionCompilationError>[1] = "invalid_value",
 ): Value => value ?? reject(ruleCode, family);
-
 
 const canonicalDependency = (
   dependency: ApplicationSourceDocument["body"]["platform_block_dependencies"][number],
@@ -729,16 +727,20 @@ const materialiseOrder = (
   const aliases = authored.items.map((item) => item.props.id);
   const desktop = aliases.map(resolvePlacement);
   const tablet = (authored.order?.tablet ?? aliases).map(resolvePlacement);
-  const phone = (authored.order?.phone ?? authored.order?.tablet ?? aliases).map(
-    resolvePlacement,
-  );
+  const phone = (authored.order?.phone ?? authored.order?.tablet ?? aliases).map(resolvePlacement);
   if (
     !responsiveOrderAllowed &&
     (canonicalJson(tablet) !== canonicalJson(desktop) ||
       canonicalJson(phone) !== canonicalJson(desktop))
   )
     reject("vortex.definition.application_layout_complete");
-  return { desktop, tablet, phone };
+  return { tablet, phone };
+};
+
+/** One compiled zone: its items in desktop order and its complete tablet and phone order. */
+type CompiledZone = {
+  items: Record<string, unknown>[];
+  order: { tablet: string[]; phone: string[] };
 };
 
 /** Pure  composition materialisation; it does not activate any compiler or reader dispatch. */
@@ -816,7 +818,7 @@ export const materialiseApplicationComposition = (
       reserved?: ReadonlySet<string>;
       captureShellPlacements?: boolean;
     },
-  ): Record<string, unknown> => {
+  ): CompiledZone => {
     const resolvedByAlias = new Map(
       authored.items.map((item) => [
         item.props.id,
@@ -827,7 +829,7 @@ export const materialiseApplicationComposition = (
       reject("vortex.definition.application_identity_unique", "duplicate_key");
     const resolvePlacement = (alias: string): string =>
       requireValue(resolvedByAlias.get(alias), "vortex.definition.application_layout_complete");
-    const placements: Record<string, unknown> = {};
+    const items: Record<string, unknown>[] = [];
     for (const item of authored.items) {
       const alias = item.props.id;
       const authoredPlacement = item.props.vortex;
@@ -868,18 +870,19 @@ export const materialiseApplicationComposition = (
       if (reading.malformedSlots.length > 0)
         reject("vortex.definition.application_block_references", "invalid_value");
       const slots: Record<string, unknown> = {};
-      for (const [slotKey, { declaration, items }] of reading.slots) {
+      const slotOrders: Record<string, unknown> = {};
+      for (const [slotKey, { declaration, items: children }] of reading.slots) {
         const reserved = options.reserved?.has(`${alias}:${slotKey}`) === true;
         if (
           declaration.repeats === undefined &&
           declaration.required &&
           !reserved &&
-          (items === undefined || items.length === 0)
+          (children === undefined || children.length === 0)
         )
           reject("vortex.definition.application_block_references", "required_value");
-        if (items === undefined) continue;
-        slots[slotKey] = compileSlot(
-          { items, order: authoredPlacement.slot_orders?.[slotKey] },
+        if (children === undefined) continue;
+        const zone = compileSlot(
+          { items: children, order: authoredPlacement.slot_orders?.[slotKey] },
           {
             depth: options.depth + 1,
             allowedCategories: new Set(declaration.allowedChildCategories),
@@ -891,6 +894,8 @@ export const materialiseApplicationComposition = (
               : { captureShellPlacements: options.captureShellPlacements }),
           },
         );
+        slots[slotKey] = zone.items;
+        slotOrders[slotKey] = zone.order;
       }
       if (
         Object.keys(authoredPlacement.slot_orders ?? {}).some(
@@ -921,7 +926,7 @@ export const materialiseApplicationComposition = (
       const settings = compileSettings(reading.settings, release.properties, resolution, theme);
       applyFieldInputDerivation(release, settings, resolution);
       validateAccessibleName(settings, release);
-      placements[canonicalId] = {
+      const vortex = {
         block: {
           blockId: release.blockId,
           releaseVersion: release.releaseVersion,
@@ -938,16 +943,19 @@ export const materialiseApplicationComposition = (
         ...(authoredPlacement.query === undefined
           ? {}
           : { queryId: resolution.moduleQuery(authoredPlacement.query) }),
-        settings,
         themeOverrides,
         responsive,
-        slots,
+        slotOrders,
       };
+      items.push({
+        type: release.rendererKey,
+        props: { id: canonicalId, settings, ...slots, vortex },
+      });
       if (options.captureShellPlacements)
         shellPlacementTargets.set(alias, { canonicalId, depth: options.depth, release });
     }
     return {
-      placements,
+      items,
       order: materialiseOrder(authored, resolvePlacement, options.responsiveOrderAllowed),
     };
   };
@@ -976,12 +984,12 @@ export const materialiseApplicationComposition = (
     const layout = compileSlot(
       { items: shell.layout.content, order: shell.layout.root.props.vortex.slot_orders.content },
       {
-      depth: 1,
-      allowedCategories: new Set(["layout"]),
-      responsiveOrderAllowed: true,
-      publicSurface: false,
-      reserved,
-      captureShellPlacements: true,
+        depth: 1,
+        allowedCategories: new Set(["layout"]),
+        responsiveOrderAllowed: true,
+        publicSurface: false,
+        reserved,
+        captureShellPlacements: true,
       },
     );
     const contentSlots = new Map<
@@ -1044,7 +1052,10 @@ export const materialiseApplicationComposition = (
           appearanceToggle: shell.presentation.top_bar.appearance_toggle,
         },
       },
-      layout,
+      layout: {
+        root: { props: { vortex: { slotOrders: { content: layout.order } } } },
+        content: layout.items,
+      },
       contentSlots: canonicalSlots,
     });
     const shellIds = [...allPlacementIds].filter((id) => !beforeShellIds.has(id));
@@ -1071,7 +1082,7 @@ export const materialiseApplicationComposition = (
     if (publicSurface && !shell.publicSafe) reject("vortex.definition.application_public_surface");
     if ([...authoredContent.keys()].some((alias) => !shell.contentSlots.has(alias)))
       reject("vortex.definition.application_block_references", "unknown_property");
-    const content: Record<string, unknown> = {};
+    const content = new Map<string, CompiledZone>();
     for (const [alias, slot] of shell.contentSlots) {
       const authored = authoredContent.get(alias);
       if (authored === undefined) {
@@ -1081,12 +1092,15 @@ export const materialiseApplicationComposition = (
       }
       if (slot.required && authored.items.length === 0)
         reject("vortex.definition.application_block_references", "required_value");
-      content[slot.canonicalId] = compileSlot(authored, {
-        depth: slot.depth,
-        allowedCategories: slot.allowed,
-        responsiveOrderAllowed: slot.responsiveOrderAllowed,
-        publicSurface,
-      });
+      content.set(
+        slot.canonicalId,
+        compileSlot(authored, {
+          depth: slot.depth,
+          allowedCategories: slot.allowed,
+          responsiveOrderAllowed: slot.responsiveOrderAllowed,
+          publicSurface,
+        }),
+      );
     }
     return { shell, content };
   };
@@ -1105,12 +1119,17 @@ export const materialiseApplicationComposition = (
     if (shellAliases.size > 1) reject("vortex.definition.application_layout_complete");
     const compileData = (data: SourcePageData): Record<string, unknown> => {
       const vortex = data.root.props.vortex;
-      if (vortex.shell === null)
-        return compileSlot(
+      if (vortex.shell === null) {
+        const zone = compileSlot(
           { items: data.content, order: vortex.slot_orders.content },
           { depth: 1, responsiveOrderAllowed: true, publicSurface },
         );
-      return compileApplicationShellContent(
+        return {
+          root: { props: { vortex: { shellId: null, slotOrders: { content: zone.order } } } },
+          content: zone.items,
+        };
+      }
+      const { shell, content } = compileApplicationShellContent(
         vortex.shell,
         new Map(
           sourcePageRootSlots(data).map(([alias, items]) => [
@@ -1119,11 +1138,24 @@ export const materialiseApplicationComposition = (
           ]),
         ),
         publicSurface,
-      ).content;
+      );
+      return {
+        root: {
+          props: {
+            vortex: {
+              shellId: shell.canonical.shellId,
+              slotOrders: Object.fromEntries(
+                [...content].map(([slotId, zone]) => [slotId, zone.order]),
+              ),
+            },
+            ...Object.fromEntries([...content].map(([slotId, zone]) => [slotId, zone.items])),
+          },
+        },
+        content: [],
+      };
     };
     let canonical: unknown;
     if ("step_content" in composition) {
-      const shellAlias = sourcePageShell(composition);
       const stepContent: Record<string, unknown> = {};
       for (const step of steps) {
         const stepId = resolution.identity("guided_step", step.id, `page:${page.key}`);
@@ -1134,31 +1166,8 @@ export const materialiseApplicationComposition = (
           ),
         );
       }
-      canonical = guidedFormPageCompositionSchema.parse(
-        shellAlias === null
-          ? { shellKind: "default", stepContent }
-          : {
-              shellKind: "application",
-              shellId: shellByAlias.get(shellAlias)?.canonical.shellId,
-              stepContent,
-            },
-      );
-    } else {
-      const shellAlias = composition.root.props.vortex.shell;
-      canonical = pageCompositionSchema.parse(
-        shellAlias === null
-          ? { shellKind: "default", main: compileData(composition) }
-          : {
-              shellKind: "application",
-              shellId: requireValue(
-                shellByAlias.get(shellAlias),
-                "vortex.definition.application_block_references",
-                "broken_reference",
-              ).canonical.shellId,
-              content: compileData(composition),
-            },
-      );
-    }
+      canonical = guidedFormPageCompositionSchema.parse({ stepContent });
+    } else canonical = pageCompositionSchema.parse(compileData(composition));
     pages.push({ pageId, composition: canonical as CanonicalComposition });
   }
 

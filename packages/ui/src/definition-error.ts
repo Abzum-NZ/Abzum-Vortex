@@ -1,9 +1,11 @@
 import {
+  compiledItemSlots,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
-  type ApplicationShell,
-  type BlockPlacementContract,
   type BlockPropertyValueContract,
+  type BreakpointOrder,
+  type CompiledItem,
+  type CompiledLayout,
   type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "./registry";
@@ -49,8 +51,9 @@ export class DefinitionRenderError extends Error {
     code: DefinitionRenderErrorCode,
     message: string,
     location: DefinitionRenderErrorLocation = {},
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = "DefinitionRenderError";
     this.code = code;
     this.location = Object.freeze({ ...location });
@@ -144,23 +147,17 @@ export function validateAccessibleName(
 }
 
 /**
- * Validates that each declared breakpoint order contains exactly the set of placement IDs
- * declared in slot.placements (complete permutation, no missing, extra, or duplicate IDs).
+ * Validates that a breakpoint order names exactly the items of its slot: one complete
+ * permutation, with no missing, extra or duplicate identities. Desktop is the slot's array order.
  */
 export function validateSlotOrder(
-  slot: {
-    placements: Readonly<Record<string, unknown>>;
-    order: Readonly<{
-      desktop?: readonly string[];
-      tablet?: readonly string[];
-      phone?: readonly string[];
-    }>;
-  },
-  breakpoint: Breakpoint,
+  items: readonly CompiledItem[],
+  order: Readonly<Partial<BreakpointOrder>> | undefined,
+  breakpoint: Exclude<Breakpoint, "desktop">,
   location: DefinitionRenderErrorLocation = {},
 ): readonly string[] {
-  const declaredPlacementIds = Object.keys(slot.placements);
-  const orderList = slot.order?.[breakpoint];
+  const declaredPlacementIds = items.map((item) => item.props.id);
+  const orderList = order?.[breakpoint];
 
   if (!Array.isArray(orderList)) {
     throw new DefinitionRenderError(
@@ -178,6 +175,7 @@ export function validateSlotOrder(
     );
   }
 
+  const declared = new Set(declaredPlacementIds);
   const seen = new Set<string>();
   for (const id of orderList) {
     if (seen.has(id)) {
@@ -188,7 +186,7 @@ export function validateSlotOrder(
       );
     }
     seen.add(id);
-    if (!slot.placements[id]) {
+    if (!declared.has(id)) {
       throw new DefinitionRenderError(
         "INCOMPLETE_CHILD_ORDERING",
         `Placement ID '${id}' in child order for breakpoint '${breakpoint}' is not declared in slot placements`,
@@ -212,11 +210,11 @@ export function validateSlotOrder(
 
 /**
  * Validates child slots and category restrictions:
- * 1. Placement slots must only contain keys declared in metadata.slots.
- * 2. Child placements within each slot must have a paletteGroup permitted by allowedChildCategories.
+ * 1. An item's slots must only be keys declared in metadata.slots.
+ * 2. Child items within each slot must have a paletteGroup permitted by allowedChildCategories.
  */
 export function validatePlacementSlots(
-  placement: BlockPlacementContract,
+  item: CompiledItem,
   metadata: PlatformBlockRelease,
   registry: PlatformComponentRegistry,
   location: DefinitionRenderErrorLocation = {},
@@ -228,21 +226,21 @@ export function validatePlacementSlots(
   );
 
   // A repeatable slot owns one key per declared item identity, so resolve every item's own key to
-  // its declaration before judging the placement's slots.
+  // its declaration before judging the item's slots.
   const repeatableSlots = new Map<string, PlatformBlockRelease["slots"][number]>();
   for (const declaration of metadata.slots) {
     if (declaration.repeats === undefined) continue;
-    for (const identity of repeatableSlotItemIdentities(declaration, placement.settings))
+    for (const identity of repeatableSlotItemIdentities(declaration, item.props.settings))
       repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
   }
 
+  const slots = new Map(compiledItemSlots(item));
   for (const declaration of metadata.slots) {
     if (declaration.repeats !== undefined) continue;
-    const childSlot = placement.slots[declaration.key];
+    const childItems = slots.get(declaration.key);
     if (
       declaration.required &&
-      (childSlot === undefined ||
-        (!options.allowEmptyRequiredSlots && Object.keys(childSlot.placements).length === 0))
+      (childItems === undefined || (!options.allowEmptyRequiredSlots && childItems.length === 0))
     ) {
       throw new DefinitionRenderError(
         "MISSING_CHILDREN",
@@ -252,7 +250,7 @@ export function validatePlacementSlots(
     }
   }
 
-  for (const slotKey of Object.keys(placement.slots)) {
+  for (const [slotKey, childItems] of slots) {
     const declaration = declaredSlots.get(slotKey) ?? repeatableSlots.get(slotKey);
     if (!declaration) {
       throw new DefinitionRenderError(
@@ -262,40 +260,36 @@ export function validatePlacementSlots(
       );
     }
 
-    const slot = placement.slots[slotKey];
-    if (!slot) continue;
-
     const allowedCategories = new Set(declaration.allowedChildCategories);
 
-    for (const [childId, childPlacement] of Object.entries(slot.placements)) {
-      const childRegistration = registry.get(
-        childPlacement.block.blockId,
-        childPlacement.block.releaseVersion,
-      );
+    for (const child of childItems) {
+      const childId = child.props.id;
+      const childBlock = child.props.vortex.block;
+      const childRegistration = registry.get(childBlock.blockId, childBlock.releaseVersion);
 
       if (!childRegistration) {
-        if (registry.hasBlockId(childPlacement.block.blockId)) {
+        if (registry.hasBlockId(childBlock.blockId)) {
           throw new DefinitionRenderError(
             "MISMATCHED_RELEASE",
-            `Child placement '${childId}' references mismatched block release version '${childPlacement.block.releaseVersion}' for block '${childPlacement.block.blockId}'`,
+            `Child placement '${childId}' references mismatched block release version '${childBlock.releaseVersion}' for block '${childBlock.blockId}'`,
             {
               ...location,
               slotKey,
               childPlacementId: childId,
-              blockId: childPlacement.block.blockId,
-              releaseVersion: childPlacement.block.releaseVersion,
+              blockId: childBlock.blockId,
+              releaseVersion: childBlock.releaseVersion,
             },
           );
         }
         throw new DefinitionRenderError(
           "UNKNOWN_RELEASE",
-          `Child placement '${childId}' references unknown block '${childPlacement.block.blockId}' release '${childPlacement.block.releaseVersion}'`,
+          `Child placement '${childId}' references unknown block '${childBlock.blockId}' release '${childBlock.releaseVersion}'`,
           {
             ...location,
             slotKey,
             childPlacementId: childId,
-            blockId: childPlacement.block.blockId,
-            releaseVersion: childPlacement.block.releaseVersion,
+            blockId: childBlock.blockId,
+            releaseVersion: childBlock.releaseVersion,
           },
         );
       }
@@ -319,11 +313,11 @@ export function validatePlacementSlots(
 }
 
 /**
- * Validates a complete placement tree before any registered renderer is invoked.
+ * Validates a complete resolved layout before any registered renderer is invoked.
  * Permission projection may legitimately empty a required slot after publication validation.
  */
 export function validatePlacementTree(
-  slot: ApplicationShell["layout"],
+  layout: CompiledLayout,
   registry: PlatformComponentRegistry,
   location: DefinitionRenderErrorLocation = {},
   options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
@@ -331,18 +325,21 @@ export function validatePlacementTree(
   const seenPlacementIds = new Set<string>();
 
   const visit = (
-    currentSlot: ApplicationShell["layout"],
+    items: readonly CompiledItem[],
+    order: Readonly<Partial<BreakpointOrder>> | undefined,
     currentLocation: DefinitionRenderErrorLocation,
   ): void => {
-    for (const breakpoint of ["desktop", "tablet", "phone"] as const)
-      validateSlotOrder(currentSlot, breakpoint, currentLocation);
+    for (const breakpoint of ["tablet", "phone"] as const)
+      validateSlotOrder(items, order, breakpoint, currentLocation);
 
-    for (const [placementId, placement] of Object.entries(currentSlot.placements)) {
+    for (const item of items) {
+      const placementId = item.props.id;
+      const vortex = item.props.vortex;
       const placementLocation: DefinitionRenderErrorLocation = {
         ...currentLocation,
         placementId,
-        blockId: placement.block.blockId,
-        releaseVersion: placement.block.releaseVersion,
+        blockId: vortex.block.blockId,
+        releaseVersion: vortex.block.releaseVersion,
       };
       if (seenPlacementIds.has(placementId)) {
         throw new DefinitionRenderError(
@@ -353,37 +350,31 @@ export function validatePlacementTree(
       }
       seenPlacementIds.add(placementId);
 
-      const registration = registry.get(
-        placement.block.blockId,
-        placement.block.releaseVersion,
-      );
+      const registration = registry.get(vortex.block.blockId, vortex.block.releaseVersion);
       if (registration === undefined) {
         throw new DefinitionRenderError(
-          registry.hasBlockId(placement.block.blockId) ? "MISMATCHED_RELEASE" : "UNKNOWN_RELEASE",
+          registry.hasBlockId(vortex.block.blockId) ? "MISMATCHED_RELEASE" : "UNKNOWN_RELEASE",
           `Placement '${placementId}' references ${
-            registry.hasBlockId(placement.block.blockId) ? "mismatched" : "unknown"
-          } block release '${placement.block.blockId}:${placement.block.releaseVersion}'`,
+            registry.hasBlockId(vortex.block.blockId) ? "mismatched" : "unknown"
+          } block release '${vortex.block.blockId}:${vortex.block.releaseVersion}'`,
+          placementLocation,
+        );
+      }
+      if (item.type !== registration.metadata.rendererKey) {
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          `Placement '${placementId}' names renderer '${item.type}' instead of its block's '${registration.metadata.rendererKey}'`,
           placementLocation,
         );
       }
 
-      validateAccessibleName(placement.settings, registration.metadata.capabilities, placementLocation);
-      validatePlacementSlots(
-        placement,
-        registration.metadata,
-        registry,
-        placementLocation,
-        options,
-      );
+      validateAccessibleName(item.props.settings, registration.metadata.capabilities, placementLocation);
+      validatePlacementSlots(item, registration.metadata, registry, placementLocation, options);
 
-      const layouts = [
-        placement.responsive.desktop,
-        placement.responsive.tablet,
-        placement.responsive.phone,
-      ];
+      const layouts = [vortex.responsive.desktop, vortex.responsive.tablet, vortex.responsive.phone];
       if (
         !registration.metadata.capabilities.responsiveVisibility &&
-        layouts.some((layout) => layout.visible !== layouts[0]?.visible)
+        layouts.some((entry) => entry.visible !== layouts[0]?.visible)
       ) {
         throw new DefinitionRenderError(
           "INVALID_COMPOSITION",
@@ -393,7 +384,7 @@ export function validatePlacementTree(
       }
       if (
         !registration.metadata.capabilities.gridWidth &&
-        layouts.some((layout) => layout.width.kind === "grid")
+        layouts.some((entry) => entry.width.kind === "grid")
       ) {
         throw new DefinitionRenderError(
           "INVALID_COMPOSITION",
@@ -403,7 +394,7 @@ export function validatePlacementTree(
       }
       if (
         registration.metadata.capabilities.height === "content" &&
-        layouts.some((layout) => layout.height.kind !== "content")
+        layouts.some((entry) => entry.height.kind !== "content")
       ) {
         throw new DefinitionRenderError(
           "INVALID_COMPOSITION",
@@ -411,12 +402,15 @@ export function validatePlacementTree(
           placementLocation,
         );
       }
+      const slots = compiledItemSlots(item);
       if (!registration.metadata.capabilities.responsiveOrder) {
-        for (const [slotKey, childSlot] of Object.entries(placement.slots)) {
-          const desktopOrder = childSlot.order.desktop;
+        for (const [slotKey, children] of slots) {
+          const desktopOrder = children.map((child) => child.props.id);
+          const childOrder = vortex.slotOrders[slotKey];
           if (
-            childSlot.order.tablet.some((entry, index) => entry !== desktopOrder[index]) ||
-            childSlot.order.phone.some((entry, index) => entry !== desktopOrder[index])
+            childOrder !== undefined &&
+            (childOrder.tablet.some((entry, index) => entry !== desktopOrder[index]) ||
+              childOrder.phone.some((entry, index) => entry !== desktopOrder[index]))
           ) {
             throw new DefinitionRenderError(
               "INCOMPLETE_CHILD_ORDERING",
@@ -427,10 +421,10 @@ export function validatePlacementTree(
         }
       }
 
-      for (const [slotKey, childSlot] of Object.entries(placement.slots))
-        visit(childSlot, { ...placementLocation, slotKey });
+      for (const [slotKey, children] of slots)
+        visit(children, vortex.slotOrders[slotKey], { ...placementLocation, slotKey });
     }
   };
 
-  visit(slot, location);
+  visit(layout.content, layout.root.props.vortex.slotOrders.content, location);
 }

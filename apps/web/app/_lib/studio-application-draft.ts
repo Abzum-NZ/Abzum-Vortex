@@ -7,7 +7,10 @@ import {
   sameId,
   canonicalJson,
   describeFailure,
-  placementSlotSchema,
+  compiledItemSlots,
+  type ApplicationContent,
+  type CompiledItem,
+  type PageComposition,
   sourcePageSlotAddresses,
   sourceItemChildSlots,
   sourcePageShell,
@@ -82,7 +85,8 @@ type StudioApplicationLoadResult =
   | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
-type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
+/** One compiled content area: its items in desktop order, exactly as the release holds them. */
+type CompiledSlot = readonly CompiledItem[];
 
 /** Exact compiled page slots keyed by authored page alias, then by page slot address key. */
 export type StudioApplicationCompiledPageSlots = Readonly<
@@ -92,109 +96,76 @@ export type StudioApplicationCompiledPageSlots = Readonly<
 const compiledPageSlot = (
   source: StoredApplicationDefinitionDraft["source"],
   page: SourcePage,
-  content: unknown,
-  compiledPage: unknown,
+  content: ApplicationContent,
+  compiledPage: ApplicationContent["pages"][number],
   at: PageSlotAddress,
 ): CompiledSlot | undefined => {
   const sourceComposition = page.composition;
-  const compiled = compiledPage as {
-    composition?: {
-      main?: unknown;
-      shellId?: unknown;
-      content?: Record<string, unknown>;
-      stepContent?: Record<string, unknown>;
-    };
-    steps?: readonly { id: unknown }[];
-  };
-  const composition = compiled.composition;
-  if (composition === undefined) return undefined;
-  const shellAlias = sourcePageShell(sourceComposition);
-  if (!("step_content" in sourceComposition) && shellAlias === null)
-    return composition.main === undefined ? undefined : placementSlotSchema.parse(composition.main);
-
-  let stepContent: unknown = undefined;
-  if ("step_content" in sourceComposition) {
+  const composition = compiledPage.composition;
+  let data: PageComposition | undefined;
+  if ("stepContent" in composition) {
     const stepIndex = "steps" in page ? page.steps.findIndex((step) => step.id === at.step) : -1;
-    const compiledStepId = compiled.steps?.[stepIndex]?.id;
-    if (compiledStepId === undefined || composition.stepContent === undefined) return undefined;
-    stepContent = composition.stepContent[String(compiledStepId)];
-    if (shellAlias === null)
-      return stepContent === undefined ? undefined : placementSlotSchema.parse(stepContent);
-  }
-
-  if (shellAlias === null || composition.shellId === undefined || at.slot === undefined)
-    return undefined;
+    const compiledStepId = "steps" in compiledPage ? compiledPage.steps[stepIndex]?.id : undefined;
+    data = compiledStepId === undefined ? undefined : composition.stepContent[String(compiledStepId)];
+  } else data = composition;
+  if (data === undefined) return undefined;
+  const shellAlias = sourcePageShell(sourceComposition);
+  const shellId = data.root.props.vortex.shellId;
+  if (shellAlias === null) return shellId === null ? data.content : undefined;
+  if (shellId === null || at.slot === undefined) return undefined;
   const sourceShell = source.body.shells.find((candidate) => candidate.id === shellAlias);
   const sourceSlot = sourceShell?.content_slots.find((candidate) => candidate.id === at.slot);
-  const canonical = content as {
-    shells?: readonly {
-      shellId: unknown;
-      contentSlots: readonly { slotId: unknown; key: string }[];
-    }[];
-  };
-  const shells = canonical.shells?.filter(
-    (candidate) => String(candidate.shellId) === String(composition.shellId),
-  ) ?? [];
-  const contentSlots = shells[0]?.contentSlots.filter(
-    (candidate) => candidate.key === sourceSlot?.key,
-  ) ?? [];
+  const shells = content.shells.filter((candidate) => String(candidate.shellId) === String(shellId));
+  const contentSlots =
+    shells[0]?.contentSlots.filter((candidate) => candidate.key === sourceSlot?.key) ?? [];
   if (sourceSlot === undefined || shells.length !== 1 || contentSlots.length !== 1)
     return undefined;
-  const slotId = String(contentSlots[0]!.slotId);
-  const runtimeSlot = (
-    "step_content" in sourceComposition
-      ? (stepContent as Record<string, unknown> | undefined)
-      : composition.content
-  )?.[slotId];
-  return runtimeSlot === undefined ? undefined : placementSlotSchema.parse(runtimeSlot);
+  const items = data.root.props[String(contentSlots[0]!.slotId)];
+  return items === undefined ? [] : (items as CompiledSlot);
 };
 
 /**
  * The authored zone and its compiled slot hold the same items in the same desktop order, with the
- * same child slots. Authored items are in desktop order; compiled placements are keyed by resolved
- * id and ordered by `order.desktop`. A child slot the author left empty compiles to an empty slot.
+ * same child slots: both are item arrays in desktop order. A child slot the author left empty
+ * compiles to an empty slot.
  */
 const assertCompiledSlotMatches = (
   authored: readonly SourceItem[],
   compiled: CompiledSlot,
 ): void => {
-  const compiledIds = compiled.order.desktop;
-  if (authored.length !== compiledIds.length)
+  if (authored.length !== compiled.length)
     throw new Error("Studio authored and compiled page placements do not match");
   for (const [index, item] of authored.entries()) {
-    const compiledPlacement = compiled.placements[compiledIds[index]!];
-    if (compiledPlacement === undefined)
-      throw new Error("Studio authored and compiled page placements do not match");
+    const compiledItem = compiled[index]!;
     const sourceSlots = new Map(sourceItemChildSlots(item));
-    const compiledSlots = Object.entries(compiledPlacement.slots);
-    const filled = compiledSlots.filter(([, slot]) => slot.order.desktop.length > 0);
+    const compiledSlots = compiledItemSlots(compiledItem);
+    const filled = compiledSlots.filter(([, children]) => children.length > 0);
     if (filled.length !== sourceSlots.size ||
       filled.some(([key]) => !sourceSlots.has(key)) ||
-      compiledSlots.some(([key, slot]) => slot.order.desktop.length === 0 &&
+      compiledSlots.some(([key, children]) => children.length === 0 &&
         !(Array.isArray(item.props[key]) && (item.props[key] as unknown[]).length === 0)))
       throw new Error("Studio authored and compiled page slots do not match");
+    const compiledByKey = new Map(compiledSlots);
     for (const [key, children] of sourceSlots)
-      assertCompiledSlotMatches(children, compiledPlacement.slots[key]!);
+      assertCompiledSlotMatches(children, compiledByKey.get(key)!);
   }
 };
 
 const pageCompiledSlotsFor = (
   source: StoredApplicationDefinitionDraft["source"],
-  canonical: unknown,
+  canonical: ApplicationContent,
 ): StudioApplicationCompiledPageSlots => {
-  const content = canonical as {
-    pages?: readonly unknown[];
-  };
-  if (content.pages === undefined || content.pages.length !== source.body.pages.length)
+  const content = canonical;
+  if (content.pages.length !== source.body.pages.length)
     throw new Error("Studio compiled page list does not match its authored draft");
   const result: Record<string, Record<string, CompiledSlot>> = {};
   source.body.pages.forEach((page, index) => {
-    const compiledPage = content.pages![index] as { key?: unknown; type?: unknown } | undefined;
+    const compiledPage = content.pages[index];
     if (compiledPage === undefined || compiledPage.key !== page.key || compiledPage.type !== page.type)
       throw new Error("Studio compiled page does not match its authored draft");
     const slots: Record<string, CompiledSlot> = {};
     for (const at of sourcePageSlotAddresses(page)) {
-      const runtimeSlot = compiledPageSlot(source, page, canonical, content.pages![index], at);
+      const runtimeSlot = compiledPageSlot(source, page, canonical, compiledPage, at);
       if (runtimeSlot === undefined)
         throw new Error("Studio compiled page slot does not match its authored draft");
       const zone: SourcePageZone | undefined = sourcePageSlotAt(page, at);

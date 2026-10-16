@@ -196,7 +196,7 @@ export const compileCandidate = (
       return refuse("DEFINITION_COMPILATION_REFUSED");
     const request = {
       sourceContractVersion: applicationSourceContractVersion,
-      validationContractVersion: "2.0.0" as const,
+      validationContractVersion: "3.0.0" as const,
       source: candidate.draft.source,
       resolution,
       catalogueSnapshot: dependencies.composition,
