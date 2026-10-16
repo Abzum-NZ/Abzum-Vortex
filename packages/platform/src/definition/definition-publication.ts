@@ -316,10 +316,11 @@ export const createDefinitionPublicationService = (
       // validation above run on every call.
       const source = candidate.draft.source;
       const inlineKeys = new Set(applicationModuleSources(source).map((module) => module.key));
-      const ownedRoots = await reader.readOwnedModuleRoots(String(candidate.draft.rootId));
+      const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
+      const ownedRoots = await overlay.readOwnedModuleRoots(String(candidate.draft.rootId));
       const usedAnchors = [];
       for (const moduleKey of applicationModuleKeys(source).filter((key) => !inlineKeys.has(key))) {
-        const page = await reader.readModuleReleasePage(candidate.draft.organizationId, moduleKey);
+        const page = await overlay.readModuleReleasePage(candidate.draft.organizationId, moduleKey);
         usedAnchors.push([moduleKey, page.rootId, page.anchorReleaseRevision]);
       }
       const cacheKey = applicationDraftCompilationKey([
@@ -343,7 +344,7 @@ export const createDefinitionPublicationService = (
       // publication's own steps; nothing is written.
       const compiled = await compileApplicationWithInlineModules(
         context,
-        createDraftModuleOverlay(reader, context, candidate.draft),
+        overlay,
         catalogue,
         candidate,
       );

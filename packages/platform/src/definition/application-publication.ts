@@ -21,6 +21,7 @@ import {
   type ModuleOutput,
   type OwnedModuleRoot,
   type PreparedState,
+  type ResolvableModuleRelease,
   refuse,
 } from "./definition-publication-contracts";
 import {
@@ -28,7 +29,9 @@ import {
   buildResolution,
   manifestFor,
   resolveDependencies,
+  selectCurrentModuleRelease,
 } from "./definition-dependency-resolution";
+import { moduleDependencies } from "./module-dependencies";
 import { assignNextDefinitionVersion } from "./semantic-version";
 import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-definition";
 
@@ -75,6 +78,7 @@ const inlineModuleSources = (candidate: DefinitionPublicationCandidate) =>
 export const materializeInlineModules = async (
   transaction: DefinitionPublicationTransaction,
   candidate: DefinitionPublicationCandidate,
+  unchanged: ReadonlySet<string> = new Set(),
 ): Promise<ReadonlyMap<string, OwnedModuleRoot>> => {
   const owned = new Map(
     (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
@@ -83,6 +87,7 @@ export const materializeInlineModules = async (
   );
   const roots = new Map<string, OwnedModuleRoot>();
   for (const source of inlineModuleSources(candidate)) {
+    if (unchanged.has(source.key)) continue;
     const existing = owned.get(source.key);
     const root =
       existing === undefined
@@ -117,9 +122,11 @@ const releaseInlineModules = async (
   roots: ReadonlyMap<string, OwnedModuleRoot>,
   version: string,
   releaseNote: string,
+  unchanged: ReadonlySet<string> = new Set(),
 ): Promise<ModuleStep[]> => {
   const steps: ModuleStep[] = [];
   for (const source of inlineModuleSources(candidate)) {
+    if (unchanged.has(source.key)) continue;
     const root = roots.get(source.key);
     if (root === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
     const module = validateCandidate(
@@ -399,6 +406,72 @@ export const rehearseApplicationPreview = async (
   });
 };
 
+/**
+ * The inline Modules whose current release already is what their publication would leave current.
+ * A Module qualifies when its draft is exactly its released source, every sibling it depends on
+ * qualifies, and its release pins exactly the releases its dependencies resolve to now. Its
+ * publication would compile it, find no change and no new pin, and not release it, so a draft
+ * compile takes the release as it is instead of compiling it again.
+ */
+const releasedUnchangedModules = async (
+  transaction: DefinitionPublicationTransaction,
+  candidate: DefinitionPublicationCandidate,
+): Promise<ReadonlySet<string>> => {
+  const owned = new Map(
+    (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
+      (root) => [root.key, root] as const,
+    ),
+  );
+  const sources = inlineModuleSources(candidate);
+  const inlineKeys = new Set(sources.map((source) => source.key));
+  const usedReleases = new Map<string, ResolvableModuleRelease>();
+  const unchanged = new Set<string>();
+  for (const source of sources) {
+    const root = owned.get(source.key);
+    if (
+      root === undefined ||
+      root.currentReleaseRevision === null ||
+      root.draftRevision !== root.currentReleaseRevision ||
+      root.sourceFingerprint !== fingerprintCanonicalValue(source)
+    )
+      continue;
+    const dependencies = moduleDependencies(source).map((dependency) => dependency.module);
+    if (dependencies.some((key) => inlineKeys.has(key) && !unchanged.has(key))) continue;
+    const release = await transaction.readModuleRelease(
+      candidate.draft.organizationId,
+      root.rootId,
+      root.currentReleaseRevision,
+    );
+    if (release === undefined) continue;
+    const pinned = new Set(
+      release.published.dependencyManifest.map((dependency) =>
+        dependency.kind === "module"
+          ? `${String(dependency.rootId).toLowerCase()}:${String(dependency.revision)}`
+          : dependency.kind,
+      ),
+    );
+    const expected: string[] = [];
+    for (const key of dependencies) {
+      const sibling = owned.get(key);
+      if (inlineKeys.has(key)) {
+        expected.push(
+          `${String(sibling?.rootId).toLowerCase()}:${String(sibling?.currentReleaseRevision)}`,
+        );
+        continue;
+      }
+      let used = usedReleases.get(key);
+      if (used === undefined) {
+        used = await selectCurrentModuleRelease(transaction, candidate, key);
+        usedReleases.set(key, used);
+      }
+      expected.push(`${String(used.rootId).toLowerCase()}:${String(used.releaseRevision)}`);
+    }
+    if (pinned.size === expected.length && expected.every((pin) => pinned.has(pin)))
+      unchanged.add(source.key);
+  }
+  return unchanged;
+};
+
 /** The inline Module releases a draft compile holds in memory are never stored; the note only labels them. */
 const draftCompileReleaseNote = "Compiled for the draft";
 
@@ -415,7 +488,8 @@ export const compileApplicationWithInlineModules = async (
   catalogue: DefinitionPublicationCatalogue,
   candidate: DefinitionPublicationCandidate,
 ) => {
-  const roots = await materializeInlineModules(transaction, candidate);
+  const unchanged = await releasedUnchangedModules(transaction, candidate);
+  const roots = await materializeInlineModules(transaction, candidate, unchanged);
   const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
   const version =
     latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
@@ -427,6 +501,7 @@ export const compileApplicationWithInlineModules = async (
     roots,
     version,
     draftCompileReleaseNote,
+    unchanged,
   );
   return compileApplication(transaction, catalogue, candidate, version, false);
 };

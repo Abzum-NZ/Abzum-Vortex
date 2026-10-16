@@ -91,10 +91,36 @@ const identityAssignments = (
  * the ones the database will record. Nothing is written; a draft compile reads it and drops it.
  */
 export const createDraftModuleOverlay = (
-  reader: DefinitionPublicationReader,
+  storedReader: DefinitionPublicationReader,
   context: SessionContext,
   applicationDraft: StoredDefinitionDraft,
 ): DefinitionPublicationTransaction => {
+  // One draft compile reads the stored definitions in one read transaction, so a stored release
+  // page or release read once is the same for the rest of the compile and is read only once.
+  const storedReads = new Map<string, Promise<unknown>>();
+  const once = <Value>(parts: readonly unknown[], read: () => Promise<Value>): Promise<Value> => {
+    const readKey = JSON.stringify(parts);
+    const known = storedReads.get(readKey);
+    if (known !== undefined) return known as Promise<Value>;
+    const value = read();
+    storedReads.set(readKey, value);
+    return value;
+  };
+  const reader: DefinitionPublicationReader = {
+    readCandidate: (rootId) => storedReader.readCandidate(rootId),
+    readOwnedModuleRoots: (applicationRootId) =>
+      storedReader.readOwnedModuleRoots(applicationRootId),
+    readModuleReleasePage: (organizationId, moduleKey, cursor) =>
+      once(["page", organizationId, moduleKey, cursor ?? null], () =>
+        storedReader.readModuleReleasePage(organizationId, moduleKey, cursor),
+      ),
+    readModuleRelease: (organizationId, rootId, releaseRevision) =>
+      once(["release", organizationId, String(rootId).toLowerCase(), releaseRevision], () =>
+        storedReader.readModuleRelease(organizationId, rootId, releaseRevision),
+      ),
+    readModuleReleases: (organizationId, locators) =>
+      storedReader.readModuleReleases(organizationId, locators),
+  };
   const candidates = new Map<string, DefinitionPublicationCandidate>();
   const releasesByKey = new Map<string, ResolvableModuleRelease>();
   const storedAnchors = new Map<string, ResolvableModuleReleasePage["anchorReleaseRevision"] & number>();
