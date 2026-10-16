@@ -3,13 +3,11 @@ import "server-only";
 import {
   applicationCompilationRequestSchema,
   definitionCompilationOutputSchema,
-  definitionPublicationConfirmationSchema,
   moduleCompilationRequestSchema,
   savedConditionRevisionAssignmentSchema,
   storedDefinitionDraftSchema,
   type DefinitionCompilationOutput,
   type DefinitionPublicationHistoryEvidence,
-  type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
   type SavedConditionRevisionAssignment,
   type SessionContext,
@@ -23,7 +21,6 @@ import { compileParsedDefinition } from "./compiler";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { DefinitionCompilationError } from "./compilation-error";
 import { validateDefinitionSet } from "./validation";
-import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-definition";
 import {
   deriveSavedConditionRevisions,
   type SavedConditionLike,
@@ -34,17 +31,8 @@ import {
   type DefinitionResolution,
   refuse,
   type DefinitionPublicationCandidate,
-  type DefinitionPublicationReader,
-  type DefinitionPublicationCatalogue,
-  type PreparedState,
 } from "./definition-publication-contracts";
-import {
-  type ResolvedDependencies,
-  resolveDependencies,
-  assertNoCycle,
-  manifestFor,
-  buildResolution,
-} from "./definition-dependency-resolution";
+import type { ResolvedDependencies } from "./definition-dependency-resolution";
 
 const draftMetadata = (draft: StoredDefinitionDraft) => ({
   organizationId: draft.organizationId,
@@ -328,85 +316,3 @@ export const validateCandidate = (
     );
   return candidate;
 };
-
-/** The one explicit comparator contract each stored draft kind declares. */
-const candidateValidationContractVersion = (
-  source: StoredDefinitionDraft["source"],
-): Readonly<{ validationContractVersion: "2.0.0" | "3.0.0" }> => ({
-  validationContractVersion: source.kind === "module" ? "3.0.0" : "2.0.0",
-});
-
-export const prepareFromReader = async (
-  context: SessionContext,
-  reader: DefinitionPublicationReader,
-  catalogue: DefinitionPublicationCatalogue,
-  command: PrepareDefinitionPublicationCommand,
-  candidateInput: DefinitionPublicationCandidate | undefined,
-  pinned?: readonly ExactDefinitionDependency[],
-): Promise<PreparedState> => {
-  const candidate = validateCandidate(context, candidateInput, command);
-  const dependencies = await resolveDependencies(reader, catalogue, candidate, pinned);
-  await assertNoCycle(reader, candidate, dependencies.modules);
-  const provisionalVersion =
-    candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
-  const provisionalResolution = buildResolution(candidate, dependencies, provisionalVersion);
-  const provisional = compileCandidate(
-    candidate,
-    dependencies,
-    provisionalResolution,
-    false,
-    catalogue.permissions,
-  );
-  const impact = compareDefinitionVersionImpactWithEvidence({
-    kind: candidate.draft.kind,
-    ...candidateValidationContractVersion(candidate.draft.source),
-    historyEvidence: candidate.historyEvidence,
-    candidate: provisional.canonical,
-  });
-  if (impact.outcome === "no_change") refuse("DEFINITION_NO_CHANGE");
-  const confirmableImpact = impact as Extract<typeof impact, { assignedVersion: string }>;
-  const resolution = buildResolution(candidate, dependencies, confirmableImpact.assignedVersion);
-  const compilationOutput = compileCandidate(
-    candidate,
-    dependencies,
-    resolution,
-    true,
-    catalogue.permissions,
-  );
-  const confirmedImpact = compareDefinitionVersionImpactWithEvidence({
-    kind: candidate.draft.kind,
-    ...candidateValidationContractVersion(candidate.draft.source),
-    historyEvidence: candidate.historyEvidence,
-    candidate: compilationOutput.canonical,
-  });
-  if (confirmedImpact.outcome === "no_change") refuse("DEFINITION_VERSION_REFUSED");
-  const finalImpact = confirmedImpact as Extract<
-    typeof confirmedImpact,
-    { assignedVersion: string }
-  >;
-  if (finalImpact.assignedVersion !== confirmableImpact.assignedVersion)
-    refuse("DEFINITION_VERSION_REFUSED");
-  const confirmation = definitionPublicationConfirmationSchema.parse({
-    outcome: finalImpact.outcome,
-    rootId: candidate.draft.rootId,
-    expectedDraftRevision: candidate.draft.draftRevision,
-    sourceFingerprint: candidate.draft.sourceFingerprint,
-    assignedVersion: finalImpact.assignedVersion,
-    contentFingerprint: compilationOutput.artifact.contentFingerprint,
-    resolutionFingerprint: compilationOutput.resolutionFingerprint,
-    dependencyManifest: manifestFor(dependencies, compilationOutput, resolution),
-    reasons: finalImpact.reasons,
-    ...(finalImpact.outcome === "release_required" ? { impact: finalImpact.impact } : {}),
-  });
-  return {
-    confirmation,
-    draft: candidate.draft,
-    compilationOutput,
-    resolutionSnapshot: resolution,
-  };
-};
-
-/**
- * The authority decides for exactly one organisation. A context for any other organisation is
- * refused before the authority or any evidence is consulted.
- */

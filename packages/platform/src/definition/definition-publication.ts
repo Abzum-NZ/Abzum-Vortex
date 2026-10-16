@@ -71,7 +71,6 @@ import {
   compileModuleCandidate,
   compileCandidate,
   validateCandidate,
-
 } from "./definition-publication-compilation";
 import {
   type ModuleBeforeSaveConditionDraftResult,

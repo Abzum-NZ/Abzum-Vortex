@@ -123,10 +123,7 @@ export const normaliseApplicationSharedContent = (content: ApplicationContent): 
   const value = asRecord(structuredClone(content));
   return {
     ...value,
-    moduleBindings: sorted(
-      withoutPinnedVersion(value.moduleBindings as unknown[]),
-      "moduleRootId",
-    ),
+    moduleBindings: sorted(withoutPinnedVersion(value.moduleBindings as unknown[]), "moduleRootId"),
     experiences: sorted((value.experiences as unknown[] | undefined) ?? [], "state"),
     roles: sorted(
       (value.roles as RecordValue[]).map((role) => ({

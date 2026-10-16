@@ -10,7 +10,8 @@ security definer
 set search_path = ''
 as $function$
   -- A Module source is the lowering of one inline Module of its owning Application's current
-  -- draft: the same alias, key and body, plus the dependencies derived from its references.
+  -- draft: the same alias, key and body, naming that Application as its owner, plus the
+  -- dependencies derived from its references.
   select exists (
     select 1
     from vortex_definition.roots as owner_root
@@ -24,7 +25,9 @@ as $function$
       and p_source ->> 'kind' = 'module'
       and inline_module.value ->> 'key' = p_source ->> 'key'
       and inline_module.value ->> 'id' = p_source ->> 'root_alias'
-      and (inline_module.value - 'id' - 'key') = ((p_source -> 'body') - 'dependencies')
+      and p_source #>> '{body,owner_application}' = owner_root.key
+      and (inline_module.value - 'id' - 'key')
+        = ((p_source -> 'body') - 'dependencies' - 'owner_application')
   );
 $function$;
 

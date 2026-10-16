@@ -2,13 +2,14 @@ import "server-only";
 
 import {
   definitionPublicationConfirmationSchema,
+  prepareDefinitionPublicationCommandSchema,
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
   type SessionContext,
   type VersionImpact,
   type VersionImpactReason,
 } from "../schema";
-import { applicationModuleSources } from "./application-module-sources";
+import { applicationModuleSources } from "./application-module-lowering";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import { compileCandidate, validateCandidate } from "./definition-publication-compilation";
 import {
@@ -115,10 +116,14 @@ const releaseInlineModules = async (
   for (const source of inlineModuleSources(candidate)) {
     const root = roots.get(source.key);
     if (root === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-    const module = validateCandidate(context, await transaction.readCandidate(root.rootId), {
-      rootId: root.rootId,
-      expectedDraftRevision: root.draftRevision,
-    });
+    const module = validateCandidate(
+      context,
+      await transaction.readCandidate(root.rootId),
+      prepareDefinitionPublicationCommandSchema.parse({
+        rootId: root.rootId,
+        expectedDraftRevision: root.draftRevision,
+      }),
+    );
     if (
       module.draft.kind !== "module" ||
       fingerprintCanonicalValue(module.draft.source) !== fingerprintCanonicalValue(source)
@@ -170,7 +175,13 @@ const compileApplication = async (
   const dependencies = await resolveDependencies(transaction, catalogue, candidate, pinned);
   await assertNoCycle(transaction, candidate, dependencies.modules);
   const resolution = buildResolution(candidate, dependencies, version);
-  const output = compileCandidate(candidate, dependencies, resolution, final, catalogue.permissions);
+  const output = compileCandidate(
+    candidate,
+    dependencies,
+    resolution,
+    final,
+    catalogue.permissions,
+  );
   if (output.kind !== "application") return refuse("DEFINITION_COMPILATION_REFUSED");
   return { output, resolution, manifest: manifestFor(dependencies, output, resolution) };
 };
@@ -272,7 +283,9 @@ export const planApplicationPublication = async (
       reasons: publicationReasons(candidate, roots, modules, application),
     };
   };
-  const rehearsed = await transaction.rehearse(async () => (await pass(provisional, false)).reasons);
+  const rehearsed = await transaction.rehearse(
+    async () => (await pass(provisional, false)).reasons,
+  );
   if (latestVersion !== undefined && rehearsed.length === 0) refuse("DEFINITION_NO_CHANGE");
   const version =
     latestVersion === undefined
