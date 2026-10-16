@@ -5,6 +5,7 @@ import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 import { useEffect, useRef, useState } from "react";
 import {
   studioApplicationInstallationCommandResultSchema,
+  studioApplicationInstallationLoadResultSchema,
   type StudioApplicationInstallationCommandResult,
   type StudioApplicationInstallationLoadResult,
   type StudioApplicationInstallationSelector,
@@ -64,7 +65,7 @@ const commandText = (result: StudioApplicationInstallationCommandResult): string
   }
   switch (result.kind) {
     case "conflict":
-      return "The installation or the selected version changed. Reload this page before continuing.";
+      return "The installation or the selected version changed. The page now shows the current state; review it before continuing.";
     case "authentication_required":
       return "Recent sign-in is required for this upgrade. Sign in again, then reload this page.";
     case "refused":
@@ -111,7 +112,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
     const deadline = Date.parse(snapshotExpiry);
     const delay = Math.max(0, deadline - Date.now());
     const timer = window.setTimeout(() => {
-      if (mounted.current && snapshotRef.current === snapshotId) {
+      if (mounted.current) {
         setNow(Date.now());
         if (!pendingRef.current) setMessage("This snapshot expired. Reload to verify current access and installation before continuing.");
       }
@@ -143,8 +144,9 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         expected: snapshot,
       });
       if (!current()) return;
-      const parsed = studioApplicationInstallationCommandResultSchema.safeParse(returned);
-      if (!parsed.success) {
+      const parsed = studioApplicationInstallationCommandResultSchema.safeParse(returned.command);
+      const reloaded = studioApplicationInstallationLoadResultSchema.safeParse(returned.load);
+      if (!parsed.success || !reloaded.success) {
         const failure = studioApplicationInstallationCommandResultSchema.parse({
           kind: "temporarily_unavailable",
           registrationMayHaveChanged: "unknown",
@@ -153,7 +155,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         setMessage(commandText(failure));
         return;
       }
-      setState((previous) => ({ ...previous, command: parsed.data }));
+      setState({ load: reloaded.data, command: parsed.data });
       setMessage(commandText(parsed.data));
     } catch {
       if (!current()) return;
@@ -220,7 +222,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
           ? <p>This version is already in use. Reload to confirm.</p>
           : <p>Continue only if you want this installed application to start using version {snapshot.selected.releaseVersion}.</p>}
         <Button type="button" variant="outline" size="sm" name="application.release.install_selected"
-          disabled={pending || expired || snapshot.selected.releaseRevision <= snapshot.active.releaseRevision || state.command !== null}
+          disabled={pending || expired || snapshot.selected.releaseRevision <= snapshot.active.releaseRevision}
           aria-busy={pending}
          
           onClick={() => void install()}>

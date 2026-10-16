@@ -202,7 +202,19 @@ export const createHumanOrganizationRequestService = (
                     ${verifiedCandidate.data.applicationRootId}::uuid
                   )
                 `;
-          const scope = parseScope(rows);
+          const parsedScope = parseScope(rows);
+          // A preview request runs the preview's installation in every read and change of this
+          // transaction; the database refuses an address its builder may not run.
+          const scope: SelectedOrganizationScope =
+            verifiedCandidate.data.previewInstallationId === undefined
+              ? parsedScope
+              : { ...parsedScope, previewInstallationId: verifiedCandidate.data.previewInstallationId };
+          if (scope.previewInstallationId !== undefined)
+            await transaction.query`
+              select pg_catalog.set_config(
+                'vortex_record.preview_installation_id', ${scope.previewInstallationId}, true
+              )
+            `;
           if (
             (verifiedCandidate.data.applicationRootId === undefined) !==
               (scope.applicationRootId === undefined) ||

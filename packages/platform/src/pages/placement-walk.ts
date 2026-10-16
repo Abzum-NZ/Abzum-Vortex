@@ -1,5 +1,4 @@
 import { isRecord } from "../catalogue/runtime-primitives";
-import { compiledPropsSettings } from "../definition/application-composition/page-composition";
 
 /** One compiled item met while walking a projected layout: its placement identity and props. */
 export type VisitedPlacement = Readonly<{
@@ -10,8 +9,6 @@ export type VisitedPlacement = Readonly<{
   props: Record<string, unknown>;
   /** The item's `props.vortex`: block release, bindings, layout and slot orders. */
   vortex: Record<string, unknown>;
-  /** The item's settings: every prop holding a typed canonical setting value. */
-  settings: Record<string, unknown>;
 }>;
 
 /**
@@ -23,13 +20,18 @@ export type PlacementVisitor<Inherited> = (
   inherited: Inherited,
 ) => Inherited | false;
 
-const reservedProps = new Set(["id", "vortex"]);
-
-/** The child slots of one item's props: every array prop but `id` and `vortex`. */
-export const itemPropSlots = (props: Record<string, unknown>): [string, unknown[]][] =>
-  Object.entries(props).flatMap(([key, value]): [string, unknown[]][] =>
-    reservedProps.has(key) || !Array.isArray(value) ? [] : [[key, value]],
-  );
+/**
+ * The child slots of one item's props: exactly the slots its `vortex.slotOrders` orders, which
+ * the compiler fills from the release's slot declarations. A list setting is never a slot.
+ */
+export const itemPropSlots = (props: Record<string, unknown>): [string, unknown[]][] => {
+  const vortex = isRecord(props.vortex) ? props.vortex : {};
+  const orders = isRecord(vortex.slotOrders) ? vortex.slotOrders : {};
+  return Object.keys(orders).flatMap((key): [string, unknown[]][] => {
+    const value = props[key];
+    return Array.isArray(value) ? [[key, value]] : [];
+  });
+};
 
 /**
  * Visits every item of one item list, in desktop order, descending through each item's slots.
@@ -51,7 +53,6 @@ export const walkPlacements = <Inherited = undefined>(
         item,
         props,
         vortex,
-        settings: compiledPropsSettings(props),
       },
       inherited as Inherited,
     );

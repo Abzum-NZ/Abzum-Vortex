@@ -3,6 +3,7 @@ import type {
   CompiledFlowSet,
   ApplicationSourceDocument,
   DefinitionProvenanceEntry,
+  PlatformBlockRelease,
 } from "../../schema";
 import { canonicalJson } from "../canonical-json-definition";
 import { explicitSourceTargets } from "./explicit-source-targets";
@@ -192,6 +193,7 @@ function applicationFlowProvenance(
 }
 
 export function applicationProvenance(
+  releases: readonly PlatformBlockRelease[],
   fullSource: ApplicationSourceDocument,
   fullCanonical: ApplicationDraft,
   resolution: Resolution,
@@ -218,6 +220,7 @@ export function applicationProvenance(
     if (isApplicationCompositionSourcePath(sourcePath)) {
       entries.push(
         ...applicationCompositionProvenance(
+          releases,
           source,
           canonical,
           sourcePath,

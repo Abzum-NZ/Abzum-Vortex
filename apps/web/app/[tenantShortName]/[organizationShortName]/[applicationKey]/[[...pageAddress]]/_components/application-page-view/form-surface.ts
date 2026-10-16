@@ -1,5 +1,6 @@
 import {
   getAccessibleName,
+  placementSettings,
   type FieldInputControlReleaseMap,
   type createFullPlatformComponentRegistry,
   type RenderedPage,
@@ -13,6 +14,28 @@ import {
   itemPropSlots,
   type VisitedPlacement,
 } from "@vortex/platform/schema";
+
+/** One placement of a form surface: its Vortex metadata and its typed settings. */
+export type FormSurfacePlacement = Readonly<{
+  vortex: Record<string, unknown>;
+  settings: Readonly<Record<string, unknown>>;
+}>;
+
+/** A placement's typed settings, read by the declaration of its registered block release. */
+const surfacePlacement = (
+  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  placementId: string,
+  props: Record<string, unknown>,
+  vortex: Record<string, unknown>,
+): FormSurfacePlacement => {
+  const block = isRecord(vortex.block) ? vortex.block : {};
+  const blockId = String(block.blockId);
+  const releaseVersion = String(block.releaseVersion);
+  const release = registry.get(blockId, releaseVersion)?.metadata;
+  if (release === undefined)
+    throw new Error(`Placement '${placementId}' names unregistered block release '${blockId}:${releaseVersion}'`);
+  return { vortex, settings: placementSettings(props, release, { placementId, blockId, releaseVersion }) };
+};
 
 /** Finds the form ancestor that owns each placement in the rendered page tree. */
 export const isPlatformRelease = (
@@ -55,7 +78,7 @@ export const formSurfaceComposition = (
 ): Readonly<{
   composition: RenderedPage;
   placementIds: readonly string[];
-  placements: Readonly<Record<string, Pick<VisitedPlacement, "vortex" | "settings">>>;
+  placements: Readonly<Record<string, FormSurfacePlacement>>;
 }> | undefined => {
   let match: VisitedPlacement | undefined;
   let matchId: string | undefined;
@@ -115,13 +138,16 @@ export const formSurfaceComposition = (
   const modalRoot = { ...form.item, props: { ...form.props, vortex: modalVortex } };
 
   const placementIds = new Set<string>();
-  const placements: Record<string, Pick<VisitedPlacement, "vortex" | "settings">> = {};
-  const collect = ({ placementId, vortex, settings }: VisitedPlacement): undefined => {
+  const placements: Record<string, FormSurfacePlacement> = {};
+  const collect = ({ placementId, props, vortex }: VisitedPlacement): undefined => {
     placementIds.add(placementId);
-    placements[placementId] = { vortex, settings };
+    placements[placementId] = surfacePlacement(registry, placementId, props, vortex);
   };
   placementIds.add(matchId);
-  placements[matchId] = { vortex: modalVortex, settings: form.settings };
+  placements[matchId] = {
+    vortex: modalVortex,
+    settings: surfacePlacement(registry, matchId, form.props, form.vortex).settings,
+  };
   for (const [, slot] of itemPropSlots(form.props)) walkPlacements(slot, collect);
   return {
     composition: {
@@ -215,7 +241,7 @@ export const visibleOwningFormFieldLabel = (
 /** Preserves the Show form task's scalar defaults on the matching authored control. */
 export const runtimeInputWithFormDefault = (
   input: Record<string, unknown>,
-  placement: Pick<VisitedPlacement, "vortex" | "settings">,
+  placement: FormSurfacePlacement,
   value: unknown,
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
   fieldInputControlReleases: FieldInputControlReleaseMap,

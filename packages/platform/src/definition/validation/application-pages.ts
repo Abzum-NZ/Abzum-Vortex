@@ -378,8 +378,17 @@ export function applicationPageRules(scope: ApplicationScope): void {
               publicBlockReferencesSafe = false;
           }
         };
+        // Each typed setting and every value nested in its groups and lists.
+        const inspectTypedSetting = (setting: JsonObject): void => {
+          inspectPublicSetting(setting);
+          if (setting.kind === "group")
+            for (const nested of Object.values(object(setting.properties)))
+              inspectTypedSetting(object(nested));
+          if (setting.kind === "list")
+            for (const item of array(setting.items)) inspectTypedSetting(item);
+        };
         for (const setting of Object.values(placement.settings))
-          walkValues(setting, inspectPublicSetting);
+          inspectTypedSetting(object(setting));
         if (placement.vortex.queryId) {
           const query = moduleQueries.get(String(placement.vortex.queryId));
           if (!publicQuerySafe(query, pageRecordId, pagePublicFields))
