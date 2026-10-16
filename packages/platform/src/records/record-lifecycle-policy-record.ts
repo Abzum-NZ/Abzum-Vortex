@@ -480,8 +480,7 @@ const parseReadProvisionedLifecyclePolicySetupSnapshot = (
     !registrationRevision.success ||
     !organizationLimits.success ||
     !sameId(organizationLimits.data.organizationId, organizationId.data) ||
-    !Array.isArray(candidate.targets) ||
-    candidate.targets.length === 0
+    !Array.isArray(candidate.targets)
   )
     return undefined;
 

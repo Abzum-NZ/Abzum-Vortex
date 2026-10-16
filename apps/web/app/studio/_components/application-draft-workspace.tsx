@@ -2,6 +2,8 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
+import { Button } from "@vortex/ui/components/button";
+import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
@@ -41,7 +43,7 @@ import {
   type StudioFlowRemoveCommand,
   type StudioFlowSettingCommand,
 } from "@vortex/ui/studio";
-import { createAppearanceRootProps, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
+import { createAppearanceRootProps, Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { readStudioCanvasRecords, reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
@@ -1300,6 +1302,11 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" &&
       <p className="text-sm text-muted-foreground">Choose a page in Structure to arrange it here.</p>}
     {/* The canvas measures its container, so it is drawn only while it is showing; its edits live in the draft history. */}
+    {(canvasPage === undefined ? selected?.kind === "application" : canvasPage.key === source.body.home_page) &&
+      source.body.uses.length === 0 &&
+      source.body.modules.every((module) => module.record_types.length === 0) &&
+      <FirstRecordTypeEmptyState action={<Button type="button" onClick={() => { void changeTab("data"); }}>
+        <Icon name="database" />Open the Data tab</Button>} />}
     {canvasPage !== undefined && draftTheme.problem.length > 0 && <p role="alert" className="text-sm text-destructive">{draftTheme.problem}</p>}
     {canvasPage !== undefined && (inspector.status === "resolved" || selected === null) &&
       // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.

@@ -136,7 +136,9 @@ export function StudioDataPanel({ hidden, owned, used, applications, selected, o
     action={<Button type="button" size="xs" onClick={onCreate} disabled={disabled}><Icon name="plus" />Record type</Button>}>
     <StudioSearchBox value={query} onChange={setQuery} placeholder="Find a record type or field" label="Find a record type or field" />
     {owned.length === 0 ? <p className="text-sm text-muted-foreground">
-      This application owns no record types yet. Add its first record type: its module is created with it.</p> : null}
+      This application owns no record types yet. Add its first record type: its module is created with it.</p>
+      : owned.every((module) => module.recordTypes.length === 0) ? <p className="text-sm text-muted-foreground">
+        This application has no record types yet. Add its first one, for example Asset.</p> : null}
     {ownedShown.length === 0 ? null : <section aria-label="Owned by this application" className="space-y-2">
       <h3 className="text-xs font-semibold uppercase text-muted-foreground">Owned by this application</h3>
       <ul className="list-none space-y-3">{ownedShown.map((module) => <ModuleNode key={module.key} module={module} owner={undefined}

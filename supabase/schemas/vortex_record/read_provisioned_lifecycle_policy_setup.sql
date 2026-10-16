@@ -209,10 +209,7 @@ begin
     end loop;
   end loop;
 
-  if pg_catalog.cardinality(storage_ids) = 0 then
-    raise exception using errcode = '23514',
-      message = 'Provisioned lifecycle setup has no policy targets';
-  end if;
+  -- An installation whose Modules hold no record types yet has no policy targets to set up.
   storage_ids := array(select distinct item.value from pg_catalog.unnest(storage_ids) item(value)
     order by item.value);
   if pg_catalog.jsonb_array_length(projection -> 'storageContractIds') <>

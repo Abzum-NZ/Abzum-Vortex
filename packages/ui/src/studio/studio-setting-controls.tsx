@@ -266,7 +266,7 @@ function ListControl({ id, property, value, onChange, choices, disabled }: Contr
   return <div className="space-y-2">
     {items.length === 0 && <p className="text-sm text-muted-foreground">No entries yet.</p>}
     <ol className="space-y-2">
-      {items.map((item, index) => <li key={index} className="space-y-2 rounded-lg border border-border p-2">
+      {items.map((item, index) => <li key={index} className="space-y-2 border border-border p-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm font-medium">{property.item.label} {index + 1}</span>
           <div className="flex gap-1">

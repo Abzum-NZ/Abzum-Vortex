@@ -1,4 +1,5 @@
 import {
+  addOwnedInlineModule,
   applicationSourceContractVersion,
   applicationSourceDocumentSchema,
   DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
@@ -6,15 +7,12 @@ import {
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
+/** What a builder enters for a new application; everything else is made from it. */
 export type MinimumApplicationInputs = Readonly<{
-  key: string;
   name: string;
   description: string;
-  moduleApplication: string;
-  moduleKey: string;
-  roleKey: string;
-  roleName: string;
-  homeName: string;
+  /** The permanent key; empty to make it from the name. */
+  key: string;
 }>;
 
 type MinimumApplicationSourceResult =
@@ -25,39 +23,64 @@ type MinimumApplicationSourceResult =
       fieldErrors: Readonly<Partial<Record<keyof MinimumApplicationInputs, string>>>;
     }>;
 
-/** The input each authored source path is edited in. */
+/** The key a new application gets from its name: `app.` and the name's words, `app.assets_hub`. */
+export const applicationKeyFromName = (name: string): string => {
+  const words = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^[_0-9]+|_+$/g, "");
+  return words === "" ? "" : `app.${words.slice(0, 96).replace(/_+$/, "")}`;
+};
+
+/** The input each authored source path is edited in; everything made from the key reports on it. */
 const inputForPath = (path: readonly PropertyKey[]): keyof MinimumApplicationInputs | undefined => {
-  const [head, section, index, leaf] = path.map(String);
+  const [head, section] = path.map(String);
   if (head === "key") return "key";
   if (head !== "body") return undefined;
   if (section === "name" || section === "description") return section;
-  if (section === "uses" && index === "0")
-    return leaf === "module" ? "moduleKey" : leaf === "application" ? "moduleApplication" : undefined;
-  if (section === "permissions" && index === "0") return "key";
-  if (section === "roles" && index === "0")
-    return leaf === "name" ? "roleName" : leaf === "key" ? "roleKey" : "key";
-  if (section === "pages" && index === "0") return leaf === "name" ? "homeName" : "key";
+  if (section === "modules" || section === "permissions" || section === "roles" || section === "pages") return "key";
   return undefined;
 };
 
-/** Authored aliases are local identities; permanent root identities come only from Definition. */
+const invalid = (
+  fieldErrors: Partial<Record<keyof MinimumApplicationInputs, string>>,
+): MinimumApplicationSourceResult => ({
+  kind: "invalid",
+  message: Object.keys(fieldErrors).length === 0
+    ? "The application could not be built from these inputs."
+    : "Fix the highlighted fields.",
+  fieldErrors,
+});
+
+/**
+ * A new application from its name and description: its key (made from the name unless set), a
+ * home page, the permission to view it, a Members access group that holds it, and the one Module
+ * the application owns, empty until its first record type. It uses no other application's Module.
+ * Authored aliases are local identities; permanent root identities come only from Definition.
+ */
 export const minimumApplicationSource = (
   inputs: MinimumApplicationInputs,
 ): MinimumApplicationSourceResult => {
-  const applicationKey = inputs.key.trim();
+  const name = inputs.name.trim();
+  const description = inputs.description.trim();
+  if (name === "" || description === "")
+    return invalid({
+      ...(name === "" ? { name: "Enter the application's name." } : {}),
+      ...(description === "" ? { description: "Enter what people use this application for." } : {}),
+    });
+  const applicationKey = inputs.key.trim() === "" ? applicationKeyFromName(name) : inputs.key.trim();
+  if (applicationKey === "")
+    return invalid({ key: "The name has no letters to make a key from. Set the key under Advanced." });
   const permissionKey = `${applicationKey}.home.view`;
-  const parsed = applicationSourceDocumentSchema.safeParse({
+  const candidate = {
     source_contract_version: applicationSourceContractVersion,
     root_alias: "application_root",
     key: applicationKey,
     kind: "application",
     body: {
-      name: inputs.name.trim(),
-      description: inputs.description.trim(),
+      name,
+      description,
       icon: "layout-dashboard",
       home_page: "home",
       modules: [],
-      uses: [{ application: inputs.moduleApplication.trim(), module: inputs.moduleKey.trim() }],
+      uses: [],
       permissions: [{
         id: "permission_home",
         key: permissionKey,
@@ -69,15 +92,15 @@ export const minimumApplicationSource = (
       }],
       roles: [{
         id: "role_member",
-        key: inputs.roleKey.trim(),
-        name: inputs.roleName.trim(),
+        key: "member",
+        name: "Members",
         home_page: "home",
         permissions: [permissionKey],
       }],
       pages: [{
         id: "page_home",
         key: "home",
-        name: inputs.homeName.trim(),
+        name: "Home",
         type: "dashboard",
         permission: permissionKey,
         composition: {
@@ -105,20 +128,25 @@ export const minimumApplicationSource = (
         token_overrides: {},
       },
     },
+  } as unknown as ApplicationSourceDocument;
+  const added = addOwnedInlineModule(candidate, {
+    key: `${applicationKey}.data`,
+    name: `${name} data`.slice(0, 120),
   });
+  if (added.kind === "invalid")
+    return invalid({ key: "Use lowercase words separated by dots, at most 100 characters, for example team.workspace." });
+  const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (!parsed.success) {
     const fieldErrors: Partial<Record<keyof MinimumApplicationInputs, string>> = {};
     for (const issue of parsed.error.issues) {
       const input = inputForPath(issue.path);
-      if (input !== undefined && fieldErrors[input] === undefined) fieldErrors[input] = issue.message;
+      if (input === undefined || fieldErrors[input] !== undefined) continue;
+      // Everything made from the key fails with the key: name the key's rule, not the made item.
+      fieldErrors[input] = input === "key"
+        ? "Use lowercase words separated by dots, at most 100 characters, for example team.workspace."
+        : issue.message;
     }
-    return {
-      kind: "invalid",
-      message: Object.keys(fieldErrors).length === 0
-        ? "The application could not be built from these inputs."
-        : "Fix the highlighted fields.",
-      fieldErrors,
-    };
+    return invalid(fieldErrors);
   }
   return { kind: "valid", source: parsed.data };
 };

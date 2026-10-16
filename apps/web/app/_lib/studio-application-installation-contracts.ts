@@ -212,7 +212,7 @@ export const studioApplicationFirstInstallSetupSchema = z.object({
   applicationReleaseRevision: revisionSchema,
   registrationRevision: revisionSchema,
   organizationLimits: organizationLifecycleLimitsSchema,
-  targets: z.array(studioApplicationFirstInstallTargetSchema).min(1).max(10_000),
+  targets: z.array(studioApplicationFirstInstallTargetSchema).max(10_000),
 }).strict();
 
 export const studioApplicationFirstInstallSelectorSchema = z.object({

@@ -789,7 +789,7 @@ const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
 const moduleSourceBodyFields = {
   name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
   description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
-  record_types: sourceProvenanceUnchanged(z.array(moduleSourceRecordTypeSchema).min(1).max(100)),
+  record_types: sourceProvenanceUnchanged(z.array(moduleSourceRecordTypeSchema).max(100)),
   permissions: sourceProvenanceUnchanged(
     z
       .array(

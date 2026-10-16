@@ -185,9 +185,8 @@ const readProvisionedLifecycleSetup = async (
     throw new ProvisionedSetupError("refused", "setup_snapshot_unreadable", {
       cause: parsed.error,
     });
+  // An installation whose Modules hold no record types yet has no lifecycle targets.
   const setup = parsed.data;
-  if (setup.targets.length === 0)
-    throw new ProvisionedSetupError("setup_unavailable", "no_lifecycle_targets");
   if (
     !sameId(setup.organizationId, selector.organizationId) ||
     !sameId(setup.applicationRootId, selector.rootId) ||
