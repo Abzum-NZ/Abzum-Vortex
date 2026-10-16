@@ -1253,29 +1253,6 @@ export type NamedActionAvailability =
   /** The preview cannot decide without the inputs the person has yet to supply; submit decides. */
   | Readonly<{ kind: "undecided"; reason: string }>;
 
-/**
- * Asks the action's own preview whether it would run on the record, inside a transaction the caller
- * already verified, and writes nothing: the preview only reads (its receipt lookup is replay-only,
- * it appends no Activity and bumps no revision), and a refusal is never recorded here, unlike an
- * attempt to run the action. The precondition is decided by the same flow run the action itself
- * uses, with no inputs supplied: a precondition that reads an input leaves the run unable to
- * decide, which is reported as undecided, never as a refusal.
- */
-export const previewNamedActionAvailability = async (
-  transaction: RequestDatabaseTransaction,
-  command: ExecuteNamedActionCommand,
-  issuedAt: string,
-  run: ActionFlowRunner,
-): Promise<NamedActionAvailability> => {
-  let preview: ActionPreparation;
-  try {
-    preview = await prepare(transaction, command, randomUUID(), true);
-  } finally {
-    await transaction.query`set local role vortex_request`;
-  }
-  return availabilityFromPreview(preview, issuedAt, run);
-};
-
 const availabilityFromPreview = (
   preview: ActionPreparation,
   issuedAt: string,
@@ -1308,8 +1285,8 @@ export type SubjectWithNamedActionAvailability = Readonly<{
 /**
  * Reads a page subject and previews every named action its placements are bound to in one fixed
  * adapter call: one read decision for the record, and each action's own preview for the record's
- * current concurrency number with no inputs, exactly as `previewNamedActionAvailability` previews
- * it, inside a transaction the caller already verified. Nothing is written. A subject the viewer
+ * current concurrency number with no inputs, inside a transaction the caller already verified.
+ * Nothing is written. A subject the viewer
  * cannot read previews nothing.
  */
 export const readSubjectWithNamedActionAvailability = async (
@@ -1355,7 +1332,11 @@ export const readSubjectWithNamedActionAvailability = async (
         item !== null &&
         String((item as Record<string, unknown>).actionId).toLowerCase() === key,
     ) as Record<string, unknown> | undefined;
-    if (entry === undefined) continue;
+    if (entry === undefined) {
+      if ((read.record as Record<string, unknown> | null)?.outcome === "allowed")
+        throw new Error("NAMED_ACTION_PREVIEW_MISSING");
+      continue;
+    }
     availability.set(
       key,
       availabilityFromPreview(parsePreparation(entry.preview), issuedAt, runFor(action)),

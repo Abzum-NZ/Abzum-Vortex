@@ -261,32 +261,7 @@ begin
 end
 $function$;
 
-create or replace function vortex_record.prepare_named_action_relationship_copies_internal(
-  p_action_owner_kind text,
-  p_action_owner_id uuid,
-  p_action_release_revision bigint,
-  p_action_id uuid,
-  p_subject_record_type_id uuid,
-  p_subject_record_id uuid,
-  p_inputs jsonb
-)
-returns jsonb
-language sql volatile security invoker set search_path = ''
-as $function$
-  select vortex_record.prepare_named_action_relationship_copies_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision, p_action_id,
-    p_subject_record_type_id, p_subject_record_id, p_inputs,
-    case when p_subject_record_type_id is null or p_subject_record_id is null
-        or pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object' then null::jsonb
-      else vortex_record.resolve_named_action_context_internal(
-        p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-        p_action_id, p_subject_record_type_id
-      ) end
-  )
-$function$;
-
 alter function vortex_record.prepare_named_action_relationship_copies_internal(text,uuid,bigint,uuid,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
-alter function vortex_record.prepare_named_action_relationship_copies_internal(text,uuid,bigint,uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.prepare_named_action_relationship_copies_internal(
   text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
@@ -294,18 +269,7 @@ revoke all on function vortex_record.prepare_named_action_relationship_copies_in
 grant execute on function vortex_record.prepare_named_action_relationship_copies_internal(
   text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
 ) to vortex_record_adapter;
-revoke all on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb
-) to vortex_record_adapter;
-
 comment on function vortex_record.prepare_named_action_relationship_copies_internal(
   text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
 ) is
   'Private named-action step: re-derives every record.changes task from the installed action its caller resolved and the supplied inputs, locks every target row and then every linked row in canonical order before any counter, data version or edge identity, and plans only the selected, declared, readable many-to-one subject edges the target does not already hold. Returns null when the action has no such task, a refused outcome for a request it cannot honour, and raises only on a broken invariant.';
-comment on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb
-) is
-  'Private named-action step: resolves the installed action and delegates to the variant that takes it.';

@@ -8,7 +8,6 @@ import {
   describeFailure,
   conditionNodeSchema,
   applicationRootIdSchema,
-  executeNamedActionCommandSchema,
   installedNamedActionReferenceSchema,
   organizationRecordAccessDeclarationSchema,
   pageIdSchema,
@@ -38,7 +37,6 @@ import {
   TypedConditionEvaluationError,
 } from "../rules/index";
 import {
-  previewNamedActionAvailability,
   readSubjectWithNamedActionAvailability,
   type NamedActionAvailability,
 } from "../records/action-record-port";
@@ -67,11 +65,7 @@ import {
   type ProjectedPageCapability,
 } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
-import {
-  pageSubjectFromRead,
-  readPageSubjectInTransaction,
-  type PageSubjectReadResult,
-} from "./page-subject-read";
+import { pageSubjectFromRead, type PageSubjectReadResult } from "./page-subject-read";
 import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
 import type { RequestDatabaseTransaction } from "../db/index";
 
@@ -496,7 +490,11 @@ export const createStoredPageCapabilityService = (
     const permission = (key: string): PagePermissionBinding => {
       const platform = dependencies.permissions.forKey(key);
       if (platform !== undefined)
-        return { kind: "platform", ownerId: dependencies.permissions.ownerId, permission: platform };
+        return {
+          kind: "platform",
+          ownerId: dependencies.permissions.ownerId,
+          permission: platform,
+        };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)
         throw new Error("STORED_PAGE_PERMISSION_BINDING_UNAVAILABLE");
@@ -592,13 +590,14 @@ export const createStoredPageCapabilityService = (
       recordTypeId: string,
       recordId: string,
     ): Promise<SubjectWithAvailability> => {
-      if (subjectRead !== undefined)
-        return sameId(subjectRead.recordTypeId, recordTypeId) &&
-          sameId(subjectRead.recordId, recordId)
-          ? subjectRead.read
-          : readPageSubjectInTransaction(transaction, { recordTypeId, recordId }).then(
-              (subject) => ({ subject, availability: new Map() }),
-            );
+      if (subjectRead !== undefined) {
+        if (
+          !sameId(subjectRead.recordTypeId, recordTypeId) ||
+          !sameId(subjectRead.recordId, recordId)
+        )
+          throw new Error("PAGE_SUBJECT_MISMATCH");
+        return subjectRead.read;
+      }
       const actions = new Map<string, FlowNamedAction["action"]>();
       for (const placementId of Object.keys(stored.placements)) {
         const bound = boundActions.get(placementId.toLowerCase());
@@ -609,11 +608,6 @@ export const createStoredPageCapabilityService = (
           );
       }
       const read = (async (): Promise<SubjectWithAvailability> => {
-        if (actions.size === 0)
-          return {
-            subject: await readPageSubjectInTransaction(transaction, { recordTypeId, recordId }),
-            availability: new Map(),
-          };
         try {
           const combined = await readSubjectWithNamedActionAvailability(
             transaction,
@@ -676,25 +670,8 @@ export const createStoredPageCapabilityService = (
               throw new Error("PAGE_SUBJECT_READ_UNAVAILABLE");
             // A subject the viewer cannot read shows no control that acts on it.
             if (read.kind !== "read") return false;
-            const command = executeNamedActionCommandSchema.parse({
-              contractVersion: "2.0.0",
-              commandId: randomUUID(),
-              action: action.action,
-              recordTypeId: action.subjectRecordTypeId,
-              recordId: subjectRecordId,
-              expectedConcurrencyNumber: read.row.revision,
-              inputs: {},
-            });
-            // Previewed together with the subject read; an action that was not is previewed alone.
-            const availability =
-              previewed.get(key) ??
-              (await previewNamedActionAvailability(
-                transaction,
-                command,
-                (dependencies.clock ?? (() => new Date()))().toISOString(),
-                (seed) =>
-                  collectActionFlowTasks(flowLibrary(), command.action.actionId, randomUUID(), seed),
-              ));
+            const availability = previewed.get(key);
+            if (availability === undefined) throw new Error("PAGE_ACTION_PREVIEW_MISSING");
             if (availability.kind === "undecided") {
               console.info(
                 `[page] action availability undecided for placement ${placementId}: ${availability.reason}`,

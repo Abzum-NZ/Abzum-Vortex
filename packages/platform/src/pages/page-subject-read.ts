@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import {
   jsonValueSchema,
+  describeFailure,
   recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
@@ -13,7 +14,8 @@ import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
 } from "../access/index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/index";
+import { readSubjectWithNamedActionAvailability } from "../records/action-record-port";
 import {
   protectedQueryRowCapabilitiesSchema,
   protectedQueryRowSchema,
@@ -23,8 +25,8 @@ import {
 /**
  * What a detail placement reads for its page subject: the one record the page is about, addressed
  * by its record type (from the installed page definition) and its record id (from the page's own
- * address). The read runs through the fixed record read path, `vortex_record.read_record` with
- * `vortex_record.read_record_capabilities`, under the viewer's own verified request scope and
+ * address). The read runs through the fixed page subject read with an empty action set, under the
+ * viewer's own verified request scope and
  * current authority. A missing record, a record of another organisation or application and a
  * record the viewer may not read all come back as the same `refused`, so the caller can never tell
  * them apart and no field the viewer cannot read is ever returned.
@@ -33,8 +35,6 @@ export type PageSubjectReadResult =
   | Readonly<{ kind: "read"; row: ProtectedQueryRow }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
-
-type SubjectRow = DatabaseRow & { readonly result: unknown; readonly capabilities: unknown };
 
 const readableSubjectSchema = z
   .object({
@@ -47,28 +47,27 @@ const readableSubjectSchema = z
 
 /**
  * The page subject from one fixed read's projection and capabilities: the same record must answer
- * both, and anything else is one neutral refusal.
+ * both. An explicit database refusal stays neutral; malformed platform data raises an error.
  */
 export const pageSubjectFromRead = (
   result: unknown,
   capabilitiesCandidate: unknown,
   recordId: string,
 ): PageSubjectReadResult => {
-  const readable = readableSubjectSchema.safeParse(result);
-  const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(capabilitiesCandidate);
-  if (
-    !readable.success ||
-    !capabilities.success ||
-    readable.data.recordId.toLowerCase() !== recordId.toLowerCase()
-  )
-    return { kind: "refused" };
-  const row = protectedQueryRowSchema.safeParse({
-    recordId: readable.data.recordId,
-    values: readable.data.values,
-    revision: readable.data.concurrencyNumber,
-    capabilities: capabilities.data,
+  if (typeof result !== "object" || result === null || !("outcome" in result))
+    throw new Error("PAGE_SUBJECT_RESULT_INVALID");
+  if (result.outcome === "refused") return { kind: "refused" };
+  const readable = readableSubjectSchema.parse(result);
+  const capabilities = protectedQueryRowCapabilitiesSchema.parse(capabilitiesCandidate);
+  if (readable.recordId.toLowerCase() !== recordId.toLowerCase())
+    throw new Error("PAGE_SUBJECT_ID_MISMATCH");
+  const row = protectedQueryRowSchema.parse({
+    recordId: readable.recordId,
+    values: readable.values,
+    revision: readable.concurrencyNumber,
+    capabilities,
   });
-  return row.success ? { kind: "read", row: row.data } : { kind: "refused" };
+  return { kind: "read", row };
 };
 
 /** Reuses the fixed subject read only inside an already verified human request transaction. */
@@ -80,17 +79,18 @@ export const readPageSubjectInTransaction = async (
   const recordId = recordIdSchema.safeParse(subject.recordId);
   if (!recordTypeId.success || !recordId.success) return { kind: "refused" };
   try {
-    // One read decision answers both the projection and the capabilities.
-    const rows = await transaction.query<SubjectRow>`
-      select subject.value -> 'record' as result, subject.value -> 'capabilities' as capabilities
-      from (
-        select vortex_record.read_record_with_capabilities(
-          ${recordTypeId.data}::uuid, ${recordId.data}::uuid
-        ) as value
-      ) as subject
-    `;
-    return pageSubjectFromRead(rows[0]?.result, rows[0]?.capabilities, recordId.data);
-  } catch {
+    const combined = await readSubjectWithNamedActionAvailability(
+      transaction,
+      { recordTypeId: recordTypeId.data, recordId: recordId.data },
+      [],
+      new Date().toISOString(),
+      () => {
+        throw new Error("PAGE_ACTION_UNEXPECTED");
+      },
+    );
+    return pageSubjectFromRead(combined.record, combined.capabilities, recordId.data);
+  } catch (error) {
+    console.error(`[page] subject read failed: ${describeFailure(error)}`);
     return { kind: "temporarily_unavailable" };
   }
 };
@@ -114,7 +114,8 @@ export const createPageSubjectReader = (dependencies: HumanOrganizationRequestDe
         );
         if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
         return result.kind === "available" ? result.value : { kind: "refused" };
-      } catch {
+      } catch (error) {
+        console.error(`[page] subject reader failed: ${describeFailure(error)}`);
         return { kind: "temporarily_unavailable" };
       }
     },
