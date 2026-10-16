@@ -29,7 +29,8 @@ export type StudioSemanticSelection =
   | Readonly<{ kind: "page"; pageAlias: string }>
   | Readonly<{ kind: "shell"; shellAlias: string }>
   | Readonly<{ kind: "navigation"; navigationItemAlias: string }>
-  | Readonly<{ kind: "flow"; flowAlias: string }>
+  /** A flow of the application (`moduleKey` null) or of one of the Modules it owns. */
+  | Readonly<{ kind: "flow"; flowAlias: string; moduleKey: string | null }>
   | Readonly<{ kind: "placement"; placementAlias: string }>;
 
 export type StudioSemanticPlacementOwner = Extract<
@@ -95,7 +96,8 @@ type SelectionIndex = Readonly<{
   pageAliases: ReadonlySet<string>;
   shellAliases: ReadonlySet<string>;
   navigationItemAliases: ReadonlySet<string>;
-  flowAliases: ReadonlySet<string>;
+  /** Flow selection keys: a flow alias is unique only within its owner. */
+  flowKeys: ReadonlySet<string>;
   placementOwners: ReadonlyMap<string, StudioSemanticPlacementOwner>;
 }>;
 
@@ -146,6 +148,10 @@ const itemPropsByRole = (catalogue: ImmutablePlatformBlockCatalogue, item: Sourc
   );
   return { slots, settings };
 };
+
+/** A flow's name as a person reads it: its authored name label, else its readable key. */
+export const studioFlowLabel = (flow: Readonly<{ key: string; labels?: Readonly<Record<string, string>> | undefined }>): string =>
+  authoredLabel(flow.labels?.name, readableKey(flow.key, "Flow"));
 
 const readableKey = (value: string | undefined, fallback: string): string => {
   const key = value?.trim().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
@@ -310,16 +316,17 @@ export const traverseStudioSemanticSelectionDraft = (
         }
       });
       visit(Object.freeze({ kind: "section", section: "flows", label: "Flows" }), () => {
-        for (const flow of draft.source.body.flows) {
-          const selection = Object.freeze({ kind: "flow", flowAlias: flow.id } as const);
-          visit(
-            Object.freeze({
-              kind: "flow",
-              label: readableKey(flow.key, "Flow"),
-              selection,
-            }),
-          );
-        }
+        const owners = [
+          { moduleKey: null, flows: draft.source.body.flows },
+          ...draft.source.body.modules.map((module) => ({ moduleKey: module.key, flows: module.flows })),
+        ];
+        for (const owner of owners)
+          for (const flow of owner.flows) {
+            const selection = Object.freeze({
+              kind: "flow", flowAlias: flow.id, moduleKey: owner.moduleKey,
+            } as const);
+            visit(Object.freeze({ kind: "flow", label: studioFlowLabel(flow), selection }));
+          }
       });
     },
   );
@@ -339,7 +346,9 @@ const normalizeSelection = (
     case "navigation":
       return Object.freeze({ kind: "navigation", navigationItemAlias: selection.navigationItemAlias });
     case "flow":
-      return Object.freeze({ kind: "flow", flowAlias: selection.flowAlias });
+      return typeof selection.moduleKey === "string" || selection.moduleKey === null
+        ? Object.freeze({ kind: "flow", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey })
+        : undefined;
     case "placement":
       return Object.freeze({ kind: "placement", placementAlias: selection.placementAlias });
     default:
@@ -359,7 +368,7 @@ export const studioSemanticSelectionKey = (selection: StudioSemanticSelection): 
     case "navigation":
       return `navigation:${selection.navigationItemAlias}`;
     case "flow":
-      return `flow:${selection.flowAlias}`;
+      return `flow:${selection.moduleKey ?? ""}:${selection.flowAlias}`;
     case "placement":
       return `placement:${selection.placementAlias}`;
   }
@@ -382,7 +391,7 @@ const containsSelection = (
     case "navigation":
       return index.navigationItemAliases.has(selection.navigationItemAlias);
     case "flow":
-      return index.flowAliases.has(selection.flowAlias);
+      return index.flowKeys.has(studioSemanticSelectionKey(selection));
     case "placement":
       return index.placementOwners.has(selection.placementAlias);
   }
@@ -392,7 +401,7 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
   const pageAliases = new Set<string>();
   const shellAliases = new Set<string>();
   const navigationItemAliases = new Set<string>();
-  const flowAliases = new Set<string>();
+  const flowKeys = new Set<string>();
   const placementOwners = new Map<string, StudioSemanticPlacementOwner>();
 
   traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
@@ -402,7 +411,7 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
         navigationItemAliases.add(node.selection.navigationItemAlias);
         break;
       case "flow":
-        flowAliases.add(node.selection.flowAlias);
+        flowKeys.add(studioSemanticSelectionKey(node.selection));
         break;
       case "shell":
         shellAliases.add(node.selection.shellAlias);
@@ -421,7 +430,7 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
     pageAliases,
     shellAliases,
     navigationItemAliases,
-    flowAliases,
+    flowKeys,
     placementOwners,
   };
 };
