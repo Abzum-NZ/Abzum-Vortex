@@ -106,6 +106,7 @@ const loadActionPage = async (addressCandidate: unknown) => {
   const selection = organizationSelectionCandidateSchema.parse({
     organizationId: resolved.read.organizationId,
     applicationRootId: resolved.application.applicationRootId,
+    ...(resolved.application.previewInstallationId === undefined ? {} : { previewInstallationId: resolved.application.previewInstallationId }),
   });
   const loaded = await loadApplicationPage(
     identity.session,
@@ -311,6 +312,7 @@ export async function abandonGuidedFormDraftAction(
   const selection = organizationSelectionCandidateSchema.parse({
     organizationId: resolved.read.organizationId,
     applicationRootId: resolved.application.applicationRootId,
+    ...(resolved.application.previewInstallationId === undefined ? {} : { previewInstallationId: resolved.application.previewInstallationId }),
   });
   const result = await createGuidedFormDraftService(guidedFormDependencies()).abandon(identity.session, selection, {
     draftId: input.draftId,

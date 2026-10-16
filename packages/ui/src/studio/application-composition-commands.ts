@@ -31,6 +31,7 @@ import {
   type SourcePageZone,
   type SourceSlotOrder,
 } from "@vortex/platform/schema";
+import { boardBlockKey, studioBoardSourceProblem } from "./board-source";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import { studioPaletteChoices, studioQueryOffered, studioReleaseReadsQuery, type StudioPaletteChoice } from "./contextual-palette";
 import {
@@ -649,6 +650,9 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
   if (choice.needsQuery !== (query !== null) || (query !== null && !studioQueryOffered(source, query)))
     return { kind: "invalid" };
 
+  const boardProblem = release.key === boardBlockKey ? studioBoardSourceProblem(source, settings, query) : undefined;
+  if (boardProblem !== undefined) return { kind: "refused", reason: `${choice.name} can't be added. ${boardProblem}.` };
+
   const alias = freshBlockName(release.key.split(".").at(-1) ?? "block", sourceNames(source));
   const item = { type: release.rendererKey, props: {
     id: alias,
@@ -795,6 +799,8 @@ const applySettings = (current: StudioCompositionContext, selection: StudioSeman
   const query = input.query;
   if (query !== null && (!readsQuery(release, target.item) || !studioQueryOffered(source, query)))
     return { kind: "invalid" };
+  const boardProblem = release.key === boardBlockKey ? studioBoardSourceProblem(source, settings, query) : undefined;
+  if (boardProblem !== undefined) return { kind: "refused", reason: `${release.name} can't take these settings. ${boardProblem}.` };
   try {
     const working = workingCopy(target.region);
     const item = workingItem(working, target.steps, alias);

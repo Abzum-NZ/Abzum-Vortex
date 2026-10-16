@@ -54,6 +54,8 @@ import {
   applicationCandidate,
   materializeInlineModules,
   planApplicationPublication,
+  rehearseApplicationPreview,
+  type RehearsedPreviewRelease,
 } from "./application-publication";
 
 /** The internal Module releases a rehearsed preparation writes are rolled back with this note. */
@@ -360,6 +362,31 @@ export const createDefinitionPublicationService = (
         ),
         currentReleaseRevision: candidate.draft.publishedRevision ?? null,
       });
+    });
+  },
+
+  /**
+   * Rehearses the publication of the caller organisation's current Application draft at the
+   * expected revision, exactly as publication runs it, and returns the release rows it wrote for
+   * the Application and its inline Modules after undoing them. Only the inline Modules' internal
+   * roots and drafts are kept, as preparation keeps them. A preview runs the returned rows.
+   */
+  rehearseApplicationPreview: async (
+    context: SessionContext,
+    input: unknown,
+  ): Promise<readonly RehearsedPreviewRelease[]> => {
+    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+    const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+    await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
+    return repository.transaction(context, async (transaction) => {
+      const candidate = applicationCandidate(
+        context,
+        await transaction.lockCandidate(parsedCommand.rootId),
+        parsedCommand,
+      );
+      const roots = await materializeInlineModules(transaction, candidate);
+      return rehearseApplicationPreview(context, transaction, catalogue, candidate, roots);
     });
   },
 

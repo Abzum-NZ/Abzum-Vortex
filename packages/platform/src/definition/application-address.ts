@@ -40,6 +40,11 @@ import {
 import { z } from "zod";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
+import { createPreviewInstallationRepository } from "./preview-installation-repository";
+import {
+  previewApplicationKey,
+  previewInstallationIdOfApplicationKey,
+} from "./preview-application-key";
 
 const reservedTenantSegments = new Set([
   "auth",
@@ -145,6 +150,8 @@ const permittedApplicationSchema = z
     icon: z.string().trim().min(1).max(120),
     homePageKey: builderKeySchema,
     pageKeys: z.array(builderKeySchema).min(1).max(10_000),
+    /** The preview of this Application's draft that this address runs, if it is a preview. */
+    previewInstallationId: z.uuid().optional(),
   })
   .strict();
 
@@ -346,9 +353,13 @@ const addressedActiveApplicationIdentitySchema = z.object({
   applicationReleaseRevision: revisionSchema,
 }).strict();
 
-type AddressedActiveApplicationIdentity = z.infer<
-  typeof addressedActiveApplicationIdentitySchema
->;
+/** An addressed Application: its active installation, or the preview of its draft. */
+type AddressedActiveApplicationIdentity =
+  | (z.infer<typeof addressedActiveApplicationIdentitySchema> & { previewInstallationId?: never })
+  | (Omit<z.infer<typeof addressedActiveApplicationIdentitySchema>, "applicationReleaseRevision"> & {
+      previewInstallationId: string;
+      applicationReleaseRevision?: never;
+    });
 
 /**
  * A page requirement names either a permission from this application's own catalogue or an exact
@@ -716,6 +727,9 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       {
         organizationId: organizationId.data,
         applicationRootId: addressedIdentity.identity.applicationRootId,
+        ...(addressedIdentity.identity.previewInstallationId === undefined
+          ? {}
+          : { previewInstallationId: addressedIdentity.identity.previewInstallationId }),
       },
       async (transaction, scope) => {
         if (scope.applicationRootId === undefined ||
@@ -726,13 +740,18 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           scope: {
             organizationId: scope.organizationId,
             applicationRootId: scope.applicationRootId,
+            ...(scope.previewInstallationId === undefined
+              ? {}
+              : { previewInstallationId: scope.previewInstallationId }),
           },
         }).load();
         const application = context.releaseSet.application;
+        const identity = addressedIdentity.identity;
         if (!sameId(context.organizationId, addressedIdentity.organizationId) ||
-          !sameId(context.applicationRootId, addressedIdentity.identity.applicationRootId) ||
-          application.releaseRevision !== addressedIdentity.identity.applicationReleaseRevision ||
-          application.definitionKey !== addressedIdentity.identity.definitionKey ||
+          !sameId(context.applicationRootId, identity.applicationRootId) ||
+          (identity.previewInstallationId === undefined &&
+            application.releaseRevision !== identity.applicationReleaseRevision) ||
+          application.definitionKey !== identity.definitionKey ||
           application.releaseRevision !== context.applicationReleaseRevision)
           return undefined;
         const permitted = await projectPermittedApplication(
@@ -752,6 +771,16 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       return unavailable();
 
     const { context, permitted } = addressedResult.value;
+    // A preview is addressed, linked and navigated by its own key, never the installed one.
+    const previewInstallationId = addressedIdentity.identity.previewInstallationId;
+    const application =
+      previewInstallationId === undefined
+        ? permitted.application
+        : permittedApplicationSchema.parse({
+            ...permitted.application,
+            key: previewApplicationKey(previewInstallationId),
+            previewInstallationId,
+          });
     const read = permittedApplicationsReadSchema.parse({
       kind: "available",
       organizationId: organizationId.data,
@@ -761,7 +790,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       ...(addressedIdentity.accountDisplayName === undefined
         ? {}
         : { accountDisplayName: addressedIdentity.accountDisplayName }),
-      applications: [permitted.application],
+      applications: [application],
     });
     return {
       read,
@@ -787,6 +816,7 @@ const readAddressedActiveApplicationIdentity = async (
   const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
   if (!session.success || !organizationId.success || !identityAuthorityId.success || !applicationKey.success)
     return undefined;
+  const previewInstallationId = previewInstallationIdOfApplicationKey(applicationKey.data);
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: identityAuthorityId.data,
   });
@@ -796,6 +826,23 @@ const readAddressedActiveApplicationIdentity = async (
     async (transaction, scope) => {
       if (scope.applicationRootId !== undefined)
         throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
+      if (previewInstallationId !== undefined) {
+        // A preview address names the preview; only a builder of its Application may open it.
+        const preview = await createPreviewInstallationRepository(transaction)
+          .readApplicationIdentity(previewInstallationId)
+          .catch((error: unknown) => {
+            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
+            return undefined;
+          });
+        if (preview === undefined || !sameId(preview.organizationId, organizationId.data))
+          return undefined;
+        return {
+          organizationId: preview.organizationId,
+          applicationRootId: preview.applicationRootId,
+          definitionKey: preview.definitionKey,
+          previewInstallationId: preview.previewInstallationId,
+        };
+      }
       const rows = await transaction.query<AddressedIdentityRow>`
         select vortex_definition.resolve_addressed_active_application_identity(
           ${applicationKey.data}::text
@@ -876,7 +923,9 @@ const readAddressedApplicationIdentityAtAddress = async (
     if (
       identity === undefined ||
       identity.organizationId !== address.organizationId ||
-      identity.definitionKey !== applicationKey.data
+      (identity.previewInstallationId === undefined
+        ? identity.definitionKey !== applicationKey.data
+        : previewApplicationKey(identity.previewInstallationId) !== applicationKey.data)
     ) return undefined;
     return Object.freeze({
       organizationId: address.organizationId,

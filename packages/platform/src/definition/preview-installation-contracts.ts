@@ -1,29 +1,15 @@
 import { z } from "zod";
 import {
-  applicationCompilationOutputSchema,
-} from "./definition-compilation-contracts";
-import {
   applicationRootIdSchema,
-  identityIdSchema,
-  moduleRootIdSchema,
-  organizationAccountIdSchema,
+  namespacedKeySchema,
   organizationIdSchema,
-  recordTypeIdSchema,
   revisionSchema,
-  storageContractIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
 
-const previewInstallationIdSchema = z
+export const previewInstallationIdSchema = z
   .uuid()
   .refine((value) => value !== "00000000-0000-0000-0000-000000000000");
-
-export const previewInstallationCandidateSchema = z
-  .object({
-    compilation: applicationCompilationOutputSchema,
-    currentReleaseRevision: revisionSchema.nullable(),
-  })
-  .strict();
 
 export const previewInstallationCreateRequestSchema = z
   .object({
@@ -33,43 +19,14 @@ export const previewInstallationCreateRequestSchema = z
   })
   .strict();
 
-export const previewInstallationAddressSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    previewInstallationId: previewInstallationIdSchema,
-  })
-  .strict();
-
-export const previewInstallationStorageIdentitySchema = z
-  .object({
-    moduleRootId: moduleRootIdSchema,
-    moduleReleaseRevision: revisionSchema,
-    recordTypeId: recordTypeIdSchema,
-    releaseStorageContractId: storageContractIdSchema,
-    previewStorageContractId: storageContractIdSchema,
-  })
-  .strict();
-
-export const previewInstallationResolvedModuleSchema = z
-  .object({
-    moduleRootId: moduleRootIdSchema,
-    moduleReleaseRevision: revisionSchema,
-    releaseVersion: z.string().min(1).max(120),
-  })
-  .strict();
-
+/** One preview of an Application draft: the draft revision it runs and the release it pins. */
 export const previewInstallationSchema = z
   .object({
     previewInstallationId: previewInstallationIdSchema,
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     draftRevision: revisionSchema,
-    previewerIdentityId: identityIdSchema,
-    previewerOrganizationAccountId: organizationAccountIdSchema,
-    candidate: previewInstallationCandidateSchema,
-    resolvedModules: z.array(previewInstallationResolvedModuleSchema).max(10_000),
-    storageIdentities: z.array(previewInstallationStorageIdentitySchema).max(10_000),
+    applicationReleaseRevision: revisionSchema,
     createdAt: timestampSchema,
     expiresAt: timestampSchema,
   })
@@ -79,36 +36,20 @@ export const previewInstallationSchema = z
     message: "Preview installation expiry must follow creation",
   });
 
-export const previewInstallationExpiryRequestSchema = z
+/** The Application one preview runs, as a builder of its organisation may address it. */
+export const previewApplicationIdentitySchema = z
   .object({
-    organizationId: organizationIdSchema,
-    limit: z.number().int().min(1).max(100).default(100),
-  })
-  .strict();
-
-export const previewInstallationExpiryResultSchema = z
-  .object({ expiredCount: z.number().int().min(0).max(100) })
-  .strict();
-
-export const previewInstallationDiscardResultSchema = z
-  .object({
-    discarded: z.literal(true),
     previewInstallationId: previewInstallationIdSchema,
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    definitionKey: namespacedKeySchema,
+    draftRevision: revisionSchema,
+    expiresAt: timestampSchema,
   })
   .strict();
 
-export type PreviewInstallationCandidate = z.infer<typeof previewInstallationCandidateSchema>;
 export type PreviewInstallationCreateRequest = z.infer<
   typeof previewInstallationCreateRequestSchema
 >;
-export type PreviewInstallationAddress = z.infer<typeof previewInstallationAddressSchema>;
 export type PreviewInstallation = z.infer<typeof previewInstallationSchema>;
-export type PreviewInstallationExpiryRequest = z.input<
-  typeof previewInstallationExpiryRequestSchema
->;
-export type PreviewInstallationExpiryResult = z.infer<
-  typeof previewInstallationExpiryResultSchema
->;
-export type PreviewInstallationDiscardResult = z.infer<
-  typeof previewInstallationDiscardResultSchema
->;
+export type PreviewApplicationIdentity = z.infer<typeof previewApplicationIdentitySchema>;

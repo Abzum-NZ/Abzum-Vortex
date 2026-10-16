@@ -8,6 +8,7 @@ import type {
 } from "../../schema";
 import { object, array, outputKey, failure } from "./helpers";
 import { walkPageComposition, walkPlacementData } from "../../pages/placement-walk";
+import { placementSettings } from "../application-composition-catalogue";
 
 /** One placed item as validation reads it: its props, its Vortex metadata and its settings. */
 export type PlacementEntry = Readonly<{
@@ -390,8 +391,8 @@ export function applicationScope(
     const entries: [string, PlacementEntry][] = [];
     walkPlacementData(
       Array.isArray(layoutValue) ? { content: layoutValue } : layoutValue,
-      ({ placementId, props, vortex, settings }) => {
-        entries.push([placementId, { props, vortex, settings }]);
+      ({ placementId, props, vortex }) => {
+        entries.push([placementId, { props, vortex, settings: placementSettings(props) }]);
         return undefined;
       },
     );
@@ -399,8 +400,8 @@ export function applicationScope(
   };
   const pageContentPlacementEntries = (page: JsonObject): [string, PlacementEntry][] => {
     const entries: [string, PlacementEntry][] = [];
-    walkPageComposition(page.composition, ({ placementId, props, vortex, settings }) => {
-      entries.push([placementId, { props, vortex, settings }]);
+    walkPageComposition(page.composition, ({ placementId, props, vortex }) => {
+      entries.push([placementId, { props, vortex, settings: placementSettings(props) }]);
       return undefined;
     });
     return entries;

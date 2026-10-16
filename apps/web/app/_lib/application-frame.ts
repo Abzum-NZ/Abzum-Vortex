@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  runtimePreviewOf,
   type ProjectedNavigation,
 } from "@vortex/platform/server";
 import {
@@ -51,6 +52,8 @@ export type ApplicationFrameModel = Readonly<{
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
+  /** The draft this address runs as a preview, and where its Studio is; absent for an installed Application. */
+  preview?: Readonly<{ draftRevision: number; expiresAt: string; studioHref: string }>;
 }>;
 
 /** The page key and query the request addresses inside this application, when it names one page. */
@@ -187,6 +190,7 @@ export const loadApplicationFrame = cache(
           );
 
     const permittedKeys = new Set(resolved.application.pageKeys);
+    const preview = runtimePreviewOf(context);
     const applicationPath = (key: string, pageKey: string) =>
       `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(key)}/${encodeURIComponent(pageKey)}`;
     return {
@@ -223,6 +227,15 @@ export const loadApplicationFrame = cache(
       platformBlockReleases: platformBlockReleasesFor(content.shells),
       fieldInputControlReleases: FIELD_INPUT_CONTROL_RELEASES,
       platformThemeTokens: DEFAULT_PLATFORM_THEME_RELEASE.tokens,
+      ...(preview === undefined
+        ? {}
+        : {
+            preview: {
+              draftRevision: preview.draftRevision,
+              expiresAt: preview.expiresAt,
+              studioHref: `/studio/${encodeURIComponent(context.organizationId)}/${encodeURIComponent(context.applicationRootId)}`,
+            },
+          }),
     };
   },
 );

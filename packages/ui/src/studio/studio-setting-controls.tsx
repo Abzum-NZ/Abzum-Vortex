@@ -3,6 +3,7 @@
 import { useState, type ReactElement } from "react";
 import {
   validateComponentSettings,
+  type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
   type ComponentSettingFailure,
   type SourceBlockPropertyValueContract,
@@ -13,7 +14,14 @@ import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { Textarea } from "../components/textarea";
-import type { StudioQueryChoice, StudioQueryField } from "./contextual-palette";
+import {
+  studioQueryChoices,
+  studioSourceFields,
+  studioSourceRecordTypes,
+  type StudioBorrowedQueries,
+  type StudioQueryChoice,
+  type StudioQueryField,
+} from "./contextual-palette";
 
 /**
  * Studio's one set of typed setting controls: one control per declared block property, chosen by
@@ -26,12 +34,35 @@ import type { StudioQueryChoice, StudioQueryField } from "./contextual-palette";
 type SettingValue = SourceBlockPropertyValueContract | undefined;
 export type StudioSettingValues = Readonly<Record<string, SourceBlockPropertyValueContract>>;
 
-/** What reference settings can point at: the fields of the block's data, the queries and the pages. */
+/**
+ * What reference settings can point at, all read from the draft being edited: the fields of the
+ * block's data (or every field of its record types), its queries, pages and record types.
+ */
 export type StudioSettingChoices = Readonly<{
   fields: readonly StudioQueryField[];
   queries: readonly StudioQueryChoice[];
   pages: readonly Readonly<{ key: string; label: string }>[];
+  recordTypes: readonly Readonly<{ key: string; label: string }>[];
 }>;
+
+/**
+ * The one source of every reference picker: the draft being edited, never the installed release.
+ * Its own Modules' queries, fields and record types, its pages, and the queries of the Modules it
+ * uses (read from their releases, as nothing of theirs is in this draft).
+ */
+export const studioDraftChoices = (source: ApplicationSourceDocument, borrowed: StudioBorrowedQueries | null):
+  StudioSettingChoices => ({
+  queries: studioQueryChoices(source, borrowed),
+  fields: studioSourceFields(source),
+  pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
+  recordTypes: studioSourceRecordTypes(source),
+});
+
+/** The choices of one block: a block that reads a query picks only that query's fields. */
+export const studioBlockChoices = (draft: StudioSettingChoices, query: string | null): StudioSettingChoices => {
+  const chosen = query === null ? undefined : draft.queries.find((candidate) => candidate.reference === query);
+  return chosen === undefined ? draft : { ...draft, fields: chosen.fields };
+};
 
 const familyText: Readonly<Record<ComponentSettingFailure["family"], string>> = {
   required_value: "needs a value",
@@ -83,6 +114,8 @@ const initialValue = (property: BlockPropertySchemaContract, choices: StudioSett
     case "field_reference": return choices.fields[0] === undefined ? undefined : { kind: "field_reference", field: choices.fields[0].reference };
     case "query_reference": return choices.queries[0] === undefined ? undefined : { kind: "query_reference", query: choices.queries[0].reference };
     case "page_reference": return choices.pages[0] === undefined ? undefined : { kind: "page_reference", page: choices.pages[0].key };
+    case "record_type_reference": return choices.recordTypes[0] === undefined ? undefined
+      : { kind: "record_type_reference", record_type: choices.recordTypes[0].key };
     default: return undefined;
   }
 };
@@ -180,6 +213,11 @@ function SettingControl(props: ControlProps): ReactElement {
         unset={unsetLabel(property, undefined)}
         options={choices.pages.map((page) => ({ value: page.key, label: page.label }))}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "page_reference", page: next })} />;
+    case "record_type_reference":
+      return <OptionControl id={id} disabled={disabled} value={value?.kind === "record_type_reference" ? value.record_type : ""}
+        unset={unsetLabel(property, undefined)}
+        options={choices.recordTypes.map((recordType) => ({ value: recordType.key, label: recordType.label }))}
+        onChange={(next) => onChange(next === "" ? undefined : { kind: "record_type_reference", record_type: next })} />;
     case "group":
       return <GroupControl {...props} />;
     case "list":
