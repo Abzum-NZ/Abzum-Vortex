@@ -43,7 +43,7 @@ const choiceForm = (
 
 type Loaded = StudioStandardPageAdoptionLoadResult | null;
 
-/** The Page adoption tab: compares each local page with the standard page it replaces. */
+/** Page adoption (in the Releases tab): compares each local page with the standard page it replaces. */
 export function StandardPageAdoption({ organizationId, rootId, disabledReason, onSaved }: Readonly<{
   organizationId: string;
   rootId: string;

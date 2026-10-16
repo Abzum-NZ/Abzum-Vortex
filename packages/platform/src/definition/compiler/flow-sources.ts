@@ -20,7 +20,13 @@ import { flowIssueLocation } from "../flow-validation";
 import { dependencyOrder } from "./dependencies";
 import type { Resolution } from "./resolution";
 import { compatibleVersion } from "./resolution";
-import { asObject, fail, type JsonObject } from "./shared";
+import {
+  applicationModuleKeysOf,
+  asObject,
+  CURRENT_MODULE_RELEASE,
+  fail,
+  type JsonObject,
+} from "./shared";
 
 /**
  * Compiles the flows a module or application owns to permanent identities, refusing an
@@ -46,9 +52,7 @@ function compileOwnedFlowSources(
         ? (body.dependencies as JsonObject[])
         : []
       : source.kind === "application"
-        ? Array.isArray(body.module_bindings)
-          ? (body.module_bindings as JsonObject[])
-          : []
+        ? applicationModuleKeysOf(body).map((module) => ({ module, version: CURRENT_MODULE_RELEASE }))
         : [];
   const dependencyModuleOutput = (moduleKey: string): ModuleCompilationOutput => {
     const bindings = moduleDependencyEntries.filter(

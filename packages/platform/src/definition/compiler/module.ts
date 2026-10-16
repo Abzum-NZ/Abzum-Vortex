@@ -625,6 +625,7 @@ function compileModule(
     content: {
       name: body.name,
       description: body.description,
+      ownerApplication: body.owner_application,
       dependencies,
       recordTypes,
       permissions,

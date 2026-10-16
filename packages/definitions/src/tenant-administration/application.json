@@ -8,22 +8,10 @@
     "description": "Tenant structure and direct protected actions for a tenant administrator.",
     "icon": "building-2",
     "home_page": "tenant_administrators",
-    "module_bindings": [
+    "uses": [
       {
-        "module": "vortex.tenant_administration",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.system_directory",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "system_directory"
+        "application": "vortex.app.organisation_administration",
+        "module": "vortex.system_directory"
       }
     ],
     "permissions": [
@@ -169,11 +157,9 @@
         ]
       }
     ],
-    "queries": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
-    "actions": [],
     "events": [
       {
         "id": "event_suspend_organization",

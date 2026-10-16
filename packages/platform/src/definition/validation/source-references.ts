@@ -313,9 +313,10 @@ export function sourceLocalReferenceRule(
         }
       }
     } else if (source.kind === "application") {
-      const moduleBindings = new Set(
-        array(body.module_bindings).map((binding) => String(binding.module)),
-      );
+      const moduleBindings = new Set([
+        ...array(body.modules).map((module) => String(module.key)),
+        ...array(body.uses).map((use) => String(use.module)),
+      ]);
       const applicationPermissionKeys = new Set(
         array(body.permissions)
           .filter(

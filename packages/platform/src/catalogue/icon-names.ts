@@ -26,6 +26,20 @@ export const VORTEX_ICON_NAMES = [
   "sliders-horizontal",
   "life-buoy",
   "building-2",
+  "sitemap",
+  "list-tree",
+  "blocks",
+  "database",
+  "workflow",
+  "palette",
+  "shield",
+  "history",
+  "undo",
+  "redo",
+  "monitor",
+  "tablet",
+  "smartphone",
+  "eye",
 ] as const;
 
 export const vortexIconNameSchema = z.enum(VORTEX_ICON_NAMES);
