@@ -891,8 +891,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     discardSourceImport();
     setConditionEpoch((value) => value + 1);
     reportConditionPending(false);
-    setAppearanceEpoch((value) => value + 1);
-    reportAppearancePending(false);
+    // The Theme editor is the whole application's, not the selection's: it is reset only when it
+    // holds input to discard. Remounting it on every selection re-ran its theme check, which held
+    // the inspector busy for seconds after each click.
+    if (busy.is("appearance")) {
+      setAppearanceEpoch((value) => value + 1);
+      reportAppearancePending(false);
+    }
     setCompositionEpoch((value) => value + 1);
     reportCompositionPending(false);
     setFlowEpoch((value) => value + 1);
