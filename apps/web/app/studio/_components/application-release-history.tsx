@@ -8,6 +8,7 @@ import type { StudioApplicationHistoryFailure, StudioApplicationHistoryPage,
   StudioApplicationHistorySnapshot } from "../../_lib/studio-application-history";
 import { inspectApplicationReleaseHistory, listApplicationReleaseHistory,
 } from "../[organizationId]/[applicationRootId]/history/actions";
+import { formatStudioTimestamp } from "./studio-time";
 
 const snapshotIdentity = (snapshot: StudioApplicationHistorySnapshot) => JSON.stringify([
   snapshot.organizationId, snapshot.rootId, snapshot.definitionKey, snapshot.draftRevision,
@@ -192,7 +193,7 @@ export function ApplicationReleaseHistory({ initialPage }: {
             {page.entries.map((entry) => <li key={entry.releaseRevision} className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
               <p className="font-semibold">Version {entry.releaseVersion}
                 {entry.isCurrent && <span> · Current version</span>}</p>
-              <p>Published <time dateTime={entry.publishedAt}>{new Date(entry.publishedAt).toLocaleString()}</time></p>
+              <p>Published <time dateTime={entry.publishedAt}>{formatStudioTimestamp(entry.publishedAt)}</time></p>
               <p className="whitespace-pre-wrap break-words">{entry.releaseNote}</p>
               <Button type="button" variant="outline" size="sm" name="application.release_history.inspect" aria-pressed={selectedRevision === entry.releaseRevision}
                 disabled={blocked}
@@ -209,7 +210,7 @@ export function ApplicationReleaseHistory({ initialPage }: {
       {metadata !== null && failure !== "conflict" ? <><dl className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
         <div><dt className="font-semibold">Version</dt><dd>{metadata.releaseVersion}</dd></div>
         <div><dt className="font-semibold">Current version</dt><dd>{metadata.isCurrent ? "Yes" : "No"}</dd></div>
-        <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{new Date(metadata.publishedAt).toLocaleString()}</time></dd></div>
+        <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{formatStudioTimestamp(metadata.publishedAt)}</time></dd></div>
         <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
         {selectedRevision === metadata.releaseRevision && <div className="pt-2">
           <nav aria-label="Selected release actions" className="flex flex-wrap gap-3">

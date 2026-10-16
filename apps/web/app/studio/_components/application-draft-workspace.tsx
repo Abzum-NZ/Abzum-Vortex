@@ -306,12 +306,14 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   }, [history, selection]);
 
   // Leaving the page (a review page, another address, a reload) with edits that are not saved is confirmed by the browser.
+  // Typed input that is not applied yet (name, appearance, composition, search, source import) is lost on unload too.
+  const unsavedWork = state.isDirty || busy.anyRendered();
   useEffect(() => {
-    if (!state.isDirty) return;
+    if (!unsavedWork) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [state.isDirty]);
+  }, [unsavedWork]);
 
   const refreshSearchMetadata = async () => {
     const current = history.getState();
@@ -816,7 +818,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
         <Button type="button" variant="outline" size="sm" disabled={busy.anyOfRendered("publication", "reopening") || state.isSaving}
           onClick={reopen}>Revert to saved</Button>
         <Button type="button" size="sm" disabled={!state.isDirty || themeOverrideProblems || state.isSaving || locked} onClick={save}>Save</Button>
-        <Button type="button" size="sm" variant="outline" disabled={busy.isRendered("reopening") || state.isSaving} onClick={openPublish}>Publish…</Button>
+        <Button type="button" size="sm" variant="outline" disabled={busy.isRendered("reopening") || state.isSaving || locked} onClick={openPublish}>Publish…</Button>
       </div>
       <p role="status" aria-live="polite" className="w-full text-sm text-muted-foreground">{pendingNote} {message}</p>
     </div>

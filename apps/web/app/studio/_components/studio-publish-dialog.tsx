@@ -8,6 +8,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-details";
 import { PublicationSummary } from "./publication-summary";
+import { formatStudioTimestamp } from "./studio-time";
 
 export type StudioPublishDialogProps = Readonly<{
   open: boolean;
@@ -59,7 +60,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
           <Alert>
             <AlertTitle>Version {published.releaseVersion} is published</AlertTitle>
             <AlertDescription>
-              Published <time dateTime={published.publishedAt}>{new Date(published.publishedAt).toLocaleString()}</time>.
+              Published <time dateTime={published.publishedAt}>{formatStudioTimestamp(published.publishedAt)}</time>.
               Nobody has been switched to it yet.
             </AlertDescription>
           </Alert>
