@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { findRepositoryRoot, loadCurrentSetupState } from "../development-setup/state";
@@ -78,5 +77,3 @@ export const personaEmails = {
   member: () => (process.env.VORTEX_DEMO_OWNER_EMAIL ?? "").replace("@", "-agent@"),
   viewer: () => (process.env.VORTEX_DEMO_OWNER_EMAIL ?? "").replace("@", "-viewer@"),
 } as const;
-
-export const newCorrelationId = (): string => randomUUID();

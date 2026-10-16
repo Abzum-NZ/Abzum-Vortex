@@ -130,7 +130,7 @@ export const createHumanOrganizationRequestService = (
     ) => Promise<Result>,
     prepare?: ChangePreparation,
     suspendedAccountResult?: () => Special,
-    mapDatabaseRefusal?: (code: string) => Result | undefined,
+    mapDatabaseRefusal?: (code: string, error: unknown) => Result | undefined,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
@@ -266,7 +266,7 @@ export const createHumanOrganizationRequestService = (
     } catch (error) {
       const code = databaseCode(error);
       if (code !== undefined && mapDatabaseRefusal !== undefined) {
-        const refusal = mapDatabaseRefusal(code);
+        const refusal = mapDatabaseRefusal(code, error);
         if (refusal !== undefined) {
           appendTelemetry(correlationId, "refused", startedAtMs);
           return { kind: "available", value: refusal };
@@ -321,7 +321,7 @@ export const createHumanOrganizationRequestService = (
         scope: SelectedOrganizationScope,
         issuedAt: string,
       ) => Promise<Result>,
-      mapDatabaseRefusal: (code: string) => Result | undefined,
+      mapDatabaseRefusal: (code: string, error: unknown) => Result | undefined,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode(
         "change",

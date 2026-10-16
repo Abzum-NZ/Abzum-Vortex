@@ -1,5 +1,6 @@
 "use client";
 
+import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { Drawer } from "@puckeditor/core";
 import { useId, useMemo, useState } from "react";
 import { Button } from "../components/button";
@@ -92,11 +93,13 @@ export function StudioBlockPalette({
                         <Drawer.Item name={choice.rendererKey} label={choice.name}
                           isDragDisabled={!editable || !available}>
                           {() => (
-                            <div className="rounded-lg border border-border bg-card p-2 text-card-foreground">
-                              <p className="text-sm font-medium">{choice.name}</p>
-                              <p className="text-xs text-muted-foreground">{choice.description}</p>
-                              {available ? null : <p className="text-xs text-muted-foreground">{choice.unavailable}</p>}
-                            </div>
+                            <Item variant="outline" size="sm">
+                              <ItemContent>
+                                <ItemTitle>{choice.name}</ItemTitle>
+                                <ItemDescription>{choice.description}</ItemDescription>
+                                {available ? null : <ItemDescription>{choice.unavailable}</ItemDescription>}
+                              </ItemContent>
+                            </Item>
                           )}
                         </Drawer.Item>
                       </div>
