@@ -202,7 +202,7 @@ export const resolveInstalledEventDefinitionContext = (
           declarationId: event.eventId,
           key: event.key,
           recordTypeId: event.recordTypeId,
-          carriedFieldIds: [...event.carriedFieldIds].sort(compareCanonicalStrings),
+          carriedFieldIds: event.carriedFieldIds,
         }),
       );
     }

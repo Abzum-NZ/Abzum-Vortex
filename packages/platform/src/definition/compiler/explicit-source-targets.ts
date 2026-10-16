@@ -14,6 +14,26 @@ import {
   permissionRecordScopeTargets,
 } from "./source-target-helpers";
 
+/**
+ * The compiled `carriedFieldIds` array is sorted into canonical order, so a source `carries` position is not its
+ * compiled position: find the compiled position of the field that source entry resolves to.
+ */
+function eventCarriedFieldTarget(
+  source: JsonObject,
+  canonical: unknown,
+  eventIndex: number,
+  carriesIndex: number,
+  resolution: Resolution,
+): Path {
+  const arrayPath: Path = ["content", "events", eventIndex, "carriedFieldIds"];
+  const event = asObject((asObject(source.body).events as unknown[])[eventIndex]);
+  const recordKey = String(event.record_type);
+  const record = source.kind === "module" ? `${String(source.key)}:${recordKey}` : recordKey;
+  const fieldId = resolution.field(record, String((event.carries as unknown[])[carriesIndex]));
+  const position = (valueAtPath(canonical, arrayPath) as unknown[]).indexOf(fieldId);
+  return position >= 0 ? [...arrayPath, position] : arrayPath;
+}
+
 export function explicitSourceTargets(
   source: JsonObject,
   canonical: unknown,
@@ -519,7 +539,7 @@ export function explicitSourceTargets(
     typeof sourcePath[4] === "number" &&
     sourcePath.length === 5
   )
-    return [["content", "events", sourcePath[2], "carriedFieldIds", sourcePath[4]]];
+    return [eventCarriedFieldTarget(source, canonical, sourcePath[2], sourcePath[4], resolution)];
   if (
     (source.kind === "module" || source.kind === "application") &&
     sourcePath[0] === "body" &&
