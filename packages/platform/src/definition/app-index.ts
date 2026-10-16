@@ -40,11 +40,3 @@ export { createFlowTestRunner } from "./flow-test-run";
 export { createFormContinuationService } from "./form-continuation";
 
 export { createDatabaseFlowStores } from "./flow-continuation-store";
-
-export {
-  applicationInstallAddressSchema,
-  applicationInstallColor,
-  createApplicationInstallManifest,
-  type ApplicationInstallAddress,
-  type ApplicationInstallManifest,
-} from "./install-metadata";
