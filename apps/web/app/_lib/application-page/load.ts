@@ -24,9 +24,6 @@ import {
   describeFailure,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-  type BlockPropertyValueContract,
-  readRecordDetailContract,
-  readRecordsTableContract,
   organizationRuntimeSettingsSchema,
   type OrganizationAccessDeclaration,
   recordIdSchema,
@@ -355,43 +352,6 @@ const loadApplicationPageJoined = async (
     }
     choicePlacements.push({ options, items: options.items, permissionKeys });
   }
-
-  const displayedFieldIds = new Set(
-    allPlacements.flatMap(({ placement }) => {
-      const settings = placement.settings;
-      if (!isRecord(settings)) return [];
-      const contractSettings = settings as Readonly<Record<string, BlockPropertyValueContract>>;
-      const detail = readRecordDetailContract(contractSettings);
-      const table = readRecordsTableContract(contractSettings);
-      return [
-        ...(detail?.fields.map((field) => field.field.toLowerCase()) ?? []),
-        ...(table?.columns.map((column) => column.field.toLowerCase()) ?? []),
-      ];
-    }),
-  );
-  for (const module of context.releaseSet.modules)
-    for (const recordType of module.content.recordTypes)
-      for (const field of recordType.fields) {
-        if (
-          !displayedFieldIds.has(String(field.fieldId).toLowerCase()) ||
-          (field.type !== "several_choices" && field.type !== "choice")
-        )
-          continue;
-        for (const option of field.settings.options) {
-          const permissionId = option.requiredPermissionId;
-          if (permissionId === undefined) continue;
-          const key = `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
-          const matches = context.permissionRegistration.entries.filter(
-            (entry) =>
-              entry.ownerKind === "module" &&
-              sameId(String(entry.ownerId), String(module.rootId)) &&
-              sameId(String(entry.permission.permissionId), String(permissionId)),
-          );
-          if (matches.length !== 1 || matches[0] === undefined)
-            return { kind: "temporarily_unavailable" };
-          gatedPermissions.set(key, matches[0]);
-        }
-      }
 
   let dateTimeZones: DateTimeZones = {};
   let allowedPermissions = new Set<string>();
@@ -723,7 +683,6 @@ const loadApplicationPageJoined = async (
     dependencies,
     subjectId,
     readSubject,
-    allowedPermissions,
     linkTiles,
     queryNotices,
     boardContinuation,

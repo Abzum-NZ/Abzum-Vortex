@@ -914,11 +914,13 @@ These are safety and product-shape limits, not performance release gates. Changi
 
 A file record has file identifier, organisation, lifecycle state, original safe display name, detected media type, extension, size, checksum, storage key, scanner name/version/result, preview references, uploader, creation/activation/deletion/removal times, owning attachment references, and legal-hold state.
 
-An upload grant has organisation, person, target record/field, allowed policy fingerprint, maximum bytes, expiry, and one-time identifier. A download grant has the same access-bound context and a short expiry.
+The upload reservation and grant APIs have been removed until file fields and the upload block are built. The file and download read paths remain. A download grant carries access-bound context and a short expiry.
 
 ## Connection and interface contracts
 
 A connection instance has organisation, connection-type revision, encrypted-secret reference, authorised applications, state, grant scopes, token expiry, last health result, and administrator activity link.
+
+The unwired connection-administration write API has been removed. Administration writes will be built with the integrations feature; the existing connection readiness and archive-selection readers remain in use. The unused search index-build lease API has also been removed and will be designed with search.
 
 An incoming message has organisation, connection, message type, provider message identifier or fingerprint, verified time, safe payload reference, duplicate state, flow trigger result, and retention due time.
 
