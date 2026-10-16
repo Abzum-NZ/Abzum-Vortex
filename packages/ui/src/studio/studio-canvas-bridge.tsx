@@ -1,7 +1,7 @@
 "use client";
 
 import { Puck, createUsePuck, useGetPuck, type Content, type Data } from "@puckeditor/core";
-import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
 import type {
   ApplicationShell,
   ProjectedApplicationFrame,
@@ -137,13 +137,20 @@ export function StudioCanvasBridge({
     });
   }, [puckSelected]);
 
+  // The canvas is a design surface: no link in it (menu pages, external addresses, links inside
+  // blocks) leaves Studio, so unsaved edits are never lost to a click.
+  const inert = (event: SyntheticEvent) => {
+    if (event.target instanceof Element && event.target.closest("a[href]") !== null) event.preventDefault();
+  };
   const canvas = <div data-vortex-studio-canvas="" className="min-h-24"><Puck.Preview id="vortex-studio-canvas" /></div>;
-  if (frame === undefined) return canvas;
+  if (frame === undefined)
+    return <div className="contents" onClickCapture={inert} onAuxClickCapture={inert}>{canvas}</div>;
   const shellId = frame.frame.shellId;
   const shell = shellId === undefined ? undefined
     : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
   const ignoreNavigation = (_pageId: string, event: MouseEvent<HTMLAnchorElement>) => event.preventDefault();
   return (
+    <div className="contents" data-vortex-studio-frame="" onClickCapture={inert} onAuxClickCapture={inert}>
     <PagePuckRenderer
       composition={frame.frame}
       breakpoint={breakpoint}
@@ -169,5 +176,6 @@ export function StudioCanvasBridge({
       }}
       outlet={{ location: frame.frame.outlet, content: canvas as ReactNode }}
     />
+    </div>
   );
 }

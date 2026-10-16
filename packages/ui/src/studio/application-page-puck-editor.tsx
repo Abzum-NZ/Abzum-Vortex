@@ -261,10 +261,15 @@ function ApplicationPageSlotPuckEditor({
   }, [runtimeSettings, slot]);
   // Checked once per opened content area: a content area that would not convert back exactly is
   // shown read-only rather than risking a silent change to the definition.
-  const [readOnlyCause] = useState(() =>
-    slot === undefined || runtimeSettings === undefined ? undefined : roundTripProblem(adapter, slot, runtimeSettings));
+  // Checked whenever the content area or its compiled settings change, and closed until it passes:
+  // a content area that would not convert back exactly is shown read-only rather than risking a
+  // silent change to the definition. Without compiled settings there is nothing to check yet.
+  const readOnlyCause = useMemo(() =>
+    slot === undefined || runtimeSettings === undefined
+      ? "STUDIO_CANVAS_ROUND_TRIP_PENDING: no compiled version to check against"
+      : roundTripProblem(adapter, slot, runtimeSettings), [slot, runtimeSettings]);
   useEffect(() => {
-    if (readOnlyCause !== undefined)
+    if (readOnlyCause !== undefined && runtimeSettings !== undefined)
       console.error(`[studio] canvas content area ${pageAlias}/${at.key} is read-only`, readOnlyCause);
   }, [readOnlyCause]);
   const shown = useMemo(() => data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint), [data, breakpoint]);
