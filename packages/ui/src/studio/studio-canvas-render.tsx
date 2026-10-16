@@ -1,5 +1,6 @@
 "use client";
 
+import { Item, ItemContent, ItemDescription } from "../components/item";
 import { createContext, useContext, type ReactElement, type ReactNode } from "react";
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
@@ -108,7 +109,13 @@ function CanvasBlock({
   const id = typeof props.id === "string" ? props.id : "";
   // A block just dropped from the palette is shown as a placeholder until Studio adds it.
   if (props.vortex === undefined)
-    return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Adding the block…</div>;
+    return (
+      <Item variant="outline" size="sm" className="border-dashed">
+        <ItemContent>
+          <ItemDescription>Adding the block…</ItemDescription>
+        </ItemContent>
+      </Item>
+    );
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   return render(renderProps(props, releaseOf(registry, props), Object.hasOwn(compiled, id) ? compiled[id] : undefined));
 }

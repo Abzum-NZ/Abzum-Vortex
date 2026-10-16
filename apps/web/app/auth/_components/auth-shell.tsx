@@ -24,7 +24,7 @@ export function AuthShell({ eyebrow, title, description, children, footer }: Aut
     <main className="flex min-h-svh items-center justify-center p-4 sm:p-6 md:p-8">
       <section aria-labelledby="auth-title" className="w-full max-w-md sm:max-w-lg">
         <Card className="border-border bg-card text-card-foreground shadow-sm">
-          <CardHeader className="gap-2 pb-4">
+          <CardHeader>
             <div className="flex items-center justify-between">
               <Link
                 className="text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
@@ -47,7 +47,7 @@ export function AuthShell({ eyebrow, title, description, children, footer }: Aut
             <CardDescription className="text-sm text-muted-foreground">{description}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">{children}</CardContent>
-          {footer ? <CardFooter className="flex flex-col items-stretch pt-2">{footer}</CardFooter> : null}
+          {footer ? <CardFooter className="flex flex-col items-stretch">{footer}</CardFooter> : null}
         </Card>
       </section>
     </main>
