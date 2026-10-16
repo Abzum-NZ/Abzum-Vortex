@@ -121,7 +121,7 @@ export type ApplicationInstallationPreparationResult = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
-  /** The provisioned, inactive bindings the initial lifecycle-policy setup names. */
+  /** The provisioned, inactive bindings the activation will switch on. */
   moduleBindings: readonly ModuleInstallationBindingEvidence[];
 }>;
 
