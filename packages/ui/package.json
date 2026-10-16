@@ -29,6 +29,7 @@
     "lucide-react": "1.48.0",
     "react": "catalog:",
     "react-day-picker": "catalog:",
+    "react-dom": "19.3.0",
     "shadcn": "4.21.0",
     "sonner": "catalog:",
     "tailwind-merge": "3.7.0",
@@ -38,7 +39,8 @@
     "motion": "13.4.6"
   },
   "devDependencies": {
-    "@types/react": "catalog:"
+    "@types/react": "catalog:",
+    "@types/react-dom": "19.3.0"
   },
   "vortex": {
     "tier": 10,

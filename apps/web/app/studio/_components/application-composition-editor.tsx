@@ -11,7 +11,6 @@ import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
   describeStudioCompositionDestinations,
   describeStudioCompositionEdit,
-  describeStudioCompositionPalette,
   describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
   describeStudioCompositionScalarSettings,
@@ -22,7 +21,6 @@ import {
   type StudioCompositionContext,
   type StudioCompositionLayout,
   type StudioCompositionTextSettings,
-  type StudioCompositionAddSettings,
   type StudioCompositionScalarSettings,
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
@@ -93,155 +91,12 @@ const destinationOptionKey = (destination: { readonly kind: string; readonly par
     ? `child:${encodeURIComponent(destination.parentAlias ?? "")}:${encodeURIComponent(destination.slotKey ?? "")}`
     : destination.kind;
 
-/** Controls edit the native source through the same command for pointer and keyboard. */
+/**
+ * Controls edit the native source through the same command for pointer and keyboard. New blocks
+ * come from the Blocks panel's palette, which adds them through the add command.
+ */
 export function ApplicationCompositionEditor(props: Props) {
-  return props.selection.kind === "page" ? <ApplicationCompositionPalette {...props} />
-    : <PlacementCompositionEditor {...props} />;
-}
-
-type AddInputs = Readonly<{
-  search: string; releaseId: string; alias: string; settings: StudioCompositionAddSettings;
-}>;
-const emptyAddInputs = (): AddInputs => ({ search: "", releaseId: "", alias: "", settings: {} });
-const addInputsPending = (inputs: AddInputs): boolean => inputs.search !== "" || inputs.releaseId !== "" ||
-  inputs.alias !== "" || Object.keys(inputs.settings).length > 0;
-
-function ApplicationCompositionPalette(props: Props) {
-  const [inputs, setInputs] = useState<AddInputs>(emptyAddInputs);
-  const [message, setMessage] = useState("");
-  const selectionKey = studioSemanticSelectionKey(props.selection);
-  const model = useMemo(() => describeStudioCompositionPalette(props.context, props.selection),
-    [props.context, props.selection]);
-  const filtered = useMemo(() => describeStudioCompositionPalette(props.context, props.selection, inputs.search),
-    [props.context, props.selection, inputs.search]);
-  const formContext = useRef(props.context);
-  const formSelection = useRef(selectionKey);
-  const pending = useRef(false);
-  const titleId = useId();
-  const hintId = useId();
-
-  // Disabling during Save/Reopen or filtering the palette cannot discard inputs.
-  // Only an accepted source, lifetime or semantic selection change resets them.
-  useEffect(() => {
-    setInputs(emptyAddInputs());
-    formContext.current = props.context;
-    formSelection.current = selectionKey;
-    pending.current = false;
-    props.onPendingChange(false);
-    setMessage("");
-  }, [props.context, selectionKey, props.onPendingChange]);
-
-  if (model.kind !== "available") return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
-    <h3 className="font-semibold">Add a component</h3>
-    <p role="status">{model.kind === "unsupported"
-      ? "Items can only be added to the main area of an ordinary private page. Nothing was changed."
-      : "This page is not in the current draft."}</p>
-  </section>;
-
-  const choices = filtered.kind === "available" ? filtered.choices : [];
-  const chosen = model.choices.find((choice) => choice.id === inputs.releaseId);
-  // Filtering never silently changes a selected exact release or its text inputs.
-  const options = chosen !== undefined && !choices.some((choice) => choice.id === chosen.id)
-    ? [...choices, chosen] : choices;
-  const update = (next: AddInputs) => {
-    if (props.disabled || formContext.current !== props.context || formSelection.current !== selectionKey) return;
-    pending.current = addInputsPending(next);
-    props.onPendingChange(pending.current);
-    setInputs(next);
-    setMessage("");
-  };
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (props.disabled || !pending.current || chosen === undefined) return;
-    if (formContext.current !== props.context || formSelection.current !== selectionKey) {
-      setMessage("The draft or your selection changed. What you typed is kept.");
-      return;
-    }
-    const result = props.onCommand(formContext.current, props.selection, {
-      kind: "add", blockId: chosen.blockId, releaseVersion: chosen.releaseVersion,
-      alias: inputs.alias, settings: inputs.settings,
-    });
-    if (result === "applied") {
-      pending.current = false;
-      props.onPendingChange(false);
-      setInputs(emptyAddInputs());
-      setMessage("Item added. Save to keep it.");
-    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
-      : result === "unsupported" ? "This item cannot be added here. What you typed is kept."
-        : "Nothing was added. Use a unique name and valid settings. What you typed is kept.");
-  };
-
-  return <section className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4" aria-labelledby={titleId}>
-    <h3 id={titleId} className="font-semibold">Add a component</h3>
-    <p className="text-sm">Add an item to the main area of this page. Existing items keep their order and size.</p>
-    <form className="space-y-3" onSubmit={submit} aria-describedby={hintId}>
-      <fieldset className="space-y-3" disabled={props.disabled}>
-        <legend className="font-medium">Available items</legend>
-        <label className="block space-y-1"><span>Search items</span>
-          <Input className={fieldClass} type="search" value={inputs.search}
-            onChange={(event) => update({ ...inputs, search: event.target.value })} /></label>
-        <label className="block space-y-1"><span>Item type</span>
-          <NativeSelect className={fieldClass} required value={inputs.releaseId} onChange={(event) => {
-            const releaseId = event.target.value;
-            if (releaseId !== "" && !model.choices.some((choice) => choice.id === releaseId)) return;
-            update({ ...inputs, releaseId, settings: {} });
-          }}><option value="">Choose an item type</option>
-            {options.map((choice) => <option key={choice.id} value={choice.id}>
-              {choice.name}{options.some((other) => other.id !== choice.id && other.name === choice.name) ? ` (version ${choice.releaseVersion})` : ""}
-            </option>)}
-          </NativeSelect></label>
-        {choices.length === 0 && <p role="status">No item types match this search. Your current choice is kept.</p>}
-        <label className="block space-y-1"><span>Technical name</span>
-          <Input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
-            value={inputs.alias} onChange={(event) => update({ ...inputs, alias: event.target.value })} /></label>
-        <p className="text-sm">Use a unique name of lowercase letters, digits and underscores, starting with a letter. It cannot be changed later.</p>
-        {chosen !== undefined && chosen.slots.length > 0 && <p className="text-sm">
-          These areas start empty: {chosen.slots.map((slot) => slot.label).join(", ")}. Move existing items into them separately.
-        </p>}
-        {chosen?.properties.map((property) => {
-          const supplied = Object.hasOwn(inputs.settings, property.key) ? inputs.settings[property.key] : undefined;
-          return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
-            <legend>{property.label}</legend>
-            <label className="flex items-center gap-2"><Checkbox checked={supplied !== undefined}
-              onCheckedChange={(checked) => {
-                const settings = { ...inputs.settings };
-                if (checked) settings[property.key] = property.kind === "boolean"
-                  ? { kind: "boolean", value: false } : property.kind === "choice"
-                    ? { kind: "choice", value: "" } : { kind: "text", value: "" };
-                else delete settings[property.key];
-                update({ ...inputs, settings });
-              }} />{property.kind === "text" ? "Set this text" : "Set this option"}</label>
-            {property.kind === "text" && supplied?.kind === "text" && <label className="block space-y-1"><span>{property.label} text</span>
-              <Textarea className={fieldClass} required={property.minLength > 0}
-                minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
-                onChange={(event) => update({ ...inputs, settings: { ...inputs.settings,
-                  [property.key]: { kind: "text", value: event.target.value } } })} /></label>}
-            {property.kind === "boolean" && supplied?.kind === "boolean" &&
-              <label className="flex items-center gap-2"><Checkbox checked={supplied.value}
-                onCheckedChange={(checked) => update({ ...inputs, settings: { ...inputs.settings,
-                  [property.key]: { kind: "boolean", value: checked } } })} />{property.label}</label>}
-            {property.kind === "choice" && supplied?.kind === "choice" &&
-              <label className="block space-y-1"><span>{property.label}</span>
-                <NativeSelect className={fieldClass} required value={supplied.value} onChange={(event) => {
-                  const value = event.target.value;
-                  if (value !== "" && !property.options.some((option) => option.key === value)) return;
-                  update({ ...inputs, settings: { ...inputs.settings, [property.key]: { kind: "choice", value } } });
-                }}><option value="">Choose a value</option>
-                  {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-                </NativeSelect></label>}
-            {property.help !== undefined && <p className="text-sm">{property.help}</p>}
-          </fieldset>;
-        })}
-      </fieldset>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add item</Button>
-        <Button type="button" variant="outline" size="sm" disabled={props.disabled || !addInputsPending(inputs)}
-          onClick={() => update(emptyAddInputs())}>Discard</Button>
-      </div>
-    </form>
-    <p id={hintId} className="text-sm">Options you leave unset are not written to the draft. Adding an item changes your draft only; Save keeps it, and nothing runs.</p>
-    <p role="status" aria-live="polite">{message}</p>
-  </section>;
+  return <PlacementCompositionEditor {...props} />;
 }
 
 function PlacementCompositionEditor(props: Props) {
