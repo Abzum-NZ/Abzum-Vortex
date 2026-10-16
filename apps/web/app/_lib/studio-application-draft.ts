@@ -35,6 +35,9 @@ import { installedReleaseCatalogue } from "./definition-catalogue";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
+import { studioCanvasFramesFor, type StudioApplicationCanvasFrames } from "./studio-canvas-frames";
+
+export type { StudioApplicationCanvasFrames } from "./studio-canvas-frames";
 
 type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 
@@ -71,7 +74,7 @@ const loadFailure = (operation: string, error: unknown): StudioApplicationFailur
 };
 
 type StudioApplicationLoadResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; compileFailure: StudioCompileFailure | null }>
+  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
   | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
@@ -293,6 +296,8 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
 export const loadStudioApplicationDraft = async (
   candidateOrganizationId: string,
   candidateRootId: string,
+  /** `false` reads the draft without compiling it: for checks that need only the saved source and revision. */
+  options: Readonly<{ compile?: boolean }> = {},
 ): Promise<StudioApplicationLoadResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = applicationRootIdSchema.safeParse(candidateRootId);
@@ -314,6 +319,7 @@ export const loadStudioApplicationDraft = async (
         draft: StoredApplicationDefinitionDraft;
         searchMetadata: StudioApplicationSearchMetadata | null;
         pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
+        canvasFrames: StudioApplicationCanvasFrames | null;
         compileFailure: StudioCompileFailure | null;
       }>>> => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
@@ -331,8 +337,9 @@ export const loadStudioApplicationDraft = async (
         const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
         let searchMetadata: StudioApplicationSearchMetadata | null = null;
         let pageCompiledSlots: StudioApplicationCompiledPageSlots | null = null;
+        let canvasFrames: StudioApplicationCanvasFrames | null = null;
         let compileFailure: StudioCompileFailure | null = null;
-        try {
+        if (options.compile !== false) try {
           const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
           const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
             .compileApplicationDraft(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
@@ -346,6 +353,7 @@ export const loadStudioApplicationDraft = async (
               compiled.compilation.artifact.resolutionFingerprint !== compiled.compilation.resolutionFingerprint)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           pageCompiledSlots = pageCompiledSlotsFor(draft.source, compiled.compilation.canonical.content);
+          canvasFrames = studioCanvasFramesFor(draft.source.body.pages, compiled.compilation.canonical.content);
           const records: StudioApplicationSearchMetadata["records"][number][] = [];
           const modules = new Map<string, StudioApplicationSearchMetadata["modules"][number]>();
           await createDatabaseDefinitionPublicationRepository(transaction).read(context, async (reader) => {
@@ -425,7 +433,7 @@ export const loadStudioApplicationDraft = async (
           console.error("STUDIO_DRAFT_COMPILE_FAILED", compileFailure.reasonCode, compileFailure.family, error);
           searchMetadata = null;
         }
-        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, pageCompiledSlots, compileFailure } };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, pageCompiledSlots, canvasFrames, compileFailure } };
       },
     );
     if (result.kind === "available")

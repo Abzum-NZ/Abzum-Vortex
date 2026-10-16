@@ -23,7 +23,7 @@ export default async function StudioApplicationPage({ params, searchParams }: {
     throw new Error(`Draft pins unknown platform theme ${pin.catalogue_theme_id}@${pin.release_version}`);
   return <ApplicationDraftWorkspace key={`${result.organizationId}:${result.draft.rootId}`}
     mode="existing" organizationId={result.organizationId} draft={result.draft} initialTab={tab}
-    searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots} compileFailure={result.compileFailure}
+    searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}
     platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
     fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
     platformThemeTokens={themeRelease.tokens} />;
