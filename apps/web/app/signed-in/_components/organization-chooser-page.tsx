@@ -9,6 +9,7 @@ import {
   type ApplicationAccount,
   createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
+  renderedPageOf,
   type DisplaySemanticEvent,
   type FieldInputControlReleaseMap,
   type ListPayload,
@@ -46,6 +47,7 @@ export function OrganizationChooserPage({
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
+  const rendered = useMemo(() => renderedPageOf(page, [shell]), [page, shell]);
   return (
     <ApplicationAccountActionsProvider
       actions={{
@@ -57,8 +59,8 @@ export function OrganizationChooserPage({
       }}
     >
       <PagePuckRenderer
-        composition={page}
-        shells={[shell]}
+        composition={rendered.page}
+        {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
         registry={registry}
         fieldInputControlReleases={fieldInputControlReleases}
         platformThemeTokens={platformThemeTokens}

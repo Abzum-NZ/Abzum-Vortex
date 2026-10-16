@@ -670,7 +670,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch (error) {
           return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
-        if (output.validationContractVersion !== "2.0.0" || resolution.contractVersion !== "3.0.0")
+        if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
           return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       if (kind === "module") {

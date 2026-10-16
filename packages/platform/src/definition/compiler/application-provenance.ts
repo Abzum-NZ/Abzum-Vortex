@@ -36,6 +36,13 @@ import {
 import { sourceContractPositions, sourceToCanonicalPath } from "./source-paths";
 import { isInterfaceOperationFlowTargetPath } from "./source-target-helpers";
 
+/** A compiled layout leaf: inside a shell's layout or a page's composition. */
+const isApplicationCompositionCanonicalPath = (path: Path): boolean =>
+  path[0] === "content" &&
+  typeof path[2] === "number" &&
+  ((path[1] === "shells" && path[3] === "layout") ||
+    (path[1] === "pages" && path[3] === "composition"));
+
 const applicationSpecialRoot = (path: Path): boolean =>
   path[0] === "body" &&
   (path[1] === "platform_block_dependencies" ||
@@ -303,12 +310,15 @@ export function applicationProvenance(
       });
       continue;
     }
-    const placementsIndex = canonicalPath.lastIndexOf("placements");
-    if (placementsIndex >= 0 && canonicalPath.includes("settings")) {
-      const placement = asObject(
-        valueAtPath(canonical, canonicalPath.slice(0, placementsIndex + 2)),
-      );
-      const block = asObject(placement.block);
+    // A setting the author left out is the release's declared default or a derived value.
+    const settingsIndex = canonicalPath.lastIndexOf("settings");
+    if (
+      settingsIndex > 0 &&
+      canonicalPath[settingsIndex - 1] === "props" &&
+      isApplicationCompositionCanonicalPath(canonicalPath)
+    ) {
+      const item = asObject(valueAtPath(canonical, canonicalPath.slice(0, settingsIndex - 1)));
+      const block = asObject(asObject(asObject(item.props).vortex).block);
       const blockId = String(block.blockId);
       const releaseVersion = String(block.releaseVersion);
       const dependencyIndex = source.body.platform_block_dependencies.findIndex(

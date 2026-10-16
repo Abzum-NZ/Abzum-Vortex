@@ -209,11 +209,13 @@ export const fieldLinkTypesOf = (module: ModuleRelease): Record<string, LinkFiel
     ),
   );
 
-export const isApplicationLauncherPlacement = (placement: unknown): boolean => {
-  if (!isRecord(placement) || !isRecord(placement.block)) return false;
+export const isApplicationLauncherPlacement = ({
+  vortex,
+}: Readonly<{ vortex: Record<string, unknown> }>): boolean => {
+  if (!isRecord(vortex.block)) return false;
   return (
-    typeof placement.block.blockId === "string" &&
-    sameId(placement.block.blockId, APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId)
+    typeof vortex.block.blockId === "string" &&
+    sameId(vortex.block.blockId, APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId)
   );
 };
 

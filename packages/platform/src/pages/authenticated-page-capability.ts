@@ -2,8 +2,10 @@ import "server-only";
 
 import {
   canonicalJson,
+  compiledItemSlots,
   pageDefinitionSchema,
   type ApplicationShell,
+  type CompiledItem,
   type ConditionNode,
   type IdentitySession,
   type OrganizationAccessDeclaration,
@@ -126,11 +128,13 @@ type RequiredPlacement = Readonly<{
 }>;
 
 const collectSlot = (
-  slot: ApplicationShell["layout"],
+  items: readonly CompiledItem[],
   result: RequiredPlacement[],
   ancestorPlacementIds: readonly string[] = [],
 ): void => {
-  for (const [placementId, candidate] of Object.entries(slot.placements)) {
+  for (const item of items) {
+    const placementId = item.props.id;
+    const candidate = item.props.vortex;
     result.push({
       placementId,
       ancestorPlacementIds,
@@ -144,18 +148,16 @@ const collectSlot = (
         ? {}
         : { visibilityCondition: candidate.visibilityCondition }),
     });
-    for (const child of Object.values(candidate.slots))
+    for (const [, child] of compiledItemSlots(item))
       collectSlot(child, result, [...ancestorPlacementIds, placementId]);
   }
 };
 
 const requiredPlacements = (resolved: ResolvedPageComposition): RequiredPlacement[] => {
   const result: RequiredPlacement[] = [];
-  if (resolved.roots.kind === "page")
-    collectSlot(resolved.roots.main, result);
+  if (resolved.roots.kind === "page") collectSlot(resolved.roots.main.content, result);
   else
-    for (const root of Object.values(resolved.roots.stepContent))
-      collectSlot(root, result);
+    for (const root of Object.values(resolved.roots.stepContent)) collectSlot(root.content, result);
   return result;
 };
 
@@ -168,15 +170,21 @@ const evaluate = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   binding: PermissionBinding | PlacementPermissionBinding,
-): Promise<Readonly<{
-  allowed: boolean;
-  correlationId: string;
-  validUntil?: string;
-}>> => {
+): Promise<
+  Readonly<{
+    allowed: boolean;
+    correlationId: string;
+    validUntil?: string;
+  }>
+> => {
   // Record placement availability carries no row decision and invokes no operation callback.
   // Page-level and non-record gates still use their original generic permission operation.
   const result = isRecordPlacementBinding(binding)
-    ? await evaluateOrganizationRecordPermissionAvailability(transaction, scope, binding.declaration)
+    ? await evaluateOrganizationRecordPermissionAvailability(
+        transaction,
+        scope,
+        binding.declaration,
+      )
     : await runOrganizationAccessOperation(
         transaction,
         scope,
@@ -186,12 +194,16 @@ const evaluate = async (
           validUntil: decision.validUntil,
         }),
       );
-  const evaluated = result.outcome === "completed"
-    ? { allowed: true, correlationId: result.value.correlationId }
-    : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
-  const validUntil = result.outcome === "eligible"
-    ? result.validUntil
-    : result.outcome === "completed" ? result.value.validUntil : undefined;
+  const evaluated =
+    result.outcome === "completed"
+      ? { allowed: true, correlationId: result.value.correlationId }
+      : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
+  const validUntil =
+    result.outcome === "eligible"
+      ? result.validUntil
+      : result.outcome === "completed"
+        ? result.value.validUntil
+        : undefined;
   return { ...evaluated, ...(validUntil === undefined ? {} : { validUntil }) };
 };
 
@@ -210,16 +222,18 @@ export const createAuthenticatedPageCapabilityService = <Command>(
       requests.run(session, candidate, async (transaction, scope) => {
         const loaded = await dependencies.adapter.load(transaction, scope, command);
         const page = pageDefinitionSchema.parse(loaded.page);
-        if (loaded.resolvedComposition !== undefined && (
-          loaded.resolvedCompositionContext === undefined ||
-          !isTrustedInstalledPageComposition(
-            loaded.resolvedCompositionContext,
-            loaded.resolvedComposition,
-          ) ||
-          canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page)
-        )) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-        const resolved = loaded.resolvedComposition ??
-          resolvePageComposition(page, loaded.applicationShells);
+        if (
+          loaded.resolvedComposition !== undefined &&
+          (loaded.resolvedCompositionContext === undefined ||
+            !isTrustedInstalledPageComposition(
+              loaded.resolvedCompositionContext,
+              loaded.resolvedComposition,
+            ) ||
+            canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
+        )
+          throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+        const resolved =
+          loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
         if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
           throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
 
@@ -252,7 +266,8 @@ export const createAuthenticatedPageCapabilityService = <Command>(
           if (
             earliestAccessEligibilityUntil === undefined ||
             Date.parse(candidateUntil) < Date.parse(earliestAccessEligibilityUntil)
-          ) earliestAccessEligibilityUntil = candidateUntil;
+          )
+            earliestAccessEligibilityUntil = candidateUntil;
         };
         retainEarliestAccessEligibility(pageAccess.validUntil);
         const states: Record<string, PageCapabilityState["placements"][string]> = {};
@@ -320,9 +335,7 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               ? {}
               : { operationRequired: binding.operationRequired }),
             operationBound: binding.operationBound,
-            ...(conditionAllowed === undefined
-              ? {}
-              : { conditionAllowed }),
+            ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
             ...(actionAvailable === undefined ? {} : { actionAvailable }),
           };
         }
@@ -343,7 +356,8 @@ export const createAuthenticatedPageCapabilityService = <Command>(
               scope,
               earliestAccessEligibilityUntil,
             ))
-          ) return undefined;
+          )
+            return undefined;
         }
         return projected;
       }),

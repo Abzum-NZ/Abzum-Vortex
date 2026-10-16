@@ -1,4 +1,10 @@
-import { flowTaskChildLists, type FlowDefinition, type FlowTask } from "../schema";
+import {
+  flowTaskChildLists,
+  walkPageComposition,
+  walkPlacementData,
+  type FlowDefinition,
+  type FlowTask,
+} from "../schema";
 
 /**
  * A form page declares no commit of its own: it commits what the flows bound to its controls'
@@ -10,9 +16,7 @@ import { flowTaskChildLists, type FlowDefinition, type FlowTask } from "../schem
 type JsonObject = Record<string, unknown>;
 
 const object = (value: unknown): JsonObject =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as JsonObject)
-    : {};
+  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
 
 /** How the executable actions a flow can commit are named in this Application's release. */
 type FormCommitActions = Readonly<{
@@ -82,30 +86,21 @@ function flowCommitActionKeys(
   return keys;
 }
 
-/** Every placement id in a slot, including placements nested in child slots. */
-function slotPlacementIds(slotValue: unknown, ids: string[] = []): string[] {
-  for (const [placementId, placementValue] of Object.entries(object(object(slotValue).placements))) {
-    ids.push(placementId);
-    for (const childSlot of Object.values(object(object(placementValue).slots)))
-      slotPlacementIds(childSlot, ids);
-  }
-  return ids;
-}
-
 /** The placement ids a page shows: its own content and, in an Application shell, the shell's. */
 function pagePlacementIds(page: JsonObject, shellsById: ReadonlyMap<string, JsonObject>): string[] {
-  const composition = object(page.composition);
   const ids: string[] = [];
-  if ("main" in composition) slotPlacementIds(composition.main, ids);
-  else if ("content" in composition)
-    for (const slot of Object.values(object(composition.content))) slotPlacementIds(slot, ids);
-  else if (composition.shellKind === "default")
-    for (const slot of Object.values(object(composition.stepContent))) slotPlacementIds(slot, ids);
-  else
-    for (const step of Object.values(object(composition.stepContent)))
-      for (const slot of Object.values(object(step))) slotPlacementIds(slot, ids);
-  if (composition.shellKind === "application")
-    slotPlacementIds(shellsById.get(String(composition.shellId))?.layout, ids);
+  const collect = ({ placementId }: Readonly<{ placementId: string }>): undefined => {
+    ids.push(placementId);
+    return undefined;
+  };
+  const composition = object(page.composition);
+  walkPageComposition(composition, collect);
+  const data =
+    composition.stepContent === undefined
+      ? composition
+      : object(Object.values(object(composition.stepContent))[0]);
+  const shellId = object(object(object(data.root).props).vortex).shellId;
+  if (typeof shellId === "string") walkPlacementData(shellsById.get(shellId)?.layout, collect);
   return ids;
 }
 

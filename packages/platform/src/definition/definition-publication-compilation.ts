@@ -208,7 +208,7 @@ export const compileCandidate = (
       return refuse("DEFINITION_COMPILATION_REFUSED");
     const request = {
       sourceContractVersion: applicationSourceContractVersion,
-      validationContractVersion: "2.0.0" as const,
+      validationContractVersion: "3.0.0" as const,
       source: candidate.draft.source,
       resolution,
       catalogueSnapshot: dependencies.composition,
@@ -329,12 +329,8 @@ export const validateCandidate = (
   return candidate;
 };
 
-/** The one explicit comparator contract each stored draft kind declares. */
-const candidateValidationContractVersion = (
-  source: StoredDefinitionDraft["source"],
-): Readonly<{ validationContractVersion: "2.0.0" | "3.0.0" }> => ({
-  validationContractVersion: source.kind === "module" ? "3.0.0" : "2.0.0",
-});
+/** The one comparator contract every stored draft kind declares. */
+const candidateValidationContractVersion = { validationContractVersion: "3.0.0" as const };
 
 export const prepareFromReader = async (
   context: SessionContext,
@@ -359,7 +355,7 @@ export const prepareFromReader = async (
   );
   const impact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
-    ...candidateValidationContractVersion(candidate.draft.source),
+    ...candidateValidationContractVersion,
     historyEvidence: candidate.historyEvidence,
     candidate: provisional.canonical,
   });
@@ -375,7 +371,7 @@ export const prepareFromReader = async (
   );
   const confirmedImpact = compareDefinitionVersionImpactWithEvidence({
     kind: candidate.draft.kind,
-    ...candidateValidationContractVersion(candidate.draft.source),
+    ...candidateValidationContractVersion,
     historyEvidence: candidate.historyEvidence,
     candidate: compilationOutput.canonical,
   });

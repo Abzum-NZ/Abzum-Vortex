@@ -7,6 +7,14 @@ import type {
   VersionRequirement,
 } from "../../schema";
 import { object, array, outputKey, failure } from "./helpers";
+import { walkPageComposition, walkPlacementData } from "../../pages/placement-walk";
+
+/** One placed item as validation reads it: its props, its Vortex metadata and its settings. */
+export type PlacementEntry = Readonly<{
+  props: JsonObject;
+  vortex: JsonObject;
+  settings: JsonObject;
+}>;
 import { fingerprintCanonicalValue, compareCanonicalStrings } from "../canonical-json-definition";
 import { applicationSearchFieldIsSelectable } from "../application-resolution";
 import { type ApplicationFieldValuePair, actionValueReferenceEntry } from "./action-values";
@@ -377,38 +385,39 @@ export function applicationScope(
   );
   const pages = new Map(array(content.pages).map((page) => [String(page.pageId), page]));
   const shells = new Map(array(content.shells).map((shell) => [String(shell.shellId), shell]));
-  const collectPlacementEntries = (
-    slotValue: unknown,
-    entries: [string, JsonObject][] = [],
-  ): [string, JsonObject][] => {
-    const slot = object(slotValue);
-    for (const [placementId, placementValue] of Object.entries(object(slot.placements))) {
-      const placement = object(placementValue);
-      entries.push([placementId, placement]);
-      for (const childSlot of Object.values(object(placement.slots)))
-        collectPlacementEntries(childSlot, entries);
-    }
+  /** Every item below one item list or Puck data tree, with its settings and Vortex metadata. */
+  const collectPlacementEntries = (layoutValue: unknown): [string, PlacementEntry][] => {
+    const entries: [string, PlacementEntry][] = [];
+    walkPlacementData(
+      Array.isArray(layoutValue) ? { content: layoutValue } : layoutValue,
+      ({ placementId, props, vortex }) => {
+        entries.push([placementId, { props, vortex, settings: object(props.settings) }]);
+        return undefined;
+      },
+    );
     return entries;
   };
-  const pageContentPlacementEntries = (page: JsonObject): [string, JsonObject][] => {
-    const composition = object(page.composition);
-    if ("main" in composition) return collectPlacementEntries(composition.main);
-    if ("content" in composition)
-      return Object.values(object(composition.content)).flatMap((slotValue) =>
-        collectPlacementEntries(slotValue),
-      );
-    if (composition.shellKind === "default")
-      return Object.values(object(composition.stepContent)).flatMap((slotValue) =>
-        collectPlacementEntries(slotValue),
-      );
-    return Object.values(object(composition.stepContent)).flatMap((stepValue) =>
-      Object.values(object(stepValue)).flatMap((slotValue) => collectPlacementEntries(slotValue)),
-    );
+  const pageContentPlacementEntries = (page: JsonObject): [string, PlacementEntry][] => {
+    const entries: [string, PlacementEntry][] = [];
+    walkPageComposition(page.composition, ({ placementId, props, vortex }) => {
+      entries.push([placementId, { props, vortex, settings: object(props.settings) }]);
+      return undefined;
+    });
+    return entries;
   };
-  const pageShellPlacementEntries = (page: JsonObject): [string, JsonObject][] => {
+  const pageShellId = (page: JsonObject): string | undefined => {
     const composition = object(page.composition);
-    if (composition.shellKind !== "application") return [];
-    return collectPlacementEntries(shells.get(String(composition.shellId))?.layout);
+    const data =
+      composition.stepContent === undefined
+        ? composition
+        : object(Object.values(object(composition.stepContent))[0]);
+    const shellId = object(object(object(data.root).props).vortex).shellId;
+    return typeof shellId === "string" ? shellId : undefined;
+  };
+  const pageShellPlacementEntries = (page: JsonObject): [string, PlacementEntry][] => {
+    const shellId = pageShellId(page);
+    if (shellId === undefined) return [];
+    return collectPlacementEntries(shells.get(shellId)?.layout);
   };
   const queries = new Map(array(content.queries).map((query) => [String(query.queryId), query]));
   // The queries a page or placement binds are the ones a bound Module exposes, by exact identity.

@@ -175,7 +175,7 @@ export const moduleCompilationRequestSchema = z
 export const applicationCompilationRequestSchema = z
   .object({
     sourceContractVersion: z.literal(applicationSourceContractVersion),
-    validationContractVersion: z.literal("2.0.0"),
+    validationContractVersion: z.literal("3.0.0"),
     source: applicationSourceDocumentSchema,
     resolution: definitionResolutionSnapshotSchema,
     catalogueSnapshot: applicationCompositionCatalogueSnapshotSchema,
@@ -359,7 +359,7 @@ export const applicationToolBundleSchema = z
 export const applicationCompilationOutputSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("2.0.0"),
+    validationContractVersion: z.literal("3.0.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
     canonical: applicationDraftSchema,
     artifact: compiledApplicationArtifactSchema,
@@ -386,7 +386,7 @@ export const applicationCompilationOutputSchema = z
 export const storedApplicationCompilationOutputSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("2.0.0"),
+    validationContractVersion: z.literal("3.0.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema.optional(),
     canonical: applicationDraftSchema,
     artifact: compiledApplicationArtifactSchema,

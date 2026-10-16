@@ -5,12 +5,18 @@ import type {
 import {
   applicationRootIdSchema,
   canonicalJson,
+  compiledItemSlots,
+  compiledPageShellId,
+  compiledPageZones,
   pageIdSchema,
   platformIdSchema,
   sameId,
   type ApplicationContent,
   type ApplicationSourceDocument,
   type BlockPropertyValueContract,
+  type BreakpointOrder,
+  type CompiledItem,
+  type PageComposition,
   type PageDefinition,
 } from "@vortex/platform/schema";
 import {
@@ -71,12 +77,8 @@ type PageAdoptionPlan = Readonly<{
   decision: PageAdoptionCommand["decision"];
 }>;
 
-type DefaultPageComposition = Extract<
-  PageDefinition["composition"],
-  { shellKind: "default"; main: unknown }
->;
-type PagePlacementSlot = DefaultPageComposition["main"];
-type PagePlacement = PagePlacementSlot["placements"][keyof PagePlacementSlot["placements"]];
+/** One compiled zone: its items in desktop order and its complete tablet and phone order. */
+type PageZone = Readonly<{ items: readonly CompiledItem[]; order: BreakpointOrder | undefined }>;
 type PageFact = Readonly<{ comparisonValue: string; displayValue: string }>;
 
 const maxPageDifferenceFacts = 160;
@@ -127,7 +129,7 @@ const propertyDisplayValue = (value: BlockPropertyValueContract): string => {
   return "Configured value";
 };
 
-const pageLayoutDisplay = (layout: PagePlacement["responsive"]["desktop"]): string => {
+const pageLayoutDisplay = (layout: CompiledItem["props"]["vortex"]["responsive"]["desktop"]): string => {
   const width = layout.width.kind === "grid"
     ? `grid column ${layout.width.startColumn}, span ${layout.width.span}`
     : layout.width.kind;
@@ -200,87 +202,86 @@ const pageFacts = (
   }
 
   const composition = page.composition;
-  if (composition.shellKind === "default") {
+  const shellId = compiledPageShellId(composition);
+  if (shellId === null) {
     add("Page shell", "default", "Default shell");
   } else {
-    const shell = content.shells.find((candidate) => sameId(candidate.shellId, composition.shellId));
+    const shell = content.shells.find((candidate) => sameId(candidate.shellId, shellId));
     add(
       "Page shell",
-      { shellId: composition.shellId, key: shell?.key ?? null, name: shell?.name ?? null },
+      { shellId, key: shell?.key ?? null, name: shell?.name ?? null },
       shell === undefined
         ? "Application shell (details unavailable)"
         : `Application shell ${safeDifferenceLabel(shell.key)}: ${safeDifferenceLabel(shell.name)}`,
     );
   }
 
-  const groups: Array<Readonly<{ label: string; slot: PagePlacementSlot }>> = [];
+  const zonesOf = (data: PageComposition): PageZone[] =>
+    compiledPageZones(data)
+      .sort(([left], [right]) => (shellId === null ? 0 : left.localeCompare(right)))
+      .map(([zone, items]) => ({ items, order: data.root.props.vortex.slotOrders[zone] }));
+  const groups: Array<Readonly<{ label: string; zone: PageZone }>> = [];
   const guidedSteps = page.type === "guided_form" ? page.steps : [];
-  if ("stepContent" in composition && composition.shellKind === "default") {
+  if ("stepContent" in composition) {
     guidedSteps.forEach((step, stepIndex) => {
-      const slot = composition.stepContent[step.id];
-      if (slot === undefined) return;
-      groups.push({ label: `Step ${stepIndex + 1} main region`, slot });
+      const data = composition.stepContent[step.id];
+      if (data === undefined) return;
+      zonesOf(data).forEach((zone, regionIndex) =>
+        groups.push({
+          label:
+            shellId === null
+              ? `Step ${stepIndex + 1} main region`
+              : `Step ${stepIndex + 1} region ${regionIndex + 1}`,
+          zone,
+        }),
+      );
       add(
         `Guided form / step ${stepIndex + 1} content binding`,
         step.id,
         safeDifferenceLabel(step.name),
       );
     });
-  } else if ("stepContent" in composition) {
-    guidedSteps.forEach((step, stepIndex) => {
-      const stepContent = composition.stepContent[step.id];
-      if (stepContent === undefined) return;
-      Object.entries(stepContent).sort(([left], [right]) => left.localeCompare(right)).forEach(([, slot], regionIndex) =>
-        groups.push({ label: `Step ${stepIndex + 1} region ${regionIndex + 1}`, slot }),
-      );
-      add(
-        `Guided form / step ${stepIndex + 1} content binding`,
-        step.id,
-        safeDifferenceLabel(step.name),
-      );
-    });
-  } else if (composition.shellKind === "default") {
-    groups.push({ label: "Main region", slot: composition.main });
-  } else {
-    Object.values(composition.content).forEach((slot, index) =>
-      groups.push({ label: `Content region ${index + 1}`, slot }),
+  } else
+    zonesOf(composition).forEach((zone, index) =>
+      groups.push({
+        label: shellId === null ? "Main region" : `Content region ${index + 1}`,
+        zone,
+      }),
     );
-  }
 
-  const addSlot = (slot: PagePlacementSlot, label: string, depth = 0): void => {
+  const addSlot = (zone: PageZone, label: string, depth = 0): void => {
     if (depth > 5 || facts.size >= maxPageDifferenceFacts) {
       truncated = true;
       return;
     }
-    const placements = slot.placements;
-    const desktopOrder = slot.order.desktop;
+    const placements = new Map(zone.items.map((item) => [item.props.id, item]));
+    const desktopOrder = zone.items.map((item) => item.props.id);
     const blockReference = (placementId: string): string => {
-      const placement = placements[placementId];
+      const placement = placements.get(placementId);
       return placement === undefined
         ? "Unknown placement"
-        : `${placement.block.blockId} @ ${placement.block.releaseVersion}`;
+        : `${placement.props.vortex.block.blockId} @ ${placement.props.vortex.block.releaseVersion}`;
     };
     add(
       `${label} / desktop order`,
       desktopOrder,
       desktopOrder.map(blockReference).join(" → ") || "No blocks",
     );
-    if (slot.order.tablet !== undefined)
+    if (zone.order !== undefined) {
       add(
         `${label} / tablet order`,
-        slot.order.tablet,
-        slot.order.tablet.map(blockReference).join(" → ") || "No blocks",
+        zone.order.tablet,
+        zone.order.tablet.map(blockReference).join(" → ") || "No blocks",
       );
-    if (slot.order.phone !== undefined)
       add(
         `${label} / phone order`,
-        slot.order.phone,
-        slot.order.phone.map(blockReference).join(" → ") || "No blocks",
+        zone.order.phone,
+        zone.order.phone.map(blockReference).join(" → ") || "No blocks",
       );
+    }
 
-    desktopOrder.forEach((placementId, index) => {
-      const placement = placements[placementId];
-      if (placement === undefined) return;
+    zone.items.forEach((item, index) => {
+      const placement = item.props.vortex;
       const placementLabel = `${label} / block ${index + 1}`;
       add(
         `${placementLabel} / block release`,
@@ -301,7 +302,7 @@ const pageFacts = (
           .map(([kind]) => kind.replace(/([A-Z])/g, " $1").toLowerCase())
           .join(", ") || "No additional binding",
       );
-      for (const [propertyKey, value] of Object.entries(placement.settings).sort(([left], [right]) => left.localeCompare(right))) {
+      for (const [propertyKey, value] of Object.entries(item.props.settings).sort(([left], [right]) => left.localeCompare(right))) {
         addProperty(`${placementLabel} / setting ${safeDifferenceLabel(propertyKey)}`, value);
         if (facts.size >= maxPageDifferenceFacts) break;
       }
@@ -312,12 +313,16 @@ const pageFacts = (
       for (const [breakpoint, layout] of Object.entries(placement.responsive))
         if (layout !== undefined)
           add(`${placementLabel} / ${breakpoint} layout`, layout, pageLayoutDisplay(layout));
-      Object.values(placement.slots).forEach((nested, nestedIndex) =>
-        addSlot(nested, `${placementLabel} / nested region ${nestedIndex + 1}`, depth + 1),
+      compiledItemSlots(item).forEach(([slotKey, children], nestedIndex) =>
+        addSlot(
+          { items: children, order: placement.slotOrders[slotKey] },
+          `${placementLabel} / nested region ${nestedIndex + 1}`,
+          depth + 1,
+        ),
       );
     });
   };
-  groups.forEach(({ label, slot }) => addSlot(slot, label));
+  groups.forEach(({ label, zone }) => addSlot(zone, label));
   return { facts, truncated };
 };
 

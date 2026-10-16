@@ -1,4 +1,3 @@
-import type { BlockPlacementContract } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./definition-error";
 
 /**
@@ -7,7 +6,7 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./def
  * other combination is refused so a projection can never invent a state.
  */
 export const projectedAvailability = (
-  placement: BlockPlacementContract,
+  placement: Readonly<Record<string, unknown>>,
   location: DefinitionRenderErrorLocation,
 ): Readonly<{
   availability: "available" | "unavailable";
