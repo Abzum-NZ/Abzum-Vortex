@@ -820,7 +820,11 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
       setPaletteMessage("");
       setBlockSetup({ choice, target, pageQuery: page !== undefined && "query" in page ? page.query : undefined,
-        add: (settings, query) => runAdd({ ...command, settings, query }) });
+        add: (settings, query) => {
+          const outcome = runAdd({ ...command, settings, query });
+          if (outcome === true) setPaletteMessage(`${choice.name} added. Save to keep it.`);
+          return outcome;
+        } });
       return false;
     }
     const outcome = runAdd({ ...command, settings: {}, query: null });
