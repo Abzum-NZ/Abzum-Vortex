@@ -228,7 +228,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
         result.kind === "conflict" || result.kind === "refused" ? result.reason : undefined);
     },
   }));
-  const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source }));
+  const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source, catalogue: platformBlockCatalogue }));
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
   const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(initialSearchMetadata);
@@ -262,12 +262,12 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   // The canvas draws the selected page, or the page that holds the selected block.
   const placementPages = useMemo(() => {
     const owners = new Map<string, string>();
-    traverseStudioSemanticSelectionDraft({ rootId: state.rootId, source }, ({ phase, node }) => {
+    traverseStudioSemanticSelectionDraft({ rootId: state.rootId, source, catalogue: platformBlockCatalogue }, ({ phase, node }) => {
       if (phase === "enter" && node.kind === "placement" && node.owner.kind === "page")
         owners.set(node.selection.placementAlias, node.owner.pageAlias);
     });
     return owners;
-  }, [state.rootId, source]);
+  }, [state.rootId, source, platformBlockCatalogue]);
   const canvasPageAlias = selected?.kind === "page" ? selected.pageAlias
     : selected?.kind === "placement" ? placementPages.get(selected.placementAlias) : undefined;
   const canvasPage = canvasPageAlias === undefined ? undefined
@@ -320,7 +320,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       publicationEpoch.current += 1;
       setPreparedPublication(null);
       previewGeneration.current += 1;
-      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentSchema.parse(next.source) });
+      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentSchema.parse(next.source), catalogue: platformBlockCatalogue });
       setState(next);
     });
     const unsubscribeSelection = selection.subscribe((next) => {
@@ -804,8 +804,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   };
 
   const describePlacement = useMemo(() => createStudioPlacementDescriber(platformBlockCatalogue), [platformBlockCatalogue]);
-  const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source }, describePlacement),
-    [state.rootId, source, describePlacement]);
+  const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source, catalogue: platformBlockCatalogue }, describePlacement),
+    [state.rootId, source, platformBlockCatalogue, describePlacement]);
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const savedStateLabel = state.isSaving ? "Saving…" : state.isDirty ? "Unsaved changes" : "Saved";

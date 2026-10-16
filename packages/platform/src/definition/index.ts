@@ -78,4 +78,5 @@ export {
   type ProvisionedSetup,
 } from "./installation-provisioned-setup";
 export type { OfflineSourceFailure } from "./offline-source-validation";
+export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";

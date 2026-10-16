@@ -270,6 +270,36 @@ function compileApplication(
   // An application never owns a query: the Query engine runs only the queries a Module exposes, so
   // every page and placement binds a dependency-qualified Module query instead.
   const queries: never[] = [];
+  // Each Module release records the one Application that owns it: an inline Module must be owned
+  // by this Application, and a used Module by the Application the source names.
+  const expectedOwners: [string, string][] = [
+    ...(body.modules as JsonObject[]).map((module): [string, string] => [
+      String(module.key),
+      definitionKey,
+    ]),
+    ...(body.uses as JsonObject[]).map((use): [string, string] => [
+      String(use.module),
+      String(use.application),
+    ]),
+  ];
+  for (const [moduleKey, owner] of expectedOwners) {
+    const expected = resolution.definition(moduleKey, "module");
+    const release = dependencyOutputs.find(
+      (output) =>
+        output.kind === "module" &&
+        output.artifact.rootId === expected.rootId &&
+        output.artifact.exactVersion === expected.exactVersion,
+    );
+    if (
+      release?.kind !== "module" ||
+      release.canonical.content.ownerApplication !== owner
+    )
+      fail(
+        "vortex.definition.application_module_bindings",
+        "scope_conflict",
+        resolution.location("module", moduleKey),
+      );
+  }
   const wildcardPermissions = permissions
     .filter((permission) => permission.administrative === false)
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
