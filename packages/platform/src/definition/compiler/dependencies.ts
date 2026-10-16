@@ -1,6 +1,6 @@
 import type { DefinitionCompilationOutput } from "../../schema";
 import type { Resolution } from "./resolution";
-import { asObject, fail, type JsonObject } from "./shared";
+import { applicationModuleKeysOf, asObject, fail, type JsonObject } from "./shared";
 
 export function dependencyOrder(source: JsonObject): string[] {
   const body = asObject(source.body);
@@ -11,7 +11,7 @@ export function dependencyOrder(source: JsonObject): string[] {
     ];
   if (source.kind === "application")
     return [
-      ...(body.module_bindings as JsonObject[]).map((entry) => String(entry.module)),
+      ...applicationModuleKeysOf(body),
       ...(body.connection_bindings as JsonObject[]).map((entry) => String(entry.connection_type)),
       String(source.key),
     ];
@@ -25,7 +25,7 @@ export function resolvedDependencies(source: JsonObject, resolution: Resolution)
       ? (body.dependencies as JsonObject[]).map((entry) => String(entry.module))
       : source.kind === "application"
         ? [
-            ...(body.module_bindings as JsonObject[]).map((entry) => String(entry.module)),
+            ...applicationModuleKeysOf(body),
             ...(body.connection_bindings as JsonObject[]).map((entry) =>
               String(entry.connection_type),
             ),

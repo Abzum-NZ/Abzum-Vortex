@@ -21,10 +21,15 @@ const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<s
   return result;
 };
 
-/** Loads authored JSON with its exact registered block dependencies and explicit theme selection. */
+/**
+ * Loads an authored Application with the Modules it owns, its exact registered block dependencies
+ * and its explicit theme selection. Each Module is authored in its own file beside the Application
+ * and becomes part of the one Application source here.
+ */
 export const loadApplicationSource = (
   authoredSource: unknown,
   selection: SourceApplicationThemeSelection,
+  modules: readonly unknown[],
 ): ApplicationSourceDocument => {
   const sourceObject = authoredSource as JsonObject;
   const body = sourceObject.body as JsonObject;
@@ -55,6 +60,7 @@ export const loadApplicationSource = (
     ...sourceObject,
     body: {
       ...body,
+      modules,
       platform_block_dependencies: dependencies,
       theme,
     },

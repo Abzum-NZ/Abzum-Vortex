@@ -18,6 +18,7 @@ import {
   type SourcePageData,
   type SourceSlotOrder,
 } from "../schema";
+import { applicationModuleKeys } from "./application-module-sources";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";
 
 /**
@@ -406,9 +407,7 @@ export function validateApplicationSourceCatalogue(
         if (
           customOwner.kind === "application"
             ? customOwner.definitionKey !== source.key
-            : !source.body.module_bindings.some(
-                (binding) => binding.module === customOwner.definitionKey,
-              )
+            : !applicationModuleKeys(source).includes(customOwner.definitionKey)
         )
           report("vortex.definition.application_block_references", "scope_conflict", location);
         if (options.pageLevel !== true)

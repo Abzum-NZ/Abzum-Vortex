@@ -14,7 +14,7 @@ import { compareCanonicalStrings } from "../canonical-json-definition";
 import { deriveFormCommitActionKeys } from "../form-commit";
 import { standardRecordActions } from "./module";
 import type { Resolution } from "./resolution";
-import { asObject, type JsonObject } from "./shared";
+import { applicationModuleKeysOf, asObject, type JsonObject } from "./shared";
 
 type ApplicationToolDraft = ApplicationToolBundleInput["tools"][number];
 type ApplicationToolStandardRecordAction = Extract<
@@ -81,11 +81,7 @@ export function compileApplicationToolBundle(
       ),
     ),
   );
-  const boundModuleKeys = new Set(
-    (asObject(source.body).module_bindings as JsonObject[]).map((binding) =>
-      String(binding.module),
-    ),
-  );
+  const boundModuleKeys = new Set(applicationModuleKeysOf(asObject(source.body)));
   const applicationActionKeys = new Set(content.actions.map((action) => String(action.key)));
   // A named action that an Application one-task entry-point flow calls with the flow's own inputs
   // is reachable through that flow's tool, the same start path a button or an interface uses, so
