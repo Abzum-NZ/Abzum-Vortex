@@ -6,8 +6,8 @@ import {
   applicationSourceDocumentSchema,
   canonicalJson,
   compiledItemSlots,
-  compiledPropsSettings,
   readSourceItem,
+  releaseSettingDeclarations,
   setSourcePageSlot,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
@@ -16,7 +16,6 @@ import {
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import type {
-  BlockPropertyValueContract,
   CompiledItem,
   SourceItem,
   SourcePageZone,
@@ -59,7 +58,7 @@ export type { StudioCanvasFrame } from "./studio-canvas-bridge";
 /** One compiled content area: its items, exactly as the published definition holds them. */
 type CompiledSlot = readonly CompiledItem[];
 type SourceSlot = SourcePageZone;
-type CompiledSettings = Readonly<Record<string, Readonly<Record<string, BlockPropertyValueContract>>>>;
+type CompiledSettings = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 
 /**
  * The settings of each block's last compiled version, by block name. The compiled slot holds the
@@ -71,7 +70,7 @@ const compiledSettingsFor = (
   stored: readonly SourceItem[],
   compiled: CompiledSlot,
 ): CompiledSettings => {
-  const result: Record<string, Readonly<Record<string, BlockPropertyValueContract>>> = {};
+  const result: Record<string, Readonly<Record<string, unknown>>> = {};
   const visit = (items: readonly SourceItem[], compiledItems: readonly CompiledItem[]): void => {
     if (items.length !== compiledItems.length)
       throw new TypeError("Compiled page placements do not match their stored page.");
@@ -80,7 +79,14 @@ const compiledSettingsFor = (
       const release = storedItemRelease(catalogue, item);
       if (release === undefined || item.type !== compiledItem.type)
         throw new TypeError("Compiled page placements do not match their stored page.");
-      result[item.props.id] = compiledPropsSettings(compiledItem.props);
+      // Its settings are the props its release declares, as their plain values.
+      result[item.props.id] = Object.fromEntries(
+        releaseSettingDeclarations(release).flatMap((property) =>
+          Object.hasOwn(compiledItem.props, property.key)
+            ? [[property.key, compiledItem.props[property.key]]]
+            : [],
+        ),
+      );
       const compiledSlots = new Map(compiledItemSlots(compiledItem));
       for (const [key, { items: children }] of readSourceItem(item, release).slots) {
         if (children === undefined) continue;

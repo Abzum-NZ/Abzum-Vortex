@@ -11,7 +11,11 @@ import {
   semanticVersionSchema,
 } from "../../catalogue/identifiers";
 import { deterministicDependencyList, iconKeySchema } from "./shared";
-import { type ComponentSettingValue, blockPropertySchema } from "./block-property-schema";
+import {
+  type BlockPropertySchemaContract,
+  type ComponentSettingValue,
+  blockPropertySchema,
+} from "./block-property-schema";
 import { customComponentReleaseSchema } from "./custom-components";
 
 export const blockSlotDeclarationSchema = z
@@ -81,6 +85,20 @@ export const isRepeatableSlotIdentity = (family: string, identity: string): bool
   builderKeySchema.safeParse(identity).success &&
   builderKeySchema.safeParse(repeatableSlotKey(family, identity)).success;
 
+/**
+ * Every setting a placement of a release carries: its own properties, then the properties the
+ * compiler derives for it. A reader tells an item's settings from its slots by this declaration.
+ */
+export const releaseSettingDeclarations = (
+  release: Readonly<{
+    properties: readonly BlockPropertySchemaContract[];
+    derivedProperties?: readonly BlockPropertySchemaContract[] | undefined;
+  }>,
+): readonly BlockPropertySchemaContract[] => [
+  ...release.properties,
+  ...(release.derivedProperties ?? []),
+];
+
 /** Item prop keys an authored item reserves for its identity and its Vortex metadata. */
 export const reservedItemPropKeys: ReadonlySet<string> = new Set(["id", "vortex"]);
 
@@ -131,6 +149,13 @@ export const platformBlockReleaseSchema = z
     paletteGroup: sourceProvenanceUnchanged(blockPaletteGroupSchema),
     rendererKey: sourceProvenanceUnchanged(namespacedKeySchema),
     properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
+    /**
+     * Present only on a release whose binding property derives an automatic field input: every
+     * setting the compiler derives for it beyond the release's own properties (the field's name,
+     * requirement, control and the control's own derived settings). Authors never set one; with the
+     * properties, the declaration names each setting a compiled placement of the release carries.
+     */
+    derivedProperties: sourceProvenanceUnchanged(z.array(blockPropertySchema).optional()),
     slots: sourceProvenanceUnchanged(z.array(blockSlotDeclarationSchema)),
     capabilities: sourceProvenanceUnchanged(blockCapabilitiesSchema),
     /** Semantic events the component emits: the only events a flow binding may name for it. */
@@ -186,17 +211,34 @@ export const platformBlockReleaseSchema = z
         path: ["properties"],
         message: "Property keys must be unique",
       });
-    if (value.properties.filter((property) => property.derivesFieldInput === true).length > 1)
+    const fieldInputBindings = value.properties.filter(
+      (property) => property.derivesFieldInput === true,
+    ).length;
+    if (fieldInputBindings > 1)
       context.addIssue({
         code: "custom",
         path: ["properties"],
         message: "A release may bind at most one automatic field input",
       });
+    if ((fieldInputBindings === 1) !== (value.derivedProperties !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["derivedProperties"],
+        message:
+          "Exactly a release that derives an automatic field input declares derived properties",
+      });
+    const settingKeys = releaseSettingDeclarations(value).map((property) => property.key);
+    if (new Set(settingKeys).size !== settingKeys.length)
+      context.addIssue({
+        code: "custom",
+        path: ["derivedProperties"],
+        message: "A derived property key cannot repeat another property key",
+      });
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
     // An authored item carries its settings directly on its props, beside its identity (`id`),
     // its Vortex metadata (`vortex`) and its child slots, so no property may take one of those keys.
-    for (const [index, property] of value.properties.entries()) {
+    for (const [index, property] of releaseSettingDeclarations(value).entries()) {
       const clashes =
         reservedItemPropKeys.has(property.key) ||
         value.slots.some((slot) =>
@@ -207,7 +249,10 @@ export const platformBlockReleaseSchema = z
       if (clashes)
         context.addIssue({
           code: "custom",
-          path: ["properties", index, "key"],
+          path:
+            index < value.properties.length
+              ? ["properties", index, "key"]
+              : ["derivedProperties", index - value.properties.length, "key"],
           message: "A property key cannot be id, vortex or a key one of the release's slots uses",
         });
     }

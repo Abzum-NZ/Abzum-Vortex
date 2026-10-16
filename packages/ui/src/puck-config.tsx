@@ -31,7 +31,7 @@ import {
 } from "react";
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
-  compiledPropsSettings,
+  plainSettingValue,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   type BreakpointOrder,
@@ -42,6 +42,7 @@ import {
   type PlatformBlockRelease,
   type ProjectedNavigation,
   themeColorSchema,
+  typedSettingValue,
 } from "@vortex/platform/schema";
 import { Checkbox } from "./components/checkbox";
 import { Input } from "./components/input";
@@ -50,6 +51,7 @@ import { NativeSelect, NativeSelectOption } from "./components/native-select";
 import { Textarea } from "./components/textarea";
 import {
   DefinitionRenderError,
+  placementSettings,
   validateAccessibleName,
   type Breakpoint,
   type DefinitionRenderErrorLocation,
@@ -352,20 +354,21 @@ const slotGapFor = (
 
 type TaggedValue = BlockPropertyValueContract | undefined;
 
-const jsonText = (value: TaggedValue): string =>
+const jsonText = (value: unknown): string =>
   value === undefined ? "" : JSON.stringify(value, null, 2);
 
 /**
- * Edits a value whose kind has no dedicated control as its canonical, kind-tagged JSON. The text
+ * Edits a value whose kind has no dedicated control as its plain JSON, as the item holds it. The text
  * follows the incoming value (undo, redo, an external change) until the person edits it; their
  * in-progress text is then kept until it is committed or discarded on blur.
  */
 function JsonValueEditor(props: {
   id: string;
   name: string;
-  value: TaggedValue;
+  value: unknown;
   readOnly: boolean | undefined;
-  onChange: (value: TaggedValue) => void;
+  /** Receives the parsed plain value; false when it is not a value of the property. */
+  onChange: (value: unknown) => boolean;
 }): ReactElement {
   const canonical = jsonText(props.value);
   const [text, setText] = useState(canonical);
@@ -393,7 +396,7 @@ function JsonValueEditor(props: {
         const trimmed = text.trim();
         if (trimmed.length === 0) return props.onChange(undefined);
         try {
-          props.onChange(JSON.parse(trimmed) as BlockPropertyValueContract);
+          if (!props.onChange(JSON.parse(trimmed) as unknown)) setText(canonical);
         } catch {
           setText(canonical);
         }
@@ -402,19 +405,28 @@ function JsonValueEditor(props: {
   );
 }
 
-/** One property's Puck field: an editor for exactly that property's kind-tagged value. */
+/**
+ * One property's Puck field: an editor for exactly that property's value. The item holds the plain
+ * value; the editor reads and writes it as the typed value of the property's declaration.
+ */
 const propertyField = (property: BlockPropertySchemaContract): Field => ({
   type: "custom",
   label: property.label,
   render: ({ id, name, value, onChange, readOnly }): ReactElement => (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{property.label}</Label>
-      {renderPropertyEditor(property, { id, name, value, onChange, readOnly })}
+      {renderPropertyEditor(property, {
+        id,
+        name,
+        value: value === undefined ? undefined : typedSettingValue(value, property),
+        onChange: (next) => onChange(next === undefined ? undefined : plainSettingValue(next)),
+        readOnly,
+      })}
     </div>
   ),
 });
 
-/** The control that edits one property's kind-tagged value. */
+/** The control that edits one property's typed value. */
 const renderPropertyEditor = (
   property: BlockPropertySchemaContract,
   {
@@ -526,9 +538,17 @@ const renderPropertyEditor = (
         <JsonValueEditor
           id={id}
           name={name}
-          value={value}
+          value={value === undefined ? undefined : plainSettingValue(value)}
           readOnly={readOnly}
-          onChange={onChange}
+          onChange={(next) => {
+            if (next === undefined) {
+              onChange(undefined);
+              return true;
+            }
+            const typed = typedSettingValue(next, property);
+            if (typed !== undefined) onChange(typed);
+            return typed !== undefined;
+          }}
         />
       );
   }
@@ -592,9 +612,9 @@ function PlacementBlock(props: {
     );
   const release = registration.metadata;
   const Implementation = implementationFor(release);
-  // Each setting is its own kind-tagged prop, including those the compiler derives beyond the
-  // release declarations; Puck writes `undefined` for an untouched field, which is absent.
-  const settings = compiledPropsSettings(componentProps);
+  // Each setting is its own prop holding its plain value; the release declares every one,
+  // including those the compiler derives, and gives it its kind.
+  const settings = placementSettings(componentProps, release, location);
   validateAccessibleName(settings, release.capabilities, location);
 
   // A placement whose use is unavailable stays viewable but never receives an invocable callback,
@@ -1131,7 +1151,9 @@ export function createVortexPuckConfig(
     components[rendererKey] = {
       label: release.name,
       defaultProps: {
-        ...defaults,
+        ...Object.fromEntries(
+          Object.entries(defaults).map(([key, value]) => [key, plainSettingValue(value)]),
+        ),
         vortex: {
           block: { blockId: release.blockId, releaseVersion: release.releaseVersion },
           themeOverrides: {},
@@ -1147,7 +1169,12 @@ export function createVortexPuckConfig(
       resolveFields: (data: { props: Record<string, unknown> }) =>
         buildFields(
           release,
-          hasRepeatableSlot ? compiledPropsSettings(data.props) : defaults,
+          hasRepeatableSlot
+            ? placementSettings(data.props, release, {
+                blockId: release.blockId,
+                releaseVersion: release.releaseVersion,
+              })
+            : defaults,
           (data.props.vortex as { responsive?: unknown } | undefined)?.responsive,
         ),
       render: (componentProps) => (
