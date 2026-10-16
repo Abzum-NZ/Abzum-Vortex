@@ -63,7 +63,7 @@ export const studioOutlineLabels = (node: StudioSemanticOutlineNode, into = new 
 /** The business label of every placed item by its authored name, for editors that list or name sibling items. */
 export const studioPlacementLabels = (context: StudioCompositionContext): ReadonlyMap<string, string> => {
   const labels = studioOutlineLabels(projectStudioSemanticOutline(
-    { rootId: context.rootId, source: applicationSourceDocumentSchema.parse(context.source) },
+    { rootId: context.rootId, source: applicationSourceDocumentSchema.parse(context.source), catalogue: context.catalogue },
     createStudioPlacementDescriber(context.catalogue)));
   const byAlias = new Map<string, string>();
   for (const [key, label] of labels) if (key.startsWith("placement:")) byAlias.set(key.slice("placement:".length), label);

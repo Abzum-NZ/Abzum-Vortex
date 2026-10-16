@@ -1,0 +1,2259 @@
+{
+  "id": "mod_service_desk_cases",
+  "key": "vortex.service_desk.cases",
+  "name": "Service Desk Cases",
+  "description": "Customer cases, conversations and controlled case summaries.",
+  "record_types": [
+    {
+      "id": "rt_sd_case",
+      "key": "case",
+      "name": "Case",
+      "plural_name": "Cases",
+      "title_field": "subject",
+      "storage_contract_id": "srt_00000011",
+      "storage_scope": "application_contained",
+      "ownership_mode": "group",
+      "standard_actions": [
+        "create",
+        "read",
+        "update",
+        "soft_delete",
+        "restore",
+        "export"
+      ],
+      "custom_actions": [
+        "act_case_assign",
+        "act_case_resolve",
+        "act_case_public_comment"
+      ],
+      "fields": [
+        {
+          "id": "fld_case_number",
+          "key": "case_number",
+          "label": "Case number",
+          "required": true,
+          "unique": true,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "reference_number",
+          "settings": {
+            "prefix": "CAS-",
+            "digits": 7
+          }
+        },
+        {
+          "id": "fld_case_subject",
+          "key": "subject",
+          "label": "Subject",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "text",
+          "settings": {
+            "max_length": 255
+          }
+        },
+        {
+          "id": "fld_case_description",
+          "key": "description",
+          "label": "Description",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "formatted_text",
+          "settings": {
+            "allowed_blocks": [
+              "paragraph",
+              "heading",
+              "list",
+              "link",
+              "attachment"
+            ]
+          }
+        },
+        {
+          "id": "fld_case_company",
+          "key": "customer_company",
+          "label": "Customer company",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.organisations:company",
+            "reverse_key": "service_cases",
+            "on_parent_delete": "refuse"
+          }
+        },
+        {
+          "id": "fld_case_requester",
+          "key": "requester",
+          "label": "Requester",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "personal",
+          "public_display": "allowed",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.people:contact",
+            "reverse_key": "requested_cases",
+            "on_parent_delete": "refuse"
+          }
+        },
+        {
+          "id": "fld_case_owner",
+          "key": "owner",
+          "label": "Owner",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link_to_person",
+          "settings": {
+            "audience": "application_accounts",
+            "application_root_required": true,
+            "on_person_deactivation": "empty_optional"
+          }
+        },
+        {
+          "id": "fld_case_owner_person",
+          "key": "owner_person",
+          "label": "Owner",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.system_directory:person",
+            "reverse_key": "owner_person_references",
+            "on_parent_delete": "empty_optional",
+            "application_root_required": true,
+            "legacy_person_field": "owner"
+          }
+        },
+        {
+          "id": "fld_case_status",
+          "key": "status",
+          "label": "Status",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "new",
+                "label": "New"
+              },
+              {
+                "value": "triage",
+                "label": "Triage"
+              },
+              {
+                "value": "waiting_customer",
+                "label": "Waiting for customer"
+              },
+              {
+                "value": "in_progress",
+                "label": "In progress"
+              },
+              {
+                "value": "resolved",
+                "label": "Resolved"
+              },
+              {
+                "value": "closed",
+                "label": "Closed"
+              }
+            ]
+          },
+          "default": "new"
+        },
+        {
+          "id": "fld_case_priority",
+          "key": "priority",
+          "label": "Priority",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "low",
+                "label": "Low"
+              },
+              {
+                "value": "normal",
+                "label": "Normal"
+              },
+              {
+                "value": "high",
+                "label": "High"
+              },
+              {
+                "value": "critical",
+                "label": "Critical"
+              }
+            ]
+          },
+          "default": "normal"
+        },
+        {
+          "id": "fld_case_sla",
+          "key": "service_level",
+          "label": "Service level",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "link",
+          "settings": {
+            "target": "vortex.service_desk.sla:service_level",
+            "reverse_key": "cases",
+            "on_parent_delete": "refuse"
+          }
+        },
+        {
+          "id": "fld_case_opened",
+          "key": "opened_at",
+          "label": "Opened at",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "date_time",
+          "settings": {}
+        },
+        {
+          "id": "fld_case_response_due",
+          "key": "first_response_due_at",
+          "label": "First response due",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {}
+        },
+        {
+          "id": "fld_case_resolution_due",
+          "key": "resolution_due_at",
+          "label": "Resolution due",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {}
+        },
+        {
+          "id": "fld_case_resolved",
+          "key": "resolved_at",
+          "label": "Resolved at",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "allowed",
+          "type": "date_time",
+          "settings": {}
+        },
+        {
+          "id": "fld_case_breached",
+          "key": "breached",
+          "label": "Service level breached",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "calculation",
+          "settings": {
+            "result_type": "yes_no",
+            "expression": {
+              "operation": "deadline_passed",
+              "due_field": "resolution_due_at",
+              "status_field": "status",
+              "terminal_status_values": [
+                "resolved",
+                "closed"
+              ]
+            }
+          }
+        },
+        {
+          "id": "fld_case_files",
+          "key": "attachments",
+          "label": "Attachments",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "sensitive",
+          "public_display": "refused",
+          "type": "attachment",
+          "settings": {
+            "allowed_kinds": [
+              "image",
+              "document",
+              "spreadsheet",
+              "presentation",
+              "audio",
+              "video",
+              "archive",
+              "text",
+              "other"
+            ],
+            "max_file_size_mb": 25,
+            "multiple": true,
+            "max_files": 30
+          }
+        }
+      ],
+      "relationships": [
+        {
+          "id": "fld_case_company_relationship",
+          "key": "customer_company",
+          "from_field": "customer_company",
+          "to_record_type": "vortex.crm.organisations:company",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "refuse"
+        },
+        {
+          "id": "fld_case_requester_relationship",
+          "key": "requester",
+          "from_field": "requester",
+          "to_record_type": "vortex.crm.people:contact",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "refuse"
+        },
+        {
+          "id": "fld_case_sla_relationship",
+          "key": "service_level",
+          "from_field": "service_level",
+          "to_record_type": "vortex.service_desk.sla:service_level",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "refuse"
+        },
+        {
+          "id": "fld_case_owner_person_relationship",
+          "key": "owner_person",
+          "from_field": "owner_person",
+          "to_record_type": "vortex.system_directory:person",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        }
+      ]
+    },
+    {
+      "id": "rt_sd_comment",
+      "key": "case_comment",
+      "name": "Case comment",
+      "plural_name": "Case comments",
+      "title_field": "created_at",
+      "storage_contract_id": "srt_00000012",
+      "storage_scope": "application_contained",
+      "ownership_mode": "inherited",
+      "ownership_relationship": "case",
+      "standard_actions": [
+        "create",
+        "read",
+        "update",
+        "soft_delete",
+        "restore",
+        "export"
+      ],
+      "custom_actions": [],
+      "fields": [
+        {
+          "id": "fld_comment_case",
+          "key": "case",
+          "label": "Case",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.service_desk.cases:case",
+            "reverse_key": "comments",
+            "on_parent_delete": "soft_delete_dependent"
+          }
+        },
+        {
+          "id": "fld_comment_body",
+          "key": "body",
+          "label": "Comment",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "search_priority": "first",
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "formatted_text",
+          "settings": {
+            "allowed_blocks": [
+              "paragraph",
+              "list",
+              "link",
+              "attachment"
+            ]
+          }
+        },
+        {
+          "id": "fld_comment_public",
+          "key": "customer_visible",
+          "label": "Customer visible",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {},
+          "default": false
+        },
+        {
+          "id": "fld_comment_by",
+          "key": "created_by",
+          "label": "Created by",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "link_to_person",
+          "settings": {
+            "audience": "organisation_identities_and_external_requesters",
+            "application_root_required": false,
+            "on_person_deactivation": "retain_reference"
+          }
+        },
+        {
+          "id": "fld_comment_by_person",
+          "key": "created_by_person",
+          "label": "Created by",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.system_directory:person",
+            "reverse_key": "created_by_person_references",
+            "on_parent_delete": "empty_optional",
+            "application_root_required": false,
+            "legacy_person_field": "created_by"
+          }
+        },
+        {
+          "id": "fld_comment_at",
+          "key": "created_at",
+          "label": "Created at",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {}
+        }
+      ],
+      "relationships": [
+        {
+          "id": "fld_comment_case_relationship",
+          "key": "case",
+          "from_field": "case",
+          "to_record_type": "vortex.service_desk.cases:case",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "soft_delete_dependent"
+        },
+        {
+          "id": "fld_comment_by_person_relationship",
+          "key": "created_by_person",
+          "from_field": "created_by_person",
+          "to_record_type": "vortex.system_directory:person",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        }
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "id": "perm_case_create",
+      "key": "vortex.service_desk.cases.case.create",
+      "label": "Create case",
+      "description": "Allows the standard create operation for cases.",
+      "record_type": "case",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case_number",
+          "subject",
+          "description",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "service_level",
+          "opened_at",
+          "first_response_due_at",
+          "resolution_due_at",
+          "resolved_at",
+          "breached",
+          "attachments"
+        ],
+        "changeable_fields": [
+          "subject",
+          "description",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "service_level",
+          "opened_at",
+          "first_response_due_at",
+          "resolution_due_at",
+          "resolved_at",
+          "attachments"
+        ]
+      }
+    },
+    {
+      "id": "perm_case_read",
+      "key": "vortex.service_desk.cases.case.read",
+      "label": "Read case",
+      "description": "Allows the standard read operation for cases.",
+      "record_type": "case",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case_number",
+          "subject",
+          "description",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "service_level",
+          "opened_at",
+          "first_response_due_at",
+          "resolution_due_at",
+          "resolved_at",
+          "breached",
+          "attachments"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_case_update",
+      "key": "vortex.service_desk.cases.case.update",
+      "label": "Update case",
+      "description": "Allows the standard update operation for cases.",
+      "record_type": "case",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case_number",
+          "subject",
+          "description",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "service_level",
+          "opened_at",
+          "first_response_due_at",
+          "resolution_due_at",
+          "resolved_at",
+          "breached",
+          "attachments"
+        ],
+        "changeable_fields": [
+          "subject",
+          "description",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "service_level",
+          "opened_at",
+          "first_response_due_at",
+          "resolution_due_at",
+          "resolved_at",
+          "attachments"
+        ]
+      }
+    },
+    {
+      "id": "perm_case_soft_delete",
+      "key": "vortex.service_desk.cases.case.soft_delete",
+      "label": "Soft Delete case",
+      "description": "Allows the standard soft_delete operation for cases.",
+      "record_type": "case",
+      "action_kind": "delete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_case_restore",
+      "key": "vortex.service_desk.cases.case.restore",
+      "label": "Restore case",
+      "description": "Allows the standard restore operation for cases.",
+      "record_type": "case",
+      "action_kind": "restore",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_case_export",
+      "key": "vortex.service_desk.cases.case.export",
+      "label": "Export case",
+      "description": "Allows the standard export operation for cases.",
+      "record_type": "case",
+      "action_kind": "export",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case_number",
+          "subject",
+          "description",
+          "customer_company",
+          "requester",
+          "owner",
+          "status",
+          "priority",
+          "service_level",
+          "opened_at",
+          "first_response_due_at",
+          "resolution_due_at",
+          "resolved_at",
+          "breached",
+          "attachments"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_case_comment_create",
+      "key": "vortex.service_desk.cases.case_comment.create",
+      "label": "Create case comment",
+      "description": "Allows the standard create operation for case comments.",
+      "record_type": "case_comment",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case",
+          "body",
+          "customer_visible",
+          "created_by",
+          "created_at"
+        ],
+        "changeable_fields": [
+          "case",
+          "body",
+          "customer_visible",
+          "created_by",
+          "created_at"
+        ]
+      }
+    },
+    {
+      "id": "perm_case_comment_read",
+      "key": "vortex.service_desk.cases.case_comment.read",
+      "label": "Read case comment",
+      "description": "Allows the standard read operation for case comments.",
+      "record_type": "case_comment",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case",
+          "body",
+          "customer_visible",
+          "created_by",
+          "created_at"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_case_comment_update",
+      "key": "vortex.service_desk.cases.case_comment.update",
+      "label": "Update case comment",
+      "description": "Allows the standard update operation for case comments.",
+      "record_type": "case_comment",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case",
+          "body",
+          "customer_visible",
+          "created_by",
+          "created_at"
+        ],
+        "changeable_fields": [
+          "case",
+          "body",
+          "customer_visible",
+          "created_by",
+          "created_at"
+        ]
+      }
+    },
+    {
+      "id": "perm_case_comment_soft_delete",
+      "key": "vortex.service_desk.cases.case_comment.soft_delete",
+      "label": "Soft Delete case comment",
+      "description": "Allows the standard soft_delete operation for case comments.",
+      "record_type": "case_comment",
+      "action_kind": "delete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_case_comment_restore",
+      "key": "vortex.service_desk.cases.case_comment.restore",
+      "label": "Restore case comment",
+      "description": "Allows the standard restore operation for case comments.",
+      "record_type": "case_comment",
+      "action_kind": "restore",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_case_comment_export",
+      "key": "vortex.service_desk.cases.case_comment.export",
+      "label": "Export case comment",
+      "description": "Allows the standard export operation for case comments.",
+      "record_type": "case_comment",
+      "action_kind": "export",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "case",
+          "body",
+          "customer_visible",
+          "created_by",
+          "created_at"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_named_1_assign",
+      "key": "vortex.service_desk.cases.case.assign",
+      "label": "Assign a case",
+      "description": "Allows the named assign operation.",
+      "record_type": "case",
+      "action_kind": "named",
+      "named_action": "assign",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "owner"
+        ],
+        "changeable_fields": [
+          "owner"
+        ]
+      }
+    },
+    {
+      "id": "perm_named_2_resolve",
+      "key": "vortex.service_desk.cases.case.resolve",
+      "label": "Resolve a case",
+      "description": "Allows the named resolve operation.",
+      "record_type": "case",
+      "action_kind": "named",
+      "named_action": "resolve",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "status",
+          "resolved_at"
+        ],
+        "changeable_fields": [
+          "status",
+          "resolved_at"
+        ]
+      }
+    },
+    {
+      "id": "perm_named_3_add_public_comment",
+      "key": "vortex.service_desk.cases.case.add_public_comment",
+      "label": "Add a public comment to a case",
+      "description": "Allows the named add_public_comment operation.",
+      "record_type": "case",
+      "action_kind": "named",
+      "named_action": "add_public_comment",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "act_case_assign",
+      "key": "vortex.service_desk.cases.case.assign",
+      "label": "Assign case",
+      "record_type": "case",
+      "permission": "vortex.service_desk.cases.case.assign",
+      "shareable": false,
+      "inputs": [
+        {
+          "key": "owner",
+          "label": "Owner",
+          "required": true,
+          "type": "organisation_account_reference"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "set_owner",
+          "type": "record.set_fields",
+          "properties": {
+            "values": {
+              "owner": "{{ inputs.owner }}"
+            }
+          }
+        },
+        {
+          "id": "announce_case_assigned",
+          "type": "event.announce",
+          "properties": {
+            "event": "vortex.service_desk.cases.case.assigned"
+          }
+        }
+      ]
+    },
+    {
+      "id": "act_case_resolve",
+      "key": "vortex.service_desk.cases.case.resolve",
+      "label": "Resolve case",
+      "record_type": "case",
+      "permission": "vortex.service_desk.cases.case.resolve",
+      "shareable": false,
+      "inputs": [
+        {
+          "key": "resolution",
+          "label": "Resolution",
+          "required": true,
+          "type": "formatted_text"
+        }
+      ],
+      "precondition": {
+        "field": "status",
+        "operator": "in",
+        "value": [
+          "in_progress",
+          "waiting_customer"
+        ]
+      },
+      "tasks": [
+        {
+          "id": "set_status",
+          "type": "record.set_fields",
+          "properties": {
+            "values": {
+              "status": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": "resolved"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "set_resolved_at",
+          "type": "record.set_fields",
+          "properties": {
+            "values": {
+              "resolved_at": "{{ execution.now }}"
+            }
+          }
+        },
+        {
+          "id": "create_resolution_comment",
+          "type": "record.create",
+          "properties": {
+            "record_type": "vortex.service_desk.cases:case_comment",
+            "values": {
+              "case": "{{ inputs.record }}",
+              "body": "{{ inputs.resolution }}",
+              "customer_visible": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": false
+                }
+              },
+              "created_by": "{{ execution.actor }}",
+              "created_at": "{{ execution.now }}"
+            }
+          }
+        },
+        {
+          "id": "announce_case_resolved",
+          "type": "event.announce",
+          "properties": {
+            "event": "vortex.service_desk.cases.case.resolved"
+          }
+        }
+      ]
+    },
+    {
+      "id": "act_case_public_comment",
+      "key": "vortex.service_desk.cases.case.add_public_comment",
+      "label": "Add public comment",
+      "record_type": "case",
+      "permission": "vortex.service_desk.cases.case.add_public_comment",
+      "shareable": true,
+      "inputs": [
+        {
+          "key": "body",
+          "label": "Body",
+          "required": true,
+          "type": "formatted_text"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "create_public_comment",
+          "type": "record.create",
+          "properties": {
+            "record_type": "vortex.service_desk.cases:case_comment",
+            "values": {
+              "case": "{{ inputs.record }}",
+              "body": "{{ inputs.body }}",
+              "customer_visible": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": true
+                }
+              },
+              "created_by": "{{ execution.actor }}",
+              "created_at": "{{ execution.now }}"
+            }
+          }
+        },
+        {
+          "id": "announce_public_comment_added",
+          "type": "event.announce",
+          "properties": {
+            "event": "vortex.service_desk.cases.case.public_comment_added"
+          }
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "id": "evt_case_created",
+      "key": "vortex.service_desk.cases.case.created",
+      "record_type": "case",
+      "carries": [
+        "case_number",
+        "subject",
+        "customer_company",
+        "priority"
+      ],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "evt_case_assigned",
+      "key": "vortex.service_desk.cases.case.assigned",
+      "record_type": "case",
+      "carries": [
+        "case_number",
+        "owner"
+      ],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "evt_case_resolved",
+      "key": "vortex.service_desk.cases.case.resolved",
+      "record_type": "case",
+      "carries": [
+        "case_number",
+        "subject",
+        "resolved_at"
+      ],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "evt_case_public_comment",
+      "key": "vortex.service_desk.cases.case.public_comment_added",
+      "record_type": "case",
+      "carries": [
+        "case_number"
+      ],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "evt_case_first_response_overdue",
+      "key": "vortex.service_desk.cases.case.first_response_overdue",
+      "record_type": "case",
+      "carries": [
+        "case_number",
+        "first_response_due_at"
+      ],
+      "personal_or_sensitive_values_allowed": false
+    },
+    {
+      "id": "evt_case_resolution_overdue",
+      "key": "vortex.service_desk.cases.case.resolution_overdue",
+      "record_type": "case",
+      "carries": [
+        "case_number",
+        "resolution_due_at"
+      ],
+      "personal_or_sensitive_values_allowed": false
+    }
+  ],
+  "flows": [
+    {
+      "contractVersion": "1.0.0",
+      "id": "rule_case_resolution",
+      "key": "resolution_required",
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "triggers": [
+        {
+          "id": "before_save",
+          "type": "BeforeSave",
+          "recordTypeId": "case",
+          "operations": [
+            {
+              "kind": "create"
+            },
+            {
+              "kind": "update"
+            }
+          ],
+          "priority": 100
+        }
+      ],
+      "tasks": [
+        {
+          "id": "resolved_without_time",
+          "type": "if",
+          "condition": {
+            "op": "and",
+            "args": [
+              {
+                "op": "eq",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "status"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "choice",
+                  "value": "resolved"
+                }
+              },
+              {
+                "op": "is_empty",
+                "arg": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "resolved_at"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "id": "refuse_without_resolution_time",
+              "type": "rule.refuse",
+              "version": "1.0.0",
+              "properties": {
+                "reason": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "resolution_time_required"
+                  }
+                },
+                "message": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "Record when the case was resolved."
+                  }
+                },
+                "field": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "case.resolved_at"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "rule_case_status_from_new",
+      "key": "case_status_from_new",
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "triggers": [
+        {
+          "id": "before_save",
+          "type": "BeforeSave",
+          "recordTypeId": "case",
+          "operations": [
+            {
+              "kind": "update"
+            }
+          ],
+          "priority": 50
+        }
+      ],
+      "tasks": [
+        {
+          "id": "status_left_new",
+          "type": "if",
+          "condition": {
+            "op": "and",
+            "args": [
+              {
+                "op": "eq",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_previous",
+                    "field": "status"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "choice",
+                  "value": "new"
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "new"
+                  }
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "in",
+                  "value": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "options": [
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "triage"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "in_progress"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "id": "refuse_status_move_from_new",
+              "type": "rule.refuse",
+              "version": "1.0.0",
+              "properties": {
+                "reason": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "case_status_move_refused_from_new"
+                  }
+                },
+                "message": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "A new case can only move to Triage or In progress."
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "rule_case_status_from_triage",
+      "key": "case_status_from_triage",
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "triggers": [
+        {
+          "id": "before_save",
+          "type": "BeforeSave",
+          "recordTypeId": "case",
+          "operations": [
+            {
+              "kind": "update"
+            }
+          ],
+          "priority": 50
+        }
+      ],
+      "tasks": [
+        {
+          "id": "status_left_triage",
+          "type": "if",
+          "condition": {
+            "op": "and",
+            "args": [
+              {
+                "op": "eq",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_previous",
+                    "field": "status"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "choice",
+                  "value": "triage"
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "triage"
+                  }
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "in",
+                  "value": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "options": [
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "new"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "in_progress"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "waiting_customer"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "id": "refuse_status_move_from_triage",
+              "type": "rule.refuse",
+              "version": "1.0.0",
+              "properties": {
+                "reason": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "case_status_move_refused_from_triage"
+                  }
+                },
+                "message": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "A case in triage can only move to New, In progress or Waiting for customer."
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "rule_case_status_from_in_progress",
+      "key": "case_status_from_in_progress",
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "triggers": [
+        {
+          "id": "before_save",
+          "type": "BeforeSave",
+          "recordTypeId": "case",
+          "operations": [
+            {
+              "kind": "update"
+            }
+          ],
+          "priority": 50
+        }
+      ],
+      "tasks": [
+        {
+          "id": "status_left_in_progress",
+          "type": "if",
+          "condition": {
+            "op": "and",
+            "args": [
+              {
+                "op": "eq",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_previous",
+                    "field": "status"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "choice",
+                  "value": "in_progress"
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "in_progress"
+                  }
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "in",
+                  "value": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "options": [
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "triage"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "waiting_customer"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "resolved"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "id": "refuse_status_move_from_in_progress",
+              "type": "rule.refuse",
+              "version": "1.0.0",
+              "properties": {
+                "reason": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "case_status_refused_from_in_progress"
+                  }
+                },
+                "message": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "A case in progress can only move to Triage, Waiting for customer or Resolved."
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "rule_case_status_from_waiting_customer",
+      "key": "case_status_from_waiting_customer",
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "triggers": [
+        {
+          "id": "before_save",
+          "type": "BeforeSave",
+          "recordTypeId": "case",
+          "operations": [
+            {
+              "kind": "update"
+            }
+          ],
+          "priority": 50
+        }
+      ],
+      "tasks": [
+        {
+          "id": "status_left_waiting_customer",
+          "type": "if",
+          "condition": {
+            "op": "and",
+            "args": [
+              {
+                "op": "eq",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_previous",
+                    "field": "status"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "choice",
+                  "value": "waiting_customer"
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "waiting_customer"
+                  }
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "in",
+                  "value": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "options": [
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "in_progress"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "resolved"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "id": "refuse_status_move_from_waiting_customer",
+              "type": "rule.refuse",
+              "version": "1.0.0",
+              "properties": {
+                "reason": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "case_status_refused_from_waiting"
+                  }
+                },
+                "message": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "A case waiting for the customer can only move to In progress or Resolved."
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "rule_case_status_from_resolved",
+      "key": "case_status_from_resolved",
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "triggers": [
+        {
+          "id": "before_save",
+          "type": "BeforeSave",
+          "recordTypeId": "case",
+          "operations": [
+            {
+              "kind": "update"
+            }
+          ],
+          "priority": 50
+        }
+      ],
+      "tasks": [
+        {
+          "id": "status_left_resolved",
+          "type": "if",
+          "condition": {
+            "op": "and",
+            "args": [
+              {
+                "op": "eq",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_previous",
+                    "field": "status"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "choice",
+                  "value": "resolved"
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "resolved"
+                  }
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "in",
+                  "value": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "options": [
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "in_progress"
+                    },
+                    {
+                      "op": "literal",
+                      "type": "choice",
+                      "value": "closed"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "id": "refuse_status_move_from_resolved",
+              "type": "rule.refuse",
+              "version": "1.0.0",
+              "properties": {
+                "reason": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "case_status_move_refused_from_resolved"
+                  }
+                },
+                "message": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "A resolved case can only be reopened (In progress) or closed."
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "contractVersion": "1.0.0",
+      "id": "rule_case_status_from_closed",
+      "key": "case_status_from_closed",
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "triggers": [
+        {
+          "id": "before_save",
+          "type": "BeforeSave",
+          "recordTypeId": "case",
+          "operations": [
+            {
+              "kind": "update"
+            }
+          ],
+          "priority": 50
+        }
+      ],
+      "tasks": [
+        {
+          "id": "status_left_closed",
+          "type": "if",
+          "condition": {
+            "op": "and",
+            "args": [
+              {
+                "op": "eq",
+                "left": {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_previous",
+                    "field": "status"
+                  }
+                },
+                "right": {
+                  "op": "literal",
+                  "type": "choice",
+                  "value": "closed"
+                }
+              },
+              {
+                "op": "not",
+                "arg": {
+                  "op": "eq",
+                  "left": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "trigger_record",
+                      "field": "status"
+                    }
+                  },
+                  "right": {
+                    "op": "literal",
+                    "type": "choice",
+                    "value": "closed"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "id": "refuse_status_move_from_closed",
+              "type": "rule.refuse",
+              "version": "1.0.0",
+              "properties": {
+                "reason": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "case_status_move_refused_from_closed"
+                  }
+                },
+                "message": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "text",
+                    "value": "A closed case can't be moved."
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "extension_points": [
+    {
+      "id": "ext_case_fields",
+      "key": "case_fields",
+      "record_type": "case",
+      "accepts": [
+        "field"
+      ]
+    },
+    {
+      "id": "ext_case_actions",
+      "key": "case_actions",
+      "record_type": "case",
+      "accepts": [
+        "action"
+      ]
+    }
+  ],
+  "sharing_conditions": [
+    {
+      "id": "share_case_priority",
+      "source_record_type": "case",
+      "key": "matching_priority",
+      "parameters": [
+        {
+          "key": "allowed_priority",
+          "type": "text"
+        }
+      ],
+      "condition": {
+        "field": "priority",
+        "operator": "equals",
+        "parameter": "allowed_priority"
+      },
+      "declared_fields": [
+        "priority"
+      ],
+      "publication_tests": [
+        {
+          "name": "Matching priority is shared",
+          "parameters": {
+            "allowed_priority": "high"
+          },
+          "field_values": {
+            "priority": "high"
+          },
+          "expected": true
+        },
+        {
+          "name": "Different priority is not shared",
+          "parameters": {
+            "allowed_priority": "high"
+          },
+          "field_values": {
+            "priority": "low"
+          },
+          "expected": false
+        }
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "id": "qry_sd_company_cases",
+      "key": "service_desk_company_cases",
+      "label": "Cases of one company",
+      "record_type": "case",
+      "inputs": [
+        {
+          "key": "company",
+          "label": "Company",
+          "required": true,
+          "type": "record_reference",
+          "record_types": [
+            "vortex.crm.organisations:company"
+          ]
+        }
+      ],
+      "select": [
+        "case_number",
+        "subject",
+        "status",
+        "priority",
+        "customer_company"
+      ],
+      "filter": {
+        "field": "customer_company",
+        "operator": "equals",
+        "parameter": "company"
+      },
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "case_number",
+          "direction": "descending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_sd_case_comments",
+      "key": "service_desk_case_comments",
+      "label": "Comments of one case",
+      "record_type": "case_comment",
+      "inputs": [
+        {
+          "key": "case",
+          "label": "Case",
+          "required": true,
+          "type": "record_reference",
+          "record_types": [
+            "vortex.service_desk.cases:case"
+          ]
+        }
+      ],
+      "select": [
+        "created_at",
+        "created_by",
+        "body",
+        "customer_visible",
+        "case"
+      ],
+      "filter": {
+        "field": "case",
+        "operator": "equals",
+        "parameter": "case"
+      },
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "created_at",
+          "direction": "descending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_sd_open_cases",
+      "key": "service_desk_open_cases",
+      "record_type": "case",
+      "inputs": [],
+      "select": [
+        "case_number",
+        "subject",
+        "customer_company",
+        "requester",
+        "owner",
+        "status",
+        "priority",
+        "resolution_due_at",
+        "breached"
+      ],
+      "filter": {
+        "field": "status",
+        "operator": "not_in",
+        "value": [
+          "resolved",
+          "closed"
+        ]
+      },
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "priority",
+          "direction": "descending"
+        },
+        {
+          "field": "resolution_due_at",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_sd_open_cases_by_status",
+      "key": "service_desk_open_cases_by_status",
+      "label": "Open cases by status",
+      "description": "Open case count for each unresolved status",
+      "record_type": "case",
+      "inputs": [],
+      "select": [
+        "status"
+      ],
+      "filter": {
+        "field": "status",
+        "operator": "not_in",
+        "value": [
+          "resolved",
+          "closed"
+        ]
+      },
+      "group_by": [
+        "status"
+      ],
+      "aggregates": [
+        {
+          "operation": "count",
+          "alias": "open_case_count"
+        }
+      ],
+      "sort": [
+        {
+          "field": "status",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_sd_case_board",
+      "key": "service_desk_case_board",
+      "label": "Case board",
+      "description": "Cases grouped by status",
+      "record_type": "case",
+      "inputs": [],
+      "select": [
+        "status",
+        "subject",
+        "case_number",
+        "priority",
+        "resolution_due_at"
+      ],
+      "filter": null,
+      "group_by": [
+        "status"
+      ],
+      "aggregates": [
+        {
+          "operation": "count",
+          "alias": "case_count"
+        }
+      ],
+      "sort": [
+        {
+          "field": "status",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_sd_customers",
+      "key": "service_desk_customers",
+      "record_type": "vortex.crm.organisations:company",
+      "inputs": [],
+      "select": [
+        "company_number",
+        "name",
+        "phone",
+        "website"
+      ],
+      "filter": {
+        "field": "company_kind",
+        "operator": "contains",
+        "value": "customer"
+      },
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "name",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_sd_requesters",
+      "key": "service_desk_requesters",
+      "record_type": "vortex.crm.people:contact",
+      "inputs": [],
+      "select": [
+        "contact_number",
+        "full_name",
+        "email",
+        "company"
+      ],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "full_name",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    }
+  ]
+}

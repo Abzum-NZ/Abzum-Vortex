@@ -1,35 +1,19 @@
 import type { StoredDefinitionSource } from "@vortex/platform/schema";
-import { crmApplication, crmModuleSources } from "./crm";
-import { hrApplication, hrModuleSources } from "./hr";
-import { iamApplication, iamModule } from "./iam";
-import { landingZoneApplication, landingZoneModuleSources } from "./landing-zone";
-import { messagesPreferenceModule } from "./messages-preferences";
-import { operationsApplication, operationsModuleSources } from "./operations";
-import {
-  organisationAdministrationApplication,
-  organisationAdministrationModule,
-} from "./organisation-administration";
-import { serviceDeskApplication, serviceDeskModuleSources } from "./service-desk";
-import { systemDirectoryModule } from "./system-directory";
-import { tasksApplication, tasksModule } from "./tasks";
-import { tenantAdministrationApplication, tenantAdministrationModule } from "./tenant-administration";
+import { crmApplication } from "./crm";
+import { hrApplication } from "./hr";
+import { iamApplication } from "./iam";
+import { landingZoneApplication } from "./landing-zone";
+import { operationsApplication } from "./operations";
+import { organisationAdministrationApplication } from "./organisation-administration";
+import { serviceDeskApplication } from "./service-desk";
+import { tasksApplication } from "./tasks";
+import { tenantAdministrationApplication } from "./tenant-administration";
 
-/** Every Module source shipped with the platform, including Modules no Application binds. */
-export const shippedModuleSources = [
-  iamModule,
-  tenantAdministrationModule,
-  organisationAdministrationModule,
-  systemDirectoryModule,
-  ...landingZoneModuleSources,
-  messagesPreferenceModule,
-  ...crmModuleSources,
-  ...serviceDeskModuleSources,
-  ...operationsModuleSources,
-  ...hrModuleSources,
-  tasksModule,
-] as readonly StoredDefinitionSource[];
-
-/** Every Application source shipped with the platform and the origin its root is created with. */
+/**
+ * Every Application source shipped with the platform and the origin its root is created with. Each
+ * Application carries the Modules it owns: Organisation Administration owns System Directory, and
+ * each platform system Application owns its own system Module.
+ */
 export const shippedApplications: readonly Readonly<{
   source: Extract<StoredDefinitionSource, { kind: "application" }>;
   applicationOriginKind: "platform_system_application" | "ordinary";

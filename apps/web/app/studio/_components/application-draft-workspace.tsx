@@ -11,7 +11,7 @@ import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -228,7 +228,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
         result.kind === "conflict" || result.kind === "refused" ? result.reason : undefined);
     },
   }));
-  const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source }));
+  const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source, catalogue: platformBlockCatalogue }));
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
   const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(initialSearchMetadata);
@@ -262,12 +262,12 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   // The canvas draws the selected page, or the page that holds the selected block.
   const placementPages = useMemo(() => {
     const owners = new Map<string, string>();
-    traverseStudioSemanticSelectionDraft({ rootId: state.rootId, source }, ({ phase, node }) => {
+    traverseStudioSemanticSelectionDraft({ rootId: state.rootId, source, catalogue: platformBlockCatalogue }, ({ phase, node }) => {
       if (phase === "enter" && node.kind === "placement" && node.owner.kind === "page")
         owners.set(node.selection.placementAlias, node.owner.pageAlias);
     });
     return owners;
-  }, [state.rootId, source]);
+  }, [state.rootId, source, platformBlockCatalogue]);
   const canvasPageAlias = selected?.kind === "page" ? selected.pageAlias
     : selected?.kind === "placement" ? placementPages.get(selected.placementAlias) : undefined;
   const canvasPage = canvasPageAlias === undefined ? undefined
@@ -320,7 +320,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       publicationEpoch.current += 1;
       setPreparedPublication(null);
       previewGeneration.current += 1;
-      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentSchema.parse(next.source) });
+      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentSchema.parse(next.source), catalogue: platformBlockCatalogue });
       setState(next);
     });
     const unsubscribeSelection = selection.subscribe((next) => {
@@ -368,7 +368,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
           result.draft.sourceFingerprint !== saved.sourceFingerprint || canonicalJson(result.draft.source) !== canonicalJson(expectedSource)) return;
       const metadata = result.searchMetadata;
       if (metadata.organizationId !== organizationId || metadata.rootId !== current.rootId || metadata.draftRevision !== current.draftRevision ||
-          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(expectedSource.body.module_bindings)) return;
+          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(applicationModuleKeys(expectedSource))) return;
       setSearchMetadata(metadata);
     } catch (error) {
       console.error("[studio] refreshing the module list failed", describeFailure(error));
@@ -379,7 +379,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const currentSearchMetadata = searchMetadata !== null && searchMetadata.organizationId === organizationId &&
     searchMetadata.rootId === state.rootId &&
     searchMetadata.draftRevision === state.draftRevision && searchMetadata.sourceFingerprint === savedPreviewDraft.current.sourceFingerprint &&
-    searchMetadata.bindingsSignature === JSON.stringify(source.body.module_bindings) &&
+    searchMetadata.bindingsSignature === JSON.stringify(applicationModuleKeys(source)) &&
     canonicalJson(state.source) === canonicalJson(savedPreviewDraft.current.source) ? searchMetadata : null;
   const compositionContext = useMemo<StudioCompositionContext>(() => ({
     organizationId, rootId: state.rootId, key: draft.key, draftRevision: state.draftRevision,
@@ -804,8 +804,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   };
 
   const describePlacement = useMemo(() => createStudioPlacementDescriber(platformBlockCatalogue), [platformBlockCatalogue]);
-  const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source }, describePlacement),
-    [state.rootId, source, describePlacement]);
+  const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source, catalogue: platformBlockCatalogue }, describePlacement),
+    [state.rootId, source, platformBlockCatalogue, describePlacement]);
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const savedStateLabel = state.isSaving ? "Saving…" : state.isDirty ? "Unsaved changes" : "Saved";

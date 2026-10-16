@@ -24,6 +24,7 @@ import {
 } from "../schema";
 import { compare, satisfies } from "semver";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
+import { applicationModuleKeys } from "./application-module-sources";
 import { createApplicationResolutionSnapshot } from "./application-resolution";
 import {
   flowOperationReferencesByNode,
@@ -134,13 +135,19 @@ const completeModuleSelection = (fold: ModuleSelectionFold): ResolvableModuleRel
   return fold.best;
 };
 
-const moduleRequirements = (draft: StoredDefinitionDraft): Requirement[] => {
-  const dependencies =
-    draft.source.kind === "module"
-      ? draft.source.body.dependencies
-      : draft.source.body.module_bindings;
-  return dependencies.map((entry) => ({ key: entry.module, version: entry.version }));
-};
+/**
+ * A Module names its dependencies (derived from its references when its Application's inline
+ * Modules are lowered); an Application accepts the current release of every Module it owns or uses.
+ */
+const moduleRequirements = (draft: StoredDefinitionDraft): Requirement[] =>
+  draft.source.kind === "module"
+    ? draft.source.body.dependencies.map((entry) => ({ key: entry.module, version: entry.version }))
+    : draft.source.kind === "application"
+      ? applicationModuleKeys(draft.source).map((key) => ({
+          key,
+          version: { selection: "allowed_range", expression: "*" },
+        }))
+      : [];
 
 const connectionRequirements = (draft: StoredDefinitionDraft): Requirement[] =>
   draft.source.kind === "application"

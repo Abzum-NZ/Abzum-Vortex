@@ -173,7 +173,7 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
   const describeNow = useCallback(() => {
     const state = history.getState();
     const context = contextNow();
-    const outline = projectStudioSemanticOutline({ rootId: state.rootId, source: applicationSourceDocumentSchema.parse(state.source) });
+    const outline = projectStudioSemanticOutline({ rootId: state.rootId, source: applicationSourceDocumentSchema.parse(state.source), catalogue });
     return {
       draftRevision: state.draftRevision, unsavedChanges: state.isDirty,
       application: { name: state.source.body.name, description: state.source.body.description },
@@ -318,7 +318,7 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
       const input = parsed.data as { placementAlias: string; set?: Record<string, z.infer<typeof settingValue>>; clear?: string[] };
       const placement: StudioSemanticSelection = { kind: "placement", placementAlias: input.placementAlias };
       if (!collect(projectStudioSemanticOutline({ rootId: history.getState().rootId,
-        source: applicationSourceDocumentSchema.parse(history.getState().source) }), "placement")
+        source: applicationSourceDocumentSchema.parse(history.getState().source), catalogue }), "placement")
         .some((item) => item.kind === "placement" && item.placementAlias === input.placementAlias))
         return { outcome: "not_found", message: "That placement is not in the current draft. Call read_application_draft." };
       if (found.name === "remove_placement") {
