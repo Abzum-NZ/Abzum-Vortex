@@ -3,8 +3,8 @@
 /**
  * The one Puck component config. It is the single place that maps a definition block to UI:
  *
- * - one Puck component per block renderer key, with typed `fields` (one editor per declared
- *   property, one slot field per declared child slot) and `defaultProps`;
+ * - one Puck component per block renderer key, with one slot field per declared child slot and
+ *   `defaultProps`; settings, layout and theme are edited by Studio's typed inspector, not Puck;
  * - one `render` function per component, which is the only place a block's React implementation is
  *   bound to a placement. The same render functions serve `<Render>` and the `<Puck>` editor.
  *
@@ -23,7 +23,6 @@ import {
   Suspense,
   useContext,
   useRef,
-  useState,
   type CSSProperties,
   type MouseEvent,
   type ReactElement,
@@ -37,19 +36,12 @@ import {
   type BreakpointOrder,
   type CompiledItemVortex,
   type BlockPaletteGroup,
-  type BlockPropertySchemaContract,
   type BlockPropertyValueContract,
   type ApplicationPuckRootShell,
   type PlatformBlockRelease,
   type ProjectedNavigation,
-  themeColorSchema,
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "./palette-groups";
-import { Checkbox } from "./components/checkbox";
-import { Input } from "./components/input";
-import { Label } from "./components/label";
-import { NativeSelect, NativeSelectOption } from "./components/native-select";
-import { Textarea } from "./components/textarea";
 import {
   DefinitionRenderError,
   validateAccessibleName,
@@ -352,190 +344,6 @@ const slotGapFor = (
 // Fields
 // ---------------------------------------------------------------------------------------------
 
-type TaggedValue = BlockPropertyValueContract | undefined;
-
-const jsonText = (value: TaggedValue): string =>
-  value === undefined ? "" : JSON.stringify(value, null, 2);
-
-/**
- * Edits a value whose kind has no dedicated control as its canonical, kind-tagged JSON. The text
- * follows the incoming value (undo, redo, an external change) until the person edits it; their
- * in-progress text is then kept until it is committed or discarded on blur.
- */
-function JsonValueEditor(props: {
-  id: string;
-  name: string;
-  value: TaggedValue;
-  readOnly: boolean | undefined;
-  onChange: (value: TaggedValue) => void;
-}): ReactElement {
-  const canonical = jsonText(props.value);
-  const [text, setText] = useState(canonical);
-  const [seen, setSeen] = useState(canonical);
-  const [editing, setEditing] = useState(false);
-  if (canonical !== seen) {
-    setSeen(canonical);
-    if (!editing) setText(canonical);
-  }
-  return (
-    <Textarea
-      id={props.id}
-      name={props.name}
-      disabled={props.readOnly}
-      value={text}
-      spellCheck={false}
-      className="font-mono text-xs"
-      onChange={(event) => {
-        setText(event.currentTarget.value);
-        setEditing(true);
-      }}
-      onBlur={() => {
-        if (!editing) return;
-        setEditing(false);
-        const trimmed = text.trim();
-        if (trimmed.length === 0) return props.onChange(undefined);
-        try {
-          props.onChange(JSON.parse(trimmed) as BlockPropertyValueContract);
-        } catch {
-          setText(canonical);
-        }
-      }}
-    />
-  );
-}
-
-/** One property's Puck field: an editor for exactly that property's kind-tagged value. */
-const propertyField = (property: BlockPropertySchemaContract): Field => ({
-  type: "custom",
-  label: property.label,
-  render: ({ id, name, value, onChange, readOnly }): ReactElement => (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{property.label}</Label>
-      {renderPropertyEditor(property, { id, name, value, onChange, readOnly })}
-    </div>
-  ),
-});
-
-/** The control that edits one property's kind-tagged value. */
-const renderPropertyEditor = (
-  property: BlockPropertySchemaContract,
-  {
-    id,
-    name,
-    value,
-    onChange,
-    readOnly,
-  }: {
-    id: string;
-    name: string;
-    value: TaggedValue;
-    onChange: (value: TaggedValue) => void;
-    readOnly: boolean | undefined;
-  },
-): ReactElement => {
-  switch (property.kind) {
-    case "text":
-      return (
-        <Input
-          id={id}
-          name={name}
-          disabled={readOnly}
-          value={value?.kind === "text" ? value.value : ""}
-          maxLength={property.maxLength}
-          onChange={(event) =>
-            onChange(
-              event.target.value.length === 0
-                ? undefined
-                : { kind: "text", value: event.target.value },
-            )
-          }
-        />
-      );
-    case "url":
-      return (
-        <Input
-          id={id}
-          name={name}
-          type="url"
-          disabled={readOnly}
-          value={value?.kind === "url" ? value.value : ""}
-          onChange={(event) =>
-            onChange(
-              event.target.value.length === 0
-                ? undefined
-                : { kind: "url", value: event.target.value },
-            )
-          }
-        />
-      );
-    case "number":
-      return (
-        <Input
-          id={id}
-          name={name}
-          type="number"
-          disabled={readOnly}
-          {...(property.minimum === undefined ? {} : { min: property.minimum })}
-          {...(property.maximum === undefined ? {} : { max: property.maximum })}
-          step={property.integer ? 1 : "any"}
-          value={value?.kind === "number" ? value.value : ""}
-          onChange={(event) =>
-            onChange(
-              event.target.value.length === 0 || !Number.isFinite(Number(event.target.value))
-                ? undefined
-                : { kind: "number", value: Number(event.target.value) },
-            )
-          }
-        />
-      );
-    case "boolean":
-      return (
-        <Checkbox
-          id={id}
-          name={name}
-          disabled={readOnly}
-          checked={value?.kind === "boolean" ? value.value : false}
-          onCheckedChange={(checked) => onChange({ kind: "boolean", value: checked === true })}
-        />
-      );
-    case "choice":
-      return (
-        <NativeSelect
-          id={id}
-          name={name}
-          disabled={readOnly}
-          value={value?.kind === "choice" ? value.value : ""}
-          onChange={(event) =>
-            onChange(
-              event.target.value.length === 0
-                ? undefined
-                : { kind: "choice", value: event.target.value },
-            )
-          }
-        >
-          {property.defaultValue === undefined ? (
-            <NativeSelectOption value="">Not set</NativeSelectOption>
-          ) : null}
-          {property.options.map((option) => (
-            <NativeSelectOption key={option.key} value={option.key}>
-              {option.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      );
-    default:
-      return (
-        <JsonValueEditor
-          id={id}
-          name={name}
-          value={value}
-          readOnly={readOnly}
-          onChange={onChange}
-        />
-      );
-  }
-};
-
 /** The names of the slot fields a placement of this release has, given its settings. */
 const declaredSlotKeys = (
   release: PlatformBlockRelease,
@@ -755,295 +563,6 @@ const compareVersions = (first: string, second: string): number => {
   return 0;
 };
 
-const BREAKPOINT_TITLES: Readonly<Record<Breakpoint, string>> = Object.freeze({
-  desktop: "Desktop",
-  tablet: "Tablet",
-  phone: "Phone",
-});
-
-const layoutAt = (
-  responsive: unknown,
-  breakpoint: Breakpoint,
-): Record<string, unknown> | undefined => {
-  const layout = (responsive as Record<string, unknown> | undefined)?.[breakpoint];
-  return layout !== null && typeof layout === "object"
-    ? (layout as Record<string, unknown>)
-    : undefined;
-};
-
-type WidthValue = { kind?: string; startColumn?: number; span?: number };
-
-// Switching to grid writes an explicit full-width placement; nothing falls back at render time.
-const GRID_WIDTH_DEFAULT = Object.freeze({ kind: "grid", startColumn: 1, span: 12 });
-
-/** One breakpoint's width: the kind and, for grid, the start column and span as one value. */
-const widthField = (release: PlatformBlockRelease): Field => {
-  const kinds = release.capabilities.gridWidth ? ["content", "fill", "grid"] : ["content", "fill"];
-  return {
-    type: "custom",
-    label: "Width",
-    render: ({ id, name, value, onChange, readOnly }): ReactElement => {
-      const width = (value ?? {}) as WidthValue;
-      const column = (key: "startColumn" | "span", label: string): ReactElement => (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${id}-${key}`}>{label}</Label>
-          <Input
-            id={`${id}-${key}`}
-            name={`${name}.${key}`}
-            type="number"
-            min={1}
-            max={12}
-            disabled={readOnly}
-            value={width[key] ?? ""}
-            onChange={(event) => {
-              const next = event.target.valueAsNumber;
-              if (Number.isInteger(next)) onChange({ ...width, [key]: next });
-            }}
-          />
-        </div>
-      );
-      return (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={id}>Width</Label>
-          <NativeSelect
-            id={id}
-            name={name}
-            disabled={readOnly}
-            value={width.kind ?? ""}
-            onChange={(event) =>
-              onChange(
-                event.target.value === "grid"
-                  ? { ...GRID_WIDTH_DEFAULT }
-                  : { kind: event.target.value },
-              )
-            }
-          >
-            {kinds.map((kind) => (
-              <NativeSelectOption key={kind} value={kind}>
-                {kind}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          {width.kind === "grid" ? (
-            <>
-              {column("startColumn", "Start column")}
-              {column("span", "Column span")}
-            </>
-          ) : null}
-        </div>
-      );
-    },
-  };
-};
-
-type OverrideValue = Record<string, unknown> & { kind: string };
-
-/**
- * A colour text input that keeps its own draft while typing and reaches the page only once the
- * draft is a colour the source accepts (committed as it becomes valid and again on blur).
- */
-function ColorTextInput({
-  id,
-  name,
-  disabled,
-  value,
-  onCommit,
-}: {
-  id: string;
-  name: string;
-  disabled: boolean | undefined;
-  value: string;
-  onCommit: (value: string) => void;
-}): ReactElement {
-  const [draft, setDraft] = useState(value);
-  const [lastValue, setLastValue] = useState(value);
-  if (value !== lastValue) {
-    setLastValue(value);
-    setDraft(value);
-  }
-  const valid = themeColorSchema.safeParse(draft).success;
-  const commit = (next: string): void => {
-    if (themeColorSchema.safeParse(next).success && next !== value) onCommit(next);
-  };
-  return (
-    <Input
-      id={id}
-      name={name}
-      disabled={disabled}
-      value={draft}
-      aria-invalid={!valid}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        commit(event.target.value);
-      }}
-      onBlur={() => commit(draft)}
-    />
-  );
-}
-
-/** The platform token kinds a placement can override from the inspector, each with its editor. */
-const THEME_OVERRIDE_FIELDS: Readonly<
-  Record<
-    string,
-    ReadonlyArray<{
-      key: string;
-      label: string;
-      input: "text" | "rem" | "level" | "density";
-    }>
-  >
-> = Object.freeze({
-  color_pair: [
-    { key: "light", label: "Light", input: "text" },
-    { key: "dark", label: "Dark", input: "text" },
-  ],
-  spacing: [{ key: "rem", label: "Rem", input: "rem" }],
-  corners: [{ key: "rem", label: "Rem", input: "rem" }],
-  elevation: [{ key: "level", label: "Level", input: "level" }],
-  density: [{ key: "value", label: "Density", input: "density" }],
-});
-
-const tokenLabel = (key: string): string =>
-  key.replace(/_/gu, " ").replace(/^./u, (first) => first.toUpperCase());
-
-/**
- * One theme token's override: off (no override) or an explicit value of the platform token's own
- * kind, started from the platform value and then edited.
- */
-const themeOverrideField = (tokenKey: string, platformToken: Record<string, unknown>): Field => {
-  const kind = String(platformToken.kind);
-  const inputs = THEME_OVERRIDE_FIELDS[kind] ?? [];
-  return {
-    type: "custom",
-    label: tokenLabel(tokenKey),
-    render: ({ id, name, value, onChange, readOnly }): ReactElement => {
-      const override = value as OverrideValue | undefined;
-      return (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id={id}
-              name={name}
-              disabled={readOnly}
-              checked={override !== undefined}
-              onCheckedChange={(checked) =>
-                onChange(
-                  checked === true
-                    ? Object.fromEntries([
-                        ["kind", kind],
-                        ...inputs.map((input) => [input.key, platformToken[input.key]]),
-                      ])
-                    : undefined,
-                )
-              }
-            />
-            <Label htmlFor={id}>{tokenLabel(tokenKey)}</Label>
-          </div>
-          {override === undefined
-            ? null
-            : inputs.map((input) => {
-                const inputId = `${id}-${input.key}`;
-                const current = override[input.key];
-                const edit = (next: unknown): void => onChange({ ...override, [input.key]: next });
-                return (
-                  <div key={input.key} className="flex flex-col gap-1.5 pl-6">
-                    <Label htmlFor={inputId}>{input.label}</Label>
-                    {input.input === "density" ? (
-                      <NativeSelect
-                        id={inputId}
-                        name={`${name}.${input.key}`}
-                        disabled={readOnly}
-                        value={String(current ?? "")}
-                        onChange={(event) => edit(event.target.value)}
-                      >
-                        <NativeSelectOption value="compact">compact</NativeSelectOption>
-                        <NativeSelectOption value="comfortable">comfortable</NativeSelectOption>
-                      </NativeSelect>
-                    ) : input.input === "text" ? (
-                      <ColorTextInput
-                        id={inputId}
-                        name={`${name}.${input.key}`}
-                        disabled={readOnly}
-                        value={String(current ?? "")}
-                        onCommit={edit}
-                      />
-                    ) : (
-                      <Input
-                        id={inputId}
-                        name={`${name}.${input.key}`}
-                        type="number"
-                        min={0}
-                        step={input.input === "level" ? 1 : 0.0625}
-                        disabled={readOnly}
-                        value={typeof current === "number" ? current : ""}
-                        onChange={(event) => {
-                          const next = event.target.valueAsNumber;
-                          if (Number.isFinite(next)) edit(next);
-                        }}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-        </div>
-      );
-    },
-  };
-};
-
-/** The theme override inspector: one typed field per overridable platform theme token. */
-const themeOverridesField = (platformThemeTokens: PlatformThemeTokens): Field => ({
-  type: "object",
-  label: "Theme overrides",
-  objectFields: Object.fromEntries(
-    Object.entries(platformThemeTokens)
-      .filter(([, token]) => THEME_OVERRIDE_FIELDS[token.kind] !== undefined)
-      .map(([key, token]) => [key, themeOverrideField(key, token as Record<string, unknown>)]),
-  ),
-});
-
-/** One breakpoint's visibility, width and height inspector, limited to what the release allows. */
-const layoutField = (
-  release: PlatformBlockRelease,
-  breakpoint: Breakpoint,
-  layout: Record<string, unknown> | undefined,
-): Field => {
-  const heightKind = (layout?.height as { kind?: unknown } | undefined)?.kind;
-  const select = (label: string, values: readonly string[]): Field => ({
-    type: "select",
-    label,
-    options: values.map((value) => ({ label: value, value })),
-  });
-  const heightFields: Record<string, Field> = {
-    kind: select(
-      "Height",
-      release.capabilities.height === "content" ? ["content"] : ["content", "bounded"],
-    ),
-    ...(heightKind === "bounded"
-      ? { units: { type: "number", label: "Height units", min: 1 } as Field }
-      : {}),
-  };
-  return {
-    type: "object",
-    label: BREAKPOINT_TITLES[breakpoint],
-    objectFields: {
-      ...(release.capabilities.responsiveVisibility
-        ? {
-            visible: {
-              type: "radio",
-              label: "Visible",
-              options: [
-                { label: "Shown", value: true },
-                { label: "Hidden", value: false },
-              ],
-            } as Field,
-          }
-        : {}),
-      width: widthField(release),
-      height: { type: "object", label: "Height", objectFields: heightFields },
-    },
-  };
-};
-
 
 type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
 
@@ -1074,33 +593,10 @@ export function createVortexPuckConfig(
     keysByCategory.set(release.paletteGroup, keys);
   }
 
-  const buildFields = (
-    release: PlatformBlockRelease,
-    settings: PlacementSettings,
-    responsive?: unknown,
-  ) => {
-    const fields: Record<string, Field> = {
-      vortex: {
-        type: "object",
-        label: "Layout",
-        objectFields: {
-          themeOverrides: themeOverridesField(platformThemeTokens),
-          responsive: {
-            type: "object",
-            label: "Responsive layout",
-            objectFields: Object.fromEntries(
-              RESPONSIVE_BREAKPOINT_ORDER.map((breakpoint) => [
-                breakpoint,
-                layoutField(release, breakpoint, layoutAt(responsive, breakpoint)),
-              ]),
-            ),
-          },
-        },
-      },
-      ...Object.fromEntries(
-        release.properties.map((property) => [property.key, propertyField(property)]),
-      ),
-    };
+  // Only slot fields: Puck finds a block's slots through them. A placement's settings, layout and
+  // theme are edited by Studio's own typed inspector, never through Puck fields.
+  const buildFields = (release: PlatformBlockRelease, settings: PlacementSettings) => {
+    const fields: Record<string, Field> = {};
     for (const slot of release.slots) {
       const allow = slot.allowedChildCategories.flatMap(
         (category) => keysByCategory.get(category) ?? [],
@@ -1141,7 +637,6 @@ export function createVortexPuckConfig(
         buildFields(
           release,
           hasRepeatableSlot ? compiledPropsSettings(data.props) : defaults,
-          (data.props.vortex as { responsive?: unknown } | undefined)?.responsive,
         ),
       render: (componentProps) => (
         <PlacementBlock

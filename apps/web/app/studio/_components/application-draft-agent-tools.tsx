@@ -68,7 +68,7 @@ const applicationTools: readonly StudioApplicationTool[] = [
       z.object({ target: z.literal("application"), name: z.string().min(1), description: z.string().min(1) }).strict(),
       z.object({ target: z.literal("page"), pageAlias: alias("The page alias from read_application_draft."), name: z.string().min(1) }).strict(),
     ]), false),
-  tool("add_placement", "Add a new block to one place on a page, the same edit as dropping it from the Blocks palette. Take the place (area and destination) and the block's blockId and releaseVersion from the page's addTargets in read_application_draft. Give exactly the block's setup settings, and for a block that needs a query, one of the draft's queries. The block gets a fresh name and its default settings. It changes the workspace draft; call save_application_draft to persist it.",
+  tool("add_placement", "Add a new block to one place on a page, the same edit as dropping it from the Blocks palette. Take the place (area and destination) and the block's blockId and releaseVersion from the page's addTargets in read_application_draft. Give its setup settings (each required one without a default, as typed values), and for a block that needs a query, one of the queries listed. Every other setting starts with its default. It changes the workspace draft; call save_application_draft to persist it.",
     z.object({
       pageAlias: alias("The page alias from read_application_draft."), area: z.string().min(1),
       destination: z.discriminatedUnion("kind", [z.object({ kind: z.literal("root") }).strict(),
@@ -331,7 +331,7 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
         const outcome = applyCommand({ kind: "page", pageAlias: input.pageAlias }, { kind: "add", pageAlias: input.pageAlias,
           area: input.area, destination: input.destination, index: input.index ?? Number.MAX_SAFE_INTEGER,
           blockId: input.blockId, releaseVersion: input.releaseVersion, settings: input.settings ?? {}, query: input.query ?? null });
-        return commandOutcome(outcome, "add_placement", "No block was added. Use a place and block listed in read_application_draft, with exactly its setup settings and, for a data block, one of its queries.");
+        return commandOutcome(outcome, "add_placement", "No block was added. Use a place and block listed in read_application_draft, with its setup settings and, for a data block, one of the listed queries.");
       }
       const input = parsed.data as { placementAlias: string; set?: Record<string, unknown>; clear?: string[]; query?: string };
       const placement: StudioSemanticSelection = { kind: "placement", placementAlias: input.placementAlias };

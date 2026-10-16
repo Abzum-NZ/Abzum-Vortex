@@ -80,3 +80,5 @@ begin
   );
 end
 $function$;
+
+reset role;

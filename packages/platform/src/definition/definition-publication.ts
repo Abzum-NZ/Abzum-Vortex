@@ -69,8 +69,6 @@ import {
 import {
   type CompiledModuleCandidate,
   compileModuleCandidate,
-  compileCandidate,
-  validateCandidate,
   validateDraftCandidate,
   compileApplicationCandidate,
   prepareFromReader,
