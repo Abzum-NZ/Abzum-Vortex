@@ -738,7 +738,7 @@ export const createDefinitionPublicationService = (
         reasons: confirmation.reasons,
         dependencyManifest: confirmation.dependencyManifest,
         resolutionSnapshot: recomputed.resolutionSnapshot,
-        validationContractVersion: recomputed.draft.source.source_contract_version,
+        validationContractVersion: recomputed.compilationOutput.validationContractVersion,
         releaseNote: parsedCommand.releaseNote,
       });
       const parsed = publishDefinitionResultSchema.safeParse(result);
