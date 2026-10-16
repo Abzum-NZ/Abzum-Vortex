@@ -53,7 +53,7 @@ export default async function StudioApplicationPage({ params, searchParams }: {
     mode="existing" organizationId={result.organizationId} draft={result.draft} place={place}
     initialTab={tab} initialSection={section}
     initialModule={module} applications={applications}
-    searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}
+    searchMetadata={result.searchMetadata} borrowedQueries={result.borrowedQueries} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}
     platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
     fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
     platformThemeTokens={themeRelease.tokens} />;

@@ -52,7 +52,12 @@ import {
   withoutFlowBindingsOf,
   syncStoredBlockDependencies,
 } from "./stored-composition";
-import { StudioCanvasCompiledSettings, studioCanvasConfig } from "./studio-canvas-render";
+import {
+  StudioCanvasCompiledSettings,
+  studioCanvasConfig,
+  StudioCanvasRecordsProvider,
+  type StudioCanvasRecords,
+} from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
 import { StudioBlockPalette, type StudioCanvasAddRequest } from "./studio-block-palette";
 import type { StudioCompositionAddTargetsModel, StudioCompositionDestination } from "./application-composition-commands";
@@ -69,6 +74,32 @@ export type StudioCanvasPalette = Readonly<{
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
   onAdd: (request: StudioCanvasAddRequest) => boolean;
+}>;
+
+/**
+ * What a block's records depend on, by block name, at any depth: its release, its typed settings
+ * and the query it reads. Records read for one spelling are shown only while the block still has it.
+ */
+const recordKeys = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly SourceItem[]): Map<string, string> => {
+  const keys = new Map<string, string>();
+  const visit = (list: readonly SourceItem[]): void => {
+    for (const item of list) {
+      const release = storedItemRelease(catalogue, item);
+      if (release === undefined) continue;
+      const reading = readSourceItem(item, release);
+      keys.set(item.props.id, canonicalJson([item.props.vortex.block, item.props.vortex.query ?? null, reading.settings]));
+      for (const [, slot] of reading.slots) if (slot.items !== undefined) visit(slot.items);
+    }
+  };
+  visit(items);
+  return keys;
+};
+
+/** The records of the canvas's data blocks for one saved revision, as the workspace read them. */
+export type StudioCanvasRecordsRead = Readonly<{
+  state: StudioCanvasRecords["state"];
+  records: Readonly<Record<string, unknown>>;
+  notInstalled: readonly string[];
 }>;
 
 /** One compiled content area: its items, exactly as the published definition holds them. */
@@ -150,6 +181,13 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   frame?: StudioCanvasFrame | undefined;
   /** The block palette of the Blocks panel. */
   palette?: StudioCanvasPalette | undefined;
+  /**
+   * Reads the records of one content area's data blocks for the saved revision `compiledSource`
+   * is. The canvas reads again whenever a newer saved revision is compiled.
+   */
+  readRecords?: ((area: string) => Promise<StudioCanvasRecordsRead>) | undefined;
+  /** A newer saved revision than `compiledSource` is being compiled. */
+  updating?: boolean | undefined;
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
@@ -272,6 +310,8 @@ function ApplicationPageSlotPuckEditor({
   frame,
   breakpoint,
   palette,
+  readRecords,
+  updating,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
     () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
@@ -330,6 +370,29 @@ function ApplicationPageSlotPuckEditor({
   }, [readOnlyCause]);
   const shown = useMemo(() => data === undefined ? undefined
     : puckDataForBreakpoint(data, breakpoint, slot?.order), [data, breakpoint, slot]);
+
+  // The records of this area's data blocks, read for the saved revision the compiled version is.
+  const [recordsRead, setRecordsRead] = useState<StudioCanvasRecordsRead & { source?: ApplicationSourceDocument }>(
+    { state: "loading", records: {}, notInstalled: [] });
+  useEffect(() => {
+    if (readRecords === undefined) return;
+    let cancelled = false;
+    setRecordsRead({ state: "loading", records: {}, notInstalled: [], source: compiledSource });
+    readRecords(at.key).then(
+      (read) => { if (!cancelled) setRecordsRead({ ...read, source: compiledSource }); },
+      (error: unknown) => {
+        console.error("[studio] the canvas records could not be read", error);
+        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, notInstalled: [], source: compiledSource });
+      });
+    return () => { cancelled = true; };
+  }, [readRecords, compiledSource, at.key]);
+  const canvasRecords = useMemo((): StudioCanvasRecords => ({
+    // Records read for another saved revision are never shown as this one's.
+    ...(recordsRead.source === compiledSource ? recordsRead : { state: "loading", records: {}, notInstalled: [] }),
+    saved: recordKeys(catalogue, originalSlot?.items ?? []),
+    current: recordKeys(catalogue, slot?.items ?? []),
+    updating: updating === true,
+  }), [recordsRead, compiledSource, catalogue, originalSlot, slot, updating]);
   const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
 
   const [themeProblems, setThemeProblems] = useState<readonly StudioPlacementThemeFailure[]>([]);
@@ -508,6 +571,7 @@ function ApplicationPageSlotPuckEditor({
       <div className="overflow-x-auto border border-border bg-muted/30 p-2">
         <div className="mx-auto overflow-hidden bg-background" style={{ width, maxWidth: "100%" }}>
           <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
+          <StudioCanvasRecordsProvider records={canvasRecords}>
           <Puck
             config={config}
             data={shown}
@@ -543,6 +607,7 @@ function ApplicationPageSlotPuckEditor({
               platformThemeTokens={platformThemeTokens}
             />
           </Puck>
+          </StudioCanvasRecordsProvider>
           </StudioCanvasCompiledSettings>
         </div>
       </div>

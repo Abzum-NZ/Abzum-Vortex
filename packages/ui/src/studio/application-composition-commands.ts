@@ -16,7 +16,11 @@ import {
   sourcePageSlotAt,
   sourcePlacementLayoutSchema,
   sourceSlotBreakpointOrders,
-  validateComponentSettings,
+  typedSourceSettingValue,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
+  isRepeatableSlotIdentity,
+  type ComponentSettingFailure,
   type ApplicationRootId,
   type ApplicationSourceDocument,
   type PageSlotAddress,
@@ -27,8 +31,9 @@ import {
   type SourcePageZone,
   type SourceSlotOrder,
 } from "@vortex/platform/schema";
+import { boardBlockKey, studioBoardSourceProblem } from "./board-source";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
-import { studioPaletteChoices, studioSourceQueries, type StudioPaletteChoice } from "./contextual-palette";
+import { studioPaletteChoices, studioQueryOffered, studioReleaseReadsQuery, type StudioPaletteChoice } from "./contextual-palette";
 import {
   adjustedSlotOrder,
   freshBlockName,
@@ -63,26 +68,17 @@ export type StudioCompositionCommand =
   | Readonly<{ kind: "resize"; breakpoint: StudioCompositionBreakpoint; layout: StudioCompositionLayout | null }>
   | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
   | Readonly<{ kind: "remove" }>
-  | Readonly<{ kind: "settings"; settings: StudioCompositionTextSettings }>
-  | Readonly<{ kind: "scalar_settings"; settings: StudioCompositionScalarSettings }>
+  /**
+   * The one settings edit: the block's complete set settings (a declared setting left out takes
+   * its default) and, for a block that reads records, the query it reads.
+   */
+  | Readonly<{ kind: "settings"; settings: StudioCompositionSettings; query: string | null }>
   | Readonly<{ kind: "add"; pageAlias: string; area: string; destination: StudioCompositionDestination;
-      index: number; blockId: string; releaseVersion: string; settings: StudioCompositionAddSettings;
+      index: number; blockId: string; releaseVersion: string; settings: StudioCompositionSettings;
       query: string | null }>;
 
-export type StudioCompositionTextSettings = Readonly<Record<string, Readonly<{ kind: "text"; value: string }>>>;
-/** The required settings of a new block that have no catalogue default, by setting key. */
-export type StudioCompositionAddSettings = Readonly<Record<string,
-  Readonly<{ kind: "text"; value: string }> | Readonly<{ kind: "boolean"; value: boolean }> |
-  Readonly<{ kind: "choice"; value: string }> | Readonly<{ kind: "number"; value: number }> |
-  Readonly<{ kind: "field_reference"; value: string }>>>;
-export type StudioCompositionScalarSettings = Readonly<Record<string,
-  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }> |
-  Readonly<{ kind: "number"; value: number }>>>;
-type ScalarProperty = Extract<BlockPropertySchemaContract, { kind: "boolean" | "choice" | "number" }>;
-export type StudioCompositionScalarSettingsModel =
-  | Readonly<{ kind: "available"; placementAlias: string; properties: readonly ScalarProperty[];
-      settings: StudioCompositionScalarSettings }>
-  | Readonly<{ kind: "invalid" | "unsupported" }>;
+/** A block's settings by setting key, each a typed authored value of its declared kind. */
+export type StudioCompositionSettings = Readonly<Record<string, SourceBlockPropertyValueContract>>;
 /** One place on a page a new block can go: a content area's top, or a fixed slot of a block in it. */
 export type StudioCompositionAddTarget = Readonly<{
   /** Stable key of this place among the page's places. */
@@ -102,8 +98,12 @@ export type StudioCompositionAddTargetsModel =
 
 export type StudioCompositionSettingsModel =
   | Readonly<{ kind: "available"; placementAlias: string;
-      properties: readonly Extract<BlockPropertySchemaContract, { kind: "text" }>[];
-      settings: StudioCompositionTextSettings }>
+      /** Every setting the block's release declares, in declaration order. */
+      properties: readonly BlockPropertySchemaContract[];
+      settings: StudioCompositionSettings;
+      /** Whether the block reads records from a query, which the settings edit chooses. */
+      readsQuery: boolean;
+      query: string | null }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 
 export type StudioCompositionDestination =
@@ -122,6 +122,9 @@ export type StudioCompositionCommandResult =
   /** An add the stored composition refuses; `reason` names the place and the rule. */
   | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "invalid" | "stale" | "unsupported" }>;
+
+/** What became of one command in the workspace: its kind, and for a refusal why. */
+export type StudioCompositionOutcome = Readonly<{ kind: StudioCompositionCommandResult["kind"]; reason?: string }>;
 
 export type StudioCompositionRemovalReason =
   "flow_control" | "flow_form" | "flow_component" | "flow_panel" | "required_slot" | "unresolved_target";
@@ -505,15 +508,6 @@ const eligibleAddRelease = (release: PlatformBlockRelease): boolean =>
   release.capabilities.accessibleName === "optional" && release.supportedStateOperations.length === 0 &&
   release.supportedEvents.every((event) => event === "refresh");
 
-/** Existing fixed-slot layouts retain their children when editing declared scalar settings. */
-const eligibleLayoutSettingsRelease = (release: PlatformBlockRelease): boolean =>
-  release.paletteGroup === "layout" && release.slots.length > 0 &&
-  release.slots.every((slot) => !slot.required && slot.repeats === undefined) &&
-  release.properties.every((property) => !property.required &&
-    (property.kind === "boolean" || property.kind === "choice" || property.kind === "number")) &&
-  release.capabilities.accessibleName === "not_applicable" &&
-  release.supportedEvents.length === 0 && release.supportedStateOperations.length === 0;
-
 const plainSettings = (settings: Readonly<Record<string, SourceBlockPropertyValueContract>>) =>
   Object.fromEntries(Object.entries(settings).map(([key, value]) => [key, plainSourceSettingValue(value)]));
 
@@ -649,30 +643,24 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
   if (choice.unavailable !== undefined)
     return { kind: "refused", reason: `${choice.name} can't be added yet. ${choice.unavailable}` };
 
-  // Exactly the required settings without a default, each of its declared kind.
-  const raw = closedPlain(input.settings, choice.setup.map((field) => field.key));
-  const settings: Record<string, unknown> = {};
-  for (const field of choice.setup) {
-    const value = closedPlain(raw[field.key], ["kind", "value"]);
-    if (value.kind !== field.kind) return { kind: "invalid" };
-    const given = value.value;
-    if ((field.kind === "text" || field.kind === "field_reference") && typeof given === "string") settings[field.key] = given;
-    else if (field.kind === "choice" && typeof given === "string" && field.options.some((option) => option.key === given))
-      settings[field.key] = given;
-    else if (field.kind === "boolean" && typeof given === "boolean") settings[field.key] = given;
-    else if (field.kind === "number" && typeof given === "number" && Number.isFinite(given)) settings[field.key] = given;
-    else return { kind: "invalid" };
-  }
+  // The settings the person gave (the setup asks for each required one without a default), each
+  // of its declared kind; every other setting takes its catalogue default.
+  const settings = commandSettings(input.settings, release.properties);
   const query = input.query;
-  if (choice.needsQuery !== (query !== null) ||
-    (query !== null && !studioSourceQueries(source).some((candidate) => candidate.reference === query)))
+  if (choice.needsQuery !== (query !== null) || (query !== null && !studioQueryOffered(source, query)))
     return { kind: "invalid" };
+
+  const boardProblem = release.key === boardBlockKey ? studioBoardSourceProblem(source, settings, query) : undefined;
+  if (boardProblem !== undefined) return { kind: "refused", reason: `${choice.name} can't be added. ${boardProblem}.` };
 
   const alias = freshBlockName(release.key.split(".").at(-1) ?? "block", sourceNames(source));
   const item = { type: release.rendererKey, props: {
     id: alias,
-    ...settings,
+    ...plainSettings(settings),
     ...Object.fromEntries(release.slots.filter((slot) => slot.repeats === undefined).map((slot) => [slot.key, []])),
+    ...Object.fromEntries(release.slots.flatMap((slot) => repeatableSlotItemIdentities(slot, settings)
+      .filter((identity) => isRepeatableSlotIdentity(slot.key, identity))
+      .map((identity) => [repeatableSlotKey(slot.key, identity), []]))),
     vortex: {
       block: { block_id: release.blockId, release_version: release.releaseVersion },
       ...(query === null ? {} : { query }),
@@ -710,233 +698,126 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
   return { kind: "applied", source: applicationSourceDocumentSchema.parse(source), placementAlias: alias };
 };
 
-/** Named content settings require the actual shell reservation and fixed-slot ancestry. */
-const ordinaryNamedSettingsPage = (catalogue: ImmutablePlatformBlockCatalogue,
-  source: ApplicationSourceDocument, target: Target,
-  optionalLayoutAncestry = false) => {
-  const page = target.region.page;
-  const slotAlias = target.region.address?.slot;
-  if (page === undefined || page.type === "guided_form" || slotAlias === undefined) return undefined;
-  if (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") return undefined;
-  const shellAlias = sourcePageShell(page.composition);
-  const shells = source.body.shells.filter((shell) => shell.id === shellAlias);
-  if (shells.length !== 1) return undefined;
-  const shell = shells[0]!;
-  const bindings = shell.content_slots.filter((binding) => binding.id === slotAlias);
-  if (bindings.length !== 1 || !manifestMatches(catalogue, source, shell.layout.content)) return undefined;
-  const binding = bindings[0]!;
-  // Validate the complete original shell, including its required-but-empty reservations.
-  validateStoredShell(catalogue, shell);
-  // Reservation validation does not validate each authored binding's metadata.
-  const shellItems = new Map<string, SourceItem>();
-  for (const item of sourceItemTree(shell.layout.content)) {
-    if (shellItems.has(item.props.id)) return refuse();
-    shellItems.set(item.props.id, item);
+/**
+ * The settings a command supplies, each a typed authored value of the declared kind of its key.
+ * A value is accepted only when its plain stored form reads back as exactly that value.
+ */
+const commandSettings = (value: unknown, properties: readonly BlockPropertySchemaContract[]):
+  Record<string, SourceBlockPropertyValueContract> => {
+  plainSource(value);
+  const raw = object(value);
+  const result: Record<string, SourceBlockPropertyValueContract> = {};
+  for (const key of Object.keys(raw)) {
+    const declaration = properties.find((property) => property.key === key) ?? refuse();
+    const supplied = raw[key];
+    if (!isObject(supplied) || supplied.kind !== declaration.kind) return refuse();
+    const failures: ComponentSettingFailure[] = [];
+    const typed = typedSourceSettingValue(
+      plainSourceSettingValue(supplied as SourceBlockPropertyValueContract), declaration, [key], failures);
+    if (typed === undefined || failures.length > 0 || !sameValue(typed, supplied)) return refuse();
+    result[key] = typed;
   }
-  for (const authoredBinding of shell.content_slots) {
-    const parent = shellItems.get(authoredBinding.parent_placement);
-    const declarations = parent === undefined ? undefined : releaseFor(catalogue, parent)?.slots
-      .filter((slot) => slot.key === authoredBinding.parent_slot);
-    if (declarations?.length !== 1) return undefined;
-    const declaration = declarations[0]!;
-    if ((declaration.required && !authoredBinding.required) ||
-      authoredBinding.allowed_child_categories.some((category) =>
-        !declaration.allowedChildCategories.includes(category))) return undefined;
-  }
-  const parents: SourceItem[] = [];
-  const optionalParentPaths: boolean[] = [];
-  const visit = (items: readonly SourceItem[], optionalPath = true): void => {
-    for (const item of items) {
-      const release = releaseFor(catalogue, item) ?? refuse();
-      if (item.props.id === binding.parent_placement) {
-        parents.push(item);
-        optionalParentPaths.push(optionalPath);
-      }
-      const slots = itemSlots(catalogue, item);
-      for (const declaration of release.slots) {
-        const child = slots.get(declaration.key);
-        if (declaration.repeats === undefined && child !== undefined)
-          visit(child.items, optionalPath && !declaration.required);
-      }
-    }
-  };
-  visit(shell.layout.content);
-  if (parents.length !== 1 || parents[0] !== target.region.parent) return undefined;
-  const declarations = releaseFor(catalogue, parents[0]!)?.slots.filter((slot) => slot.key === binding.parent_slot);
-  if (declarations?.length !== 1 || declarations[0]!.repeats !== undefined) return undefined;
-  const declaration = declarations[0]!;
-  // Layout settings alone require optional immutable slots; authored required content stays required.
-  if (optionalLayoutAncestry && (!optionalParentPaths[0] || declaration.required)) return undefined;
-  if (target.region.zone.items.some((item) => {
-    const release = releaseFor(catalogue, item);
-    return release === undefined || !declaration.allowedChildCategories.includes(release.paletteGroup) ||
-      !binding.allowed_child_categories.includes(release.paletteGroup);
-  })) return undefined;
-  return page;
+  return result;
 };
 
-/** Setting changes retain identity, so Flow references and required content do not block them. */
-const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null,
-  eligible: (release: PlatformBlockRelease) => boolean = eligibleAddRelease) => {
+/**
+ * A block's repeatable slots follow its settings: an entry the settings add gets an empty slot,
+ * and an entry they remove takes its slot away, which must be empty by then.
+ */
+const syncRepeatableSlots = (item: SourceItem, release: PlatformBlockRelease,
+  before: Readonly<Record<string, SourceBlockPropertyValueContract>>,
+  after: Readonly<Record<string, SourceBlockPropertyValueContract>>): string | undefined => {
+  for (const declaration of release.slots) {
+    if (declaration.repeats === undefined) continue;
+    const kept = new Set(repeatableSlotItemIdentities(declaration, after)
+      .filter((identity) => isRepeatableSlotIdentity(declaration.key, identity))
+      .map((identity) => repeatableSlotKey(declaration.key, identity)));
+    for (const identity of repeatableSlotItemIdentities(declaration, before)) {
+      const key = repeatableSlotKey(declaration.key, identity);
+      if (kept.has(key) || item.props[key] === undefined) continue;
+      if (Array.isArray(item.props[key]) && (item.props[key] as unknown[]).length > 0)
+        return `Its ${declaration.label} for '${identity}' still holds blocks. Move or remove them first`;
+      delete item.props[key];
+      const orders = item.props.vortex.slot_orders;
+      if (orders !== undefined) {
+        delete orders[key];
+        if (Object.keys(orders).length === 0) delete item.props.vortex.slot_orders;
+      }
+    }
+    for (const key of kept) if (item.props[key] === undefined) item.props[key] = [];
+  }
+  return undefined;
+};
+
+/**
+ * Which placed blocks the settings edit reaches: any block on a page that is not public and that
+ * no experience shows, in a content area whose blocks all name releases the source depends on.
+ * Settings keep a block's identity, so flow references and required content stay intact.
+ */
+const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null) => {
   const catalogue = context.catalogue;
   plainSource(context.source);
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
-  const region = target.region;
-  const release = releaseFor(catalogue, target.item);
-  const layoutSettings = release !== undefined && eligibleLayoutSettingsRelease(release);
-  const ordinaryPage = region.ordinaryMain === true ? region.page : undefined;
-  // Settings alone may edit one actual declared step region; it never becomes an ordinary main region.
-  const guidedPage = region.page?.type === "guided_form" && region.address?.slot === undefined &&
-    region.page.steps.filter((step) => step.id === region.address?.step).length === 1
-    ? region.page : undefined;
-  const namedPage = ordinaryPage === undefined && guidedPage === undefined
-    ? ordinaryNamedSettingsPage(catalogue, source, target, layoutSettings) : undefined;
-  const page = ordinaryPage ?? guidedPage ?? namedPage;
-  const guided = ordinaryPage === undefined && guidedPage !== undefined;
-  const named = namedPage !== undefined;
-  if (page === undefined || (!guided && !named &&
-    ((page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
-      region.ordinaryMain !== true)) ||
+  const page = target.region.page;
+  if (page === undefined || page.type === "public" ||
     source.body.public_addresses.some((address) => address.page === page.id) ||
     source.body.experiences?.some((experience) => experience.page === page.key)) return { kind: "unsupported" } as const;
-  if (release === undefined || !eligible(release) ||
-    ((guided || (named && !layoutSettings)) &&
-      (release.paletteGroup !== "content" || release.slots.length !== 0)))
+  const release = releaseFor(catalogue, target.item);
+  if (release === undefined || !manifestMatches(catalogue, source, target.region.zone.items))
     return { kind: "unsupported" } as const;
-  if ((!layoutSettings && itemSlots(catalogue, target.item).size !== 0) ||
-    !manifestMatches(catalogue, source, region.zone.items)) return { kind: "unsupported" } as const;
-  let zone = region.zone;
-  for (const step of target.steps) {
-    const parent = zone.items.find((item) => item.props.id === step.parentAlias);
-    const declaration = parent === undefined ? undefined : releaseFor(catalogue, parent)?.slots.find((item) => item.key === step.slotKey);
-    const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
-    // Layout settings keep their existing children but cannot edit through required ancestor slots.
-    if (declaration === undefined || declaration.repeats !== undefined || child === undefined ||
-      (layoutSettings && declaration.required))
-      return { kind: "unsupported" } as const;
-    zone = child;
-  }
-  validateStoredZone(catalogue, region.zone);
+  validateStoredZone(catalogue, target.region.zone);
   return { kind: "available", ...resolved, release } as const;
 };
 
-const textSettings = (value: unknown, release: PlatformBlockRelease): StudioCompositionTextSettings => {
-  const raw = object(value);
-  const keys = Reflect.ownKeys(raw);
-  if (keys.some((key) => typeof key !== "string" || !release.properties.some((property) => property.key === key)))
-    return refuse();
-  closedPlain(raw, release.properties.filter((property) => Object.hasOwn(raw, property.key)).map((property) => property.key));
-  const settings: Record<string, { kind: "text"; value: string }> = {};
-  for (const key of Object.getOwnPropertyNames(raw)) {
-    const text = closedPlain(raw[key], ["kind", "value"]);
-    if (text.kind !== "text" || typeof text.value !== "string") return refuse();
-    settings[key] = { kind: "text", value: text.value };
-  }
-  if (validateComponentSettings(settings, release.properties).length > 0) return refuse();
-  return settings;
-};
+/** Whether a block reads its records from a query: a data or figures block, or one that has one. */
+const readsQuery = (release: PlatformBlockRelease, item: SourceItem): boolean =>
+  studioReleaseReadsQuery(release) || item.props.vortex.query !== undefined;
 
 export const describeStudioCompositionSettings = (context: StudioCompositionContext,
   selection: StudioSemanticSelection | null): StudioCompositionSettingsModel => {
   try {
     const resolved = resolveSettings(context, selection);
     if (resolved.kind !== "available") return resolved;
-    const properties = resolved.release.properties.map((property) => {
-      if (property.kind !== "text") return refuse();
-      return property;
-    });
-    return { kind: "available", placementAlias: resolved.alias, properties,
-      settings: textSettings(itemReading(context.catalogue, resolved.target.item).settings, resolved.release) };
+    const item = resolved.target.item;
+    return { kind: "available", placementAlias: resolved.alias, properties: resolved.release.properties,
+      settings: itemReading(context.catalogue, item).settings, readsQuery: readsQuery(resolved.release, item),
+      query: item.props.vortex.query ?? null };
   } catch { return { kind: "invalid" }; }
 };
 
+/** The one settings edit: the block's complete set settings, and the query it reads. */
 const applySettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
-  const input = closedPlain(command, ["kind", "settings"]);
-  if (input.kind !== "settings") return { kind: "invalid" };
+  const input = closedPlain(command, ["kind", "settings", "query"]);
+  if (input.kind !== "settings" || (input.query !== null && typeof input.query !== "string")) return { kind: "invalid" };
   const resolved = resolveSettings(current, selection);
   if (resolved.kind !== "available") return resolved;
-  const settings = textSettings(input.settings, resolved.release);
-  const { source, target, alias } = resolved;
-  const working = workingCopy(target.region);
-  withSettings(workingItem(working, target.steps, alias), resolved.release, settings);
-  commitWorking(current.catalogue, target.region, working);
-  const parsed = applicationSourceDocumentSchema.parse(source);
-  return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
-};
-
-const scalarProperties = (release: PlatformBlockRelease): readonly ScalarProperty[] =>
-  release.properties.filter((property): property is ScalarProperty =>
-    property.kind === "boolean" || property.kind === "choice" ||
-    (release.paletteGroup === "layout" && property.kind === "number"));
-const eligibleScalarRelease = (release: PlatformBlockRelease): boolean =>
-  scalarProperties(release).length > 0 &&
-  ((release.paletteGroup === "content" && release.slots.length === 0 && release.supportedStateOperations.length === 0 &&
-    release.supportedEvents.every((event) => event === "refresh")) || eligibleLayoutSettingsRelease(release));
-
-/** The command supplies only editable scalars; omitted keys deliberately stay omitted. */
-const scalarSettings = (value: unknown, properties: readonly ScalarProperty[]): StudioCompositionScalarSettings => {
-  const raw = object(value);
-  closedPlain(raw, properties.filter((property) => Object.hasOwn(raw, property.key)).map((property) => property.key));
-  const settings: Record<string, StudioCompositionScalarSettings[string]> = {};
-  for (const property of properties) {
-    if (!Object.hasOwn(raw, property.key)) continue;
-    const supplied = closedPlain(raw[property.key], ["kind", "value"]);
-    if (property.kind === "boolean" && supplied.kind === "boolean" && typeof supplied.value === "boolean")
-      settings[property.key] = { kind: "boolean", value: supplied.value };
-    else if (property.kind === "choice" && supplied.kind === "choice" && typeof supplied.value === "string" &&
-      property.options.some((option) => option.key === supplied.value))
-      settings[property.key] = { kind: "choice", value: supplied.value };
-    else if (property.kind === "number" && supplied.kind === "number" && typeof supplied.value === "number" &&
-      Number.isFinite(supplied.value))
-      settings[property.key] = { kind: "number", value: supplied.value };
-    else return refuse();
-  }
-  return settings;
-};
-
-export const describeStudioCompositionScalarSettings = (context: StudioCompositionContext,
-  selection: StudioSemanticSelection | null): StudioCompositionScalarSettingsModel => {
+  const { source, target, alias, release } = resolved;
+  const settings = commandSettings(input.settings, release.properties);
+  const query = input.query;
+  if (query !== null && (!readsQuery(release, target.item) || !studioQueryOffered(source, query)))
+    return { kind: "invalid" };
+  const boardProblem = release.key === boardBlockKey ? studioBoardSourceProblem(source, settings, query) : undefined;
+  if (boardProblem !== undefined) return { kind: "refused", reason: `${release.name} can't take these settings. ${boardProblem}.` };
   try {
-    const resolved = resolveSettings(context, selection, eligibleScalarRelease);
-    if (resolved.kind !== "available") return resolved;
-    const properties = scalarProperties(resolved.release);
-    const reading = itemReading(context.catalogue, resolved.target.item);
-    const supplied: Record<string, unknown> = {};
-    for (const property of properties)
-      if (Object.hasOwn(reading.settings, property.key))
-        supplied[property.key] = reading.settings[property.key];
-    const settings = scalarSettings(supplied, properties);
-    if (reading.settingFailures.length > 0) return { kind: "invalid" };
-    return { kind: "available", placementAlias: resolved.alias, properties,
-      settings };
-  } catch { return { kind: "invalid" }; }
-};
-
-const applyScalarSettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
-  command: unknown): StudioCompositionCommandResult => {
-  const input = closedPlain(command, ["kind", "settings"]);
-  if (input.kind !== "scalar_settings") return { kind: "invalid" };
-  const resolved = resolveSettings(current, selection, eligibleScalarRelease);
-  if (resolved.kind !== "available") return resolved;
-  const properties = scalarProperties(resolved.release);
-  const supplied = scalarSettings(input.settings, properties);
-  const reading = itemReading(current.catalogue, resolved.target.item);
-  if (reading.settingFailures.length > 0) return { kind: "invalid" };
-  const settings: Record<string, SourceBlockPropertyValueContract> = { ...reading.settings };
-  for (const property of properties) delete settings[property.key];
-  for (const key of Object.keys(supplied)) {
-    const value = supplied[key];
-    if (value !== undefined) settings[key] = value;
+    const working = workingCopy(target.region);
+    const item = workingItem(working, target.steps, alias);
+    const before = itemReading(current.catalogue, item).settings;
+    withSettings(item, release, settings);
+    const vortex = { ...item.props.vortex };
+    if (query === null) delete vortex.query;
+    else vortex.query = query;
+    item.props.vortex = vortex;
+    const slotProblem = syncRepeatableSlots(item, release, before, settings);
+    if (slotProblem !== undefined) return { kind: "refused", reason: `${release.name} can't take these settings. ${slotProblem}.` };
+    commitWorking(current.catalogue, target.region, working);
+  } catch (error) {
+    if (error instanceof StoredCompositionRefusal)
+      return { kind: "refused", reason: `${release.name} can't take these settings. ${error.message}.` };
+    throw error;
   }
-  // Validate the complete merge, including untouched structured content and required fields.
-  if (validateComponentSettings(settings, resolved.release.properties).length > 0) return { kind: "invalid" };
-  const { source, target, alias } = resolved;
-  const working = workingCopy(target.region);
-  withSettings(workingItem(working, target.steps, alias), resolved.release, settings);
-  commitWorking(current.catalogue, target.region, working);
   const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
@@ -1160,7 +1041,6 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     if (command.kind === "add") return applyAdd(current, command);
     if (command.kind === "remove") return applyRemoval(current, selection, command);
     if (command.kind === "settings") return applySettings(current, selection, command);
-    if (command.kind === "scalar_settings") return applyScalarSettings(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const { source, target, alias } = resolved;

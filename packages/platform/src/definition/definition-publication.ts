@@ -47,8 +47,8 @@ import {
   buildResolution,
 } from "./definition-dependency-resolution";
 import {
-  compileCandidate,
-  validateCandidate,
+  validateDraftCandidate,
+  compileApplicationCandidate,
 } from "./definition-publication-compilation";
 import {
   applicationCandidate,
@@ -305,9 +305,11 @@ export const createDefinitionPublicationService = (
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
     await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
     return repository.read(context, async (reader) => {
-      const candidate = validateCandidate(
+      // The draft and its current release's version; the published release itself is read and
+      // verified by preparation and publication, which judge the draft against it.
+      const candidate = validateDraftCandidate(
         context,
-        await reader.readCandidate(parsedCommand.rootId),
+        await reader.readDraftCandidate(parsedCommand.rootId),
         parsedCommand,
       );
       // Another definition kind at this root is refused exactly like a missing draft.
@@ -315,8 +317,7 @@ export const createDefinitionPublicationService = (
         refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const dependencies = await resolveDependencies(reader, catalogue, candidate);
       await assertNoCycle(reader, candidate, dependencies.modules);
-      const currentVersion =
-        candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? "1.0.0";
+      const currentVersion = candidate.currentReleaseVersion ?? "1.0.0";
       const resolution = buildResolution(candidate, dependencies, currentVersion);
       // The compile is a pure function of exactly what this key names, so the same draft revision
       // under the same resolved dependencies is compiled once. Authorisation, the candidate
@@ -340,13 +341,12 @@ export const createDefinitionPublicationService = (
       ]);
       const cached = readCachedApplicationDraftCompilation(cacheKey);
       if (cached !== undefined) return cached;
-      const compilation = compileCandidate(
+      const compilation = compileApplicationCandidate(
         candidate,
         dependencies,
         resolution,
-        false,
         catalogue.permissions,
-      );
+      ).output;
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION

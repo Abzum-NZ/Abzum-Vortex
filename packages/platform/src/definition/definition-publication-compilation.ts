@@ -30,6 +30,8 @@ import {
   type PublishableCompilationOutput,
   type DefinitionResolution,
   refuse,
+  type DefinitionCandidateDraft,
+  type DefinitionDraftCandidate,
   type DefinitionPublicationCandidate,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
@@ -180,6 +182,41 @@ const compileModuleCandidate = (
   return { request, output, dependencyOutputs };
 };
 
+/**
+ * The one Application compile: a draft and its resolved dependencies to compiled output. A draft
+ * compile for the builder stops here; publication also judges the result as a release.
+ */
+export const compileApplicationCandidate = (
+  candidate: DefinitionCandidateDraft,
+  dependencies: ResolvedDependencies,
+  resolution: DefinitionResolution,
+  permissions: PlatformPermissionSource,
+): Readonly<{
+  request: z.output<typeof applicationCompilationRequestSchema>;
+  output: PublishableCompilationOutput;
+  dependencyOutputs: readonly DefinitionCompilationOutput[];
+}> => {
+  if (
+    candidate.draft.source.kind !== "application" ||
+    resolution.contractVersion !== "3.0.0" ||
+    dependencies.composition === undefined
+  )
+    return refuse("DEFINITION_COMPILATION_REFUSED");
+  const dependencyOutputs = [
+    ...dependencies.modules.map((release) => release.compilationOutput),
+    ...dependencies.connections.map((release) => release.compilationOutput),
+  ].map((output) => definitionCompilationOutputSchema.parse(output));
+  const request = parsedCompilationRequest(applicationCompilationRequestSchema, {
+    sourceContractVersion: applicationSourceContractVersion,
+    validationContractVersion: "3.0.0" as const,
+    source: candidate.draft.source,
+    resolution,
+    catalogueSnapshot: dependencies.composition,
+    draftMetadata: draftMetadata(candidate.draft),
+  });
+  return { request, output: compileParsedDefinition(request, dependencyOutputs, permissions), dependencyOutputs };
+};
+
 export const compileCandidate = (
   candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
@@ -187,26 +224,9 @@ export const compileCandidate = (
   final: boolean,
   permissions: PlatformPermissionSource,
 ): PublishableCompilationOutput => {
-  const dependencyOutputs = [
-    ...dependencies.modules.map((release) => release.compilationOutput),
-    ...dependencies.connections.map((release) => release.compilationOutput),
-  ].map((output) => definitionCompilationOutputSchema.parse(output));
   if (candidate.draft.source.kind === "application") {
-    if (resolution.contractVersion !== "3.0.0" || dependencies.composition === undefined)
-      return refuse("DEFINITION_COMPILATION_REFUSED");
-    const request = {
-      sourceContractVersion: applicationSourceContractVersion,
-      validationContractVersion: "3.0.0" as const,
-      source: candidate.draft.source,
-      resolution,
-      catalogueSnapshot: dependencies.composition,
-      draftMetadata: draftMetadata(candidate.draft),
-    };
-    const output = compileParsedDefinition(
-      parsedCompilationRequest(applicationCompilationRequestSchema, request),
-      dependencyOutputs,
-      permissions,
-    );
+    const { request, output, dependencyOutputs } =
+      compileApplicationCandidate(candidate, dependencies, resolution, permissions);
     if (
       final &&
       (output.kind !== "application" ||
@@ -215,14 +235,18 @@ export const compileCandidate = (
       return refuse("DEFINITION_COMPILATION_REFUSED");
     if (final)
       assertFinalPublicationValidation(
-        parsedCompilationRequest(applicationCompilationRequestSchema, request),
-        output,
+        request,
+        output as Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
         dependencyOutputs,
         candidate.historyEvidence,
         permissions,
       );
     return output;
   }
+  const dependencyOutputs = [
+    ...dependencies.modules.map((release) => release.compilationOutput),
+    ...dependencies.connections.map((release) => release.compilationOutput),
+  ].map((output) => definitionCompilationOutputSchema.parse(output));
   if (candidate.draft.source.kind === "module") {
     if (final) {
       const compiled = compileModuleCandidate(candidate, dependencies, resolution, permissions);
@@ -276,6 +300,39 @@ export const compileCandidate = (
   return refuse("DEFINITION_COMPILATION_REFUSED");
 };
 
+/** The stored draft re-read, of this organisation and at exactly the expected root and revision. */
+const validatedDraft = (
+  context: SessionContext,
+  supplied: StoredDefinitionDraft,
+  command: PrepareDefinitionPublicationCommand,
+): StoredDefinitionDraft => {
+  const draft = storedDefinitionDraftSchema.safeParse(supplied);
+  if (!draft.success) return refuse("DEFINITION_HISTORY_INVALID");
+  if (draft.data.organizationId !== context.organizationId)
+    refuse("DEFINITION_ORGANIZATION_MISMATCH");
+  if (
+    String(draft.data.rootId) !== String(command.rootId) ||
+    draft.data.draftRevision !== command.expectedDraftRevision
+  )
+    refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  if (draft.data.sourceFingerprint !== fingerprintCanonicalValue(draft.data.source))
+    refuse("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
+  return draft.data;
+};
+
+/** A builder's draft compile: the draft as `validateCandidate` checks it, and its current version. */
+export const validateDraftCandidate = (
+  context: SessionContext,
+  candidateInput: DefinitionDraftCandidate | undefined,
+  command: PrepareDefinitionPublicationCommand,
+): DefinitionDraftCandidate => {
+  if (candidateInput === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  const draft = validatedDraft(context, candidateInput.draft, command);
+  if ((draft.publishedRevision === undefined) !== (candidateInput.currentReleaseVersion === null))
+    refuse("DEFINITION_HISTORY_INVALID");
+  return { draft, identities: candidateInput.identities, currentReleaseVersion: candidateInput.currentReleaseVersion };
+};
+
 export const validateCandidate = (
   context: SessionContext,
   candidateInput: DefinitionPublicationCandidate | undefined,
@@ -283,21 +340,12 @@ export const validateCandidate = (
 ): DefinitionPublicationCandidate => {
   if (candidateInput === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   const supplied = candidateInput;
-  const draft = storedDefinitionDraftSchema.safeParse(supplied.draft);
-  if (!draft.success) return refuse("DEFINITION_HISTORY_INVALID");
   const candidate: DefinitionPublicationCandidate = {
-    draft: draft.data,
+    draft: validatedDraft(context, supplied.draft, command),
     identities: supplied.identities,
     historyEvidence: supplied.historyEvidence,
     savedConditionHistory: supplied.savedConditionHistory,
   };
-  if (candidate.draft.organizationId !== context.organizationId)
-    refuse("DEFINITION_ORGANIZATION_MISMATCH");
-  if (
-    String(candidate.draft.rootId) !== String(command.rootId) ||
-    candidate.draft.draftRevision !== command.expectedDraftRevision
-  )
-    refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
   if (
     candidate.historyEvidence.kind !== candidate.draft.kind ||
     candidate.historyEvidence.definitionKey !== candidate.draft.key ||
