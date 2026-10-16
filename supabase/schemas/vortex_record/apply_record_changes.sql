@@ -1531,6 +1531,10 @@ begin
       inserted_value := vortex_record.insert_named_action_record_internal(
         (creation ->> 'recordTypeId')::uuid, creation -> 'finalValues', submitted_field_ids
       );
+      perform vortex_record.mirror_person_links_internal(
+        (inserted_value ->> 'storageContractId')::uuid, organization_id_value,
+        (inserted_value ->> 'recordId')::uuid, inserted_value -> 'values'
+      );
       created_records := created_records || pg_catalog.jsonb_build_object(
         creation ->> 'ordinal', inserted_value
       );

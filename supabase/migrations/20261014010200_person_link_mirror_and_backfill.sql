@@ -169,6 +169,7 @@ declare
   account_id uuid;
   target_storage_id uuid;
   expected_link jsonb;
+  has_legacy_values boolean;
   changed_count integer := 0;
   changed_rows integer;
 begin
@@ -210,15 +211,25 @@ begin
     ) then
       raise exception using errcode = '55000', message = 'Person link backfill storage is incompatible';
     end if;
+    old_column := 'f_' || pg_catalog.replace(pair.old_field_id::text, '-', '');
+    new_column := 'f_' || pg_catalog.replace(pair.new_field_id::text, '-', '');
     select catalogue.storage_contract_id into target_storage_id
     from vortex_record.storage_catalogue as catalogue
     where catalogue.record_type_id = pair.target_type_id
       and catalogue.physical_schema_token = 'system_projection';
     if target_storage_id is null then
-      raise exception using errcode = '55000', message = 'Person link backfill target storage is unavailable';
+      -- A new installation can provision the source before its projection dependency.
+      -- There is nothing to backfill until a legacy value exists.
+      execute pg_catalog.format(
+        'select exists (select 1 from record_data.%I where %I is not null)',
+        table_token, old_column
+      ) into has_legacy_values;
+      if has_legacy_values then
+        raise exception using errcode = '55000',
+          message = 'Person link backfill target storage is unavailable';
+      end if;
+      continue;
     end if;
-    old_column := 'f_' || pg_catalog.replace(pair.old_field_id::text, '-', '');
-    new_column := 'f_' || pg_catalog.replace(pair.new_field_id::text, '-', '');
     for source_row in execute pg_catalog.format(
       'select stored.organisation_id, stored.application_root_id, stored.record_id,
          stored.%I as old_value, stored.%I as new_value
@@ -2508,6 +2519,10 @@ begin
       from pg_catalog.jsonb_object_keys(creation -> 'values') as key;
       inserted_value := vortex_record.insert_named_action_record_internal(
         (creation ->> 'recordTypeId')::uuid, creation -> 'finalValues', submitted_field_ids
+      );
+      perform vortex_record.mirror_person_links_internal(
+        (inserted_value ->> 'storageContractId')::uuid, organization_id_value,
+        (inserted_value ->> 'recordId')::uuid, inserted_value -> 'values'
       );
       created_records := created_records || pg_catalog.jsonb_build_object(
         creation ->> 'ordinal', inserted_value
