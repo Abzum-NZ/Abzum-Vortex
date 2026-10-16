@@ -11,6 +11,7 @@ import {
   type RecordsDisplayFormat,
 } from "../schema";
 import type { ProtectedQueryRow } from "../queries/index";
+import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
 
 /**
@@ -19,7 +20,7 @@ import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-
  */
 export type ProjectedCellValue =
   | Readonly<{ kind: "text"; text: string }>
-  | Readonly<{ kind: "number"; value: number }>
+  | Readonly<{ kind: "number"; value: number; formatted: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
   | Readonly<{ kind: "link"; address: string; label: string }>
@@ -209,6 +210,12 @@ const projectLink = (value: string, linkType: LinkFieldType): ProjectedCellValue
   return { kind: "text", text: value };
 };
 
+const numberCell = (value: number): ProjectedCellValue => ({
+  kind: "number",
+  value,
+  formatted: formatDecimal(value),
+});
+
 /**
  * Maps one stored value to a closed display value by the declared format. A value that does not
  * fit its declared format is shown as plain text, and a formatted-text document is shown as rich text,
@@ -270,12 +277,14 @@ const projectCell = (
     typeof value.amount === "string" &&
     typeof value.currency === "string"
   )
-    return { kind: "text", text: `${value.currency} ${value.amount}` };
+    return { kind: "text", text: formatMoney({ currency: value.currency, amount: value.amount }) };
   switch (format) {
     case "number":
     case "currency":
     case "percent":
-      if (typeof value === "number" && Number.isFinite(value)) return { kind: "number", value };
+      if (typeof value === "number" && Number.isFinite(value)) return numberCell(value);
+      if (typeof value === "string" && isExactDecimal(value))
+        return { kind: "number", value: Number(value), formatted: formatDecimal(value) };
       break;
     case "boolean":
       if (typeof value === "boolean") return { kind: "boolean", value };
@@ -285,7 +294,7 @@ const projectCell = (
       if (typeof value === "string" && value.length > 0) return projectDate(value);
       break;
     case "automatic":
-      if (typeof value === "number" && Number.isFinite(value)) return { kind: "number", value };
+      if (typeof value === "number" && Number.isFinite(value)) return numberCell(value);
       if (typeof value === "boolean") return { kind: "boolean", value };
       break;
     case "text":
