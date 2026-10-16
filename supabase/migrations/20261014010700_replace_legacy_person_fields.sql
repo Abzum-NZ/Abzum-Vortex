@@ -1,131 +1,6 @@
 set local role vortex_owner;
 
-create or replace function vortex_record.canonical_record_value_matches(
-  p_value jsonb,
-  p_field_type text,
-  p_database_value_type text
-)
-returns boolean
-language plpgsql
-stable
-security invoker
-set search_path = ''
-as $function$
-declare
-  -- Canonical exact decimal text: no exponent, no leading zero, no trailing
-  -- fractional zero, and no negative zero -- exactly what
-  -- `normalizeExactDecimal` emits (contracts/src/exact-decimal.ts:49-72).
-  canonical_decimal constant text :=
-    '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
-  uuid_pattern constant text :=
-    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
-  nil_uuid_text constant text := '00000000-0000-0000-0000-000000000000';
-  date_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}$';
-  date_time_pattern constant text :=
-    '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$';
-  value_text text;
-begin
-  if p_value is null then
-    return false;
-  end if;
-  -- A JSON null clears the column, whatever the declared type.
-  if pg_catalog.jsonb_typeof(p_value) = 'null' then
-    return true;
-  end if;
-
-  if p_field_type = 'money'
-    or (p_field_type in ('calculation', 'total') and p_database_value_type = 'json') then
-    return pg_catalog.jsonb_typeof(p_value) = 'object'
-      and p_value - array['amount', 'currency']::text[] = '{}'::jsonb
-      and p_value ?& array['amount', 'currency']
-      and pg_catalog.jsonb_typeof(p_value -> 'amount') = 'string'
-      and (p_value ->> 'amount') ~ canonical_decimal
-      and pg_catalog.jsonb_typeof(p_value -> 'currency') = 'string'
-      and (p_value ->> 'currency') ~ '^[A-Z]{3}$';
-  elsif p_field_type = 'several_choices' then
-    return pg_catalog.jsonb_typeof(p_value) = 'array'
-      and not exists (
-        select 1 from pg_catalog.jsonb_array_elements(p_value) as member(value)
-        where pg_catalog.jsonb_typeof(member.value) is distinct from 'string'
-      );
-  elsif p_field_type = 'attachment' then
-    return pg_catalog.jsonb_typeof(p_value) = 'array'
-      and not exists (
-        select 1 from pg_catalog.jsonb_array_elements(p_value) as member(value)
-        where pg_catalog.jsonb_typeof(member.value) is distinct from 'string'
-          or (member.value #>> '{}') !~ uuid_pattern
-          or pg_catalog.lower(member.value #>> '{}') = nil_uuid_text
-      );
-  elsif p_field_type = 'table' then
-    return pg_catalog.jsonb_typeof(p_value) = 'array';
-  elsif p_field_type = 'formatted_text' then
-    return pg_catalog.jsonb_typeof(p_value) = 'object'
-      and pg_catalog.jsonb_typeof(p_value -> 'blocks') = 'array';
-  end if;
-
-  -- Every remaining field type is decided by its storage type.
-  if p_database_value_type = 'decimal' then
-    return pg_catalog.jsonb_typeof(p_value) = 'string'
-      and (p_value #>> '{}') ~ canonical_decimal;
-  elsif p_database_value_type = 'integer' then
-    if pg_catalog.jsonb_typeof(p_value) is distinct from 'number' then
-      return false;
-    end if;
-    value_text := p_value #>> '{}';
-    return value_text ~ '^-?(?:0|[1-9][0-9]*)$'
-      and value_text::numeric between -9223372036854775808 and 9223372036854775807;
-  elsif p_database_value_type = 'boolean' then
-    return pg_catalog.jsonb_typeof(p_value) = 'boolean';
-  elsif p_database_value_type = 'date' then
-    if pg_catalog.jsonb_typeof(p_value) is distinct from 'string' then
-      return false;
-    end if;
-    value_text := p_value #>> '{}';
-    if value_text !~ date_pattern then
-      return false;
-    end if;
-    begin
-      perform value_text::date;
-    exception when invalid_datetime_format or datetime_field_overflow
-      or invalid_text_representation then
-      return false;
-    end;
-    return true;
-  elsif p_database_value_type = 'timestamp_with_time_zone' then
-    -- The instant is stored; the offset it arrived with is not preserved, and
-    -- the read codec returns UTC `Z`. The pattern requires an explicit offset,
-    -- so the stored instant never depends on the session time zone.
-    if pg_catalog.jsonb_typeof(p_value) is distinct from 'string' then
-      return false;
-    end if;
-    value_text := p_value #>> '{}';
-    if value_text !~ date_time_pattern then
-      return false;
-    end if;
-    begin
-      perform value_text::timestamptz;
-    exception when invalid_datetime_format or datetime_field_overflow
-      or invalid_text_representation then
-      return false;
-    end;
-    return true;
-  elsif p_database_value_type = 'text' then
-    return pg_catalog.jsonb_typeof(p_value) = 'string';
-  elsif p_database_value_type = 'json' then
-    return true;
-  end if;
-  return false;
-end
-$function$;
-
-alter function vortex_record.canonical_record_value_matches(jsonb, text, text) owner to vortex_record_adapter;
-
-revoke all on function vortex_record.canonical_record_value_matches(jsonb, text, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
-comment on function vortex_record.canonical_record_value_matches(jsonb, text, text) is
-  'Private pure check that one value is the canonical V2 shape for its declared field type; never raises and decides no authority.';
-
-CREATE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
+CREATE OR REPLACE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
     LANGUAGE sql IMMUTABLE
     SET search_path TO ''
     AS $$
@@ -294,6 +169,2362 @@ grant execute on function vortex_record.group_member_selector_internal(jsonb)
 
 comment on function vortex_record.group_member_selector_internal(jsonb) is
   'Owner-only parser of a generic group member selector: the typed grouping values keyed by lower-case field identity with their declared field types, or null when the selector is malformed.';
+
+create or replace function vortex_record.run_module_query_summary_internal(
+  p_module_root_id uuid,
+  p_query_id uuid,
+  p_expected_release_revision bigint,
+  p_input_values jsonb,
+  p_user_inputs jsonb,
+  p_prepared_plan jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  summary_candidate_limit constant integer := 100000;
+  uuid_pattern constant text :=
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  prepared_plan jsonb := p_prepared_plan;
+  resolved jsonb;
+  query_item jsonb;
+  record_type_item jsonb;
+  record_type_id_value uuid;
+  context_organization_id uuid;
+  context_application_root_id uuid;
+  v_storage_contract_id uuid;
+  physical_table_token text;
+  storage_scope text;
+  access_sql text;
+  access_parameters jsonb := '[]'::jsonb;
+  access_owner_account_id uuid;
+  access_owner_group_ids uuid[] := array[]::uuid[];
+  access_shared_record_ids uuid[] := array[]::uuid[];
+  readable_field_ids text[] := array[]::text[];
+  filter_condition jsonb;
+  filter_types jsonb := '{}'::jsonb;
+  parameter_types jsonb := '{}'::jsonb;
+  parameter_values jsonb := '{}'::jsonb;
+  filter_ids text[] := array[]::text[];
+  filter_predicate text := 'true';
+  filter_parameters jsonb := '[]'::jsonb;
+  filter_expression_pairs text[] := array[]::text[];
+  filter_values_sql text := '''{}''::jsonb';
+  group_ids text[] := array[]::text[];
+  aggregate_items jsonb := '[]'::jsonb;
+  aggregate_item jsonb;
+  aggregate_aliases text[] := array[]::text[];
+  summary_field_ids text[] := array[]::text[];
+  fast_field_ids text[] := array[]::text[];
+  fields_by_id jsonb := '{}'::jsonb;
+  field_item jsonb;
+  field_key text;
+  field_type text;
+  mapping_row vortex_record.field_storage_mappings%rowtype;
+  fast_path boolean := false;
+  fast_path_fields_valid boolean := true;
+  scan_sql text;
+  candidate_sql text;
+  selected_sql text;
+  summary_sql text;
+  expression_pairs text[] := array[]::text[];
+  group_value_pairs text[] := array[]::text[];
+  group_by_terms text[] := array[]::text[];
+  group_presence_terms text[] := array[]::text[];
+  group_values_sql text;
+  group_by_sql text;
+  group_presence_sql text;
+  aggregate_object_sql text := '';
+  aggregate_result_sql text;
+  aggregate_count_sql text;
+  aggregate_sum_sql text;
+  aggregate_average_sql text;
+  aggregate_present_sql text;
+  aggregate_value_sql text;
+  aggregate_currency_sql text;
+  aggregate_amount_sql text;
+  aggregate_mixed_currency_sql text;
+  aggregate_operation text;
+  aggregate_field_id text;
+  aggregate_field_type text;
+  aggregate_original_field_type text;
+  aggregate_alias text;
+  average_places integer;
+  value_expression text;
+  groups_json_sql text := '''[]''::jsonb';
+  board_summary_mode boolean := false;
+  board_choice_field_id text;
+  board_options jsonb;
+  board_option jsonb;
+  board_option_values text[] := array[]::text[];
+  board_bucket_sql text;
+  board_option_position integer;
+  board_totals_sql text;
+  board_empty_aggregates_sql text;
+  result_value jsonb;
+begin
+  board_summary_mode := p_user_inputs ? 'boardSummary';
+  if board_summary_mode then
+    board_choice_field_id := pg_catalog.lower(p_user_inputs #>> '{boardSummary,choiceFieldId}');
+  end if;
+  resolved := prepared_plan -> 'resolved';
+  query_item := prepared_plan -> 'query';
+  record_type_item := prepared_plan -> 'recordType';
+  record_type_id_value := (prepared_plan ->> 'recordTypeId')::uuid;
+  context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
+  context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
+
+  if coalesce((query_item ->> 'relationshipHops')::integer, 0) <> 0 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_invalid');
+  end if;
+  if pg_catalog.jsonb_typeof(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) <> 'array'
+    or pg_catalog.jsonb_array_length(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) > 10
+    or pg_catalog.jsonb_typeof(coalesce(query_item -> 'aggregates', '[]'::jsonb)) <> 'array'
+    or pg_catalog.jsonb_array_length(coalesce(query_item -> 'aggregates', '[]'::jsonb)) > 20 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
+  if board_summary_mode
+    and pg_catalog.jsonb_array_length(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) <> 1 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
+
+  for field_item in
+    select item.value from pg_catalog.jsonb_array_elements(coalesce(record_type_item -> 'fields', '[]'::jsonb)) as item(value)
+  loop
+    fields_by_id := fields_by_id || pg_catalog.jsonb_build_object(
+      pg_catalog.lower(field_item ->> 'fieldId'), field_item
+    );
+  end loop;
+
+  for field_item in
+    select item.value from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) as item(value)
+  loop
+    if pg_catalog.jsonb_typeof(field_item) <> 'string'
+      or pg_catalog.lower(field_item #>> '{}') !~ uuid_pattern then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    field_key := pg_catalog.lower(field_item #>> '{}');
+    field_type := coalesce(fields_by_id -> field_key ->> 'type', '');
+    if field_key = any (group_ids)
+      or field_type not in (
+        'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
+        'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
+        'link', 'link_to_one_of_several'
+      ) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    group_ids := pg_catalog.array_append(group_ids, field_key);
+    if not (field_key = any (summary_field_ids)) then
+      summary_field_ids := pg_catalog.array_append(summary_field_ids, field_key);
+      fast_field_ids := pg_catalog.array_append(fast_field_ids, field_key);
+    end if;
+  end loop;
+
+  if board_summary_mode then
+    if pg_catalog.cardinality(group_ids) <> 1
+      or group_ids[1] is distinct from board_choice_field_id
+      or not (fields_by_id ? board_choice_field_id)
+      or fields_by_id -> board_choice_field_id ->> 'type' is distinct from 'choice'
+      or coalesce((fields_by_id -> board_choice_field_id ->> 'filterable')::boolean, false) is not true
+      or pg_catalog.jsonb_typeof(coalesce(query_item -> 'selectedFieldIds', '[]'::jsonb)) is distinct from 'array'
+      or not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'selectedFieldIds', '[]'::jsonb)) as selected(value)
+        where pg_catalog.jsonb_typeof(selected.value) = 'string'
+          and pg_catalog.lower(selected.value #>> '{}') = board_choice_field_id
+      ) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    board_options := fields_by_id #> array[board_choice_field_id, 'settings', 'options'];
+    if pg_catalog.jsonb_typeof(board_options) is distinct from 'array' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    if pg_catalog.jsonb_array_length(board_options) not between 1 and 12 then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    for board_option in
+      select item.value from pg_catalog.jsonb_array_elements(board_options) as item(value)
+    loop
+      if pg_catalog.jsonb_typeof(board_option) is distinct from 'object' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+      if board_option - array['value', 'label', 'requiredPermissionId']::text[] <> '{}'::jsonb
+        or not (board_option ? 'value') or not (board_option ? 'label')
+        or pg_catalog.jsonb_typeof(board_option -> 'value') is distinct from 'string'
+        or coalesce(pg_catalog.length(board_option ->> 'value'), 0) not between 1 and 120
+        or pg_catalog.jsonb_typeof(board_option -> 'label') is distinct from 'string'
+        or coalesce(pg_catalog.length(pg_catalog.btrim(board_option ->> 'label')), 0) not between 1 and 60
+        or (board_option ? 'requiredPermissionId' and (
+          pg_catalog.jsonb_typeof(board_option -> 'requiredPermissionId') is distinct from 'string'
+          or pg_catalog.lower(board_option ->> 'requiredPermissionId') !~ uuid_pattern
+          or pg_catalog.lower(board_option ->> 'requiredPermissionId') = '00000000-0000-0000-0000-000000000000'
+        ))
+        or (board_option ->> 'value') collate "C" = any (board_option_values) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+      board_option_values := pg_catalog.array_append(board_option_values, board_option ->> 'value');
+    end loop;
+  end if;
+
+  aggregate_items := coalesce(query_item -> 'aggregates', '[]'::jsonb);
+  for aggregate_item in
+    select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
+  loop
+    aggregate_operation := aggregate_item ->> 'operation';
+    aggregate_alias := aggregate_item ->> 'alias';
+    aggregate_field_id := nullif(pg_catalog.lower(aggregate_item ->> 'fieldId'), '');
+    if aggregate_operation not in ('count', 'sum', 'minimum', 'maximum', 'average')
+      or aggregate_alias is null
+      or aggregate_alias !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
+      or pg_catalog.length(aggregate_alias) > 40
+      or aggregate_alias = any (aggregate_aliases)
+      or (aggregate_item ? 'fieldId' and aggregate_field_id is null)
+      or (aggregate_operation <> 'count' and aggregate_field_id is null)
+      or (aggregate_operation = 'count' and aggregate_field_id is not null) then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    aggregate_aliases := pg_catalog.array_append(aggregate_aliases, aggregate_alias);
+    if aggregate_field_id is not null then
+      if aggregate_field_id !~ uuid_pattern or not (fields_by_id ? aggregate_field_id) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+      aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
+      aggregate_field_type := aggregate_original_field_type;
+      if aggregate_original_field_type = 'calculation' then
+        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
+          or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
+          or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
+            not in ('whole_number', 'decimal_number') then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+        end if;
+        aggregate_field_type := (fields_by_id -> aggregate_field_id) #>> '{settings,resultType}';
+      elsif aggregate_original_field_type = 'total' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+      if (aggregate_operation in ('sum', 'average')
+          and aggregate_field_type not in ('whole_number', 'decimal_number', 'money'))
+        or (aggregate_operation in ('minimum', 'maximum')
+          and aggregate_field_type not in (
+            'text', 'whole_number', 'decimal_number', 'yes_no', 'money', 'date', 'date_time'
+          )) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+      if not (aggregate_field_id = any (summary_field_ids)) then
+        summary_field_ids := pg_catalog.array_append(summary_field_ids, aggregate_field_id);
+        fast_field_ids := pg_catalog.array_append(fast_field_ids, aggregate_field_id);
+      end if;
+    end if;
+  end loop;
+
+  v_storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
+  physical_table_token := prepared_plan #>> '{storage,physicalTableToken}';
+  storage_scope := prepared_plan #>> '{storage,storageScope}';
+  access_sql := coalesce(prepared_plan #>> '{access,predicate}', 'true');
+  access_parameters := coalesce(prepared_plan #> '{access,parameters}', '[]'::jsonb);
+  access_owner_account_id := nullif(prepared_plan #>> '{access,ownerAccountId}', '')::uuid;
+  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
+  into access_owner_group_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,ownerGroupIds}') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
+  into access_shared_record_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,sharedRecordIds}') as item(value);
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+  into readable_field_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
+
+  prepared_plan := vortex_record.prepare_module_query_internal(
+    p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
+    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
+    'complete', prepared_plan
+  );
+  if prepared_plan ->> 'outcome' is distinct from 'prepared' then
+    return prepared_plan;
+  end if;
+  filter_condition := prepared_plan #> '{filter,residualCondition}';
+  if filter_condition = 'null'::jsonb then
+    filter_condition := null;
+  end if;
+  -- The compiler already applied an exact predicate over guaranteed readable
+  -- columns. Re-evaluating it for each selected row adds no decision.
+  if (prepared_plan #>> '{filter,pushedExact}')::boolean is true then
+    filter_condition := null;
+  end if;
+  filter_types := coalesce(prepared_plan #> '{filter,residualFieldTypes}', '{}'::jsonb);
+  parameter_types := coalesce(prepared_plan #> '{filter,residualInputTypes}', '{}'::jsonb);
+  parameter_values := coalesce(prepared_plan #> '{filter,residualInputs}', '{}'::jsonb);
+  filter_predicate := coalesce(prepared_plan #>> '{filter,pushedPredicate}', 'true');
+  filter_parameters := coalesce(prepared_plan #> '{filter,pushedParameters}', '[]'::jsonb);
+  select coalesce(pg_catalog.array_agg(item.value order by item.position), array[]::text[])
+  into filter_expression_pairs
+  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}')
+    with ordinality as item(value, position);
+  if pg_catalog.cardinality(filter_expression_pairs) > 0 then
+    select pg_catalog.string_agg(
+      'pg_catalog.jsonb_build_object(' || chunk.pairs_text || ')', ' || '
+      order by chunk.chunk_index
+    )
+    into filter_values_sql
+    from (
+      select (pair.position - 1) / 50 as chunk_index,
+        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_text
+      from pg_catalog.unnest(filter_expression_pairs)
+        with ordinality as pair(value, position)
+      group by (pair.position - 1) / 50
+    ) as chunk;
+  end if;
+  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
+  into filter_ids
+  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'filterFieldIds') as item(value);
+
+  -- The plan is exact only when every candidate is readable and every field
+  -- used by grouping, aggregates or filtering is readable on every candidate.
+  -- Derived filter and aggregate fields can lose their projection on an
+  -- individual record when an input is withheld, so both require read_record.
+  fast_path := pg_catalog.cardinality(readable_field_ids) > 0
+    and not exists (
+      select 1 from pg_catalog.unnest(filter_ids) as required(id)
+      where fields_by_id -> required.id ->> 'type' in ('calculation', 'total')
+    )
+    and not exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
+      where item.value ? 'fieldId'
+        and fields_by_id -> pg_catalog.lower(item.value ->> 'fieldId') ->> 'type'
+          in ('calculation', 'total')
+    )
+    and not exists (
+      select 1 from pg_catalog.unnest(group_ids || filter_ids) as required(id)
+      where required.id <> all (readable_field_ids)
+    )
+    and not exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
+      where item.value ? 'fieldId'
+        and pg_catalog.lower(item.value ->> 'fieldId') <> all (readable_field_ids)
+    );
+
+  if fast_path then
+    foreach field_key in array fast_field_ids loop
+      select mapping.* into mapping_row
+      from vortex_record.field_storage_mappings as mapping
+      where mapping.storage_contract_id = v_storage_contract_id
+        and mapping.field_id = field_key::uuid;
+      if not found or mapping_row.state <> 'active' then
+        fast_path_fields_valid := false;
+        exit;
+      end if;
+      field_type := fields_by_id -> field_key ->> 'type';
+      fast_path_fields_valid := fast_path_fields_valid and case field_type
+        when 'whole_number' then mapping_row.database_value_type = 'integer'
+        when 'decimal_number' then mapping_row.database_value_type = 'decimal'
+        when 'yes_no' then mapping_row.database_value_type = 'boolean'
+        when 'date' then mapping_row.database_value_type = 'date'
+        when 'date_time' then mapping_row.database_value_type = 'timestamp_with_time_zone'
+        when 'money' then mapping_row.database_value_type = 'json'
+        when 'link' then mapping_row.database_value_type = 'json'
+        when 'link_to_one_of_several' then mapping_row.database_value_type = 'json'
+        when 'text' then mapping_row.database_value_type = 'text'
+        when 'long_text' then mapping_row.database_value_type = 'text'
+        when 'formatted_text' then mapping_row.database_value_type = 'json'
+        when 'choice' then mapping_row.database_value_type = 'text'
+        when 'reference_number' then mapping_row.database_value_type = 'text'
+        when 'email_address' then mapping_row.database_value_type = 'text'
+        when 'phone_number' then mapping_row.database_value_type = 'text'
+        when 'web_address' then mapping_row.database_value_type = 'text'
+        when 'several_choices' then mapping_row.database_value_type = 'json'
+        when 'table' then mapping_row.database_value_type = 'json'
+        when 'attachment' then mapping_row.database_value_type = 'json'
+        else false end;
+      if not fast_path_fields_valid then
+        exit;
+      end if;
+      value_expression := case mapping_row.database_value_type
+        when 'decimal' then pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', mapping_row.physical_column_token)
+        when 'timestamp_with_time_zone' then pg_catalog.format(
+          'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(stored.%I))',
+          mapping_row.physical_column_token
+        )
+        when 'date' then pg_catalog.format(
+          'pg_catalog.to_jsonb(pg_catalog.to_char(stored.%I, ''YYYY-MM-DD''))',
+          mapping_row.physical_column_token
+        )
+        else pg_catalog.format('pg_catalog.to_jsonb(stored.%I)', mapping_row.physical_column_token)
+      end;
+      expression_pairs := pg_catalog.array_append(
+        expression_pairs, pg_catalog.format('%L, %s', field_key, value_expression)
+      );
+    end loop;
+    fast_path := fast_path_fields_valid;
+  end if;
+
+  for aggregate_item in
+    select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
+  loop
+    aggregate_operation := aggregate_item ->> 'operation';
+    aggregate_alias := aggregate_item ->> 'alias';
+    aggregate_field_id := nullif(pg_catalog.lower(aggregate_item ->> 'fieldId'), '');
+    aggregate_count_sql := 'pg_catalog.count(*)';
+    aggregate_present_sql := 'true';
+    aggregate_value_sql := 'pg_catalog.to_jsonb(pg_catalog.count(*))';
+    aggregate_mixed_currency_sql := 'false';
+    if aggregate_field_id is not null then
+      aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
+      aggregate_field_type := aggregate_original_field_type;
+      if aggregate_original_field_type = 'calculation' then
+        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
+          or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
+          or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
+            not in ('whole_number', 'decimal_number') then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+        end if;
+        aggregate_field_type := (fields_by_id -> aggregate_field_id) #>> '{settings,resultType}';
+      elsif aggregate_original_field_type = 'total' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+      aggregate_present_sql := pg_catalog.format(
+        '(candidate.projected_values ? %L and candidate.projected_values -> %L <> ''null''::jsonb)',
+        aggregate_field_id, aggregate_field_id
+      );
+      aggregate_count_sql := pg_catalog.format(
+        'pg_catalog.count(*) filter (where %s)', aggregate_present_sql
+      );
+      value_expression := pg_catalog.format('(candidate.projected_values -> %L)', aggregate_field_id);
+      aggregate_currency_sql := pg_catalog.format(
+        '(candidate.projected_values -> %L ->> ''currency'')', aggregate_field_id
+      );
+      aggregate_amount_sql := pg_catalog.format(
+        '((candidate.projected_values -> %L ->> ''amount'')::numeric)', aggregate_field_id
+      );
+      if aggregate_operation = 'count' then
+        aggregate_value_sql := pg_catalog.format('pg_catalog.to_jsonb(%s)', aggregate_count_sql);
+      elsif aggregate_field_type = 'money' then
+        aggregate_mixed_currency_sql := pg_catalog.format(
+          '(pg_catalog.count(distinct %s) filter (where %s)) > 1',
+          aggregate_currency_sql, aggregate_present_sql
+        );
+        if aggregate_operation = 'minimum' then
+          value_expression := pg_catalog.format(
+            '(pg_catalog.array_agg(%s order by %s asc, %s collate "C" asc) filter (where %s))[1]',
+            value_expression, aggregate_amount_sql, aggregate_currency_sql, aggregate_present_sql
+          );
+          aggregate_value_sql := value_expression;
+        elsif aggregate_operation = 'maximum' then
+          value_expression := pg_catalog.format(
+            '(pg_catalog.array_agg(%s order by %s desc, %s collate "C" asc) filter (where %s))[1]',
+            value_expression, aggregate_amount_sql, aggregate_currency_sql, aggregate_present_sql
+          );
+          aggregate_value_sql := value_expression;
+        else
+          average_places := coalesce((aggregate_item ->> 'decimalPlaces')::integer, 2);
+          if average_places not between 0 and 12 then
+            return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+          end if;
+          if aggregate_operation = 'sum' then
+            value_expression := pg_catalog.format(
+              'pg_catalog.trim_scale(pg_catalog.sum(%s) filter (where %s))::text',
+              aggregate_amount_sql, aggregate_present_sql
+            );
+          else
+            aggregate_sum_sql := pg_catalog.format(
+              'pg_catalog.sum(%s) filter (where %s)', aggregate_amount_sql, aggregate_present_sql
+            );
+            aggregate_average_sql := pg_catalog.format(
+              'case when %3$s = 0 then null else
+                 pg_catalog.sign(%1$s) * (
+                   pg_catalog.div(
+                     pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
+                     (%3$s)::numeric
+                   )
+                   + case when 2 * pg_catalog.mod(
+                       pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
+                       (%3$s)::numeric
+                     ) >= (%3$s)::numeric then 1 else 0 end
+                 ) / pg_catalog.power(10::numeric, %2$s)
+               end',
+              aggregate_sum_sql, average_places, aggregate_count_sql
+            );
+            value_expression := pg_catalog.format(
+              'pg_catalog.trim_scale((%s))::text', aggregate_average_sql
+            );
+          end if;
+          aggregate_value_sql := pg_catalog.format(
+            'pg_catalog.jsonb_build_object(''amount'', %s, ''currency'', (pg_catalog.array_agg(%s order by %s collate "C" asc) filter (where %s))[1])',
+            value_expression, aggregate_currency_sql, aggregate_currency_sql, aggregate_present_sql
+          );
+        end if;
+      elsif aggregate_operation in ('minimum', 'maximum') then
+        if aggregate_field_type = 'text' then
+          value_expression := pg_catalog.format(
+            '(pg_catalog.array_agg(%s order by (candidate.projected_values ->> %L) collate "C" %s) filter (where %s))[1]',
+            value_expression, aggregate_field_id,
+            case aggregate_operation when 'minimum' then 'asc' else 'desc' end,
+            aggregate_present_sql
+          );
+        elsif aggregate_field_type = 'yes_no' then
+          value_expression := pg_catalog.format(
+            '(pg_catalog.array_agg(%s order by (candidate.projected_values ->> %L)::boolean %s) filter (where %s))[1]',
+            value_expression, aggregate_field_id,
+            case aggregate_operation when 'minimum' then 'asc' else 'desc' end,
+            aggregate_present_sql
+          );
+        elsif aggregate_field_type = 'whole_number' then
+          value_expression := pg_catalog.format(
+            'pg_catalog.to_jsonb(pg_catalog.%s((candidate.projected_values ->> %L)::bigint) filter (where %s))',
+            case aggregate_operation when 'minimum' then 'min' else 'max' end,
+            aggregate_field_id, aggregate_present_sql
+          );
+        elsif aggregate_field_type = 'decimal_number' then
+          value_expression := pg_catalog.format(
+            'pg_catalog.to_jsonb(pg_catalog.trim_scale(pg_catalog.%s((candidate.projected_values ->> %L)::numeric) filter (where %s))::text)',
+            case aggregate_operation when 'minimum' then 'min' else 'max' end,
+            aggregate_field_id, aggregate_present_sql
+          );
+        elsif aggregate_field_type = 'date' then
+          value_expression := pg_catalog.format(
+            'pg_catalog.to_jsonb(pg_catalog.%s(candidate.projected_values ->> %L) filter (where %s))',
+            case aggregate_operation when 'minimum' then 'min' else 'max' end,
+            aggregate_field_id, aggregate_present_sql
+          );
+        else
+          value_expression := pg_catalog.format(
+            'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(pg_catalog.%s((candidate.projected_values ->> %L)::timestamp with time zone) filter (where %s)))',
+            case aggregate_operation when 'minimum' then 'min' else 'max' end,
+            aggregate_field_id, aggregate_present_sql
+          );
+        end if;
+        aggregate_value_sql := value_expression;
+      else
+        average_places := coalesce((aggregate_item ->> 'decimalPlaces')::integer, 2);
+        if aggregate_operation = 'average' and average_places not between 0 and 12 then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+        end if;
+        if aggregate_operation = 'sum' then
+          value_expression := pg_catalog.format(
+            'pg_catalog.trim_scale(pg_catalog.sum((candidate.projected_values ->> %L)::numeric) filter (where %s))::text',
+            aggregate_field_id, aggregate_present_sql
+          );
+        else
+          aggregate_sum_sql := pg_catalog.format(
+            'pg_catalog.sum((candidate.projected_values ->> %L)::numeric) filter (where %s)',
+            aggregate_field_id, aggregate_present_sql
+          );
+          aggregate_average_sql := pg_catalog.format(
+            'case when %3$s = 0 then null else
+               pg_catalog.sign(%1$s) * (
+                 pg_catalog.div(
+                   pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
+                   (%3$s)::numeric
+                 )
+                 + case when 2 * pg_catalog.mod(
+                     pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
+                     (%3$s)::numeric
+                   ) >= (%3$s)::numeric then 1 else 0 end
+               ) / pg_catalog.power(10::numeric, %2$s)
+             end',
+            aggregate_sum_sql, average_places, aggregate_count_sql
+          );
+          value_expression := pg_catalog.format(
+            'pg_catalog.trim_scale((%s))::text', aggregate_average_sql
+          );
+        end if;
+        aggregate_value_sql := pg_catalog.format('pg_catalog.to_jsonb(%s)', value_expression);
+      end if;
+      if aggregate_operation = 'count' then
+        aggregate_result_sql := pg_catalog.format(
+          'pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', %s, ''value'', %s)',
+          aggregate_count_sql, aggregate_value_sql
+        );
+      else
+        aggregate_result_sql := pg_catalog.format(
+          'case when %s then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''mixed_currency'') else pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', %s, ''value'', case when %s = 0 then ''null''::jsonb else %s end) end',
+          aggregate_mixed_currency_sql, aggregate_count_sql, aggregate_count_sql, aggregate_value_sql
+        );
+      end if;
+    else
+      aggregate_result_sql := pg_catalog.format(
+        'pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', pg_catalog.count(*), ''value'', pg_catalog.to_jsonb(pg_catalog.count(*)))'
+      );
+    end if;
+    if aggregate_object_sql <> '' then
+      aggregate_object_sql := aggregate_object_sql || ', ';
+    end if;
+    aggregate_object_sql := aggregate_object_sql || pg_catalog.format('%L, %s', aggregate_alias, aggregate_result_sql);
+  end loop;
+
+  foreach field_key in array group_ids loop
+    group_value_pairs := pg_catalog.array_append(
+      group_value_pairs,
+      pg_catalog.format('%L, candidate.projected_values -> %L', field_key, field_key)
+    );
+    group_by_terms := pg_catalog.array_append(
+      group_by_terms, pg_catalog.format('(candidate.projected_values -> %L)', field_key)
+    );
+    group_presence_terms := pg_catalog.array_append(
+      group_presence_terms, pg_catalog.format('(candidate.projected_values ? %L)', field_key)
+    );
+  end loop;
+  group_values_sql := 'pg_catalog.jsonb_build_object(' || pg_catalog.array_to_string(group_value_pairs, ', ') || ')';
+  group_by_sql := pg_catalog.array_to_string(group_by_terms, ', ');
+  group_presence_sql := pg_catalog.array_to_string(group_presence_terms, ' and ');
+
+  if fast_path then
+    candidate_sql := pg_catalog.format(
+      'select pg_catalog.jsonb_build_object(%s) as projected_values,
+         %s as filter_values
+       from record_data.%I as stored
+       where stored.organisation_id = $1
+         and stored.lifecycle_state = ''active''
+         and %s
+         and (%s)
+         and (%s)
+       limit $5',
+      pg_catalog.array_to_string(expression_pairs, ', '),
+      filter_values_sql,
+      physical_table_token,
+      case when storage_scope = 'application_contained'
+        then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
+      access_sql,
+      filter_predicate
+    );
+  else
+    -- The access predicate supplies only the planner's candidate superset.
+    -- Decide every scanned row through read_record before evaluating its Query
+    -- filter, so a withheld field can never decide whether it counts.
+    scan_sql := pg_catalog.format(
+      'select stored.record_id
+       from record_data.%I as stored
+       where stored.organisation_id = $1
+         and stored.lifecycle_state = ''active''
+         and %s
+         and (%s)
+         and (%s)
+       limit $5',
+      physical_table_token,
+      case when storage_scope = 'application_contained'
+        then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
+      access_sql,
+      filter_predicate
+    );
+    candidate_sql := scan_sql;
+  end if;
+
+  -- A compiled predicate may be a superset. The fast path still evaluates the
+  -- complete condition over values the exact plan proves readable; the raw
+  -- candidate count remains the ceiling, before any totals are returned.
+  if fast_path then
+    selected_sql := case when filter_condition is not null then
+      'select candidate.projected_values from candidate where
+         vortex_access.evaluate_query_condition_internal(
+           $12, $13, candidate.filter_values, $14, $15, false
+         )'
+      else 'select candidate.projected_values from candidate' end;
+  else
+    -- Materialize each read once. The raw candidate count gates the reads, and
+    -- every filter and aggregate uses only the fields this read returned.
+    selected_sql := pg_catalog.format(
+      'with readable as materialized (
+         select vortex_record.read_record(%L::uuid, candidate.record_id) as result
+         from candidate
+         where (select value from candidate_count) <= %s
+       )
+       select (
+         select coalesce(pg_catalog.jsonb_object_agg(field.id, readable.result -> ''values'' -> field.id), ''{}''::jsonb)
+         from pg_catalog.unnest($17::text[]) as field(id)
+         where readable.result -> ''values'' ? field.id
+       ) as projected_values
+       from readable
+       where readable.result ->> ''outcome'' = ''allowed''
+         and not exists (
+           select 1 from pg_catalog.unnest($16::text[]) as required(id)
+           where not (readable.result -> ''values'' ? required.id)
+         )
+         and ($12::jsonb is null or vortex_access.evaluate_query_condition_internal(
+           $12, $13,
+           (select coalesce(pg_catalog.jsonb_object_agg(referenced.id,
+             case $13 ->> referenced.id
+               when ''record_reference'' then pg_catalog.to_jsonb(
+                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''recordId''))
+               when ''organization_account_reference'' then pg_catalog.to_jsonb(
+                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''organizationAccountId''))
+               else readable.result -> ''values'' -> referenced.id
+             end), ''{}''::jsonb)
+            from pg_catalog.unnest($16::text[]) as referenced(id)),
+           $14, $15, false
+         ))',
+      record_type_id_value::text, summary_candidate_limit
+    );
+  end if;
+
+  -- Omitted grouping fields are withheld on that row, so they form no group;
+  -- a readable JSON null remains a legitimate null group.
+  if board_summary_mode then
+    board_bucket_sql := pg_catalog.format(
+      'case when pg_catalog.jsonb_typeof(candidate.projected_values -> %L) = ''string'' then case ',
+      board_choice_field_id
+    );
+    board_option_position := 0;
+    for board_option in
+      select item.value from pg_catalog.jsonb_array_elements(board_options) as item(value)
+    loop
+      board_option_position := board_option_position + 1;
+      board_bucket_sql := board_bucket_sql || pg_catalog.format(
+        'when (candidate.projected_values ->> %L) collate "C" = %L collate "C" then %s ',
+        board_choice_field_id, board_option ->> 'value', board_option_position
+      );
+    end loop;
+    board_bucket_sql := board_bucket_sql || 'else 0 end else 0 end';
+    if aggregate_object_sql = '' then
+      board_totals_sql := 'select ''{}''::jsonb as aggregate_values';
+      board_empty_aggregates_sql := 'select ''{}''::jsonb as aggregates';
+    else
+      board_totals_sql := pg_catalog.format(
+        'select pg_catalog.jsonb_build_object(%s) as aggregate_values
+         from normalized as candidate',
+        aggregate_object_sql
+      );
+      board_empty_aggregates_sql := pg_catalog.format(
+        'select pg_catalog.jsonb_build_object(%s) as aggregates
+         from (select null::jsonb as projected_values) as candidate where false',
+        aggregate_object_sql
+      );
+    end if;
+    if fast_path then
+      -- One grouping-set scan computes both each bucket and the grand total.
+      -- The raw candidate count is retained separately for the existing limit.
+      summary_sql := pg_catalog.format(
+        'with candidate as materialized (%s),
+         candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
+         selected as (%s),
+         normalized as (
+           select candidate.projected_values, %s as bucket_index
+           from selected as candidate
+         ),
+         aggregate_rows as materialized (
+           select grouping(candidate.bucket_index) as is_total,
+             candidate.bucket_index,
+             pg_catalog.count(*)::integer as row_count,
+             %s as aggregates
+           from normalized as candidate
+           group by rollup(candidate.bucket_index)
+         ),
+         totals as (select row_count, aggregates from aggregate_rows where is_total = 1),
+         grouped as (select bucket_index, row_count, aggregates from aggregate_rows where is_total = 0),
+         installed_options as (
+           select choice_option.value, choice_option.position::integer as position
+           from pg_catalog.jsonb_array_elements(%L::jsonb)
+             with ordinality as choice_option(value, position)
+         ),
+         empty_aggregates as (%s),
+         columns_result as (
+           select coalesce(pg_catalog.jsonb_agg(
+             pg_catalog.jsonb_build_object(
+               ''value'', installed.value ->> ''value'',
+               ''label'', installed.value ->> ''label'',
+               ''rowCount'', coalesce(grouped.row_count, 0),
+               ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+             ) order by installed.position
+           ), ''[]''::jsonb) as value
+           from installed_options as installed
+           left join grouped on grouped.bucket_index = installed.position
+           cross join empty_aggregates
+         ),
+         unassigned_result as (
+           select pg_catalog.jsonb_build_object(
+             ''rowCount'', coalesce(grouped.row_count, 0),
+             ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+           ) as value
+           from (select 0::integer as bucket_index) as unassigned
+           left join grouped on grouped.bucket_index = unassigned.bucket_index
+           cross join empty_aggregates
+         )
+         select case when candidate_count.value > %s
+           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
+           else pg_catalog.jsonb_build_object(
+             ''outcome'', ''completed'',
+             ''moduleRootId'', %L,
+             ''moduleReleaseVersion'', %L,
+             ''queryId'', %L,
+             ''choiceFieldId'', %L,
+             ''totalRowCount'', totals.row_count,
+             ''columns'', columns_result.value,
+             ''unassigned'', unassigned_result.value,
+             ''aggregates'', totals.aggregates
+           ) end
+         from candidate_count cross join totals
+           cross join columns_result cross join unassigned_result',
+        candidate_sql,
+        selected_sql,
+        board_bucket_sql,
+        case when aggregate_object_sql = '' then '''{}''::jsonb'
+          else pg_catalog.format('pg_catalog.jsonb_build_object(%s)', aggregate_object_sql) end,
+        board_options::text,
+        board_empty_aggregates_sql,
+        summary_candidate_limit,
+        p_module_root_id::text,
+        resolved ->> 'moduleReleaseVersion',
+        p_query_id::text,
+        board_choice_field_id
+      );
+    else
+    summary_sql := pg_catalog.format(
+      'with candidate as materialized (%s),
+       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
+       selected as materialized (%s),
+       normalized as materialized (
+         select candidate.projected_values, %s as bucket_index
+         from selected as candidate
+       ),
+       selected_count as (select pg_catalog.count(*)::integer as value from normalized),
+       installed_options as (
+         select choice_option.value, choice_option.position::integer as position
+         from pg_catalog.jsonb_array_elements(%L::jsonb)
+           with ordinality as choice_option(value, position)
+       ),
+       totals as (%s),
+       grouped as (
+         select candidate.bucket_index,
+           pg_catalog.count(*)::integer as row_count,
+           pg_catalog.jsonb_build_object(%s) as aggregates
+         from normalized as candidate
+         group by candidate.bucket_index
+       ),
+       empty_aggregates as (%s),
+       columns_result as (
+         select coalesce(pg_catalog.jsonb_agg(
+           pg_catalog.jsonb_build_object(
+             ''value'', installed.value ->> ''value'',
+             ''label'', installed.value ->> ''label'',
+             ''rowCount'', coalesce(grouped.row_count, 0),
+             ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+           ) order by installed.position
+         ), ''[]''::jsonb) as value
+         from installed_options as installed
+         left join grouped on grouped.bucket_index = installed.position
+         cross join empty_aggregates
+       ),
+       unassigned_result as (
+         select pg_catalog.jsonb_build_object(
+           ''rowCount'', coalesce(grouped.row_count, 0),
+           ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+         ) as value
+         from (select 0::integer as bucket_index) as unassigned
+         left join grouped on grouped.bucket_index = unassigned.bucket_index
+         cross join empty_aggregates
+       )
+       select case when candidate_count.value > %s
+         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
+         else pg_catalog.jsonb_build_object(
+           ''outcome'', ''completed'',
+           ''moduleRootId'', %L,
+           ''moduleReleaseVersion'', %L,
+           ''queryId'', %L,
+           ''choiceFieldId'', %L,
+           ''totalRowCount'', selected_count.value,
+           ''columns'', columns_result.value,
+           ''unassigned'', unassigned_result.value,
+           ''aggregates'', totals.aggregate_values
+         ) end
+       from candidate_count cross join selected_count cross join totals
+         cross join columns_result cross join unassigned_result',
+      candidate_sql,
+      selected_sql,
+      board_bucket_sql,
+      board_options::text,
+      board_totals_sql,
+      aggregate_object_sql,
+      board_empty_aggregates_sql,
+      summary_candidate_limit,
+      p_module_root_id::text,
+      resolved ->> 'moduleReleaseVersion',
+      p_query_id::text,
+      board_choice_field_id
+    );
+    end if;
+  elsif pg_catalog.cardinality(group_ids) > 0 then
+    groups_json_sql := pg_catalog.format(
+      '(select coalesce(pg_catalog.jsonb_agg(
+         pg_catalog.jsonb_build_object(
+           ''groupKey'', grouped.group_values::text,
+           ''groupValues'', grouped.group_values,
+           ''rowCount'', grouped.row_count,
+           ''aggregates'', grouped.aggregates
+         ) order by grouped.group_values::text collate "C"
+       ), ''[]''::jsonb) from grouped)'
+    );
+    summary_sql := pg_catalog.format(
+      'with candidate as materialized (%s),
+       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
+       selected as materialized (%s),
+       selected_count as (select pg_catalog.count(*)::integer as value from selected),
+       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate),
+       grouped as (
+         select %s as group_values,
+           pg_catalog.count(*)::integer as row_count,
+           pg_catalog.jsonb_build_object(%s) as aggregates
+         from selected as candidate
+         where %s
+         group by %s
+       )
+       select case when candidate_count.value > %s
+         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
+         else pg_catalog.jsonb_build_object(
+           ''outcome'', ''completed'',
+           ''moduleRootId'', %L,
+           ''moduleReleaseVersion'', %L,
+           ''queryId'', %L,
+           ''groupByFieldIds'', %L::jsonb,
+           ''totalRowCount'', selected_count.value,
+           ''groups'', %s,
+           ''aggregates'', totals.aggregate_values
+         ) end
+       from candidate_count cross join selected_count cross join totals',
+      candidate_sql,
+      selected_sql,
+      aggregate_object_sql,
+      group_values_sql,
+      aggregate_object_sql,
+      group_presence_sql,
+      group_by_sql,
+      summary_candidate_limit,
+      p_module_root_id::text,
+      resolved ->> 'moduleReleaseVersion',
+      p_query_id::text,
+      pg_catalog.to_jsonb(group_ids)::text,
+      groups_json_sql
+    );
+  else
+    summary_sql := pg_catalog.format(
+      'with candidate as materialized (%s),
+       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
+       selected as materialized (%s),
+       selected_count as (select pg_catalog.count(*)::integer as value from selected),
+       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate)
+       select case when candidate_count.value > %s
+         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
+         else pg_catalog.jsonb_build_object(
+           ''outcome'', ''completed'',
+           ''moduleRootId'', %L,
+           ''moduleReleaseVersion'', %L,
+           ''queryId'', %L,
+           ''groupByFieldIds'', %L::jsonb,
+           ''totalRowCount'', selected_count.value,
+           ''groups'', ''[]''::jsonb,
+           ''aggregates'', totals.aggregate_values
+         ) end
+       from candidate_count cross join selected_count cross join totals',
+      candidate_sql,
+      selected_sql,
+      aggregate_object_sql,
+      summary_candidate_limit,
+      p_module_root_id::text,
+      resolved ->> 'moduleReleaseVersion',
+      p_query_id::text,
+      pg_catalog.to_jsonb(group_ids)::text
+    );
+  end if;
+
+  begin
+    execute summary_sql into result_value
+      using context_organization_id, context_application_root_id, null::text[], null::uuid,
+        summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
+        access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
+        filter_condition, filter_types, parameter_types, parameter_values,
+        filter_ids, summary_field_ids;
+  exception when invalid_parameter_value then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+  end;
+  return result_value;
+end
+$function$;
+
+alter function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_owner;
+
+revoke all on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb)
+  to vortex_record_adapter;
+
+comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
+  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan.';
+
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO ''
+    AS $_$
+declare
+  scope_condition jsonb;
+  field_entry jsonb;
+  field_id text;
+  field_kind text;
+  result_kind text;
+  semantic_type text;
+  field_types jsonb := '{}'::jsonb;
+  declared_fields jsonb;
+  declaration jsonb;
+  binding jsonb;
+  parameter_key text;
+  parameter_type text;
+  parameter_types jsonb := '{}'::jsonb;
+  parameter_values jsonb := '{}'::jsonb;
+  declaration_keys text[] := array[]::text[];
+  binding_keys text[] := array[]::text[];
+  key_count integer;
+  tree_depth integer;
+  tree_operands integer;
+  supplied_key text;
+  supplied_value jsonb;
+  contract_version text;
+  exact_values boolean;
+  canonical_decimal constant text :=
+    '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
+begin
+  if p_record_scope is null or pg_catalog.jsonb_typeof(p_record_scope) is distinct from 'object'
+    or p_saved_condition is null or pg_catalog.jsonb_typeof(p_saved_condition) is distinct from 'object'
+    or p_source_record_type is null or pg_catalog.jsonb_typeof(p_source_record_type) is distinct from 'object'
+    or p_field_values is null or pg_catalog.jsonb_typeof(p_field_values) is distinct from 'object'
+    or p_current_organization_account_id is null
+    or p_current_organization_account_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+
+  -- The evaluator selects semantics only from explicit trusted version
+  -- evidence. Actual adapter facts below always carry the pinned version.
+  contract_version := p_source_record_type ->> 'validationContractVersion';
+  if not (p_source_record_type ? 'validationContractVersion')
+    or pg_catalog.jsonb_typeof(p_source_record_type -> 'validationContractVersion') is distinct from 'string'
+    or contract_version not in ('1.0.0', '2.0.0', '3.0.0') then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+  exact_values := contract_version in ('2.0.0', '3.0.0');
+
+  scope_condition := p_record_scope -> 'savedCondition';
+  if pg_catalog.jsonb_typeof(scope_condition) is distinct from 'object' then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+  select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(scope_condition);
+  if key_count <> 4
+    or pg_catalog.jsonb_typeof(scope_condition -> 'conditionId') is distinct from 'string'
+    or not vortex_platform.is_non_nil_uuid(scope_condition ->> 'conditionId')
+    or pg_catalog.jsonb_typeof(scope_condition -> 'publishedRevision') is distinct from 'number'
+    or (scope_condition ->> 'publishedRevision') !~ '^[1-9][0-9]*$'
+    or (scope_condition ->> 'publishedRevision')::numeric > 9007199254740991
+    or pg_catalog.jsonb_typeof(scope_condition -> 'contractFingerprint') is distinct from 'string'
+    or (scope_condition ->> 'contractFingerprint') !~ '^sha256:[a-f0-9]{64}$'
+    or pg_catalog.jsonb_typeof(scope_condition -> 'parameterBindings') is distinct from 'array' then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+
+  if pg_catalog.jsonb_typeof(p_saved_condition -> 'conditionId') is distinct from 'string'
+    or not vortex_platform.is_non_nil_uuid(p_saved_condition ->> 'conditionId')
+    or pg_catalog.jsonb_typeof(p_saved_condition -> 'sourceRecordTypeId') is distinct from 'string'
+    or not vortex_platform.is_non_nil_uuid(p_saved_condition ->> 'sourceRecordTypeId')
+    or pg_catalog.jsonb_typeof(p_saved_condition -> 'publishedRevision') is distinct from 'number'
+    or (p_saved_condition ->> 'publishedRevision') !~ '^[1-9][0-9]*$'
+    or (p_saved_condition ->> 'publishedRevision')::numeric > 9007199254740991
+    or pg_catalog.jsonb_typeof(p_saved_condition -> 'contractFingerprint') is distinct from 'string'
+    or (p_saved_condition ->> 'contractFingerprint') !~ '^sha256:[a-f0-9]{64}$'
+    or pg_catalog.jsonb_typeof(p_saved_condition -> 'parameters') is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_saved_condition -> 'condition') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_saved_condition -> 'declaredFieldIds') is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_source_record_type -> 'recordTypeId') is distinct from 'string'
+    or not vortex_platform.is_non_nil_uuid(p_source_record_type ->> 'recordTypeId')
+    or pg_catalog.jsonb_typeof(p_source_record_type -> 'fields') is distinct from 'array'
+    or scope_condition ->> 'conditionId' <> p_saved_condition ->> 'conditionId'
+    or (scope_condition ->> 'publishedRevision')::numeric <> (p_saved_condition ->> 'publishedRevision')::numeric
+    or scope_condition ->> 'contractFingerprint' <> p_saved_condition ->> 'contractFingerprint'
+    or p_saved_condition ->> 'sourceRecordTypeId' <> p_source_record_type ->> 'recordTypeId' then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+
+  for field_entry in select value from pg_catalog.jsonb_array_elements(p_source_record_type -> 'fields') loop
+    if pg_catalog.jsonb_typeof(field_entry) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(field_entry -> 'fieldId') is distinct from 'string'
+      or not vortex_platform.is_non_nil_uuid(field_entry ->> 'fieldId')
+      or pg_catalog.jsonb_typeof(field_entry -> 'type') is distinct from 'string' then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    field_id := field_entry ->> 'fieldId';
+    field_kind := field_entry ->> 'type';
+    if field_types ? field_id then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    semantic_type := case
+      when exact_values and field_kind = 'decimal_number' then 'decimal_number'
+      when exact_values and field_kind = 'money' then 'money'
+      when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+      when field_kind = 'yes_no' then 'boolean'
+      when field_kind = 'date' then 'date'
+      when field_kind = 'date_time' then 'date_time'
+      when field_kind = 'several_choices' then 'text_collection'
+      when field_kind in ('table', 'attachment') then 'opaque_json'
+      when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
+      when field_kind in ('calculation', 'total') then null
+      when field_kind in (
+        'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
+        'email_address', 'phone_number', 'web_address'
+      ) then 'text'
+      else null end;
+    if field_kind in ('calculation', 'total') then
+      result_kind := field_entry #>> '{settings,resultType}';
+      semantic_type := case
+        when exact_values and result_kind = 'decimal_number' then 'decimal_number'
+        when exact_values and result_kind = 'money' then 'money'
+        when result_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+        when result_kind = 'yes_no' then 'boolean'
+        when result_kind = 'date' then 'date'
+        when result_kind = 'date_time' then 'date_time'
+        when result_kind in ('text', 'choice') then 'text'
+        else null end;
+    end if;
+    if semantic_type is null then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    field_types := field_types || pg_catalog.jsonb_build_object(field_id, semantic_type);
+  end loop;
+
+  declared_fields := '{}'::jsonb;
+  for field_entry in select value from pg_catalog.jsonb_array_elements(p_saved_condition -> 'declaredFieldIds') loop
+    if pg_catalog.jsonb_typeof(field_entry) is distinct from 'string'
+      or not (field_types ? (field_entry #>> '{}'))
+      or declared_fields ? (field_entry #>> '{}') then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    declared_fields := declared_fields || pg_catalog.jsonb_build_object(field_entry #>> '{}', true);
+  end loop;
+
+  select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(p_field_values);
+  if key_count <> pg_catalog.jsonb_array_length(p_saved_condition -> 'declaredFieldIds') then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+  for supplied_key, supplied_value in select key, value from pg_catalog.jsonb_each(p_field_values) loop
+    semantic_type := field_types ->> supplied_key;
+    if not (declared_fields ? supplied_key)
+      or not vortex_access.typed_condition_value_matches_internal(supplied_value, semantic_type, true)
+      or (
+        supplied_value <> 'null'::jsonb and semantic_type = 'decimal_number'
+        and (
+          pg_catalog.jsonb_typeof(supplied_value) <> 'string'
+          or (supplied_value #>> '{}') !~ canonical_decimal
+        )
+      ) then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+  end loop;
+
+  for declaration in select value from pg_catalog.jsonb_array_elements(p_saved_condition -> 'parameters') loop
+    if pg_catalog.jsonb_typeof(declaration) is distinct from 'object' then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(declaration);
+    parameter_key := declaration ->> 'key';
+    parameter_type := declaration ->> 'type';
+    if key_count <> 2
+      or parameter_key !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
+      or pg_catalog.length(parameter_key) > 40
+      or parameter_type is null
+      or not (
+        parameter_type in (
+          'text', 'number', 'boolean', 'date', 'date_time', 'organization_account_reference'
+        )
+        or (exact_values and parameter_type in ('decimal_number', 'money'))
+      )
+      or parameter_types ? parameter_key then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    parameter_types := parameter_types || pg_catalog.jsonb_build_object(parameter_key, parameter_type);
+    declaration_keys := pg_catalog.array_append(declaration_keys, parameter_key);
+  end loop;
+
+  for binding in select value from pg_catalog.jsonb_array_elements(scope_condition -> 'parameterBindings') loop
+    if pg_catalog.jsonb_typeof(binding) is distinct from 'object' then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(binding);
+    parameter_key := binding ->> 'key';
+    parameter_type := parameter_types ->> parameter_key;
+    if parameter_key is null or not (parameter_types ? parameter_key) or parameter_key = any(binding_keys) then
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    if binding ->> 'source' = 'current_organization_account_id' then
+      if key_count <> 2 or parameter_type not in ('text', 'organization_account_reference') then
+        raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+      end if;
+      parameter_values := parameter_values || pg_catalog.jsonb_build_object(
+        parameter_key, p_current_organization_account_id::text
+      );
+    elsif binding ->> 'source' = 'literal' then
+      if key_count <> 3 or not (binding ? 'value')
+        or not vortex_access.typed_condition_value_matches_internal(binding -> 'value', parameter_type, false)
+        or (parameter_type = 'decimal_number' and (
+          pg_catalog.jsonb_typeof(binding -> 'value') <> 'string'
+          or (binding ->> 'value') !~ canonical_decimal
+        )) then
+        raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+      end if;
+      parameter_values := parameter_values || pg_catalog.jsonb_build_object(parameter_key, binding -> 'value');
+    else
+      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+    end if;
+    binding_keys := pg_catalog.array_append(binding_keys, parameter_key);
+  end loop;
+  if pg_catalog.cardinality(declaration_keys) <> pg_catalog.cardinality(binding_keys)
+    or exists (
+      select 1 from pg_catalog.unnest(declaration_keys) as declared(key)
+      where not (declared.key = any(binding_keys))
+    ) then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+
+  with recursive nodes(node, depth) as (
+    select p_saved_condition -> 'condition', 1
+    union all
+    select children.child, nodes.depth + 1
+    from nodes
+    cross join lateral (
+      select child.value as child
+      from pg_catalog.jsonb_array_elements(case
+        when nodes.node ->> 'kind' in ('all', 'any')
+          and pg_catalog.jsonb_typeof(nodes.node -> 'conditions') = 'array'
+          then nodes.node -> 'conditions' else '[]'::jsonb end) as child(value)
+      union all
+      select nodes.node -> 'condition'
+      where nodes.node ->> 'kind' = 'not'
+        and pg_catalog.jsonb_typeof(nodes.node -> 'condition') = 'object'
+    ) as children
+  )
+  select pg_catalog.max(depth), pg_catalog.sum(case when node ->> 'kind' = 'comparison'
+    then case when node ->> 'operator' in ('is_empty', 'is_not_empty') then 1 else 2 end else 0 end)::integer
+  into tree_depth, tree_operands from nodes;
+  if tree_depth > 10 or tree_operands > 100 then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+  end if;
+
+  perform vortex_access.evaluate_typed_condition_node_internal(
+    p_saved_condition -> 'condition', field_types, p_field_values,
+    parameter_types, parameter_values, true
+  );
+  return vortex_access.evaluate_typed_condition_node_internal(
+    p_saved_condition -> 'condition', field_types, p_field_values,
+    parameter_types, parameter_values, false
+  );
+exception
+  when invalid_text_representation or numeric_value_out_of_range or invalid_parameter_value then
+    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
+end
+$_$;
+
+alter function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) owner to vortex_owner;
+
+COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) IS 'Owner-only pure predicate for one sealed permission saved condition over trusted versioned record values and a protected current organization account.';
+
+REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) to postgres;
+
+create or replace function vortex_access.list_organization_activity_entries_projection(
+  p_record_ids uuid[],
+  p_sort_key text,
+  p_direction text,
+  p_after jsonb,
+  p_limit integer
+)
+returns table (
+  organization_id uuid,
+  record_id uuid,
+  revision bigint,
+  attribute_values jsonb
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  visible_organization_id uuid;
+  actor_identity_id uuid;
+  actor_account_id uuid;
+  person_record_type_id uuid;
+  decision_outcome text;
+  decision_organization_id uuid;
+  decision_account_id uuid;
+  audit_projection boolean;
+  after_occurred_at timestamptz;
+  after_record_id uuid;
+  keyset_sql text := '';
+  base_sql text;
+  source_sql text;
+  order_sql text;
+  scan_sql text;
+begin
+  if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
+    or p_sort_key is null or p_direction is null
+    or (p_limit is not null and p_limit < 1) then
+    raise exception using errcode = '22023', message = 'Activity projection bounds are invalid';
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) <> 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+      or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) <> 'string'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string' then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end if;
+    begin
+      after_occurred_at := (p_after -> 'sortKey' ->> 0)::timestamptz;
+      after_record_id := (p_after ->> 'recordId')::uuid;
+    exception when invalid_text_representation or datetime_field_overflow then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end;
+    keyset_sql := case when p_direction = 'descending'
+      then ' and (entry.occurred_at, entry.activity_id) < ($6, $7)'
+      else ' and (entry.occurred_at, entry.activity_id) > ($6, $7)' end;
+  end if;
+  begin
+    checked_context := vortex_access.validated_human_request_context();
+    visible_organization_id := (checked_context ->> 'organizationId')::uuid;
+    actor_identity_id := (checked_context ->> 'identityId')::uuid;
+    actor_account_id := (checked_context ->> 'organizationAccountId')::uuid;
+    perform 1 from vortex_access.resolve_human_organization_scope(
+      actor_identity_id, visible_organization_id
+    );
+  exception
+    when insufficient_privilege or no_data_found then
+      return;
+  end;
+
+  select evaluated.outcome, evaluated.organization_id, evaluated.organization_account_id
+  into decision_outcome, decision_organization_id, decision_account_id
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.permissions.read',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', vortex_access.required_platform_permission(
+        'platform.organization.permissions.read'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  audit_projection := coalesce(
+    decision_outcome = 'eligible'
+      and decision_organization_id = visible_organization_id
+      and decision_account_id = actor_account_id,
+    false
+  );
+
+  select distinct storage.record_type_id into strict person_record_type_id
+  from vortex_record.storage_catalogue as storage
+  where storage.state = 'active'
+    and storage.protected_read_model_key = 'organization_accounts'
+    and storage.record_type_definition ->> 'key' = 'person';
+
+  order_sql := pg_catalog.format(
+    ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
+    case when p_direction = 'descending' then 'desc' else 'asc' end,
+    case when p_direction = 'descending' then 'desc' else 'asc' end
+  );
+  base_sql := $scan$select entry.*
+    from vortex_record.organization_activity_entries as entry
+    where entry.organization_id = $1
+      and entry.occurred_at >= pg_catalog.statement_timestamp() - interval '90 days'
+      and ($2 is null or entry.activity_id = any($2))$scan$;
+  if audit_projection then
+    source_sql := base_sql || keyset_sql || order_sql;
+  else
+    source_sql := 'select visible.* from (('
+      || base_sql
+      || ' and entry.actor_kind = ''organization_account'' and entry.actor_id = $4'
+      || keyset_sql || order_sql
+      || ') union all ('
+      || base_sql
+      || ' and entry.actor_kind = ''identity'' and entry.actor_id = $5'
+      || keyset_sql || order_sql
+      || ')) as visible'
+      || pg_catalog.format(' order by visible.occurred_at %s, visible.activity_id %s limit $8',
+        case when p_direction = 'descending' then 'desc' else 'asc' end,
+        case when p_direction = 'descending' then 'desc' else 'asc' end);
+  end if;
+  scan_sql := $scan$select
+    entry.organization_id,
+    entry.activity_id,
+    1::bigint,
+    pg_catalog.jsonb_build_object(
+      'organization_id', entry.organization_id::text,
+      'revision', 1,
+      'occurred_at', entry.occurred_at,
+      'actor_kind', case entry.actor_kind
+        when 'organization_account' then 'Person'
+        when 'identity' then 'Platform operator'
+        when 'system' then 'System'
+        when 'public_session' then 'Public visitor'
+        else 'Other' end,
+      'actor', case when entry.actor_kind = 'organization_account'
+        then pg_catalog.jsonb_build_object(
+          'recordTypeId', $9::text, 'recordId', entry.actor_id::text
+        )
+        else null end,
+      'action', entry.action,
+      'subject_count', pg_catalog.cardinality(entry.subject_ids),
+      'changed_field_count', case when $3
+        then pg_catalog.cardinality(entry.changed_field_ids) else null end
+    )
+  from ($scan$ || source_sql || $scan$) as entry$scan$
+    || pg_catalog.format(' order by entry.occurred_at %s, entry.activity_id %s',
+      case when p_direction = 'descending' then 'desc' else 'asc' end,
+      case when p_direction = 'descending' then 'desc' else 'asc' end);
+  return query execute scan_sql using visible_organization_id, p_record_ids,
+    audit_projection, actor_account_id, actor_identity_id,
+    after_occurred_at, after_record_id, p_limit, person_record_type_id;
+end
+$function$;
+
+create or replace function vortex_access.list_organization_activity_entries_projection(
+  p_record_id uuid, p_page_size integer
+)
+returns table (
+  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+)
+language sql volatile security definer set search_path = ''
+as $function$
+  select projected.*
+  from vortex_access.list_organization_activity_entries_projection(
+    case when p_record_id is null then null else array[p_record_id] end,
+    'occurred_at', 'descending', null, null
+  ) as projected
+$function$;
+
+revoke all on function vortex_access.list_organization_activity_entries_projection(
+  uuid[], text, text, jsonb, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_organization_activity_entries_projection(
+  uuid[], text, text, jsonb, integer
+) to vortex_owner, vortex_record_adapter, postgres;
+alter function vortex_access.list_organization_activity_entries_projection(
+  uuid[], text, text, jsonb, integer
+) owner to vortex_owner;
+
+revoke all on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
+  to vortex_owner, vortex_record_adapter;
+comment on function vortex_access.list_organization_activity_entries_projection(uuid, integer) is
+  'Recent organisation activity projection; own rows or the existing permissions-read audit view, with counts and no payload or identifier lists.';
+alter function vortex_access.list_organization_activity_entries_projection(uuid, integer)
+  owner to vortex_owner;
+grant execute on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
+  to postgres;
+
+create or replace function vortex_record.provision_exact_module_storage(
+  p_module_root_id uuid,
+  p_module_release_revision bigint
+)
+returns table (
+  module_root_id uuid,
+  release_revision bigint,
+  storage_contract_ids uuid[],
+  changed boolean
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  release_row vortex_definition.releases%rowtype;
+  record_types jsonb;
+  record_type jsonb;
+  stored_catalogue vortex_record.storage_catalogue%rowtype;
+  stored_field vortex_record.field_storage_mappings%rowtype;
+  projection_expression_pair record;
+  field_value jsonb;
+  relationship_value jsonb;
+  target_value jsonb;
+  target_ids uuid[];
+  storage_id uuid;
+  record_type_id_value uuid;
+  field_id_value uuid;
+  relationship_id_value uuid;
+  table_token text;
+  column_token text;
+  storage_scope_value text;
+  ownership_mode_value text;
+  database_type text;
+  sql_type text;
+  stored_projection_role text;
+  requested_projection_role text;
+  stored_database_type text;
+  requested_database_type text;
+  stored_sql_type text;
+  requested_sql_type text;
+  stored_expression jsonb;
+  requested_expression jsonb;
+  shape_fingerprint text;
+  scope_index_columns text;
+  result_storage_ids uuid[] := array[]::uuid[];
+  any_change boolean := false;
+  is_projection boolean;
+  protected_view_key text;
+  reader_schema_value text;
+  reader_function_value text;
+  field_columns_sql text;
+  projection_view_sql text;
+  existing_columns text[];
+  expected_columns text[];
+begin
+  if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
+    or p_module_release_revision not between 1 and 9007199254740991 then
+    raise exception using errcode = '22023', message = 'Record storage release selector is invalid';
+  end if;
+
+  select release.* into strict release_row
+  from vortex_definition.releases as release
+  join vortex_definition.roots as root on root.root_id = release.root_id
+  where release.root_id = p_module_root_id
+    and release.release_revision = p_module_release_revision
+    and root.kind = 'module';
+  -- Module V3 reuses the Module V2 record-type content, so both validation
+  -- contracts allocate identical storage. The source contract must agree with
+  -- the validation contract, and the embedded identity is compared with
+  -- IS DISTINCT FROM so an absent JSON member cannot evade the gate.
+  if release_row.validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
+    or release_row.source_contract_version
+      is distinct from release_row.validation_contract_version
+    or release_row.compilation_output #>> '{kind}' is distinct from 'module'
+    or release_row.compilation_output #>> '{canonical,envelope,rootId}'
+      is distinct from p_module_root_id::text
+    or release_row.compilation_output #>> '{validationContractVersion}'
+      is distinct from release_row.validation_contract_version then
+    raise exception using errcode = '23514', message = 'Exact Module release is incompatible';
+  end if;
+
+  record_types := release_row.compilation_output #> '{canonical,content,recordTypes}';
+  if pg_catalog.jsonb_typeof(record_types) <> 'array'
+    or pg_catalog.jsonb_array_length(record_types) < 1 then
+    raise exception using errcode = '23514', message = 'Module record storage definition is incompatible';
+  end if;
+
+  perform 1 from vortex_record.release_provisions as provision
+  where provision.module_root_id = p_module_root_id
+    and provision.release_revision = p_module_release_revision
+  for update;
+  if found then
+    select provision.storage_contract_ids into result_storage_ids
+    from vortex_record.release_provisions as provision
+    where provision.module_root_id = p_module_root_id
+      and provision.release_revision = p_module_release_revision;
+    if result_storage_ids is distinct from (
+      select pg_catalog.array_agg((item.value ->> 'storageContractId')::uuid order by item.value ->> 'storageContractId')
+      from pg_catalog.jsonb_array_elements(record_types) as item(value)
+    ) then
+      raise exception using errcode = '55000', message = 'Stored release provision identities are incompatible';
+    end if;
+    result_storage_ids := array[]::uuid[];
+  end if;
+
+  if (
+    select pg_catalog.count(*) <> pg_catalog.count(distinct item.value ->> 'storageContractId')
+      or pg_catalog.count(*) <> pg_catalog.count(distinct item.value ->> 'recordTypeId')
+    from pg_catalog.jsonb_array_elements(record_types) as item(value)
+  ) then
+    raise exception using errcode = '23514', message = 'Module record storage identities are duplicated';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(record_types) as record_item(value)
+    where (
+      select pg_catalog.count(*) <> pg_catalog.count(distinct field_item.value ->> 'fieldId')
+      from pg_catalog.jsonb_array_elements(record_item.value -> 'fields') as field_item(value)
+    )
+  ) or (
+    select pg_catalog.count(*) <> pg_catalog.count(distinct relationship_item.value ->> 'relationshipId')
+    from pg_catalog.jsonb_array_elements(record_types) as record_item(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      record_item.value -> 'relationships'
+    ) as relationship_item(value)
+  ) then
+    raise exception using errcode = '23514', message = 'Module field or relationship identities are duplicated';
+  end if;
+
+  for record_type in
+    select item.value
+    from pg_catalog.jsonb_array_elements(record_types) as item(value)
+    order by item.value ->> 'storageContractId'
+  loop
+    begin
+      storage_id := (record_type ->> 'storageContractId')::uuid;
+      record_type_id_value := (record_type ->> 'recordTypeId')::uuid;
+    exception when invalid_text_representation then
+      raise exception using errcode = '42501', message = 'Module record storage identity is invalid';
+    end;
+    storage_scope_value := record_type ->> 'storageScope';
+    ownership_mode_value := record_type ->> 'ownershipMode';
+    if not vortex_platform.is_non_nil_uuid(storage_id::text)
+      or not vortex_platform.is_non_nil_uuid(record_type_id_value::text)
+      or storage_scope_value not in ('organization_shared', 'application_contained')
+      or ownership_mode_value not in ('none', 'organization_account', 'group', 'inherited')
+      or pg_catalog.jsonb_typeof(record_type -> 'fields') <> 'array'
+      or pg_catalog.jsonb_array_length(record_type -> 'fields') < 1
+      or pg_catalog.jsonb_typeof(record_type -> 'relationships') <> 'array' then
+      raise exception using errcode = '42501', message = 'Module record storage definition is invalid';
+    end if;
+    -- The eight-sortable-field limit is a publish rule; an older release may declare more and
+    -- simply gets an index per sortable field.
+    -- The record-type loop is ordered by storage identity, so overlapping
+    -- provisions acquire absent and existing lineage locks deterministically.
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('vortex_record.storage:' || storage_id::text, 0)
+    );
+    table_token := 'rt_' || pg_catalog.replace(pg_catalog.lower(storage_id::text), '-', '');
+    shape_fingerprint := vortex_record.storage_meaning_fingerprint(record_type);
+    result_storage_ids := result_storage_ids || storage_id;
+    scope_index_columns := case storage_scope_value
+      when 'organization_shared' then 'organisation_id'
+      else 'organisation_id, application_root_id'
+    end;
+
+    -- A system projection record type has no generated storage. It is read
+    -- through one registered protected view, created here as an ordinary
+    -- record_data relation so the fixed read adapters resolve it unchanged,
+    -- while the projection itself keeps every row-visibility rule inside the
+    -- registered function. The view exposes exactly the record type's declared
+    -- fields as record-data columns, plus the protected row identity and
+    -- revision, and is read-only: the projection has no ordinary write path.
+    -- Every projection value is reset per record type, so a generated record
+    -- type provisioned after a projection never inherits its protected key.
+    is_projection := record_type ? 'systemProjection';
+    protected_view_key := null;
+    reader_schema_value := null;
+    reader_function_value := null;
+    projection_view_sql := null;
+    if is_projection then
+      protected_view_key := record_type #>> '{systemProjection,protectedView}';
+      select registered.reader_schema, registered.reader_function
+      into reader_schema_value, reader_function_value
+      from vortex_record.protected_read_model_views as registered
+      where registered.protected_read_model_key = protected_view_key;
+      if not found then
+        raise exception using errcode = '42501',
+          message = 'Protected projection view is unavailable';
+      end if;
+      if storage_scope_value <> 'organization_shared' then
+        raise exception using errcode = '42501',
+          message = 'Protected projection storage must be organisation shared';
+      end if;
+      field_columns_sql := '';
+      expected_columns := array[]::text[];
+      for field_value in
+        select item.value
+        from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+        order by item.value ->> 'fieldId'
+      loop
+        begin
+          field_id_value := (field_value ->> 'fieldId')::uuid;
+        exception when invalid_text_representation then
+          raise exception using errcode = '42501',
+            message = 'Record field storage identity is invalid';
+        end;
+        column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
+        database_type := vortex_record.database_value_type(field_value);
+        if database_type is null then
+          raise exception using errcode = '23514',
+            message = 'Record field storage type is unsupported';
+        end if;
+        sql_type := vortex_record.sql_value_type(database_type);
+        expected_columns := expected_columns || column_token;
+        if field_value ->> 'fieldId' = record_type #>> '{systemProjection,organizationFieldId}' then
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format('projection.organization_id::text as %I, ', column_token);
+        elsif field_value ->> 'fieldId' = record_type #>> '{systemProjection,revisionFieldId}' then
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format('projection.revision::%s as %I, ', sql_type, column_token);
+        elsif database_type = 'json' then
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format(
+              '(projection.attribute_values -> %L) as %I, ', field_value ->> 'key', column_token
+            );
+        else
+          field_columns_sql := field_columns_sql
+            || pg_catalog.format(
+              '(projection.attribute_values ->> %L)::%s as %I, ',
+              field_value ->> 'key', sql_type, column_token
+            );
+        end if;
+      end loop;
+      select pg_catalog.array_agg(item.column_name order by item.column_name)
+      into expected_columns
+      from pg_catalog.unnest(expected_columns) as item(column_name);
+      field_columns_sql := pg_catalog.left(
+        field_columns_sql, pg_catalog.length(field_columns_sql) - 2
+      );
+      projection_view_sql := pg_catalog.format(
+        'create view record_data.%I as select
+           projection.organization_id as organisation_id,
+           %L::uuid as module_root_id,
+           %L::uuid as record_type_id,
+           %L::uuid as storage_contract_id,
+           projection.record_id,
+           null::uuid as application_root_id,
+           %L::bigint as definition_revision,
+           null::uuid as owner_organisation_account_id,
+           null::uuid as owner_group_id,
+           ''active''::text as lifecycle_state,
+           projection.revision as concurrency_number,
+           null::timestamptz as created_at,
+           null::uuid as created_by,
+           null::timestamptz as updated_at,
+           null::uuid as updated_by,
+           null::timestamptz as deleted_at,
+           null::uuid as deleted_by,
+           null::timestamptz as removal_due_at,
+           %s
+         from %I.%I(null::uuid, null::integer) as projection',
+        table_token, p_module_root_id, record_type_id_value, storage_id,
+        p_module_release_revision, field_columns_sql,
+        reader_schema_value, reader_function_value
+      );
+    end if;
+
+    select catalogue.* into stored_catalogue
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = storage_id
+    for update;
+
+    if not found then
+      if is_projection then
+        execute projection_view_sql;
+        execute pg_catalog.format(
+          'grant select on record_data.%I to vortex_record_adapter', table_token
+        );
+      else
+        perform vortex_record.create_record_storage_table_internal(
+          storage_id, p_module_root_id, record_type_id_value,
+          storage_scope_value, ownership_mode_value
+        );
+      end if;
+
+      insert into vortex_record.storage_catalogue (
+        storage_contract_id, physical_schema_token, physical_table_token,
+        module_root_id, record_type_id, storage_scope,
+        first_compatible_release_revision, last_compatible_release_revision,
+        state, content_fingerprint, record_type_definition, protected_read_model_key
+      ) values (
+        storage_id,
+        case when is_projection then 'system_projection' else 'record_data' end,
+        table_token, p_module_root_id, record_type_id_value, storage_scope_value,
+        p_module_release_revision, p_module_release_revision, 'active',
+        shape_fingerprint, record_type, protected_view_key
+      );
+      any_change := true;
+    else
+      if is_projection then
+        if stored_catalogue.module_root_id <> p_module_root_id
+          or stored_catalogue.record_type_id <> record_type_id_value
+          or stored_catalogue.storage_scope <> storage_scope_value
+          or stored_catalogue.state <> 'active'
+          or stored_catalogue.physical_schema_token <> 'system_projection'
+          or stored_catalogue.protected_read_model_key is distinct from protected_view_key
+          or stored_catalogue.physical_table_token <> table_token
+          or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
+          raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
+        end if;
+        if pg_catalog.jsonb_typeof(stored_catalogue.record_type_definition) is distinct from 'object'
+          or pg_catalog.jsonb_typeof(stored_catalogue.record_type_definition -> 'fields') is distinct from 'array'
+          or pg_catalog.jsonb_typeof(stored_catalogue.record_type_definition -> 'systemProjection') is distinct from 'object'
+          or pg_catalog.jsonb_typeof(record_type -> 'systemProjection') is distinct from 'object' then
+          raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
+        end if;
+
+        -- The catalogue keeps the newest compatible exact definition. Compare
+        -- only shared field identities so an older subset and newer additions
+        -- retain their existing release-order behavior. These descriptors
+        -- mirror the source expressions assembled above, including the
+        -- protected attribute key, JSON/text extraction, and cast.
+        for projection_expression_pair in
+          select requested_item.value as requested_field,
+            stored_item.value as stored_field
+          from pg_catalog.jsonb_array_elements(record_type -> 'fields') as requested_item(value)
+          join pg_catalog.jsonb_array_elements(
+            stored_catalogue.record_type_definition -> 'fields'
+          ) as stored_item(value)
+            on stored_item.value ->> 'fieldId' = requested_item.value ->> 'fieldId'
+          order by requested_item.value ->> 'fieldId'
+        loop
+          stored_projection_role := case
+            when projection_expression_pair.stored_field ->> 'fieldId'
+              = stored_catalogue.record_type_definition #>> '{systemProjection,organizationFieldId}'
+              then 'organization'
+            when projection_expression_pair.stored_field ->> 'fieldId'
+              = stored_catalogue.record_type_definition #>> '{systemProjection,revisionFieldId}'
+              then 'revision'
+            else 'attribute'
+          end;
+          requested_projection_role := case
+            when projection_expression_pair.requested_field ->> 'fieldId'
+              = record_type #>> '{systemProjection,organizationFieldId}'
+              then 'organization'
+            when projection_expression_pair.requested_field ->> 'fieldId'
+              = record_type #>> '{systemProjection,revisionFieldId}'
+              then 'revision'
+            else 'attribute'
+          end;
+          stored_database_type := vortex_record.database_value_type(
+            projection_expression_pair.stored_field
+          );
+          requested_database_type := vortex_record.database_value_type(
+            projection_expression_pair.requested_field
+          );
+          if stored_projection_role is distinct from requested_projection_role
+            or stored_database_type is null
+            or requested_database_type is null then
+            raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
+          end if;
+          stored_sql_type := vortex_record.sql_value_type(stored_database_type);
+          requested_sql_type := vortex_record.sql_value_type(requested_database_type);
+          stored_expression := case stored_projection_role
+            when 'organization' then pg_catalog.jsonb_build_object(
+              'role', stored_projection_role,
+              'source', 'projection.organization_id',
+              'cast', 'text'
+            )
+            when 'revision' then pg_catalog.jsonb_build_object(
+              'role', stored_projection_role,
+              'source', 'projection.revision',
+              'cast', stored_sql_type
+            )
+            else pg_catalog.jsonb_build_object(
+              'role', stored_projection_role,
+              'source', 'projection.attribute_values',
+              'key', projection_expression_pair.stored_field ->> 'key',
+              'extraction', case when stored_database_type = 'json' then '->' else '->>' end,
+              'cast', case when stored_database_type = 'json' then null else stored_sql_type end
+            )
+          end;
+          requested_expression := case requested_projection_role
+            when 'organization' then pg_catalog.jsonb_build_object(
+              'role', requested_projection_role,
+              'source', 'projection.organization_id',
+              'cast', 'text'
+            )
+            when 'revision' then pg_catalog.jsonb_build_object(
+              'role', requested_projection_role,
+              'source', 'projection.revision',
+              'cast', requested_sql_type
+            )
+            else pg_catalog.jsonb_build_object(
+              'role', requested_projection_role,
+              'source', 'projection.attribute_values',
+              'key', projection_expression_pair.requested_field ->> 'key',
+              'extraction', case when requested_database_type = 'json' then '->' else '->>' end,
+              'cast', case when requested_database_type = 'json' then null else requested_sql_type end
+            )
+          end;
+          if stored_expression is distinct from requested_expression then
+            raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
+          end if;
+        end loop;
+
+        select coalesce(
+            pg_catalog.array_agg(attribute.attname order by attribute.attname),
+            array[]::text[]
+          )
+        into existing_columns
+        from pg_catalog.pg_attribute as attribute
+        where attribute.attrelid = pg_catalog.to_regclass(
+            pg_catalog.format('%I.%I', 'record_data', table_token)
+          )
+          and attribute.attnum > 0
+          and not attribute.attisdropped
+          and attribute.attname like 'f\_%';
+        -- The view always carries the newest compatible release's shape, as a
+        -- generated table keeps every column a newer release added. A newer
+        -- release, or the newest one with a different field set, recreates it
+        -- exactly; an older release, which the field checks below prove is a
+        -- compatible subset, leaves the newer view alone. The projection has no
+        -- indexes or dependent objects.
+        if p_module_release_revision > stored_catalogue.last_compatible_release_revision
+          or (p_module_release_revision = stored_catalogue.last_compatible_release_revision
+            and existing_columns is distinct from expected_columns) then
+          execute pg_catalog.format('drop view record_data.%I', table_token);
+          execute projection_view_sql;
+          execute pg_catalog.format(
+            'grant select on record_data.%I to vortex_record_adapter', table_token
+          );
+          any_change := true;
+        end if;
+      else
+        if stored_catalogue.module_root_id <> p_module_root_id
+          or stored_catalogue.record_type_id <> record_type_id_value
+          or stored_catalogue.storage_scope <> storage_scope_value
+          or stored_catalogue.state <> 'active'
+          or stored_catalogue.physical_schema_token <> 'record_data'
+          or stored_catalogue.physical_table_token <> table_token
+          or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
+          raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
+        end if;
+      end if;
+    end if;
+
+    for field_value in
+      select item.value from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+      order by item.value ->> 'fieldId'
+    loop
+      begin
+        field_id_value := (field_value ->> 'fieldId')::uuid;
+      exception when invalid_text_representation then
+        raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
+      end;
+      if not vortex_platform.is_non_nil_uuid(field_id_value::text)
+        or field_value ->> 'type' is null
+        or pg_catalog.jsonb_typeof(field_value -> 'required') <> 'boolean'
+        or pg_catalog.jsonb_typeof(field_value -> 'unique') <> 'boolean'
+        or pg_catalog.jsonb_typeof(field_value -> 'filterable') <> 'boolean'
+        or pg_catalog.jsonb_typeof(field_value -> 'sortable') <> 'boolean'
+        or pg_catalog.jsonb_typeof(field_value -> 'settings') <> 'object' then
+        raise exception using errcode = '42501', message = 'Record field storage definition is invalid';
+      end if;
+      column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
+      database_type := vortex_record.database_value_type(field_value);
+      if database_type is null then
+        raise exception using errcode = '23514', message = 'Record field storage type is unsupported';
+      end if;
+      sql_type := vortex_record.sql_value_type(database_type);
+
+      select mapping.* into stored_field
+      from vortex_record.field_storage_mappings as mapping
+      where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value
+      for update;
+      if found then
+        if stored_field.physical_column_token <> column_token
+          or stored_field.database_value_type <> database_type
+          or stored_field.state <> 'active'
+          or vortex_record.field_storage_meaning(stored_field.field_definition)
+            is distinct from vortex_record.field_storage_meaning(field_value)
+          or not exists (
+            select 1
+            from pg_catalog.pg_attribute as attribute
+            where attribute.attrelid = pg_catalog.to_regclass(
+                pg_catalog.format('%I.%I', 'record_data', table_token)
+              )
+              and attribute.attname = column_token
+              and attribute.attnum > 0
+              and not attribute.attisdropped
+          ) then
+          raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
+        end if;
+      else
+        if not is_projection then
+          if stored_catalogue.storage_contract_id is not null
+            and (field_value ->> 'required')::boolean then
+            raise exception using errcode = '55000', message = 'Compatible storage upgrades may add only nullable fields';
+          end if;
+          execute pg_catalog.format(
+            'alter table record_data.%I add column %I %s%s',
+            table_token, column_token, sql_type,
+            case when (field_value ->> 'required')::boolean then ' not null' else '' end
+          );
+        end if;
+        insert into vortex_record.field_storage_mappings (
+          storage_contract_id, field_id, physical_column_token, database_value_type,
+          field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
+        ) values (
+          storage_id, field_id_value, column_token, database_type, field_value,
+          p_module_root_id, p_module_release_revision, 'active'
+        );
+        -- A projection field lives in the protected view, which carries no
+        -- indexes; the projection's own protected function applies visibility,
+        -- ordering and filtering, so no generated index is provisioned.
+        if is_projection then
+          null;
+        elsif (field_value ->> 'unique')::boolean then
+          perform vortex_record.ensure_field_index_internal(
+            storage_id, field_id_value, 'uniqueness', storage_scope_value,
+            table_token, scope_index_columns, column_token
+          );
+        elsif (field_value ->> 'filterable')::boolean or (field_value ->> 'sortable')::boolean then
+          perform vortex_record.ensure_field_index_internal(
+            storage_id, field_id_value, 'performance', storage_scope_value,
+            table_token, scope_index_columns, column_token
+          );
+        end if;
+        any_change := true;
+      end if;
+    end loop;
+
+    -- Only a field this Module itself introduced can prove a removed field. A
+    -- field another Module contributed keeps its retained lineage and never
+    -- refuses this Module's own storage.
+    if exists (
+      select 1 from vortex_record.field_storage_mappings as mapping
+      where mapping.storage_contract_id = storage_id and mapping.state = 'active'
+        and mapping.introduced_by_module_root_id = p_module_root_id
+        and mapping.introduced_at_release_revision <= p_module_release_revision
+        and not exists (
+          select 1 from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+          where item.value ->> 'fieldId' = mapping.field_id::text
+        )
+    ) then
+      raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove fields';
+    end if;
+
+    if stored_catalogue.storage_contract_id is not null
+      and stored_catalogue.last_compatible_release_revision < p_module_release_revision then
+      update vortex_record.storage_catalogue
+      set last_compatible_release_revision = greatest(
+            last_compatible_release_revision, p_module_release_revision
+          ),
+          content_fingerprint = shape_fingerprint,
+          record_type_definition = record_type,
+          changed_at = pg_catalog.statement_timestamp()
+      where storage_contract_id = storage_id;
+      any_change := true;
+    elsif stored_catalogue.storage_contract_id is not null
+      and stored_catalogue.first_compatible_release_revision > p_module_release_revision then
+      -- A newer release may have created the shared table first. The loops above
+      -- prove the older release is a compatible subset; retain the newer shape.
+      update vortex_record.storage_catalogue
+      set first_compatible_release_revision = p_module_release_revision,
+          changed_at = pg_catalog.statement_timestamp()
+      where storage_contract_id = storage_id;
+    elsif stored_catalogue.storage_contract_id is not null
+      and stored_catalogue.last_compatible_release_revision = p_module_release_revision
+      and stored_catalogue.content_fingerprint <> shape_fingerprint then
+      raise exception using errcode = '55000', message = 'Stored record storage meaning is incompatible';
+    end if;
+  end loop;
+
+  if exists (
+    select 1
+    from vortex_record.relationship_storage_mappings as mapping
+    where mapping.module_root_id = p_module_root_id
+      and mapping.release_revision <= p_module_release_revision
+      and not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(record_types) as record_item(value)
+        cross join lateral pg_catalog.jsonb_array_elements(
+          record_item.value -> 'relationships'
+        ) as relationship_item(value)
+        where relationship_item.value ->> 'relationshipId' = mapping.relationship_id::text
+      )
+  ) then
+    raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove relationships';
+  end if;
+
+  for record_type in select item.value from pg_catalog.jsonb_array_elements(record_types) as item(value)
+  loop
+    storage_id := (record_type ->> 'storageContractId')::uuid;
+    for relationship_value in
+      select item.value from pg_catalog.jsonb_array_elements(record_type -> 'relationships') as item(value)
+    loop
+      relationship_id_value := (relationship_value ->> 'relationshipId')::uuid;
+      field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
+      target_ids := array[]::uuid[];
+      if relationship_value ? 'toRecordType' then
+        target_ids := array[(relationship_value #>> '{toRecordType,recordTypeId}')::uuid];
+      else
+        for target_value in select item.value
+          from pg_catalog.jsonb_array_elements(relationship_value -> 'toRecordTypes') as item(value)
+        loop
+          target_ids := target_ids || (target_value ->> 'recordTypeId')::uuid;
+        end loop;
+      end if;
+      if pg_catalog.cardinality(target_ids) < 1 or array_position(target_ids, null) is not null then
+        raise exception using errcode = '42501', message = 'Relationship target evidence is unresolved';
+      end if;
+      insert into vortex_record.relationship_storage_mappings (
+        relationship_id, module_root_id, release_revision, source_storage_contract_id,
+        source_field_id, target_record_type_ids, cardinality, on_parent_delete, definition
+      ) values (
+        relationship_id_value, p_module_root_id, p_module_release_revision, storage_id,
+        field_id_value, target_ids, relationship_value ->> 'cardinality',
+        relationship_value ->> 'onParentDelete', relationship_value
+      )
+      on conflict (relationship_id) do update
+      set release_revision = greatest(
+            vortex_record.relationship_storage_mappings.release_revision,
+            excluded.release_revision
+          )
+      where vortex_record.relationship_storage_mappings.module_root_id = excluded.module_root_id
+        and vortex_record.relationship_storage_mappings.source_storage_contract_id = excluded.source_storage_contract_id
+        and vortex_record.relationship_storage_mappings.source_field_id = excluded.source_field_id
+        and vortex_record.relationship_storage_mappings.target_record_type_ids = excluded.target_record_type_ids
+        and vortex_record.relationship_storage_mappings.cardinality = excluded.cardinality
+        and vortex_record.relationship_storage_mappings.on_parent_delete = excluded.on_parent_delete
+        and vortex_record.relationship_storage_mappings.definition = excluded.definition;
+      if not found then
+        raise exception using errcode = '55000', message = 'Existing relationship storage is incompatible';
+      end if;
+    end loop;
+  end loop;
+
+  select pg_catalog.array_agg(value order by value) into result_storage_ids
+  from pg_catalog.unnest(result_storage_ids) as item(value);
+  insert into vortex_record.release_provisions (
+    module_root_id, release_revision, storage_contract_ids
+  ) values (
+    p_module_root_id, p_module_release_revision, result_storage_ids
+  ) on conflict on constraint release_provisions_pkey do nothing;
+
+  return query select p_module_root_id, p_module_release_revision,
+    result_storage_ids, any_change;
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002', message = 'Exact Module release is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000', message = 'Module storage evidence is ambiguous';
+end
+$function$;
+
+alter function vortex_record.provision_exact_module_storage(uuid,bigint) owner to vortex_owner;
+
+revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
+  to vortex_owner;
+comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
+  'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';
+
+create or replace function vortex_record.read_record_titles(
+  p_record_type_id uuid,
+  p_record_ids uuid[],
+  p_title_field_id uuid
+)
+returns table (record_id uuid, result jsonb)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+begin
+  if p_record_ids is null then
+    return;
+  end if;
+
+  -- This registered projection has its own fixed account-read visibility:
+  -- account administrators see suspended members, while other live members
+  -- see active members only. A role-template permission cannot express that
+  -- fixed authority, so titles use the same protected reader as legacy links.
+  if exists (
+    select 1
+    from vortex_record.storage_catalogue as storage
+    join vortex_record.protected_read_model_views as registered
+      on registered.protected_read_model_key = storage.protected_read_model_key
+    cross join lateral pg_catalog.jsonb_array_elements(
+      storage.record_type_definition -> 'fields'
+    ) as field(value)
+    where storage.record_type_id = p_record_type_id
+      and storage.state = 'active'
+      and storage.protected_read_model_key = 'organization_accounts'
+      and registered.reader_schema = 'vortex_access'
+      and registered.reader_function = 'list_organization_accounts_projection'
+      and storage.record_type_definition ->> 'titleFieldId' = p_title_field_id::text
+      and field.value ->> 'fieldId' = p_title_field_id::text
+      and field.value ->> 'key' = 'display_name'
+  ) then
+    return query
+    with visible as materialized (
+      select person.record_id, person.revision,
+        person.attribute_values ->> 'display_name' as display_name
+      from vortex_access.list_organization_accounts_projection(
+        null::uuid, null::integer, p_record_ids
+      ) as person
+    )
+    select requested.id,
+      case when pg_catalog.length(pg_catalog.btrim(visible.display_name)) > 0
+        then pg_catalog.jsonb_build_object(
+          'outcome', 'allowed', 'recordId', requested.id,
+          'concurrencyNumber', visible.revision,
+          'values', pg_catalog.jsonb_build_object(
+            pg_catalog.lower(p_title_field_id::text), visible.display_name
+          )
+        )
+        else pg_catalog.jsonb_build_object('outcome', 'refused')
+      end
+    from pg_catalog.unnest(p_record_ids) as requested(id)
+    left join visible on visible.record_id = requested.id;
+    return;
+  end if;
+
+  return query select titles.record_id, titles.result
+  from vortex_record.read_record_titles_internal(
+    p_record_type_id, p_record_ids, p_title_field_id
+  ) as titles;
+end
+$function$;
+
+alter function vortex_record.read_record_titles(uuid,uuid[],uuid) owner to vortex_owner;
+
+revoke all on function vortex_record.read_record_titles(uuid,uuid[],uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_record.read_record_titles(uuid,uuid[],uuid) to vortex_request;
+
+comment on function vortex_record.read_record_titles(uuid,uuid[],uuid) is
+  'Protected batch of record titles; the registered organisation-account projection applies its fixed viewer visibility for Person display names, while the restricted adapter applies exact-record access to other types.';
+
+create or replace function vortex_record.read_studio_person_label(p_account_id uuid)
+returns table (record_id uuid, display_name text)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  person_type_id uuid;
+  title_field_id uuid;
+begin
+  select distinct storage.record_type_id,
+    (storage.record_type_definition ->> 'titleFieldId')::uuid
+  into strict person_type_id, title_field_id
+  from vortex_record.storage_catalogue as storage
+  where storage.state = 'active'
+    and storage.protected_read_model_key = 'organization_accounts'
+    and storage.record_type_definition ->> 'key' = 'person';
+
+  return query
+  select title.record_id,
+    title.result -> 'values' ->> title_field_id::text
+  from vortex_record.read_record_titles(
+    person_type_id, array[p_account_id], title_field_id
+  ) as title
+  where title.result ->> 'outcome' = 'allowed';
+end
+$function$;
+
+alter function vortex_record.read_studio_person_label(uuid) owner to vortex_owner;
+revoke all on function vortex_record.read_studio_person_label(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_record.read_studio_person_label(uuid) to vortex_request;
+
+set local role vortex_record_adapter;
+
+create or replace function vortex_record.canonical_record_value_matches(
+  p_value jsonb,
+  p_field_type text,
+  p_database_value_type text
+)
+returns boolean
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $function$
+declare
+  -- Canonical exact decimal text: no exponent, no leading zero, no trailing
+  -- fractional zero, and no negative zero -- exactly what
+  -- `normalizeExactDecimal` emits (contracts/src/exact-decimal.ts:49-72).
+  canonical_decimal constant text :=
+    '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
+  uuid_pattern constant text :=
+    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+  nil_uuid_text constant text := '00000000-0000-0000-0000-000000000000';
+  date_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}$';
+  date_time_pattern constant text :=
+    '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$';
+  value_text text;
+begin
+  if p_value is null then
+    return false;
+  end if;
+  -- A JSON null clears the column, whatever the declared type.
+  if pg_catalog.jsonb_typeof(p_value) = 'null' then
+    return true;
+  end if;
+
+  if p_field_type = 'money'
+    or (p_field_type in ('calculation', 'total') and p_database_value_type = 'json') then
+    return pg_catalog.jsonb_typeof(p_value) = 'object'
+      and p_value - array['amount', 'currency']::text[] = '{}'::jsonb
+      and p_value ?& array['amount', 'currency']
+      and pg_catalog.jsonb_typeof(p_value -> 'amount') = 'string'
+      and (p_value ->> 'amount') ~ canonical_decimal
+      and pg_catalog.jsonb_typeof(p_value -> 'currency') = 'string'
+      and (p_value ->> 'currency') ~ '^[A-Z]{3}$';
+  elsif p_field_type = 'several_choices' then
+    return pg_catalog.jsonb_typeof(p_value) = 'array'
+      and not exists (
+        select 1 from pg_catalog.jsonb_array_elements(p_value) as member(value)
+        where pg_catalog.jsonb_typeof(member.value) is distinct from 'string'
+      );
+  elsif p_field_type = 'attachment' then
+    return pg_catalog.jsonb_typeof(p_value) = 'array'
+      and not exists (
+        select 1 from pg_catalog.jsonb_array_elements(p_value) as member(value)
+        where pg_catalog.jsonb_typeof(member.value) is distinct from 'string'
+          or (member.value #>> '{}') !~ uuid_pattern
+          or pg_catalog.lower(member.value #>> '{}') = nil_uuid_text
+      );
+  elsif p_field_type = 'table' then
+    return pg_catalog.jsonb_typeof(p_value) = 'array';
+  elsif p_field_type = 'formatted_text' then
+    return pg_catalog.jsonb_typeof(p_value) = 'object'
+      and pg_catalog.jsonb_typeof(p_value -> 'blocks') = 'array';
+  end if;
+
+  -- Every remaining field type is decided by its storage type.
+  if p_database_value_type = 'decimal' then
+    return pg_catalog.jsonb_typeof(p_value) = 'string'
+      and (p_value #>> '{}') ~ canonical_decimal;
+  elsif p_database_value_type = 'integer' then
+    if pg_catalog.jsonb_typeof(p_value) is distinct from 'number' then
+      return false;
+    end if;
+    value_text := p_value #>> '{}';
+    return value_text ~ '^-?(?:0|[1-9][0-9]*)$'
+      and value_text::numeric between -9223372036854775808 and 9223372036854775807;
+  elsif p_database_value_type = 'boolean' then
+    return pg_catalog.jsonb_typeof(p_value) = 'boolean';
+  elsif p_database_value_type = 'date' then
+    if pg_catalog.jsonb_typeof(p_value) is distinct from 'string' then
+      return false;
+    end if;
+    value_text := p_value #>> '{}';
+    if value_text !~ date_pattern then
+      return false;
+    end if;
+    begin
+      perform value_text::date;
+    exception when invalid_datetime_format or datetime_field_overflow
+      or invalid_text_representation then
+      return false;
+    end;
+    return true;
+  elsif p_database_value_type = 'timestamp_with_time_zone' then
+    -- The instant is stored; the offset it arrived with is not preserved, and
+    -- the read codec returns UTC `Z`. The pattern requires an explicit offset,
+    -- so the stored instant never depends on the session time zone.
+    if pg_catalog.jsonb_typeof(p_value) is distinct from 'string' then
+      return false;
+    end if;
+    value_text := p_value #>> '{}';
+    if value_text !~ date_time_pattern then
+      return false;
+    end if;
+    begin
+      perform value_text::timestamptz;
+    exception when invalid_datetime_format or datetime_field_overflow
+      or invalid_text_representation then
+      return false;
+    end;
+    return true;
+  elsif p_database_value_type = 'text' then
+    return pg_catalog.jsonb_typeof(p_value) = 'string';
+  elsif p_database_value_type = 'json' then
+    return true;
+  end if;
+  return false;
+end
+$function$;
+
+alter function vortex_record.canonical_record_value_matches(jsonb, text, text) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.canonical_record_value_matches(jsonb, text, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_record.canonical_record_value_matches(jsonb, text, text) is
+  'Private pure check that one value is the canonical V2 shape for its declared field type; never raises and decides no authority.';
 
 create or replace function vortex_record.plan_record_read_scan_internal(
   p_record_type_id uuid
@@ -3072,2124 +5303,6 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values or affects scan order or budget; orders board and generic group pages by record identity, returns generic group identity even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; refuses preview member, grouped, aggregate and system projection modes.';
 
-create or replace function vortex_record.run_module_query_summary_internal(
-  p_module_root_id uuid,
-  p_query_id uuid,
-  p_expected_release_revision bigint,
-  p_input_values jsonb,
-  p_user_inputs jsonb,
-  p_prepared_plan jsonb
-)
-returns jsonb
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  summary_candidate_limit constant integer := 100000;
-  uuid_pattern constant text :=
-    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-  prepared_plan jsonb := p_prepared_plan;
-  resolved jsonb;
-  query_item jsonb;
-  record_type_item jsonb;
-  record_type_id_value uuid;
-  context_organization_id uuid;
-  context_application_root_id uuid;
-  v_storage_contract_id uuid;
-  physical_table_token text;
-  storage_scope text;
-  access_sql text;
-  access_parameters jsonb := '[]'::jsonb;
-  access_owner_account_id uuid;
-  access_owner_group_ids uuid[] := array[]::uuid[];
-  access_shared_record_ids uuid[] := array[]::uuid[];
-  readable_field_ids text[] := array[]::text[];
-  filter_condition jsonb;
-  filter_types jsonb := '{}'::jsonb;
-  parameter_types jsonb := '{}'::jsonb;
-  parameter_values jsonb := '{}'::jsonb;
-  filter_ids text[] := array[]::text[];
-  filter_predicate text := 'true';
-  filter_parameters jsonb := '[]'::jsonb;
-  filter_expression_pairs text[] := array[]::text[];
-  filter_values_sql text := '''{}''::jsonb';
-  group_ids text[] := array[]::text[];
-  aggregate_items jsonb := '[]'::jsonb;
-  aggregate_item jsonb;
-  aggregate_aliases text[] := array[]::text[];
-  summary_field_ids text[] := array[]::text[];
-  fast_field_ids text[] := array[]::text[];
-  fields_by_id jsonb := '{}'::jsonb;
-  field_item jsonb;
-  field_key text;
-  field_type text;
-  mapping_row vortex_record.field_storage_mappings%rowtype;
-  fast_path boolean := false;
-  fast_path_fields_valid boolean := true;
-  scan_sql text;
-  candidate_sql text;
-  selected_sql text;
-  summary_sql text;
-  expression_pairs text[] := array[]::text[];
-  group_value_pairs text[] := array[]::text[];
-  group_by_terms text[] := array[]::text[];
-  group_presence_terms text[] := array[]::text[];
-  group_values_sql text;
-  group_by_sql text;
-  group_presence_sql text;
-  aggregate_object_sql text := '';
-  aggregate_result_sql text;
-  aggregate_count_sql text;
-  aggregate_sum_sql text;
-  aggregate_average_sql text;
-  aggregate_present_sql text;
-  aggregate_value_sql text;
-  aggregate_currency_sql text;
-  aggregate_amount_sql text;
-  aggregate_mixed_currency_sql text;
-  aggregate_operation text;
-  aggregate_field_id text;
-  aggregate_field_type text;
-  aggregate_original_field_type text;
-  aggregate_alias text;
-  average_places integer;
-  value_expression text;
-  groups_json_sql text := '''[]''::jsonb';
-  board_summary_mode boolean := false;
-  board_choice_field_id text;
-  board_options jsonb;
-  board_option jsonb;
-  board_option_values text[] := array[]::text[];
-  board_bucket_sql text;
-  board_option_position integer;
-  board_totals_sql text;
-  board_empty_aggregates_sql text;
-  result_value jsonb;
-begin
-  board_summary_mode := p_user_inputs ? 'boardSummary';
-  if board_summary_mode then
-    board_choice_field_id := pg_catalog.lower(p_user_inputs #>> '{boardSummary,choiceFieldId}');
-  end if;
-  resolved := prepared_plan -> 'resolved';
-  query_item := prepared_plan -> 'query';
-  record_type_item := prepared_plan -> 'recordType';
-  record_type_id_value := (prepared_plan ->> 'recordTypeId')::uuid;
-  context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
-  context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
-
-  if coalesce((query_item ->> 'relationshipHops')::integer, 0) <> 0 then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_invalid');
-  end if;
-  if pg_catalog.jsonb_typeof(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) <> 'array'
-    or pg_catalog.jsonb_array_length(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) > 10
-    or pg_catalog.jsonb_typeof(coalesce(query_item -> 'aggregates', '[]'::jsonb)) <> 'array'
-    or pg_catalog.jsonb_array_length(coalesce(query_item -> 'aggregates', '[]'::jsonb)) > 20 then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-  end if;
-  if board_summary_mode
-    and pg_catalog.jsonb_array_length(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) <> 1 then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-  end if;
-
-  for field_item in
-    select item.value from pg_catalog.jsonb_array_elements(coalesce(record_type_item -> 'fields', '[]'::jsonb)) as item(value)
-  loop
-    fields_by_id := fields_by_id || pg_catalog.jsonb_build_object(
-      pg_catalog.lower(field_item ->> 'fieldId'), field_item
-    );
-  end loop;
-
-  for field_item in
-    select item.value from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'groupByFieldIds', '[]'::jsonb)) as item(value)
-  loop
-    if pg_catalog.jsonb_typeof(field_item) <> 'string'
-      or pg_catalog.lower(field_item #>> '{}') !~ uuid_pattern then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    field_key := pg_catalog.lower(field_item #>> '{}');
-    field_type := coalesce(fields_by_id -> field_key ->> 'type', '');
-    if field_key = any (group_ids)
-      or field_type not in (
-        'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
-        'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
-        'link', 'link_to_one_of_several'
-      ) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    group_ids := pg_catalog.array_append(group_ids, field_key);
-    if not (field_key = any (summary_field_ids)) then
-      summary_field_ids := pg_catalog.array_append(summary_field_ids, field_key);
-      fast_field_ids := pg_catalog.array_append(fast_field_ids, field_key);
-    end if;
-  end loop;
-
-  if board_summary_mode then
-    if pg_catalog.cardinality(group_ids) <> 1
-      or group_ids[1] is distinct from board_choice_field_id
-      or not (fields_by_id ? board_choice_field_id)
-      or fields_by_id -> board_choice_field_id ->> 'type' is distinct from 'choice'
-      or coalesce((fields_by_id -> board_choice_field_id ->> 'filterable')::boolean, false) is not true
-      or pg_catalog.jsonb_typeof(coalesce(query_item -> 'selectedFieldIds', '[]'::jsonb)) is distinct from 'array'
-      or not exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(coalesce(query_item -> 'selectedFieldIds', '[]'::jsonb)) as selected(value)
-        where pg_catalog.jsonb_typeof(selected.value) = 'string'
-          and pg_catalog.lower(selected.value #>> '{}') = board_choice_field_id
-      ) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    board_options := fields_by_id #> array[board_choice_field_id, 'settings', 'options'];
-    if pg_catalog.jsonb_typeof(board_options) is distinct from 'array' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    if pg_catalog.jsonb_array_length(board_options) not between 1 and 12 then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    for board_option in
-      select item.value from pg_catalog.jsonb_array_elements(board_options) as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(board_option) is distinct from 'object' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      if board_option - array['value', 'label', 'requiredPermissionId']::text[] <> '{}'::jsonb
-        or not (board_option ? 'value') or not (board_option ? 'label')
-        or pg_catalog.jsonb_typeof(board_option -> 'value') is distinct from 'string'
-        or coalesce(pg_catalog.length(board_option ->> 'value'), 0) not between 1 and 120
-        or pg_catalog.jsonb_typeof(board_option -> 'label') is distinct from 'string'
-        or coalesce(pg_catalog.length(pg_catalog.btrim(board_option ->> 'label')), 0) not between 1 and 60
-        or (board_option ? 'requiredPermissionId' and (
-          pg_catalog.jsonb_typeof(board_option -> 'requiredPermissionId') is distinct from 'string'
-          or pg_catalog.lower(board_option ->> 'requiredPermissionId') !~ uuid_pattern
-          or pg_catalog.lower(board_option ->> 'requiredPermissionId') = '00000000-0000-0000-0000-000000000000'
-        ))
-        or (board_option ->> 'value') collate "C" = any (board_option_values) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      board_option_values := pg_catalog.array_append(board_option_values, board_option ->> 'value');
-    end loop;
-  end if;
-
-  aggregate_items := coalesce(query_item -> 'aggregates', '[]'::jsonb);
-  for aggregate_item in
-    select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
-  loop
-    aggregate_operation := aggregate_item ->> 'operation';
-    aggregate_alias := aggregate_item ->> 'alias';
-    aggregate_field_id := nullif(pg_catalog.lower(aggregate_item ->> 'fieldId'), '');
-    if aggregate_operation not in ('count', 'sum', 'minimum', 'maximum', 'average')
-      or aggregate_alias is null
-      or aggregate_alias !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
-      or pg_catalog.length(aggregate_alias) > 40
-      or aggregate_alias = any (aggregate_aliases)
-      or (aggregate_item ? 'fieldId' and aggregate_field_id is null)
-      or (aggregate_operation <> 'count' and aggregate_field_id is null)
-      or (aggregate_operation = 'count' and aggregate_field_id is not null) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    aggregate_aliases := pg_catalog.array_append(aggregate_aliases, aggregate_alias);
-    if aggregate_field_id is not null then
-      if aggregate_field_id !~ uuid_pattern or not (fields_by_id ? aggregate_field_id) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
-      aggregate_field_type := aggregate_original_field_type;
-      if aggregate_original_field_type = 'calculation' then
-        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
-          or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
-          or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
-            not in ('whole_number', 'decimal_number') then
-          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-        end if;
-        aggregate_field_type := (fields_by_id -> aggregate_field_id) #>> '{settings,resultType}';
-      elsif aggregate_original_field_type = 'total' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      if (aggregate_operation in ('sum', 'average')
-          and aggregate_field_type not in ('whole_number', 'decimal_number', 'money'))
-        or (aggregate_operation in ('minimum', 'maximum')
-          and aggregate_field_type not in (
-            'text', 'whole_number', 'decimal_number', 'yes_no', 'money', 'date', 'date_time'
-          )) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      if not (aggregate_field_id = any (summary_field_ids)) then
-        summary_field_ids := pg_catalog.array_append(summary_field_ids, aggregate_field_id);
-        fast_field_ids := pg_catalog.array_append(fast_field_ids, aggregate_field_id);
-      end if;
-    end if;
-  end loop;
-
-  v_storage_contract_id := (prepared_plan #>> '{storage,storageContractId}')::uuid;
-  physical_table_token := prepared_plan #>> '{storage,physicalTableToken}';
-  storage_scope := prepared_plan #>> '{storage,storageScope}';
-  access_sql := coalesce(prepared_plan #>> '{access,predicate}', 'true');
-  access_parameters := coalesce(prepared_plan #> '{access,parameters}', '[]'::jsonb);
-  access_owner_account_id := nullif(prepared_plan #>> '{access,ownerAccountId}', '')::uuid;
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
-  into access_owner_group_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,ownerGroupIds}') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
-  into access_shared_record_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,sharedRecordIds}') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
-  into readable_field_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
-
-  prepared_plan := vortex_record.prepare_module_query_internal(
-    p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
-    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
-    'complete', prepared_plan
-  );
-  if prepared_plan ->> 'outcome' is distinct from 'prepared' then
-    return prepared_plan;
-  end if;
-  filter_condition := prepared_plan #> '{filter,residualCondition}';
-  if filter_condition = 'null'::jsonb then
-    filter_condition := null;
-  end if;
-  -- The compiler already applied an exact predicate over guaranteed readable
-  -- columns. Re-evaluating it for each selected row adds no decision.
-  if (prepared_plan #>> '{filter,pushedExact}')::boolean is true then
-    filter_condition := null;
-  end if;
-  filter_types := coalesce(prepared_plan #> '{filter,residualFieldTypes}', '{}'::jsonb);
-  parameter_types := coalesce(prepared_plan #> '{filter,residualInputTypes}', '{}'::jsonb);
-  parameter_values := coalesce(prepared_plan #> '{filter,residualInputs}', '{}'::jsonb);
-  filter_predicate := coalesce(prepared_plan #>> '{filter,pushedPredicate}', 'true');
-  filter_parameters := coalesce(prepared_plan #> '{filter,pushedParameters}', '[]'::jsonb);
-  select coalesce(pg_catalog.array_agg(item.value order by item.position), array[]::text[])
-  into filter_expression_pairs
-  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}')
-    with ordinality as item(value, position);
-  if pg_catalog.cardinality(filter_expression_pairs) > 0 then
-    select pg_catalog.string_agg(
-      'pg_catalog.jsonb_build_object(' || chunk.pairs_text || ')', ' || '
-      order by chunk.chunk_index
-    )
-    into filter_values_sql
-    from (
-      select (pair.position - 1) / 50 as chunk_index,
-        pg_catalog.string_agg(pair.value, ', ' order by pair.position) as pairs_text
-      from pg_catalog.unnest(filter_expression_pairs)
-        with ordinality as pair(value, position)
-      group by (pair.position - 1) / 50
-    ) as chunk;
-  end if;
-  select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
-  into filter_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'filterFieldIds') as item(value);
-
-  -- The plan is exact only when every candidate is readable and every field
-  -- used by grouping, aggregates or filtering is readable on every candidate.
-  -- Derived filter and aggregate fields can lose their projection on an
-  -- individual record when an input is withheld, so both require read_record.
-  fast_path := pg_catalog.cardinality(readable_field_ids) > 0
-    and not exists (
-      select 1 from pg_catalog.unnest(filter_ids) as required(id)
-      where fields_by_id -> required.id ->> 'type' in ('calculation', 'total')
-    )
-    and not exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
-      where item.value ? 'fieldId'
-        and fields_by_id -> pg_catalog.lower(item.value ->> 'fieldId') ->> 'type'
-          in ('calculation', 'total')
-    )
-    and not exists (
-      select 1 from pg_catalog.unnest(group_ids || filter_ids) as required(id)
-      where required.id <> all (readable_field_ids)
-    )
-    and not exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
-      where item.value ? 'fieldId'
-        and pg_catalog.lower(item.value ->> 'fieldId') <> all (readable_field_ids)
-    );
-
-  if fast_path then
-    foreach field_key in array fast_field_ids loop
-      select mapping.* into mapping_row
-      from vortex_record.field_storage_mappings as mapping
-      where mapping.storage_contract_id = v_storage_contract_id
-        and mapping.field_id = field_key::uuid;
-      if not found or mapping_row.state <> 'active' then
-        fast_path_fields_valid := false;
-        exit;
-      end if;
-      field_type := fields_by_id -> field_key ->> 'type';
-      fast_path_fields_valid := fast_path_fields_valid and case field_type
-        when 'whole_number' then mapping_row.database_value_type = 'integer'
-        when 'decimal_number' then mapping_row.database_value_type = 'decimal'
-        when 'yes_no' then mapping_row.database_value_type = 'boolean'
-        when 'date' then mapping_row.database_value_type = 'date'
-        when 'date_time' then mapping_row.database_value_type = 'timestamp_with_time_zone'
-        when 'money' then mapping_row.database_value_type = 'json'
-        when 'link' then mapping_row.database_value_type = 'json'
-        when 'link_to_one_of_several' then mapping_row.database_value_type = 'json'
-        when 'text' then mapping_row.database_value_type = 'text'
-        when 'long_text' then mapping_row.database_value_type = 'text'
-        when 'formatted_text' then mapping_row.database_value_type = 'json'
-        when 'choice' then mapping_row.database_value_type = 'text'
-        when 'reference_number' then mapping_row.database_value_type = 'text'
-        when 'email_address' then mapping_row.database_value_type = 'text'
-        when 'phone_number' then mapping_row.database_value_type = 'text'
-        when 'web_address' then mapping_row.database_value_type = 'text'
-        when 'several_choices' then mapping_row.database_value_type = 'json'
-        when 'table' then mapping_row.database_value_type = 'json'
-        when 'attachment' then mapping_row.database_value_type = 'json'
-        else false end;
-      if not fast_path_fields_valid then
-        exit;
-      end if;
-      value_expression := case mapping_row.database_value_type
-        when 'decimal' then pg_catalog.format('pg_catalog.to_jsonb(stored.%I::text)', mapping_row.physical_column_token)
-        when 'timestamp_with_time_zone' then pg_catalog.format(
-          'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(stored.%I))',
-          mapping_row.physical_column_token
-        )
-        when 'date' then pg_catalog.format(
-          'pg_catalog.to_jsonb(pg_catalog.to_char(stored.%I, ''YYYY-MM-DD''))',
-          mapping_row.physical_column_token
-        )
-        else pg_catalog.format('pg_catalog.to_jsonb(stored.%I)', mapping_row.physical_column_token)
-      end;
-      expression_pairs := pg_catalog.array_append(
-        expression_pairs, pg_catalog.format('%L, %s', field_key, value_expression)
-      );
-    end loop;
-    fast_path := fast_path_fields_valid;
-  end if;
-
-  for aggregate_item in
-    select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
-  loop
-    aggregate_operation := aggregate_item ->> 'operation';
-    aggregate_alias := aggregate_item ->> 'alias';
-    aggregate_field_id := nullif(pg_catalog.lower(aggregate_item ->> 'fieldId'), '');
-    aggregate_count_sql := 'pg_catalog.count(*)';
-    aggregate_present_sql := 'true';
-    aggregate_value_sql := 'pg_catalog.to_jsonb(pg_catalog.count(*))';
-    aggregate_mixed_currency_sql := 'false';
-    if aggregate_field_id is not null then
-      aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
-      aggregate_field_type := aggregate_original_field_type;
-      if aggregate_original_field_type = 'calculation' then
-        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
-          or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
-          or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
-            not in ('whole_number', 'decimal_number') then
-          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-        end if;
-        aggregate_field_type := (fields_by_id -> aggregate_field_id) #>> '{settings,resultType}';
-      elsif aggregate_original_field_type = 'total' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      aggregate_present_sql := pg_catalog.format(
-        '(candidate.projected_values ? %L and candidate.projected_values -> %L <> ''null''::jsonb)',
-        aggregate_field_id, aggregate_field_id
-      );
-      aggregate_count_sql := pg_catalog.format(
-        'pg_catalog.count(*) filter (where %s)', aggregate_present_sql
-      );
-      value_expression := pg_catalog.format('(candidate.projected_values -> %L)', aggregate_field_id);
-      aggregate_currency_sql := pg_catalog.format(
-        '(candidate.projected_values -> %L ->> ''currency'')', aggregate_field_id
-      );
-      aggregate_amount_sql := pg_catalog.format(
-        '((candidate.projected_values -> %L ->> ''amount'')::numeric)', aggregate_field_id
-      );
-      if aggregate_operation = 'count' then
-        aggregate_value_sql := pg_catalog.format('pg_catalog.to_jsonb(%s)', aggregate_count_sql);
-      elsif aggregate_field_type = 'money' then
-        aggregate_mixed_currency_sql := pg_catalog.format(
-          '(pg_catalog.count(distinct %s) filter (where %s)) > 1',
-          aggregate_currency_sql, aggregate_present_sql
-        );
-        if aggregate_operation = 'minimum' then
-          value_expression := pg_catalog.format(
-            '(pg_catalog.array_agg(%s order by %s asc, %s collate "C" asc) filter (where %s))[1]',
-            value_expression, aggregate_amount_sql, aggregate_currency_sql, aggregate_present_sql
-          );
-          aggregate_value_sql := value_expression;
-        elsif aggregate_operation = 'maximum' then
-          value_expression := pg_catalog.format(
-            '(pg_catalog.array_agg(%s order by %s desc, %s collate "C" asc) filter (where %s))[1]',
-            value_expression, aggregate_amount_sql, aggregate_currency_sql, aggregate_present_sql
-          );
-          aggregate_value_sql := value_expression;
-        else
-          average_places := coalesce((aggregate_item ->> 'decimalPlaces')::integer, 2);
-          if average_places not between 0 and 12 then
-            return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-          end if;
-          if aggregate_operation = 'sum' then
-            value_expression := pg_catalog.format(
-              'pg_catalog.trim_scale(pg_catalog.sum(%s) filter (where %s))::text',
-              aggregate_amount_sql, aggregate_present_sql
-            );
-          else
-            aggregate_sum_sql := pg_catalog.format(
-              'pg_catalog.sum(%s) filter (where %s)', aggregate_amount_sql, aggregate_present_sql
-            );
-            aggregate_average_sql := pg_catalog.format(
-              'case when %3$s = 0 then null else
-                 pg_catalog.sign(%1$s) * (
-                   pg_catalog.div(
-                     pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
-                     (%3$s)::numeric
-                   )
-                   + case when 2 * pg_catalog.mod(
-                       pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
-                       (%3$s)::numeric
-                     ) >= (%3$s)::numeric then 1 else 0 end
-                 ) / pg_catalog.power(10::numeric, %2$s)
-               end',
-              aggregate_sum_sql, average_places, aggregate_count_sql
-            );
-            value_expression := pg_catalog.format(
-              'pg_catalog.trim_scale((%s))::text', aggregate_average_sql
-            );
-          end if;
-          aggregate_value_sql := pg_catalog.format(
-            'pg_catalog.jsonb_build_object(''amount'', %s, ''currency'', (pg_catalog.array_agg(%s order by %s collate "C" asc) filter (where %s))[1])',
-            value_expression, aggregate_currency_sql, aggregate_currency_sql, aggregate_present_sql
-          );
-        end if;
-      elsif aggregate_operation in ('minimum', 'maximum') then
-        if aggregate_field_type = 'text' then
-          value_expression := pg_catalog.format(
-            '(pg_catalog.array_agg(%s order by (candidate.projected_values ->> %L) collate "C" %s) filter (where %s))[1]',
-            value_expression, aggregate_field_id,
-            case aggregate_operation when 'minimum' then 'asc' else 'desc' end,
-            aggregate_present_sql
-          );
-        elsif aggregate_field_type = 'yes_no' then
-          value_expression := pg_catalog.format(
-            '(pg_catalog.array_agg(%s order by (candidate.projected_values ->> %L)::boolean %s) filter (where %s))[1]',
-            value_expression, aggregate_field_id,
-            case aggregate_operation when 'minimum' then 'asc' else 'desc' end,
-            aggregate_present_sql
-          );
-        elsif aggregate_field_type = 'whole_number' then
-          value_expression := pg_catalog.format(
-            'pg_catalog.to_jsonb(pg_catalog.%s((candidate.projected_values ->> %L)::bigint) filter (where %s))',
-            case aggregate_operation when 'minimum' then 'min' else 'max' end,
-            aggregate_field_id, aggregate_present_sql
-          );
-        elsif aggregate_field_type = 'decimal_number' then
-          value_expression := pg_catalog.format(
-            'pg_catalog.to_jsonb(pg_catalog.trim_scale(pg_catalog.%s((candidate.projected_values ->> %L)::numeric) filter (where %s))::text)',
-            case aggregate_operation when 'minimum' then 'min' else 'max' end,
-            aggregate_field_id, aggregate_present_sql
-          );
-        elsif aggregate_field_type = 'date' then
-          value_expression := pg_catalog.format(
-            'pg_catalog.to_jsonb(pg_catalog.%s(candidate.projected_values ->> %L) filter (where %s))',
-            case aggregate_operation when 'minimum' then 'min' else 'max' end,
-            aggregate_field_id, aggregate_present_sql
-          );
-        else
-          value_expression := pg_catalog.format(
-            'pg_catalog.to_jsonb(vortex_platform.format_timestamp_utc(pg_catalog.%s((candidate.projected_values ->> %L)::timestamp with time zone) filter (where %s)))',
-            case aggregate_operation when 'minimum' then 'min' else 'max' end,
-            aggregate_field_id, aggregate_present_sql
-          );
-        end if;
-        aggregate_value_sql := value_expression;
-      else
-        average_places := coalesce((aggregate_item ->> 'decimalPlaces')::integer, 2);
-        if aggregate_operation = 'average' and average_places not between 0 and 12 then
-          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-        end if;
-        if aggregate_operation = 'sum' then
-          value_expression := pg_catalog.format(
-            'pg_catalog.trim_scale(pg_catalog.sum((candidate.projected_values ->> %L)::numeric) filter (where %s))::text',
-            aggregate_field_id, aggregate_present_sql
-          );
-        else
-          aggregate_sum_sql := pg_catalog.format(
-            'pg_catalog.sum((candidate.projected_values ->> %L)::numeric) filter (where %s)',
-            aggregate_field_id, aggregate_present_sql
-          );
-          aggregate_average_sql := pg_catalog.format(
-            'case when %3$s = 0 then null else
-               pg_catalog.sign(%1$s) * (
-                 pg_catalog.div(
-                   pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
-                   (%3$s)::numeric
-                 )
-                 + case when 2 * pg_catalog.mod(
-                     pg_catalog.abs(%1$s) * pg_catalog.power(10::numeric, %2$s),
-                     (%3$s)::numeric
-                   ) >= (%3$s)::numeric then 1 else 0 end
-               ) / pg_catalog.power(10::numeric, %2$s)
-             end',
-            aggregate_sum_sql, average_places, aggregate_count_sql
-          );
-          value_expression := pg_catalog.format(
-            'pg_catalog.trim_scale((%s))::text', aggregate_average_sql
-          );
-        end if;
-        aggregate_value_sql := pg_catalog.format('pg_catalog.to_jsonb(%s)', value_expression);
-      end if;
-      if aggregate_operation = 'count' then
-        aggregate_result_sql := pg_catalog.format(
-          'pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', %s, ''value'', %s)',
-          aggregate_count_sql, aggregate_value_sql
-        );
-      else
-        aggregate_result_sql := pg_catalog.format(
-          'case when %s then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''mixed_currency'') else pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', %s, ''value'', case when %s = 0 then ''null''::jsonb else %s end) end',
-          aggregate_mixed_currency_sql, aggregate_count_sql, aggregate_count_sql, aggregate_value_sql
-        );
-      end if;
-    else
-      aggregate_result_sql := pg_catalog.format(
-        'pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', pg_catalog.count(*), ''value'', pg_catalog.to_jsonb(pg_catalog.count(*)))'
-      );
-    end if;
-    if aggregate_object_sql <> '' then
-      aggregate_object_sql := aggregate_object_sql || ', ';
-    end if;
-    aggregate_object_sql := aggregate_object_sql || pg_catalog.format('%L, %s', aggregate_alias, aggregate_result_sql);
-  end loop;
-
-  foreach field_key in array group_ids loop
-    group_value_pairs := pg_catalog.array_append(
-      group_value_pairs,
-      pg_catalog.format('%L, candidate.projected_values -> %L', field_key, field_key)
-    );
-    group_by_terms := pg_catalog.array_append(
-      group_by_terms, pg_catalog.format('(candidate.projected_values -> %L)', field_key)
-    );
-    group_presence_terms := pg_catalog.array_append(
-      group_presence_terms, pg_catalog.format('(candidate.projected_values ? %L)', field_key)
-    );
-  end loop;
-  group_values_sql := 'pg_catalog.jsonb_build_object(' || pg_catalog.array_to_string(group_value_pairs, ', ') || ')';
-  group_by_sql := pg_catalog.array_to_string(group_by_terms, ', ');
-  group_presence_sql := pg_catalog.array_to_string(group_presence_terms, ' and ');
-
-  if fast_path then
-    candidate_sql := pg_catalog.format(
-      'select pg_catalog.jsonb_build_object(%s) as projected_values,
-         %s as filter_values
-       from record_data.%I as stored
-       where stored.organisation_id = $1
-         and stored.lifecycle_state = ''active''
-         and %s
-         and (%s)
-         and (%s)
-       limit $5',
-      pg_catalog.array_to_string(expression_pairs, ', '),
-      filter_values_sql,
-      physical_table_token,
-      case when storage_scope = 'application_contained'
-        then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
-      access_sql,
-      filter_predicate
-    );
-  else
-    -- The access predicate supplies only the planner's candidate superset.
-    -- Decide every scanned row through read_record before evaluating its Query
-    -- filter, so a withheld field can never decide whether it counts.
-    scan_sql := pg_catalog.format(
-      'select stored.record_id
-       from record_data.%I as stored
-       where stored.organisation_id = $1
-         and stored.lifecycle_state = ''active''
-         and %s
-         and (%s)
-         and (%s)
-       limit $5',
-      physical_table_token,
-      case when storage_scope = 'application_contained'
-        then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
-      access_sql,
-      filter_predicate
-    );
-    candidate_sql := scan_sql;
-  end if;
-
-  -- A compiled predicate may be a superset. The fast path still evaluates the
-  -- complete condition over values the exact plan proves readable; the raw
-  -- candidate count remains the ceiling, before any totals are returned.
-  if fast_path then
-    selected_sql := case when filter_condition is not null then
-      'select candidate.projected_values from candidate where
-         vortex_access.evaluate_query_condition_internal(
-           $12, $13, candidate.filter_values, $14, $15, false
-         )'
-      else 'select candidate.projected_values from candidate' end;
-  else
-    -- Materialize each read once. The raw candidate count gates the reads, and
-    -- every filter and aggregate uses only the fields this read returned.
-    selected_sql := pg_catalog.format(
-      'with readable as materialized (
-         select vortex_record.read_record(%L::uuid, candidate.record_id) as result
-         from candidate
-         where (select value from candidate_count) <= %s
-       )
-       select (
-         select coalesce(pg_catalog.jsonb_object_agg(field.id, readable.result -> ''values'' -> field.id), ''{}''::jsonb)
-         from pg_catalog.unnest($17::text[]) as field(id)
-         where readable.result -> ''values'' ? field.id
-       ) as projected_values
-       from readable
-       where readable.result ->> ''outcome'' = ''allowed''
-         and not exists (
-           select 1 from pg_catalog.unnest($16::text[]) as required(id)
-           where not (readable.result -> ''values'' ? required.id)
-         )
-         and ($12::jsonb is null or vortex_access.evaluate_query_condition_internal(
-           $12, $13,
-           (select coalesce(pg_catalog.jsonb_object_agg(referenced.id,
-             case $13 ->> referenced.id
-               when ''record_reference'' then pg_catalog.to_jsonb(
-                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''recordId''))
-               when ''organization_account_reference'' then pg_catalog.to_jsonb(
-                 pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''organizationAccountId''))
-               else readable.result -> ''values'' -> referenced.id
-             end), ''{}''::jsonb)
-            from pg_catalog.unnest($16::text[]) as referenced(id)),
-           $14, $15, false
-         ))',
-      record_type_id_value::text, summary_candidate_limit
-    );
-  end if;
-
-  -- Omitted grouping fields are withheld on that row, so they form no group;
-  -- a readable JSON null remains a legitimate null group.
-  if board_summary_mode then
-    board_bucket_sql := pg_catalog.format(
-      'case when pg_catalog.jsonb_typeof(candidate.projected_values -> %L) = ''string'' then case ',
-      board_choice_field_id
-    );
-    board_option_position := 0;
-    for board_option in
-      select item.value from pg_catalog.jsonb_array_elements(board_options) as item(value)
-    loop
-      board_option_position := board_option_position + 1;
-      board_bucket_sql := board_bucket_sql || pg_catalog.format(
-        'when (candidate.projected_values ->> %L) collate "C" = %L collate "C" then %s ',
-        board_choice_field_id, board_option ->> 'value', board_option_position
-      );
-    end loop;
-    board_bucket_sql := board_bucket_sql || 'else 0 end else 0 end';
-    if aggregate_object_sql = '' then
-      board_totals_sql := 'select ''{}''::jsonb as aggregate_values';
-      board_empty_aggregates_sql := 'select ''{}''::jsonb as aggregates';
-    else
-      board_totals_sql := pg_catalog.format(
-        'select pg_catalog.jsonb_build_object(%s) as aggregate_values
-         from normalized as candidate',
-        aggregate_object_sql
-      );
-      board_empty_aggregates_sql := pg_catalog.format(
-        'select pg_catalog.jsonb_build_object(%s) as aggregates
-         from (select null::jsonb as projected_values) as candidate where false',
-        aggregate_object_sql
-      );
-    end if;
-    if fast_path then
-      -- One grouping-set scan computes both each bucket and the grand total.
-      -- The raw candidate count is retained separately for the existing limit.
-      summary_sql := pg_catalog.format(
-        'with candidate as materialized (%s),
-         candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-         selected as (%s),
-         normalized as (
-           select candidate.projected_values, %s as bucket_index
-           from selected as candidate
-         ),
-         aggregate_rows as materialized (
-           select grouping(candidate.bucket_index) as is_total,
-             candidate.bucket_index,
-             pg_catalog.count(*)::integer as row_count,
-             %s as aggregates
-           from normalized as candidate
-           group by rollup(candidate.bucket_index)
-         ),
-         totals as (select row_count, aggregates from aggregate_rows where is_total = 1),
-         grouped as (select bucket_index, row_count, aggregates from aggregate_rows where is_total = 0),
-         installed_options as (
-           select choice_option.value, choice_option.position::integer as position
-           from pg_catalog.jsonb_array_elements(%L::jsonb)
-             with ordinality as choice_option(value, position)
-         ),
-         empty_aggregates as (%s),
-         columns_result as (
-           select coalesce(pg_catalog.jsonb_agg(
-             pg_catalog.jsonb_build_object(
-               ''value'', installed.value ->> ''value'',
-               ''label'', installed.value ->> ''label'',
-               ''rowCount'', coalesce(grouped.row_count, 0),
-               ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
-             ) order by installed.position
-           ), ''[]''::jsonb) as value
-           from installed_options as installed
-           left join grouped on grouped.bucket_index = installed.position
-           cross join empty_aggregates
-         ),
-         unassigned_result as (
-           select pg_catalog.jsonb_build_object(
-             ''rowCount'', coalesce(grouped.row_count, 0),
-             ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
-           ) as value
-           from (select 0::integer as bucket_index) as unassigned
-           left join grouped on grouped.bucket_index = unassigned.bucket_index
-           cross join empty_aggregates
-         )
-         select case when candidate_count.value > %s
-           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-           else pg_catalog.jsonb_build_object(
-             ''outcome'', ''completed'',
-             ''moduleRootId'', %L,
-             ''moduleReleaseVersion'', %L,
-             ''queryId'', %L,
-             ''choiceFieldId'', %L,
-             ''totalRowCount'', totals.row_count,
-             ''columns'', columns_result.value,
-             ''unassigned'', unassigned_result.value,
-             ''aggregates'', totals.aggregates
-           ) end
-         from candidate_count cross join totals
-           cross join columns_result cross join unassigned_result',
-        candidate_sql,
-        selected_sql,
-        board_bucket_sql,
-        case when aggregate_object_sql = '' then '''{}''::jsonb'
-          else pg_catalog.format('pg_catalog.jsonb_build_object(%s)', aggregate_object_sql) end,
-        board_options::text,
-        board_empty_aggregates_sql,
-        summary_candidate_limit,
-        p_module_root_id::text,
-        resolved ->> 'moduleReleaseVersion',
-        p_query_id::text,
-        board_choice_field_id
-      );
-    else
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       normalized as materialized (
-         select candidate.projected_values, %s as bucket_index
-         from selected as candidate
-       ),
-       selected_count as (select pg_catalog.count(*)::integer as value from normalized),
-       installed_options as (
-         select choice_option.value, choice_option.position::integer as position
-         from pg_catalog.jsonb_array_elements(%L::jsonb)
-           with ordinality as choice_option(value, position)
-       ),
-       totals as (%s),
-       grouped as (
-         select candidate.bucket_index,
-           pg_catalog.count(*)::integer as row_count,
-           pg_catalog.jsonb_build_object(%s) as aggregates
-         from normalized as candidate
-         group by candidate.bucket_index
-       ),
-       empty_aggregates as (%s),
-       columns_result as (
-         select coalesce(pg_catalog.jsonb_agg(
-           pg_catalog.jsonb_build_object(
-             ''value'', installed.value ->> ''value'',
-             ''label'', installed.value ->> ''label'',
-             ''rowCount'', coalesce(grouped.row_count, 0),
-             ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
-           ) order by installed.position
-         ), ''[]''::jsonb) as value
-         from installed_options as installed
-         left join grouped on grouped.bucket_index = installed.position
-         cross join empty_aggregates
-       ),
-       unassigned_result as (
-         select pg_catalog.jsonb_build_object(
-           ''rowCount'', coalesce(grouped.row_count, 0),
-           ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
-         ) as value
-         from (select 0::integer as bucket_index) as unassigned
-         left join grouped on grouped.bucket_index = unassigned.bucket_index
-         cross join empty_aggregates
-       )
-       select case when candidate_count.value > %s
-         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''choiceFieldId'', %L,
-           ''totalRowCount'', selected_count.value,
-           ''columns'', columns_result.value,
-           ''unassigned'', unassigned_result.value,
-           ''aggregates'', totals.aggregate_values
-         ) end
-       from candidate_count cross join selected_count cross join totals
-         cross join columns_result cross join unassigned_result',
-      candidate_sql,
-      selected_sql,
-      board_bucket_sql,
-      board_options::text,
-      board_totals_sql,
-      aggregate_object_sql,
-      board_empty_aggregates_sql,
-      summary_candidate_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      board_choice_field_id
-    );
-    end if;
-  elsif pg_catalog.cardinality(group_ids) > 0 then
-    groups_json_sql := pg_catalog.format(
-      '(select coalesce(pg_catalog.jsonb_agg(
-         pg_catalog.jsonb_build_object(
-           ''groupKey'', grouped.group_values::text,
-           ''groupValues'', grouped.group_values,
-           ''rowCount'', grouped.row_count,
-           ''aggregates'', grouped.aggregates
-         ) order by grouped.group_values::text collate "C"
-       ), ''[]''::jsonb) from grouped)'
-    );
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       selected_count as (select pg_catalog.count(*)::integer as value from selected),
-       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate),
-       grouped as (
-         select %s as group_values,
-           pg_catalog.count(*)::integer as row_count,
-           pg_catalog.jsonb_build_object(%s) as aggregates
-         from selected as candidate
-         where %s
-         group by %s
-       )
-       select case when candidate_count.value > %s
-         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''groupByFieldIds'', %L::jsonb,
-           ''totalRowCount'', selected_count.value,
-           ''groups'', %s,
-           ''aggregates'', totals.aggregate_values
-         ) end
-       from candidate_count cross join selected_count cross join totals',
-      candidate_sql,
-      selected_sql,
-      aggregate_object_sql,
-      group_values_sql,
-      aggregate_object_sql,
-      group_presence_sql,
-      group_by_sql,
-      summary_candidate_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::text,
-      groups_json_sql
-    );
-  else
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       selected_count as (select pg_catalog.count(*)::integer as value from selected),
-       totals as (select pg_catalog.jsonb_build_object(%s) as aggregate_values from selected as candidate)
-       select case when candidate_count.value > %s
-         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''groupByFieldIds'', %L::jsonb,
-           ''totalRowCount'', selected_count.value,
-           ''groups'', ''[]''::jsonb,
-           ''aggregates'', totals.aggregate_values
-         ) end
-       from candidate_count cross join selected_count cross join totals',
-      candidate_sql,
-      selected_sql,
-      aggregate_object_sql,
-      summary_candidate_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::text
-    );
-  end if;
-
-  begin
-    execute summary_sql into result_value
-      using context_organization_id, context_application_root_id, null::text[], null::uuid,
-        summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
-        access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
-        filter_condition, filter_types, parameter_types, parameter_values,
-        filter_ids, summary_field_ids;
-  exception when invalid_parameter_value then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
-  end;
-  return result_value;
-end
-$function$;
-
-alter function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_owner;
-
-revoke all on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb)
-  to vortex_record_adapter;
-
-comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan.';
-
-CREATE OR REPLACE FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) RETURNS boolean
-    LANGUAGE plpgsql IMMUTABLE
-    SET search_path TO ''
-    AS $_$
-declare
-  scope_condition jsonb;
-  field_entry jsonb;
-  field_id text;
-  field_kind text;
-  result_kind text;
-  semantic_type text;
-  field_types jsonb := '{}'::jsonb;
-  declared_fields jsonb;
-  declaration jsonb;
-  binding jsonb;
-  parameter_key text;
-  parameter_type text;
-  parameter_types jsonb := '{}'::jsonb;
-  parameter_values jsonb := '{}'::jsonb;
-  declaration_keys text[] := array[]::text[];
-  binding_keys text[] := array[]::text[];
-  key_count integer;
-  tree_depth integer;
-  tree_operands integer;
-  supplied_key text;
-  supplied_value jsonb;
-  contract_version text;
-  exact_values boolean;
-  canonical_decimal constant text :=
-    '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
-begin
-  if p_record_scope is null or pg_catalog.jsonb_typeof(p_record_scope) is distinct from 'object'
-    or p_saved_condition is null or pg_catalog.jsonb_typeof(p_saved_condition) is distinct from 'object'
-    or p_source_record_type is null or pg_catalog.jsonb_typeof(p_source_record_type) is distinct from 'object'
-    or p_field_values is null or pg_catalog.jsonb_typeof(p_field_values) is distinct from 'object'
-    or p_current_organization_account_id is null
-    or p_current_organization_account_id = '00000000-0000-0000-0000-000000000000'::uuid then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-
-  -- The evaluator selects semantics only from explicit trusted version
-  -- evidence. Actual adapter facts below always carry the pinned version.
-  contract_version := p_source_record_type ->> 'validationContractVersion';
-  if not (p_source_record_type ? 'validationContractVersion')
-    or pg_catalog.jsonb_typeof(p_source_record_type -> 'validationContractVersion') is distinct from 'string'
-    or contract_version not in ('1.0.0', '2.0.0', '3.0.0') then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-  exact_values := contract_version in ('2.0.0', '3.0.0');
-
-  scope_condition := p_record_scope -> 'savedCondition';
-  if pg_catalog.jsonb_typeof(scope_condition) is distinct from 'object' then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-  select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(scope_condition);
-  if key_count <> 4
-    or pg_catalog.jsonb_typeof(scope_condition -> 'conditionId') is distinct from 'string'
-    or not vortex_platform.is_non_nil_uuid(scope_condition ->> 'conditionId')
-    or pg_catalog.jsonb_typeof(scope_condition -> 'publishedRevision') is distinct from 'number'
-    or (scope_condition ->> 'publishedRevision') !~ '^[1-9][0-9]*$'
-    or (scope_condition ->> 'publishedRevision')::numeric > 9007199254740991
-    or pg_catalog.jsonb_typeof(scope_condition -> 'contractFingerprint') is distinct from 'string'
-    or (scope_condition ->> 'contractFingerprint') !~ '^sha256:[a-f0-9]{64}$'
-    or pg_catalog.jsonb_typeof(scope_condition -> 'parameterBindings') is distinct from 'array' then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-
-  if pg_catalog.jsonb_typeof(p_saved_condition -> 'conditionId') is distinct from 'string'
-    or not vortex_platform.is_non_nil_uuid(p_saved_condition ->> 'conditionId')
-    or pg_catalog.jsonb_typeof(p_saved_condition -> 'sourceRecordTypeId') is distinct from 'string'
-    or not vortex_platform.is_non_nil_uuid(p_saved_condition ->> 'sourceRecordTypeId')
-    or pg_catalog.jsonb_typeof(p_saved_condition -> 'publishedRevision') is distinct from 'number'
-    or (p_saved_condition ->> 'publishedRevision') !~ '^[1-9][0-9]*$'
-    or (p_saved_condition ->> 'publishedRevision')::numeric > 9007199254740991
-    or pg_catalog.jsonb_typeof(p_saved_condition -> 'contractFingerprint') is distinct from 'string'
-    or (p_saved_condition ->> 'contractFingerprint') !~ '^sha256:[a-f0-9]{64}$'
-    or pg_catalog.jsonb_typeof(p_saved_condition -> 'parameters') is distinct from 'array'
-    or pg_catalog.jsonb_typeof(p_saved_condition -> 'condition') is distinct from 'object'
-    or pg_catalog.jsonb_typeof(p_saved_condition -> 'declaredFieldIds') is distinct from 'array'
-    or pg_catalog.jsonb_typeof(p_source_record_type -> 'recordTypeId') is distinct from 'string'
-    or not vortex_platform.is_non_nil_uuid(p_source_record_type ->> 'recordTypeId')
-    or pg_catalog.jsonb_typeof(p_source_record_type -> 'fields') is distinct from 'array'
-    or scope_condition ->> 'conditionId' <> p_saved_condition ->> 'conditionId'
-    or (scope_condition ->> 'publishedRevision')::numeric <> (p_saved_condition ->> 'publishedRevision')::numeric
-    or scope_condition ->> 'contractFingerprint' <> p_saved_condition ->> 'contractFingerprint'
-    or p_saved_condition ->> 'sourceRecordTypeId' <> p_source_record_type ->> 'recordTypeId' then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-
-  for field_entry in select value from pg_catalog.jsonb_array_elements(p_source_record_type -> 'fields') loop
-    if pg_catalog.jsonb_typeof(field_entry) is distinct from 'object'
-      or pg_catalog.jsonb_typeof(field_entry -> 'fieldId') is distinct from 'string'
-      or not vortex_platform.is_non_nil_uuid(field_entry ->> 'fieldId')
-      or pg_catalog.jsonb_typeof(field_entry -> 'type') is distinct from 'string' then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    field_id := field_entry ->> 'fieldId';
-    field_kind := field_entry ->> 'type';
-    if field_types ? field_id then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    semantic_type := case
-      when exact_values and field_kind = 'decimal_number' then 'decimal_number'
-      when exact_values and field_kind = 'money' then 'money'
-      when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
-      when field_kind = 'yes_no' then 'boolean'
-      when field_kind = 'date' then 'date'
-      when field_kind = 'date_time' then 'date_time'
-      when field_kind = 'several_choices' then 'text_collection'
-      when field_kind in ('table', 'attachment') then 'opaque_json'
-      when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
-      when field_kind in ('calculation', 'total') then null
-      when field_kind in (
-        'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
-        'email_address', 'phone_number', 'web_address'
-      ) then 'text'
-      else null end;
-    if field_kind in ('calculation', 'total') then
-      result_kind := field_entry #>> '{settings,resultType}';
-      semantic_type := case
-        when exact_values and result_kind = 'decimal_number' then 'decimal_number'
-        when exact_values and result_kind = 'money' then 'money'
-        when result_kind in ('whole_number', 'decimal_number', 'money') then 'number'
-        when result_kind = 'yes_no' then 'boolean'
-        when result_kind = 'date' then 'date'
-        when result_kind = 'date_time' then 'date_time'
-        when result_kind in ('text', 'choice') then 'text'
-        else null end;
-    end if;
-    if semantic_type is null then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    field_types := field_types || pg_catalog.jsonb_build_object(field_id, semantic_type);
-  end loop;
-
-  declared_fields := '{}'::jsonb;
-  for field_entry in select value from pg_catalog.jsonb_array_elements(p_saved_condition -> 'declaredFieldIds') loop
-    if pg_catalog.jsonb_typeof(field_entry) is distinct from 'string'
-      or not (field_types ? (field_entry #>> '{}'))
-      or declared_fields ? (field_entry #>> '{}') then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    declared_fields := declared_fields || pg_catalog.jsonb_build_object(field_entry #>> '{}', true);
-  end loop;
-
-  select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(p_field_values);
-  if key_count <> pg_catalog.jsonb_array_length(p_saved_condition -> 'declaredFieldIds') then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-  for supplied_key, supplied_value in select key, value from pg_catalog.jsonb_each(p_field_values) loop
-    semantic_type := field_types ->> supplied_key;
-    if not (declared_fields ? supplied_key)
-      or not vortex_access.typed_condition_value_matches_internal(supplied_value, semantic_type, true)
-      or (
-        supplied_value <> 'null'::jsonb and semantic_type = 'decimal_number'
-        and (
-          pg_catalog.jsonb_typeof(supplied_value) <> 'string'
-          or (supplied_value #>> '{}') !~ canonical_decimal
-        )
-      ) then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-  end loop;
-
-  for declaration in select value from pg_catalog.jsonb_array_elements(p_saved_condition -> 'parameters') loop
-    if pg_catalog.jsonb_typeof(declaration) is distinct from 'object' then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(declaration);
-    parameter_key := declaration ->> 'key';
-    parameter_type := declaration ->> 'type';
-    if key_count <> 2
-      or parameter_key !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
-      or pg_catalog.length(parameter_key) > 40
-      or parameter_type is null
-      or not (
-        parameter_type in (
-          'text', 'number', 'boolean', 'date', 'date_time', 'organization_account_reference'
-        )
-        or (exact_values and parameter_type in ('decimal_number', 'money'))
-      )
-      or parameter_types ? parameter_key then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    parameter_types := parameter_types || pg_catalog.jsonb_build_object(parameter_key, parameter_type);
-    declaration_keys := pg_catalog.array_append(declaration_keys, parameter_key);
-  end loop;
-
-  for binding in select value from pg_catalog.jsonb_array_elements(scope_condition -> 'parameterBindings') loop
-    if pg_catalog.jsonb_typeof(binding) is distinct from 'object' then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    select pg_catalog.count(*) into key_count from pg_catalog.jsonb_object_keys(binding);
-    parameter_key := binding ->> 'key';
-    parameter_type := parameter_types ->> parameter_key;
-    if parameter_key is null or not (parameter_types ? parameter_key) or parameter_key = any(binding_keys) then
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    if binding ->> 'source' = 'current_organization_account_id' then
-      if key_count <> 2 or parameter_type not in ('text', 'organization_account_reference') then
-        raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-      end if;
-      parameter_values := parameter_values || pg_catalog.jsonb_build_object(
-        parameter_key, p_current_organization_account_id::text
-      );
-    elsif binding ->> 'source' = 'literal' then
-      if key_count <> 3 or not (binding ? 'value')
-        or not vortex_access.typed_condition_value_matches_internal(binding -> 'value', parameter_type, false)
-        or (parameter_type = 'decimal_number' and (
-          pg_catalog.jsonb_typeof(binding -> 'value') <> 'string'
-          or (binding ->> 'value') !~ canonical_decimal
-        )) then
-        raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-      end if;
-      parameter_values := parameter_values || pg_catalog.jsonb_build_object(parameter_key, binding -> 'value');
-    else
-      raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-    end if;
-    binding_keys := pg_catalog.array_append(binding_keys, parameter_key);
-  end loop;
-  if pg_catalog.cardinality(declaration_keys) <> pg_catalog.cardinality(binding_keys)
-    or exists (
-      select 1 from pg_catalog.unnest(declaration_keys) as declared(key)
-      where not (declared.key = any(binding_keys))
-    ) then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-
-  with recursive nodes(node, depth) as (
-    select p_saved_condition -> 'condition', 1
-    union all
-    select children.child, nodes.depth + 1
-    from nodes
-    cross join lateral (
-      select child.value as child
-      from pg_catalog.jsonb_array_elements(case
-        when nodes.node ->> 'kind' in ('all', 'any')
-          and pg_catalog.jsonb_typeof(nodes.node -> 'conditions') = 'array'
-          then nodes.node -> 'conditions' else '[]'::jsonb end) as child(value)
-      union all
-      select nodes.node -> 'condition'
-      where nodes.node ->> 'kind' = 'not'
-        and pg_catalog.jsonb_typeof(nodes.node -> 'condition') = 'object'
-    ) as children
-  )
-  select pg_catalog.max(depth), pg_catalog.sum(case when node ->> 'kind' = 'comparison'
-    then case when node ->> 'operator' in ('is_empty', 'is_not_empty') then 1 else 2 end else 0 end)::integer
-  into tree_depth, tree_operands from nodes;
-  if tree_depth > 10 or tree_operands > 100 then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-  end if;
-
-  perform vortex_access.evaluate_typed_condition_node_internal(
-    p_saved_condition -> 'condition', field_types, p_field_values,
-    parameter_types, parameter_values, true
-  );
-  return vortex_access.evaluate_typed_condition_node_internal(
-    p_saved_condition -> 'condition', field_types, p_field_values,
-    parameter_types, parameter_values, false
-  );
-exception
-  when invalid_text_representation or numeric_value_out_of_range or invalid_parameter_value then
-    raise exception using errcode = '22023', message = 'Typed record condition is invalid';
-end
-$_$;
-
-alter function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) owner to vortex_owner;
-
-COMMENT ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) IS 'Owner-only pure predicate for one sealed permission saved condition over trusted versioned record values and a protected current organization account.';
-
-REVOKE ALL ON FUNCTION vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) FROM PUBLIC;
-
-grant execute on function vortex_access.evaluate_permission_saved_condition(p_record_scope jsonb, p_saved_condition jsonb, p_source_record_type jsonb, p_field_values jsonb, p_current_organization_account_id uuid) to postgres;
-
-create or replace function vortex_access.list_organization_activity_entries_projection(
-  p_record_ids uuid[],
-  p_sort_key text,
-  p_direction text,
-  p_after jsonb,
-  p_limit integer
-)
-returns table (
-  organization_id uuid,
-  record_id uuid,
-  revision bigint,
-  attribute_values jsonb
-)
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  checked_context jsonb;
-  visible_organization_id uuid;
-  actor_identity_id uuid;
-  actor_account_id uuid;
-  person_record_type_id uuid;
-  decision_outcome text;
-  decision_organization_id uuid;
-  decision_account_id uuid;
-  audit_projection boolean;
-  after_occurred_at timestamptz;
-  after_record_id uuid;
-  keyset_sql text := '';
-  base_sql text;
-  source_sql text;
-  order_sql text;
-  scan_sql text;
-begin
-  if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
-    or p_sort_key is null or p_direction is null
-    or (p_limit is not null and p_limit < 1) then
-    raise exception using errcode = '22023', message = 'Activity projection bounds are invalid';
-  end if;
-  if p_after is not null then
-    if pg_catalog.jsonb_typeof(p_after) <> 'object'
-      or pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
-      or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
-      or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) <> 'string'
-      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string' then
-      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
-    end if;
-    begin
-      after_occurred_at := (p_after -> 'sortKey' ->> 0)::timestamptz;
-      after_record_id := (p_after ->> 'recordId')::uuid;
-    exception when invalid_text_representation or datetime_field_overflow then
-      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
-    end;
-    keyset_sql := case when p_direction = 'descending'
-      then ' and (entry.occurred_at, entry.activity_id) < ($6, $7)'
-      else ' and (entry.occurred_at, entry.activity_id) > ($6, $7)' end;
-  end if;
-  begin
-    checked_context := vortex_access.validated_human_request_context();
-    visible_organization_id := (checked_context ->> 'organizationId')::uuid;
-    actor_identity_id := (checked_context ->> 'identityId')::uuid;
-    actor_account_id := (checked_context ->> 'organizationAccountId')::uuid;
-    perform 1 from vortex_access.resolve_human_organization_scope(
-      actor_identity_id, visible_organization_id
-    );
-  exception
-    when insufficient_privilege or no_data_found then
-      return;
-  end;
-
-  select evaluated.outcome, evaluated.organization_id, evaluated.organization_account_id
-  into decision_outcome, decision_organization_id, decision_account_id
-  from vortex_access.evaluate_organization_permission_eligibility(
-    pg_catalog.jsonb_build_object(
-      'operationKey', 'platform.organization.permissions.read',
-      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
-      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', vortex_access.required_platform_permission(
-        'platform.organization.permissions.read'
-      ),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
-      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-    )
-  ) as evaluated;
-  audit_projection := coalesce(
-    decision_outcome = 'eligible'
-      and decision_organization_id = visible_organization_id
-      and decision_account_id = actor_account_id,
-    false
-  );
-
-  select distinct storage.record_type_id into strict person_record_type_id
-  from vortex_record.storage_catalogue as storage
-  where storage.state = 'active'
-    and storage.protected_read_model_key = 'organization_accounts'
-    and storage.record_type_definition ->> 'key' = 'person';
-
-  order_sql := pg_catalog.format(
-    ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
-    case when p_direction = 'descending' then 'desc' else 'asc' end,
-    case when p_direction = 'descending' then 'desc' else 'asc' end
-  );
-  base_sql := $scan$select entry.*
-    from vortex_record.organization_activity_entries as entry
-    where entry.organization_id = $1
-      and entry.occurred_at >= pg_catalog.statement_timestamp() - interval '90 days'
-      and ($2 is null or entry.activity_id = any($2))$scan$;
-  if audit_projection then
-    source_sql := base_sql || keyset_sql || order_sql;
-  else
-    source_sql := 'select visible.* from (('
-      || base_sql
-      || ' and entry.actor_kind = ''organization_account'' and entry.actor_id = $4'
-      || keyset_sql || order_sql
-      || ') union all ('
-      || base_sql
-      || ' and entry.actor_kind = ''identity'' and entry.actor_id = $5'
-      || keyset_sql || order_sql
-      || ')) as visible'
-      || pg_catalog.format(' order by visible.occurred_at %s, visible.activity_id %s limit $8',
-        case when p_direction = 'descending' then 'desc' else 'asc' end,
-        case when p_direction = 'descending' then 'desc' else 'asc' end);
-  end if;
-  scan_sql := $scan$select
-    entry.organization_id,
-    entry.activity_id,
-    1::bigint,
-    pg_catalog.jsonb_build_object(
-      'organization_id', entry.organization_id::text,
-      'revision', 1,
-      'occurred_at', entry.occurred_at,
-      'actor_kind', case entry.actor_kind
-        when 'organization_account' then 'Person'
-        when 'identity' then 'Platform operator'
-        when 'system' then 'System'
-        when 'public_session' then 'Public visitor'
-        else 'Other' end,
-      'actor', case when entry.actor_kind = 'organization_account'
-        then pg_catalog.jsonb_build_object(
-          'recordTypeId', $9::text, 'recordId', entry.actor_id::text
-        )
-        else null end,
-      'action', entry.action,
-      'subject_count', pg_catalog.cardinality(entry.subject_ids),
-      'changed_field_count', case when $3
-        then pg_catalog.cardinality(entry.changed_field_ids) else null end
-    )
-  from ($scan$ || source_sql || $scan$) as entry$scan$
-    || pg_catalog.format(' order by entry.occurred_at %s, entry.activity_id %s',
-      case when p_direction = 'descending' then 'desc' else 'asc' end,
-      case when p_direction = 'descending' then 'desc' else 'asc' end);
-  return query execute scan_sql using visible_organization_id, p_record_ids,
-    audit_projection, actor_account_id, actor_identity_id,
-    after_occurred_at, after_record_id, p_limit, person_record_type_id;
-end
-$function$;
-
-create or replace function vortex_access.list_organization_activity_entries_projection(
-  p_record_id uuid, p_page_size integer
-)
-returns table (
-  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
-)
-language sql volatile security definer set search_path = ''
-as $function$
-  select projected.*
-  from vortex_access.list_organization_activity_entries_projection(
-    case when p_record_id is null then null else array[p_record_id] end,
-    'occurred_at', 'descending', null, null
-  ) as projected
-$function$;
-
-revoke all on function vortex_access.list_organization_activity_entries_projection(
-  uuid[], text, text, jsonb, integer
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_activity_entries_projection(
-  uuid[], text, text, jsonb, integer
-) to vortex_owner, vortex_record_adapter, postgres;
-alter function vortex_access.list_organization_activity_entries_projection(
-  uuid[], text, text, jsonb, integer
-) owner to vortex_owner;
-
-revoke all on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  to vortex_owner, vortex_record_adapter;
-comment on function vortex_access.list_organization_activity_entries_projection(uuid, integer) is
-  'Recent organisation activity projection; own rows or the existing permissions-read audit view, with counts and no payload or identifier lists.';
-alter function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  owner to vortex_owner;
-grant execute on function vortex_access.list_organization_activity_entries_projection(uuid, integer)
-  to postgres;
-
-create or replace function vortex_record.provision_exact_module_storage(
-  p_module_root_id uuid,
-  p_module_release_revision bigint
-)
-returns table (
-  module_root_id uuid,
-  release_revision bigint,
-  storage_contract_ids uuid[],
-  changed boolean
-)
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  release_row vortex_definition.releases%rowtype;
-  record_types jsonb;
-  record_type jsonb;
-  stored_catalogue vortex_record.storage_catalogue%rowtype;
-  stored_field vortex_record.field_storage_mappings%rowtype;
-  projection_expression_pair record;
-  field_value jsonb;
-  relationship_value jsonb;
-  target_value jsonb;
-  target_ids uuid[];
-  storage_id uuid;
-  record_type_id_value uuid;
-  field_id_value uuid;
-  relationship_id_value uuid;
-  table_token text;
-  column_token text;
-  storage_scope_value text;
-  ownership_mode_value text;
-  database_type text;
-  sql_type text;
-  stored_projection_role text;
-  requested_projection_role text;
-  stored_database_type text;
-  requested_database_type text;
-  stored_sql_type text;
-  requested_sql_type text;
-  stored_expression jsonb;
-  requested_expression jsonb;
-  shape_fingerprint text;
-  scope_index_columns text;
-  result_storage_ids uuid[] := array[]::uuid[];
-  any_change boolean := false;
-  is_projection boolean;
-  protected_view_key text;
-  reader_schema_value text;
-  reader_function_value text;
-  field_columns_sql text;
-  projection_view_sql text;
-  existing_columns text[];
-  expected_columns text[];
-begin
-  if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
-    or p_module_release_revision not between 1 and 9007199254740991 then
-    raise exception using errcode = '22023', message = 'Record storage release selector is invalid';
-  end if;
-
-  select release.* into strict release_row
-  from vortex_definition.releases as release
-  join vortex_definition.roots as root on root.root_id = release.root_id
-  where release.root_id = p_module_root_id
-    and release.release_revision = p_module_release_revision
-    and root.kind = 'module';
-  -- Module V3 reuses the Module V2 record-type content, so both validation
-  -- contracts allocate identical storage. The source contract must agree with
-  -- the validation contract, and the embedded identity is compared with
-  -- IS DISTINCT FROM so an absent JSON member cannot evade the gate.
-  if release_row.validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))
-    or release_row.source_contract_version
-      is distinct from release_row.validation_contract_version
-    or release_row.compilation_output #>> '{kind}' is distinct from 'module'
-    or release_row.compilation_output #>> '{canonical,envelope,rootId}'
-      is distinct from p_module_root_id::text
-    or release_row.compilation_output #>> '{validationContractVersion}'
-      is distinct from release_row.validation_contract_version then
-    raise exception using errcode = '23514', message = 'Exact Module release is incompatible';
-  end if;
-
-  record_types := release_row.compilation_output #> '{canonical,content,recordTypes}';
-  if pg_catalog.jsonb_typeof(record_types) <> 'array'
-    or pg_catalog.jsonb_array_length(record_types) < 1 then
-    raise exception using errcode = '23514', message = 'Module record storage definition is incompatible';
-  end if;
-
-  perform 1 from vortex_record.release_provisions as provision
-  where provision.module_root_id = p_module_root_id
-    and provision.release_revision = p_module_release_revision
-  for update;
-  if found then
-    select provision.storage_contract_ids into result_storage_ids
-    from vortex_record.release_provisions as provision
-    where provision.module_root_id = p_module_root_id
-      and provision.release_revision = p_module_release_revision;
-    if result_storage_ids is distinct from (
-      select pg_catalog.array_agg((item.value ->> 'storageContractId')::uuid order by item.value ->> 'storageContractId')
-      from pg_catalog.jsonb_array_elements(record_types) as item(value)
-    ) then
-      raise exception using errcode = '55000', message = 'Stored release provision identities are incompatible';
-    end if;
-    result_storage_ids := array[]::uuid[];
-  end if;
-
-  if (
-    select pg_catalog.count(*) <> pg_catalog.count(distinct item.value ->> 'storageContractId')
-      or pg_catalog.count(*) <> pg_catalog.count(distinct item.value ->> 'recordTypeId')
-    from pg_catalog.jsonb_array_elements(record_types) as item(value)
-  ) then
-    raise exception using errcode = '23514', message = 'Module record storage identities are duplicated';
-  end if;
-  if exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(record_types) as record_item(value)
-    where (
-      select pg_catalog.count(*) <> pg_catalog.count(distinct field_item.value ->> 'fieldId')
-      from pg_catalog.jsonb_array_elements(record_item.value -> 'fields') as field_item(value)
-    )
-  ) or (
-    select pg_catalog.count(*) <> pg_catalog.count(distinct relationship_item.value ->> 'relationshipId')
-    from pg_catalog.jsonb_array_elements(record_types) as record_item(value)
-    cross join lateral pg_catalog.jsonb_array_elements(
-      record_item.value -> 'relationships'
-    ) as relationship_item(value)
-  ) then
-    raise exception using errcode = '23514', message = 'Module field or relationship identities are duplicated';
-  end if;
-
-  for record_type in
-    select item.value
-    from pg_catalog.jsonb_array_elements(record_types) as item(value)
-    order by item.value ->> 'storageContractId'
-  loop
-    begin
-      storage_id := (record_type ->> 'storageContractId')::uuid;
-      record_type_id_value := (record_type ->> 'recordTypeId')::uuid;
-    exception when invalid_text_representation then
-      raise exception using errcode = '42501', message = 'Module record storage identity is invalid';
-    end;
-    storage_scope_value := record_type ->> 'storageScope';
-    ownership_mode_value := record_type ->> 'ownershipMode';
-    if not vortex_platform.is_non_nil_uuid(storage_id::text)
-      or not vortex_platform.is_non_nil_uuid(record_type_id_value::text)
-      or storage_scope_value not in ('organization_shared', 'application_contained')
-      or ownership_mode_value not in ('none', 'organization_account', 'group', 'inherited')
-      or pg_catalog.jsonb_typeof(record_type -> 'fields') <> 'array'
-      or pg_catalog.jsonb_array_length(record_type -> 'fields') < 1
-      or pg_catalog.jsonb_typeof(record_type -> 'relationships') <> 'array' then
-      raise exception using errcode = '42501', message = 'Module record storage definition is invalid';
-    end if;
-    -- The eight-sortable-field limit is a publish rule; an older release may declare more and
-    -- simply gets an index per sortable field.
-    -- The record-type loop is ordered by storage identity, so overlapping
-    -- provisions acquire absent and existing lineage locks deterministically.
-    perform pg_catalog.pg_advisory_xact_lock(
-      pg_catalog.hashtextextended('vortex_record.storage:' || storage_id::text, 0)
-    );
-    table_token := 'rt_' || pg_catalog.replace(pg_catalog.lower(storage_id::text), '-', '');
-    shape_fingerprint := vortex_record.storage_meaning_fingerprint(record_type);
-    result_storage_ids := result_storage_ids || storage_id;
-    scope_index_columns := case storage_scope_value
-      when 'organization_shared' then 'organisation_id'
-      else 'organisation_id, application_root_id'
-    end;
-
-    -- A system projection record type has no generated storage. It is read
-    -- through one registered protected view, created here as an ordinary
-    -- record_data relation so the fixed read adapters resolve it unchanged,
-    -- while the projection itself keeps every row-visibility rule inside the
-    -- registered function. The view exposes exactly the record type's declared
-    -- fields as record-data columns, plus the protected row identity and
-    -- revision, and is read-only: the projection has no ordinary write path.
-    -- Every projection value is reset per record type, so a generated record
-    -- type provisioned after a projection never inherits its protected key.
-    is_projection := record_type ? 'systemProjection';
-    protected_view_key := null;
-    reader_schema_value := null;
-    reader_function_value := null;
-    projection_view_sql := null;
-    if is_projection then
-      protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      select registered.reader_schema, registered.reader_function
-      into reader_schema_value, reader_function_value
-      from vortex_record.protected_read_model_views as registered
-      where registered.protected_read_model_key = protected_view_key;
-      if not found then
-        raise exception using errcode = '42501',
-          message = 'Protected projection view is unavailable';
-      end if;
-      if storage_scope_value <> 'organization_shared' then
-        raise exception using errcode = '42501',
-          message = 'Protected projection storage must be organisation shared';
-      end if;
-      field_columns_sql := '';
-      expected_columns := array[]::text[];
-      for field_value in
-        select item.value
-        from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
-        order by item.value ->> 'fieldId'
-      loop
-        begin
-          field_id_value := (field_value ->> 'fieldId')::uuid;
-        exception when invalid_text_representation then
-          raise exception using errcode = '42501',
-            message = 'Record field storage identity is invalid';
-        end;
-        column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
-        database_type := vortex_record.database_value_type(field_value);
-        if database_type is null then
-          raise exception using errcode = '23514',
-            message = 'Record field storage type is unsupported';
-        end if;
-        sql_type := vortex_record.sql_value_type(database_type);
-        expected_columns := expected_columns || column_token;
-        if field_value ->> 'fieldId' = record_type #>> '{systemProjection,organizationFieldId}' then
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format('projection.organization_id::text as %I, ', column_token);
-        elsif field_value ->> 'fieldId' = record_type #>> '{systemProjection,revisionFieldId}' then
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format('projection.revision::%s as %I, ', sql_type, column_token);
-        elsif database_type = 'json' then
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format(
-              '(projection.attribute_values -> %L) as %I, ', field_value ->> 'key', column_token
-            );
-        else
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format(
-              '(projection.attribute_values ->> %L)::%s as %I, ',
-              field_value ->> 'key', sql_type, column_token
-            );
-        end if;
-      end loop;
-      select pg_catalog.array_agg(item.column_name order by item.column_name)
-      into expected_columns
-      from pg_catalog.unnest(expected_columns) as item(column_name);
-      field_columns_sql := pg_catalog.left(
-        field_columns_sql, pg_catalog.length(field_columns_sql) - 2
-      );
-      projection_view_sql := pg_catalog.format(
-        'create view record_data.%I as select
-           projection.organization_id as organisation_id,
-           %L::uuid as module_root_id,
-           %L::uuid as record_type_id,
-           %L::uuid as storage_contract_id,
-           projection.record_id,
-           null::uuid as application_root_id,
-           %L::bigint as definition_revision,
-           null::uuid as owner_organisation_account_id,
-           null::uuid as owner_group_id,
-           ''active''::text as lifecycle_state,
-           projection.revision as concurrency_number,
-           null::timestamptz as created_at,
-           null::uuid as created_by,
-           null::timestamptz as updated_at,
-           null::uuid as updated_by,
-           null::timestamptz as deleted_at,
-           null::uuid as deleted_by,
-           null::timestamptz as removal_due_at,
-           %s
-         from %I.%I(null::uuid, null::integer) as projection',
-        table_token, p_module_root_id, record_type_id_value, storage_id,
-        p_module_release_revision, field_columns_sql,
-        reader_schema_value, reader_function_value
-      );
-    end if;
-
-    select catalogue.* into stored_catalogue
-    from vortex_record.storage_catalogue as catalogue
-    where catalogue.storage_contract_id = storage_id
-    for update;
-
-    if not found then
-      if is_projection then
-        execute projection_view_sql;
-        execute pg_catalog.format(
-          'grant select on record_data.%I to vortex_record_adapter', table_token
-        );
-      else
-        perform vortex_record.create_record_storage_table_internal(
-          storage_id, p_module_root_id, record_type_id_value,
-          storage_scope_value, ownership_mode_value
-        );
-      end if;
-
-      insert into vortex_record.storage_catalogue (
-        storage_contract_id, physical_schema_token, physical_table_token,
-        module_root_id, record_type_id, storage_scope,
-        first_compatible_release_revision, last_compatible_release_revision,
-        state, content_fingerprint, record_type_definition, protected_read_model_key
-      ) values (
-        storage_id,
-        case when is_projection then 'system_projection' else 'record_data' end,
-        table_token, p_module_root_id, record_type_id_value, storage_scope_value,
-        p_module_release_revision, p_module_release_revision, 'active',
-        shape_fingerprint, record_type, protected_view_key
-      );
-      any_change := true;
-    else
-      if is_projection then
-        if stored_catalogue.module_root_id <> p_module_root_id
-          or stored_catalogue.record_type_id <> record_type_id_value
-          or stored_catalogue.storage_scope <> storage_scope_value
-          or stored_catalogue.state <> 'active'
-          or stored_catalogue.physical_schema_token <> 'system_projection'
-          or stored_catalogue.protected_read_model_key is distinct from protected_view_key
-          or stored_catalogue.physical_table_token <> table_token
-          or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
-          raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
-        end if;
-        if pg_catalog.jsonb_typeof(stored_catalogue.record_type_definition) is distinct from 'object'
-          or pg_catalog.jsonb_typeof(stored_catalogue.record_type_definition -> 'fields') is distinct from 'array'
-          or pg_catalog.jsonb_typeof(stored_catalogue.record_type_definition -> 'systemProjection') is distinct from 'object'
-          or pg_catalog.jsonb_typeof(record_type -> 'systemProjection') is distinct from 'object' then
-          raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
-        end if;
-
-        -- The catalogue keeps the newest compatible exact definition. Compare
-        -- only shared field identities so an older subset and newer additions
-        -- retain their existing release-order behavior. These descriptors
-        -- mirror the source expressions assembled above, including the
-        -- protected attribute key, JSON/text extraction, and cast.
-        for projection_expression_pair in
-          select requested_item.value as requested_field,
-            stored_item.value as stored_field
-          from pg_catalog.jsonb_array_elements(record_type -> 'fields') as requested_item(value)
-          join pg_catalog.jsonb_array_elements(
-            stored_catalogue.record_type_definition -> 'fields'
-          ) as stored_item(value)
-            on stored_item.value ->> 'fieldId' = requested_item.value ->> 'fieldId'
-          order by requested_item.value ->> 'fieldId'
-        loop
-          stored_projection_role := case
-            when projection_expression_pair.stored_field ->> 'fieldId'
-              = stored_catalogue.record_type_definition #>> '{systemProjection,organizationFieldId}'
-              then 'organization'
-            when projection_expression_pair.stored_field ->> 'fieldId'
-              = stored_catalogue.record_type_definition #>> '{systemProjection,revisionFieldId}'
-              then 'revision'
-            else 'attribute'
-          end;
-          requested_projection_role := case
-            when projection_expression_pair.requested_field ->> 'fieldId'
-              = record_type #>> '{systemProjection,organizationFieldId}'
-              then 'organization'
-            when projection_expression_pair.requested_field ->> 'fieldId'
-              = record_type #>> '{systemProjection,revisionFieldId}'
-              then 'revision'
-            else 'attribute'
-          end;
-          stored_database_type := vortex_record.database_value_type(
-            projection_expression_pair.stored_field
-          );
-          requested_database_type := vortex_record.database_value_type(
-            projection_expression_pair.requested_field
-          );
-          if stored_projection_role is distinct from requested_projection_role
-            or stored_database_type is null
-            or requested_database_type is null then
-            raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
-          end if;
-          stored_sql_type := vortex_record.sql_value_type(stored_database_type);
-          requested_sql_type := vortex_record.sql_value_type(requested_database_type);
-          stored_expression := case stored_projection_role
-            when 'organization' then pg_catalog.jsonb_build_object(
-              'role', stored_projection_role,
-              'source', 'projection.organization_id',
-              'cast', 'text'
-            )
-            when 'revision' then pg_catalog.jsonb_build_object(
-              'role', stored_projection_role,
-              'source', 'projection.revision',
-              'cast', stored_sql_type
-            )
-            else pg_catalog.jsonb_build_object(
-              'role', stored_projection_role,
-              'source', 'projection.attribute_values',
-              'key', projection_expression_pair.stored_field ->> 'key',
-              'extraction', case when stored_database_type = 'json' then '->' else '->>' end,
-              'cast', case when stored_database_type = 'json' then null else stored_sql_type end
-            )
-          end;
-          requested_expression := case requested_projection_role
-            when 'organization' then pg_catalog.jsonb_build_object(
-              'role', requested_projection_role,
-              'source', 'projection.organization_id',
-              'cast', 'text'
-            )
-            when 'revision' then pg_catalog.jsonb_build_object(
-              'role', requested_projection_role,
-              'source', 'projection.revision',
-              'cast', requested_sql_type
-            )
-            else pg_catalog.jsonb_build_object(
-              'role', requested_projection_role,
-              'source', 'projection.attribute_values',
-              'key', projection_expression_pair.requested_field ->> 'key',
-              'extraction', case when requested_database_type = 'json' then '->' else '->>' end,
-              'cast', case when requested_database_type = 'json' then null else requested_sql_type end
-            )
-          end;
-          if stored_expression is distinct from requested_expression then
-            raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
-          end if;
-        end loop;
-
-        select coalesce(
-            pg_catalog.array_agg(attribute.attname order by attribute.attname),
-            array[]::text[]
-          )
-        into existing_columns
-        from pg_catalog.pg_attribute as attribute
-        where attribute.attrelid = pg_catalog.to_regclass(
-            pg_catalog.format('%I.%I', 'record_data', table_token)
-          )
-          and attribute.attnum > 0
-          and not attribute.attisdropped
-          and attribute.attname like 'f\_%';
-        -- The view always carries the newest compatible release's shape, as a
-        -- generated table keeps every column a newer release added. A newer
-        -- release, or the newest one with a different field set, recreates it
-        -- exactly; an older release, which the field checks below prove is a
-        -- compatible subset, leaves the newer view alone. The projection has no
-        -- indexes or dependent objects.
-        if p_module_release_revision > stored_catalogue.last_compatible_release_revision
-          or (p_module_release_revision = stored_catalogue.last_compatible_release_revision
-            and existing_columns is distinct from expected_columns) then
-          execute pg_catalog.format('drop view record_data.%I', table_token);
-          execute projection_view_sql;
-          execute pg_catalog.format(
-            'grant select on record_data.%I to vortex_record_adapter', table_token
-          );
-          any_change := true;
-        end if;
-      else
-        if stored_catalogue.module_root_id <> p_module_root_id
-          or stored_catalogue.record_type_id <> record_type_id_value
-          or stored_catalogue.storage_scope <> storage_scope_value
-          or stored_catalogue.state <> 'active'
-          or stored_catalogue.physical_schema_token <> 'record_data'
-          or stored_catalogue.physical_table_token <> table_token
-          or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
-          raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
-        end if;
-      end if;
-    end if;
-
-    for field_value in
-      select item.value from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
-      order by item.value ->> 'fieldId'
-    loop
-      begin
-        field_id_value := (field_value ->> 'fieldId')::uuid;
-      exception when invalid_text_representation then
-        raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
-      end;
-      if not vortex_platform.is_non_nil_uuid(field_id_value::text)
-        or field_value ->> 'type' is null
-        or pg_catalog.jsonb_typeof(field_value -> 'required') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'unique') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'filterable') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'sortable') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'settings') <> 'object' then
-        raise exception using errcode = '42501', message = 'Record field storage definition is invalid';
-      end if;
-      column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
-      database_type := vortex_record.database_value_type(field_value);
-      if database_type is null then
-        raise exception using errcode = '23514', message = 'Record field storage type is unsupported';
-      end if;
-      sql_type := vortex_record.sql_value_type(database_type);
-
-      select mapping.* into stored_field
-      from vortex_record.field_storage_mappings as mapping
-      where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value
-      for update;
-      if found then
-        if stored_field.physical_column_token <> column_token
-          or stored_field.database_value_type <> database_type
-          or stored_field.state <> 'active'
-          or vortex_record.field_storage_meaning(stored_field.field_definition)
-            is distinct from vortex_record.field_storage_meaning(field_value)
-          or not exists (
-            select 1
-            from pg_catalog.pg_attribute as attribute
-            where attribute.attrelid = pg_catalog.to_regclass(
-                pg_catalog.format('%I.%I', 'record_data', table_token)
-              )
-              and attribute.attname = column_token
-              and attribute.attnum > 0
-              and not attribute.attisdropped
-          ) then
-          raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
-        end if;
-      else
-        if not is_projection then
-          if stored_catalogue.storage_contract_id is not null
-            and (field_value ->> 'required')::boolean then
-            raise exception using errcode = '55000', message = 'Compatible storage upgrades may add only nullable fields';
-          end if;
-          execute pg_catalog.format(
-            'alter table record_data.%I add column %I %s%s',
-            table_token, column_token, sql_type,
-            case when (field_value ->> 'required')::boolean then ' not null' else '' end
-          );
-        end if;
-        insert into vortex_record.field_storage_mappings (
-          storage_contract_id, field_id, physical_column_token, database_value_type,
-          field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
-        ) values (
-          storage_id, field_id_value, column_token, database_type, field_value,
-          p_module_root_id, p_module_release_revision, 'active'
-        );
-        -- A projection field lives in the protected view, which carries no
-        -- indexes; the projection's own protected function applies visibility,
-        -- ordering and filtering, so no generated index is provisioned.
-        if is_projection then
-          null;
-        elsif (field_value ->> 'unique')::boolean then
-          perform vortex_record.ensure_field_index_internal(
-            storage_id, field_id_value, 'uniqueness', storage_scope_value,
-            table_token, scope_index_columns, column_token
-          );
-        elsif (field_value ->> 'filterable')::boolean or (field_value ->> 'sortable')::boolean then
-          perform vortex_record.ensure_field_index_internal(
-            storage_id, field_id_value, 'performance', storage_scope_value,
-            table_token, scope_index_columns, column_token
-          );
-        end if;
-        any_change := true;
-      end if;
-    end loop;
-
-    -- Only a field this Module itself introduced can prove a removed field. A
-    -- field another Module contributed keeps its retained lineage and never
-    -- refuses this Module's own storage.
-    if exists (
-      select 1 from vortex_record.field_storage_mappings as mapping
-      where mapping.storage_contract_id = storage_id and mapping.state = 'active'
-        and mapping.introduced_by_module_root_id = p_module_root_id
-        and mapping.introduced_at_release_revision <= p_module_release_revision
-        and not exists (
-          select 1 from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
-          where item.value ->> 'fieldId' = mapping.field_id::text
-        )
-    ) then
-      raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove fields';
-    end if;
-
-    if stored_catalogue.storage_contract_id is not null
-      and stored_catalogue.last_compatible_release_revision < p_module_release_revision then
-      update vortex_record.storage_catalogue
-      set last_compatible_release_revision = greatest(
-            last_compatible_release_revision, p_module_release_revision
-          ),
-          content_fingerprint = shape_fingerprint,
-          record_type_definition = record_type,
-          changed_at = pg_catalog.statement_timestamp()
-      where storage_contract_id = storage_id;
-      any_change := true;
-    elsif stored_catalogue.storage_contract_id is not null
-      and stored_catalogue.first_compatible_release_revision > p_module_release_revision then
-      -- A newer release may have created the shared table first. The loops above
-      -- prove the older release is a compatible subset; retain the newer shape.
-      update vortex_record.storage_catalogue
-      set first_compatible_release_revision = p_module_release_revision,
-          changed_at = pg_catalog.statement_timestamp()
-      where storage_contract_id = storage_id;
-    elsif stored_catalogue.storage_contract_id is not null
-      and stored_catalogue.last_compatible_release_revision = p_module_release_revision
-      and stored_catalogue.content_fingerprint <> shape_fingerprint then
-      raise exception using errcode = '55000', message = 'Stored record storage meaning is incompatible';
-    end if;
-  end loop;
-
-  if exists (
-    select 1
-    from vortex_record.relationship_storage_mappings as mapping
-    where mapping.module_root_id = p_module_root_id
-      and mapping.release_revision <= p_module_release_revision
-      and not exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(record_types) as record_item(value)
-        cross join lateral pg_catalog.jsonb_array_elements(
-          record_item.value -> 'relationships'
-        ) as relationship_item(value)
-        where relationship_item.value ->> 'relationshipId' = mapping.relationship_id::text
-      )
-  ) then
-    raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove relationships';
-  end if;
-
-  for record_type in select item.value from pg_catalog.jsonb_array_elements(record_types) as item(value)
-  loop
-    storage_id := (record_type ->> 'storageContractId')::uuid;
-    for relationship_value in
-      select item.value from pg_catalog.jsonb_array_elements(record_type -> 'relationships') as item(value)
-    loop
-      relationship_id_value := (relationship_value ->> 'relationshipId')::uuid;
-      field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
-      target_ids := array[]::uuid[];
-      if relationship_value ? 'toRecordType' then
-        target_ids := array[(relationship_value #>> '{toRecordType,recordTypeId}')::uuid];
-      else
-        for target_value in select item.value
-          from pg_catalog.jsonb_array_elements(relationship_value -> 'toRecordTypes') as item(value)
-        loop
-          target_ids := target_ids || (target_value ->> 'recordTypeId')::uuid;
-        end loop;
-      end if;
-      if pg_catalog.cardinality(target_ids) < 1 or array_position(target_ids, null) is not null then
-        raise exception using errcode = '42501', message = 'Relationship target evidence is unresolved';
-      end if;
-      insert into vortex_record.relationship_storage_mappings (
-        relationship_id, module_root_id, release_revision, source_storage_contract_id,
-        source_field_id, target_record_type_ids, cardinality, on_parent_delete, definition
-      ) values (
-        relationship_id_value, p_module_root_id, p_module_release_revision, storage_id,
-        field_id_value, target_ids, relationship_value ->> 'cardinality',
-        relationship_value ->> 'onParentDelete', relationship_value
-      )
-      on conflict (relationship_id) do update
-      set release_revision = greatest(
-            vortex_record.relationship_storage_mappings.release_revision,
-            excluded.release_revision
-          )
-      where vortex_record.relationship_storage_mappings.module_root_id = excluded.module_root_id
-        and vortex_record.relationship_storage_mappings.source_storage_contract_id = excluded.source_storage_contract_id
-        and vortex_record.relationship_storage_mappings.source_field_id = excluded.source_field_id
-        and vortex_record.relationship_storage_mappings.target_record_type_ids = excluded.target_record_type_ids
-        and vortex_record.relationship_storage_mappings.cardinality = excluded.cardinality
-        and vortex_record.relationship_storage_mappings.on_parent_delete = excluded.on_parent_delete
-        and vortex_record.relationship_storage_mappings.definition = excluded.definition;
-      if not found then
-        raise exception using errcode = '55000', message = 'Existing relationship storage is incompatible';
-      end if;
-    end loop;
-  end loop;
-
-  select pg_catalog.array_agg(value order by value) into result_storage_ids
-  from pg_catalog.unnest(result_storage_ids) as item(value);
-  insert into vortex_record.release_provisions (
-    module_root_id, release_revision, storage_contract_ids
-  ) values (
-    p_module_root_id, p_module_release_revision, result_storage_ids
-  ) on conflict on constraint release_provisions_pkey do nothing;
-
-  return query select p_module_root_id, p_module_release_revision,
-    result_storage_ids, any_change;
-exception
-  when no_data_found then
-    raise exception using errcode = 'P0002', message = 'Exact Module release is unavailable';
-  when too_many_rows then
-    raise exception using errcode = '55000', message = 'Module storage evidence is ambiguous';
-end
-$function$;
-
-alter function vortex_record.provision_exact_module_storage(uuid,bigint) owner to vortex_owner;
-
-revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
-  to vortex_owner;
-comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
-  'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';
-
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
   p_operation text,
@@ -7040,116 +7153,7 @@ comment on function vortex_record.apply_record_changes(
 ) is
   'The one protected Record-change operation: claims one command receipt (a preview command carries its own preview-scoped id) and applies an ordered mutation list under one canonical lock order. Live changes keep their access decisions, Activity, Event and background effects; preview changes belong only to the validated preview owner and append no live effects. Named-action and lifecycle commands are refused in previews.';
 
-create or replace function vortex_record.read_record_titles(
-  p_record_type_id uuid,
-  p_record_ids uuid[],
-  p_title_field_id uuid
-)
-returns table (record_id uuid, result jsonb)
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-begin
-  if p_record_ids is null then
-    return;
-  end if;
-
-  -- This registered projection has its own fixed account-read visibility:
-  -- account administrators see suspended members, while other live members
-  -- see active members only. A role-template permission cannot express that
-  -- fixed authority, so titles use the same protected reader as legacy links.
-  if exists (
-    select 1
-    from vortex_record.storage_catalogue as storage
-    join vortex_record.protected_read_model_views as registered
-      on registered.protected_read_model_key = storage.protected_read_model_key
-    cross join lateral pg_catalog.jsonb_array_elements(
-      storage.record_type_definition -> 'fields'
-    ) as field(value)
-    where storage.record_type_id = p_record_type_id
-      and storage.state = 'active'
-      and storage.protected_read_model_key = 'organization_accounts'
-      and registered.reader_schema = 'vortex_access'
-      and registered.reader_function = 'list_organization_accounts_projection'
-      and storage.record_type_definition ->> 'titleFieldId' = p_title_field_id::text
-      and field.value ->> 'fieldId' = p_title_field_id::text
-      and field.value ->> 'key' = 'display_name'
-  ) then
-    return query
-    with visible as materialized (
-      select person.record_id, person.revision,
-        person.attribute_values ->> 'display_name' as display_name
-      from vortex_access.list_organization_accounts_projection(
-        null::uuid, null::integer, p_record_ids
-      ) as person
-    )
-    select requested.id,
-      case when pg_catalog.length(pg_catalog.btrim(visible.display_name)) > 0
-        then pg_catalog.jsonb_build_object(
-          'outcome', 'allowed', 'recordId', requested.id,
-          'concurrencyNumber', visible.revision,
-          'values', pg_catalog.jsonb_build_object(
-            pg_catalog.lower(p_title_field_id::text), visible.display_name
-          )
-        )
-        else pg_catalog.jsonb_build_object('outcome', 'refused')
-      end
-    from pg_catalog.unnest(p_record_ids) as requested(id)
-    left join visible on visible.record_id = requested.id;
-    return;
-  end if;
-
-  return query select titles.record_id, titles.result
-  from vortex_record.read_record_titles_internal(
-    p_record_type_id, p_record_ids, p_title_field_id
-  ) as titles;
-end
-$function$;
-
-alter function vortex_record.read_record_titles(uuid,uuid[],uuid) owner to vortex_owner;
-
-revoke all on function vortex_record.read_record_titles(uuid,uuid[],uuid)
-  from public, anon, authenticated, service_role, vortex_runtime;
-grant execute on function vortex_record.read_record_titles(uuid,uuid[],uuid) to vortex_request;
-
-comment on function vortex_record.read_record_titles(uuid,uuid[],uuid) is
-  'Protected batch of record titles; the registered organisation-account projection applies its fixed viewer visibility for Person display names, while the restricted adapter applies exact-record access to other types.';
-
-create or replace function vortex_record.read_studio_person_label(p_account_id uuid)
-returns table (record_id uuid, display_name text)
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  person_type_id uuid;
-  title_field_id uuid;
-begin
-  select distinct storage.record_type_id,
-    (storage.record_type_definition ->> 'titleFieldId')::uuid
-  into strict person_type_id, title_field_id
-  from vortex_record.storage_catalogue as storage
-  where storage.state = 'active'
-    and storage.protected_read_model_key = 'organization_accounts'
-    and storage.record_type_definition ->> 'key' = 'person';
-
-  return query
-  select title.record_id,
-    title.result -> 'values' ->> title_field_id::text
-  from vortex_record.read_record_titles(
-    person_type_id, array[p_account_id], title_field_id
-  ) as title
-  where title.result ->> 'outcome' = 'allowed';
-end
-$function$;
-
-alter function vortex_record.read_studio_person_label(uuid) owner to vortex_owner;
-revoke all on function vortex_record.read_studio_person_label(uuid)
-  from public, anon, authenticated, service_role, vortex_runtime;
-grant execute on function vortex_record.read_studio_person_label(uuid) to vortex_request;
+set local role vortex_owner;
 
 drop function vortex_record.backfill_person_links_internal(uuid,bigint);
 drop function vortex_record.mirror_person_links_internal(uuid,uuid,uuid,jsonb);

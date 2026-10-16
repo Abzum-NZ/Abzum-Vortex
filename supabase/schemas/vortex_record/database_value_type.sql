@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
+CREATE OR REPLACE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
     LANGUAGE sql IMMUTABLE
     SET search_path TO ''
     AS $$

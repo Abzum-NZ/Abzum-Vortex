@@ -224,7 +224,7 @@
             "on_parent_delete": "empty_optional"
           },
           {
-            "id": "fld_contact_owner_person_relationship",
+            "id": "fld_contact_owner_relationship",
             "key": "relationship_owner",
             "from_field": "relationship_owner",
             "to_record_type": "vortex.system_directory:person",

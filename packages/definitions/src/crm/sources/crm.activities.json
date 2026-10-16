@@ -179,7 +179,7 @@
             "id": "fld_activity_owner",
             "key": "owner",
             "label": "Owner",
-            "required": false,
+            "required": true,
             "unique": false,
             "filterable": true,
             "sortable": false,

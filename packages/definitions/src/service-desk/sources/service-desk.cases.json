@@ -521,7 +521,7 @@
             "on_parent_delete": "soft_delete_dependent"
           },
           {
-            "id": "fld_comment_by_person_relationship",
+            "id": "fld_comment_by_relationship",
             "key": "created_by",
             "from_field": "created_by",
             "to_record_type": "vortex.system_directory:person",

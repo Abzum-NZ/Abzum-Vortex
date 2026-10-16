@@ -372,7 +372,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         ],
         relationships: [
           {
-            id: "rel_iam_request_beneficiary_person",
+            id: "rel_iam_request_beneficiary",
             key: "beneficiary",
             from_field: "beneficiary",
             to_record_type: "vortex.system_directory:person",

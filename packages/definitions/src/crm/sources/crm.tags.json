@@ -240,7 +240,7 @@
             "on_parent_delete": "soft_delete_dependent"
           },
           {
-            "id": "fld_record_tag_by_person_relationship",
+            "id": "fld_record_tag_by_relationship",
             "key": "assigned_by",
             "from_field": "assigned_by",
             "to_record_type": "vortex.system_directory:person",

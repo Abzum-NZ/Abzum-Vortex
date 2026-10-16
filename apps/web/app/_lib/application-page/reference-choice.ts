@@ -422,6 +422,7 @@ export const projectSelectedReferenceChoiceEditField = async (
 
   const matches = (choice: ReferenceChoiceOption): boolean => {
     const choiceValue = choice.value;
+    if (!("recordTypeId" in choiceValue)) return false;
     return (
       sameId(choiceValue.recordTypeId, queryTarget.recordTypeId) &&
       queryAllowedTargets.some((target) => sameId(target.recordTypeId, choiceValue.recordTypeId)) &&
@@ -478,6 +479,7 @@ export const projectInitialReferenceChoice = async (
     return undefined;
   const target = command.source.query.recordType;
   const matches = (choice: ReferenceChoiceOption): boolean =>
+    "recordTypeId" in choice.value &&
     sameId(choice.value.recordTypeId, target.recordTypeId) &&
     sameId(choice.value.recordId, args.recordId);
   const nextPage =
