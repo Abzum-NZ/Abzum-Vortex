@@ -368,6 +368,13 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     private readonly context: SessionContext,
   ) {}
 
+  async readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]> {
+    const rows = await this.transaction.query`
+      select * from vortex_definition.read_owned_module_roots(${applicationRootId}::uuid)
+    `;
+    return rows.map(parseOwnedModuleRoot);
+  }
+
   /** The draft, its identities and its current release's revision and version, checked as one. */
   private async readPublicationState(
     rootId: string,
@@ -912,13 +919,6 @@ class DatabasePublicationTransaction
   /** The append function obtains the row locks and repeats the draft revision/fingerprint checks. */
   lockCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined> {
     return this.readCandidate(rootId);
-  }
-
-  async readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]> {
-    const rows = await this.transaction.query`
-      select * from vortex_definition.read_owned_module_roots(${applicationRootId}::uuid)
-    `;
-    return rows.map(parseOwnedModuleRoot);
   }
 
   async createOwnedModuleRoot(
