@@ -1,5 +1,6 @@
 "use client";
 
+import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { createContext, useContext, type ReactElement, type ReactNode } from "react";
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
@@ -156,7 +157,13 @@ function CanvasBlock({
   const id = typeof props.id === "string" ? props.id : "";
   // A block just dropped from the palette is shown as a placeholder until Studio adds it.
   if (props.vortex === undefined)
-    return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Adding the block…</div>;
+    return (
+      <Item variant="outline" size="sm" className="border-dashed">
+        <ItemContent>
+          <ItemDescription>Adding the block…</ItemDescription>
+        </ItemContent>
+      </Item>
+    );
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   const release = releaseOf(registry, props);
   // A block whose drawing needs what the compiler derives (an automatic field input's control, a
@@ -165,11 +172,12 @@ function CanvasBlock({
   const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
   if (release !== undefined && !current &&
     (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release)))
-    return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground"
-      data-vortex-canvas-pending={id}>
-      <p className="font-medium text-foreground">{release.name}</p>
-      <p>{records.updating ? "Updating the canvas…" : "Save to show this block."}</p>
-    </div>;
+    return <Item variant="outline" className="border-dashed" data-vortex-canvas-pending={id}>
+      <ItemContent>
+        <ItemTitle>{release.name}</ItemTitle>
+        <ItemDescription>{records.updating ? "Updating the canvas…" : "Save to show this block."}</ItemDescription>
+      </ItemContent>
+    </Item>;
   const drawn = renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined);
   if (release === undefined || !studioReleaseReadsQuery(release)) return render(drawn);
   // A data block draws the records its saved version reads, and says so when it has none to show.

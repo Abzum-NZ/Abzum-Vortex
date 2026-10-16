@@ -16,6 +16,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
+import { Button } from "../components/button";
 import { Icon } from "../icons/icon";
 import { APPEARANCE_COOKIE, createAppearanceRootProps, parseThemeMode, type ThemeMode } from "../theme";
 
@@ -62,10 +63,10 @@ export function AppearanceToggle(): ReactElement | null {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Appearance: ${current?.label ?? "System"}`}
-        className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 max-sm:min-h-[44px] max-sm:min-w-[44px] max-sm:justify-center"
+        render={<Button variant="ghost" size="sm" className="max-sm:min-h-11 max-sm:min-w-11" />}
       >
         <span className="max-sm:sr-only">{current?.label}</span>
-        <Icon name="chevron-down" aria-hidden="true" className="size-3.5 text-muted-foreground" />
+        <Icon name="chevron-down" aria-hidden="true" data-icon="inline-end" className="text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-36">
         <DropdownMenuRadioGroup

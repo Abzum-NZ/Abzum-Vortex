@@ -98,7 +98,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
         <FieldLegend id={ids.label} variant="label">
           <FieldLabelText label={label} required={required} />
         </FieldLegend>
-        <FieldGroup data-slot="checkbox-group" className="min-w-0 max-h-64 overflow-y-auto p-1">
+        <FieldGroup data-slot="checkbox-group" className="min-w-0 max-h-64 overflow-y-auto">
           {options.map((option, index) => {
             const optionId = `${ids.control}-option-${index}`;
             const checked = selectedSet.has(option.key);
@@ -113,7 +113,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
                 />
                 <FieldLabel
                   htmlFor={optionId}
-                  className="min-h-[44px] min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]"
+                  className="min-h-11 min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]"
                 >
                   {option.label}
                 </FieldLabel>

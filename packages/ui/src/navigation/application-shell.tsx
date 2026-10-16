@@ -62,7 +62,7 @@ const shellFrameCss = `
 }
 [data-vortex-sidebar-state="collapsed"] [data-vortex-shell-navigation] [data-sidebar="menu-button"] {
   justify-content: center;
-  padding-inline: 0.75rem;
+  padding-inline: calc(var(--spacing, 0.25rem) * 3);
 }
 [data-vortex-sidebar-state="collapsed"] [data-vortex-shell-navigation] [data-sidebar="menu-sub"] {
   display: none;
@@ -75,11 +75,16 @@ function SwitcherButton({
   label,
 }: Readonly<{ icon: "building-2" | "grid"; label: string }>): ReactElement {
   return (
-    <span className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm font-medium text-foreground">
-      <Icon name={icon} aria-hidden="true" />
+    <>
+      <Icon name={icon} aria-hidden="true" data-icon="inline-start" />
       <span className="truncate max-sm:sr-only">{label}</span>
-      <Icon name="chevron-down" aria-hidden="true" className="size-3.5 text-muted-foreground max-sm:hidden" />
-    </span>
+      <Icon
+        name="chevron-down"
+        aria-hidden="true"
+        data-icon="inline-end"
+        className="text-muted-foreground max-sm:hidden"
+      />
+    </>
   );
 }
 
@@ -97,7 +102,7 @@ export function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpR
           : "Browser agent tools could not be enabled.";
   return (
     <div
-      className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-md border px-2 py-1 text-xs"
+      className="flex max-w-full min-w-0 flex-wrap items-center gap-2 text-xs"
       role="status"
       aria-live="polite"
       data-vortex-webmcp={runtime.working === undefined ? runtime.status : "working"}
@@ -157,7 +162,9 @@ function OrganizationSwitcher({
       <DropdownMenuTrigger
         disabled={runtime === undefined && actions === null}
         aria-label={`Organisation: ${organizationName}`}
-        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-[44px] max-sm:min-w-[44px] max-sm:items-center max-sm:justify-center"
+        render={
+          <Button variant="ghost" size="sm" className="max-w-56 max-sm:min-h-11 max-sm:min-w-11" />
+        }
       >
         <SwitcherButton icon="building-2" label={organizationName} />
       </DropdownMenuTrigger>
@@ -187,7 +194,7 @@ function ApplicationSwitcher({
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm text-muted-foreground"
+        className="inline-flex max-w-56 items-center gap-2 truncate text-sm text-muted-foreground"
       >
         <Icon name="grid" aria-hidden="true" />
         <span className="truncate max-sm:sr-only">Applications temporarily unavailable</span>
@@ -198,7 +205,7 @@ function ApplicationSwitcher({
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex max-w-56 items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm text-muted-foreground"
+        className="inline-flex max-w-56 items-center gap-2 truncate text-sm text-muted-foreground"
       >
         <Icon name="grid" aria-hidden="true" />
         <span className="truncate max-sm:sr-only">Applications unavailable</span>
@@ -210,7 +217,9 @@ function ApplicationSwitcher({
       <DropdownMenuTrigger
         disabled={runtime === undefined || runtime.applications.length === 0 || actions === null}
         aria-label={`Application: ${applicationName}`}
-        className="rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-[44px] max-sm:min-w-[44px] max-sm:items-center max-sm:justify-center"
+        render={
+          <Button variant="ghost" size="sm" className="max-w-56 max-sm:min-h-11 max-sm:min-w-11" />
+        }
       >
         <SwitcherButton icon="grid" label={applicationName} />
       </DropdownMenuTrigger>
