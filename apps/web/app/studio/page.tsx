@@ -115,7 +115,7 @@ export default async function StudioLandingPage({
           <Card key={entry.organizationId}>
             <CardHeader>
               <CardTitle>{entry.organizationDisplayName}</CardTitle>
-              <CardDescription>{entry.tenantDisplayName}</CardDescription>
+              {entry.tenantDisplayName !== entry.organizationDisplayName && <CardDescription>{entry.tenantDisplayName}</CardDescription>}
             </CardHeader>
             <CardContent className="space-y-6">
               <section className="space-y-2">
