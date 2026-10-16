@@ -206,12 +206,25 @@ export const actionTaskSchema = z.discriminatedUnion("type", [
     .strict(),
 ]);
 
+const canonicalCarriedFieldIdsSchema = z
+  .array(fieldIdSchema)
+  .max(30)
+  .superRefine((fieldIds, context) => {
+    if (new Set(fieldIds).size !== fieldIds.length)
+      context.addIssue({ code: "custom", message: "Carried field identities must be unique" });
+    if (fieldIds.some((fieldId, index) => index > 0 && fieldIds[index - 1]! >= fieldId))
+      context.addIssue({
+        code: "custom",
+        message: "Carried field identities must use canonical order",
+      });
+  });
+
 export const eventDefinitionSchema = z
   .object({
     eventId: eventIdSchema,
     key: namespacedKeySchema,
     recordTypeId: recordTypeIdSchema,
-    carriedFieldIds: z.array(fieldIdSchema).max(30),
+    carriedFieldIds: canonicalCarriedFieldIdsSchema,
     personalOrSensitiveValuesAllowed: z.literal(false),
   })
   .strict();
@@ -225,19 +238,6 @@ export const standardInstalledEventKindSchema = z.enum([
   "reassigned",
   "state_changed",
 ]);
-
-const canonicalCarriedFieldIdsSchema = z
-  .array(fieldIdSchema)
-  .max(30)
-  .superRefine((fieldIds, context) => {
-    if (new Set(fieldIds).size !== fieldIds.length)
-      context.addIssue({ code: "custom", message: "Carried field identities must be unique" });
-    if (fieldIds.some((fieldId, index) => index > 0 && fieldIds[index - 1]! >= fieldId))
-      context.addIssue({
-        code: "custom",
-        message: "Carried field identities must use canonical order",
-      });
-  });
 
 const installedEventOwnerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema }).strict(),

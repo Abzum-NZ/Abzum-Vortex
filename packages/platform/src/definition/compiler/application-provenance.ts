@@ -9,6 +9,7 @@ import { explicitSourceTargets } from "./explicit-source-targets";
 import {
   applicationCompositionProvenance,
   applicationThemeValueTargets,
+  compiledSettingStart,
   isApplicationCompositionSourcePath,
 } from "./application-composition-provenance";
 import {
@@ -311,13 +312,11 @@ export function applicationProvenance(
       continue;
     }
     // A setting the author left out is the release's declared default or a derived value.
-    const settingsIndex = canonicalPath.lastIndexOf("settings");
-    if (
-      settingsIndex > 0 &&
-      canonicalPath[settingsIndex - 1] === "props" &&
-      isApplicationCompositionCanonicalPath(canonicalPath)
-    ) {
-      const item = asObject(valueAtPath(canonical, canonicalPath.slice(0, settingsIndex - 1)));
+    const settingIndex = isApplicationCompositionCanonicalPath(canonicalPath)
+      ? compiledSettingStart(canonical, canonicalPath)
+      : undefined;
+    if (settingIndex !== undefined) {
+      const item = asObject(valueAtPath(canonical, canonicalPath.slice(0, settingIndex - 1)));
       const block = asObject(asObject(asObject(item.props).vortex).block);
       const blockId = String(block.blockId);
       const releaseVersion = String(block.releaseVersion);

@@ -20,6 +20,7 @@ import {
   describeFailure,
   exactDecimalTextSchema,
   moneyValueSchema,
+  compiledPropsSettings,
   readBoardPlacementContract,
   richTextDocumentSchema,
   sameId,
@@ -376,7 +377,7 @@ export const projectBoardPlacement = async (
     if (input.placement.props.vortex.queryId === undefined)
       return unavailable("board_query_not_bound");
 
-    const contract = readBoardPlacementContract(input.placement.props.settings);
+    const contract = readBoardPlacementContract(compiledPropsSettings(input.placement.props));
     const binding = findInstalledQuery(context, String(input.placement.props.vortex.queryId));
     if (contract === undefined || binding === undefined)
       return unavailable("board_settings_invalid");

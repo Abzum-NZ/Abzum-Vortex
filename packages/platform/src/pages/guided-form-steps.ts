@@ -35,6 +35,7 @@ import {
   type PlatformId,
   type RecordTypeDefinition,
   type SelectedOrganizationScope,
+  compiledPropsSettings,
   isRecord,
   sameId,
   walkPlacementData,
@@ -241,8 +242,7 @@ const guidedStepFieldForPlacement = (
   props: Record<string, unknown>,
   recordType: RecordTypeDefinition,
 ): Omit<GuidedFormStepField, "placementId"> | undefined => {
-  const settings = props.settings;
-  if (!isRecord(settings)) return undefined;
+  const settings = compiledPropsSettings(props);
   const name = settings.name;
   const parsedKey =
     isRecord(name) && name.kind === "text" ? builderKeySchema.safeParse(name.value) : undefined;
@@ -412,7 +412,7 @@ const collectStepFields = (
           fields.push({ ...field, placementId });
         }
         for (const [key, child] of Object.entries(props))
-          if (key !== "id" && key !== "settings" && key !== "vortex" && !visitItems(child, owner))
+          if (key !== "id" && key !== "vortex" && Array.isArray(child) && !visitItems(child, owner))
             return false;
       }
       return true;
@@ -942,7 +942,7 @@ export const guidedFormInputData = (
         const value = entry === undefined ? undefined : byId[String(entry.field.fieldId)];
         if (entry !== undefined && value !== undefined) {
           const blockId = isRecord(vortex.block) ? String(vortex.block.blockId) : "";
-          const settings = isRecord(props.settings) ? props.settings : {};
+          const settings: Record<string, unknown> = compiledPropsSettings(props);
           const control = sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId)
             ? isRecord(settings.control) && settings.control.kind === "choice"
               ? settings.control.value

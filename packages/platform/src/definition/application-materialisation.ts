@@ -3,6 +3,8 @@ import {
   applicationShellSchema,
   applicationThemeSchema,
   canonicalApplicationThemeSelection,
+  canonicalResponsivePlacement,
+  canonicalThemeTokenValue,
   blockPropertyValueSchema,
   guidedFormPageCompositionSchema,
   findFieldInputBinding,
@@ -88,44 +90,6 @@ const canonicalThemeDependency = (base: ApplicationSourceDocument["body"]["theme
   releaseVersion: base.release_version,
 });
 
-const canonicalThemeValue = (value: Record<string, unknown>): unknown => {
-  switch (value.kind) {
-    case "typography":
-      return {
-        kind: value.kind,
-        family: value.family,
-        sizeRem: value.size_rem,
-        lineHeight: value.line_height,
-        weight: value.weight,
-      };
-    case "border":
-      return {
-        kind: value.kind,
-        widthRem: value.width_rem,
-        style: value.style,
-        colorToken: value.color_token,
-      };
-    case "focus":
-      return { kind: value.kind, colorToken: value.color_token, widthRem: value.width_rem };
-    case "asset":
-      return { kind: value.kind, assetId: value.asset_id };
-    default:
-      return value;
-  }
-};
-
-const canonicalPlacementLayout = (value: Record<string, unknown>): Record<string, unknown> => {
-  const width = value.width as Record<string, unknown>;
-  return {
-    visible: value.visible,
-    width:
-      width.kind === "grid"
-        ? { kind: "grid", startColumn: width.start_column, span: width.span }
-        : width,
-    height: value.height,
-  };
-};
-
 const validateThemeTokenReferences = (tokens: CanonicalTheme["tokens"]): void => {
   for (const token of Object.values(tokens)) {
     if (token.kind !== "border" && token.kind !== "focus") continue;
@@ -192,7 +156,7 @@ export const materialiseApplicationTheme = (
     reject("vortex.definition.application_dependency_manifest");
   const overrides: Record<string, ThemeTokenValue> = {};
   for (const [key, value] of Object.entries(authored.token_overrides))
-    overrides[key] = canonicalThemeValue(
+    overrides[key] = canonicalThemeTokenValue(
       value as unknown as Record<string, unknown>,
     ) as ThemeTokenValue;
   const selection = resolveThemeSelection({
@@ -301,7 +265,7 @@ const mergePlacementThemeOverrides = (
   const effectiveOverrides: Record<string, unknown> = {};
   for (const [key, authoredValue] of Object.entries(authoredOverrides)) {
     const inherited = theme.tokens[key] as Record<string, unknown> | undefined;
-    const override = canonicalThemeValue(authoredValue as Record<string, unknown>) as Record<
+    const override = canonicalThemeTokenValue(authoredValue as Record<string, unknown>) as Record<
       string,
       unknown
     >;
@@ -692,17 +656,11 @@ const materialiseResponsive = (
   authored: Record<string, unknown>,
   release: PlatformBlockRelease,
 ): Record<string, unknown> => {
-  const desktop = canonicalPlacementLayout(authored.desktop as Record<string, unknown>);
-  const tablet = canonicalPlacementLayout(
-    (authored.tablet as Record<string, unknown> | undefined) ??
-      (authored.desktop as Record<string, unknown>),
-  );
-  const phone = canonicalPlacementLayout(
-    (authored.phone as Record<string, unknown> | undefined) ??
-      (authored.tablet as Record<string, unknown> | undefined) ??
-      (authored.desktop as Record<string, unknown>),
-  );
-  const layouts = { desktop, tablet, phone };
+  const layouts = canonicalResponsivePlacement(authored) as Record<
+    "desktop" | "tablet" | "phone",
+    Record<string, unknown>
+  >;
+  const { desktop, tablet, phone } = layouts;
   if (
     !release.capabilities.responsiveVisibility &&
     (tablet.visible !== desktop.visible || phone.visible !== desktop.visible)
@@ -949,7 +907,7 @@ export const materialiseApplicationComposition = (
       };
       items.push({
         type: release.rendererKey,
-        props: { id: canonicalId, settings, ...slots, vortex },
+        props: { id: canonicalId, ...settings, ...slots, vortex },
       });
       if (options.captureShellPlacements)
         shellPlacementTargets.set(alias, { canonicalId, depth: options.depth, release });

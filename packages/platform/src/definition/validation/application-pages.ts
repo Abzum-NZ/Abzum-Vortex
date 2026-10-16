@@ -378,7 +378,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
               publicBlockReferencesSafe = false;
           }
         };
-        walkValues(placement.settings, inspectPublicSetting);
+        for (const setting of Object.values(placement.settings))
+          walkValues(setting, inspectPublicSetting);
         if (placement.vortex.queryId) {
           const query = moduleQueries.get(String(placement.vortex.queryId));
           if (!publicQuerySafe(query, pageRecordId, pagePublicFields))

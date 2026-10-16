@@ -29,7 +29,12 @@ import {
 } from "@vortex/platform/schema";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import { getStudioContextualPaletteGroups } from "./contextual-palette";
-import { createVortexAuthoredPuckAdapter } from "./vortex-authored-puck-adapter";
+import {
+  adjustedSlotOrder,
+  storedItemRelease,
+  validateStoredShell,
+  validateStoredZone,
+} from "./stored-composition";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
@@ -137,7 +142,6 @@ type Target = { region: Region; zone: Zone; item: SourceItem;
   steps: readonly SlotStep[]; responsiveOrder: boolean };
 
 type CompositionCatalogueTools = Readonly<{
-  bridge: ReturnType<typeof createVortexAuthoredPuckAdapter>;
   releases: ReadonlyMap<string, PlatformBlockRelease>;
 }>;
 const catalogueTools = new WeakMap<ImmutablePlatformBlockCatalogue, CompositionCatalogueTools>();
@@ -145,7 +149,6 @@ const toolsFor = (catalogue: ImmutablePlatformBlockCatalogue): CompositionCatalo
   let tools = catalogueTools.get(catalogue);
   if (tools === undefined) {
     tools = Object.freeze({
-      bridge: createVortexAuthoredPuckAdapter(catalogue),
       releases: new Map(catalogue.releases.map((release) =>
         [`${release.blockId}:${release.releaseVersion}`, release])),
     });
@@ -230,9 +233,7 @@ const regions = (source: ApplicationSourceDocument): Region[] => {
 const releaseFor = (
   catalogue: ImmutablePlatformBlockCatalogue,
   item: SourceItem,
-): PlatformBlockRelease | undefined =>
-  toolsFor(catalogue).releases.get(
-    `${item.props.vortex.block.block_id}:${item.props.vortex.block.release_version}`);
+): PlatformBlockRelease | undefined => storedItemRelease(catalogue, item);
 
 /**
  * The child slots an item fills, with their authored breakpoint orders. A known release decides
@@ -383,16 +384,77 @@ const sameDestination = (left: StudioCompositionDestination, right: StudioCompos
   left.kind === "root" ? right.kind === "root" : right.kind === "child" &&
     left.parentAlias === right.parentAlias && left.slotKey === right.slotKey;
 
-const privateContentAt = (root: unknown, steps: readonly SlotStep[]): unknown[] => {
-  let content = root;
+/** A working copy of one region's stored slot; commands edit it and commit it as a whole. */
+type Working = { items: SourceItem[]; order: SourceSlotOrder | undefined };
+/** One slot of a working copy: its items, its declared order and how to write both back. */
+type ZoneHandle = Readonly<{
+  items: SourceItem[];
+  order: SourceSlotOrder | undefined;
+  set: (items: SourceItem[], order: SourceSlotOrder | undefined) => void;
+}>;
+
+const workingCopy = (region: Region): Working =>
+  structuredClone({ items: region.zone.items, order: region.zone.order });
+
+/** The slot a path of steps reaches in a working copy; its order lives on its parent block. */
+const zoneHandle = (working: Working, steps: readonly SlotStep[]): ZoneHandle => {
+  if (steps.length === 0)
+    return { items: working.items, order: working.order,
+      set: (items, order) => { working.items = items; working.order = order; } };
+  let items = working.items;
+  let parent: SourceItem | undefined;
   for (const step of steps) {
-    if (!Array.isArray(content)) return refuse();
-    const matches = content.filter((value: unknown) => object(object(value).props).id === step.parentAlias);
+    const matches = items.filter((item) => item.props.id === step.parentAlias);
     if (matches.length !== 1) return refuse();
-    content = object(object(matches[0]).props)[step.slotKey];
+    parent = matches[0]!;
+    const child = parent.props[step.slotKey];
+    if (!Array.isArray(child)) return refuse();
+    items = child as SourceItem[];
   }
-  if (!Array.isArray(content)) return refuse();
-  return content;
+  const holder = parent!;
+  const key = steps.at(-1)!.slotKey;
+  return {
+    items,
+    order: holder.props.vortex.slot_orders?.[key],
+    set: (next, order) => {
+      holder.props[key] = next;
+      const orders = { ...holder.props.vortex.slot_orders };
+      if (order === undefined) delete orders[key];
+      else orders[key] = order;
+      if (Object.keys(orders).length === 0) delete holder.props.vortex.slot_orders;
+      else holder.props.vortex.slot_orders = orders;
+    },
+  };
+};
+
+const workingItem = (working: Working, steps: readonly SlotStep[], alias: string): SourceItem => {
+  const matches = zoneHandle(working, steps).items.filter((item) => item.props.id === alias);
+  return matches.length === 1 ? matches[0]! : refuse();
+};
+
+/** Judges the edited slot as stored data and writes it into the region's own document. */
+const commitWorking = (catalogue: ImmutablePlatformBlockCatalogue, region: Region, working: Working): void => {
+  if (region.shell === undefined) {
+    region.replace(validateStoredZone(catalogue, working));
+    return;
+  }
+  const shell = validateStoredShell(catalogue, {
+    ...region.shell,
+    layout: {
+      root: { props: { vortex: { slot_orders: working.order === undefined ? {} : { content: working.order } } } },
+      content: working.items,
+    },
+  });
+  region.replace({ items: shell.layout.content, order: shell.layout.root.props.vortex.slot_orders.content }, shell);
+};
+
+/** The item with exactly these settings: each declared property it holds is replaced. */
+const withSettings = (item: SourceItem, release: PlatformBlockRelease,
+  settings: Readonly<Record<string, SourceBlockPropertyValueContract>>): void => {
+  const declared = new Set(release.properties.map((property) => property.key));
+  const { id, ...rest } = item.props;
+  item.props = { id, ...plainSettings(settings),
+    ...Object.fromEntries(Object.entries(rest).filter(([key]) => !declared.has(key))) } as SourceItem["props"];
 };
 
 /** Refuse cycles and accessors before recursive schemas read an authored snapshot. */
@@ -403,7 +465,7 @@ const plainSource = (source: unknown): void => {
     const entry = pending.pop()!;
     const value = entry.value;
     if (value === null || typeof value !== "object") {
-      if (value !== undefined && typeof value !== "string" && typeof value !== "number" &&
+      if (value !== undefined && value !== null && typeof value !== "string" && typeof value !== "number" &&
         typeof value !== "boolean") return refuse();
       continue;
     }
@@ -454,7 +516,6 @@ const resolveAdd = (context: StudioCompositionContext, selection: StudioSemantic
   plainSource(context.source);
   if (!validContext(context)) return { kind: "invalid" };
   const catalogue = context.catalogue;
-  const { bridge } = toolsFor(catalogue);
   // Bound and validate the actual selected raw region before the recursive whole-source schema.
   const rawPages = object(object(context.source).body).pages;
   if (!Array.isArray(rawPages)) return { kind: "invalid" };
@@ -465,7 +526,7 @@ const resolveAdd = (context: StudioCompositionContext, selection: StudioSemantic
   if (rawPage.type === "public" || rawPage.type === "guided_form") return { kind: "unsupported" };
   const rawFrame = object(object(object(rawComposition.root).props).vortex);
   if (rawFrame.shell !== null) return { kind: "unsupported" };
-  bridge.toPuckData({ items: rawComposition.content,
+  validateStoredZone(catalogue, { items: rawComposition.content,
     order: rawFrame.slot_orders === undefined ? undefined : object(rawFrame.slot_orders).content });
   const source = applicationSourceDocumentSchema.parse(context.source);
   if (resolveStudioSelectionInspectorContext({ rootId: context.rootId, source }, selection).status !== "resolved")
@@ -493,7 +554,7 @@ const addChoices = (
 ): StudioCompositionPaletteChoice[] => {
   // This surface describes an already resolved nonpublic page; it grants no authority.
   const discovery = createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } });
-  const { bridge, releases } = toolsFor(catalogue);
+  const { releases } = toolsFor(catalogue);
   return getStudioContextualPaletteGroups(discovery, { kind: "page" }, searchText)
     .flatMap((group) => group.choices).flatMap((choice) => {
       const release = releases.get(`${choice.blockId}:${choice.releaseVersion}`);
@@ -506,7 +567,7 @@ const addChoices = (
       // Optional declarations must really accept omission and the native seed.
       // Validation uses an existing authored alias or the user's proposed alias,
       // never a generated placement identity. This detached seed is not persisted.
-      bridge.toPuckData(seedZone(release, authoredAlias, {}));
+      validateStoredZone(catalogue, seedZone(release, authoredAlias, {}));
       return [{ id: choice.id, blockId: release.blockId, releaseVersion: release.releaseVersion,
         key: release.key, name: release.name, properties,
         slots: release.slots.map((slot) => ({ key: slot.key, label: slot.label })) }];
@@ -545,7 +606,7 @@ export const describeStudioCompositionPalette = (context: StudioCompositionConte
 const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
   const catalogue = current.catalogue;
-  const { bridge, releases } = toolsFor(catalogue);
+  const { releases } = toolsFor(catalogue);
   const input = closedPlain(command, ["kind", "blockId", "releaseVersion", "alias", "settings"]);
   if (input.kind !== "add" || typeof input.blockId !== "string" || typeof input.releaseVersion !== "string")
     return { kind: "invalid" };
@@ -583,12 +644,12 @@ const applyAdd = (current: StudioCompositionContext, selection: StudioSemanticSe
     else return { kind: "invalid" };
   }
   if (validateComponentSettings(settings, release.properties).length > 0) return { kind: "invalid" };
-  const seed = bridge.toPuckData(seedZone(release, alias, settings));
-  if (seed.content.length !== 1) return { kind: "invalid" };
-  const data = bridge.toPuckData(target.main);
-  data.content.push(...seed.content);
-  // Always use the real original destination. A new node's source hints cannot replace it.
-  target.replace(bridge.fromPuckData(target.main, data));
+  const seed = validateStoredZone(catalogue, seedZone(release, alias, settings));
+  if (seed.items.length !== 1) return { kind: "invalid" };
+  // The new block joins the end of the slot, and of every declared tablet and phone order.
+  const items = [...structuredClone(target.main.items), ...seed.items];
+  target.replace(validateStoredZone(catalogue,
+    { items, order: adjustedSlotOrder(target.main.order, items.map((item) => item.props.id)) }));
   const dependencies = target.source.body.platform_block_dependencies;
   const existing = dependencies.find((dependency) => dependency.block_id === release.blockId &&
     dependency.release_version === release.releaseVersion);
@@ -619,7 +680,7 @@ const ordinaryNamedSettingsPage = (catalogue: ImmutablePlatformBlockCatalogue,
   if (bindings.length !== 1 || !manifestMatches(catalogue, source, shell.layout.content)) return undefined;
   const binding = bindings[0]!;
   // Validate the complete original shell, including its required-but-empty reservations.
-  toolsFor(catalogue).bridge.toPuckShell(shell);
+  validateStoredShell(catalogue, shell);
   // Reservation validation does not validate each authored binding's metadata.
   const shellItems = new Map<string, SourceItem>();
   for (const item of sourceItemTree(shell.layout.content)) {
@@ -672,7 +733,6 @@ const ordinaryNamedSettingsPage = (catalogue: ImmutablePlatformBlockCatalogue,
 const resolveSettings = (context: StudioCompositionContext, selection: StudioSemanticSelection | null,
   eligible: (release: PlatformBlockRelease) => boolean = eligibleAddRelease) => {
   const catalogue = context.catalogue;
-  const { bridge } = toolsFor(catalogue);
   plainSource(context.source);
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" } as const;
@@ -712,7 +772,7 @@ const resolveSettings = (context: StudioCompositionContext, selection: StudioSem
       return { kind: "unsupported" } as const;
     zone = child;
   }
-  bridge.toPuckData(region.zone);
+  validateStoredZone(catalogue, region.zone);
   return { kind: "available", ...resolved, release } as const;
 };
 
@@ -748,20 +808,15 @@ export const describeStudioCompositionSettings = (context: StudioCompositionCont
 
 const applySettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
-  const { bridge } = toolsFor(current.catalogue);
   const input = closedPlain(command, ["kind", "settings"]);
   if (input.kind !== "settings") return { kind: "invalid" };
   const resolved = resolveSettings(current, selection);
   if (resolved.kind !== "available") return resolved;
   const settings = textSettings(input.settings, resolved.release);
   const { source, target, alias } = resolved;
-  const data = bridge.toPuckData(target.region.zone);
-  const content = privateContentAt(data.content, target.steps);
-  const matches = content.filter((value) => object(object(value).props).id === alias);
-  if (matches.length !== 1) return { kind: "invalid" };
-  object(object(matches[0]).props).settings = structuredClone(settings);
-  // Original source-order and breakpoint provenance remain the inverse's baseline.
-  target.region.replace(bridge.fromPuckData(target.region.zone, data));
+  const working = workingCopy(target.region);
+  withSettings(workingItem(working, target.steps, alias), resolved.release, settings);
+  commitWorking(current.catalogue, target.region, working);
   const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
@@ -816,7 +871,6 @@ export const describeStudioCompositionScalarSettings = (context: StudioCompositi
 
 const applyScalarSettings = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
-  const { bridge } = toolsFor(current.catalogue);
   const input = closedPlain(command, ["kind", "settings"]);
   if (input.kind !== "scalar_settings") return { kind: "invalid" };
   const resolved = resolveSettings(current, selection, eligibleScalarRelease);
@@ -834,11 +888,9 @@ const applyScalarSettings = (current: StudioCompositionContext, selection: Studi
   // Validate the complete merge, including untouched structured content and required fields.
   if (validateComponentSettings(settings, resolved.release.properties).length > 0) return { kind: "invalid" };
   const { source, target, alias } = resolved;
-  const data = bridge.toPuckData(target.region.zone);
-  const matches = privateContentAt(data.content, target.steps).filter((value) => object(object(value).props).id === alias);
-  if (matches.length !== 1) return { kind: "invalid" };
-  object(object(matches[0]).props).settings = structuredClone(settings);
-  target.region.replace(bridge.fromPuckData(target.region.zone, data));
+  const working = workingCopy(target.region);
+  withSettings(workingItem(working, target.steps, alias), resolved.release, settings);
+  commitWorking(current.catalogue, target.region, working);
   const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
@@ -933,7 +985,6 @@ type ResolvedRemoval = { kind: "available"; removal: Removal }
 const resolveRemoval = (context: StudioCompositionContext,
   selection: StudioSemanticSelection | null): ResolvedRemoval => {
   const catalogue = context.catalogue;
-  const { bridge } = toolsFor(catalogue);
   plainSource(context.source);
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" };
@@ -945,7 +996,7 @@ const resolveRemoval = (context: StudioCompositionContext,
   const release = releaseFor(catalogue, target.item);
   if (release === undefined || !eligibleAddRelease(release) || itemSlots(catalogue, target.item).size !== 0 ||
     !manifestMatches(catalogue, source, target.region.zone.items)) return { kind: "unsupported" };
-  bridge.toPuckData(target.region.zone);
+  validateStoredZone(catalogue, target.region.zone);
   let zone = target.region.zone;
   for (const step of target.steps) {
     const parent = zone.items.find((item) => item.props.id === step.parentAlias);
@@ -985,18 +1036,17 @@ export const describeStudioCompositionRemoval = (context: StudioCompositionConte
 
 const applyRemoval = (current: StudioCompositionContext, selection: StudioSemanticSelection | null,
   command: unknown): StudioCompositionCommandResult => {
-  const { bridge } = toolsFor(current.catalogue);
   closedPlain(command, ["kind"]);
   const resolved = resolveRemoval(current, selection);
   if (resolved.kind !== "available") return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
   const { source, target, alias, willRemoveUnusedRelease } = resolved.removal;
-  const data = bridge.toPuckData(target.region.zone);
-  const content = privateContentAt(data.content, target.steps);
-  const index = content.findIndex((value) => object(object(value).props).id === alias);
-  if (index < 0) return { kind: "invalid" };
-  content.splice(index, 1);
-  // The original destination supplies order/provenance, including explicit empty breakpoints.
-  target.region.replace(bridge.fromPuckData(target.region.zone, data));
+  const working = workingCopy(target.region);
+  const zone = zoneHandle(working, target.steps);
+  const remaining = zone.items.filter((item) => item.props.id !== alias);
+  if (remaining.length !== zone.items.length - 1) return { kind: "invalid" };
+  // The block also leaves every declared tablet and phone order of its slot.
+  zone.set(remaining, adjustedSlotOrder(zone.order, remaining.map((item) => item.props.id)));
+  commitWorking(current.catalogue, target.region, working);
   const block = target.item.props.vortex.block;
   if (willRemoveUnusedRelease) source.body.platform_block_dependencies = source.body.platform_block_dependencies
     .filter((dependency) => dependency.block_id !== block.block_id ||
@@ -1011,11 +1061,10 @@ export const describeStudioCompositionDestinations = (context: StudioComposition
     const resolved = resolve(context, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const catalogue = context.catalogue;
-    const { bridge } = toolsFor(catalogue);
     const { target, source, alias } = resolved;
     if (target.region.ordinaryMain !== true || !manifestMatches(catalogue, source, target.region.zone.items))
       return { kind: "unsupported" };
-    bridge.toPuckData(target.region.zone);
+    validateStoredZone(catalogue, target.region.zone);
     return { kind: "available", destinations: moveDestinations(catalogue, target, alias).map(({ destination, label }) =>
       ({ destination, label })) };
   } catch { return { kind: "invalid" }; }
@@ -1028,14 +1077,13 @@ export const describeStudioCompositionEdit = (context: StudioCompositionContext,
     const resolved = resolve(context, selection);
     if (resolved === undefined) return { kind: "invalid" };
     const catalogue = context.catalogue;
-    const { bridge } = toolsFor(catalogue);
     const { target, source, alias } = resolved;
     if (!manifestMatches(catalogue, source, target.region.zone.items) ||
       (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent)))
       return { kind: "unsupported" };
     // Validate the complete original region and reserved shell targets before offering controls.
-    if (target.region.shell) bridge.toPuckShell(target.region.shell);
-    else bridge.toPuckData(target.region.zone);
+    if (target.region.shell) validateStoredShell(catalogue, target.region.shell);
+    else validateStoredZone(catalogue, target.region.zone);
     const release = releaseFor(catalogue, target.item);
     if (release === undefined) return { kind: "unsupported" };
     const responsive = target.item.props.vortex.responsive;
@@ -1057,7 +1105,6 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
   try {
     if (!sameContext(expected, current)) return { kind: "stale" };
     const catalogue = current.catalogue;
-    const { bridge } = toolsFor(catalogue);
     const kind = Object.getOwnPropertyDescriptor(command, "kind");
     if (kind === undefined || kind.get !== undefined || kind.set !== undefined) return { kind: "invalid" };
     if (command.kind === "add") return applyAdd(current, selection, command);
@@ -1077,17 +1124,18 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
       const resolvedDestination = moveDestinations(catalogue, target, alias).find((candidate) =>
         sameDestination(candidate.destination, destination));
       if (resolvedDestination === undefined) return { kind: "invalid" };
-      const data = bridge.toPuckData(target.region.zone);
-      const from = privateContentAt(data.content, target.steps);
-      const to = privateContentAt(data.content, resolvedDestination.steps);
-      const index = from.findIndex((value: unknown) => object(object(value).props).id === alias);
-      if (index < 0 || from === to) return { kind: "invalid" };
-      // Transfer the whole original private node. Its source-origin order hints
-      // must never be rewritten to impersonate the destination baseline.
-      const moved = from.splice(index, 1)[0];
-      if (moved === undefined) return refuse();
-      to.push(moved);
-      target.region.replace(bridge.fromPuckData(target.region.zone, data));
+      const working = workingCopy(target.region);
+      const from = zoneHandle(working, target.steps);
+      const moved = from.items.find((item) => item.props.id === alias);
+      if (moved === undefined || sameSteps(target.steps, resolvedDestination.steps)) return { kind: "invalid" };
+      // The block leaves its slot and every declared order there, then joins the end of the
+      // destination slot and of every order declared there.
+      const remaining = from.items.filter((item) => item !== moved);
+      from.set(remaining, adjustedSlotOrder(from.order, remaining.map((item) => item.props.id)));
+      const to = zoneHandle(working, resolvedDestination.steps);
+      const joined = [...to.items, moved];
+      to.set(joined, adjustedSlotOrder(to.order, joined.map((item) => item.props.id)));
+      commitWorking(catalogue, target.region, working);
       const parsed = applicationSourceDocumentSchema.parse(source);
       return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
     }
@@ -1096,21 +1144,15 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     const allowedKeys = command.kind === "order" ? ["kind", "breakpoint", "order"] : ["kind", "breakpoint", "layout"];
     if (commandKeys.length !== 3 || commandKeys.some((key) => typeof key !== "string" || !allowedKeys.includes(key)))
       return { kind: "invalid" };
-    const data = target.region.shell ? bridge.toPuckShell(target.region.shell) : bridge.toPuckData(target.region.zone);
-    let content: unknown = data.content;
-    for (const step of target.steps) {
-      if (!Array.isArray(content)) return refuse();
-      const parent: unknown = content.find((value: unknown) => object(object(value).props).id === step.parentAlias);
-      content = object(object(parent).props)[step.slotKey];
-    }
-    if (!Array.isArray(content)) return refuse();
+    const working = workingCopy(target.region);
     if (command.kind === "order") {
       if (command.breakpoint !== "desktop" && !target.responsiveOrder) return { kind: "unsupported" };
-      const desktop = target.zone.items.map((item) => item.props.id);
+      const zone = zoneHandle(working, target.steps);
+      const desktop = zone.items.map((item) => item.props.id);
       const order: { desktop: string[]; tablet?: string[]; phone?: string[] } = {
         desktop,
-        ...(target.zone.order?.tablet === undefined ? {} : { tablet: [...target.zone.order.tablet] }),
-        ...(target.zone.order?.phone === undefined ? {} : { phone: [...target.zone.order.phone] }),
+        ...(zone.order?.tablet === undefined ? {} : { tablet: [...zone.order.tablet] }),
+        ...(zone.order?.phone === undefined ? {} : { phone: [...zone.order.phone] }),
       };
       if (command.order === null) {
         if (command.breakpoint === "desktop") return { kind: "invalid" };
@@ -1124,25 +1166,22 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
           return { kind: "invalid" };
         order[command.breakpoint] = proposed as string[];
       }
-      if (command.breakpoint === "desktop") {
-        // A release without responsive order applies the same order at every
-        // breakpoint; retain explicit declarations while moving their values.
-        if (!target.responsiveOrder) {
-          if (order.tablet !== undefined) order.tablet = [...order.desktop];
-          if (order.phone !== undefined) order.phone = [...order.desktop];
-        }
-        const byId = new Map(content.map((value: unknown) => [object(object(value).props).id, value]));
-        content.splice(0, content.length, ...order.desktop.map((id) => byId.get(id)));
+      // A release without responsive order applies the same order at every breakpoint; retain
+      // explicit declarations while moving their values.
+      if (command.breakpoint === "desktop" && !target.responsiveOrder) {
+        if (order.tablet !== undefined) order.tablet = [...order.desktop];
+        if (order.phone !== undefined) order.phone = [...order.desktop];
       }
-      for (const value of content) {
-        const nodeProps = object(object(value).props);
-        // Mutate the actual private metadata, retaining its slot/baselineOrder provenance.
-        const metadata = object(nodeProps.vortex);
-        metadata.order = structuredClone(order);
-        nodeProps.vortex = metadata;
-      }
+      const byId = new Map(zone.items.map((item) => [item.props.id, item]));
+      zone.set(order.desktop.map((id) => byId.get(id)!),
+        order.tablet === undefined && order.phone === undefined ? undefined : {
+          ...(order.tablet === undefined ? {} : { tablet: order.tablet }),
+          ...(order.phone === undefined ? {} : { phone: order.phone }),
+        });
     } else if (command.kind === "resize") {
-      const responsive = { ...target.item.props.vortex.responsive };
+      const item = workingItem(working, target.steps, alias);
+      // The authored layout is the only layout: the edit replaces exactly this breakpoint.
+      const responsive = { ...item.props.vortex.responsive };
       if (command.layout === null) {
         if (command.breakpoint === "desktop") return { kind: "invalid" };
         delete responsive[command.breakpoint];
@@ -1151,23 +1190,9 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
         if (!checked.success) return { kind: "invalid" };
         responsive[command.breakpoint] = checked.data;
       }
-      const node: unknown = content.find((value: unknown) => object(object(value).props).id === alias);
-      const props = object(object(node).props);
-      // Drop Puck's copy of the old layout: the adapter would read a stale copy that differs
-      // from the authored layout as a Puck edit and write the old layout back.
-      const metadata = { ...object(props.vortex) };
-      delete metadata.responsive;
-      const authored = object(metadata.authored);
-      props.vortex = {
-        ...metadata,
-        authored: { ...authored, responsive: structuredClone(responsive) },
-      };
+      item.props.vortex = { ...item.props.vortex, responsive };
     } else return { kind: "invalid" };
-    if (target.region.shell) {
-      const shell = bridge.fromPuckShell(target.region.shell, data);
-      target.region.replace({ items: shell.layout.content,
-        order: shell.layout.root.props.vortex.slot_orders.content }, shell);
-    } else target.region.replace(bridge.fromPuckData(target.region.zone, data));
+    commitWorking(catalogue, target.region, working);
     const parsed = applicationSourceDocumentSchema.parse(source);
     if (sameValue(parsed, current.source)) return { kind: "invalid" };
     return { kind: "applied", source: parsed };
