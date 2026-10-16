@@ -242,7 +242,8 @@ export function StudioFlowInspector({ context, selection, lists, stepPath, start
       {settings?.kind === "available" && fields.length === 0 && settings.note === undefined &&
         <p className="text-sm text-muted-foreground">This step has no settings.</p>}
       {properties.length > 0 && <StudioSettingFields idPrefix={`flow-step-${step.id}`} properties={properties} values={controlValues}
-        choices={{ fields: [], queries: [], pages, recordTypes: [] }} disabled={disabled}
+        choices={{ fields: [], queries: [], pages, recordTypes: [], actions: [], pipelines: [], relationships: [], records: null }}
+        disabled={disabled}
         onChange={(next) => {
           for (const field of plain) {
             const before = toControl(field, shown(field));

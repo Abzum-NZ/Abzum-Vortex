@@ -21,5 +21,6 @@ export * from "./application-flow-create";
 export * from "./application-visibility-condition-commands";
 export * from "./placement-theme-overrides";
 export * from "./studio-setting-controls";
+export * from "./studio-record-reference-control";
 export * from "./theme-preset";
 export { StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell } from "./stored-composition";
