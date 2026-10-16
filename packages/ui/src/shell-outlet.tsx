@@ -86,10 +86,14 @@ const replaceIn = (
       if (location.kind === "placement") return outletItem;
       return { ...item, props: { ...item.props, [location.slotKey]: [outletItem] } };
     }
+    // The item's slots are exactly those its `vortex.slotOrders` orders.
+    const slotKeys = new Set(
+      Object.keys((item.props.vortex as { slotOrders?: object } | undefined)?.slotOrders ?? {}),
+    );
     const props = Object.fromEntries(
       Object.entries(item.props).map(([key, value]) => [
         key,
-        key !== "id" && isContent(value) ? replaceIn(value, location) : value,
+        slotKeys.has(key) && isContent(value) ? replaceIn(value, location) : value,
       ]),
     );
     return { ...item, props } as ComponentData;

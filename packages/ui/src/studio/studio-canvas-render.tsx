@@ -6,8 +6,9 @@ import {
   canonicalResponsivePlacement,
   canonicalThemeTokenValue,
   findFieldInputBinding,
-  typedSourceSettings,
-  type BlockPropertyValueContract,
+  plainSettingValue,
+  releaseSettingDeclarations,
+  typedSettingValue,
   type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "../registry";
@@ -16,12 +17,14 @@ import { studioReleaseReadsQuery } from "./contextual-palette";
 /**
  * The Studio canvas renders the stored items Puck holds with the one Puck config. A block's render
  * function takes a compiled item's props, so each canvas component reads its stored item for
- * drawing only: its typed settings over the settings its last compiled version holds (defaults the
- * author left out, references the compiler resolved), and its stored block, layout and theme in
- * their canonical spelling. Nothing here is written to Puck's data.
+ * drawing only: its plain settings over the plain settings its last compiled version holds
+ * (defaults the author left out, settings the compiler derived, references it resolved), and its
+ * stored block, layout and theme in their canonical spelling. A stored value is drawn only when it
+ * is already a compiled value of its declaration, so an unresolved reference draws as compiled.
+ * Nothing here is written to Puck's data.
  */
 
-type CompiledSettings = Readonly<Record<string, Readonly<Record<string, BlockPropertyValueContract>>>>;
+type CompiledSettings = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 
 const CompiledSettingsContext = createContext<CompiledSettings>({});
 
@@ -87,7 +90,7 @@ type StoredVortex = Readonly<{
 const renderProps = (
   props: Readonly<Record<string, unknown>>,
   release: PlatformBlockRelease | undefined,
-  compiled: Readonly<Record<string, BlockPropertyValueContract>> | undefined,
+  compiled: Readonly<Record<string, unknown>> | undefined,
   /** The stored item is exactly the one `compiled` was compiled from, so its compiled settings stand alone. */
   exact = false,
 ): Record<string, unknown> => {
@@ -95,13 +98,14 @@ const renderProps = (
   const result: Record<string, unknown> = { ...props };
   if (release !== undefined) {
     const authored: Record<string, unknown> = {};
-    for (const property of release.properties) {
-      if (props[property.key] !== undefined) authored[property.key] = props[property.key];
+    for (const property of releaseSettingDeclarations(release)) {
+      const value = props[property.key];
+      if (value !== undefined && typedSettingValue(value, property) !== undefined)
+        authored[property.key] = value;
       delete result[property.key];
     }
     // A block added since the last compile draws with its release's defaults, as publication writes them.
-    Object.assign(result, compiled ?? catalogueDefaults(release),
-      exact && compiled !== undefined ? {} : typedSourceSettings(authored, release.properties).settings);
+    Object.assign(result, compiled ?? catalogueDefaults(release), exact && compiled !== undefined ? {} : authored);
   }
   result.vortex = {
     block: { blockId: vortex.block?.block_id, releaseVersion: vortex.block?.release_version },
@@ -113,9 +117,10 @@ const renderProps = (
   return result;
 };
 
-const catalogueDefaults = (release: PlatformBlockRelease): Record<string, BlockPropertyValueContract> =>
+/** The release's declared defaults, as the plain values a compiled item carries. */
+const catalogueDefaults = (release: PlatformBlockRelease): Record<string, unknown> =>
   Object.fromEntries(release.properties.flatMap((property) =>
-    property.defaultValue === undefined ? [] : [[property.key, property.defaultValue]]));
+    property.defaultValue === undefined ? [] : [[property.key, plainSettingValue(property.defaultValue)]]));
 
 /**
  * The slot fields only, without Puck's `allow` lists: a block dropped or moved into any slot

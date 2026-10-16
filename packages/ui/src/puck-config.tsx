@@ -30,7 +30,7 @@ import {
 } from "react";
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
-  compiledPropsSettings,
+  plainSettingValue,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   type BreakpointOrder,
@@ -44,6 +44,7 @@ import {
 import { PALETTE_GROUP_TITLES } from "./palette-groups";
 import {
   DefinitionRenderError,
+  placementSettings,
   validateAccessibleName,
   type Breakpoint,
   type DefinitionRenderErrorLocation,
@@ -402,9 +403,9 @@ function PlacementBlock(props: {
     );
   const release = registration.metadata;
   const Implementation = implementationFor(release);
-  // Each setting is its own kind-tagged prop, including those the compiler derives beyond the
-  // release declarations; Puck writes `undefined` for an untouched field, which is absent.
-  const settings = compiledPropsSettings(componentProps);
+  // Each setting is its own prop holding its plain value; the release declares every one,
+  // including those the compiler derives, and gives it its kind.
+  const settings = placementSettings(componentProps, release, location);
   validateAccessibleName(settings, release.capabilities, location);
 
   // A placement whose use is unavailable stays viewable but never receives an invocable callback,
@@ -626,7 +627,9 @@ export function createVortexPuckConfig(
     components[rendererKey] = {
       label: release.name,
       defaultProps: {
-        ...defaults,
+        ...Object.fromEntries(
+          Object.entries(defaults).map(([key, value]) => [key, plainSettingValue(value)]),
+        ),
         vortex: {
           block: { blockId: release.blockId, releaseVersion: release.releaseVersion },
           themeOverrides: {},
@@ -642,7 +645,12 @@ export function createVortexPuckConfig(
       resolveFields: (data: { props: Record<string, unknown> }) =>
         buildFields(
           release,
-          hasRepeatableSlot ? compiledPropsSettings(data.props) : defaults,
+          hasRepeatableSlot
+            ? placementSettings(data.props, release, {
+                blockId: release.blockId,
+                releaseVersion: release.releaseVersion,
+              })
+            : defaults,
         ),
       render: (componentProps) => (
         <PlacementBlock

@@ -51,7 +51,7 @@ type BlockPropertySchemaBase = {
   /**
    * Present only on the `field_reference` property an automatic field input binds its record field
    * to: the compiler then derives that input's name, label, requirement, choices and control from
-   * the referenced module field. Authored and canonical values of the release are unchanged.
+   * the referenced module field, each a setting the release declares among its derived properties.
    */
   derivesFieldInput?: boolean | undefined;
 };
@@ -578,6 +578,122 @@ export const plainSourceSettingValue = (value: SourceBlockPropertyValueContract)
     default:
       return value.value;
   }
+};
+
+/**
+ * The plain form of one canonical setting value: the value without its kind, as a compiled item
+ * carries it. A compiled item holds every setting in this form, exactly as a stored item does; only
+ * its references are resolved to canonical identities.
+ */
+export const plainSettingValue = (value: BlockPropertyValueContract): unknown => {
+  switch (value.kind) {
+    case "asset_reference":
+      return value.assetId;
+    case "icon":
+      return value.iconKey;
+    case "theme_token":
+      return value.tokenKey;
+    case "field_reference":
+      return value.fieldId;
+    case "relationship_reference":
+      return value.relationshipId;
+    case "action_reference":
+      return value.actionKey;
+    case "page_reference":
+      return value.pageId;
+    case "query_reference":
+      return value.queryId;
+    case "pipeline_reference":
+      return value.pipelineId;
+    case "record_type_reference":
+      return value.recordType;
+    case "record_reference":
+      return { recordType: value.recordType, recordId: value.recordId };
+    case "group":
+      return Object.fromEntries(
+        Object.entries(value.properties).map(([key, nested]) => [key, plainSettingValue(nested)]),
+      );
+    case "list":
+      return value.items.map(plainSettingValue);
+    default:
+      return value.value;
+  }
+};
+
+/**
+ * The kind-tagged candidate of one plain compiled value, built from the declaration it fills; the
+ * closed value contract then judges it. Undefined when the plain value has the wrong shape.
+ */
+const typedSettingCandidate = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+): unknown => {
+  switch (declaration.kind) {
+    case "text":
+    case "number":
+    case "boolean":
+    case "choice":
+    case "rich_text":
+    case "url":
+      return { kind: declaration.kind, value };
+    case "asset_reference":
+      return { kind: declaration.kind, assetId: value };
+    case "icon":
+      return { kind: declaration.kind, iconKey: value };
+    case "theme_token":
+      return { kind: declaration.kind, tokenKey: value };
+    case "field_reference":
+      return { kind: declaration.kind, fieldId: value };
+    case "relationship_reference":
+      return { kind: declaration.kind, relationshipId: value };
+    case "action_reference":
+      return { kind: declaration.kind, actionKey: value };
+    case "page_reference":
+      return { kind: declaration.kind, pageId: value };
+    case "query_reference":
+      return { kind: declaration.kind, queryId: value };
+    case "pipeline_reference":
+      return { kind: declaration.kind, pipelineId: value };
+    case "record_type_reference":
+      return { kind: declaration.kind, recordType: value };
+    case "record_reference": {
+      const reference = plainObject(value);
+      return reference === undefined ? undefined : { kind: declaration.kind, ...reference };
+    }
+    case "group": {
+      const group = plainObject(value);
+      if (group === undefined) return undefined;
+      const declared = new Map(declaration.properties.map((property) => [property.key, property]));
+      const properties: Record<string, unknown> = {};
+      for (const [key, nested] of Object.entries(group)) {
+        const property = declared.get(key);
+        if (property === undefined) return undefined;
+        properties[key] = typedSettingCandidate(nested, property);
+      }
+      return { kind: "group", properties };
+    }
+    case "list":
+      return Array.isArray(value)
+        ? {
+            kind: "list",
+            items: value.map((item: unknown) => typedSettingCandidate(item, declaration.item)),
+          }
+        : undefined;
+  }
+};
+
+/**
+ * Reads one plain compiled setting value as the canonical value of the declaration it fills, or
+ * undefined when it is not one. The declaration alone gives the value its kind, and the value must
+ * satisfy every constraint of that declaration (options, bounds, item shapes).
+ */
+export const typedSettingValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+): BlockPropertyValueContract | undefined => {
+  const parsed = blockPropertyValueSchema.safeParse(typedSettingCandidate(value, declaration));
+  if (!parsed.success) return undefined;
+  return validateComponentSettingValue(parsed.data, declaration).length === 0 ? parsed.data : undefined;
 };
 
 /** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */
