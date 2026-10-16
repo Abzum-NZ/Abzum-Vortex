@@ -2,6 +2,7 @@ import { z } from "zod";
 import { applicationDraftSchema } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotSchema } from "./application-composition/catalogue-snapshot";
 import { applicationSourceDocumentSchema } from "./application-source-contracts";
+import { applicationSourceContractVersion } from "./application-contract-versions";
 import {
   applicationActionInputDefinitionSchema,
   publishedApplicationDefinitionSchema,
@@ -173,7 +174,7 @@ export const moduleCompilationRequestSchema = z
 /** The one current Application compilation request; runtime dispatch requires this exact pair. */
 export const applicationCompilationRequestSchema = z
   .object({
-    sourceContractVersion: z.literal("2.0.0"),
+    sourceContractVersion: z.literal(applicationSourceContractVersion),
     validationContractVersion: z.literal("2.0.0"),
     source: applicationSourceDocumentSchema,
     resolution: definitionResolutionSnapshotSchema,

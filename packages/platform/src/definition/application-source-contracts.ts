@@ -26,7 +26,17 @@ import {
   sourcePermissionFieldPolicySchema,
 } from "./module-source-contracts";
 import { applicationRolePermissionKeysSchema } from "../access/permissions";
-import { sourceGuidedFormPageCompositionSchema, sourceApplicationShellSchema, sourcePageCompositionSchema, sourcePlacementEntries } from "./application-composition/page-composition";
+import {
+  sourceApplicationShellSchema,
+  sourceGuidedFormPageCompositionSchema,
+  sourceItemTree,
+  sourcePageDataOf,
+  sourcePageDataSchema,
+  sourcePageItems,
+  sourcePageRootSlots,
+  sourcePageShell,
+  type SourcePageData,
+} from "./application-composition/source-composition";
 import { sourceApplicationThemeSchema } from "./application-composition/theme";
 import { sourcePlatformBlockDependenciesSchema } from "./application-composition/platform-block-release";
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
@@ -200,7 +210,7 @@ const sourcePageCommon = {
 
 const sourcePageBase = {
   ...sourcePageCommon,
-  composition: sourceProvenanceUnchanged(sourcePageCompositionSchema),
+  composition: sourceProvenanceUnchanged(sourcePageDataSchema),
 };
 
 const sourceListPageSchema = z
@@ -906,9 +916,9 @@ export const sourceApplicationBodySchema = z
       }
       // Shown before any placement authority or data is projected, so presentation-only.
       const composition = page.composition;
-      const shellAlias = composition.shell_kind === "application" ? composition.shell : undefined;
+      const shellAlias = sourcePageShell(composition);
       const shell =
-        shellAlias === undefined
+        shellAlias === null
           ? undefined
           : value.shells.find((candidate) => candidate.id === shellAlias);
       if (
@@ -942,30 +952,23 @@ export const sourceApplicationBodySchema = z
         message: "Shell content-slot aliases must be unique across the application",
       });
 
-    const placementEntries = value.shells.flatMap((shell) =>
-      sourcePlacementEntries(shell.layout),
-    );
+    const placedItems = value.shells.flatMap((shell) => sourceItemTree(shell.layout.content));
     const shellsByAlias = new Map(value.shells.map((shell) => [shell.id, shell]));
     const validateShellContent = (
-      content: Record<string, { placements: Record<string, unknown> }>,
+      data: SourcePageData,
       shell: (typeof value.shells)[number],
       path: (string | number)[],
     ) => {
       const allowed = new Set(shell.content_slots.map((slot) => slot.id));
       const required = shell.content_slots.filter((slot) => slot.required).map((slot) => slot.id);
-      const supplied = Object.keys(content);
-      if (supplied.some((slotId) => !allowed.has(slotId)))
+      const content = new Map(sourcePageRootSlots(data));
+      if ([...content.keys()].some((slotId) => !allowed.has(slotId)))
         context.addIssue({
           code: "custom",
           path,
           message: "Page content may bind only slots declared by its shell",
         });
-      if (
-        required.some((slotId) => {
-          const slot = content[slotId];
-          return slot === undefined || Object.keys(slot.placements).length === 0;
-        })
-      )
+      if (required.some((slotId) => (content.get(slotId)?.length ?? 0) === 0))
         context.addIssue({
           code: "custom",
           path,
@@ -974,54 +977,31 @@ export const sourceApplicationBodySchema = z
     };
     for (const [pageIndex, page] of value.pages.entries()) {
       const composition = page.composition;
-      if ("step_content" in composition) {
-        if (composition.shell_kind === "default") {
-          for (const slot of Object.values(composition.step_content))
-            placementEntries.push(...sourcePlacementEntries(slot));
-          continue;
-        }
-        const shell = shellsByAlias.get(composition.shell);
-        if (shell === undefined)
-          context.addIssue({
-            code: "custom",
-            path: ["pages", pageIndex, "composition", "shell"],
-            message: "A page shell must resolve inside the same application",
-          });
-        for (const [stepId, content] of Object.entries(composition.step_content)) {
-          if (shell !== undefined)
-            validateShellContent(content, shell, [
-              "pages",
-              pageIndex,
-              "composition",
-              "step_content",
-              stepId,
-            ]);
-          for (const slot of Object.values(content))
-            placementEntries.push(...sourcePlacementEntries(slot));
-        }
+      placedItems.push(...sourcePageItems(composition));
+      const shellAlias = sourcePageShell(composition);
+      if (shellAlias === null) continue;
+      const shell = shellsByAlias.get(shellAlias);
+      if (shell === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["pages", pageIndex, "composition"],
+          message: "A page shell must resolve inside the same application",
+        });
         continue;
       }
-      if (composition.shell_kind === "default")
-        placementEntries.push(...sourcePlacementEntries(composition.main));
-      else {
-        const shell = shellsByAlias.get(composition.shell);
-        if (shell === undefined)
-          context.addIssue({
-            code: "custom",
-            path: ["pages", pageIndex, "composition", "shell"],
-            message: "A page shell must resolve inside the same application",
-          });
-        else
-          validateShellContent(composition.content, shell, [
-            "pages",
-            pageIndex,
-            "composition",
-            "content",
-          ]);
-        for (const slot of Object.values(composition.content))
-          placementEntries.push(...sourcePlacementEntries(slot));
-      }
+      const steps = "step_content" in composition ? Object.keys(composition.step_content) : [];
+      sourcePageDataOf(composition).forEach((data, index) =>
+        validateShellContent(data, shell, [
+          "pages",
+          pageIndex,
+          "composition",
+          ...("step_content" in composition ? ["step_content", steps[index]!] : []),
+          "root",
+          "props",
+        ]),
+      );
     }
+    const placementEntries = placedItems.map((item) => [item.props.id, item.props.vortex] as const);
 
     const placementAliases = placementEntries.map(([placementId]) => placementId);
     if (new Set(placementAliases).size !== placementAliases.length)

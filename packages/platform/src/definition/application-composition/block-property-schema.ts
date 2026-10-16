@@ -1,9 +1,22 @@
 import { z } from "zod";
-import { labelSchema } from "../../catalogue/common";
-import { sourceProvenanceUnchanged } from "../definition-source-common";
-import { builderKeySchema } from "../../catalogue/identifiers";
-import type { richTextDocumentSchema } from "../../records/rich-text";
-import { richTextElementKindSchema, type RichTextInline } from "../../records/rich-text";
+import { labelSchema, safeHttpsUrlSchema } from "../../catalogue/common";
+import {
+  sourceProvenanceUnchanged,
+  sourceQualifiedFieldSchema,
+  sourceQualifiedQueryReferenceSchema,
+  sourceQualifiedRelationshipSchema,
+} from "../definition-source-common";
+import {
+  builderKeySchema,
+  namespacedKeySchema,
+  platformIdSchema,
+  sourceQualifiedRecordTypeSchema,
+} from "../../catalogue/identifiers";
+import {
+  richTextDocumentSchema,
+  richTextElementKindSchema,
+  type RichTextInline,
+} from "../../records/rich-text";
 import type { DefinitionRuleFailureFamily } from "../../catalogue/validation-errors";
 import {
   type BlockPropertyValueContract,
@@ -344,6 +357,227 @@ export const validateComponentSettings = (
       failures.push({ family: "required_value", path: [declaration.key] });
   }
   return failures;
+};
+
+const plainObject = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined;
+
+const plainStringOf = (schema: z.ZodType<string>, value: unknown): string | undefined => {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+};
+
+/**
+ * Reads one authored setting value as the typed value of the release property it fills.
+ *
+ * Authored settings are plain JSON placed directly on an item's props: a string, number, boolean,
+ * rich-text document, `{record_type, record_id}` record reference, an object for a group and an
+ * array for a list. The release property declaration alone gives the value its kind, so an authored
+ * value never repeats it. Shape mismatches are reported as `invalid_value` at their setting path and
+ * undeclared group keys as `unknown_property` (or `unsafe_content`); every other rule is judged by
+ * `validateComponentSettingValue` on the typed result.
+ */
+export const typedSourceSettingValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+  path: readonly (string | number)[],
+  failures: ComponentSettingFailure[],
+): SourceBlockPropertyValueContract | undefined => {
+  const invalid = (): undefined => {
+    failures.push({ family: "invalid_value", path });
+    return undefined;
+  };
+  const text = (schema: z.ZodType<string>): string | undefined =>
+    plainStringOf(schema, value) ?? invalid();
+  switch (declaration.kind) {
+    case "text":
+    case "url":
+    case "choice": {
+      const parsed = text(declaration.kind === "url" ? safeHttpsUrlSchema : z.string());
+      return parsed === undefined ? undefined : { kind: declaration.kind, value: parsed };
+    }
+    case "number":
+      return typeof value === "number" && Number.isFinite(value)
+        ? { kind: "number", value }
+        : invalid();
+    case "boolean":
+      return typeof value === "boolean" ? { kind: "boolean", value } : invalid();
+    case "rich_text": {
+      const parsed = richTextDocumentSchema.safeParse(value);
+      return parsed.success ? { kind: "rich_text", value: parsed.data } : invalid();
+    }
+    case "asset_reference": {
+      const parsed = text(platformIdSchema);
+      return parsed === undefined ? undefined : { kind: "asset_reference", asset_id: parsed as never };
+    }
+    case "icon": {
+      const parsed = text(builderKeySchema);
+      return parsed === undefined ? undefined : { kind: "icon", icon_key: parsed };
+    }
+    case "theme_token": {
+      const parsed = text(builderKeySchema);
+      return parsed === undefined ? undefined : { kind: "theme_token", token: parsed };
+    }
+    case "field_reference": {
+      const parsed = text(sourceQualifiedFieldSchema);
+      return parsed === undefined ? undefined : { kind: "field_reference", field: parsed };
+    }
+    case "relationship_reference": {
+      const parsed = text(sourceQualifiedRelationshipSchema);
+      return parsed === undefined
+        ? undefined
+        : { kind: "relationship_reference", relationship: parsed };
+    }
+    case "action_reference": {
+      const parsed = text(namespacedKeySchema);
+      return parsed === undefined ? undefined : { kind: "action_reference", action: parsed };
+    }
+    case "page_reference": {
+      const parsed = text(builderKeySchema);
+      return parsed === undefined ? undefined : { kind: "page_reference", page: parsed };
+    }
+    case "query_reference": {
+      const parsed = text(sourceQualifiedQueryReferenceSchema);
+      return parsed === undefined ? undefined : { kind: "query_reference", query: parsed };
+    }
+    case "pipeline_reference": {
+      const parsed = text(builderKeySchema);
+      return parsed === undefined ? undefined : { kind: "pipeline_reference", pipeline: parsed };
+    }
+    case "record_type_reference": {
+      const parsed = text(sourceQualifiedRecordTypeSchema);
+      return parsed === undefined
+        ? undefined
+        : { kind: "record_type_reference", record_type: parsed };
+    }
+    case "record_reference": {
+      const reference = plainObject(value);
+      const recordType = plainStringOf(sourceQualifiedRecordTypeSchema, reference?.record_type);
+      const recordId = plainStringOf(z.uuid(), reference?.record_id);
+      if (
+        reference === undefined ||
+        Object.keys(reference).some((key) => key !== "record_type" && key !== "record_id") ||
+        recordType === undefined ||
+        recordId === undefined
+      )
+        return invalid();
+      return { kind: "record_reference", record_type: recordType, record_id: recordId };
+    }
+    case "group": {
+      const group = plainObject(value);
+      if (group === undefined) return invalid();
+      const declared = new Map(declaration.properties.map((property) => [property.key, property]));
+      const properties: Record<string, SourceBlockPropertyValueContract> = {};
+      let complete = true;
+      for (const [key, nested] of Object.entries(group)) {
+        const property = declared.get(key);
+        if (property === undefined) {
+          failures.push({
+            family: isExecutableComponentSettingKey(key) ? "unsafe_content" : "unknown_property",
+            path: [...path, key],
+          });
+          complete = false;
+          continue;
+        }
+        const typed = typedSourceSettingValue(nested, property, [...path, key], failures);
+        if (typed === undefined) complete = false;
+        else properties[key] = typed;
+      }
+      return complete ? { kind: "group", properties } : undefined;
+    }
+    case "list": {
+      if (!Array.isArray(value)) return invalid();
+      const items: SourceBlockPropertyValueContract[] = [];
+      let complete = true;
+      value.forEach((item: unknown, index) => {
+        const typed = typedSourceSettingValue(item, declaration.item, [...path, index], failures);
+        if (typed === undefined) complete = false;
+        else items.push(typed);
+      });
+      return complete ? { kind: "list", items } : undefined;
+    }
+  }
+};
+
+/**
+ * Reads an item's authored settings against its release declarations. Returns the typed settings
+ * and every failure: undeclared keys, plain values of the wrong shape and every rule
+ * `validateComponentSettingValue` judges, including a missing required value.
+ */
+export const typedSourceSettings = (
+  settings: Readonly<Record<string, unknown>>,
+  declarations: readonly BlockPropertySchemaContract[],
+): Readonly<{
+  settings: Record<string, SourceBlockPropertyValueContract>;
+  failures: ComponentSettingFailure[];
+}> => {
+  const failures: ComponentSettingFailure[] = [];
+  const typed: Record<string, SourceBlockPropertyValueContract> = {};
+  const declared = new Set(declarations.map((declaration) => declaration.key));
+  for (const key of Object.keys(settings))
+    if (!declared.has(key))
+      failures.push({
+        family: isExecutableComponentSettingKey(key) ? "unsafe_content" : "unknown_property",
+        path: [key],
+      });
+  for (const declaration of declarations) {
+    if (!Object.hasOwn(settings, declaration.key)) {
+      if (declaration.required && declaration.defaultValue === undefined)
+        failures.push({ family: "required_value", path: [declaration.key] });
+      continue;
+    }
+    const value = typedSourceSettingValue(
+      settings[declaration.key],
+      declaration,
+      [declaration.key],
+      failures,
+    );
+    if (value === undefined) continue;
+    typed[declaration.key] = value;
+    failures.push(...validateComponentSettingValue(value, declaration, [declaration.key]));
+  }
+  return { settings: typed, failures };
+};
+
+/** The plain authored form of one typed setting value: the value without its kind. */
+export const plainSourceSettingValue = (value: SourceBlockPropertyValueContract): unknown => {
+  switch (value.kind) {
+    case "asset_reference":
+      return value.asset_id;
+    case "icon":
+      return value.icon_key;
+    case "theme_token":
+      return value.token;
+    case "field_reference":
+      return value.field;
+    case "relationship_reference":
+      return value.relationship;
+    case "action_reference":
+      return value.action;
+    case "page_reference":
+      return value.page;
+    case "query_reference":
+      return value.query;
+    case "pipeline_reference":
+      return value.pipeline;
+    case "record_type_reference":
+      return value.record_type;
+    case "record_reference":
+      return { record_type: value.record_type, record_id: value.record_id };
+    case "group":
+      return Object.fromEntries(
+        Object.entries(value.properties).map(([key, nested]) => [
+          key,
+          plainSourceSettingValue(nested),
+        ]),
+      );
+    case "list":
+      return value.items.map(plainSourceSettingValue);
+    default:
+      return value.value;
+  }
 };
 
 /** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */

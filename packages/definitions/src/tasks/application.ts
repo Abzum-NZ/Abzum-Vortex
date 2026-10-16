@@ -4,7 +4,7 @@ import {
   defaultSaveFlowSource,
   type ApplicationSourceDocument,
   type PlatformBlockReleaseIdentity,
-  type SourceBlockPropertyValueContract,
+  type SourceItemVortex,
 } from "@vortex/platform/schema";
 import { loadApplicationSource } from "../application-source-loader";
 
@@ -27,33 +27,41 @@ const layout = {
   width: { kind: "fill" as const },
   height: { kind: "content" as const },
 };
+/** One authored item before it is named: renderer, plain settings, child slots and metadata. */
 const placement = (
   release: PlatformBlockReleaseIdentity,
-  settings: Record<string, SourceBlockPropertyValueContract> = {},
-  slots: Record<string, unknown> = {},
+  settings: Record<string, unknown> = {},
+  slots: Record<string, readonly unknown[]> = {},
+  bindings: Partial<Pick<SourceItemVortex, "query">> = {},
 ) => ({
-  block: { block_id: release.blockId, release_version: release.releaseVersion },
-  settings,
-  theme_overrides: {},
-  responsive: { desktop: layout },
-  slots,
+  type: release.rendererKey,
+  props: {
+    ...settings,
+    ...slots,
+    vortex: {
+      block: { block_id: release.blockId, release_version: release.releaseVersion },
+      ...bindings,
+      theme_overrides: {},
+      responsive: { desktop: layout },
+    },
+  },
 });
-const slot = (placements: Record<string, unknown>) => ({
-  placements,
-  order: { desktop: Object.keys(placements) },
-});
+type Placement = ReturnType<typeof placement>;
+/** A slot's items in desktop order, each named by its alias. */
+const slot = (entries: Record<string, Placement>) =>
+  Object.entries(entries).map(([id, item]) => ({ type: item.type, props: { id, ...item.props } }));
 const input = (name: string, label: string, required: boolean) =>
   placement(TEXT_INPUT_BLOCK_RELEASE, {
-    name: { kind: "text", value: name },
-    label: { kind: "text", value: label },
-    required: { kind: "boolean", value: required },
+    name,
+    label,
+    required,
   });
 const page = (
   key: string,
   name: string,
   type: "list" | "form",
   permission: string,
-  content: Record<string, unknown>,
+  content: Record<string, Placement>,
 ) => ({
   id: `page_tasks_${key}`,
   key,
@@ -63,9 +71,10 @@ const page = (
   permission,
   ...(type === "list" ? { query } : {}),
   composition: {
-    shell_kind: "application",
-    shell: "shell_tasks",
-    content: { slot_primary: slot(content) },
+    root: {
+      props: { slot_primary: slot(content), vortex: { shell: "shell_tasks", slot_orders: {} } },
+    },
+    content: [],
   },
 });
 
@@ -83,41 +92,44 @@ const shell = {
       appearance_toggle: true,
     },
   },
-  layout: slot({
-    shell_root: placement(
-      CONTAINER_BLOCK_RELEASE,
-      {
-        direction: { kind: "choice", value: "column" },
-        gap: { kind: "choice", value: "medium" },
-      },
-      {
-        header: slot({}),
-        content: slot({
-          shell_body: placement(
-            CONTAINER_BLOCK_RELEASE_1_2_0,
-            {
-              direction: { kind: "choice", value: "row" },
-              gap: { kind: "choice", value: "medium" },
-              menu_width: { kind: "number", value: 16 },
-              menu_placement: { kind: "choice", value: "sticky" },
-              content_landmark: { kind: "boolean", value: true },
-              tablet_menu_width: { kind: "number", value: 14 },
-              phone_direction: { kind: "choice", value: "column" },
-              phone_menu_placement: { kind: "choice", value: "flow" },
-            },
-            {
-              menu: slot({
-                shell_navigation: placement(APPLICATION_NAVIGATION_BLOCK_RELEASE, {
-                  title: { kind: "text", value: "Tasks" },
+  layout: {
+    root: { props: { vortex: { slot_orders: {} } } },
+    content: slot({
+      shell_root: placement(
+        CONTAINER_BLOCK_RELEASE,
+        {
+          direction: "column",
+          gap: "medium",
+        },
+        {
+          header: slot({}),
+          content: slot({
+            shell_body: placement(
+              CONTAINER_BLOCK_RELEASE_1_2_0,
+              {
+                direction: "row",
+                gap: "medium",
+                menu_width: 16,
+                menu_placement: "sticky",
+                content_landmark: true,
+                tablet_menu_width: 14,
+                phone_direction: "column",
+                phone_menu_placement: "flow",
+              },
+              {
+                menu: slot({
+                  shell_navigation: placement(APPLICATION_NAVIGATION_BLOCK_RELEASE, {
+                    title: "Tasks",
+                  }),
                 }),
-              }),
-              content: slot({}),
-            },
-          ),
-        }),
-      },
-    ),
-  }),
+                content: slot({}),
+              },
+            ),
+          }),
+        },
+      ),
+    }),
+  },
   content_slots: [
     {
       id: "slot_primary",
@@ -142,7 +154,7 @@ const shell = {
 /** The module supplies records and queries; this Application supplies navigation and pages. */
 export const tasksApplication: ApplicationSourceDocument = loadApplicationSource(
   {
-    source_contract_version: "2.0.0",
+    source_contract_version: "3.0.0",
     root_alias: "app_tasks",
     key: "vortex.app.tasks",
     kind: "application",
@@ -188,7 +200,14 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
         },
       ],
       navigation: [
-        { id: "nav_tasks_list", type: "page", label: "Tasks", icon: "check", page: "tasks", permission: readPage },
+        {
+          id: "nav_tasks_list",
+          type: "page",
+          label: "Tasks",
+          icon: "check",
+          page: "tasks",
+          permission: readPage,
+        },
         {
           id: "nav_tasks_create",
           type: "page",
@@ -216,37 +235,33 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
       shells: [shell],
       pages: [
         page("tasks", "Tasks", "list", readPage, {
-          tasks_table: {
-            ...placement(TABLE_BLOCK_RELEASE_1_3_0, {
-              title: { kind: "text", value: "Tasks" },
-              columns: {
-                kind: "list",
-                items: (["title", "notes"] as const).map((field) => ({
-                  kind: "group" as const,
-                  properties: {
-                    field: { kind: "field_reference" as const, field: `${recordType}.${field}` },
-                    label: { kind: "text" as const, value: field === "title" ? "Title" : "Notes" },
-                  },
-                })),
-              },
-            }),
-            query,
-          },
+          tasks_table: placement(
+            TABLE_BLOCK_RELEASE_1_3_0,
+            {
+              title: "Tasks",
+              columns: (["title", "notes"] as const).map((field) => ({
+                field: `${recordType}.${field}`,
+                label: field === "title" ? "Title" : "Notes",
+              })),
+            },
+            {},
+            { query },
+          ),
         }),
         page("new_task", "Create task", "form", createPage, {
           form_new_task: placement(
             FORM_CONTAINER_BLOCK_RELEASE,
             {
-              title: { kind: "text", value: "Create task" },
+              title: "Create task",
             },
             {
               content: slot({
                 input_task_title: input("title", "Title", true),
                 input_task_notes: input("notes", "Notes", false),
                 submit_new_task: placement(BUTTON_BLOCK_RELEASE, {
-                  label: { kind: "text", value: "Create task" },
-                  action_kind: { kind: "choice", value: "submit" },
-                  variant: { kind: "choice", value: "primary" },
+                  label: "Create task",
+                  action_kind: "submit",
+                  variant: "primary",
                 }),
               }),
             },

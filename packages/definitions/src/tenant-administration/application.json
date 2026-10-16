@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "2.0.0",
+  "source_contract_version": "3.0.0",
   "root_alias": "app_tenant_administration",
   "key": "vortex.app.tenant_administration",
   "kind": "application",
@@ -52,7 +52,13 @@
         "record_type": "vortex.system_directory:organization",
         "action_kind": "read",
         "administrative": false,
-        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
         "field_policy": {
           "readable_fields": [
             "organization_id",
@@ -85,7 +91,13 @@
         "record_type": "vortex.system_directory:tenant_administrator",
         "action_kind": "read",
         "administrative": false,
-        "record_scope": { "routes": [{ "kind": "all_records" }] },
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
         "field_policy": {
           "readable_fields": [
             "organization_id",
@@ -120,13 +132,13 @@
         "id": "nav_tenant",
         "type": "heading",
         "label": "Tenant",
-        "icon":  "building-2",
+        "icon": "building-2",
         "children": [
           {
             "id": "nav_overview",
             "type": "page",
             "label": "Overview",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "tenant_overview",
             "permission": "application.tenant_administration.open"
           },
@@ -134,7 +146,7 @@
             "id": "nav_structure",
             "type": "page",
             "label": "Tenant structure",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "tenant_structure",
             "permission": "application.tenant_administration.open"
           }
@@ -144,20 +156,20 @@
         "id": "nav_access",
         "type": "heading",
         "label": "Access",
-        "icon":  "grid",
+        "icon": "grid",
         "children": [
           {
             "id": "nav_administrators",
             "type": "page",
             "label": "Tenant administrators",
-            "icon":  "building-2",
+            "icon": "building-2",
             "page": "tenant_administrators",
             "permission": "application.tenant_administration.open"
           }
         ]
       }
     ],
-    "queries":  [],
+    "queries": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
@@ -220,124 +232,60 @@
         "id": "shell_tenant_administration",
         "key": "tenant_administration_shell",
         "name": "Tenant administration shell",
-        "presentation":  {
-            "sidebar":  {
-                "collapsible":  "icon",
-                "default_collapsed":  false
-            },
-            "top_bar":  {
-                "breadcrumbs":  true,
-                "organization_switcher":  true,
-                "application_switcher":  true,
-                "account_menu":  true,
-                "appearance_toggle":  true
-            }
+        "presentation": {
+          "sidebar": {
+            "collapsible": "icon",
+            "default_collapsed": false
+          },
+          "top_bar": {
+            "breadcrumbs": true,
+            "organization_switcher": true,
+            "application_switcher": true,
+            "account_menu": true,
+            "appearance_toggle": true
+          }
         },
         "layout": {
-          "placements": {
-            "shell_root": {
-              "block": {
-                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                "release_version": "1.3.0"
-              },
-              "settings": {
-                "direction": {
-                  "kind": "choice",
-                  "value": "column"
-                },
-                "gap": {
-                  "kind": "choice",
-                  "value": "medium"
-                },
-                "padding": {
-                  "kind": "choice",
-                  "value": "medium"
-                },
-                "content_width": {
-                  "kind": "choice",
-                  "value": "fill"
-                }
-              },
-              "theme_overrides": {},
-              "responsive": {
-                "desktop": {
-                  "visible": true,
-                  "width": {
-                    "kind": "fill"
-                  },
-                  "height": {
-                    "kind": "content"
-                  }
-                }
-              },
-              "slots": {
-                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
-                "content": {
-                  "placements": {
-                    "shell_body": {
-                      "block": {
-                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                        "release_version": "1.2.0"
-                      },
-                      "settings": {
-                        "direction": {
-                          "kind": "choice",
-                          "value": "row"
-                        },
-                        "gap": {
-                          "kind": "choice",
-                          "value": "medium"
-                        },
-                        "menu_width": {
-                          "kind": "number",
-                          "value": 16
-                        },
-                        "menu_placement": {
-                          "kind": "choice",
-                          "value": "sticky"
-                        },
-                        "content_landmark": {
-                          "kind": "boolean",
-                          "value": true
-                        },
-                        "tablet_menu_width": {
-                          "kind": "number",
-                          "value": 14
-                        },
-                        "phone_direction": {
-                          "kind": "choice",
-                          "value": "column"
-                        },
-                        "phone_menu_placement": {
-                          "kind": "choice",
-                          "value": "flow"
-                        }
-                      },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      },
-                      "slots": {
-                        "menu": {
-                          "placements": {
-                            "shell_navigation": {
+          "root": {
+            "props": {
+              "vortex": {
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": [
+            {
+              "type": "platform.renderer.container",
+              "props": {
+                "id": "shell_root",
+                "direction": "column",
+                "gap": "medium",
+                "padding": "medium",
+                "content_width": "fill",
+                "header": [],
+                "content": [
+                  {
+                    "type": "platform.renderer.container",
+                    "props": {
+                      "id": "shell_body",
+                      "direction": "row",
+                      "gap": "medium",
+                      "menu_width": 16,
+                      "menu_placement": "sticky",
+                      "content_landmark": true,
+                      "tablet_menu_width": 14,
+                      "phone_direction": "column",
+                      "phone_menu_placement": "flow",
+                      "menu": [
+                        {
+                          "type": "platform.renderer.application_navigation",
+                          "props": {
+                            "id": "shell_navigation",
+                            "title": "Tenant Administration",
+                            "vortex": {
                               "block": {
                                 "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
                                 "release_version": "1.0.0"
-                              },
-                              "settings": {
-                                "title": {
-                                  "kind": "text",
-                                  "value": "Tenant Administration"
-                                }
                               },
                               "theme_overrides": {},
                               "responsive": {
@@ -350,39 +298,54 @@
                                     "kind": "content"
                                   }
                                 }
-                              },
-                              "slots": {}
+                              }
                             }
-                          },
-                          "order": {
-                            "desktop": [
-                              "shell_navigation"
-                            ]
                           }
+                        }
+                      ],
+                      "content": [],
+                      "vortex": {
+                        "block": {
+                          "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                          "release_version": "1.2.0"
                         },
-                        "content": {
-                          "placements": {},
-                          "order": {
-                            "desktop": []
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
                           }
                         }
                       }
                     }
+                  }
+                ],
+                "vortex": {
+                  "block": {
+                    "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                    "release_version": "1.3.0"
                   },
-                  "order": {
-                    "desktop": [
-                      "shell_body"
-                    ]
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
                   }
                 }
               }
             }
-          },
-          "order": {
-            "desktop": [
-              "shell_root"
-            ]
-          }
+          ]
         },
         "content_slots": [
           {
@@ -413,129 +376,87 @@
         "type": "dashboard",
         "permission": "application.tenant_administration.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_tenant_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "overview_text": {
-                  "block": {
-                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Tenant overview"
-                    },
-                    "text": {
-                      "kind": "text",
-                      "value": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure for its protected actions. Tenant administrators are listed on their own page."
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "overview_text",
+                    "title": "Tenant overview",
+                    "text": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure for its protected actions. Tenant administrators are listed on their own page.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.0.0"
                       },
-                      "height": {
-                        "kind": "content"
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 },
-                "overview_organizations_region": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.4.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Organisations in this tenant"
-                    },
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "overview_organizations_region",
+                    "title": "Organisations in this tenant",
                     "row_click": {
-                      "kind": "group",
-                      "properties": {
-                        "event_id": {
-                          "kind": "text",
-                          "value": "event_open_organization_detail"
-                        }
-                      }
+                      "event_id": "event_open_organization_detail"
                     },
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Organisation"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.short_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Short name"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:organization.display_name",
+                        "label": "Organisation"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.short_name",
+                        "label": "Short name"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.state",
+                        "label": "State"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.4.0"
+                      },
+                      "view_permission": "vortex.tenant_administration.organization.read",
+                      "query": "vortex.system_directory:organizations",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
                           }
                         }
-                      ]
-                    }
-                  },
-                  "view_permission": "vortex.tenant_administration.organization.read",
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
                       }
                     }
-                  },
-                  "slots": {},
-                  "query": "vortex.system_directory:organizations"
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "overview_text",
-                  "overview_organizations_region"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_tenant_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -545,813 +466,512 @@
         "type": "dashboard",
         "permission": "application.tenant_administration.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_tenant_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "structure_region": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.4.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Tenant structure"
-                    },
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "structure_region",
+                    "title": "Tenant structure",
                     "row_click": {
-                      "kind": "group",
-                      "properties": {
-                        "event_id": {
-                          "kind": "text",
-                          "value": "event_open_organization_detail"
-                        }
-                      }
+                      "event_id": "event_open_organization_detail"
                     },
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Display name"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.short_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Short name"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.state_changed_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State changed"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.created_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Created"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "row_actions": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_suspend_organization"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Suspend organisation"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_restore_organization"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Restore organisation"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_rename_organization"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Rename organisation"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_move_organization"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Move organisation"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "event_id": {
-                              "kind": "text",
-                              "value": "event_create_child_organization"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Create child organisation"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:organization.display_name",
+                        "label": "Display name"
                       },
-                      "height": {
-                        "kind": "content"
+                      {
+                        "field": "vortex.system_directory:organization.short_name",
+                        "label": "Short name"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.state",
+                        "label": "State"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.state_changed_at",
+                        "label": "State changed"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.created_at",
+                        "label": "Created"
                       }
-                    }
-                  },
-                  "slots": {},
-                  "view_permission": "vortex.tenant_administration.organization.read",
-                  "query": "vortex.system_directory:organizations"
-                },
-                "form_rename_organization": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Rename organisation"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": false,
-                      "width": {
-                        "kind": "fill"
+                    ],
+                    "row_actions": [
+                      {
+                        "event_id": "event_suspend_organization",
+                        "label": "Suspend organisation"
                       },
-                      "height": {
-                        "kind": "content"
+                      {
+                        "event_id": "event_restore_organization",
+                        "label": "Restore organisation"
+                      },
+                      {
+                        "event_id": "event_rename_organization",
+                        "label": "Rename organisation"
+                      },
+                      {
+                        "event_id": "event_move_organization",
+                        "label": "Move organisation"
+                      },
+                      {
+                        "event_id": "event_create_child_organization",
+                        "label": "Create child organisation"
                       }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "input_rename_organization_display_name": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Organisation name"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.4.0"
                       },
-                      "order": {
-                        "desktop": [
-                          "input_rename_organization_display_name"
-                        ]
+                      "view_permission": "vortex.tenant_administration.organization.read",
+                      "query": "vortex.system_directory:organizations",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
                 },
-                "form_move_organization": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Move organisation"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
-                      }
-                    }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "input_move_organization_parent": {
-                          "block": {
-                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                            "release_version": "1.1.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "parent_organization_id"
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_rename_organization",
+                    "title": "Rename organisation",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_rename_organization_display_name",
+                          "name": "display_name",
+                          "label": "Organisation name",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
                             },
-                            "label": {
-                              "kind": "text",
-                              "value": "New parent organisation"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "choice_source": {
-                              "kind": "group",
-                              "properties": {
-                                "query": {
-                                  "kind": "query_reference",
-                                  "query": "vortex.system_directory:organizations"
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
                                 },
-                                "label_field": {
-                                  "kind": "field_reference",
-                                  "field": "vortex.system_directory:organization.display_name"
+                                "height": {
+                                  "kind": "content"
                                 }
                               }
                             }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
+                          }
                         }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
                       },
-                      "order": {
-                        "desktop": [
-                          "input_move_organization_parent"
-                        ]
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": false,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
                 },
-                "form_create_child_organization": {
-                  "block": {
-                    "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Create child organisation"
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": false,
-                      "width": {
-                        "kind": "fill"
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_move_organization",
+                    "title": "Move organisation",
+                    "content": [
+                      {
+                        "type": "platform.renderer.choice_input",
+                        "props": {
+                          "id": "input_move_organization_parent",
+                          "name": "parent_organization_id",
+                          "label": "New parent organisation",
+                          "required": true,
+                          "choice_source": {
+                            "query": "vortex.system_directory:organizations",
+                            "label_field": "vortex.system_directory:organization.display_name"
+                          },
+                          "vortex": {
+                            "block": {
+                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                              "release_version": "1.1.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
                       },
-                      "height": {
-                        "kind": "content"
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "create_child_organisation_steward_notice": {
-                          "block": {
-                            "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "title": {
-                              "kind": "text",
-                              "value": "First organisation steward"
+                  }
+                },
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_create_child_organization",
+                    "title": "Create child organisation",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text",
+                        "props": {
+                          "id": "create_child_organisation_steward_notice",
+                          "title": "First organisation steward",
+                          "text": "The signed-in administrator who creates this child organisation becomes its first organisation steward.",
+                          "vortex": {
+                            "block": {
+                              "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                              "release_version": "1.0.0"
                             },
-                            "text": {
-                              "kind": "text",
-                              "value": "The signed-in administrator who creates this child organisation becomes its first organisation steward."
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_short_name": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "short_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Short name"
-                            },
-                            "help_text": {
-                              "kind": "text",
-                              "value": "Use lowercase words separated by underscores."
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_display_name": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Display name"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_steward_display_name": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "steward_display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Your display name in the new organisation"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_language": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "language"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Language"
-                            },
-                            "help_text": {
-                              "kind": "text",
-                              "value": "Enter a language tag such as en or en-NZ."
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_time_zone": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "time_zone"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Time zone"
-                            },
-                            "help_text": {
-                              "kind": "text",
-                              "value": "Enter an IANA time zone such as Pacific/Auckland."
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_currency": {
-                          "block": {
-                            "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "currency"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Currency"
-                            },
-                            "help_text": {
-                              "kind": "text",
-                              "value": "Enter a three-letter ISO currency code such as NZD."
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_date_format": {
-                          "block": {
-                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "date_format"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Date format"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "options": {
-                              "kind": "list",
-                              "items": [
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "short"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Short"
-                                    }
-                                  }
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
                                 },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "medium"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Medium"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "long"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Long"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "full"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Full"
-                                    }
-                                  }
+                                "height": {
+                                  "kind": "content"
                                 }
-                              ]
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
                               }
                             }
-                          },
-                          "slots": {}
-                        },
-                        "input_create_child_organization_number_format": {
-                          "block": {
-                            "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                            "release_version": "1.0.0"
-                          },
-                          "settings": {
-                            "name": {
-                              "kind": "text",
-                              "value": "number_format"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Number format"
-                            },
-                            "required": {
-                              "kind": "boolean",
-                              "value": true
-                            },
-                            "options": {
-                              "kind": "list",
-                              "items": [
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "auto"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Automatic"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "always"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Always group thousands"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "min2"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Group thousands above four digits"
-                                    }
-                                  }
-                                },
-                                {
-                                  "kind": "group",
-                                  "properties": {
-                                    "key": {
-                                      "kind": "text",
-                                      "value": "never"
-                                    },
-                                    "label": {
-                                      "kind": "text",
-                                      "value": "Never group thousands"
-                                    }
-                                  }
-                                }
-                              ]
-                            }
-                          },
-                          "theme_overrides": {},
-                          "responsive": {
-                            "desktop": {
-                              "visible": true,
-                              "width": {
-                                "kind": "fill"
-                              },
-                              "height": {
-                                "kind": "content"
-                              }
-                            }
-                          },
-                          "slots": {}
+                          }
                         }
                       },
-                      "order": {
-                        "desktop": [
-                          "create_child_organisation_steward_notice",
-                          "input_create_child_organization_short_name",
-                          "input_create_child_organization_display_name",
-                          "input_create_child_organization_steward_display_name",
-                          "input_create_child_organization_language",
-                          "input_create_child_organization_time_zone",
-                          "input_create_child_organization_currency",
-                          "input_create_child_organization_date_format",
-                          "input_create_child_organization_number_format"
-                        ]
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_child_organization_short_name",
+                          "name": "short_name",
+                          "label": "Short name",
+                          "help_text": "Use lowercase words separated by underscores.",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_child_organization_display_name",
+                          "name": "display_name",
+                          "label": "Display name",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_child_organization_steward_display_name",
+                          "name": "steward_display_name",
+                          "label": "Your display name in the new organisation",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_child_organization_language",
+                          "name": "language",
+                          "label": "Language",
+                          "help_text": "Enter a language tag such as en or en-NZ.",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_child_organization_time_zone",
+                          "name": "time_zone",
+                          "label": "Time zone",
+                          "help_text": "Enter an IANA time zone such as Pacific/Auckland.",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_child_organization_currency",
+                          "name": "currency",
+                          "label": "Currency",
+                          "help_text": "Enter a three-letter ISO currency code such as NZD.",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.choice_input",
+                        "props": {
+                          "id": "input_create_child_organization_date_format",
+                          "name": "date_format",
+                          "label": "Date format",
+                          "required": true,
+                          "options": [
+                            {
+                              "key": "short",
+                              "label": "Short"
+                            },
+                            {
+                              "key": "medium",
+                              "label": "Medium"
+                            },
+                            {
+                              "key": "long",
+                              "label": "Long"
+                            },
+                            {
+                              "key": "full",
+                              "label": "Full"
+                            }
+                          ],
+                          "vortex": {
+                            "block": {
+                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.choice_input",
+                        "props": {
+                          "id": "input_create_child_organization_number_format",
+                          "name": "number_format",
+                          "label": "Number format",
+                          "required": true,
+                          "options": [
+                            {
+                              "key": "auto",
+                              "label": "Automatic"
+                            },
+                            {
+                              "key": "always",
+                              "label": "Always group thousands"
+                            },
+                            {
+                              "key": "min2",
+                              "label": "Group thousands above four digits"
+                            },
+                            {
+                              "key": "never",
+                              "label": "Never group thousands"
+                            }
+                          ],
+                          "vortex": {
+                            "block": {
+                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": false,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "structure_region",
-                  "form_rename_organization",
-                  "form_move_organization",
-                  "form_create_child_organization"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_tenant_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1362,114 +982,64 @@
         "record_type": "vortex.system_directory:organization",
         "permission": "application.tenant_administration.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_tenant_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "tenant_organization_detail": {
-                  "block": {
-                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
-                    "release_version": "1.2.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Organisation details"
-                    },
-                    "detail_fields": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.display_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Organisation"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.short_name"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Short name"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.state_changed_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State changed"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:organization.created_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Created"
-                            }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.record_detail",
+                  "props": {
+                    "id": "tenant_organization_detail",
+                    "title": "Organisation details",
+                    "detail_fields": [
+                      {
+                        "field": "vortex.system_directory:organization.display_name",
+                        "label": "Organisation"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.short_name",
+                        "label": "Short name"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.state",
+                        "label": "State"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.state_changed_at",
+                        "label": "State changed"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization.created_at",
+                        "label": "Created"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                        "release_version": "1.2.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
                           }
                         }
-                      ]
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "tenant_organization_detail"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_tenant_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1479,142 +1049,91 @@
         "type": "dashboard",
         "permission": "application.tenant_administration.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_tenant_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "administrators_text": {
-                  "block": {
-                    "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                    "release_version": "1.0.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Tenant administrators"
-                    },
-                    "text": {
-                      "kind": "text",
-                      "value": "Tenant administrators are read live from protected Identity data under your current authority; nothing is copied into application records. Granting and revoking tenant-administrator access runs through IAM, never from this application."
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "administrators_text",
+                    "title": "Tenant administrators",
+                    "text": "Tenant administrators are read live from protected Identity data under your current authority; nothing is copied into application records. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.0.0"
                       },
-                      "height": {
-                        "kind": "content"
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 },
-                "administrators_region": {
-                  "block": {
-                    "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                    "release_version": "1.4.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Tenant administrators"
-                    },
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "administrators_region",
+                    "title": "Tenant administrators",
                     "row_click": {
-                      "kind": "group",
-                      "properties": {
-                        "event_id": {
-                          "kind": "text",
-                          "value": "event_open_tenant_administrator_detail"
-                        }
-                      }
+                      "event_id": "event_open_tenant_administrator_detail"
                     },
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.identity_id"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Identity"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.starts_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Starts"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.expires_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Expires"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.identity_id",
+                        "label": "Identity"
+                      },
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.starts_at",
+                        "label": "Starts"
+                      },
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.expires_at",
+                        "label": "Expires"
+                      },
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.state",
+                        "label": "State"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.4.0"
+                      },
+                      "view_permission": "vortex.tenant_administration.tenant_administrator.read",
+                      "query": "vortex.system_directory:tenant_administrators",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
                           }
                         }
-                      ]
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
                       }
                     }
-                  },
-                  "slots": {},
-                  "view_permission": "vortex.tenant_administration.tenant_administrator.read",
-                  "query": "vortex.system_directory:tenant_administrators"
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "administrators_text",
-                  "administrators_region"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_tenant_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       },
       {
@@ -1625,114 +1144,64 @@
         "record_type": "vortex.system_directory:tenant_administrator",
         "permission": "application.tenant_administration.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_tenant_administration",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "tenant_administrator_detail": {
-                  "block": {
-                    "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
-                    "release_version": "1.2.0"
-                  },
-                  "settings": {
-                    "title": {
-                      "kind": "text",
-                      "value": "Tenant administrator details"
-                    },
-                    "detail_fields": {
-                      "kind": "list",
-                      "items": [
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.identity_id"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Identity"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.capability_keys"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Capabilities"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.starts_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Starts"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.expires_at"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "Expires"
-                            }
-                          }
-                        },
-                        {
-                          "kind": "group",
-                          "properties": {
-                            "field": {
-                              "kind": "field_reference",
-                              "field": "vortex.system_directory:tenant_administrator.state"
-                            },
-                            "label": {
-                              "kind": "text",
-                              "value": "State"
-                            }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.record_detail",
+                  "props": {
+                    "id": "tenant_administrator_detail",
+                    "title": "Tenant administrator details",
+                    "detail_fields": [
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.identity_id",
+                        "label": "Identity"
+                      },
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.capability_keys",
+                        "label": "Capabilities"
+                      },
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.starts_at",
+                        "label": "Starts"
+                      },
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.expires_at",
+                        "label": "Expires"
+                      },
+                      {
+                        "field": "vortex.system_directory:tenant_administrator.state",
+                        "label": "State"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                        "release_version": "1.2.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
                           }
                         }
-                      ]
-                    }
-                  },
-                  "theme_overrides": {},
-                  "responsive": {
-                    "desktop": {
-                      "visible": true,
-                      "width": {
-                        "kind": "fill"
-                      },
-                      "height": {
-                        "kind": "content"
                       }
                     }
-                  },
-                  "slots": {}
+                  }
                 }
-              },
-              "order": {
-                "desktop": [
-                  "tenant_administrator_detail"
-                ]
+              ],
+              "vortex": {
+                "shell": "shell_tenant_administration",
+                "slot_orders": {}
               }
             }
-          }
+          },
+          "content": []
         }
       }
     ],
@@ -1752,9 +1221,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1810,9 +1277,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1868,9 +1333,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "expected_revision": {
             "type": "whole_number",
@@ -1941,9 +1404,7 @@
                       "source": "task_output",
                       "task": "form",
                       "key": "values",
-                      "path": [
-                        "display_name"
-                      ]
+                      "path": ["display_name"]
                     }
                   }
                 }
@@ -1982,9 +1443,7 @@
           "parent_organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           }
         },
         "variables": {},
@@ -2007,35 +1466,59 @@
                 "entries": {
                   "short_name": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "" }
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
                   },
                   "display_name": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "" }
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
                   },
                   "steward_display_name": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "" }
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
                   },
                   "language": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "" }
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
                   },
                   "time_zone": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "" }
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
                   },
                   "currency": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "" }
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
                   },
                   "date_format": {
                     "kind": "literal",
-                    "literal": { "type": "choice", "value": "medium" }
+                    "literal": {
+                      "type": "choice",
+                      "value": "medium"
+                    }
                   },
                   "number_format": {
                     "kind": "literal",
-                    "literal": { "type": "choice", "value": "auto" }
+                    "literal": {
+                      "type": "choice",
+                      "value": "auto"
+                    }
                   }
                 }
               }
@@ -2172,9 +1655,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           },
           "revision": {
             "type": "whole_number",
@@ -2314,9 +1795,7 @@
                           "source": "task_output",
                           "task": "parent_form",
                           "key": "values",
-                          "path": [
-                            "parent_organization_id"
-                          ]
+                          "path": ["parent_organization_id"]
                         }
                       }
                     }
@@ -2480,9 +1959,7 @@
           "organization_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:organization"
-            ]
+            "recordTypeIds": ["vortex.system_directory:organization"]
           }
         },
         "variables": {},
@@ -2528,9 +2005,7 @@
           "tenant_administrator_id": {
             "type": "record_reference",
             "required": true,
-            "recordTypeIds": [
-              "vortex.system_directory:tenant_administrator"
-            ]
+            "recordTypeIds": ["vortex.system_directory:tenant_administrator"]
           }
         },
         "variables": {},

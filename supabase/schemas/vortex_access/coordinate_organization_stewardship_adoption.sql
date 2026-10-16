@@ -29,7 +29,6 @@ declare
   platform_registration vortex_access.permission_registrations%rowtype;
   is_replay boolean;
   expected_count bigint;
-  declared_current_revision bigint;
   expected_metadata_exact boolean;
   continuity_count bigint;
   distinct_continuity_count bigint;
@@ -159,7 +158,6 @@ begin
     ) as declaration
   )
   select pg_catalog.count(*),
-    pg_catalog.min(expected.declared_current_revision),
     coalesce(
       pg_catalog.count(*) > 0
       and pg_catalog.count(*) = pg_catalog.count(distinct expected.permission_id)
@@ -170,7 +168,7 @@ begin
       and pg_catalog.count(distinct expected.catalogue_fingerprint) = 1
       and pg_catalog.bool_and(
         expected.registration_revision = platform_registration.revision
-        and expected.declared_current_revision >= platform_registration.revision
+        and expected.declared_current_revision = platform_registration.revision
         and expected.source_version = platform_registration.source_version
         and expected.catalogue_fingerprint =
           platform_registration.permission_catalogue_fingerprint
@@ -179,7 +177,7 @@ begin
       ),
       false
     )
-  into expected_count, declared_current_revision, expected_metadata_exact
+  into expected_count, expected_metadata_exact
   from expected;
   if not expected_metadata_exact then
     raise exception using errcode = '55000',
@@ -195,56 +193,6 @@ begin
   order by continuity.owner_kind collate "C", continuity.owner_id,
     continuity.permission_id
   for update;
-
-  select pg_catalog.count(*) into continuity_count
-  from vortex_access.permission_continuities as continuity
-  where continuity.organization_id = p_organization_id
-    and continuity.registration_kind = 'platform'
-    and continuity.registration_owner_id = platform_owner_id;
-
-  if continuity_count = 0 then
-    -- Only an untouched historical pre-adoption phase may seed availability.
-    if is_replay or platform_registration.revision not between 1 and 3
-      or exists (
-        select 1 from vortex_access.organization_roles as role
-        where role.organization_id = p_organization_id
-      ) or exists (
-        select 1 from vortex_access.organization_role_revisions as role_revision
-        where role_revision.organization_id = p_organization_id
-      ) or exists (
-        select 1 from vortex_access.organization_role_permission_entries as grant_entry
-        where grant_entry.organization_id = p_organization_id
-      ) or exists (
-        select 1 from vortex_access.organization_role_assignments as assignment
-        where assignment.organization_id = p_organization_id
-      ) or exists (
-        select 1 from vortex_access.organization_delegation_authorities as delegation
-        where delegation.organization_id = p_organization_id
-      ) then
-      raise exception using errcode = '55000',
-        message = 'Platform permission continuity evidence is incomplete';
-    end if;
-
-    insert into vortex_access.permission_continuities (
-      organization_id, application_root_id, owner_kind, owner_id,
-      permission_id, registration_kind, registration_owner_id, state,
-      continuity_revision, meaning_fingerprint,
-      last_processed_registration_revision, changed_at
-    )
-    select entry.organization_id, null, entry.owner_kind, entry.owner_id,
-      entry.permission_id, 'platform', entry.registration_owner_id,
-      'available', 1, entry.meaning_fingerprint, entry.registration_revision,
-      pg_catalog.clock_timestamp()
-    from vortex_access.permission_catalogue_entries as entry
-    where entry.organization_id = p_organization_id
-      and entry.application_root_id is null
-      and entry.registration_kind = 'platform'
-      and entry.registration_owner_id = platform_owner_id
-      and entry.registration_revision = platform_registration.revision
-      and entry.owner_kind = 'platform'
-      and entry.owner_id = platform_owner_id
-    order by entry.owner_kind collate "C", entry.owner_id, entry.permission_id;
-  end if;
 
   select pg_catalog.count(*), pg_catalog.count(distinct continuity.permission_id)
   into continuity_count, distinct_continuity_count
@@ -315,20 +263,9 @@ begin
     perform vortex_access.assert_organization_has_permanent_steward(
       p_organization_id
     );
-    if platform_registration.revision >= 7
-      and declared_current_revision = platform_registration.revision then
-      -- Availability is already current; use the version under our held lock.
-      select version.current_version into next_access_version
-      from vortex_access.organization_access_versions as version
-      where version.organization_id = p_organization_id;
-    else
-      -- Historical progression or a newer trusted target must use its writer.
-      select published.access_version into next_access_version
-      from vortex_access.initialize_platform_permission_catalogue(
-        p_organization_id, p_changed_by, p_correlation_id
-      ) as published;
-    end if;
-
+    select version.current_version into next_access_version
+    from vortex_access.organization_access_versions as version
+    where version.organization_id = p_organization_id;
     return query select 'unchanged'::text,
       'adopt_organization_stewardship'::text,
       pg_catalog.jsonb_build_object(
@@ -482,20 +419,9 @@ begin
     'stewardship_changed'
   ) as version;
 
-  if platform_registration.revision >= 7
-    and declared_current_revision = platform_registration.revision then
-    -- Availability is already current; use the version under our held lock.
-    select version.current_version into next_access_version
-    from vortex_access.organization_access_versions as version
-    where version.organization_id = p_organization_id;
-  else
-    -- Historical progression or a newer trusted target must use its writer.
-    select published.access_version into next_access_version
-    from vortex_access.initialize_platform_permission_catalogue(
-      p_organization_id, p_changed_by, p_correlation_id
-    ) as published;
-  end if;
-
+  select version.current_version into next_access_version
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = p_organization_id;
   return query select 'changed'::text,
     'adopt_organization_stewardship'::text,
     pg_catalog.jsonb_build_object(
@@ -520,17 +446,7 @@ $function$;
 comment on function vortex_access.coordinate_organization_stewardship_adoption(
   uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid
 ) is
-  'Owner-only atomic whole-current-catalogue first-steward adoption or exact unchanged replay. It preserves original grants, validates complete availability, and progresses only through the existing catalogue writer.';
-
-revoke execute on function
-  vortex_access.coordinate_organization_stewardship_adoption(
-    uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid
-  ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-
-revoke execute on function
-  vortex_access.coordinate_organization_stewardship_adoption(
-    uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid
-  ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+  'Owner-only atomic whole-current-catalogue first-steward adoption or exact unchanged replay. It preserves original grants and validates complete availability.';
 
 revoke execute on function
   vortex_access.coordinate_organization_stewardship_adoption(

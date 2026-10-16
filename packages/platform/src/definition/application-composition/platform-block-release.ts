@@ -81,6 +81,9 @@ export const isRepeatableSlotIdentity = (family: string, identity: string): bool
   builderKeySchema.safeParse(identity).success &&
   builderKeySchema.safeParse(repeatableSlotKey(family, identity)).success;
 
+/** Item prop keys an authored item reserves for its identity and its Vortex metadata. */
+export const reservedItemPropKeys: ReadonlySet<string> = new Set(["id", "vortex"]);
+
 const blockCapabilitiesBase = {
   responsiveVisibility: sourceProvenanceUnchanged(z.boolean()),
   responsiveOrder: sourceProvenanceUnchanged(z.boolean()),
@@ -191,6 +194,23 @@ export const platformBlockReleaseSchema = z
       });
     if (new Set(value.slots.map((slot) => slot.key)).size !== value.slots.length)
       context.addIssue({ code: "custom", path: ["slots"], message: "Slot keys must be unique" });
+    // An authored item carries its settings directly on its props, beside its identity (`id`),
+    // its Vortex metadata (`vortex`) and its child slots, so no property may take one of those keys.
+    for (const [index, property] of value.properties.entries()) {
+      const clashes =
+        reservedItemPropKeys.has(property.key) ||
+        value.slots.some((slot) =>
+          slot.repeats === undefined
+            ? slot.key === property.key
+            : property.key.startsWith(`${slot.key}_`),
+        );
+      if (clashes)
+        context.addIssue({
+          code: "custom",
+          path: ["properties", index, "key"],
+          message: "A property key cannot be id, vortex or a key one of the release's slots uses",
+        });
+    }
     for (const [index, slot] of value.slots.entries()) {
       const repeats = slot.repeats;
       if (repeats === undefined) continue;

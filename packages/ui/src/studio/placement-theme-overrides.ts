@@ -3,12 +3,11 @@ import {
   isRecord,
   revisionSchema,
   sourceApplicationThemeSchema,
+  sourceItemTree,
   sourceThemeTokenValueSchema,
-  type sourcePlacementSlotSchema,
+  type SourceItem,
 } from "@vortex/platform/schema";
 import type { StudioAppearanceFailureCode, StudioApplicationTheme, StudioThemeTokenValue } from "./application-appearance";
-
-type SourceSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
 
 /** One placement's authored theme overrides, addressed by its authored alias. */
 export type StudioPlacementThemeOverrides = Readonly<{
@@ -63,16 +62,15 @@ export const parseStudioPlacementThemeRequest = (
   };
 };
 
-/** Every placement under a slot, nested slots included, that overrides at least one theme token. */
+/** Every item in a slot, nested slots included, that overrides at least one theme token. */
 export const placementsWithThemeOverrides = (
-  slot: SourceSlot,
+  items: readonly SourceItem[],
 ): readonly StudioPlacementThemeOverrides[] =>
-  Object.entries(slot.placements).flatMap(([alias, placement]) => [
-    ...(Object.keys(placement.theme_overrides).length === 0
+  sourceItemTree(items).flatMap((item) =>
+    Object.keys(item.props.vortex.theme_overrides).length === 0
       ? []
-      : [{ alias, themeOverrides: placement.theme_overrides as Record<string, StudioThemeTokenValue> }]),
-    ...Object.values(placement.slots).flatMap((child) => placementsWithThemeOverrides(child)),
-  ]);
+      : [{ alias: item.props.id,
+          themeOverrides: item.props.vortex.theme_overrides as Record<string, StudioThemeTokenValue> }]);
 
 /** Why the saved draft would not compile: the refusal's stable code and where it was found. */
 export type StudioCompileFailure = Readonly<{
@@ -82,14 +80,10 @@ export type StudioCompileFailure = Readonly<{
   tokenKey?: string;
 }>;
 
-/** Removes one placement's theme overrides, wherever it sits under the slot; false when not found. */
-export const clearPlacementThemeOverrides = (slot: SourceSlot, alias: string): boolean => {
-  const placement = slot.placements[alias];
-  if (placement !== undefined) {
-    placement.theme_overrides = {};
-    return true;
-  }
-  return Object.values(slot.placements).some((candidate) =>
-    Object.values(candidate.slots).some((child) => clearPlacementThemeOverrides(child, alias)),
-  );
+/** Removes one item's theme overrides, wherever it sits in the slot; false when not found. */
+export const clearPlacementThemeOverrides = (items: readonly SourceItem[], alias: string): boolean => {
+  const item = sourceItemTree(items).find((candidate) => candidate.props.id === alias);
+  if (item === undefined) return false;
+  item.props.vortex.theme_overrides = {};
+  return true;
 };

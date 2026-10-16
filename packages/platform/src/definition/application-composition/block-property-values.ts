@@ -1,12 +1,11 @@
 import { z } from "zod";
 import { safeHttpsUrlSchema } from "../../catalogue/common";
-import {
+import type {
   sourceQualifiedFieldSchema,
   sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRelationshipSchema,
-  sourceProvenanceTarget,
-  sourceProvenanceUnchanged,
 } from "../definition-source-common";
+import { sourceProvenanceUnchanged } from "../definition-source-common";
 import { recordTypeReferenceSchema } from "../definitions";
 import {
   builderKeySchema,
@@ -18,8 +17,8 @@ import {
   platformIdSchema,
   queryIdSchema,
   recordIdSchema,
-  sourceQualifiedRecordTypeSchema,
 } from "../../catalogue/identifiers";
+import type { sourceQualifiedRecordTypeSchema } from "../../catalogue/identifiers";
 import { richTextDocumentSchema } from "../../records/rich-text";
 
 export { richTextDocumentSchema, richTextElementKindSchema } from "../../records/rich-text";
@@ -173,6 +172,11 @@ export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z
   ]),
 );
 
+/**
+ * The typed reading of one authored setting value. Authored settings are stored plain (see
+ * `typedSourceSettingValue`); the declaration they fill gives them this kind, and they keep their
+ * portable aliases until compilation resolves them to the canonical form above.
+ */
 export type SourceBlockPropertyValueContract =
   | { kind: "text"; value: string }
   | { kind: "number"; value: number }
@@ -199,129 +203,3 @@ export type SourceBlockPropertyValueContract =
   | { kind: "record_reference"; record_type: string; record_id: string }
   | { kind: "group"; properties: Record<string, SourceBlockPropertyValueContract> }
   | { kind: "list"; items: SourceBlockPropertyValueContract[] };
-
-/** Authored  values retain portable aliases while preserving the same closed value kinds. */
-export const sourceBlockPropertyValueSchema: z.ZodType<SourceBlockPropertyValueContract> = z.lazy(
-  () =>
-    z.discriminatedUnion("kind", [
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("text")),
-          value: sourceProvenanceUnchanged(z.string()),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("number")),
-          value: sourceProvenanceUnchanged(z.number().finite()),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("boolean")),
-          value: sourceProvenanceUnchanged(z.boolean()),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("choice")),
-          value: sourceProvenanceUnchanged(builderKeySchema),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("rich_text")),
-          value: sourceProvenanceUnchanged(richTextDocumentSchema, true),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("url")),
-          value: sourceProvenanceUnchanged(safeHttpsUrlSchema),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("asset_reference")),
-          asset_id: sourceProvenanceTarget(platformIdSchema, ["assetId"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("icon")),
-          icon_key: sourceProvenanceTarget(builderKeySchema, ["iconKey"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("theme_token")),
-          token: sourceProvenanceTarget(builderKeySchema, ["tokenKey"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("field_reference")),
-          field: sourceProvenanceTarget(sourceQualifiedFieldSchema, ["fieldId"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("relationship_reference")),
-          relationship: sourceProvenanceTarget(sourceQualifiedRelationshipSchema, [
-            "relationshipId",
-          ]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("action_reference")),
-          action: sourceProvenanceTarget(namespacedKeySchema, ["actionKey"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("page_reference")),
-          page: sourceProvenanceTarget(builderKeySchema, ["pageId"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("query_reference")),
-          query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema, ["queryId"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("pipeline_reference")),
-          pipeline: sourceProvenanceTarget(builderKeySchema, ["pipelineId"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("record_type_reference")),
-          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("record_reference")),
-          record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
-          record_id: sourceProvenanceTarget(z.uuid(), ["recordId"]),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("group")),
-          properties: sourceProvenanceUnchanged(
-            z.record(builderKeySchema, sourceBlockPropertyValueSchema),
-          ),
-        })
-        .strict(),
-      z
-        .object({
-          kind: sourceProvenanceUnchanged(z.literal("list")),
-          items: sourceProvenanceUnchanged(z.array(sourceBlockPropertyValueSchema)),
-        })
-        .strict(),
-    ]),
-);

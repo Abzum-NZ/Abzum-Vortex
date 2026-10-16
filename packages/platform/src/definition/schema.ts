@@ -9,6 +9,7 @@ export * from "./application-composition/theme";
 export * from "./application-composition/catalogue-snapshot";
 export * from "./application-composition/protected-read-models";
 export * from "./application-composition/page-composition";
+export * from "./application-composition/source-composition";
 export * from "./application-composition/catalogue-discovery";
 export * from "./application-composition-release-identities";
 export * from "./preview-installation-contracts";

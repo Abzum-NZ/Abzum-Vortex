@@ -1,4 +1,5 @@
 import {
+  applicationSourceContractVersion,
   applicationSourceDocumentSchema,
   DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
@@ -47,7 +48,7 @@ export const minimumApplicationSource = (
   const applicationKey = inputs.key.trim();
   const permissionKey = `${applicationKey}.home.view`;
   const parsed = applicationSourceDocumentSchema.safeParse({
-    source_contract_version: "2.0.0",
+    source_contract_version: applicationSourceContractVersion,
     root_alias: "application_root",
     key: applicationKey,
     kind: "application",
@@ -86,8 +87,8 @@ export const minimumApplicationSource = (
         type: "dashboard",
         permission: permissionKey,
         composition: {
-          shell_kind: "default",
-          main: { placements: {}, order: { desktop: [] } },
+          root: { props: { vortex: { shell: null, slot_orders: {} } } },
+          content: [],
         },
       }],
       navigation: [],

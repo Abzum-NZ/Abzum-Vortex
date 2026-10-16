@@ -82,21 +82,17 @@ begin
       desired_definition_fingerprint = excluded.desired_definition_fingerprint,
       observed_state = excluded.observed_state,
       observed_revision = vortex_record.index_catalogue.observed_revision + 1,
-      claim_id = null, claimed_by = null, claimed_at = null, lease_expires_at = null,
       changed_at = pg_catalog.statement_timestamp()
     where vortex_record.index_catalogue.purpose is distinct from excluded.purpose
       or vortex_record.index_catalogue.sort_shape is distinct from excluded.sort_shape
       or vortex_record.index_catalogue.desired_definition_fingerprint
         is distinct from excluded.desired_definition_fingerprint
-      or (vortex_record.index_catalogue.observed_state is distinct from excluded.observed_state
-        and (vortex_record.index_catalogue.claim_id is null
-          or vortex_record.index_catalogue.lease_expires_at <= pg_catalog.statement_timestamp()));
+      or vortex_record.index_catalogue.observed_state is distinct from excluded.observed_state;
   end loop;
 
   update vortex_record.index_catalogue as catalogue
   set purpose = 'published_sort_drop', observed_state = 'missing',
     observed_revision = catalogue.observed_revision + 1,
-    claim_id = null, claimed_by = null, claimed_at = null, lease_expires_at = null,
     changed_at = pg_catalog.statement_timestamp()
   where catalogue.purpose = 'published_sort'
     and not (catalogue.index_contract_id = any (selected_ids));

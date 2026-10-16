@@ -2,16 +2,21 @@ import {
   builderKeySchema,
   readRecordDetailContract,
   readRecordsTableContract,
-  isRepeatableSlotIdentity,
-  repeatableSlotItemIdentities,
-  repeatableSlotKey,
-  validateComponentSettings,
+  readSourceItem,
+  sourceItemChildSlots,
+  sourcePageDataOf,
+  sourcePageRootSlots,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
   type DefinitionRuleFailure,
   type DefinitionValidationLocation,
   type PlatformBlockRelease,
+  type ComponentSettingFailure,
   type SourceBlockPropertyValueContract,
+  type SourceItem,
+  type SourceItemVortex,
+  type SourcePageData,
+  type SourceSlotOrder,
 } from "../schema";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";
 
@@ -26,9 +31,8 @@ import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-ca
 
 type Segment = DefinitionValidationLocation["segments"][number];
 type Body = ApplicationSourceDocument["body"];
-type SourceSlot = Body["shells"][number]["layout"];
-type SourcePlacement = SourceSlot["placements"][string];
-type SourceLayout = SourcePlacement["responsive"]["desktop"];
+type SourceZone = Readonly<{ items: readonly SourceItem[]; order: SourceSlotOrder | undefined }>;
+type SourceLayout = SourceItemVortex["responsive"]["desktop"];
 type SourceValue = SourceBlockPropertyValueContract;
 
 export const applicationCatalogueRuleCodes = [
@@ -46,7 +50,7 @@ const maximumLocationSegments = 12;
 const keySegment = (kind: Segment["kind"], key: string): Segment[] =>
   builderKeySchema.safeParse(key).success ? [{ kind, key }] : [];
 
-const effectiveLayouts = (responsive: SourcePlacement["responsive"]): SourceLayout[] => {
+const effectiveLayouts = (responsive: SourceItemVortex["responsive"]): SourceLayout[] => {
   const tablet = responsive.tablet ?? responsive.desktop;
   return [responsive.desktop, tablet, responsive.phone ?? tablet];
 };
@@ -150,7 +154,7 @@ export function validateApplicationSourceCatalogue(
    * carries the field.
    */
   const validateDataContract = (
-    placement: SourcePlacement,
+    placement: SourceItemVortex,
     placementAlias: string,
     settings: Readonly<Record<string, SourceValue>>,
     location: readonly Segment[],
@@ -273,12 +277,11 @@ export function validateApplicationSourceCatalogue(
   const settingPathSegments = (path: readonly (string | number)[]): Segment[] =>
     path.flatMap((part) => (typeof part === "string" ? keySegment("setting", part) : []));
 
-  const validateSettings = (
-    authored: Readonly<Record<string, SourceValue>>,
-    declarations: readonly BlockPropertySchemaContract[],
+  const reportSettingFailures = (
+    settingFailures: readonly ComponentSettingFailure[],
     location: readonly Segment[],
   ): void => {
-    for (const failure of validateComponentSettings(authored, declarations))
+    for (const failure of settingFailures)
       report(
         "vortex.definition.application_block_settings",
         failure.family,
@@ -320,7 +323,7 @@ export function validateApplicationSourceCatalogue(
   };
 
   const validateResponsive = (
-    placement: SourcePlacement,
+    placement: SourceItemVortex,
     release: PlatformBlockRelease,
     location: readonly Segment[],
   ): void => {
@@ -342,18 +345,20 @@ export function validateApplicationSourceCatalogue(
   let limitReported = false;
 
   const validateSlot = (
-    slot: SourceSlot,
+    zone: SourceZone,
     options: SlotOptions,
     parent: readonly Segment[],
   ): void => {
     if (!options.responsiveOrderAllowed) {
-      const desktop = slot.order.desktop.join("\0");
-      const tablet = (slot.order.tablet ?? slot.order.desktop).join("\0");
-      const phone = (slot.order.phone ?? slot.order.tablet ?? slot.order.desktop).join("\0");
-      if (tablet !== desktop || phone !== desktop)
+      const desktop = zone.items.map((item) => item.props.id);
+      const tablet = (zone.order?.tablet ?? desktop).join("\0");
+      const phone = (zone.order?.phone ?? zone.order?.tablet ?? desktop).join("\0");
+      if (tablet !== desktop.join("\0") || phone !== desktop.join("\0"))
         report("vortex.definition.application_layout_complete", "invalid_value", parent);
     }
-    for (const [alias, placement] of Object.entries(slot.placements)) {
+    for (const item of zone.items) {
+      const alias = item.props.id;
+      const placement = item.props.vortex;
       const location = [...options.scope, ...keySegment("block", alias)];
       placementCount += 1;
       if (
@@ -375,9 +380,9 @@ export function validateApplicationSourceCatalogue(
       if (release === undefined) {
         report("vortex.definition.application_block_references", "broken_reference", location);
         // Nested content is still judged, without the unknown parent's slot restrictions.
-        for (const child of Object.values(placement.slots))
+        for (const [slotKey, children] of sourceItemChildSlots(item))
           validateSlot(
-            child,
+            { items: children, order: placement.slot_orders?.[slotKey] },
             {
               scope: options.scope,
               depth: options.depth + 1,
@@ -388,6 +393,8 @@ export function validateApplicationSourceCatalogue(
           );
         continue;
       }
+      if (item.type !== release.rendererKey)
+        report("vortex.definition.application_block_references", "invalid_value", location);
       options.shellPlacements?.set(alias, { depth: options.depth, release });
       // A custom component is placeable only by its owning application or by an application that
       // binds the owning module (publication resolution also requires the exact owning module
@@ -415,51 +422,40 @@ export function validateApplicationSourceCatalogue(
       if (options.publicSurface && release.capabilities.publicSurface !== "allowed")
         report("vortex.definition.application_public_surface", "unsafe_content", location);
 
-      validateSettings(placement.settings, release.properties, location);
-      validateDataContract(placement, alias, placement.settings, location);
-      validateAccessibleName(placement.settings, release, location);
+      const reading = readSourceItem(item, release);
+      reportSettingFailures(reading.settingFailures, location);
+      validateDataContract(placement, alias, reading.settings, location);
+      validateAccessibleName(reading.settings, release, location);
       validateResponsive(placement, release, location);
 
-      // A repeatable declaration's own key names only its family, never a slot.
-      const declaredSlots = new Set(
-        release.slots
-          .filter((declaration) => declaration.repeats === undefined)
-          .map((declaration) => declaration.key),
-      );
-      const repeatableSlots = new Map<string, (typeof release.slots)[number]>();
-      for (const declaration of release.slots) {
-        if (declaration.repeats === undefined) continue;
-        const identities = repeatableSlotItemIdentities(declaration, placement.settings);
-        if (new Set(identities).size !== identities.length)
-          report(
-            "vortex.definition.application_block_settings",
-            "duplicate_key",
-            [...location, ...keySegment("setting", declaration.repeats.items)],
-          );
-        for (const identity of identities) {
-          if (!isRepeatableSlotIdentity(declaration.key, identity))
-            report(
-              "vortex.definition.application_block_settings",
-              "invalid_value",
-              [...location, ...keySegment("setting", declaration.repeats.items)],
-            );
-          else repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
-        }
-      }
+      for (const failure of reading.repeatableFailures)
+        report(
+          "vortex.definition.application_block_settings",
+          failure.family,
+          [...location, ...keySegment("setting", failure.declaration.repeats?.items ?? "")],
+        );
+      if (reading.unknownKeys.length > 0)
+        report("vortex.definition.application_block_references", "unknown_property", location);
+      if (reading.malformedSlots.length > 0)
+        report("vortex.definition.application_block_references", "invalid_value", location);
       if (
-        Object.keys(placement.slots).some(
-          (key) => !declaredSlots.has(key) && !repeatableSlots.has(key),
+        Object.keys(placement.slot_orders ?? {}).some(
+          (slotKey) => reading.slots.get(slotKey)?.items === undefined,
         )
       )
-        report("vortex.definition.application_block_references", "unknown_property", location);
-      const validateChild = (
-        declaration: (typeof release.slots)[number],
-        slotKey: string,
-      ): void => {
-        const child = placement.slots[slotKey];
-        if (child === undefined) return;
+        report("vortex.definition.application_layout_complete", "invalid_value", location);
+      for (const [slotKey, { declaration, items }] of reading.slots) {
+        const reserved = options.reserved?.has(`${alias}:${slotKey}`) === true;
+        if (
+          declaration.repeats === undefined &&
+          declaration.required &&
+          !reserved &&
+          (items === undefined || items.length === 0)
+        )
+          report("vortex.definition.application_block_references", "required_value", location);
+        if (items === undefined) continue;
         validateSlot(
-          child,
+          { items, order: placement.slot_orders?.[slotKey] },
           {
             scope: options.scope,
             depth: options.depth + 1,
@@ -473,20 +469,7 @@ export function validateApplicationSourceCatalogue(
           },
           location,
         );
-      };
-      for (const declaration of release.slots) {
-        if (declaration.repeats !== undefined) continue;
-        const child = placement.slots[declaration.key];
-        const reserved = options.reserved?.has(`${alias}:${declaration.key}`) === true;
-        if (
-          declaration.required &&
-          !reserved &&
-          (child === undefined || Object.keys(child.placements).length === 0)
-        )
-          report("vortex.definition.application_block_references", "required_value", location);
-        validateChild(declaration, declaration.key);
       }
-      for (const [slotKey, declaration] of repeatableSlots) validateChild(declaration, slotKey);
     }
   };
 
@@ -500,7 +483,7 @@ export function validateApplicationSourceCatalogue(
       Readonly<{ depth: number; release: PlatformBlockRelease }>
     >();
     validateSlot(
-      shell.layout,
+      { items: shell.layout.content, order: shell.layout.root.props.vortex.slot_orders.content },
       {
         scope: [],
         depth: 1,
@@ -549,7 +532,7 @@ export function validateApplicationSourceCatalogue(
 
   const validateShellContent = (
     shellAlias: string,
-    content: Readonly<Record<string, SourceSlot>>,
+    data: SourcePageData,
     publicSurface: boolean,
     scope: readonly Segment[],
   ): void => {
@@ -558,11 +541,11 @@ export function validateApplicationSourceCatalogue(
     if (shell === undefined) return;
     if (publicSurface && !shell.publicSafe)
       report("vortex.definition.application_public_surface", "unsafe_content", scope);
-    for (const [alias, slot] of Object.entries(content)) {
+    for (const [alias, items] of sourcePageRootSlots(data)) {
       const declaration = shell.contentSlots.get(alias);
       if (declaration === undefined) continue;
       validateSlot(
-        slot,
+        { items, order: data.root.props.vortex.slot_orders[alias] },
         {
           scope,
           depth: declaration.depth,
@@ -580,32 +563,16 @@ export function validateApplicationSourceCatalogue(
     pageRecordType = "record_type" in page ? page.record_type : undefined;
     const scope = keySegment("page", page.key);
     const publicSurface = page.type === "public";
-    const pageSlot = (slot: SourceSlot) =>
-      validateSlot(
-        slot,
-        { scope, depth: 1, pageLevel: true, responsiveOrderAllowed: true, publicSurface },
-        scope,
-      );
-    if (page.type === "guided_form") {
-      const composition = page.composition;
-      for (const step of page.steps) {
-        if (composition.shell_kind === "default") {
-          const slot = composition.step_content[step.id];
-          if (slot !== undefined) pageSlot(slot);
-        } else {
-          const content = composition.step_content[step.id];
-          if (content !== undefined)
-            validateShellContent(composition.shell, content, publicSurface, scope);
-        }
-      }
-    } else if (page.composition.shell_kind === "default") pageSlot(page.composition.main);
-    else
-      validateShellContent(
-        page.composition.shell,
-        page.composition.content,
-        publicSurface,
-        scope,
-      );
+    for (const data of sourcePageDataOf(page.composition)) {
+      const shellAlias = data.root.props.vortex.shell;
+      if (shellAlias === null)
+        validateSlot(
+          { items: data.content, order: data.root.props.vortex.slot_orders.content },
+          { scope, depth: 1, pageLevel: true, responsiveOrderAllowed: true, publicSurface },
+          scope,
+        );
+      else validateShellContent(shellAlias, data, publicSurface, scope);
+    }
   }
 
   return failures;

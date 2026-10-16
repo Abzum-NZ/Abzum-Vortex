@@ -12,6 +12,7 @@ import {
 } from "../schema";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { createApplicationResolutionSnapshot } from "./application-resolution";
+import { applicationSourceContractVersion } from "./application-contract-versions";
 import { compareCanonicalStrings } from "./canonical-json-definition";
 import { compileParsedDefinition } from "./compiler";
 import { compatibleVersion } from "./compiler/resolution";
@@ -218,7 +219,7 @@ const compileApplication = async (
     ...connections.map((release) => release.compilationOutput),
   ].map((output) => definitionCompilationOutputSchema.parse(output));
   const parsedRequest = applicationCompilationRequestSchema.safeParse({
-    sourceContractVersion: "2.0.0",
+    sourceContractVersion: applicationSourceContractVersion,
     validationContractVersion: "2.0.0",
     source,
     resolution: createApplicationResolutionSnapshot({
