@@ -171,9 +171,15 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   );
   // Rechecks settled feedback only while a result is supplied; without one a
   // keystroke must not re-render the whole form.
+  // The feedback is read through a ref: a callback that changed with each result would make every
+  // field's mount effect report a change when the result arrives, marking its located corrections
+  // as already edited past before the person has seen them.
+  const flowFeedbackRef = useRef(props.flowFeedback);
+  flowFeedbackRef.current = props.flowFeedback;
   const reportFieldChanged = useCallback(() => {
-    if (props.flowFeedback?.kind === "refusal" && props.flowFeedback.corrections !== undefined)
-      setEditedPastCorrections(JSON.stringify(props.flowFeedback.corrections));
+    const settled = flowFeedbackRef.current;
+    if (settled?.kind === "refusal" && settled.corrections !== undefined)
+      setEditedPastCorrections(JSON.stringify(settled.corrections));
     if (supplied) setFeedbackTick((current) => current + 1);
     if (validationAttemptedRef.current)
       setValidationErrors(registry.validationErrors());
@@ -183,7 +189,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         formId,
         !equalFormValue(registry.values(), baseline) || ownerGroupChoice !== undefined,
       );
-  }, [formId, ownerGroupChoice, props.flowFeedback, registry, supplied, unsavedWorkRegistry]);
+  }, [formId, ownerGroupChoice, registry, supplied, unsavedWorkRegistry]);
 
   // Applicability is decided once per render from the fields' current typed
   // values, and the scope changes with it, so every field clears or restores
