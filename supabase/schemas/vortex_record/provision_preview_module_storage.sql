@@ -81,9 +81,12 @@ begin
     raise exception using errcode = '23514', message = 'Module record storage identities are duplicated';
   end if;
 
+  -- A system projection is the platform's own read model, which a preview reads as it is: it
+  -- has no storage of its own to isolate.
   for record_type in
     select item.value
     from pg_catalog.jsonb_array_elements(record_types) as item(value)
+    where not item.value ? 'systemProjection'
     order by item.value ->> 'storageContractId'
   loop
     begin

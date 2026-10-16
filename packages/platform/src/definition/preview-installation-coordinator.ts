@@ -10,6 +10,7 @@ import {
   identitySessionSchema,
   previewInstallationCreateRequestSchema,
   type IdentitySession,
+  type OrganizationSelectionCandidate,
   type PreviewInstallation,
   type PreviewInstallationCreateRequest,
   type SelectedOrganizationScope,
@@ -111,14 +112,63 @@ const toCoordinatorError = (
 };
 
 /**
- * Provisions the preview of an Application draft inside the requesting builder's human
- * transaction: the draft's publication is rehearsed, and the preview runs the releases it wrote.
- * No live installation, permission registration or external service is touched.
+ * Provisions the preview of an Application draft for the requesting builder in two human
+ * requests. The organisation request rehearses the draft's publication, which only it may: it
+ * writes the inline Modules' drafts, as preparing a publication does, and returns the release
+ * rows the undone rehearsal wrote. The Application request then provisions the preview from
+ * exactly those rows, atomically, and refuses them unless the draft is still at the revision they
+ * were rehearsed from. No live installation, permission registration or external service is
+ * touched.
  */
 export const createPreviewInstallationCoordinator = (
   dependencies: PreviewInstallationCoordinatorDependencies,
-) =>
-  Object.freeze({
+) => {
+  const builderRequest = async <Result>(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    rootId: string,
+    operation: (
+      transaction: RequestDatabaseTransaction,
+      authority: BuilderAuthority,
+      context: SessionContext,
+    ) => Promise<Result>,
+  ): Promise<Result> => {
+    const captured: { failure?: DefinitionError<PreviewInstallationCoordinatorErrorCode> } = {};
+    const result = await dependencies.installerRequests
+      .runChange<Result>(session, selection, async (transaction, scope, issuedAt) => {
+        try {
+          if (
+            !sameId(scope.organizationId, selection.organizationId) ||
+            (selection.applicationRootId === undefined
+              ? scope.applicationRootId !== undefined
+              : scope.applicationRootId === undefined ||
+                !sameId(scope.applicationRootId, selection.applicationRootId))
+          )
+            throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
+          const authority = dependencies.builderAuthority(transaction, scope);
+          if (!sameId(authority.organizationId, scope.organizationId))
+            throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
+          await requireBuilderAuthority(authority, { kind: "publication", rootId });
+          const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+          return await operation(transaction, authority, context);
+        } catch (error) {
+          captured.failure = toCoordinatorError(error);
+          throw error;
+        }
+      })
+      .catch((error: unknown) => {
+        throw captured.failure ?? toCoordinatorError(error);
+      });
+    if (result.kind === "available") return result.value;
+    if (captured.failure !== undefined) throw captured.failure;
+    throw new DefinitionError(
+      result.kind === "temporarily_unavailable"
+        ? "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE"
+        : "PREVIEW_INSTALLATION_REFUSED",
+    );
+  };
+
+  return Object.freeze({
     async create(
       sessionCandidate: IdentitySession,
       requestCandidate: PreviewInstallationCreateRequest,
@@ -127,65 +177,33 @@ export const createPreviewInstallationCoordinator = (
       const request = previewInstallationCreateRequestSchema.safeParse(requestCandidate);
       if (!session.success || !request.success)
         throw new DefinitionError("INVALID_PREVIEW_INSTALLATION_COMMAND");
-      const captured: { failure?: DefinitionError<PreviewInstallationCoordinatorErrorCode> } = {};
-      const result = await dependencies.installerRequests
-        .runChange(
-          session.data,
-          {
-            organizationId: request.data.organizationId,
-            applicationRootId: request.data.applicationRootId,
-          },
-          async (transaction, scope, issuedAt) => {
-            try {
-              if (
-                !sameId(scope.organizationId, request.data.organizationId) ||
-                scope.applicationRootId === undefined ||
-                !sameId(scope.applicationRootId, request.data.applicationRootId)
-              )
-                throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
-              const authority = dependencies.builderAuthority(transaction, scope);
-              if (!sameId(authority.organizationId, scope.organizationId))
-                throw new DefinitionError("PREVIEW_INSTALLATION_REFUSED");
-              await requireBuilderAuthority(authority, {
-                kind: "publication",
-                rootId: request.data.applicationRootId,
-              });
-              const context = await readLiveHumanContext(transaction, {
-                scope,
-                session: session.data,
-                issuedAt,
-              });
-              const releases = await dependencies
-                .draftRehearsal(transaction, authority)
-                .rehearseApplicationPreview(context, {
-                  rootId: request.data.applicationRootId,
-                  expectedDraftRevision: request.data.expectedDraftRevision,
-                });
-              const preview = await createPreviewInstallationRepository(transaction).create(
-                request.data,
-                releases,
-              );
-              await writePreviewRuntimeReleaseSet(
-                transaction,
-                dependencies.releaseCatalogue,
-                preview.previewInstallationId,
-              );
-              return preview;
-            } catch (error) {
-              captured.failure = toCoordinatorError(error);
-              throw error;
-            }
-          },
-        )
-        .catch((error: unknown) => {
-          throw captured.failure ?? toCoordinatorError(error);
-        });
-      if (result.kind === "available") return result.value;
-      if (captured.failure !== undefined) throw captured.failure;
-      throw new DefinitionError(
-        result.kind === "temporarily_unavailable"
-          ? "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE"
-          : "PREVIEW_INSTALLATION_REFUSED",
+      const { organizationId, applicationRootId, expectedDraftRevision } = request.data;
+      const releases = await builderRequest(
+        session.data,
+        { organizationId },
+        applicationRootId,
+        (transaction, authority, context) =>
+          dependencies
+            .draftRehearsal(transaction, authority)
+            .rehearseApplicationPreview(context, { rootId: applicationRootId, expectedDraftRevision }),
+      );
+      return builderRequest(
+        session.data,
+        { organizationId, applicationRootId },
+        applicationRootId,
+        async (transaction) => {
+          const preview = await createPreviewInstallationRepository(transaction).create(
+            request.data,
+            releases,
+          );
+          await writePreviewRuntimeReleaseSet(
+            transaction,
+            dependencies.releaseCatalogue,
+            preview.previewInstallationId,
+          );
+          return preview;
+        },
       );
     },
   });
+};

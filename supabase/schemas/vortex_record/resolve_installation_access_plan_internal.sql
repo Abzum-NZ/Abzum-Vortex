@@ -156,7 +156,8 @@ begin
     loop
       record_type_id_value := (record_type_item ->> 'recordTypeId')::uuid;
       release_storage_contract_value := (record_type_item ->> 'storageContractId')::uuid;
-      if preview_installation_id_value is null then
+      -- A preview isolates its record storage; a system projection is read as it is.
+      if preview_installation_id_value is null or record_type_item ? 'systemProjection' then
         storage_contract_value := release_storage_contract_value;
       else
         select (binding.value ->> 'previewStorageContractId')::uuid

@@ -27,10 +27,6 @@ begin
       message = 'Rehearsed preview release selection is invalid';
   end if;
   checked_context := vortex_definition.assert_preview_installation_authority_internal();
-  if checked_context ->> 'applicationRootId' is distinct from p_application_root_id::text then
-    raise exception using errcode = '42501',
-      message = 'Rehearsed preview release context is unavailable';
-  end if;
   pin_count := pg_catalog.jsonb_array_length(p_pins);
 
   -- Only the Application and the Modules it owns, exactly as the rehearsal stored them.
