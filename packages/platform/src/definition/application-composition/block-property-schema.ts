@@ -684,14 +684,16 @@ const typedSettingCandidate = (
 
 /**
  * Reads one plain compiled setting value as the canonical value of the declaration it fills, or
- * undefined when it is not one. The declaration alone gives the value its kind.
+ * undefined when it is not one. The declaration alone gives the value its kind, and the value must
+ * satisfy every constraint of that declaration (options, bounds, item shapes).
  */
 export const typedSettingValue = (
   value: unknown,
   declaration: BlockPropertySchemaContract,
 ): BlockPropertyValueContract | undefined => {
   const parsed = blockPropertyValueSchema.safeParse(typedSettingCandidate(value, declaration));
-  return parsed.success ? parsed.data : undefined;
+  if (!parsed.success) return undefined;
+  return validateComponentSettingValue(parsed.data, declaration).length === 0 ? parsed.data : undefined;
 };
 
 /** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */
