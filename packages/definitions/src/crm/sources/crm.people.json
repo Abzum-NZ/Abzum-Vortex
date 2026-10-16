@@ -14,6 +14,14 @@
           "selection": "exact",
           "version": "1.0.0"
         }
+      },
+      {
+        "dependency_key": "system_directory",
+        "module": "vortex.system_directory",
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        }
       }
     ],
     "record_types": [
@@ -175,6 +183,25 @@
             }
           },
           {
+            "id": "fld_contact_owner_person",
+            "key": "relationship_owner_person",
+            "label": "Relationship owner",
+            "required": false,
+            "unique": false,
+            "filterable": false,
+            "sortable": false,
+            "personal_data": "none",
+            "public_display": "refused",
+            "type": "link",
+            "settings": {
+              "target": "vortex.system_directory:person",
+              "reverse_key": "relationship_owner_person_references",
+              "on_parent_delete": "empty_optional",
+              "application_root_required": false,
+              "legacy_person_field": "relationship_owner"
+            }
+          },
+          {
             "id": "fld_contact_consent",
             "key": "email_consent",
             "label": "Email consent",
@@ -211,6 +238,14 @@
             "key": "company",
             "from_field": "company",
             "to_record_type": "vortex.crm.organisations:company",
+            "cardinality": "many_to_one",
+            "on_parent_delete": "empty_optional"
+          },
+          {
+            "id": "fld_contact_owner_person_relationship",
+            "key": "relationship_owner_person",
+            "from_field": "relationship_owner_person",
+            "to_record_type": "vortex.system_directory:person",
             "cardinality": "many_to_one",
             "on_parent_delete": "empty_optional"
           }
@@ -908,7 +943,13 @@
             "type": "record.set_fields",
             "properties": {
               "values": {
-                "status": { "kind": "literal", "literal": { "type": "json", "value": "converted" } }
+                "status": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "converted"
+                  }
+                }
               }
             }
           },

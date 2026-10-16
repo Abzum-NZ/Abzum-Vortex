@@ -330,12 +330,18 @@ const writtenValue = (
       value = hasOwn(prepared.existingValues, subjectField.fieldId)
         ? prepared.existingValues[subjectField.fieldId]
         : null;
-    } else if (reference.source === "execution_actor")
-      value =
-        field.type === "link_to_person"
-          ? { organizationAccountId: prepared.actorOrganizationAccountId }
-          : prepared.actorOrganizationAccountId;
-    else if (reference.source === "execution_now") value = issuedAt;
+    } else if (reference.source === "execution_actor") {
+      if (field.type === "link_to_person")
+        value = { organizationAccountId: prepared.actorOrganizationAccountId };
+      else if (field.type === "link") {
+        if (field.settings.target.state !== "resolved")
+          throw new Error("Named action actor link target is unresolved");
+        value = {
+          recordTypeId: field.settings.target.recordTypeId,
+          recordId: prepared.actorOrganizationAccountId,
+        };
+      } else value = prepared.actorOrganizationAccountId;
+    } else if (reference.source === "execution_now") value = issuedAt;
     else return undefined;
   }
   return jsonValueSchema.safeParse(value).success ? (value as JsonValue) : undefined;

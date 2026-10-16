@@ -1926,7 +1926,28 @@
         "relationships": []
       }
     ],
-    "permissions": [],
+    "permissions": [
+      {
+        "id": "perm_person_reference_read",
+        "key": "vortex.system_directory.person.reference_read",
+        "label": "Read active person labels",
+        "description": "Read the display names of active organisation members for person references.",
+        "record_type": "person",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [{ "kind": "all_records" }],
+          "saved_condition": {
+            "condition": "active_person",
+            "parameter_bindings": []
+          }
+        },
+        "field_policy": {
+          "readable_fields": ["display_name"],
+          "changeable_fields": []
+        }
+      }
+    ],
     "actions": [],
     "events": [],
     "flows": [],
@@ -1940,7 +1961,36 @@
         ]
       }
     ],
-    "sharing_conditions": [],
+    "sharing_conditions": [
+      {
+        "id": "condition_active_person",
+        "source_record_type": "person",
+        "key": "active_person",
+        "parameters": [],
+        "condition": { "field": "state", "operator": "equals", "value": "active" },
+        "declared_fields": ["state"],
+        "publication_tests": [
+          {
+            "name": "Active member is available for reference",
+            "parameters": {},
+            "field_values": { "state": "active" },
+            "expected": true
+          },
+          {
+            "name": "Suspended member is unavailable for reference",
+            "parameters": {},
+            "field_values": { "state": "suspended" },
+            "expected": false
+          },
+          {
+            "name": "Closed member is unavailable for reference",
+            "parameters": {},
+            "field_values": { "state": "closed" },
+            "expected": false
+          }
+        ]
+      }
+    ],
     "queries": [
       {
         "id": "qry_people",

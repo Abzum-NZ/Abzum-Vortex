@@ -101,17 +101,27 @@ export function actionValueCompatible(
   dialect: ModuleValueDialect = "canonical",
 ): boolean {
   const entry = object(value);
+  const target = object(targetField?.settings).target;
+  // Source publication limits this coercion to the People projection. The compiled pass sees
+  // the resolved record-type identity instead of its source key.
+  const actorAsLink =
+    actionValueReference(value)?.source === "execution_actor" &&
+    targetField?.type === "link" &&
+    (target === "vortex.system_directory:person" || object(target).state === "resolved");
   const expectedType = ["formatted_text", "table", "attachment"].includes(String(targetField?.type))
     ? String(targetField!.type)
     : typedFieldValueType(targetField);
   const compatible =
     entry.kind === "literal"
       ? fieldValueMatches(actionValueLiteral(value), targetField, dialect)
-      : valueTypesCompatible(actionValueType(value, fields, inputs), expectedType, "exact");
+      : actorAsLink ||
+        valueTypesCompatible(actionValueType(value, fields, inputs), expectedType, "exact");
   const expectedRecordTypeIds = fieldRecordTypeIds(targetField);
   if (!compatible || expectedRecordTypeIds === undefined) return compatible;
   if (entry.kind === "literal") return compatible;
-  const actualRecordTypeIds = actionValueRecordTypeIds(value, fields, inputs, subjectRecordTypeId);
+  const actualRecordTypeIds = actorAsLink
+    ? expectedRecordTypeIds
+    : actionValueRecordTypeIds(value, fields, inputs, subjectRecordTypeId);
   return (
     actualRecordTypeIds !== undefined &&
     actualRecordTypeIds.length > 0 &&
