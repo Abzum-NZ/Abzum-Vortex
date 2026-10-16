@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
@@ -43,8 +44,8 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
   const [busy, setBusy] = useState(false);
   const [invalidated, setInvalidated] = useState(false);
   const [message, setMessage] = useState(initial.kind === "available"
-    ? "Choose an existing condition that runs before save from the saved Module draft."
-    : "The editor for conditions that run before save is unavailable. Reopen after checking the saved draft and current access.");
+    ? "Choose a rule that runs before a record is saved."
+    : "The rules before saving cannot be edited right now. Reopen after checking the saved draft and your access.");
   const active = useRef(false);
   const selectionEpoch = useRef(0);
   const requestEpoch = useRef(0);
@@ -98,7 +99,7 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
           setContext(undefined); setInvalidated(true); setMessage("This retained predicate is read-only. Your pending condition is preserved."); return;
         }
         setSnapshot(result.snapshot); setContext(result.selected); setInvalidated(false);
-        if (result.selected !== undefined) { resetBuffer(result.selected); setMessage(`Loaded saved Module draft revision ${result.snapshot.draftRevision}.`); }
+        if (result.selected !== undefined) { resetBuffer(result.selected); setMessage("Loaded the saved draft."); }
         else { setBaseline(null); setApplied(null); setWorking(null); appliedRef.current = null; setUndoStack([]); setRedoStack([]); setControlValidation(null); bufferEpoch.current += 1; setMessage("Choose an existing condition that runs before save."); }
         return;
       }
@@ -163,7 +164,7 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
           setInvalidated(true); setMessage("The save receipt did not match this predicate. Your local condition is preserved."); return;
         }
         setSnapshot(result.snapshot); setContext(result.selected); resetBuffer(result.selected); setInvalidated(false);
-        setMessage(`Saved predicate at Module draft revision ${result.snapshot.draftRevision}.`); return;
+        setMessage("Saved the rule."); return;
       }
       if (result.kind === "validation_failed") setRemoteValidation(result.validation);
       else setInvalidated(true);
@@ -182,11 +183,12 @@ export function ModuleBeforeSaveConditionEditor({ organizationId, moduleRootId, 
     </li>)}</ul>
   </div>;
   return <main className="mx-auto max-w-4xl space-y-6 p-6" aria-busy={busy}>
-    <header className="space-y-2"><h1 className="text-2xl font-semibold">Conditions that run before save</h1>
+    <header className="space-y-2"><h1 className="text-2xl font-semibold">Rules before saving</h1>
       <p>Edit the current-field condition of an existing If task. Its branches and actions stay fixed. Save updates the draft.</p>
-      {snapshot !== undefined && <p>Module {snapshot.name}, draft revision {snapshot.draftRevision}, published revision {snapshot.publishedRevision ?? "None"}.</p>}
+      {snapshot !== undefined && <><p>Module {snapshot.name}.</p>
+        <TechnicalDetails><p>Draft revision {snapshot.draftRevision}, published revision {snapshot.publishedRevision ?? "None"}.</p></TechnicalDetails></>}
     </header>
-    <label className="block space-y-1"><span>Existing condition that runs before save</span>
+    <label className="block space-y-1"><span>Rule to edit</span>
       <NativeSelect value={selected} disabled={busy}
         onChange={(event) => void load(event.target.value, false)}>
         <option value="">Choose an If task</option>

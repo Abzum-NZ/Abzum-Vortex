@@ -331,7 +331,7 @@ const moveDestinations = (
     }
   };
   if (target.steps.length > 0) result.push({ destination: { kind: "root" },
-    label: "This page's main region", steps: [] });
+    label: "The main area of this page", steps: [] });
   visit(target.region.slot, []);
   return selectedPathSupported ? result : [];
 };

@@ -101,7 +101,7 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
           setMessage("The saved result could not be verified. Your pending label is preserved."); return;
         }
         replaceBuffer(saved, result.fields, captured.selectedKey);
-        setMessage(`Saved Module draft revision ${saved.draftRevision}. Reopen to read the persisted draft again.`);
+        setMessage("Saved. Choose Reopen to load the saved draft again.");
       } else if (result.kind === "validation_failed") {
         setValidation(result); setMessage("The label could not be saved. Correct the located validation feedback; your pending label is preserved.");
       } else setMessage(result.kind === "conflict"
@@ -140,7 +140,7 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
         setMessage("The Module draft could not be reopened. Your pending label is preserved."); return;
       }
       replaceBuffer(reopened, result.fields, captured.selectedKey);
-      setMessage(`Reopened persisted Module draft revision ${reopened.draftRevision}.`);
+      setMessage("Loaded the saved draft.");
     } catch {
       if (isCurrent()) setMessage("The Module draft could not be reopened. Your pending label is preserved.");
     } finally {
@@ -158,7 +158,7 @@ export function ModuleFieldLabelEditor({ draft, fields }: {
         <div><dt className="inline font-medium">Module draft revision: </dt><dd className="inline">{baseline.draftRevision}</dd></div>
         <div><dt className="inline font-medium">Saved source fingerprint: </dt><dd className="inline">{baseline.sourceFingerprint}</dd></div>
       </dl></TechnicalDetails>
-      <p>Edit one authored field label. Save explicitly updates this Module's draft revision.</p>
+      <p>Change the label of one field. Save keeps the change in this module's draft.</p>
     </header>
     <form className="space-y-4" onSubmit={save}>
       <label className="block space-y-1"><span>Module field</span>

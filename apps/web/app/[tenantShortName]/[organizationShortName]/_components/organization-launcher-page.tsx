@@ -93,8 +93,8 @@ export function OrganizationLauncherPage({
                         {
                           recordId: studio.placementId,
                           cells: {
-                            label: { kind: "text", text: "Open Studio" },
-                            description: { kind: "text", text: "Create an application" },
+                            label: { kind: "text", text: "Studio" },
+                            description: { kind: "text", text: "Build applications and modules" },
                           },
                         },
                       ],

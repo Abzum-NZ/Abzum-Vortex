@@ -202,7 +202,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
           return;
         }
         replaceBuffer(saved, result.fields, captured.selectedKey);
-        setMessage(`Saved Module draft revision ${saved.draftRevision}. Reopen to read the persisted draft again.`);
+        setMessage("Saved. Choose Reopen to load the saved draft again.");
       } else if (result.kind === "validation_failed") {
         setValidation(result.validation);
         setMessage("The setting could not be saved. Correct the located validation feedback; your pending value is preserved.");
@@ -248,7 +248,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
         return;
       }
       replaceBuffer(reopened, result.fields, captured.selectedKey);
-      setMessage(`Reopened persisted Module draft revision ${reopened.draftRevision}.`);
+      setMessage("Loaded the saved draft.");
     } catch {
       if (isCurrent()) setMessage("The Module draft could not be reopened. Your pending value is preserved.");
     } finally {

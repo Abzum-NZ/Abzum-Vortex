@@ -37,13 +37,13 @@ const unavailableText = (reason: string): string => {
     case "not_installed":
       return "This application does not have a current installation to upgrade.";
     case "not_newer":
-      return "This release is not newer than the currently active release.";
+      return "This version is not newer than the one in use.";
     case "module_set_changed":
-      return "This release changes the Module release set. This partial supports only upgrades with the same exact Module releases.";
+      return "This version changes which modules are used. Only upgrades that keep the same modules can be done here.";
     case "installation_incomplete":
-      return "The current installation is incomplete or has bindings that cannot be safely reconciled.";
+      return "The current installation is incomplete or cannot be safely brought up to date.";
     case "registration_misaligned":
-      return "The current installation registration does not match its active release.";
+      return "The current installation does not match the version it says it uses.";
     default:
       return "This upgrade is unavailable for the selected application.";
   }
@@ -53,18 +53,18 @@ const commandText = (result: StudioApplicationInstallationCommandResult): string
   if (result.kind === "completed") {
     if (result.outcome === "unchanged")
       return result.registrationMayHaveChanged
-        ? `Revision ${result.activeAtCommitRevision} is active. The coordinator may have reconciled its Access registration; reload to confirm the current state.`
-        : `Revision ${result.activeAtCommitRevision} was already active. No installation change was requested.`;
+        ? "This version is in use. Its access settings may have been brought up to date; reload to confirm."
+        : "This version was already in use. Nothing was changed.";
     const observed = result.postCommit.kind === "observed"
       ? result.postCommit.active.releaseRevision === result.activeAtCommitRevision
-        ? ` A fresh read also observed revision ${result.postCommit.active.releaseRevision} active.`
-        : ` A later fresh read observed revision ${result.postCommit.active.releaseRevision}; another activation may have followed this completed upgrade.`
-      : " The upgrade completed, but a fresh read of the current installation was unavailable.";
-    return `Upgrade completed from revision ${result.previousActiveRevision} to revision ${result.activeAtCommitRevision}.${observed}`;
+        ? ""
+        : " Another upgrade may have followed this one."
+      : " The upgrade completed, but the current state could not be read back. Reload to confirm.";
+    return `The upgrade is done.${observed}`;
   }
   switch (result.kind) {
     case "conflict":
-      return "The installation or selected release changed. Reload this page before continuing.";
+      return "The installation or the selected version changed. Reload this page before continuing.";
     case "authentication_required":
       return "Recent sign-in is required for this upgrade. Sign in again, then reload this page.";
     case "refused":
@@ -174,10 +174,10 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   return <main className="mx-auto max-w-3xl space-y-6 p-6">
     <header className="space-y-3">
       <h1 className="text-2xl font-semibold">Review selected application upgrade</h1>
-      <p>This page checks a published revision against your signed-in access and installed Module releases. It does not install on page load.</p>
+      <p>This page checks the selected published version against your access and the modules installed in this organization. Nothing is installed until you confirm.</p>
       <nav aria-label="Installation navigation" className="flex flex-wrap gap-4">
-        <a className="underline" href={historyHref(selector)}>Back to release history</a>
-        <a className="underline" href={routeHref(selector)}>Reload current access and installation state</a>
+        <a className="underline" href={historyHref(selector)}>Back to published versions</a>
+        <a className="underline" href={routeHref(selector)}>Reload</a>
       </nav>
     </header>
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>
@@ -189,40 +189,42 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
     </section> : <>
       <section aria-label="Selected release and active installation" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <dl className="space-y-2">
-          <div><dt className="font-semibold">Application</dt><dd>{snapshot.definitionKey}</dd></div>
-          <div><dt className="font-semibold">Selected published release</dt><dd>Version {snapshot.selected.releaseVersion} · revision {snapshot.selected.releaseRevision}</dd></div>
-          <div><dt className="font-semibold">Currently active release</dt><dd>Version {snapshot.active.releaseVersion} · revision {snapshot.active.releaseRevision}</dd></div>
+          <div><dt className="font-semibold">Selected version</dt><dd>{snapshot.selected.releaseVersion}</dd></div>
+          <div><dt className="font-semibold">Version in use now</dt><dd>{snapshot.active.releaseVersion}</dd></div>
         </dl>
         <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Application technical name</dt><dd>{snapshot.definitionKey}</dd></div>
+          <div><dt className="font-semibold">Selected release revision</dt><dd>{snapshot.selected.releaseRevision}</dd></div>
+          <div><dt className="font-semibold">Active release revision</dt><dd>{snapshot.active.releaseRevision}</dd></div>
           <div><dt className="font-semibold">Organization</dt><dd className="break-all">{snapshot.organizationId}</dd></div>
           <div><dt className="font-semibold">Application root</dt><dd className="break-all">{snapshot.rootId}</dd></div>
           <div><dt className="font-semibold">Selected content fingerprint</dt><dd className="break-all"><code>{snapshot.selected.contentFingerprint}</code></dd></div>
           <div><dt className="font-semibold">Selected resolution fingerprint</dt><dd className="break-all"><code>{snapshot.selected.resolutionFingerprint}</code></dd></div>
         </dl></TechnicalDetails>
-        <p>This partial supports an explicit upgrade of an existing Application only when every Module release is unchanged. First installation, older releases and Module changes are unavailable here.</p>
+        <p>This page upgrades an application that is already installed, and only when none of its modules change. First installs, older versions and module changes are not available here.</p>
       </section>
-      {expired && <p className="rounded-xl border bg-card text-card-foreground p-3">This access snapshot expired. Reload before continuing.</p>}
+      {expired && <p className="rounded-xl border bg-card text-card-foreground p-3">Your access was checked a while ago. Reload before continuing.</p>}
       {state.command !== null && <section className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
-        <h2 ref={outcomeHeading} tabIndex={-1} className="text-lg font-semibold">Upgrade outcome</h2>
+        <h2 ref={outcomeHeading} tabIndex={-1} className="text-lg font-semibold">Result</h2>
         <p>{commandText(state.command)}</p>
-        {state.command.kind === "completed" && <dl className="space-y-2">
-          <div><dt className="font-semibold">Selected release</dt><dd>Revision {state.command.selected.releaseRevision}</dd></div>
-          <div><dt className="font-semibold">Active at commit</dt><dd>Revision {state.command.activeAtCommitRevision}</dd></div>
-          {state.command.outcome === "activated" && <div><dt className="font-semibold">Previously active</dt><dd>Revision {state.command.previousActiveRevision}</dd></div>}
-          {state.command.postCommit.kind === "observed" && <div><dt className="font-semibold">Freshly observed active</dt><dd>Revision {state.command.postCommit.active.releaseRevision}</dd></div>}
-        </dl>}
+        {state.command.kind === "completed" && <TechnicalDetails><dl className="space-y-2">
+          <div><dt className="font-semibold">Selected release revision</dt><dd>{state.command.selected.releaseRevision}</dd></div>
+          <div><dt className="font-semibold">Active at commit</dt><dd>{state.command.activeAtCommitRevision}</dd></div>
+          {state.command.outcome === "activated" && <div><dt className="font-semibold">Previously active</dt><dd>{state.command.previousActiveRevision}</dd></div>}
+          {state.command.postCommit.kind === "observed" && <div><dt className="font-semibold">Freshly observed active</dt><dd>{state.command.postCommit.active.releaseRevision}</dd></div>}
+        </dl></TechnicalDetails>}
       </section>}
       <section aria-label="Confirm selected release upgrade" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <h2 className="text-lg font-semibold">Confirm upgrade</h2>
         {snapshot.selected.releaseRevision === snapshot.active.releaseRevision
-          ? <p>This selected release is already active. Reload to confirm its current state.</p>
-          : <p>Continue only if you want to activate version {snapshot.selected.releaseVersion}, revision {snapshot.selected.releaseRevision} for this installed Application.</p>}
+          ? <p>This version is already in use. Reload to confirm.</p>
+          : <p>Continue only if you want this installed application to start using version {snapshot.selected.releaseVersion}.</p>}
         <Button type="button" variant="outline" size="sm" name="application.release.install_selected"
           disabled={pending || expired || snapshot.selected.releaseRevision <= snapshot.active.releaseRevision || state.command !== null}
           aria-busy={pending}
          
           onClick={() => void install()}>
-          {pending ? "Installing selected release…" : "Confirm upgrade to selected release"}
+          {pending ? "Upgrading…" : "Upgrade to this version"}
         </Button>
       </section>
     </>}

@@ -118,7 +118,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
         setType(savedField?.type ?? "");
         setRequired(savedField?.required ?? false);
         setMaxLength("");
-        setMessage(`Saved Module draft revision ${saved.data.draftRevision}. Publish the Module on its publish page to release it.`);
+        setMessage("Saved. Publish the module from its Publish page to release it.");
       } else if (result.kind === "validation_failed") {
         setValidation(result.validation);
         setMessage("The Module does not accept this change. Your entries are kept; correct them using the reasons below.");
@@ -147,7 +147,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
       setBaseline(result.draft);
       setSelected(result.draft.source.body.record_types[0] === undefined ? "" : selectionValue(result.draft.source.body.record_types[0].id, ""));
       setLabel(""); setType(""); setRequired(false); setMaxLength(""); setValidation(null);
-      setMessage(`Reloaded saved Module draft revision ${result.draft.draftRevision}.`);
+      setMessage("Loaded the saved draft.");
     } catch {
       setMessage("The saved draft could not be read because the request did not complete. Try again in a moment.");
     } finally { setBusy(false); }

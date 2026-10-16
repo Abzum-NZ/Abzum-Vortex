@@ -4,6 +4,8 @@ import { TechnicalDetails, ViewSource } from "@vortex/ui/components/technical-de
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { StudioField } from "./studio-field";
+import { summarizeSourceChange } from "../_lib/source-change-summary";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@vortex/ui/components/table";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
@@ -44,6 +46,18 @@ const candidateFingerprint = async (source: ApplicationSourceDocument): Promise<
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalJson(source)));
   return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 };
+
+/** What the imported file would change, by area and item name; the source itself is only under View source. */
+function SourceChangeTable({ current, next }: { current: ApplicationSourceDocument; next: ApplicationSourceDocument }) {
+  const rows = summarizeSourceChange(current, next);
+  if (rows.length === 0) return <p>The file matches your draft. Nothing would change.</p>;
+  return <Table>
+    <TableHeader><TableRow><TableHead>Area</TableHead><TableHead>Item</TableHead><TableHead>Change</TableHead></TableRow></TableHeader>
+    <TableBody>{rows.map((row, index) => <TableRow key={`${row.area}:${row.item}:${index}`}>
+      <TableCell>{row.area}</TableCell><TableCell>{row.item}</TableCell><TableCell>{row.change}</TableCell>
+    </TableRow>)}</TableBody>
+  </Table>;
+}
 
 export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChange, onApply }: Props) {
   const [confirm, confirmDialog] = useConfirm();
@@ -172,50 +186,50 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
         return;
       }
       const parsed = studioApplicationSourceReviewResultSchema.safeParse(response);
-      if (!parsed.success) { setMessage("The review could not be verified. Your input is preserved."); return; }
+      if (!parsed.success) { setMessage("The review could not be verified. What you typed is kept."); return; }
       const result = parsed.data;
       if (result.kind !== "available" && result.kind !== "validation_failed") {
         setMessage(result.kind === "conflict" ? "The saved draft changed. Reopen explicitly before reviewing again."
-          : result.kind === "invalid" ? "The source failed draft validation. Your input is preserved."
-            : result.kind === "refused" ? "The current draft read was refused. Your input is preserved."
-              : "The review is unavailable. Your input is preserved.");
+          : result.kind === "invalid" ? "The source failed draft validation. What you typed is kept."
+            : result.kind === "refused" ? "The current draft read was refused. What you typed is kept."
+              : "The review is unavailable. What you typed is kept.");
         return;
       }
       if (!sameId(result.organizationId, snapshot.organizationId) || !sameId(result.rootId, snapshot.rootId) ||
         result.key !== snapshot.key || result.rootAlias !== snapshot.rootAlias ||
         result.draftRevision !== snapshot.draftRevision || result.savedSourceFingerprint !== snapshot.savedSourceFingerprint) {
-        setMessage("The review does not match this source and draft. Your input is preserved.");
+        setMessage("The review does not match this source and draft. What you typed is kept.");
         return;
       }
       const submittedFingerprint = await candidateFingerprint(candidate.source);
       if (!responseIsCurrent()) return;
       if (result.candidateSourceFingerprint !== submittedFingerprint) {
-        setMessage("The review does not match the submitted source. Your input is preserved.");
+        setMessage("The review does not match the submitted source. What you typed is kept.");
         return;
       }
       if (result.kind === "validation_failed") {
         if (!result.validation.errors.every((error) => error.location === undefined ||
           (error.location.documentKind === "application" && error.location.documentKey === snapshot.key))) {
-          setMessage("The validation locations do not match this Application. Your input is preserved.");
+          setMessage("The validation locations do not match this Application. What you typed is kept.");
           return;
         }
         setDiagnostics({ snapshot, text: submittedText, epoch: requestEpoch, validation: result.validation });
-        setMessage("The source failed semantic validation. Resolve the displayed issues and review again. Your input is preserved.");
+        setMessage("The file has problems. Fix the issues listed below and check it again. What you typed is kept.");
         return;
       }
       if (result.source.key !== snapshot.key || result.source.root_alias !== snapshot.rootAlias ||
         canonicalJson(result.source) !== canonicalJson(candidate.source)) {
-        setMessage("The review does not match this source and draft. Your input is preserved.");
+        setMessage("The review does not match this source and draft. What you typed is kept.");
         return;
       }
       const next: ReviewedSource = { snapshot, text: submittedText, epoch: requestEpoch,
         source: result.source, fingerprint: result.candidateSourceFingerprint };
       acceptedReview.current = next;
       setReviewed(next);
-      setMessage("Source reviewed for draft editing. Applying it changes local history only.");
+      setMessage("Checked. Review what will change below, then apply it to your draft.");
     } catch {
       if (responseIsCurrent())
-        setMessage("The review could not be completed. Your input is preserved.");
+        setMessage("The review could not be completed. What you typed is kept.");
     } finally {
       if (active.current && epoch.current === requestEpoch) {
         busy.current = null;
@@ -231,75 +245,79 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onPendingChang
       candidate.epoch === epoch.current && candidate.text === raw.current &&
       sameStudioApplicationSourceImportSnapshot(candidate.snapshot, readSnapshot());
     if (candidate === null || !isCurrent()) {
-      setMessage("The review is no longer current. Your input is preserved; review again.");
+      setMessage("The check is out of date. What you typed is kept; check it again.");
       return;
     }
     if (canonicalJson(candidate.source) === canonicalJson(candidate.snapshot.source)) {
-      setMessage("This source already matches local history. No change was made.");
+      setMessage("Your draft already matches this file. Nothing was changed.");
       return;
     }
     if (!await confirm({
-      title: "Replace the local source with the reviewed document?",
-      description: "Replace this draft's current local source with the reviewed document? Unsaved local changes will be replaced. Save remains a separate action.",
-      confirmLabel: "Replace local source",
+      title: "Replace the draft with the imported file?",
+      description: "The imported file replaces your current draft, including your unsaved changes. Save keeps the result.",
+      confirmLabel: "Replace the draft",
     })) return;
-    if (!isCurrent()) { setMessage("The editor changed. No source was replaced."); return; }
+    if (!isCurrent()) { setMessage("The draft changed, so nothing was replaced."); return; }
     const result = onApply(candidate.snapshot, candidate.source);
     if (result === "applied") {
       replaceText("");
-      setMessage("Source applied to local history. Save the draft explicitly to persist it.");
-    } else setMessage(result === "unchanged" ? "This source already matches local history. No change was made."
-      : "The editor changed. Your input is preserved; review again.");
+      setMessage("Imported. Save to keep it.");
+    } else setMessage(result === "unchanged" ? "Your draft already matches this file. Nothing was changed."
+      : "The editor changed. What you typed is kept; review again.");
   };
 
-  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Application source import" aria-busy={operation !== null}>
-    <h2 className="font-semibold">Import authored Application source</h2>
-    <p>Choose a local JSON file or paste source in format 2.0.0, up to 2 MiB. Keep this draft's key and root alias.
-      Review the complete source before replacing local history. Import does not publish, install or adopt a release.</p>
-    <StudioField label="Local JSON source file">
+  return <section className="space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4" aria-label="Import an application file" aria-busy={operation !== null}>
+    <h3 className="font-semibold">Import an application file</h3>
+    <p>Choose an exported application file, or paste its contents (up to 2 MiB). It must be for this same application.
+      You see what would change before anything is replaced. Importing does not publish or install anything.</p>
+    <StudioField label="Application file">
       {(control) => <Input {...control} ref={fileInput} type="file" accept=".json,application/json" disabled={disabled}
         onChange={(event) => { void readFile(event); }} />}
     </StudioField>
-    <StudioField label="Authored Application JSON">
+    <StudioField label="Or paste the file contents">
       {(control) => <Textarea {...control} className={`${inputClass} min-h-48 font-mono text-sm`} value={text} disabled={disabled}
         onChange={(event) => {
           if (disabled || readSnapshot() === null) return;
           replaceText(event.target.value);
-          setMessage("Input changed. Review this source before applying it.");
+          setMessage("The file changed. Check it again before applying.");
         }} />}
     </StudioField>
     {reviewed !== null && <div className="space-y-2">
-      <p>Applying replaces the complete current local source, including permissions, roles, dependencies, pages and flows.
-        This review does not establish publication eligibility or installed permissions.</p>
-      <TechnicalDetails title="View source and technical details">
-        <p className="break-all">Reviewed source fingerprint: <code>{reviewed.fingerprint}</code></p>
-        <ViewSource value={reviewed.snapshot.source} title="Current local source" />
-        <ViewSource value={reviewed.source} title="Complete reviewed replacement source" />
+      <p>Applying replaces everything in your draft, including permissions, access groups, pages and flows.
+        Checking the file does not decide whether it can be published.</p>
+      <SourceChangeTable current={reviewed.snapshot.source} next={reviewed.source} />
+      <TechnicalDetails title="View source">
+        <p className="break-all">Fingerprint of the file: <code>{reviewed.fingerprint}</code></p>
+        <ViewSource value={reviewed.snapshot.source} title="Current draft" />
+        <ViewSource value={reviewed.source} title="Imported file" />
       </TechnicalDetails>
     </div>}
     {diagnosticsCurrent && diagnostics !== null && <div role="status" aria-live="polite" className="space-y-2">
-      <h3 className="font-semibold">Source validation issues</h3>
+      <h3 className="font-semibold">Problems found in the file</h3>
       <ul className="space-y-3">
         {diagnostics.validation.errors.map((error, index) => <li key={`${error.code}:${index}`}>
-          <p className="break-all">Application document: {error.location?.documentKey ?? diagnostics.snapshot.key}
-            {error.location?.segments.map((segment, segmentIndex) =>
-              <span key={segmentIndex}> · {segment.kind}: {segment.key}</span>)}</p>
-          <p><code>{error.code}</code>: {error.message}</p>
+          <p className="font-medium">{error.message}</p>
           <p>{error.guidance}</p>
+          <TechnicalDetails>
+            <p className="break-all">Where: {error.location?.documentKey ?? diagnostics.snapshot.key}
+              {error.location?.segments.map((segment, segmentIndex) =>
+                <span key={segmentIndex}> · {segment.kind}: {segment.key}</span>)}</p>
+            <p>Code: <code>{error.code}</code></p>
+          </TechnicalDetails>
         </li>)}
       </ul>
     </div>}
     <div className="flex flex-wrap gap-2">
       <Button type="button" disabled={disabled || operation !== null || text.length === 0}
-        onClick={() => { void review(); }}>Review source</Button>
+        onClick={() => { void review(); }}>Check the file</Button>
       <Button type="button" disabled={disabled || operation !== null || reviewed === null}
-        onClick={apply}>Apply reviewed source to local history</Button>
+        onClick={apply}>Apply to the draft</Button>
       <Button type="button" disabled={text.length === 0 && operation === null}
         onClick={() => {
           replaceText("");
           if (fileInput.current !== null) fileInput.current.value = "";
-          setMessage("Unapplied source input discarded. Local history is unchanged.");
-        }}>Discard source input or response</Button>
+          setMessage("Discarded. Your draft is unchanged.");
+        }}>Discard</Button>
     </div>
     <p role="status" aria-live="polite">{message}</p>
     {confirmDialog}

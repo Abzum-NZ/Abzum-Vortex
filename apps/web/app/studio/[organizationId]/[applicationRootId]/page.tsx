@@ -9,10 +9,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function StudioApplicationPage({ params }: {
+export default async function StudioApplicationPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; applicationRootId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
-  const { organizationId, applicationRootId } = await params;
+  const [{ organizationId, applicationRootId }, { tab }] = await Promise.all([params, searchParams]);
   const result = await loadStudioApplicationDraft(organizationId, applicationRootId);
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;
@@ -21,7 +22,7 @@ export default async function StudioApplicationPage({ params }: {
   if (themeRelease === undefined)
     throw new Error(`Draft pins unknown platform theme ${pin.catalogue_theme_id}@${pin.release_version}`);
   return <ApplicationDraftWorkspace key={`${result.organizationId}:${result.draft.rootId}`}
-    mode="existing" organizationId={result.organizationId} draft={result.draft}
+    mode="existing" organizationId={result.organizationId} draft={result.draft} initialTab={tab}
     searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots} compileFailure={result.compileFailure}
     platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
     fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}

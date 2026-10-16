@@ -101,7 +101,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
     studioCreateAccess.kind === "available" &&
     studioCreateAccess.organizationId === resolved.read.organizationId
       ? {
-          href: `/studio/${studioCreateAccess.organizationId}/new`,
+          href: "/studio",
           placementId: organizationLauncherStudioPlacementId,
         }
       : undefined;

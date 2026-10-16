@@ -95,7 +95,7 @@ export function ApplicationFlowTaskSettings({ context, selection, outline, disab
       { kind: "set_task_setting", taskId: outline.id, taskPath: outline.path, property: key, value: edit.value });
     if (result.kind === "applied") {
       discard(key);
-      setStatus(`Setting ${key} applied. Save draft to persist it.`);
+      setStatus(`Setting ${key} applied. Save to keep it.`);
     } else setErrors((previous) => ({ ...previous, [key]: result.reason }));
   };
 

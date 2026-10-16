@@ -130,6 +130,12 @@ export async function createStudioApplication(organizationId: string, candidate:
   return createHumanApplicationDraft(organizationId, { source: source.data });
 }
 
+/**
+ * Saves the draft and answers with the draft's recompiled page slots, search metadata and compile
+ * failure for the saved revision, so the canvas swaps them in instead of keeping the ones compiled
+ * for the revision the workspace was opened on. `recompiled` is null when the saved draft could not
+ * be read back for the same revision; the workspace then says so and keeps the saved result.
+ */
 export async function saveStudioApplication(organizationId: string, candidate: unknown) {
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
   if (!command.success)
@@ -142,7 +148,16 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   if (!validation.valid)
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);
-  return saveHumanApplicationDraft(organizationId, command.data);
+  const saved = await saveHumanApplicationDraft(organizationId, command.data);
+  if (saved.kind !== "available") return saved;
+  const loaded = await loadStudioApplicationDraft(organizationId, saved.draft.rootId);
+  const recompiled = loaded.kind === "available" && loaded.draft.draftRevision === saved.draft.draftRevision &&
+    loaded.draft.sourceFingerprint === saved.draft.sourceFingerprint
+    ? { pageCompiledSlots: loaded.pageCompiledSlots, searchMetadata: loaded.searchMetadata, compileFailure: loaded.compileFailure }
+    : null;
+  if (recompiled === null)
+    console.error("[studio] save-application STUDIO_SAVE_RECOMPILE_UNAVAILABLE: the saved revision could not be read back");
+  return { ...saved, recompiled };
 }
 
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {

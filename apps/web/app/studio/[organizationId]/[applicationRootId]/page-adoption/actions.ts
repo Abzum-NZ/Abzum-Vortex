@@ -1,8 +1,8 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { pageAdoptionCommandSchema } from "../../../../_lib/studio-standard-page-adoption-plan";
-import { saveStudioStandardPageAdoption } from "../../../../_lib/studio-standard-page-adoption";
+import { loadStudioStandardPageAdoption, saveStudioStandardPageAdoption,
+  type StudioStandardPageAdoptionLoadResult } from "../../../../_lib/studio-standard-page-adoption";
 
 const textField = (formData: FormData, key: string): string | undefined => {
   const value = formData.get(key);
@@ -16,7 +16,15 @@ const numberField = (formData: FormData, key: string): number | undefined => {
   return Number.isSafeInteger(value) ? value : undefined;
 };
 
-export async function submitStandardPageAdoption(formData: FormData): Promise<void> {
+/** Reads the comparison for the Page adoption tab; the server resolves access afresh. */
+export async function readStandardPageAdoption(
+  organizationId: string, rootId: string,
+): Promise<StudioStandardPageAdoptionLoadResult> {
+  return loadStudioStandardPageAdoption(organizationId, rootId);
+}
+
+/** Returns the outcome code ("saved", "conflict", ...) for the tab to show; the tab then reloads the comparison. */
+export async function submitStandardPageAdoption(formData: FormData): Promise<string> {
   const organizationId = textField(formData, "organizationId");
   const rootId = textField(formData, "rootId");
   const targetKind = textField(formData, "targetKind");
@@ -33,10 +41,7 @@ export async function submitStandardPageAdoption(formData: FormData): Promise<vo
     target: { kind: targetKind, id: targetId },
   });
   if (organizationId === undefined || rootId === undefined || !parsed.success)
-    redirect("/studio");
+    return "refused";
   const result = await saveStudioStandardPageAdoption(organizationId, parsed.data);
-  const resultCode = result.kind === "available" ? "saved" : result.kind;
-  redirect(
-    `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(parsed.data.rootId)}/page-adoption?result=${encodeURIComponent(resultCode)}`,
-  );
+  return result.kind === "available" ? "saved" : result.kind;
 }

@@ -63,6 +63,9 @@ export type StudioSemanticSelectionTraversalNode =
       label: string;
       selection: Extract<StudioSemanticSelection, { kind: "placement" }>;
       owner: StudioSemanticPlacementOwner;
+      /** The placed block's release and settings, so a surface can name the item for a person. */
+      block: Readonly<{ block_id: string; release_version: string }>;
+      settings: SourcePlacementSlot["placements"][string]["settings"];
     }>;
 
 export type StudioSemanticSelectionTraversalEvent = Readonly<{
@@ -148,9 +151,14 @@ export const traverseStudioSemanticSelectionDraft = (
         visit(
           Object.freeze({
             kind: "placement",
-            label: `Placement ${readableKey(placementAlias, "item")}`,
+            label: `Item ${readableKey(placementAlias, "item")}`,
             selection,
             owner,
+            block: Object.freeze({
+              block_id: String(placement.block.block_id),
+              release_version: String(placement.block.release_version),
+            }),
+            settings: placement.settings,
           }),
           () => {
             for (const [slotKey, childSlot] of Object.entries(placement.slots))
@@ -220,14 +228,14 @@ export const traverseStudioSemanticSelectionDraft = (
       visit(Object.freeze({ kind: "section", section: "navigation", label: "Navigation" }), () =>
         navigation(draft.source.body.navigation),
       );
-      visit(Object.freeze({ kind: "section", section: "shells", label: "Shells" }), () => {
+      visit(Object.freeze({ kind: "section", section: "shells", label: "Layouts" }), () => {
         for (const shell of draft.source.body.shells) {
           const owner = Object.freeze({ kind: "shell", shellAlias: shell.id } as const);
           const selection = owner;
           visit(
             Object.freeze({
               kind: "shell",
-              label: authoredLabel(shell.name, "Shell"),
+              label: authoredLabel(shell.name, "Layout"),
               selection,
             }),
             () => placementSlot(shell.layout, owner, "layout", "Layout"),
@@ -454,6 +462,7 @@ export const createStudioSemanticSelectionStore = (
 
 export {
   projectStudioSemanticOutline,
+  type StudioPlacementDescriber,
   type StudioSemanticOutline,
   type StudioSemanticOutlineNode,
 } from "./semantic-outline";

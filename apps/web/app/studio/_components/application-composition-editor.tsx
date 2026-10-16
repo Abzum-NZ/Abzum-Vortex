@@ -6,6 +6,7 @@ import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { studioPlacementLabels } from "../_lib/studio-labels";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
   describeStudioCompositionDestinations,
@@ -133,8 +134,8 @@ function ApplicationCompositionPalette(props: Props) {
   if (model.kind !== "available") return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
     <h3 className="font-semibold">Add a component</h3>
     <p role="status">{model.kind === "unsupported"
-      ? "Adding is supported only in an ordinary private page's main region with known block releases. Its source is preserved."
-      : "This page is not available in the current draft. Its source is preserved."}</p>
+      ? "Items can only be added to the main area of an ordinary private page. Nothing was changed."
+      : "This page is not in the current draft."}</p>
   </section>;
 
   const choices = filtered.kind === "available" ? filtered.choices : [];
@@ -153,7 +154,7 @@ function ApplicationCompositionPalette(props: Props) {
     event.preventDefault();
     if (props.disabled || !pending.current || chosen === undefined) return;
     if (formContext.current !== props.context || formSelection.current !== selectionKey) {
-      setMessage("The draft or selection changed. Your inputs are preserved.");
+      setMessage("The draft or your selection changed. What you typed is kept.");
       return;
     }
     const result = props.onCommand(formContext.current, props.selection, {
@@ -164,38 +165,38 @@ function ApplicationCompositionPalette(props: Props) {
       pending.current = false;
       props.onPendingChange(false);
       setInputs(emptyAddInputs());
-      setMessage("Component added to one local history entry. Save to persist it.");
-    } else setMessage(result === "stale" ? "The draft or selection changed. Your inputs are preserved."
-      : result === "unsupported" ? "This release or region is unsupported. Your inputs are preserved."
-        : "No component was added. Use a unique alias and valid declared settings. Your inputs are preserved.");
+      setMessage("Item added. Save to keep it.");
+    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
+      : result === "unsupported" ? "This item cannot be added here. What you typed is kept."
+        : "Nothing was added. Use a unique name and valid settings. What you typed is kept.");
   };
 
   return <section className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4" aria-labelledby={titleId}>
     <h3 id={titleId} className="font-semibold">Add a component</h3>
-    <p className="text-sm">Add an exact released presentation or supported layout component to this page's main region. Existing components and responsive orders are retained.</p>
+    <p className="text-sm">Add an item to the main area of this page. Existing items keep their order and size.</p>
     <form className="space-y-3" onSubmit={submit} aria-describedby={hintId}>
       <fieldset className="space-y-3" disabled={props.disabled}>
-        <legend className="font-medium">Released component palette</legend>
-        <label className="block space-y-1"><span>Search components</span>
+        <legend className="font-medium">Available items</legend>
+        <label className="block space-y-1"><span>Search items</span>
           <Input className={fieldClass} type="search" value={inputs.search}
             onChange={(event) => update({ ...inputs, search: event.target.value })} /></label>
-        <label className="block space-y-1"><span>Exact component release</span>
+        <label className="block space-y-1"><span>Item type</span>
           <NativeSelect className={fieldClass} required value={inputs.releaseId} onChange={(event) => {
             const releaseId = event.target.value;
             if (releaseId !== "" && !model.choices.some((choice) => choice.id === releaseId)) return;
             update({ ...inputs, releaseId, settings: {} });
-          }}><option value="">Choose a release</option>
+          }}><option value="">Choose an item type</option>
             {options.map((choice) => <option key={choice.id} value={choice.id}>
-              {choice.name} ({choice.key}, {choice.releaseVersion})
+              {choice.name}{options.some((other) => other.id !== choice.id && other.name === choice.name) ? ` (version ${choice.releaseVersion})` : ""}
             </option>)}
           </NativeSelect></label>
-        {choices.length === 0 && <p role="status">No supported releases match this search. Any selected release and its inputs are preserved.</p>}
-        <label className="block space-y-1"><span>Placement name</span>
+        {choices.length === 0 && <p role="status">No item types match this search. Your current choice is kept.</p>}
+        <label className="block space-y-1"><span>Technical name</span>
           <Input className={fieldClass} required minLength={1} maxLength={160} pattern="[a-z][a-z0-9_]*"
             value={inputs.alias} onChange={(event) => update({ ...inputs, alias: event.target.value })} /></label>
-        <p className="text-sm">Enter a unique name beginning with a lowercase letter, followed by lowercase letters, digits or underscores.</p>
+        <p className="text-sm">Use a unique name of lowercase letters, digits and underscores, starting with a letter. It cannot be changed later.</p>
         {chosen !== undefined && chosen.slots.length > 0 && <p className="text-sm">
-          Declared slots start empty: {chosen.slots.map((slot) => slot.label).join(", ")}. Move existing placements into them separately.
+          These areas start empty: {chosen.slots.map((slot) => slot.label).join(", ")}. Move existing items into them separately.
         </p>}
         {chosen?.properties.map((property) => {
           const supplied = Object.hasOwn(inputs.settings, property.key) ? inputs.settings[property.key] : undefined;
@@ -209,7 +210,7 @@ function ApplicationCompositionPalette(props: Props) {
                     ? { kind: "choice", value: "" } : { kind: "text", value: "" };
                 else delete settings[property.key];
                 update({ ...inputs, settings });
-              }} />{property.kind === "text" ? "Supply this optional text" : "Supply this optional setting"}</label>
+              }} />{property.kind === "text" ? "Set this text" : "Set this option"}</label>
             {property.kind === "text" && supplied?.kind === "text" && <label className="block space-y-1"><span>{property.label} text</span>
               <Textarea className={fieldClass} required={property.minLength > 0}
                 minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
@@ -218,14 +219,14 @@ function ApplicationCompositionPalette(props: Props) {
             {property.kind === "boolean" && supplied?.kind === "boolean" &&
               <label className="flex items-center gap-2"><Checkbox checked={supplied.value}
                 onCheckedChange={(checked) => update({ ...inputs, settings: { ...inputs.settings,
-                  [property.key]: { kind: "boolean", value: checked } } })} />{property.label} value</label>}
+                  [property.key]: { kind: "boolean", value: checked } } })} />{property.label}</label>}
             {property.kind === "choice" && supplied?.kind === "choice" &&
-              <label className="block space-y-1"><span>{property.label} value</span>
+              <label className="block space-y-1"><span>{property.label}</span>
                 <NativeSelect className={fieldClass} required value={supplied.value} onChange={(event) => {
                   const value = event.target.value;
                   if (value !== "" && !property.options.some((option) => option.key === value)) return;
                   update({ ...inputs, settings: { ...inputs.settings, [property.key]: { kind: "choice", value } } });
-                }}><option value="">Choose a declared value</option>
+                }}><option value="">Choose a value</option>
                   {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
                 </NativeSelect></label>}
             {property.help !== undefined && <p className="text-sm">{property.help}</p>}
@@ -233,12 +234,12 @@ function ApplicationCompositionPalette(props: Props) {
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add component</Button>
+        <Button type="submit" disabled={props.disabled || chosen === undefined || inputs.alias === ""}>Add item</Button>
         <Button type="button" variant="outline" size="sm" disabled={props.disabled || !addInputsPending(inputs)}
-          onClick={() => update(emptyAddInputs())}>Discard add inputs</Button>
+          onClick={() => update(emptyAddInputs())}>Discard</Button>
       </div>
     </form>
-    <p id={hintId} className="text-sm">Optional settings remain omitted until supplied; declared defaults are not written. Enter or the Add button applies the same guarded command. Save persists the draft; adding does not run data or actions.</p>
+    <p id={hintId} className="text-sm">Options you leave unset are not written to the draft. Adding an item changes your draft only; Save keeps it, and nothing runs.</p>
     <p role="status" aria-live="polite">{message}</p>
   </section>;
 }
@@ -246,6 +247,7 @@ function ApplicationCompositionPalette(props: Props) {
 function PlacementCompositionEditor(props: Props) {
   const [confirm, confirmDialog] = useConfirm();
   const [breakpoint, setBreakpoint] = useState<StudioCompositionBreakpoint>("desktop");
+  const names = useMemo(() => studioPlacementLabels(props.context), [props.context]);
   const model = useMemo(() => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint]);
   const moveModel = useMemo(() => describeStudioCompositionDestinations(props.context, props.selection),
@@ -314,10 +316,10 @@ function PlacementCompositionEditor(props: Props) {
   }, [scalarModel, props.context, selectionKey, props.onPendingChange]);
 
   if (model.kind !== "available" || inputs === null) return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
-    <h3 className="font-semibold">Placement order and size</h3>
+    <h3 className="font-semibold">Item order and size</h3>
     <p role="status">{model.kind === "unsupported"
-      ? "This region uses an unsupported block release. Its source is preserved."
-      : "This placement is not available in the current draft. Its source is preserved."}</p>
+      ? "This area uses an item type that cannot be edited here. Nothing was changed."
+      : "This item is not in the current draft."}</p>
   </section>;
 
   const baseline = inputsFor(model.layout);
@@ -341,7 +343,7 @@ function PlacementCompositionEditor(props: Props) {
     if (command.kind === "remove" && (pending.current || movePending.current)) return;
     if (command.kind === "move" ? pending.current : movePending.current) return;
     if (formContext.current !== props.context || formBreakpoint.current !== breakpoint) {
-      setMessage("The draft context changed. Wait for the current controls before applying.");
+      setMessage("The draft changed. Wait a moment, then try again.");
       return;
     }
     const expected = formContext.current;
@@ -349,22 +351,20 @@ function PlacementCompositionEditor(props: Props) {
     if (command.kind === "remove") {
       const removal = describeStudioCompositionRemoval(expected, expectedSelection);
       if (removal.kind !== "available") {
-        setMessage("This placement cannot be removed. Its source and your inputs are preserved.");
+        setMessage("This item cannot be removed. Nothing was changed.");
         return;
       }
       const confirmed = await confirm({
-        title: "Remove this presentation placement?",
-        description: removal.willRemoveUnusedRelease
-          ? "Remove this presentation placement and its now-unused exact release dependency from local history? Save remains separate."
-          : "Remove this presentation placement from local history? Its release dependency is still used elsewhere. Save remains separate.",
-        confirmLabel: "Remove placement",
-        cancelLabel: "Keep placement",
+        title: "Remove this item?",
+        description: "The item is removed from your draft. Save keeps the change.",
+        confirmLabel: "Remove item",
+        cancelLabel: "Keep item",
         destructive: true,
       });
       if (!confirmed) return;
       if (props.disabled || pending.current || movePending.current || settingsPending.current || scalarPending.current || formContext.current !== expected ||
         formBreakpoint.current !== breakpoint) {
-        setMessage("The draft or inputs changed. No removal was applied.");
+        setMessage("The draft or your input changed. Nothing was removed.");
         return;
       }
     }
@@ -375,10 +375,10 @@ function PlacementCompositionEditor(props: Props) {
       setDestinationKey("");
       props.onPendingChange(settingsPending.current || scalarPending.current);
       setInputs(baseline);
-      setMessage("Composition applied to one local history entry. Save to persist it.");
-    } else setMessage(result === "stale" ? "The draft or selection changed. Your inputs are preserved."
-      : result === "unsupported" ? "This edit is unsupported by the block release. Your inputs are preserved."
-        : "No change was applied. Use a valid size, order or compatible destination.");
+      setMessage("Change made. Save to keep it.");
+    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
+      : result === "unsupported" ? "This item does not support that change. What you typed is kept."
+        : "Nothing changed. Use a valid size, order or destination.");
   };
   const move = (direction: -1 | 1) => {
     if (pending.current || movePending.current || settingsPending.current || scalarPending.current || !orderEditable || selectedIndex < 0) return;
@@ -409,7 +409,7 @@ function PlacementCompositionEditor(props: Props) {
     // an array index. The pure command resolves it again against its snapshot.
     const chosen = destinations.find((item) => destinationOptionKey(item.destination) === destinationKey);
     if (chosen === undefined) {
-      setMessage("This destination is no longer available. Your inputs are preserved.");
+      setMessage("This destination is no longer available. What you typed is kept.");
       return;
     }
     void run({ kind: "move", destination: chosen.destination });
@@ -430,17 +430,17 @@ function PlacementCompositionEditor(props: Props) {
     const expectedSelection = props.selection;
     if (expected !== props.context || settingsSelection.current !== selectionKey ||
       describeStudioCompositionSettings(expected, expectedSelection).kind !== "available") {
-      setMessage("The draft or selection changed. Your text inputs are preserved.");
+      setMessage("The draft or your selection changed. What you typed is kept.");
       return;
     }
     const result = props.onCommand(expected, expectedSelection, { kind: "settings", settings: settingsInputs });
     if (result === "applied") {
       settingsPending.current = false;
       props.onPendingChange(pending.current || movePending.current || scalarPending.current);
-      setMessage("Text settings applied to one local history entry. Save to persist them.");
-    } else setMessage(result === "stale" ? "The draft or selection changed. Your text inputs are preserved."
-      : result === "unsupported" ? "These settings are unavailable for this placement. Your inputs are preserved."
-        : "No text change was applied. Use valid declared text within its limits. Your inputs are preserved.");
+      setMessage("Text changed. Save to keep it.");
+    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
+      : result === "unsupported" ? "This item has no text to change. What you typed is kept."
+        : "Nothing changed. Use valid text within its length limits. What you typed is kept.");
   };
 
   const updateScalars = (next: ScalarInputs) => {
@@ -458,28 +458,28 @@ function PlacementCompositionEditor(props: Props) {
     const expectedSelection = props.selection;
     if (expected !== props.context || scalarSelection.current !== selectionKey ||
       describeStudioCompositionScalarSettings(expected, expectedSelection).kind !== "available") {
-      setMessage("The draft or selection changed. Your scalar inputs are preserved.");
+      setMessage("The draft or your selection changed. What you typed is kept.");
       return;
     }
     const settings = parseScalarInputs(scalarInputs);
     if (settings === undefined) {
-      setMessage("Supply a finite decimal number for each numeric setting. Your inputs are preserved.");
+      setMessage("Enter a number for each numeric setting. What you typed is kept.");
       return;
     }
     const result = props.onCommand(expected, expectedSelection, { kind: "scalar_settings", settings });
     if (result === "applied") {
       scalarPending.current = false;
       props.onPendingChange(pending.current || movePending.current || settingsPending.current);
-      setMessage("Declared settings applied to one local history entry. Save to persist them.");
-    } else setMessage(result === "stale" ? "The draft or selection changed. Your scalar inputs are preserved."
-      : result === "unsupported" ? "These settings are unavailable for this placement. Your inputs are preserved."
-        : "No scalar change was applied. Supply valid declared values and required fields. Your inputs are preserved.");
+      setMessage("Settings changed. Save to keep them.");
+    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
+      : result === "unsupported" ? "This item has no settings to change. What you typed is kept."
+        : "Nothing changed. Enter valid values and fill the required settings. What you typed is kept.");
   };
 
   return <section className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4" aria-labelledby={titleId}>
-    <h3 id={titleId} className="font-semibold">Placement composition</h3>
-    <p className="text-sm">Existing placement: {model.placementAlias}. This edits authored layout without running its data or actions.</p>
-    <label className="block space-y-1"><span>Breakpoint</span>
+    <h3 id={titleId} className="font-semibold">Order and size</h3>
+    <p className="text-sm">{names.get(model.placementAlias) ?? "This item"}. This changes the layout in your draft; nothing runs.</p>
+    <label className="block space-y-1"><span>Screen size</span>
       <NativeSelect className={fieldClass} value={breakpoint} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty}
         onChange={(event) => {
           if (pending.current || movePending.current || settingsPending.current || scalarPending.current || props.disabled) return;
@@ -489,9 +489,9 @@ function PlacementCompositionEditor(props: Props) {
         <option value="desktop">Desktop</option><option value="tablet">Tablet</option><option value="phone">Phone</option>
       </NativeSelect></label>
     <fieldset className="space-y-2" disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !orderEditable} aria-describedby={hintId}>
-      <legend className="font-medium">Sibling order</legend>
+      <legend className="font-medium">Order among its neighbours</legend>
       <ol className="list-decimal pl-6">{model.order.map((alias) => <li key={alias}
-        aria-current={alias === model.placementAlias ? "true" : undefined}>{alias}</li>)}</ol>
+        aria-current={alias === model.placementAlias ? "true" : undefined}>{names.get(alias) ?? "Item"}</li>)}</ol>
       <div className="flex flex-wrap gap-2" onKeyDown={(event) => {
         if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
         event.preventDefault();
@@ -501,27 +501,27 @@ function PlacementCompositionEditor(props: Props) {
         <Button type="button" variant="outline" size="sm" disabled={selectedIndex < 0 || selectedIndex >= model.order.length - 1}
           onClick={() => move(1)}>Move later</Button>
         {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={!model.explicitOrder}
-          onClick={() => { if (!pending.current) void run({ kind: "order", breakpoint, order: null }); }}>Inherit wider order</Button>}
+          onClick={() => { if (!pending.current) void run({ kind: "order", breakpoint, order: null }); }}>Use the larger screen's order</Button>}
       </div>
     </fieldset>
-    <p id={hintId} className="text-sm">Focus an order button and use Alt+Up or Alt+Down, or activate its button. {breakpoint !== "desktop" && !model.responsiveOrder
-      ? "The parent release uses one order at every breakpoint." : model.explicitOrder ? "This order is explicitly authored." : "This order inherits from the wider breakpoint."}</p>
+    <p id={hintId} className="text-sm">Use the buttons, or Alt+Up and Alt+Down. {breakpoint !== "desktop" && !model.responsiveOrder
+      ? "This area uses one order at every screen size." : model.explicitOrder ? "This order is set for this screen size." : "This order is inherited from the larger screen size."}</p>
     <form className="space-y-3" onSubmit={applySize}>
       <fieldset className="space-y-3" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty}>
-        <legend className="font-medium">Responsive size</legend>
+        <legend className="font-medium">Size</legend>
         <label className="flex items-center gap-2"><Checkbox checked={inputs.visible}
           disabled={!model.capabilities.responsiveVisibility}
-          onCheckedChange={(checked) => update({ ...inputs, visible: checked })} />Visible at this breakpoint</label>
+          onCheckedChange={(checked) => update({ ...inputs, visible: checked })} />Shown at this screen size</label>
         <label className="block space-y-1"><span>Width</span>
           <NativeSelect className={fieldClass} value={inputs.width} onChange={(event) => {
             const width = event.target.value;
             if (width === "content" || width === "fill" || width === "grid") update({ ...inputs, width });
           }}><option value="content">Content</option><option value="fill">Fill</option>
-            {model.capabilities.gridWidth && <option value="grid">Twelve-column grid</option>}</NativeSelect></label>
+            {model.capabilities.gridWidth && <option value="grid">Columns</option>}</NativeSelect></label>
         {inputs.width === "grid" && <div className="grid grid-cols-2 gap-2">
-          <label className="block space-y-1"><span>Start column</span><Input className={fieldClass} type="number" required min={1} max={12} step={1}
+          <label className="block space-y-1"><span>Starts at column</span><Input className={fieldClass} type="number" required min={1} max={12} step={1}
             value={inputs.startColumn} onChange={(event) => update({ ...inputs, startColumn: event.target.value })} /></label>
-          <label className="block space-y-1"><span>Column span</span><Input className={fieldClass} type="number" required min={1} max={12} step={1}
+          <label className="block space-y-1"><span>Number of columns</span><Input className={fieldClass} type="number" required min={1} max={12} step={1}
             value={inputs.span} onChange={(event) => update({ ...inputs, span: event.target.value })} /></label>
         </div>}
         <label className="block space-y-1"><span>Height</span>
@@ -529,23 +529,23 @@ function PlacementCompositionEditor(props: Props) {
             const height = event.target.value;
             if (height === "content" || height === "bounded") update({ ...inputs, height });
           }}><option value="content">Content</option>
-            {model.capabilities.height === "content_or_bounded" && <option value="bounded">Bounded</option>}</NativeSelect></label>
-        {inputs.height === "bounded" && <label className="block space-y-1"><span>Height units</span>
+            {model.capabilities.height === "content_or_bounded" && <option value="bounded">Fixed height</option>}</NativeSelect></label>
+        {inputs.height === "bounded" && <label className="block space-y-1"><span>Height</span>
           <Input className={fieldClass} type="number" required min={0} step="any" value={inputs.units}
             onChange={(event) => update({ ...inputs, units: event.target.value })} /></label>}
       </fieldset>
-      <p className="text-sm">{model.explicitLayout ? "This layout is explicitly authored." : "This layout inherits from the wider breakpoint."} Applying size records one local history entry; Enter submits this same form.</p>
+      <p className="text-sm">{model.explicitLayout ? "This size is set for this screen size." : "This size is inherited from the larger screen size."}</p>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply size</Button>
-        <Button type="button" variant="outline" size="sm" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard size inputs</Button>
+        <Button type="submit" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply</Button>
+        <Button type="button" variant="outline" size="sm" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard</Button>
         {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !model.explicitLayout}
-          onClick={() => { if (!pending.current) void run({ kind: "resize", breakpoint, layout: null }); }}>Inherit wider size</Button>}
+          onClick={() => { if (!pending.current) void run({ kind: "resize", breakpoint, layout: null }); }}>Use the larger screen's size</Button>}
       </div>
     </form>
     <form className="space-y-3" onSubmit={applyDestination}>
       <fieldset className="space-y-3" disabled={props.disabled || dirty || settingsDirty || scalarDirty || destinations.length === 0}>
-        <legend className="font-medium">Move to another slot</legend>
-        <label className="block space-y-1"><span>Existing destination in this page region</span>
+        <legend className="font-medium">Move to another area</legend>
+        <label className="block space-y-1"><span>Where to move it</span>
           <NativeSelect className={fieldClass} required value={destinationKey} onChange={(event) => {
             if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
             const key = event.target.value;
@@ -557,38 +557,40 @@ function PlacementCompositionEditor(props: Props) {
           }}>
             <option value="">Choose a destination</option>
             {destinations.map((item) => <option key={destinationOptionKey(item.destination)}
-              value={destinationOptionKey(item.destination)}>{item.label}</option>)}
+              value={destinationOptionKey(item.destination)}>{item.destination.kind === "child"
+                ? `${names.get(item.destination.parentAlias) ?? "Item"} / ${item.label.slice(item.label.indexOf(" / ") + 3)}`
+                : item.label}</option>)}
           </NativeSelect></label>
-        <Button type="submit" disabled={!moveDirty}>Move placement</Button>
+        <Button type="submit" disabled={!moveDirty}>Move</Button>
         <Button type="button" variant="outline" size="sm" disabled={!moveDirty} onClick={() => {
           if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
           movePending.current = false;
           setDestinationKey("");
           props.onPendingChange(pending.current || settingsPending.current || scalarPending.current);
           setMessage("");
-        }}>Discard destination</Button>
+        }}>Discard</Button>
       </fieldset>
-      <p className="text-sm">Move the existing placement and its children to the end of an existing compatible slot in this page's main region. Use this select and Enter or the Move button. Required content, nesting limits and slot compatibility are checked before applying.</p>
+      <p className="text-sm">Moves this item, with what is inside it, to the end of another area on this page. Required content and nesting limits are checked first.</p>
       {destinations.length === 0 && <p role="status">{moveModel.kind === "unsupported"
-        ? "Moves are supported only within an ordinary page's main region with known block releases."
-        : "No other compatible existing destination is available for this placement."}</p>}
+        ? "Items can only be moved within the main area of an ordinary page."
+        : "There is no other area this item can move to."}</p>}
     </form>
-    <section className="space-y-2" aria-label="Remove presentation placement">
-      <p className="text-sm">Remove only an unreferenced released presentation placement. Flows and other source fields are retained. Save remains separate.</p>
+    <section className="space-y-2" aria-label="Remove item">
+      <p className="text-sm">Removes this item from the page. Flows and everything else stay as they are. Save keeps the change.</p>
       <Button type="button" variant="outline" size="sm"
         disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || removalModel.kind !== "available"}
-        onClick={() => { void run({ kind: "remove" }); }}>Remove placement</Button>
+        onClick={() => { void run({ kind: "remove" }); }}>Remove item</Button>
       {removalModel.kind === "blocked" && <p role="status">{removalModel.reason === "required_slot"
-        ? "This slot requires its remaining placement."
+        ? "This area needs at least this item."
         : removalModel.reason === "unresolved_target"
-          ? "A declared placement target cannot be resolved safely. Removal is unavailable."
-          : "A Flow still refers to this placement. Removal is unavailable."}</p>}
+          ? "Something this item points to cannot be found. It cannot be removed."
+          : "A flow still uses this item. It cannot be removed."}</p>}
       {(removalModel.kind === "invalid" || removalModel.kind === "unsupported") &&
-        <p role="status">Removal is available only for supported presentation placements in private list, detail or dashboard main regions.</p>}
+        <p role="status">Only display items in the main area of a list, detail or dashboard page can be removed.</p>}
     </section>
     {settingsModel.kind === "available" ? <form className="space-y-3" onSubmit={applySettings}>
       <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty || scalarDirty}>
-        <legend className="font-medium">Declared text settings</legend>
+        <legend className="font-medium">Text</legend>
         {settingsModel.properties.map((property) => {
           const supplied = Object.hasOwn(settingsInputs, property.key) ? settingsInputs[property.key] : undefined;
           return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
@@ -599,7 +601,7 @@ function PlacementCompositionEditor(props: Props) {
                 if (checked) next[property.key] = { kind: "text", value: "" };
                 else delete next[property.key];
                 updateSettings(next);
-              }} />Supply this optional text</label>
+              }} />Set this text</label>
             {supplied !== undefined && <label className="block space-y-1"><span>{property.label} text</span>
               <Textarea className={fieldClass} required={property.minLength > 0}
                 minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
@@ -610,16 +612,16 @@ function PlacementCompositionEditor(props: Props) {
         })}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}>Apply text settings</Button>
+        <Button type="submit" disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}>Apply</Button>
         <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}
-          onClick={() => updateSettings(settingsModel.settings)}>Discard text inputs</Button>
+          onClick={() => updateSettings(settingsModel.settings)}>Discard</Button>
       </div>
-      <p className="text-sm">Omitted text stays omitted until supplied. Apply and keyboard submission use one guarded command. Discard changes only these inputs; Save remains explicit.</p>
-      {settingsDirty && <p role="status">Apply or discard text inputs before changing layout, destination, order, breakpoint or removing this placement.</p>}
-    </form> : <p role="status">Text settings are available only for supported released presentation placements in private list, detail or dashboard main or Application-shell content regions, or guided page content using the default shell.</p>}
+      <p className="text-sm">Text you leave unset is not written to the draft. Apply puts the change in your draft; Save keeps it.</p>
+      {settingsDirty && <p role="status">Apply or discard the text before changing anything else on this item.</p>}
+    </form> : <p role="status">This item has no text that can be edited here.</p>}
     {scalarModel.kind === "available" && <form className="space-y-3" onSubmit={applyScalars}>
       <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty || settingsDirty}>
-        <legend className="font-medium">Declared settings</legend>
+        <legend className="font-medium">Settings</legend>
         {scalarModel.properties.map((property) => {
           const supplied = Object.hasOwn(scalarInputs, property.key) ? scalarInputs[property.key] : undefined;
           const canOmit = !property.required || property.defaultValue !== undefined;
@@ -630,9 +632,9 @@ function PlacementCompositionEditor(props: Props) {
               ? property.options.find((option) => option.key === defaultValue.value)?.label : undefined;
           return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
             <legend>{property.label}</legend>
-            <p className="text-sm">{property.required ? "Required setting." : "Optional setting."} {defaultLabel !== undefined
-              ? `Omitting this setting uses the declared default: ${defaultLabel}.`
-              : canOmit ? "Omitted until you supply a value." : "Supply a declared value."}</p>
+            <p className="text-sm">{property.required ? "Required." : "Optional."} {defaultLabel !== undefined
+              ? `If you leave it unset, ${defaultLabel} is used.`
+              : canOmit ? "Not set until you choose a value." : "Choose a value."}</p>
             <label className="flex items-center gap-2"><Checkbox checked={supplied !== undefined}
               disabled={!canOmit} onCheckedChange={(checked) => {
                 const next = { ...scalarInputs };
@@ -641,18 +643,18 @@ function PlacementCompositionEditor(props: Props) {
                     ? { kind: "number", value: "" } : { kind: "choice", value: "" };
                 else delete next[property.key];
                 updateScalars(next);
-              }} />Supply this setting</label>
+              }} />Set this option</label>
             {property.kind === "boolean" && supplied?.kind === "boolean" &&
               <label className="flex items-center gap-2"><Checkbox checked={supplied.value}
                 onCheckedChange={(checked) => updateScalars({ ...scalarInputs,
-                  [property.key]: { kind: "boolean", value: checked } })} />{property.label} value</label>}
+                  [property.key]: { kind: "boolean", value: checked } })} />{property.label}</label>}
             {property.kind === "choice" && supplied?.kind === "choice" &&
-              <label className="block space-y-1"><span>{property.label} value</span>
+              <label className="block space-y-1"><span>{property.label}</span>
                 <NativeSelect className={fieldClass} required value={supplied.value} onChange={(event) => {
                   const value = event.target.value;
                   if (value !== "" && !property.options.some((option) => option.key === value)) return;
                   updateScalars({ ...scalarInputs, [property.key]: { kind: "choice", value } });
-                }}><option value="">Choose a declared value</option>
+                }}><option value="">Choose a value</option>
                   {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
                 </NativeSelect></label>}
             {property.kind === "number" && <p className="text-sm">
@@ -661,7 +663,7 @@ function PlacementCompositionEditor(props: Props) {
               {property.maximum !== undefined && ` Maximum: ${property.maximum}.`}
             </p>}
             {property.kind === "number" && supplied?.kind === "number" &&
-              <label className="block space-y-1"><span>{property.label} value</span>
+              <label className="block space-y-1"><span>{property.label}</span>
                 <Input className={fieldClass} type="text" inputMode={property.integer ? "numeric" : "decimal"}
                   value={supplied.value} onChange={(event) => updateScalars({ ...scalarInputs,
                     [property.key]: { kind: "number", value: event.target.value } })} />
@@ -672,13 +674,13 @@ function PlacementCompositionEditor(props: Props) {
       </fieldset>
       <div className="flex flex-wrap gap-2">
         <Button type="submit"
-          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply declared settings</Button>
+          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply</Button>
         <Button type="button" variant="outline" size="sm"
           disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}
-          onClick={() => updateScalars(scalarInputsFor(scalarModel.settings))}>Discard scalar inputs</Button>
+          onClick={() => updateScalars(scalarInputsFor(scalarModel.settings))}>Discard</Button>
       </div>
-      <p className="text-sm">Supplied false is an explicit value. Declared defaults are shown without writing them into omitted settings. Apply or Enter uses one guarded command; Save remains explicit.</p>
-      {scalarDirty && <p role="status">Apply or discard scalar inputs before changing text, layout, destination, order, breakpoint or removing this placement.</p>}
+      <p className="text-sm">A setting you leave unset uses its default. Apply puts the change in your draft; Save keeps it.</p>
+      {scalarDirty && <p role="status">Apply or discard the settings before changing anything else on this item.</p>}
     </form>}
     <p role="status" aria-live="polite">{message}</p>
     {confirmDialog}

@@ -32,7 +32,7 @@ function RootTable({
         <TableRow>
           <TableHead>Name</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead>Workspaces</TableHead>
+          <TableHead>Open</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -45,26 +45,21 @@ function RootTable({
             <TableRow key={root.rootId}>
               <TableCell>
                 <span className="font-medium">{root.name}</span>
-                <span className="block text-sm text-muted-foreground">{root.key}</span>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {root.draftRevision === null
-                  ? "No draft yet"
-                  : `Draft revision ${root.draftRevision}`} ·{" "}
-                {root.currentReleaseRevision === null
-                  ? "Not released yet"
-                  : `Release revision ${root.currentReleaseRevision}`}
+                {root.draftRevision === null ? "No draft yet" : "Draft saved"} ·{" "}
+                {root.currentReleaseRevision === null ? "Not published yet" : "Published"}
               </TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                   {root.draftRevision !== null && (
                     <Link className="underline underline-offset-4" href={base}>
-                      Draft workspace
+                      Workspace
                     </Link>
                   )}
                   {root.kind === "application" ? (
                     <Link className="underline underline-offset-4" href={`${base}/history`}>
-                      Release history
+                      Published versions
                     </Link>
                   ) : root.draftRevision !== null ? (
                     <>
@@ -72,7 +67,7 @@ function RootTable({
                         Fields
                       </Link>
                       <Link className="underline underline-offset-4" href={`${base}/queries`}>
-                        Queries
+                        Saved views
                       </Link>
                       <Link className="underline underline-offset-4" href={`${base}/publish`}>
                         Publish
@@ -132,7 +127,7 @@ export default async function StudioOrganizationPage({
       <Card>
         <CardHeader>
           <CardTitle>Applications</CardTitle>
-          <CardDescription>Open a draft when available or review its releases.</CardDescription>
+          <CardDescription>Open an application to edit it, or look at its published versions.</CardDescription>
         </CardHeader>
         <CardContent>
           {applications.length === 0 ? (
@@ -145,7 +140,7 @@ export default async function StudioOrganizationPage({
       <Card>
         <CardHeader>
           <CardTitle>Modules</CardTitle>
-          <CardDescription>Open available module drafts, fields, queries, or publication.</CardDescription>
+          <CardDescription>Open a module to edit its fields, saved views or publish it.</CardDescription>
         </CardHeader>
         <CardContent>
           {modules.length === 0 ? (

@@ -156,7 +156,7 @@ export const organizationLauncherStudioPage = pageDefinitionSchema.parse({
               releaseVersion: LINK_TILES_BLOCK_RELEASE.releaseVersion,
             },
             settings: {
-              title: { kind: "text", value: "Create an application" },
+              title: { kind: "text", value: "Studio" },
               label_key: { kind: "text", value: "label" },
               address_key: { kind: "text", value: "address" },
               description_key: { kind: "text", value: "description" },

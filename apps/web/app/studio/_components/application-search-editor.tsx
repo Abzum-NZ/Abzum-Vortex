@@ -50,7 +50,7 @@ export function ApplicationSearchEditor({ source, metadata, disabled, onPendingC
     const parsed = applicationSourceDocumentSchema.safeParse(candidate);
     if (!parsed.success) { setMessage("Choose searchable fields, a title and a compatible Page before applying."); return; }
     if (!onApply(source, parsed.data.body.search)) { setMessage("The draft or choices changed. Refresh before applying."); return; }
-    setPending(false); onPendingChange(false); setMessage("Search applied to local history. Save and publish explicitly to use it.");
+    setPending(false); onPendingChange(false); setMessage("Search changed. Save to keep it, then publish to use it.");
   };
   return <section aria-label="Application Search configuration" className="space-y-4 rounded-lg border p-4">
     <h2 className="text-lg font-semibold">Search</h2>

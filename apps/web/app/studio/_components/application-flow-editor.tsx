@@ -267,12 +267,12 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     });
     if (result === "applied") {
       discard();
-      setMessage("Flow text applied to local history. Save draft to persist it.");
+      setMessage("Flow text applied. Save to keep it.");
     } else setMessage(result === "stale"
-      ? "This task or draft changed. Your text is preserved; discard it and select the current task to continue."
-      : result === "unsupported" ? "This property is read-only. Your text is preserved."
+      ? "This task or draft changed. What you typed is kept; discard it and select the current task to continue."
+      : result === "unsupported" ? "This property is read-only. What you typed is kept."
         : result === "no_change" ? "The source already has this text. No history change was made."
-          : "Use non-empty text of at most 2000 characters without template delimiters. Your text is preserved.");
+          : "Use non-empty text of at most 2000 characters without template delimiters. What you typed is kept.");
   };
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); apply(); };
   const changeInsert = (patch: Partial<InsertInputs>) => {
@@ -301,11 +301,11 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     const result = onAppend(expected.context, expected.selection, command);
     if (result === "applied") {
       discardInsert();
-      setMessage("Presentation task appended to local history. Save draft to persist it.");
+      setMessage("Presentation task added. Save to keep it.");
     } else setMessage(result === "stale"
-      ? "This Flow or draft changed. Your insertion inputs are preserved; discard them to use the current source."
-      : result === "unsupported" ? "This Flow or task is not available for insertion. Your inputs are preserved."
-        : "Use a unique lowercase task key of at most 40 characters and non-empty text of at most 2000 characters without template delimiters. The Flow must remain within its task limits. Your inputs are preserved.");
+      ? "This Flow or draft changed. What you typed is kept; discard them to use the current source."
+      : result === "unsupported" ? "This Flow or task is not available for insertion. What you typed is kept."
+        : "Use a unique lowercase task key of at most 40 characters and non-empty text of at most 2000 characters without template delimiters. The Flow must remain within its task limits. What you typed is kept.");
   };
   const submitAppend = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); append(); };
   const beginCalculate = async (editing: boolean) => {
@@ -351,7 +351,7 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     const rounding = flowRoundingModeSchema.safeParse(inputs.rounding);
     if (inputs.operator === "" || left === undefined || right === undefined || !rounding.success ||
       !/^(?:0|[1-9]\d*)$/.test(inputs.scale)) {
-      setMessage("Choose both numeric operands, an operator, precision and rounding. Your inputs are preserved.");
+      setMessage("Choose both numeric operands, an operator, precision and rounding. What you typed is kept.");
       return;
     }
     const settings: StudioFlowCalculateSettings = { operator: inputs.operator, left, right,
@@ -362,11 +362,11 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     const result = onCalculate(expected.context, expected.selection, command, isCurrentTarget);
     if (result === "applied" || result === "no_change") {
       discardCalculate();
-      setMessage(result === "applied" ? "Calculate applied to local history. Save draft to persist it."
+      setMessage(result === "applied" ? "Calculate applied. Save to keep it."
         : "The source already has this calculation. No history change was made.");
-    } else setMessage(result === "stale" ? "This task or draft changed. Your Calculate inputs are preserved; discard them to continue."
-      : result === "unsupported" ? "This calculation is read-only here. Your inputs are preserved."
-        : "Use valid numbers or current declared numeric values, a unique task key and precision from 0 to 18. Your inputs are preserved.");
+    } else setMessage(result === "stale" ? "This task or draft changed. What you typed is kept; discard them to continue."
+      : result === "unsupported" ? "This calculation is read-only here. What you typed is kept."
+        : "Use valid numbers or current declared numeric values, a unique task key and precision from 0 to 18. What you typed is kept.");
   };
   const move = (option: StudioFlowPresentationMoveOption) => {
     const expectedTarget = target;
@@ -382,9 +382,9 @@ export function ApplicationFlowEditor({ context, selection, disabled, onPendingC
     const result = onMove(context, selection, { kind: "move_presentation", ...option }, isCurrentTarget);
     if (result === "applied") {
       selectTarget({ ...expectedTarget, path: option.neighborPath });
-      setMessage("Presentation task moved in local history. Save draft to persist it.");
+      setMessage("Presentation task moved. Save to keep it.");
     } else setMessage(result === "stale"
-      ? "The selected task, adjacent task or draft changed. Select the current task to continue. Your inputs are preserved."
+      ? "The selected task, adjacent task or draft changed. Select the current task to continue. What you typed is kept."
       : result === "unsupported" ? "These tasks cannot be moved across each other here. No source was changed."
         : result === "no_change" ? "This task is already at that boundary. No history entry was added."
           : "This task move could not be validated. No source was changed.");

@@ -286,7 +286,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onSettingP
     if (adding === null || taskType === "") return;
     const result = onInsert(adding.expected, adding.expectedSelection, { kind: "insert_task", taskType, listPath: adding.listPath, index: adding.index });
     if (result.kind === "applied") {
-      setStatus(`Task ${result.taskId} added ${adding.where}. Save draft to persist it.`);
+      setStatus(`Task ${result.taskId} added ${adding.where}. Save to keep it.`);
       setFocusId(result.taskId);
       setAdding(null);
     } else setStatus(result.reason);
@@ -302,7 +302,7 @@ export function ApplicationFlowCanvas({ context, selection, disabled, onSettingP
     const result = onRemove(removing.expected, removing.expectedSelection,
       { kind: "remove_task", taskId: removing.taskId, taskPath: removing.taskPath });
     if (result.kind === "applied") {
-      setStatus(`Task ${removing.taskId} removed. Save draft to persist it.`);
+      setStatus(`Task ${removing.taskId} removed. Save to keep it.`);
       setSelected(null);
     } else setStatus(result.reason);
     setRemoving(null);

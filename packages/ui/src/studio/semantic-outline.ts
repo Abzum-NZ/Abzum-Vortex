@@ -48,9 +48,21 @@ const outlineKey = (
   return JSON.stringify([parentKey, "slot", node.slotAlias]);
 };
 
-/** Projects one authored Application draft into an immutable, alias-selected Studio outline. */
+/** Names a placed block for a person from its release and settings; `undefined` keeps the generic fallback. */
+export type StudioPlacementDescriber = (
+  placement: Readonly<{
+    block: Readonly<{ block_id: string; release_version: string }>;
+    settings: Readonly<Record<string, unknown>>;
+  }>,
+) => string | undefined;
+
+/**
+ * Projects one authored Application draft into an immutable, alias-selected Studio outline.
+ * `describePlacement` supplies the business label of a placed block (display name and item label).
+ */
 export const projectStudioSemanticOutline = (
   draft: StudioApplicationSelectionDraft,
+  describePlacement?: StudioPlacementDescriber,
 ): StudioSemanticOutline => {
   let root: MutableOutlineNode | undefined;
   const stack: MutableOutlineNode[] = [];
@@ -61,7 +73,7 @@ export const projectStudioSemanticOutline = (
       const outlineNode: MutableOutlineNode = {
         key: outlineKey(node, parent?.key),
         kind: node.kind,
-        label: node.label,
+        label: (node.kind === "placement" ? describePlacement?.(node) : undefined) ?? node.label,
         selection: "selection" in node ? node.selection : null,
         children: [],
       };

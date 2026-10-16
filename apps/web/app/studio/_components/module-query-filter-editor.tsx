@@ -176,7 +176,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
         setWorking(result.selected.filter);
         appliedRef.current = result.selected.filter;
         clearLocalHistory();
-        setMessage(`Loaded saved filter at Module draft revision ${result.snapshot.draftRevision}.`);
+        setMessage("Loaded the saved filter.");
       } else {
         setMessage("Choose a Module Query to inspect its saved filter.");
       }
@@ -397,8 +397,8 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
           return;
         }
         setMessage(result.kind === "saved"
-          ? `Saved at Module draft revision ${result.snapshot.draftRevision}.`
-          : `No source change was needed at Module draft revision ${result.snapshot.draftRevision}.`);
+          ? "Saved."
+          : "Nothing needed to change.");
         return;
       }
       if (result.kind !== "validation_failed") setContextInvalidated(true);
@@ -456,7 +456,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
           clearLocalHistory();
           setControlValidation(null);
           setRemoteValidation(null);
-          setMessage(`Reopened persisted Module draft revision ${result.snapshot.draftRevision}.`);
+          setMessage("Loaded the saved draft.");
         } else setMessage("Choose a Module Query to inspect its saved filter.");
         return;
       }
