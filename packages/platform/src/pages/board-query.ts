@@ -110,9 +110,7 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): BoardCellValue
     }
     case "money": {
       const money = moneyValueSchema.safeParse(value);
-      return money.success
-        ? { kind: "text", text: formatMoney(money.data) }
-        : undefined;
+      return money.success ? { kind: "text", text: formatMoney(money.data) } : undefined;
     }
     case "yes_no":
       return typeof value === "boolean" ? { kind: "boolean", value } : undefined;
@@ -245,9 +243,7 @@ const metricValue = (
     }
     case "money": {
       const money = moneyValueSchema.safeParse(result.value);
-      return money.success
-        ? { kind: "text", text: formatMoney(money.data) }
-        : undefined;
+      return money.success ? { kind: "text", text: formatMoney(money.data) } : undefined;
     }
     case "date":
     case "date_time":

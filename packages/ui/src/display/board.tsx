@@ -87,7 +87,10 @@ function ColumnMetrics({
     <div role="group" aria-label="Protected totals" className="flex flex-col">
       {metrics.map((metric) => (
         <p key={metric.key} className="m-0 text-muted-foreground" data-vortex-board-metric="true">
-          {metric.label}: <span className="font-medium text-foreground"><MetricValue value={metric.value} /></span>
+          {metric.label}:{" "}
+          <span className="font-medium text-foreground">
+            <MetricValue value={metric.value} />
+          </span>
         </p>
       ))}
     </div>
@@ -234,8 +237,8 @@ function BoardColumn({
                         ) : null}
                         {details.map((field) => (
                           <p key={field.key} className="m-0 flex min-w-0 justify-between gap-2">
-                            <span className="shrink-0 text-muted-foreground">{field.label}</span>
-                            <span className="min-w-0 break-words text-right">
+                            <span className="min-w-0 text-muted-foreground">{field.label}</span>
+                            <span className="shrink-0 whitespace-nowrap text-right">
                               <DisplayCellView value={field.value} />
                             </span>
                           </p>

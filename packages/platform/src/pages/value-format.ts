@@ -22,7 +22,8 @@ const EXACT_DECIMAL = /^-?\d+(\.\d+)?$/;
 export const isExactDecimal = (text: string): boolean => EXACT_DECIMAL.test(text);
 
 /** A number or exact decimal text with locale digit grouping. */
-export const formatDecimal = (value: number | string): string => decimalFormat.format(value as number);
+export const formatDecimal = (value: number | string): string =>
+  decimalFormat.format(value as number);
 
 /** A money value with its own currency symbol or code and locale grouping. */
 export const formatMoney = (money: Readonly<{ currency: string; amount: string }>): string =>
