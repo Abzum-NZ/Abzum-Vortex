@@ -1,8 +1,55 @@
 -- Modules are edited only inside their Application (#2727, P5c).
 -- Only an Application has a draft: save_draft, restore and the draft write guard refuse Module
 -- roots. The owning Application's publication stages a Module's source with
--- stage_owned_module_source, which replaces its use of save_draft.
+-- stage_owned_module_source, which replaces its use of save_draft. A Module source holds no
+-- dependencies (they are derived from its references when it is compiled), so
+-- is_owned_module_source_internal compares the whole source with the lowering of the owner's
+-- inline Module.
 set local role vortex_owner;
+
+create or replace function vortex_definition.is_owned_module_source_internal(
+  p_owner_application_root_id uuid,
+  p_organization_id uuid,
+  p_source jsonb
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  -- A Module source is exactly the lowering of one inline Module of its owning Application's
+  -- current draft: the inline Module's alias, key and body, naming that Application as its owner,
+  -- under the one current Module source contract (moduleSourceContractVersion). Nothing else may
+  -- differ; a Module's dependencies are derived when it is compiled and never stored.
+  select exists (
+    select 1
+    from vortex_definition.roots as owner_root
+    join vortex_definition.drafts as owner_draft on owner_draft.root_id = owner_root.root_id
+    cross join lateral pg_catalog.jsonb_array_elements(
+      coalesce(owner_draft.draft_source #> '{body,modules}', '[]'::jsonb)
+    ) as inline_module(value)
+    where owner_root.root_id = p_owner_application_root_id
+      and owner_root.organization_id = p_organization_id
+      and owner_root.kind = 'application'
+      and p_source = pg_catalog.jsonb_build_object(
+        'source_contract_version', '3.0.0',
+        'root_alias', inline_module.value -> 'id',
+        'key', inline_module.value -> 'key',
+        'kind', 'module',
+        'body', (inline_module.value - 'id' - 'key')
+          || pg_catalog.jsonb_build_object('owner_application', owner_root.key)
+      )
+  );
+$function$;
+
+revoke all on function vortex_definition.is_owned_module_source_internal(uuid, uuid, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_definition.is_owned_module_source_internal(uuid, uuid, jsonb) is
+  'Whether a Module source is exactly one inline Module of its owning Application''s current draft.';
+
+alter function vortex_definition.is_owned_module_source_internal(uuid, uuid, jsonb) owner to vortex_owner;
 
 create or replace function vortex_definition.validated_builder_draft_write_context_internal(
   p_root_id uuid

@@ -9,9 +9,10 @@ stable
 security definer
 set search_path = ''
 as $function$
-  -- A Module source is the lowering of one inline Module of its owning Application's current
-  -- draft: the same alias, key and body, naming that Application as its owner, plus the
-  -- dependencies derived from its references.
+  -- A Module source is exactly the lowering of one inline Module of its owning Application's
+  -- current draft: the inline Module's alias, key and body, naming that Application as its owner,
+  -- under the one current Module source contract (moduleSourceContractVersion). Nothing else may
+  -- differ; a Module's dependencies are derived when it is compiled and never stored.
   select exists (
     select 1
     from vortex_definition.roots as owner_root
@@ -22,12 +23,14 @@ as $function$
     where owner_root.root_id = p_owner_application_root_id
       and owner_root.organization_id = p_organization_id
       and owner_root.kind = 'application'
-      and p_source ->> 'kind' = 'module'
-      and inline_module.value ->> 'key' = p_source ->> 'key'
-      and inline_module.value ->> 'id' = p_source ->> 'root_alias'
-      and p_source #>> '{body,owner_application}' = owner_root.key
-      and (inline_module.value - 'id' - 'key')
-        = ((p_source -> 'body') - 'dependencies' - 'owner_application')
+      and p_source = pg_catalog.jsonb_build_object(
+        'source_contract_version', '3.0.0',
+        'root_alias', inline_module.value -> 'id',
+        'key', inline_module.value -> 'key',
+        'kind', 'module',
+        'body', (inline_module.value - 'id' - 'key')
+          || pg_catalog.jsonb_build_object('owner_application', owner_root.key)
+      )
   );
 $function$;
 
