@@ -105,9 +105,12 @@ const projectItems = (
     };
     const projectedProps: JsonObject = {};
     const slotOrders: JsonObject = {};
+    // The item's slots are exactly those its `vortex.slotOrders` orders; every other prop is a
+    // plain setting value, a list setting included.
+    const slotKeys = new Set(Object.keys(object(vortex.slotOrders)));
     for (const [key, value] of Object.entries(props)) {
       if (reservedProps.has(key)) continue;
-      if (!Array.isArray(value)) {
+      if (!slotKeys.has(key)) {
         projectedProps[key] = value;
         continue;
       }

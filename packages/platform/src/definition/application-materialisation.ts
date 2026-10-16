@@ -9,6 +9,8 @@ import {
   guidedFormPageCompositionSchema,
   findFieldInputBinding,
   pageCompositionSchema,
+  plainSettingValue,
+  releaseSettingDeclarations,
   validateComponentSettingValue,
   type ApplicationCompositionCatalogueSnapshot,
   type ApplicationContent,
@@ -622,9 +624,19 @@ const applyFieldInputDerivation = (
     required: { kind: "boolean", value: field.required },
     ...derived.settings,
   };
+  // Each derived setting satisfies both the delegated control's declaration and the field input
+  // release's own declaration of it, so the release names every setting its placements carry.
+  const ownDeclaration = (key: string): BlockPropertySchemaContract | undefined =>
+    releaseSettingDeclarations(release).find((property) => property.key === key);
   for (const [key, value] of Object.entries(derivedValues))
-    settings[key] = derivedPropertyValue(value, declaration(key));
-  settings["control"] = { kind: "choice", value: derived.control };
+    settings[key] = derivedPropertyValue(
+      derivedPropertyValue(value, declaration(key)),
+      ownDeclaration(key),
+    );
+  settings["control"] = derivedPropertyValue(
+    { kind: "choice", value: derived.control },
+    ownDeclaration("control"),
+  );
   for (const property of target.properties)
     if (property.required && settings[property.key] === undefined)
       reject("vortex.definition.unsupported_field_type", "unsupported_choice");
@@ -884,6 +896,16 @@ export const materialiseApplicationComposition = (
       const settings = compileSettings(reading.settings, release.properties, resolution, theme);
       applyFieldInputDerivation(release, settings, resolution);
       validateAccessibleName(settings, release);
+      // A compiled item carries each setting as its plain value, and every setting it carries is one
+      // its release declares, so a reader tells settings from slots by that declaration alone.
+      const declaredSettings = new Set(
+        releaseSettingDeclarations(release).map((property) => property.key),
+      );
+      if (Object.keys(settings).some((key) => !declaredSettings.has(key)))
+        reject("vortex.definition.application_block_settings", "unknown_property");
+      const plainSettings = Object.fromEntries(
+        Object.entries(settings).map(([key, value]) => [key, plainSettingValue(value)]),
+      );
       const vortex = {
         block: {
           blockId: release.blockId,
@@ -907,7 +929,7 @@ export const materialiseApplicationComposition = (
       };
       items.push({
         type: release.rendererKey,
-        props: { id: canonicalId, ...settings, ...slots, vortex },
+        props: { id: canonicalId, ...plainSettings, ...slots, vortex },
       });
       if (options.captureShellPlacements)
         shellPlacementTargets.set(alias, { canonicalId, depth: options.depth, release });
