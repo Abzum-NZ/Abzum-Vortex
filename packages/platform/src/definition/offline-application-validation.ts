@@ -11,7 +11,8 @@ import {
   type StoredDefinitionSource,
 } from "../schema";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
-import { applicationModuleKeys, applicationModuleSources } from "./application-module-sources";
+import { applicationModuleKeys } from "./application-module-sources";
+import { applicationModuleSources } from "./application-module-lowering";
 import { createApplicationResolutionSnapshot } from "./application-resolution";
 import { applicationSourceContractVersion } from "./application-contract-versions";
 import { compareCanonicalStrings } from "./canonical-json-definition";
@@ -277,42 +278,6 @@ const compileApplication = async (
 };
 
 /**
- * Every Module key has exactly one owning Application, and every Module an Application uses is
- * owned by the Application it names.
- */
-const ownershipFailures = (
-  applications: readonly ApplicationSourceDocument[],
-): OfflineSourceFailure[] => {
-  const owners = new Map<string, string[]>();
-  for (const application of applications)
-    for (const module of application.body.modules)
-      owners.set(module.key, [...(owners.get(module.key) ?? []), application.key]);
-  const failures: OfflineSourceFailure[] = [];
-  for (const [module, applicationKeys] of owners)
-    if (applicationKeys.length > 1)
-      failures.push(
-        resolutionFailure(
-          module,
-          "offline_module_owned_twice",
-          `modules > ${module}`,
-          `Module ${module} is owned by ${applicationKeys.join(" and ")}; one Application owns each Module`,
-        ),
-      );
-  for (const application of applications)
-    for (const use of application.body.uses)
-      if (!(owners.get(use.module) ?? []).includes(use.application))
-        failures.push(
-          resolutionFailure(
-            application.key,
-            "offline_used_module_not_owned",
-            `uses > ${use.module}`,
-            `uses Module ${use.module} from ${use.application}, which does not own it`,
-          ),
-        );
-  return failures;
-};
-
-/**
  * Runs the publication checks that need no database over shipped Application sources and reports
  * every failure, not the first: the source schema, Module ownership and use, the compile of each
  * inline Module against its siblings and the Modules its Application uses, the Application compile
@@ -332,7 +297,6 @@ export const validateApplicationsOffline = async (
     if (!parsed.success) failures.push(unexpected(source.key, "source_schema", parsed.error));
     else applications.push(parsed.data);
   }
-  failures.push(...ownershipFailures(applications));
   const moduleSources = applications.flatMap((application) => {
     try {
       return applicationModuleSources(application);

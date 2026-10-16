@@ -924,11 +924,12 @@ export type SourceApplicationModule = z.infer<typeof sourceApplicationModuleSche
 
 /**
  * The internal Module release unit derived from an Application's inline Module: the same body plus
- * the dependencies derived from its references. It is never authored.
+ * its owning Application and the dependencies derived from its references. It is never authored.
  */
 const moduleSourceBodySchema = z
   .object({
     ...moduleSourceBodyFields,
+    owner_application: sourceProvenanceUnchanged(namespacedKeySchema),
     dependencies: sourceProvenanceUnchanged(
       z
         .array(

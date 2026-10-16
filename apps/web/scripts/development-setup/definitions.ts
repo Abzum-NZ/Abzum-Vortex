@@ -6,13 +6,13 @@ import {
 } from "@vortex/platform/server";
 import {
   applicationModuleKeys,
-  applicationModuleSources,
   platformIdSchema,
   type SessionContext,
   type StoredDefinitionSource,
 } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
+  applicationModuleSources,
   createDatabaseDefinitionPublicationService,
   createDefinitionStore,
   type ImmutableDefinitionPublicationCatalogueDefinition,
