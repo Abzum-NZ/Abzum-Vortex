@@ -59,7 +59,7 @@ const fill = (
 
 /**
  * One page's data inside its application shell: the shell's layout with every content slot the
- * page fills placed into its reserved target. A required content slot must be filled.
+ * page fills placed into its reserved target. A content slot the page leaves empty renders empty.
  */
 export const resolveShellLayout = (
   shell: ApplicationShell,
@@ -75,7 +75,6 @@ export const resolveShellLayout = (
   >();
   for (const binding of shell.contentSlots) {
     const items = supplied.get(String(binding.slotId)) ?? [];
-    if (binding.required && items.length === 0) throw new Error("PAGE_COMPOSITION_BINDING_INVALID");
     const order = data.root.props.vortex.slotOrders[String(binding.slotId)] ?? {
       tablet: [],
       phone: [],

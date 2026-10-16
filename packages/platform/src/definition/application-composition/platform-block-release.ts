@@ -145,6 +145,8 @@ export const platformBlockReleaseSchema = z
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
     name: sourceProvenanceUnchanged(labelSchema),
+    /** What the block shows or does, in a sentence; the Studio palette lists and searches it. */
+    description: sourceProvenanceUnchanged(z.string().trim().min(1).max(240)),
     icon: sourceProvenanceUnchanged(iconKeySchema),
     paletteGroup: sourceProvenanceUnchanged(blockPaletteGroupSchema),
     rendererKey: sourceProvenanceUnchanged(namespacedKeySchema),

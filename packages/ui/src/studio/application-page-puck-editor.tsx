@@ -1,6 +1,7 @@
 "use client";
 
-import { Puck, type Data } from "@puckeditor/core";
+import { Puck, type Data, type PuckAction } from "@puckeditor/core";
+import { createPortal } from "react-dom";
 import "@puckeditor/core/puck.css";
 import {
   applicationSourceDocumentSchema,
@@ -28,7 +29,7 @@ import { contentConfigFor } from "../shell-outlet";
 import type { Breakpoint } from "../definition-error";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
@@ -49,11 +50,26 @@ import {
   storedZoneAliases,
   withCopiedFlowBindings,
   withoutFlowBindingsOf,
+  syncStoredBlockDependencies,
 } from "./stored-composition";
 import { StudioCanvasCompiledSettings, studioCanvasConfig } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
+import { StudioBlockPalette, type StudioCanvasAddRequest } from "./studio-block-palette";
+import type { StudioCompositionAddTargetsModel, StudioCompositionDestination } from "./application-composition-commands";
 
 export type { StudioCanvasFrame } from "./studio-canvas-bridge";
+export type { StudioCanvasAddRequest } from "./studio-block-palette";
+
+/** Studio's block palette: drawn in the Blocks panel, inside this editor so its blocks drag with Puck. */
+export type StudioCanvasPalette = Readonly<{
+  /** The Blocks panel element the palette is drawn into. */
+  host: HTMLElement | null;
+  /** The places on the open page a new block can go. */
+  targets: StudioCompositionAddTargetsModel;
+  message: string;
+  /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
+  onAdd: (request: StudioCanvasAddRequest) => boolean;
+}>;
 
 /** One compiled content area: its items, exactly as the published definition holds them. */
 type CompiledSlot = readonly CompiledItem[];
@@ -132,34 +148,11 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   breakpoint: Breakpoint;
   /** The application frame the page is drawn inside, when the draft compiled. */
   frame?: StudioCanvasFrame | undefined;
+  /** The block palette of the Blocks panel. */
+  palette?: StudioCanvasPalette | undefined;
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
-/** The dependency list must name exactly the releases the placements use; a Puck edit can add or drop one. */
-type PlatformBlockDependency = ApplicationSourceDocument["body"]["platform_block_dependencies"][number];
-const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void => {
-  const used = new Map<string, { block_id: string; release_version: string }>();
-  const collect = (value: unknown): void => {
-    if (Array.isArray(value)) return value.forEach(collect);
-    if (typeof value !== "object" || value === null) return;
-    const record = value as Record<string, unknown>;
-    const block = record.block as Record<string, unknown> | undefined;
-    if (typeof block?.block_id === "string" && typeof block.release_version === "string")
-      used.set(`${block.block_id}@${block.release_version}`,
-        { block_id: block.block_id, release_version: block.release_version });
-    Object.values(record).forEach(collect);
-  };
-  collect(source.body.pages);
-  collect(source.body.shells);
-  const kept = source.body.platform_block_dependencies.filter((dependency) =>
-    used.has(`${dependency.block_id}@${dependency.release_version}`));
-  for (const [identity, release] of used)
-    if (!kept.some((dependency) => `${dependency.block_id}@${dependency.release_version}` === identity))
-      kept.push({ kind: "platform_block", ...release } as PlatformBlockDependency);
-  kept.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
-    : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
-  source.body.platform_block_dependencies = kept;
-};
 
 const isItemList = (value: unknown): value is SourceItem[] =>
   Array.isArray(value) && value.every((entry) =>
@@ -170,6 +163,26 @@ const itemsHold = (items: readonly SourceItem[], alias: string): boolean =>
     Object.values(item.props).some((value) => isItemList(value) && itemsHold(value, alias)));
 
 const slotHolds = (slot: SourceSlot, alias: string): boolean => itemsHold(slot.items, alias);
+
+/** Whether Puck holds a block just dropped from the palette: one without its stored metadata yet. */
+const holdsDroppedBlock = (items: readonly unknown[]): boolean => items.some((entry) => {
+  if (entry === null || typeof entry !== "object") return false;
+  const props = (entry as { props?: Record<string, unknown> }).props;
+  if (props === undefined || props.vortex === undefined) return true;
+  return Object.values(props).some((value) => Array.isArray(value) && value.length > 0 &&
+    value.every((child) => child !== null && typeof child === "object" && "props" in child) && holdsDroppedBlock(value));
+});
+
+/** Puck's name of a slot, `<block name>:<slot key>`, or its root zone, as a place for a new block. */
+const destinationOfZone = (zone: string): StudioCompositionDestination => {
+  if (zone === "root:default-zone") return { kind: "root" };
+  const separator = zone.lastIndexOf(":");
+  return { kind: "child", parentAlias: zone.slice(0, separator), slotKey: zone.slice(separator + 1) };
+};
+
+/** Draws the palette into the Blocks panel. */
+const inPalette = (palette: StudioCanvasPalette | undefined, content: ReactNode) =>
+  palette?.host === null || palette?.host === undefined ? null : createPortal(content, palette.host);
 
 export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps) {
   const page = props.source.body.pages.find((candidate) => candidate.id === props.pageAlias);
@@ -258,6 +271,7 @@ function ApplicationPageSlotPuckEditor({
   onSelectPlacement,
   frame,
   breakpoint,
+  palette,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
     () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
@@ -388,6 +402,8 @@ function ApplicationPageSlotPuckEditor({
   // authored content area, placed in the current draft and validated before the history takes it.
   const change = (candidate: Data) => {
     if (!editable) return;
+    // A block dropped from the palette is added by Studio's add command, not by this edit.
+    if (holdsDroppedBlock(candidate.content as unknown[])) return;
     try {
       const current = sourceRef.current;
       const matches = current.body.pages.filter((item) => item.id === pageAlias);
@@ -406,7 +422,7 @@ function ApplicationPageSlotPuckEditor({
       const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
       next.body.flow_bindings = withoutFlowBindingsOf(
         withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
-      syncPlatformBlockDependencies(next);
+      syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
       setMessage("");
@@ -423,11 +439,27 @@ function ApplicationPageSlotPuckEditor({
     }
   };
 
+  // A drop from the palette: Puck has put a bare block in its own data; Studio adds the real one.
+  const dropped = (action: PuckAction) => {
+    if (action.type !== "insert") return;
+    const request: StudioCanvasAddRequest = { area: at.key, destination: destinationOfZone(action.destinationZone),
+      index: action.destinationIndex, rendererKey: action.componentType };
+    // After Puck finishes its own insert: show the stored draft again unless the add went through.
+    setTimeout(() => {
+      if (!editable || palette?.onAdd(request) !== true) setResync((generation) => generation + 1);
+    }, 0);
+  };
+  const paletteNote = (text: string) =>
+    inPalette(palette, <p role="status" className="text-sm text-muted-foreground">{text}</p>);
+  const placesHere = palette?.targets.kind === "available"
+    ? palette.targets.targets.filter((target) => target.area === at.key) : [];
+
   if (page === undefined || slot === undefined)
     return <p role="status">This page content area is unavailable.</p>;
   if (data === undefined || shown === undefined)
     return (
       <section className="space-y-3" aria-label="Page canvas">
+        {paletteNote("Blocks can be added once this page has a compiled version. Save the draft to compile it.")}
         <p role="status">
           This page needs a current compiled version before it can be arranged on the canvas.
         </p>
@@ -480,6 +512,7 @@ function ApplicationPageSlotPuckEditor({
             config={config}
             data={shown}
             onChange={change}
+            onAction={dropped}
             iframe={{ enabled: false }}
             metadata={{ breakpoint }}
             permissions={{
@@ -490,6 +523,14 @@ function ApplicationPageSlotPuckEditor({
               insert: false,
             }}
           >
+            {palette?.targets.kind !== "available"
+              ? paletteNote(palette?.targets.kind === "unsupported"
+                ? "Blocks can't be added to this kind of page in Studio yet."
+                : "This page is not in the current draft.")
+              : inPalette(palette, <StudioBlockPalette targets={placesHere} editable={editable}
+                message={palette.message} onAdd={(request) => {
+                  palette.onAdd(request);
+                }} />)}
             <StudioCanvasBridge
               data={shown}
               resync={resync}

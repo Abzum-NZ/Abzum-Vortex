@@ -76,6 +76,7 @@ export const platformBlockReleaseContentHash = (definition: {
   key: string;
   releaseVersion: string;
   name: unknown;
+  description: unknown;
   icon: unknown;
   paletteGroup: unknown;
   rendererKey: unknown;
@@ -89,6 +90,7 @@ export const platformBlockReleaseContentHash = (definition: {
 }): CatalogueReleaseContentHash => {
   const contentFingerprint = fingerprintCanonicalValue({
     name: definition.name,
+    description: definition.description,
     icon: definition.icon,
     paletteGroup: definition.paletteGroup,
     rendererKey: definition.rendererKey,

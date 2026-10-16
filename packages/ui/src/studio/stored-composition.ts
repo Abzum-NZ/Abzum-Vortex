@@ -5,6 +5,7 @@ import {
   sourceApplicationShellSchema,
   sourceItemSchema,
   sourceSlotBreakpointOrders,
+  type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type PlatformBlockRelease,
   type SourceApplicationShell,
@@ -325,6 +326,10 @@ const generatedAlias = (puckId: string, reserved: ReadonlySet<string>): string =
   return alias;
 };
 
+/** A source-safe block name for a new block, unique among `reserved`: `base`, or `base_2` and so on. */
+export const freshBlockName = (base: string, reserved: ReadonlySet<string>): string =>
+  generatedAlias(base, reserved);
+
 const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
   Object.entries(props).flatMap(([key, value]): [string, unknown[]][] =>
     !reservedItemPropKeys.has(key) && Array.isArray(value) && value.length > 0 && value.every(isSourceItemShape)
@@ -527,4 +532,34 @@ export const storedZoneAliases = (zone: StoredZone): Set<string> => {
   };
   visit(zone.items);
   return aliases;
+};
+
+type StoredBlockDependency = ApplicationSourceDocument["body"]["platform_block_dependencies"][number];
+
+/**
+ * The dependency list names exactly the releases the placements use: an edit that adds, drops or
+ * removes blocks (a canvas edit, a removed page or layout, a new layout) brings it in step.
+ */
+export const syncStoredBlockDependencies = (source: ApplicationSourceDocument): void => {
+  const used = new Map<string, { block_id: string; release_version: string }>();
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(collect);
+    if (typeof value !== "object" || value === null) return;
+    const record = value as Record<string, unknown>;
+    const block = record.block as Record<string, unknown> | undefined;
+    if (typeof block?.block_id === "string" && typeof block.release_version === "string")
+      used.set(`${block.block_id}@${block.release_version}`,
+        { block_id: block.block_id, release_version: block.release_version });
+    Object.values(record).forEach(collect);
+  };
+  collect(source.body.pages);
+  collect(source.body.shells);
+  const kept = source.body.platform_block_dependencies.filter((dependency) =>
+    used.has(`${dependency.block_id}@${dependency.release_version}`));
+  for (const [identity, release] of used)
+    if (!kept.some((dependency) => `${dependency.block_id}@${dependency.release_version}` === identity))
+      kept.push({ kind: "platform_block", ...release } as StoredBlockDependency);
+  kept.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
+    : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
+  source.body.platform_block_dependencies = kept;
 };

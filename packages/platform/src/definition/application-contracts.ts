@@ -1085,16 +1085,6 @@ export const applicationContentSchema = applicationSharedContentSchema
               path: ["pages", pageIndex, "composition"],
               message: "Page content may bind only slots declared by its shell",
             });
-          if (
-            shell.contentSlots.some(
-              (slot) => slot.required && (supplied.get(String(slot.slotId))?.length ?? 0) === 0,
-            )
-          )
-            context.addIssue({
-              code: "custom",
-              path: ["pages", pageIndex, "composition"],
-              message: "Page content must bind non-empty content to every required shell slot",
-            });
         }
         placedItems.push(
           ...compiledItemTree(data.content),

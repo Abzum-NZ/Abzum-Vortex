@@ -152,7 +152,10 @@ export function StudioCanvasBridge({
   const inert = (event: SyntheticEvent) => {
     if (event.target instanceof Element && event.target.closest("a[href]") !== null) event.preventDefault();
   };
-  const canvas = <div data-vortex-studio-canvas="" className="min-h-24"><Puck.Preview id="vortex-studio-canvas" /></div>;
+  // The canvas is the frame's page outlet, edited: the frame keeps its region while the page is empty,
+  // and empty slots of the page's blocks stay, so each remains a drop target.
+  const canvas = <div data-vortex-studio-canvas="" data-vortex-shell-outlet="" data-vortex-editing="" className="min-h-24">
+    <Puck.Preview id="vortex-studio-canvas" /></div>;
   if (frame === undefined)
     return <div className="contents" onClickCapture={inert} onAuxClickCapture={inert}>{canvas}</div>;
   const shellId = frame.frame.shellId;

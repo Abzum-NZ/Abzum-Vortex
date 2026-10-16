@@ -5,6 +5,7 @@ import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
   canonicalThemeTokenValue,
+  plainSettingValue,
   releaseSettingDeclarations,
   typedSettingValue,
   type PlatformBlockRelease,
@@ -56,7 +57,8 @@ const renderProps = (
         authored[property.key] = value;
       delete result[property.key];
     }
-    Object.assign(result, compiled ?? {}, authored);
+    // A block added since the last compile draws with its release's defaults, as publication writes them.
+    Object.assign(result, compiled ?? catalogueDefaults(release), authored);
   }
   result.vortex = {
     block: { blockId: vortex.block?.block_id, releaseVersion: vortex.block?.release_version },
@@ -68,8 +70,23 @@ const renderProps = (
   return result;
 };
 
+/** The release's declared defaults, as the plain values a compiled item carries. */
+const catalogueDefaults = (release: PlatformBlockRelease): Record<string, unknown> =>
+  Object.fromEntries(release.properties.flatMap((property) =>
+    property.defaultValue === undefined ? [] : [[property.key, plainSettingValue(property.defaultValue)]]));
+
+/**
+ * The slot fields only, without Puck's `allow` lists: a block dropped or moved into any slot
+ * reaches Studio, whose stored composition check admits it or refuses it with its place and rule.
+ */
 const slotFields = (fields: Record<string, Field> | undefined): Record<string, Field> =>
-  Object.fromEntries(Object.entries(fields ?? {}).filter(([, field]) => field.type === "slot"));
+  Object.fromEntries(Object.entries(fields ?? {}).flatMap(([key, field]) => {
+    if (field.type !== "slot") return [];
+    const slot: Record<string, unknown> = { ...field };
+    delete slot.allow;
+    delete slot.disallow;
+    return [[key, slot as unknown as Field]];
+  }));
 
 const releaseOf = (registry: PlatformComponentRegistry, props: Readonly<Record<string, unknown>>) => {
   const block = ((props.vortex ?? {}) as StoredVortex).block;
@@ -89,6 +106,9 @@ function CanvasBlock({
 }>): ReactElement {
   const compiled = useContext(CompiledSettingsContext);
   const id = typeof props.id === "string" ? props.id : "";
+  // A block just dropped from the palette is shown as a placeholder until Studio adds it.
+  if (props.vortex === undefined)
+    return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Adding the block…</div>;
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   return render(renderProps(props, releaseOf(registry, props), Object.hasOwn(compiled, id) ? compiled[id] : undefined));
 }
@@ -98,7 +118,8 @@ const canvasConfigs = new WeakMap<Config, Config>();
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
  * item as above. Only slot fields remain, because Puck finds slots through them and Studio edits
- * settings in its inspector; no defaults are merged, because the canvas never inserts a block.
+ * settings in its inspector. No defaults are merged: a block dropped from the palette is added by
+ * Studio's add command, never by Puck.
  */
 export const studioCanvasConfig = (config: Config, registry: PlatformComponentRegistry): Config => {
   let canvas = canvasConfigs.get(config);
