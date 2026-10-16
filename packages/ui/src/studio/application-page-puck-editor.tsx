@@ -111,9 +111,8 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   selectedPlacementAlias: string | null;
   /** A block clicked on the canvas (`null`: the page itself); `false` keeps the workspace selection. */
   onSelectPlacement: (alias: string | null) => Promise<boolean>;
-  /** The screen size the canvas shows; the workspace keeps it while pages change. */
+  /** The screen size the canvas shows; Studio's canvas toolbar chooses it and keeps it while pages change. */
   breakpoint: Breakpoint;
-  onBreakpointChange: (breakpoint: Breakpoint) => void;
   /** The application frame the page is drawn inside, when the draft compiled. */
   frame?: StudioCanvasFrame | undefined;
 }>;
@@ -187,10 +186,10 @@ export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps)
   );
 }
 
-const breakpoints: readonly Readonly<{ value: Breakpoint; label: string; width: string }>[] = [
-  { value: "desktop", label: "Desktop", width: "100%" },
-  { value: "tablet", label: "Tablet", width: "820px" },
-  { value: "phone", label: "Phone", width: "390px" },
+const breakpoints: readonly Readonly<{ value: Breakpoint; width: string }>[] = [
+  { value: "desktop", width: "100%" },
+  { value: "tablet", width: "820px" },
+  { value: "phone", width: "390px" },
 ];
 
 /** Why a content area that does not convert exactly is not editable on the canvas. */
@@ -226,7 +225,6 @@ function ApplicationPageSlotPuckEditor({
   onSelectPlacement,
   frame,
   breakpoint,
-  onBreakpointChange,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const registry = useMemo(
     () => createFullPlatformComponentRegistry(platformBlockCatalogue.releases),
@@ -399,17 +397,8 @@ function ApplicationPageSlotPuckEditor({
   const width = breakpoints.find((entry) => entry.value === breakpoint)!.width;
   return (
     <section className="space-y-3" aria-label="Page canvas" aria-busy={disabled}>
+      {/* The screen size is chosen in Studio's canvas toolbar. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div role="group" aria-label="Screen size" className="flex gap-1">
-          {breakpoints.map((entry) => (
-            <Button key={entry.value} type="button" size="sm"
-              variant={breakpoint === entry.value ? "secondary" : "outline"}
-              aria-pressed={breakpoint === entry.value}
-              onClick={() => onBreakpointChange(entry.value)}>
-              {entry.label}
-            </Button>
-          ))}
-        </div>
         <p className="text-sm text-muted-foreground">
           {readOnlyCause !== undefined
             ? "This part of the page can't be arranged on the canvas yet, so it is shown read-only to keep it exactly as it is. Its blocks can still be changed in the inspector."

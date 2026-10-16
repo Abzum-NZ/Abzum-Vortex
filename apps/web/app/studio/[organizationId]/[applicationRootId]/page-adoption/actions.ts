@@ -16,7 +16,7 @@ const numberField = (formData: FormData, key: string): number | undefined => {
   return Number.isSafeInteger(value) ? value : undefined;
 };
 
-/** Reads the comparison for the Page adoption tab; the server resolves access afresh. */
+/** Reads the comparison for Page adoption in the Releases tab; the server resolves access afresh. */
 export async function readStandardPageAdoption(
   organizationId: string, rootId: string,
 ): Promise<StudioStandardPageAdoptionLoadResult> {
