@@ -2,6 +2,7 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
+  compiledPageShellId,
   sameId,
   applicationExperienceStateSchema,
   applicationRootIdSchema,
@@ -554,7 +555,7 @@ const projectPermittedApplication = async (
     )
     .map((experience) => {
       const composition = experience.page.composition;
-      const shellId = composition.shellKind === "application" ? composition.shellId : undefined;
+      const shellId = compiledPageShellId(composition) ?? undefined;
       return applicationExperienceSchema.parse({
         state: experience.state,
         page: experience.page,

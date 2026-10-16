@@ -100,15 +100,14 @@ export const projectReferenceChoicePage = async (
 
 /** A form field may show only a value the page subject read returned for its own record type. */
 export const projectEditField = (
-  placement: Readonly<Record<string, unknown>>,
+  placement: Readonly<{ vortex: Record<string, unknown>; settings: Record<string, unknown> }>,
   recordType: InstalledRuntimeContext["releaseSet"]["modules"][number]["content"]["recordTypes"][number],
   values: Readonly<Record<string, JsonValue>>,
   dateTimeZones: DateTimeZones,
 ): Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined => {
   const settings = placement.settings;
-  const block = placement.block;
-  if (!isRecord(settings) || !isRecord(block) || typeof block.blockId !== "string")
-    return undefined;
+  const block = placement.vortex.block;
+  if (!isRecord(block) || typeof block.blockId !== "string") return undefined;
   const blockId = block.blockId;
   const fieldSetting = settings.field;
   const nameSetting = settings.name;

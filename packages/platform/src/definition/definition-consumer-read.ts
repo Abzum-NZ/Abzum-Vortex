@@ -90,7 +90,7 @@ export const applicationDefinitionConsumerReadResultSchema = z
     content: applicationContentSchema,
     toolBundle: applicationToolBundleSchema,
     ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("2.0.0"),
+    validationContractVersion: z.literal("3.0.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema.optional(),
   })
   .strict()

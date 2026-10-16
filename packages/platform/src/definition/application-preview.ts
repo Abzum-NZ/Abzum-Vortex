@@ -1,6 +1,23 @@
 import "server-only";
 
-import { applicationContentSchema, applicationRootIdSchema, canonicalPlacementEntries, flowTaskChildLists, flowTaskRegistry, revisionSchema, type ApplicationContent, type ComponentFlowBinding, type ComponentSemanticEventKind, type FlowDefinition, type FlowEffectKind, type FlowTask, type SessionContext } from "../schema";
+import {
+  applicationContentSchema,
+  applicationRootIdSchema,
+  compiledItemTree,
+  compiledPageShellId,
+  compiledPageZones,
+  type CompiledItem,
+  flowTaskChildLists,
+  flowTaskRegistry,
+  revisionSchema,
+  type ApplicationContent,
+  type ComponentFlowBinding,
+  type ComponentSemanticEventKind,
+  type FlowDefinition,
+  type FlowEffectKind,
+  type FlowTask,
+  type SessionContext,
+} from "../schema";
 import { z } from "zod";
 import type { ApplicationDraftCompilation } from "./definition-publication";
 import type { DefinitionPublicationFailureCode } from "./definition-publication-contracts";
@@ -263,7 +280,6 @@ export const substituteApplicationPreviewInteractions = (
 };
 
 type ApplicationPage = ApplicationContent["pages"][number];
-type PlacementSlot = ApplicationContent["shells"][number]["layout"];
 
 /**
  * Every placement identity the requested page renders: its application shell's layout, if any,
@@ -275,31 +291,22 @@ const pagePlacementIds = (
   activeStepId: string | undefined,
 ): ReadonlySet<string> => {
   const ids = new Set<string>();
-  const addSlot = (slot: PlacementSlot): void => {
-    for (const [placementId] of canonicalPlacementEntries(slot)) ids.add(placementId);
+  const addItems = (items: readonly CompiledItem[]): void => {
+    for (const item of compiledItemTree(items)) ids.add(item.props.id);
   };
   const composition = page.composition;
-  if (composition.shellKind === "application") {
-    const shell = content.shells.find(
-      (candidate) => String(candidate.shellId) === String(composition.shellId),
-    );
-    if (shell !== undefined) addSlot(shell.layout);
+  const shellId = compiledPageShellId(composition);
+  if (shellId !== null) {
+    const shell = content.shells.find((candidate) => String(candidate.shellId) === String(shellId));
+    if (shell !== undefined) addItems(shell.layout.content);
   }
-  if (page.type === "guided_form") {
-    if (activeStepId === undefined) return ids;
-    const guided = page.composition;
-    if (guided.shellKind === "default") {
-      for (const [stepId, slot] of Object.entries(guided.stepContent))
-        if (stepId === activeStepId) addSlot(slot);
-    } else {
-      for (const [stepId, slots] of Object.entries(guided.stepContent))
-        if (stepId === activeStepId) for (const slot of Object.values(slots)) addSlot(slot);
-    }
-    return ids;
-  }
-  const standard = page.composition;
-  if (standard.shellKind === "default") addSlot(standard.main);
-  else for (const slot of Object.values(standard.content)) addSlot(slot);
+  const data =
+    "stepContent" in composition
+      ? activeStepId === undefined
+        ? undefined
+        : composition.stepContent[activeStepId]
+      : composition;
+  if (data !== undefined) for (const [, items] of compiledPageZones(data)) addItems(items);
   return ids;
 };
 
@@ -551,4 +558,3 @@ export const compileApplicationPreviewDraft = async (
     draft: applicationPreviewDraftFromCompilation(compiled),
   };
 };
-

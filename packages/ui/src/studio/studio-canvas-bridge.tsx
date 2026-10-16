@@ -157,7 +157,6 @@ export function StudioCanvasBridge({
       registry={registry}
       fieldInputControlReleases={fieldInputControlReleases}
       platformThemeTokens={platformThemeTokens}
-      shells={frame.shells}
       {...(shell === undefined ? {} : { shell })}
       theme={frame.theme}
       projectedNavigation={frame.navigation}

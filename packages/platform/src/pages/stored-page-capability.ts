@@ -29,6 +29,8 @@ import {
   type ConditionNode,
   type JsonValue,
   type PlatformId,
+  type CompiledLayout,
+  compiledItemTree,
 } from "../schema";
 import {
   collectActionFlowTasks,
@@ -417,13 +419,12 @@ const placementOperationBindings = (
   );
 };
 
-const placementEntries = (slot: unknown): Record<string, unknown>[] => {
-  const candidate = slot as { placements: Record<string, Record<string, unknown>> };
-  return Object.entries(candidate.placements).flatMap(([placementId, placement]) => [
-    { placementId, ...placement },
-    ...Object.values(placement.slots as Record<string, unknown>).flatMap(placementEntries),
-  ]);
-};
+/** Every item of a resolved layout as its placement identity and its Vortex metadata. */
+const placementEntries = (layout: CompiledLayout): Record<string, unknown>[] =>
+  compiledItemTree(layout.content).map((item) => ({
+    placementId: item.props.id,
+    ...item.props.vortex,
+  }));
 
 export const createStoredPageCapabilityService = (
   dependencies: StoredPageCapabilityDependencies,

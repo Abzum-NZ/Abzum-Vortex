@@ -14,7 +14,9 @@ import {
   type OrganizationSelectionCandidate,
   isRecord,
   sameId,
+  itemPropSlots,
   walkPageComposition,
+  walkPlacementData,
   walkPlacements,
   type PlacementVisitor,
   type VisitedPlacement,
@@ -57,20 +59,17 @@ export type ProjectedReferenceChoiceForm = Readonly<{
   placements: ReadonlyMap<string, ReferenceChoiceFormField>;
 }>;
 
-const blockOf = (placement: unknown): Record<string, unknown> | undefined => {
-  if (!isRecord(placement) || !isRecord(placement.block)) return undefined;
-  return placement.block;
-};
+/** The parts of a placed item a choice source is read from: its Vortex metadata and settings. */
+type PlacedParts = Readonly<{ vortex: Record<string, unknown>; settings: Record<string, unknown> }>;
 
-const settingsOf = (
-  placement: unknown,
-): Readonly<Record<string, BlockPropertyValueContract>> | undefined => {
-  if (!isRecord(placement) || !isRecord(placement.settings)) return undefined;
-  return placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
-};
+const blockOf = (placement: PlacedParts): Record<string, unknown> | undefined =>
+  isRecord(placement.vortex.block) ? placement.vortex.block : undefined;
+
+const settingsOf = (placement: PlacedParts): Readonly<Record<string, BlockPropertyValueContract>> =>
+  placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
 
 /** True only for the immutable choice-input release that declares a query source. */
-export const hasReferenceChoiceSource = (placement: unknown): boolean => {
+export const hasReferenceChoiceSource = (placement: PlacedParts): boolean => {
   const block = blockOf(placement);
   const settings = settingsOf(placement);
   return (
@@ -80,12 +79,11 @@ export const hasReferenceChoiceSource = (placement: unknown): boolean => {
     (block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.releaseVersion ||
       block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion ||
       block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_3_0.releaseVersion) &&
-    settings !== undefined &&
     Object.hasOwn(settings, "choice_source")
   );
 };
 
-const placementSettings = (placement: unknown): ChoicePlacementSettings | undefined => {
+const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | undefined => {
   if (!hasReferenceChoiceSource(placement)) return undefined;
   const settings = settingsOf(placement);
   const name = settings?.name;
@@ -171,7 +169,7 @@ const queryCommand = (
 
 /** Resolves one trusted placement's source against the exact installed Module releases. */
 const referenceChoiceFieldForPlacement = (
-  placement: unknown,
+  placement: PlacedParts,
   modules: readonly ModuleDefinitionConsumerReadResult[],
 ): ReferenceChoiceFormField | undefined => {
   const settings = placementSettings(placement);
@@ -236,17 +234,6 @@ export const bindReferenceChoiceField = (
   };
 };
 
-/** Walks every slot root of an authored composition: main, shell content and step content. */
-const walkAuthoredComposition = <Inherited = undefined>(
-  composition: unknown,
-  visit: PlacementVisitor<Inherited>,
-): void => {
-  if (!isRecord(composition)) return;
-  if ("main" in composition) walkPlacements(composition.main, visit);
-  for (const roots of [composition.content, composition.stepContent])
-    if (isRecord(roots)) for (const root of Object.values(roots)) walkPlacements(root, visit);
-};
-
 const formPlacementsOnPage = (
   page: unknown,
   targetFormId: string,
@@ -254,9 +241,10 @@ const formPlacementsOnPage = (
 ): Readonly<{ fields: readonly ReferenceChoiceFormField[]; invalid: boolean }> => {
   const found: ReferenceChoiceFormField[] = [];
   let invalid = false;
-  walkAuthoredComposition(
+  walkPageComposition(
     isRecord(page) ? page.composition : undefined,
-    ({ placementId, placement }, formId: string | undefined) => {
+    (placement, formId: string | undefined) => {
+      const { placementId } = placement;
       const block = blockOf(placement);
       const isForm =
         typeof block?.blockId === "string" &&
@@ -283,7 +271,8 @@ export const applicationHasAuthoredForm = (
   formId: string,
 ): boolean => {
   let matches = 0;
-  const countForm = ({ placementId, placement }: VisitedPlacement): undefined => {
+  const countForm = (placement: VisitedPlacement): undefined => {
+    const { placementId } = placement;
     const block = blockOf(placement);
     if (
       sameId(placementId, formId) &&
@@ -293,8 +282,8 @@ export const applicationHasAuthoredForm = (
       matches += 1;
   };
 
-  for (const page of application.pages) walkAuthoredComposition(page.composition, countForm);
-  for (const shell of application.shells) walkPlacements(shell.layout, countForm);
+  for (const page of application.pages) walkPageComposition(page.composition, countForm);
+  for (const shell of application.shells) walkPlacementData(shell.layout, countForm);
   return matches === 1;
 };
 
@@ -312,7 +301,7 @@ const referenceChoiceFieldsForForm = (
     fields.push(...result.fields);
   }
   for (const shell of application.shells) {
-    const result = formPlacementsOnPage({ composition: { main: shell.layout } }, formId, modules);
+    const result = formPlacementsOnPage({ composition: shell.layout }, formId, modules);
     if (result.invalid) return undefined;
     fields.push(...result.fields);
   }
@@ -335,15 +324,16 @@ export const projectedReferenceChoiceForm = (
   let target: Record<string, unknown> | undefined;
   walkPageComposition(
     page.composition,
-    ({ placementId, placement }, inherited: Readonly<{ usable: boolean }>) => {
+    (placement, inherited: Readonly<{ usable: boolean }>) => {
+      const { placementId } = placement;
       const block = blockOf(placement);
       const isForm =
         typeof block?.blockId === "string" &&
         sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
-      const currentlyUsable = inherited.usable && placement.availability === undefined;
+      const currentlyUsable = inherited.usable && placement.vortex.availability === undefined;
       if (isForm && sameId(placementId, formId)) {
         matches += 1;
-        if (currentlyUsable) target = placement;
+        if (currentlyUsable) target = placement.props;
       }
       return { usable: currentlyUsable };
     },
@@ -354,14 +344,15 @@ export const projectedReferenceChoiceForm = (
   const fields = new Map<string, ReferenceChoiceFormField>();
   const placements = new Map<string, ReferenceChoiceFormField>();
   let invalid = false;
-  const collect: PlacementVisitor<boolean> = ({ placementId, placement }, usable) => {
+  const collect: PlacementVisitor<boolean> = (placement, usable) => {
+    const { placementId } = placement;
     const block = blockOf(placement);
     if (
       typeof block?.blockId === "string" &&
       sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
     )
       return false;
-    const currentlyUsable = usable && placement.availability === undefined;
+    const currentlyUsable = usable && placement.vortex.availability === undefined;
     if (!currentlyUsable) return false;
     if (hasReferenceChoiceSource(placement)) {
       const field = referenceChoiceFieldForPlacement(placement, modules);
@@ -373,8 +364,7 @@ export const projectedReferenceChoiceForm = (
     }
     return currentlyUsable;
   };
-  if (isRecord(target.slots))
-    for (const child of Object.values(target.slots)) walkPlacements(child, collect, true);
+  for (const [, child] of itemPropSlots(target)) walkPlacements(child, collect, true);
   return invalid || !validDependencies(fields) ? undefined : { fields, placements };
 };
 

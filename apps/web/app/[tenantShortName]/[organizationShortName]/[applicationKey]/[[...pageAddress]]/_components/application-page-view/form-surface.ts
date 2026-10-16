@@ -2,7 +2,7 @@ import {
   getAccessibleName,
   type FieldInputControlReleaseMap,
   type createFullPlatformComponentRegistry,
-  type ProjectedPageCapability,
+  type RenderedPage,
 } from "@vortex/ui";
 import {
   responsivePlacementSchema,
@@ -10,6 +10,7 @@ import {
   isRecord,
   walkPageComposition,
   walkPlacements,
+  itemPropSlots,
   type VisitedPlacement,
 } from "@vortex/platform/schema";
 
@@ -32,10 +33,10 @@ export const formOwnersByPlacement = (
   const owners: Record<string, string> = {};
   walkPageComposition(
     page.composition,
-    ({ placementId, placement }, formOwner: string | undefined) => {
+    ({ placementId, vortex }, formOwner: string | undefined) => {
       const owner = isPlatformRelease(
         registry,
-        placement.block,
+        vortex.block,
         PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
       ) ? placementId : formOwner;
       if (owner !== undefined) owners[placementId] = owner;
@@ -52,18 +53,19 @@ export const formSurfaceComposition = (
   formId: string,
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Readonly<{
-  composition: ProjectedPageCapability;
+  composition: RenderedPage;
   placementIds: readonly string[];
-  placements: Readonly<Record<string, Record<string, unknown>>>;
+  placements: Readonly<Record<string, Pick<VisitedPlacement, "vortex" | "settings">>>;
 }> | undefined => {
-  let match: Record<string, unknown> | undefined;
+  let match: VisitedPlacement | undefined;
   let matchId: string | undefined;
   let matchUsable = false;
   let matches = 0;
   walkPageComposition(
     page.composition,
-    ({ placementId, placement }, usable: boolean) => {
-      const currentlyUsable = usable && placement.availability === undefined;
+    (placement, usable: boolean) => {
+      const { placementId } = placement;
+      const currentlyUsable = usable && placement.vortex.availability === undefined;
       if (placementId.toLowerCase() === formId.toLowerCase()) {
         match = placement;
         matchId = placementId;
@@ -79,11 +81,16 @@ export const formSurfaceComposition = (
     matchId === undefined ||
     matches !== 1 ||
     !matchUsable ||
-    !isPlatformRelease(registry, match.block, PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE)
+    !isPlatformRelease(
+      registry,
+      (match as VisitedPlacement).vortex.block,
+      PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
+    )
   )
     return undefined;
+  const form: VisitedPlacement = match;
 
-  const sourceResponsive = match.responsive;
+  const sourceResponsive = form.vortex.responsive;
   if (!isRecord(sourceResponsive)) return undefined;
   const desktop = sourceResponsive.desktop;
   const tablet = sourceResponsive.tablet;
@@ -96,34 +103,34 @@ export const formSurfaceComposition = (
     !isRecord(phone)
   )
     return undefined;
-  const modalRoot: Record<string, unknown> = {
-    ...match,
+  // The modal shows the form whatever its page layout hides at a breakpoint.
+  const modalVortex: Record<string, unknown> = {
+    ...form.vortex,
     responsive: {
       desktop: { ...desktop, visible: true },
       tablet: { ...tablet, visible: true },
       phone: { ...phone, visible: true },
     },
   };
+  const modalRoot = { ...form.item, props: { ...form.props, vortex: modalVortex } };
 
   const placementIds = new Set<string>();
-  const placements: Record<string, Record<string, unknown>> = {};
-  const collect = ({ placementId, placement }: VisitedPlacement): undefined => {
+  const placements: Record<string, Pick<VisitedPlacement, "vortex" | "settings">> = {};
+  const collect = ({ placementId, vortex, settings }: VisitedPlacement): undefined => {
     placementIds.add(placementId);
-    placements[placementId] = placement;
+    placements[placementId] = { vortex, settings };
   };
-  collect({ placementId: matchId, placement: modalRoot });
-  if (isRecord(modalRoot.slots))
-    for (const slot of Object.values(modalRoot.slots)) walkPlacements(slot, collect);
-  const rootSlot = {
-    placements: { [matchId]: modalRoot },
-    order: { desktop: [matchId], tablet: [matchId], phone: [matchId] },
-  };
+  placementIds.add(matchId);
+  placements[matchId] = { vortex: modalVortex, settings: form.settings };
+  for (const [, slot] of itemPropSlots(form.props)) walkPlacements(slot, collect);
   return {
     composition: {
       pageId,
-      type: "form",
-      composition: { main: rootSlot },
-    } as unknown as ProjectedPageCapability,
+      composition: {
+        root: { props: { vortex: { slotOrders: { content: { tablet: [matchId], phone: [matchId] } } } } },
+        content: [modalRoot],
+      } as unknown as Extract<RenderedPage["composition"], { content: unknown }>,
+    },
     placementIds: [...placementIds],
     placements,
   };
@@ -157,14 +164,14 @@ export const visibleOwningFormFieldLabel = (
   const surface = formSurfaceComposition(page, pageId, formId, registry);
   if (surface === undefined) return undefined;
   const ownerForm = surface.placements[formId];
-  const ownerBlock = ownerForm?.block;
+  const ownerBlock = ownerForm?.vortex.block;
   if (
     !isPlatformRelease(registry, ownerBlock, PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE)
   )
     return undefined;
   const matchingPlacements = surface.placementIds.flatMap((placementId) => {
     const placement = surface.placements[placementId];
-    const block = placement?.block;
+    const block = placement?.vortex.block;
     const settings = placement?.settings;
     if (
       !isRecord(block) ||
@@ -208,18 +215,19 @@ export const visibleOwningFormFieldLabel = (
 /** Preserves the Show form task's scalar defaults on the matching authored control. */
 export const runtimeInputWithFormDefault = (
   input: Record<string, unknown>,
-  placement: Record<string, unknown>,
+  placement: Pick<VisitedPlacement, "vortex" | "settings">,
   value: unknown,
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
   fieldInputControlReleases: FieldInputControlReleaseMap,
 ): Record<string, unknown> => {
-  if (!isRecord(placement.block) || typeof placement.block.blockId !== "string") return input;
-  const blockId = placement.block.blockId.toLowerCase();
-  const settings = isRecord(placement.settings) ? placement.settings : {};
+  const block = placement.vortex.block;
+  if (!isRecord(block) || typeof block.blockId !== "string") return input;
+  const blockId = block.blockId.toLowerCase();
+  const settings = placement.settings;
   let control = Object.entries(fieldInputControlReleases).find(
     ([, release]) => release.blockId.toLowerCase() === blockId,
   )?.[0];
-  const releaseKey = registry.get(blockId, String(placement.block.releaseVersion))?.metadata.key;
+  const releaseKey = registry.get(blockId, String(block.releaseVersion))?.metadata.key;
   if (releaseKey === PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE.key) {
     const selected = settings.control;
     control = isRecord(selected) && selected.kind === "choice" && typeof selected.value === "string"

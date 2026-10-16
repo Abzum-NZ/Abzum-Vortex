@@ -12,11 +12,10 @@ import {
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
-import type { placementSlotSchema, SourceItem, SourcePageZone } from "@vortex/platform/schema";
+import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import { createFullPlatformComponentRegistry } from "../combined-registry";
-import { createVortexPuckAdapter } from "../vortex-puck-adapter";
 import { getVortexPuckConfig } from "../puck-config";
 import { contentConfigFor } from "../shell-outlet";
 import type { Breakpoint } from "../definition-error";
@@ -43,7 +42,8 @@ import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } fro
 
 export type { StudioCanvasFrame } from "./studio-canvas-bridge";
 
-type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
+/** One compiled content area: its items, exactly as the published definition holds them. */
+type CompiledSlot = readonly CompiledItem[];
 type SourceSlot = SourcePageZone;
 const record = (value: unknown): Record<string, unknown> => {
   if (value === null || typeof value !== "object" || Array.isArray(value))
@@ -53,7 +53,7 @@ const record = (value: unknown): Record<string, unknown> => {
 
 const compiledSettingsFor = (
   authoredData: Data,
-  compiledData: Data,
+  compiledContent: CompiledSlot,
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> => {
   const result: Record<string, Readonly<Record<string, unknown>>> = {};
   const visit = (authoredContent: unknown, compiledContent: unknown): void => {
@@ -79,7 +79,7 @@ const compiledSettingsFor = (
       for (const key of authoredSlots) visit(authoredProps[key], compiledProps[key]);
     }
   };
-  visit(authoredData.content, compiledData.content);
+  visit(authoredData.content, compiledContent);
   return result;
 };
 
@@ -90,7 +90,7 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
   pageAlias: string;
-  /** The compiled slots of this page keyed by page slot address key. */
+  /** The compiled items of each content area of this page, keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, CompiledSlot>> | undefined;
   disabled: boolean;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
@@ -249,7 +249,6 @@ function ApplicationPageSlotPuckEditor({
     [registry, fieldInputControlReleases, platformThemeTokens],
   );
   const adapter = useMemo(() => createVortexAuthoredPuckAdapter(catalogue), [catalogue]);
-  const runtimeAdapter = useMemo(() => createVortexPuckAdapter(catalogue), [catalogue]);
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
   const [resync, setResync] = useState(0);
@@ -268,9 +267,9 @@ function ApplicationPageSlotPuckEditor({
   );
   const runtimeSettings = useMemo(() => {
     if (originalSlot === undefined || compiledSlot === undefined) return undefined;
-    const authoredData = adapter.toPuckData(originalSlot);
-    const compiledData = runtimeAdapter.toPuckData(compiledSlot, undefined, { kind: "default" });
-    return compiledSettingsFor(authoredData, compiledData);
+    // The compiled items are Puck data in the same desktop order, so each authored item reads its
+    // compiled settings directly from the item at the same position.
+    return compiledSettingsFor(adapter.toPuckData(originalSlot), compiledSlot);
   }, [compiledSlot, originalSlot]);
   const data = useMemo(() => {
     if (slot === undefined || runtimeSettings === undefined) return undefined;
