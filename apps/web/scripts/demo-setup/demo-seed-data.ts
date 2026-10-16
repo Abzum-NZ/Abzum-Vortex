@@ -381,8 +381,18 @@ export const hrPositions: readonly Readonly<{
 ];
 
 /**
- * One employee: an Employee links one-to-one to a directory Person and the demo organisation has
- * a single person, its first owner. `positionIndex` refers to a position in `hrPositions`.
+ * People who belong to the demo organisation next to its first owner and have no employee record
+ * yet, so HR "New employee" has someone to choose: an Employee links one-to-one to a directory
+ * Person. Each is a real organisation member that holds no role.
+ */
+export const demoColleagues: readonly Readonly<{ displayName: string; email: string }>[] = [
+  { displayName: "Aroha Ngata", email: "aroha.ngata@abzum.example" },
+  { displayName: "Tane Walker", email: "tane.walker@abzum.example" },
+  { displayName: "Mere Campbell", email: "mere.campbell@abzum.example" },
+];
+
+/**
+ * One employee, linked to the first owner. `positionIndex` refers to a position in `hrPositions`.
  */
 export const hrEmployees: readonly Readonly<{
   number: string;
