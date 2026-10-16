@@ -91,10 +91,18 @@ begin
     end if;
   end if;
 
-  loop
-    new_root_id := pg_catalog.gen_random_uuid();
-    exit when new_root_id <> '00000000-0000-0000-0000-000000000000'::uuid;
-  end loop;
+  -- An owned Module's root is derived from its Application and key, so a draft compiled in
+  -- memory names a Module that is not yet created exactly as its creation will.
+  if p_kind = 'module' then
+    new_root_id := vortex_definition.derived_definition_id(array[
+      'owned_module_root', pg_catalog.lower(p_owner_application_root_id::text), p_key
+    ]);
+  else
+    loop
+      new_root_id := pg_catalog.gen_random_uuid();
+      exit when new_root_id <> '00000000-0000-0000-0000-000000000000'::uuid;
+    end loop;
+  end if;
 
   system_projection_value := p_kind = 'module' and exists (
     select 1
