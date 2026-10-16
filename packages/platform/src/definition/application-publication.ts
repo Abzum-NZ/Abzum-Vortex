@@ -209,7 +209,12 @@ const compileApplication = async (
     catalogue.permissions,
   );
   if (output.kind !== "application") return refuse("DEFINITION_COMPILATION_REFUSED");
-  return { output, resolution, manifest: manifestFor(dependencies, output, resolution) };
+  return {
+    output,
+    resolution,
+    dependencies,
+    manifest: manifestFor(dependencies, output, resolution),
+  };
 };
 
 type CompiledApplication = Awaited<ReturnType<typeof compileApplication>>;
@@ -392,4 +397,36 @@ export const rehearseApplicationPreview = async (
     }
     return transaction.readRehearsedReleases(String(candidate.draft.rootId), pins);
   });
+};
+
+/** The inline Module releases a draft compile holds in memory are never stored; the note only labels them. */
+const draftCompileReleaseNote = "Compiled for the draft";
+
+/**
+ * The Application draft compiled with its own inline Modules, exactly as its publication
+ * compiles them: each inline Module is staged, compiled and released through the publication's
+ * own steps, and the Application is compiled against those releases. Run against the in-memory
+ * publication transaction it writes nothing, so Studio compiles a draft whose Modules add
+ * fields, record types or queries that no installed release has yet.
+ */
+export const compileApplicationWithInlineModules = async (
+  context: SessionContext,
+  transaction: DefinitionPublicationTransaction,
+  catalogue: DefinitionPublicationCatalogue,
+  candidate: DefinitionPublicationCandidate,
+) => {
+  const roots = await materializeInlineModules(transaction, candidate);
+  const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
+  const version =
+    latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
+  await releaseInlineModules(
+    context,
+    transaction,
+    catalogue,
+    candidate,
+    roots,
+    version,
+    draftCompileReleaseNote,
+  );
+  return compileApplication(transaction, catalogue, candidate, version, false);
 };

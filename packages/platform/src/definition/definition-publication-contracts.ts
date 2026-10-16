@@ -116,6 +116,8 @@ export type ResolvableConnectionTypeRelease = Readonly<{
 
 export interface DefinitionPublicationReader {
   readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
+  /** The internal Module roots one Application owns. */
+  readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]>;
   readModuleReleasePage(
     organizationId: OrganizationId,
     key: string,
@@ -198,8 +200,6 @@ export type OwnedModuleRoot = Readonly<{
 export interface DefinitionPublicationTransaction extends DefinitionPublicationReader {
   /** Re-reads immediately before compilation; appendRelease owns the atomic row lock/check. */
   lockCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
-  /** The internal Module roots one Application owns. */
-  readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]>;
   /** Creates the internal root of one of an Application's inline Modules, owned by it. */
   createOwnedModuleRoot(
     applicationRootId: string,

@@ -77,7 +77,13 @@ begin
     identity_id, root_id, owner_scope, kind, component_owner, created_at, created_by
   )
   select
-    case when requirement.kind = 'root' then p_root_id else pg_catalog.gen_random_uuid() end,
+    -- A new identity is derived from its root and owner, so a draft compiled in memory names
+    -- it exactly as this record does.
+    case when requirement.kind = 'root' then p_root_id
+      else vortex_definition.derived_definition_id(array[
+        'source_identity', pg_catalog.lower(p_root_id::text), requirement.owner_scope,
+        requirement.kind, requirement.component_owner
+      ]) end,
     p_root_id, requirement.owner_scope, requirement.kind, requirement.component_owner,
     p_operation_at, p_actor_id
   from (

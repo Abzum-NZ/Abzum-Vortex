@@ -30,12 +30,9 @@ import {
   readLiveHumanContext,
   requireBuilderAuthority,
   createDatabaseDefinitionPublicationService,
-  createDatabaseDefinitionPublicationRepository,
   applicationSearchFieldIsSelectable,
   fingerprintCanonicalValue,
   DefinitionCompilationError,
-  type ModuleReleasePageCursor,
-  type ResolvableModuleRelease,
 } from "@vortex/platform/server";
 import type { StudioCompileFailure } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -339,37 +336,16 @@ export const loadStudioApplicationDraft = async (
           canvasFrames = studioCanvasFramesFor(draft.source.body.pages, compiled.compilation.canonical.content);
           const records: StudioApplicationSearchMetadata["records"][number][] = [];
           const modules = new Map<string, StudioApplicationSearchMetadata["modules"][number]>();
-          await createDatabaseDefinitionPublicationRepository(transaction).read(context, async (reader) => {
+          // The exact Module releases the draft compiled against, its own inline Modules included.
+          {
             for (const binding of compiled.compilation.canonical.content.moduleBindings) {
               const selections = compiled.compilation.resolvedDependencies.filter((dependency) => dependency.kind === "module" &&
                 sameId(dependency.rootId, binding.moduleRootId) && dependency.exactVersion === binding.resolvedVersion);
               const selection = selections[0];
               if (selections.length !== 1 || selection === undefined) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-              let cursor: ModuleReleasePageCursor | undefined;
-              let release: ResolvableModuleRelease | undefined;
-              let previous: number | null = null;
-              let count = 0;
-              for (;;) {
-                const page = await reader.readModuleReleasePage(scope.organizationId, selection.key, cursor);
-                if (page.rootId === null || page.anchorReleaseRevision === null || !sameId(page.rootId, binding.moduleRootId) || page.entries.length === 0 ||
-                    (cursor !== undefined && (page.anchorReleaseRevision !== cursor.anchorReleaseRevision || !sameId(page.rootId, cursor.rootId))))
-                  throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                for (const entry of page.entries) {
-                  if (++count > 10_000 || entry.previousReleaseRevision !== previous || entry.release.releaseRevision <= (previous ?? 0))
-                    throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                  previous = entry.release.releaseRevision;
-                  if (entry.release.releaseVersion === binding.resolvedVersion) {
-                    if (release !== undefined) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                    release = entry.release;
-                  }
-                }
-                if (page.nextAfterReleaseRevision === null) {
-                  if (previous !== page.anchorReleaseRevision) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                  break;
-                }
-                if (page.nextAfterReleaseRevision !== previous) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                cursor = { rootId: page.rootId, anchorReleaseRevision: page.anchorReleaseRevision, afterReleaseRevision: page.nextAfterReleaseRevision };
-              }
+              const matches = compiled.moduleReleases.filter((candidate) => sameId(candidate.rootId, binding.moduleRootId) &&
+                candidate.releaseVersion === binding.resolvedVersion);
+              const release = matches.length === 1 ? matches[0] : undefined;
               if (release === undefined || !sameId(release.organizationId, scope.organizationId) ||
                   !sameId(release.rootId, binding.moduleRootId) || release.key !== selection.key ||
                   release.releaseVersion !== binding.resolvedVersion)
@@ -399,7 +375,7 @@ export const loadStudioApplicationDraft = async (
                     contentFingerprint: release.contentFingerprint, resolutionFingerprint: release.resolutionFingerprint, fields });
               }
             }
-          });
+          }
           const final = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data, expectedDraftRevision: draft.draftRevision });
           if (canonicalJson(final) !== canonicalJson(draft)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
