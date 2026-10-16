@@ -12,7 +12,7 @@ import {
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
-import type { placementSlotSchema } from "@vortex/platform/schema";
+import type { placementSlotSchema, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import { createFullPlatformComponentRegistry } from "../combined-registry";
@@ -44,7 +44,7 @@ import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } fro
 export type { StudioCanvasFrame } from "./studio-canvas-bridge";
 
 type CompiledSlot = ReturnType<typeof placementSlotSchema.parse>;
-type SourceSlot = ReturnType<typeof sourcePlacementSlotSchema.parse>;
+type SourceSlot = SourcePageZone;
 const record = (value: unknown): Record<string, unknown> => {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("Compiled Puck page data is invalid.");
@@ -144,10 +144,15 @@ const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void 
   source.body.platform_block_dependencies = kept;
 };
 
-const slotHolds = (slot: SourceSlot, alias: string): boolean =>
-  Object.hasOwn(slot.placements, alias) ||
-  Object.values(slot.placements).some((placement) =>
-    Object.values(placement.slots).some((child) => slotHolds(child, alias)));
+const isItemList = (value: unknown): value is SourceItem[] =>
+  Array.isArray(value) && value.every((entry) =>
+    entry !== null && typeof entry === "object" && "type" in entry && "props" in entry);
+
+const itemsHold = (items: readonly SourceItem[], alias: string): boolean =>
+  items.some((item) => item.props.id === alias ||
+    Object.values(item.props).some((value) => isItemList(value) && itemsHold(value, alias)));
+
+const slotHolds = (slot: SourceSlot, alias: string): boolean => itemsHold(slot.items, alias);
 
 export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps) {
   const page = props.source.body.pages.find((candidate) => candidate.id === props.pageAlias);
@@ -358,7 +363,7 @@ function ApplicationPageSlotPuckEditor({
       const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
       if (matches.length !== 1 || targetSlot === undefined)
         throw new TypeError("The selected page is unavailable.");
-      const editedSlot = sourcePlacementSlotSchema.parse(adapter.fromPuckData(targetSlot, candidate));
+      const editedSlot = adapter.fromPuckData(targetSlot, candidate);
       // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
       if (canonicalJson(editedSlot) === canonicalJson(targetSlot)) return;
       const next = structuredClone(current);

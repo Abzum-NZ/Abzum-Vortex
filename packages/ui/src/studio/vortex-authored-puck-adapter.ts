@@ -560,7 +560,7 @@ export const createVortexAuthoredPuckAdapter = (catalogueInput: unknown) => {
             authored: clone(metadata),
             // The authored settings travel with the item, so a copy Puck makes of it (duplicate)
             // keeps every setting the original declared, including those equal to a default.
-            authoredSettings: clone(settings),
+            authoredSettings: clone(reading.settings),
             compiledSettings: clone(compiledSettings),
             slot: clone(identity),
             baselineOrder: clone(slotOrder),
