@@ -906,8 +906,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const canPrepare = readPublicationSnapshot() !== null;
   const noEdit = state.isSaving || workspaceLifetime === 0;
   const flows = useStudioFlowsTab({ organizationId, draftKey: draft.key, rootId: draft.rootId, history, selectionStore: selection,
-    busy, active, lifetime, source, selected, catalogue: platformBlockCatalogue, labels, applications, pages: draftChoices.pages,
-    disabled: noEdit || busy.anyRendered("flowStep"), epoch: flowEpoch, setMessage, choose: chooseSelection,
+    busy, active, lifetime, workspaceLifetime, source, selected, catalogue: platformBlockCatalogue, labels, applications, pages: draftChoices.pages,
+    disabled: noEdit || busy.anyRendered("flowStep"), epoch: flowEpoch, setMessage, choose: chooseSelection, select: changeSelection,
     openFlowsTab: () => changeTab("flows") });
 
   const commandVisibility: Parameters<typeof ApplicationVisibilityConditionEditor>[0]["onCommand"] =

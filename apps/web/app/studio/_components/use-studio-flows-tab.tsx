@@ -28,8 +28,8 @@ const StudioFlowCanvas = dynamic(
  * flow command or one flow creation on the current draft, taken by the draft history exactly as
  * every other Studio edit is.
  */
-export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, selectionStore, busy, active, lifetime,
-  source, selected, catalogue, labels, applications, pages, disabled, epoch, setMessage, choose, openFlowsTab }: Readonly<{
+export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, selectionStore, busy, active, lifetime, workspaceLifetime,
+  source, selected, catalogue, labels, applications, pages, disabled, epoch, setMessage, choose, select, openFlowsTab }: Readonly<{
   organizationId: string;
   draftKey: string;
   rootId: ApplicationRootId;
@@ -38,6 +38,8 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
   busy: StudioBusy;
   active: MutableRefObject<boolean>;
   lifetime: MutableRefObject<number>;
+  /** The rendered workspace lifetime, which the flow snapshot of this render carries. */
+  workspaceLifetime: number;
   source: ApplicationSourceDocument;
   selected: StudioSemanticSelection | null;
   catalogue: ImmutablePlatformBlockCatalogue;
@@ -50,6 +52,8 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
   epoch: number;
   setMessage: (message: string) => void;
   choose: (selection: StudioSemanticSelection) => Promise<boolean> | boolean;
+  /** Selects without asking (the selection change itself discards unapplied input). */
+  select: (selection: StudioSemanticSelection) => boolean;
   openFlowsTab: () => Promise<boolean>;
 }>) {
   const state = history.getState();
@@ -63,8 +67,8 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
 
   const context = useMemo((): StudioFlowContext => ({
     organizationId, rootId: state.rootId, key: draftKey, draftRevision: state.draftRevision,
-    localLifetime: lifetime.current, source: state.source as ApplicationSourceDocument,
-  }), [organizationId, state.rootId, draftKey, state.draftRevision, state.source, lifetime]);
+    localLifetime: workspaceLifetime, source: state.source as ApplicationSourceDocument,
+  }), [organizationId, state.rootId, draftKey, state.draftRevision, state.source, workspaceLifetime]);
   const controlLabel = useCallback((alias: string) =>
     labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias: alias })) ?? "a control", [labels]);
   const outline = useMemo(() => {
@@ -82,9 +86,13 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
     if (flowSelection === null) return;
     const entry = path === null || outline === null ? undefined
       : outline.entries.find((candidate) => samePath(candidate.path, path));
-    void choose(entry === undefined ? flowSelection
-      : { kind: "flow_step", flowAlias: flowSelection.flowAlias, moduleKey: flowSelection.moduleKey, taskId: entry.task.id });
-  }, [flowSelection, outline, choose]);
+    const next: StudioSemanticSelection = entry === undefined ? flowSelection
+      : { kind: "flow_step", flowAlias: flowSelection.flowAlias, moduleKey: flowSelection.moduleKey, taskId: entry.task.id };
+    // Moving between the steps of the open flow discards only the step's own unapplied settings, after asking;
+    // nothing else on the Flows tab holds input a step change could lose.
+    if (busy.is("flowStep")) void choose(next);
+    else select(next);
+  }, [flowSelection, outline, choose, select, busy]);
   const starts = useMemo(() => flowSelection === null ? [] : describeStudioFlowStarts(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel]);
   const recordTypes = useMemo(() => source.body.modules.flatMap((module) => module.record_types.map((recordType) => ({
@@ -121,7 +129,7 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
     if (!history.edit(result.source)) return "The draft did not accept the new flow, so nothing was changed.";
     void (async () => {
       await openFlowsTab();
-      await choose(result.selection);
+      select(result.selection);
     })();
     setMessage("Flow created. Save to keep it.");
     return true;
