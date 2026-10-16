@@ -73,7 +73,7 @@ export function AppearanceToggle(): ReactElement | null {
           onValueChange={(value) => appearance.choose(parseThemeMode(String(value)))}
         >
           {CHOICES.map((choice) => (
-            <DropdownMenuRadioItem key={choice.mode} value={choice.mode}>
+            <DropdownMenuRadioItem key={choice.mode} value={choice.mode} closeOnClick>
               {choice.label}
             </DropdownMenuRadioItem>
           ))}
