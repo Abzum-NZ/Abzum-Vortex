@@ -59,7 +59,6 @@ const THEME_VARIABLE_NAMES = [
   "--vortex-space-sm",
   "--vortex-space-md",
   "--vortex-space-lg",
-  "--vortex-component-spacing",
   "--vortex-radius-sm",
   "--vortex-radius-md",
   "--vortex-radius-lg",
@@ -426,7 +425,6 @@ function generateThemeCssVariables(
     "--vortex-space-sm": spacing("space_sm", "0.5rem"),
     "--vortex-space-md": spacing("space_md", "1rem"),
     "--vortex-space-lg": spacing("space_lg", "1.5rem"),
-    "--vortex-component-spacing": "0.25rem",
     "--vortex-radius-sm": corners("radius_sm", "0.125rem"),
     "--vortex-radius-md": corners("radius_md", "0.25rem"),
     "--vortex-radius-lg": corners("radius_lg", "0.5rem"),
@@ -519,9 +517,6 @@ export function createThemeRootProps(
   const loaderCycle = theme?.loaderMark?.cycleSeconds;
   const style: CSSProperties & ThemeCssVariables = {
     ...generateThemeCssVariables(platformThemeTokens, theme?.tokens),
-    // Maia's pinned style uses wider component spacing; carry that choice on this app root so
-    // another application on the same page keeps its own style values.
-    "--vortex-component-spacing": theme?.selection?.style === "maia" ? "0.4rem" : "0.25rem",
     ...(loaderCycle !== undefined && Number.isFinite(loaderCycle) && loaderCycle > 0
       ? { "--vortex-loader-cycle": `${loaderCycle}s` }
       : {}),

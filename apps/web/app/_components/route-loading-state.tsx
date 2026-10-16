@@ -10,9 +10,9 @@ export function RouteLoadingState() {
   return (
     <div className="flex min-h-svh flex-col gap-4 p-6" aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading</span>
-      <Skeleton className="h-8 w-64 max-w-full rounded-md bg-muted" />
-      <Skeleton className="h-32 w-full rounded-lg bg-muted" />
-      <Skeleton className="h-64 w-full rounded-lg bg-muted" />
+      <Skeleton className="h-8 w-64 max-w-full" />
+      <Skeleton className="h-32 w-full" />
+      <Skeleton className="h-64 w-full" />
     </div>
   );
 }

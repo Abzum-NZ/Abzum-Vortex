@@ -12,7 +12,7 @@ export function StudioOutline({ node, selectedKey, choose, disabled = false }: {
   return <li className="space-y-1">
     {node.selection === null ? <span className="block break-words text-sm text-muted-foreground" title={node.label}>{node.label}</span>
       : <Button type="button" variant="outline" size="sm" disabled={disabled} title={node.label}
-        className="h-auto w-full justify-start whitespace-normal py-1 text-left"
+        className="h-auto min-h-8 w-full justify-start whitespace-normal text-left"
         aria-pressed={selectedKey === studioSemanticSelectionKey(node.selection)} onClick={() => choose(node)}>
         <span className="min-w-0 break-words">{node.label}</span>
       </Button>}

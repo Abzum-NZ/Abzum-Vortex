@@ -13,6 +13,7 @@ import {
 import { Icon } from "../icons/icon";
 import type { RecordsTableActionContract } from "@vortex/platform/schema";
 import { Button } from "../components/button";
+import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
 import {
   DropdownMenu,
@@ -78,18 +79,19 @@ export function RecordsLoadingState({
   accessibleName,
 }: Readonly<{ accessibleName: string }>): ReactElement {
   return (
-    <div
+    <Card
       role="status"
       aria-busy="true"
       data-vortex-display-state="loading"
-      className="flex flex-col gap-2 rounded-lg border border-border bg-background p-4"
       aria-label={`Loading ${accessibleName}`}
     >
-      <Skeleton className="h-4 w-1/3" />
-      <Skeleton className="h-8 w-full" />
-      <Skeleton className="h-8 w-full" />
-      <Skeleton className="h-8 w-full" />
-    </div>
+      <CardContent className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+      </CardContent>
+    </Card>
   );
 }
 

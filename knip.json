@@ -5,7 +5,11 @@
   "workspaces": {
     ".": {
       "includeEntryExports": false,
-      "entry": ["tooling/supabase/lane.mjs", "tooling/list-paging/seed-list-records.mjs"],
+      "entry": [
+        "tooling/supabase/lane.mjs",
+        "tooling/list-paging/seed-list-records.mjs",
+        "tooling/theme/off-theme-detector.js"
+      ],
       "project": ["tooling/**/*.{js,mjs,ts}"],
       "ignore": ["tooling/typescript/types/**"]
     },

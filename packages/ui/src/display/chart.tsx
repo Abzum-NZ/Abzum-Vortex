@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import { Progress } from "../components/progress";
 import { createPayloadParser, type PlatformComponentRegistration } from "../registry";
 import {
   Table,
@@ -137,12 +138,11 @@ export function ChartDisplay(props: DisplayRenderProps<ChartPayload>): ReactElem
                   <TableCell className="whitespace-nowrap">{point.label}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div aria-hidden="true" className="h-3 min-w-0 flex-1 rounded-sm bg-muted">
-                        <div
-                          className="h-full rounded-sm bg-chart-1"
-                          style={{ width: maximum === 0 ? "0%" : `${(point.value / maximum) * 100}%` }}
-                        />
-                      </div>
+                      <Progress
+                        aria-hidden="true"
+                        className="min-w-0 flex-1"
+                        value={maximum === 0 ? 0 : (point.value / maximum) * 100}
+                      />
                       <span className="tabular-nums">{point.text}</span>
                     </div>
                   </TableCell>
