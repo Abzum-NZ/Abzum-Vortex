@@ -111,6 +111,9 @@ declare
   lookahead_record record;
   lookahead_ids uuid[];
   page_first_loaded jsonb;
+  -- What every row of the page shares, built once in this invocation: the
+  -- validated active installation, the facts envelope and the read-time inputs.
+  page_shared jsonb; page_narrowed boolean;
   decided_ids uuid[] := array[]::uuid[];
   decided_loaded jsonb[];
   decided_decisions jsonb[];
@@ -124,10 +127,8 @@ declare
   needs_refusal_check boolean;
   projection jsonb;
   readable_values jsonb;
-  row_capabilities jsonb;
   capability_rows jsonb[] := array[]::jsonb[];
   page_capabilities jsonb;
-  capability_index integer;
   rows_value jsonb := '[]'::jsonb;
   row_count integer := 0;
   last_examined_sort_key text[];
@@ -1140,9 +1141,11 @@ begin
         -- Keep the reusable decision in this invocation; the request role cannot
         -- write it or pass it to the owner-only exact-record evaluator.
         page_eligibility_checked := true;
-        page_access_loaded := vortex_record.load_record_access_facts_internal(
+        page_shared := pg_catalog.jsonb_build_object(
+          'installation', vortex_definition.read_current_active_installation());
+        page_access_loaded := vortex_record.load_record_access_facts_from_installation_internal(
           record_type_id_value, 'read', scan_record.record_id, null,
-          scan_record.projection_row
+          page_shared -> 'installation', scan_record.projection_row
         );
         if page_access_loaded ->> 'outcome' = 'loaded'
           and pg_catalog.jsonb_typeof(page_access_loaded -> 'declaration') = 'object' then
@@ -1152,6 +1155,10 @@ begin
             pg_catalog.clock_timestamp()
           );
           page_first_loaded := page_access_loaded;
+          select page_shared || pg_catalog.jsonb_build_object('envelope', page.envelope) || page.read_time,
+            page.narrowed
+          into page_shared, page_narrowed
+          from vortex_record.read_record_page_envelope_internal(record_type_id_value, page_first_loaded) as page;
         end if;
       end if;
       -- Decide this candidate and the page's next ones together in one set
@@ -1172,7 +1179,7 @@ begin
         into decided_ids, decided_loaded, decided_decisions, decided_bounds
         from vortex_record.read_record_page_decisions_internal(
           record_type_id_value, page_first_loaded, page_declaration, page_eligibility,
-          lookahead_ids
+          lookahead_ids, page_shared -> 'envelope', page_narrowed
         ) as decided;
         page_batching := pg_catalog.cardinality(decided_ids) > 0;
       end if;
@@ -1185,7 +1192,7 @@ begin
         record_type_id_value, scan_record.record_id, page_declaration, page_eligibility,
         validated_record_types, scan_record.projection_row,
         coalesce(decided_loaded[decided_index], page_access_loaded),
-        decided_decisions[decided_index], decided_bounds[decided_index]
+        decided_decisions[decided_index], decided_bounds[decided_index], page_shared
       ) as row_read;
       projection := read_row.projection;
       -- Only the exact evaluator validates record types for reuse.
@@ -1288,13 +1295,13 @@ begin
           capability_rows := pg_catalog.array_append(
             capability_rows,
             pg_catalog.jsonb_build_object(
-              'recordId', scan_record.record_id,
-              -- The page pass's facts for this record when it has them, also
-              -- for the first record: the same facts every other row carries.
-              'readFacts', coalesce(decided_loaded[pg_catalog.array_position(
-                decided_ids, scan_record.record_id)], read_row.read_facts),
-              'readBounds', read_row.read_bounds
-            )
+              'recordId', scan_record.record_id, 'readBounds', read_row.read_bounds
+            ) || case
+              -- The page pass's compact record scope when it has one, also for
+              -- the first record; its page-wide facts are the page envelope.
+              when scan_record.record_id = any (decided_ids) then pg_catalog.jsonb_build_object('record',
+                decided_loaded[pg_catalog.array_position(decided_ids, scan_record.record_id)])
+              else pg_catalog.jsonb_build_object('readFacts', read_row.read_facts) end
           );
           rows_value := rows_value || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
             'recordId', scan_record.record_id,
@@ -1304,13 +1311,10 @@ begin
               from pg_catalog.unnest(requested_ids) as requested(id)
               where readable_values ? requested.id
             ), '{}'::jsonb)
-          ));
+          ) || case when pg_catalog.cardinality(system_field_keys) > 0
+            then pg_catalog.jsonb_build_object('systemValues', scan_record.system_values)
+            else '{}'::jsonb end);
           row_count := row_count + 1;
-          if pg_catalog.cardinality(system_field_keys) > 0 then
-            rows_value := pg_catalog.jsonb_set(
-              rows_value, array[(row_count - 1)::text, 'systemValues'], scan_record.system_values
-            );
-          end if;
           last_returned_sort_key := scan_record.sort_key;
           last_returned_record_id := scan_record.record_id;
         end if;
@@ -1339,21 +1343,23 @@ begin
   end if;
   if row_count > 0 then
     page_capabilities := vortex_record.read_record_capabilities_page_internal(
-      record_type_id_value, pg_catalog.to_jsonb(capability_rows)
+      record_type_id_value, pg_catalog.to_jsonb(capability_rows), page_shared -> 'envelope'
     );
     if pg_catalog.jsonb_typeof(page_capabilities) is distinct from 'array'
       or pg_catalog.jsonb_array_length(page_capabilities) <> row_count then
       raise exception using errcode = '55000', message = 'Page capabilities are unavailable';
     end if;
-    for capability_index in 0..row_count - 1 loop
-      row_capabilities := page_capabilities -> capability_index;
-      if pg_catalog.jsonb_typeof(row_capabilities) is distinct from 'object' then
-        raise exception using errcode = '55000', message = 'Record capabilities are unavailable';
-      end if;
-      rows_value := pg_catalog.jsonb_set(
-        rows_value, array[capability_index::text, 'capabilities'], row_capabilities
-      );
-    end loop;
+    if exists (
+      select 1 from pg_catalog.jsonb_array_elements(page_capabilities) as item(value)
+      where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+    ) then
+      raise exception using errcode = '55000', message = 'Record capabilities are unavailable';
+    end if;
+    -- Each row gets its own capabilities, in one pass over the page.
+    select pg_catalog.jsonb_agg(item.value || pg_catalog.jsonb_build_object(
+        'capabilities', page_capabilities -> (item.ordinality::integer - 1)) order by item.ordinality)
+    into rows_value
+    from pg_catalog.jsonb_array_elements(rows_value) with ordinality as item(value, ordinality);
   end if;
   if more_rows then
     next_value := pg_catalog.jsonb_build_object(

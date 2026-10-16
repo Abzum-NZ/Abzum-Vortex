@@ -56,6 +56,7 @@ const targets: readonly Target[] = [
     page: "crm_opportunity_detail",
     recordKey: "opportunity",
   },
+  { label: "CRM contacts list", application: pipelineApplication, page: "crm_contacts" },
   {
     label: "Service Desk case list",
     application: casesApplication,
