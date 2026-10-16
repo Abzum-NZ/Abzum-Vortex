@@ -1,10 +1,13 @@
 import {
   type DefinitionRuleFailure,
   type ApplicationSourceDocument,
+  type SourceItem,
   builderKeySchema,
+  sourceItemChildSlots,
+  sourceItemTree,
+  sourcePageItems,
 } from "../../schema";
 import {
-  type JsonObject,
   type PreparedValidationContext,
   editSaveSources,
   parseEditSaveSource,
@@ -13,37 +16,23 @@ import {
 } from "./context";
 import { object, array } from "./helpers";
 
-type PlacedApplicationBlock = Readonly<{ placement: JsonObject; pageType: string | undefined }>;
+type PlacedApplicationBlock = Readonly<{ item: SourceItem; pageType: string | undefined }>;
 
 /**
  * Every block placed in an Application source by its application-unique alias: shell layouts,
  * page content and guided-form step content at any depth, with the type of the page that places
  * it (none for a shell).
  */
-const placedApplicationBlocks = (body: JsonObject): ReadonlyMap<string, PlacedApplicationBlock> => {
+const placedApplicationBlocks = (
+  body: ApplicationSourceDocument["body"],
+): ReadonlyMap<string, PlacedApplicationBlock> => {
   const placed = new Map<string, PlacedApplicationBlock>();
-  const visitSlot = (slotValue: unknown, pageType?: string): void => {
-    for (const [alias, placementValue] of Object.entries(object(object(slotValue).placements))) {
-      const placement = object(placementValue);
-      placed.set(alias, { placement, pageType });
-      for (const child of Object.values(object(placement.slots))) visitSlot(child, pageType);
-    }
-  };
-  for (const shell of array(body.shells)) visitSlot(shell.layout);
-  for (const page of array(body.pages)) {
-    const composition = object(page.composition);
-    const pageType = String(page.type);
-    if (composition.step_content !== undefined) {
-      for (const stepValue of Object.values(object(composition.step_content))) {
-        if (composition.shell_kind === "default") visitSlot(stepValue, pageType);
-        else for (const slot of Object.values(object(stepValue))) visitSlot(slot, pageType);
-      }
-    } else if (composition.shell_kind === "default") {
-      visitSlot(composition.main, pageType);
-    } else {
-      for (const slot of Object.values(object(composition.content))) visitSlot(slot, pageType);
-    }
-  }
+  for (const shell of body.shells)
+    for (const item of sourceItemTree(shell.layout.content))
+      placed.set(item.props.id, { item, pageType: undefined });
+  for (const page of body.pages)
+    for (const item of sourcePageItems(page.composition))
+      placed.set(item.props.id, { item, pageType: page.type });
   return placed;
 };
 
@@ -60,11 +49,11 @@ export function applicationFlowBindingEventRule(
     if (!parsed.success || !isApplicationSource(parsed.data)) return [];
     const source = parsed.data as ApplicationSourceDocument;
     const body = object(source.body);
-    const placedBlocks = placedApplicationBlocks(body);
+    const placedBlocks = placedApplicationBlocks(source.body);
     const failures: DefinitionRuleFailure[] = [];
     for (const binding of array(body.flow_bindings)) {
       const placed = placedBlocks.get(String(binding.control));
-      const block = placed ? object(placed.placement.block) : undefined;
+      const block = placed?.item.props.vortex.block;
       const release = block
         ? registeredBlockReleases.get(`${String(block.block_id)}:${String(block.release_version)}`)
         : undefined;
@@ -94,38 +83,38 @@ const formContainerBlockKey = "platform.form.container";
 const actionButtonBlockKey = "platform.action.button";
 
 /**
- * One authored block setting of the given kind, read as the renderer reads it: a setting of any
- * other kind is not that setting, so a button's action kind falls back to its `action` default.
+ * One authored plain block setting of the given JSON type, read as the renderer reads it: a value
+ * of any other type is not that setting, so a button's action kind falls back to its `action`
+ * default.
  */
-const sourceBlockSetting = (placement: JsonObject, key: string, kind: string): unknown => {
-  const setting: unknown = object(placement.settings)[key];
-  return setting !== null && typeof setting === "object" && object(setting).kind === kind
-    ? object(setting).value
-    : undefined;
+const sourceBlockSetting = (
+  item: SourceItem,
+  key: string,
+  type: "string" | "boolean",
+): unknown => {
+  const setting: unknown = item.props[key];
+  return typeof setting === type ? setting : undefined;
 };
 
-/** The registered key of a placement's exact block release, or undefined for an unknown release. */
-const sourceBlockKey = (placement: JsonObject): string | undefined => {
-  const block = object(placement.block);
-  return registeredBlockReleases.get(`${String(block.block_id)}:${String(block.release_version)}`)
-    ?.key;
+/** The registered key of an item's exact block release, or undefined for an unknown release. */
+const sourceBlockKey = (item: SourceItem): string | undefined => {
+  const block = item.props.vortex.block;
+  return registeredBlockReleases.get(`${block.block_id}:${block.release_version}`)?.key;
 };
 
 /** A button's authored action kind, `action` when it declares none. */
-const sourceButtonActionKind = (placement: JsonObject): unknown =>
-  sourceBlockSetting(placement, "action_kind", "choice") ?? "action";
+const sourceButtonActionKind = (item: SourceItem): unknown =>
+  sourceBlockSetting(item, "action_kind", "string") ?? "action";
 
 /** Whether a form container holds, at any depth, a button that submits the enclosing form. */
-const containsSubmitButton = (placement: JsonObject): boolean =>
-  Object.values(object(placement.slots)).some((slotValue) =>
-    Object.values(object(object(slotValue).placements)).some((childValue) => {
-      const child = object(childValue);
-      return (
+const containsSubmitButton = (item: SourceItem): boolean =>
+  sourceItemChildSlots(item).some(([, children]) =>
+    children.some(
+      (child) =>
         (sourceBlockKey(child) === actionButtonBlockKey &&
           sourceButtonActionKind(child) === "submit") ||
-        containsSubmitButton(child)
-      );
-    }),
+        containsSubmitButton(child),
+    ),
   );
 
 /**
@@ -157,7 +146,7 @@ export function applicationControlBindingRule(
       boundEvents.set(control, events);
     }
     const failures: DefinitionRuleFailure[] = [];
-    for (const [alias, { placement, pageType }] of placedApplicationBlocks(body)) {
+    for (const [alias, { item: placement, pageType }] of placedApplicationBlocks(source.body)) {
       const blockKey = sourceBlockKey(placement);
       const bound = boundEvents.get(alias) ?? new Set<string>();
       const unbound =

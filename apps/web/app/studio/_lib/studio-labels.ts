@@ -21,18 +21,16 @@ export const studioKindLabel = (kind: StudioSemanticSelection["kind"] | "section
 
 type Release = ImmutablePlatformBlockCatalogue["releases"][number];
 
-const textValue = (value: unknown): string | undefined => {
-  if (typeof value !== "object" || value === null) return undefined;
-  const entry = value as { kind?: unknown; value?: unknown };
-  if (entry.kind !== "text" && entry.kind !== "choice") return undefined;
-  return typeof entry.value === "string" && entry.value.trim().length > 0 ? entry.value.trim() : undefined;
-};
+// Authored settings are plain values: a text or choice setting is its string.
+const textValue = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 
 /** The setting that names an item to a person: the block's accessible-name setting, else its first text setting. */
 const itemLabel = (release: Release | undefined, settings: Readonly<Record<string, unknown>>): string | undefined => {
   const capabilities = release?.capabilities as { accessibleNamePropertyPath?: readonly string[] } | undefined;
   const named = capabilities?.accessibleNamePropertyPath?.[0];
-  if (named !== undefined) {
+  const namedKind = release?.properties.find((property) => property.key === named)?.kind;
+  if (named !== undefined && (namedKind === "text" || namedKind === "choice")) {
     const label = textValue(settings[named]);
     if (label !== undefined) return label;
   }

@@ -7,13 +7,9 @@ import {
   defaultSaveFlowSource,
   type ApplicationSourceDocument,
   type PlatformBlockReleaseIdentity,
-  type SourceBlockPropertyValueContract,
+  type SourceItemVortex,
 } from "@vortex/platform/schema";
-import {
-  operationsRunbooks,
-  runbookPageKey,
-  runbookPageText,
-} from "./runbooks";
+import { operationsRunbooks, runbookPageKey, runbookPageText } from "./runbooks";
 
 type JsonObject = Record<string, unknown>;
 
@@ -114,45 +110,55 @@ const placementLayout = {
   height: { kind: "content" as const },
 };
 
-/** Authored  block placement: exact block release, typed settings and named child slots. */
+/**
+ * One authored item before it is named: the block release's renderer, plain settings, child slots
+ * and its Vortex metadata (exact block release, optional bindings, layout).
+ */
 const placement = (
   release: PlatformBlockReleaseIdentity,
-  settings: Record<string, SourceBlockPropertyValueContract> = {},
-  slots: Record<string, unknown> = {},
+  settings: Record<string, unknown> = {},
+  slots: Record<string, readonly unknown[]> = {},
+  bindings: Partial<Pick<SourceItemVortex, "view_permission" | "query">> = {},
 ) => ({
-  block: { block_id: release.blockId, release_version: release.releaseVersion },
-  settings,
-  theme_overrides: {},
-  responsive: { desktop: placementLayout },
-  slots,
+  type: release.rendererKey,
+  props: {
+    ...settings,
+    ...slots,
+    vortex: {
+      block: { block_id: release.blockId, release_version: release.releaseVersion },
+      ...bindings,
+      theme_overrides: {},
+      responsive: { desktop: placementLayout },
+    },
+  },
 });
+type Placement = ReturnType<typeof placement>;
 
-const slot = (entries: Record<string, unknown>) => ({
-  placements: entries,
-  order: { desktop: Object.keys(entries) },
-});
+/** A slot's items in desktop order, each named by its alias. */
+const slot = (entries: Record<string, Placement>) =>
+  Object.entries(entries).map(([id, item]) => ({ type: item.type, props: { id, ...item.props } }));
 
 const textBlock = (title: string, text: string) =>
   placement(TEXT_BLOCK_RELEASE, {
-    title: { kind: "text", value: title },
-    text: { kind: "text", value: text },
+    title,
+    text,
   });
 
 /** A required single-line form input whose name matches the committed field or action input key. */
 const textInput = (name: string, label: string) =>
   placement(TEXT_INPUT_BLOCK_RELEASE, {
-    name: { kind: "text", value: name },
-    label: { kind: "text", value: label },
-    required: { kind: "boolean", value: true },
+    name,
+    label,
+    required: true,
   });
 
 /** A required formatted-text form input whose name matches the committed action input key. */
 const richTextInput = (name: string, label: string, helpText: string) =>
   placement(RICH_TEXT_INPUT_BLOCK_RELEASE, {
-    name: { kind: "text", value: name },
-    label: { kind: "text", value: label },
-    help_text: { kind: "text", value: helpText },
-    required: { kind: "boolean", value: true },
+    name,
+    label,
+    help_text: helpText,
+    required: true,
   });
 
 /** A required form choice input whose name matches the committed field key. */
@@ -162,26 +168,17 @@ const choiceInput = (
   options: ReadonlyArray<readonly [string, string]>,
 ) =>
   placement(CHOICE_INPUT_BLOCK_RELEASE, {
-    name: { kind: "text", value: name },
-    label: { kind: "text", value: label },
-    required: { kind: "boolean", value: true },
-    options: {
-      kind: "list",
-      items: options.map(([value, optionLabel]) => ({
-        kind: "group" as const,
-        properties: {
-          key: { kind: "text" as const, value },
-          label: { kind: "text" as const, value: optionLabel },
-        },
-      })),
-    },
+    name,
+    label,
+    required: true,
+    options: options.map(([value, optionLabel]) => ({ key: value, label: optionLabel })),
   });
 
 const submitButton = (label: string) =>
   placement(BUTTON_BLOCK_RELEASE, {
-    label: { kind: "text", value: label },
-    action_kind: { kind: "choice", value: "submit" },
-    variant: { kind: "choice", value: "primary" },
+    label,
+    action_kind: "submit",
+    variant: "primary",
   });
 
 /** A button whose action event starts one bound named-action flow; shown only to its permission. */
@@ -189,20 +186,20 @@ const actionButton = (
   label: string,
   variant: "primary" | "secondary" | "danger",
   permission: string,
-) => ({
-  ...placement(BUTTON_BLOCK_RELEASE, {
-    label: { kind: "text", value: label },
-    action_kind: { kind: "choice", value: "action" },
-    variant: { kind: "choice", value: variant },
-  }),
-  view_permission: permission,
-});
+) =>
+  placement(
+    BUTTON_BLOCK_RELEASE,
+    { label, action_kind: "action", variant },
+    {},
+    { view_permission: permission },
+  );
 
 /** A form container holding its inputs followed by its one submit button. */
-const form = (title: string, inputs: Record<string, unknown>) =>
-  placement(FORM_CONTAINER_BLOCK_RELEASE, { title: { kind: "text", value: title } }, {
-    content: slot(inputs),
-  });
+const form = (
+  title: string,
+  inputs: Record<string, Placement>,
+  bindings: Parameters<typeof placement>[3] = {},
+) => placement(FORM_CONTAINER_BLOCK_RELEASE, { title }, { content: slot(inputs) }, bindings);
 
 const createForm = "form_operations_new_incident";
 const attachForm = "form_operations_incident_attach";
@@ -236,12 +233,9 @@ const runbookPages = operationsRunbooks.map((runbook) => {
     name: runbook.title,
     type: "dashboard",
     permission: "application.operations.open",
-    composition: {
-      shell_kind: "default",
-      main: slot({
-        [`${pageKey}_text`]: textBlock(runbook.title, runbookPageText(runbook)),
-      }),
-    },
+    blocks: slot({
+      [`${pageKey}_text`]: textBlock(runbook.title, runbookPageText(runbook)),
+    }),
   };
 });
 
@@ -253,15 +247,12 @@ const pages = [
     name: "Open signals",
     type: "dashboard",
     permission: "application.operations.open",
-    composition: {
-      shell_kind: "default",
-      main: slot({
-        operations_signals_text: textBlock(
-          "Open alert signals",
-          "Open alert signals are recorded and deduplicated by the platform alert sink and hold no customer content. They cannot be listed here yet: signals will appear on this page once they become a system record type. Until then, create an incident from the Create incident page, or open an incident from the Incidents page and attach a signal to it by its deduplication key.",
-        ),
-      }),
-    },
+    blocks: slot({
+      operations_signals_text: textBlock(
+        "Open alert signals",
+        "Open alert signals are recorded and deduplicated by the platform alert sink and hold no customer content. They cannot be listed here yet: signals will appear on this page once they become a system record type. Until then, create an incident from the Create incident page, or open an incident from the Incidents page and attach a signal to it by its deduplication key.",
+      ),
+    }),
   },
   {
     id: "page_operations_incidents",
@@ -271,34 +262,21 @@ const pages = [
     record_type: incidentRecordType,
     permission: readIncidentsPage,
     query: openIncidentsQuery,
-    composition: {
-      shell_kind: "default",
-      main: slot({
-        operations_incidents_table: {
-          ...placement(TABLE_BLOCK_RELEASE_1_3_0, {
-            title: { kind: "text", value: "Open incidents" },
-            columns: {
-              kind: "list",
-              items: incidentColumns.map(([field, label]) => ({
-                kind: "group" as const,
-                properties: {
-                  field: {
-                    kind: "field_reference" as const,
-                    field: `${incidentRecordType}.${field}`,
-                  },
-                  label: { kind: "text" as const, value: label },
-                },
-              })),
-            },
-            row_click: {
-              kind: "group",
-              properties: { event_id: { kind: "text", value: incidentRowClickEventId } },
-            },
-          }),
-          query: openIncidentsQuery,
+    blocks: slot({
+      operations_incidents_table: placement(
+        TABLE_BLOCK_RELEASE_1_3_0,
+        {
+          title: "Open incidents",
+          columns: incidentColumns.map(([field, label]) => ({
+            field: `${incidentRecordType}.${field}`,
+            label,
+          })),
+          row_click: { event_id: incidentRowClickEventId },
         },
-      }),
-    },
+        {},
+        { query: openIncidentsQuery },
+      ),
+    }),
   },
   {
     id: "page_operations_incident_detail",
@@ -307,41 +285,39 @@ const pages = [
     type: "detail",
     record_type: incidentRecordType,
     permission: readIncidentsPage,
-    composition: {
-      shell_kind: "default",
-      main: slot({
-        operations_incident_detail_body: placement(RECORD_DETAIL_BLOCK_RELEASE, {
-          title: { kind: "text", value: "Incident" },
-        }),
-        // Attach runs on the open incident as its subject; operators without the attach
-        // permission never see the form, and the action refuses a resolved or closed incident and
-        // a signal whose deduplication key does not match the incident's own.
-        [attachForm]: {
-          ...form("Attach a signal to this incident", {
-            input_operations_attach_deduplication_key: textInput(
-              "deduplication_key",
-              "Signal deduplication key",
-            ),
-            input_operations_attach_evidence: richTextInput(
-              "evidence",
-              "Signal evidence",
-              "Operational evidence only. Do not paste customer content or personal data.",
-            ),
-            submit_operations_incident_attach: submitButton("Attach signal"),
-          }),
-          view_permission: attachIncidentView,
-        },
-        // The bounded operator actions run on the open incident as their subject. Each button is
-        // shown only to its own permission holder, and every action refuses a resolved or closed
-        // incident in the module.
-        ...Object.fromEntries(
-          incidentOperations.map((operation) => [
-            operation.button,
-            actionButton(operation.label, operation.variant, operation.viewPermission),
-          ]),
-        ),
+    blocks: slot({
+      operations_incident_detail_body: placement(RECORD_DETAIL_BLOCK_RELEASE, {
+        title: "Incident",
       }),
-    },
+      // Attach runs on the open incident as its subject; operators without the attach
+      // permission never see the form, and the action refuses a resolved or closed incident and
+      // a signal whose deduplication key does not match the incident's own.
+      [attachForm]: form(
+        "Attach a signal to this incident",
+        {
+          input_operations_attach_deduplication_key: textInput(
+            "deduplication_key",
+            "Signal deduplication key",
+          ),
+          input_operations_attach_evidence: richTextInput(
+            "evidence",
+            "Signal evidence",
+            "Operational evidence only. Do not paste customer content or personal data.",
+          ),
+          submit_operations_incident_attach: submitButton("Attach signal"),
+        },
+        { view_permission: attachIncidentView },
+      ),
+      // The bounded operator actions run on the open incident as their subject. Each button is
+      // shown only to its own permission holder, and every action refuses a resolved or closed
+      // incident in the module.
+      ...Object.fromEntries(
+        incidentOperations.map((operation) => [
+          operation.button,
+          actionButton(operation.label, operation.variant, operation.viewPermission),
+        ]),
+      ),
+    }),
   },
   {
     id: "page_operations_new_incident",
@@ -350,27 +326,24 @@ const pages = [
     type: "form",
     record_type: incidentRecordType,
     permission: createIncidentPage,
-    composition: {
-      shell_kind: "default",
-      main: slot({
-        [createForm]: form("Create incident", {
-          input_operations_incident_code: textInput("code", "Code"),
-          input_operations_incident_severity: choiceInput("severity", "Severity", [
-            ["warning", "Warning"],
-            ["error", "Error"],
-            ["critical", "Critical"],
-          ]),
-          input_operations_incident_service: textInput("affected_service", "Affected service"),
-          input_operations_incident_deduplication_key: textInput(
-            "deduplication_key",
-            "Deduplication key",
-          ),
-          input_operations_incident_owning_role: textInput("owning_role", "Owning role"),
-          input_operations_incident_runbook: textInput("runbook_reference", "Runbook reference"),
-          submit_operations_new_incident: submitButton("Create incident"),
-        }),
+    blocks: slot({
+      [createForm]: form("Create incident", {
+        input_operations_incident_code: textInput("code", "Code"),
+        input_operations_incident_severity: choiceInput("severity", "Severity", [
+          ["warning", "Warning"],
+          ["error", "Error"],
+          ["critical", "Critical"],
+        ]),
+        input_operations_incident_service: textInput("affected_service", "Affected service"),
+        input_operations_incident_deduplication_key: textInput(
+          "deduplication_key",
+          "Deduplication key",
+        ),
+        input_operations_incident_owning_role: textInput("owning_role", "Owning role"),
+        input_operations_incident_runbook: textInput("runbook_reference", "Runbook reference"),
+        submit_operations_new_incident: submitButton("Create incident"),
       }),
-    },
+    }),
   },
 ];
 
@@ -388,43 +361,46 @@ const applicationShell = {
       appearance_toggle: true,
     },
   },
-  layout: slot({
-    shell_root: placement(
-      CONTAINER_BLOCK_RELEASE_1_3_0,
-      {
-        direction: { kind: "choice", value: "column" },
-        gap: { kind: "choice", value: "medium" },
-        padding: { kind: "choice", value: "medium" },
-        content_width: { kind: "choice", value: "fill" },
-      },
-      {
-        header: slot({}),
-        content: slot({
-          shell_body: placement(
-            CONTAINER_BLOCK_RELEASE_1_2_0,
-            {
-              direction: { kind: "choice", value: "row" },
-              gap: { kind: "choice", value: "medium" },
-              menu_width: { kind: "number", value: 16 },
-              menu_placement: { kind: "choice", value: "sticky" },
-              content_landmark: { kind: "boolean", value: true },
-              tablet_menu_width: { kind: "number", value: 14 },
-              phone_direction: { kind: "choice", value: "column" },
-              phone_menu_placement: { kind: "choice", value: "flow" },
-            },
-            {
-              menu: slot({
-                shell_navigation: placement(APPLICATION_NAVIGATION_BLOCK_RELEASE, {
-                  title: { kind: "text", value: "Operations" },
+  layout: {
+    root: { props: { vortex: { slot_orders: {} } } },
+    content: slot({
+      shell_root: placement(
+        CONTAINER_BLOCK_RELEASE_1_3_0,
+        {
+          direction: "column",
+          gap: "medium",
+          padding: "medium",
+          content_width: "fill",
+        },
+        {
+          header: slot({}),
+          content: slot({
+            shell_body: placement(
+              CONTAINER_BLOCK_RELEASE_1_2_0,
+              {
+                direction: "row",
+                gap: "medium",
+                menu_width: 16,
+                menu_placement: "sticky",
+                content_landmark: true,
+                tablet_menu_width: 14,
+                phone_direction: "column",
+                phone_menu_placement: "flow",
+              },
+              {
+                menu: slot({
+                  shell_navigation: placement(APPLICATION_NAVIGATION_BLOCK_RELEASE, {
+                    title: "Operations",
+                  }),
                 }),
-              }),
-              content: slot({}),
-            },
-          ),
-        }),
-      },
-    ),
-  }),
+                content: slot({}),
+              },
+            ),
+          }),
+        },
+      ),
+    }),
+  },
   content_slots: [
     {
       id: "slot_primary",
@@ -446,12 +422,14 @@ const applicationShell = {
   ],
 };
 
-const applicationPages = pages.map((page) => ({
+/** Every page fills the shell's one primary content slot with its blocks. */
+const applicationPages = pages.map(({ blocks, ...page }) => ({
   ...page,
   composition: {
-    shell_kind: "application",
-    shell: "shell_operations",
-    content: { slot_primary: page.composition.main },
+    root: {
+      props: { slot_primary: blocks, vortex: { shell: "shell_operations", slot_orders: {} } },
+    },
+    content: [],
   },
 }));
 
@@ -472,16 +450,18 @@ const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<s
 /** Exactly the registered block releases the shell and pages place, in permanent-identity order. */
 const platformBlockDependencies = [
   ...collectBlockReleases({ shell: applicationShell, pages: applicationPages }),
-].sort().map((releaseKey) => {
-  const separator = releaseKey.lastIndexOf("@");
-  if (separator < 1 || separator === releaseKey.length - 1)
-    throw new TypeError(`Invalid platform block release identity: ${releaseKey}`);
-  return {
-    kind: "platform_block" as const,
-    block_id: releaseKey.slice(0, separator),
-    release_version: releaseKey.slice(separator + 1),
-  };
-});
+]
+  .sort()
+  .map((releaseKey) => {
+    const separator = releaseKey.lastIndexOf("@");
+    if (separator < 1 || separator === releaseKey.length - 1)
+      throw new TypeError(`Invalid platform block release identity: ${releaseKey}`);
+    return {
+      kind: "platform_block" as const,
+      block_id: releaseKey.slice(0, separator),
+      release_version: releaseKey.slice(separator + 1),
+    };
+  });
 
 const theme = {
   base: {
@@ -508,7 +488,7 @@ const theme = {
  */
 export const operationsApplication: ApplicationSourceDocument =
   applicationSourceDocumentSchema.parse({
-    source_contract_version: "2.0.0",
+    source_contract_version: "3.0.0",
     root_alias: "app_operations",
     key: "vortex.app.operations",
     kind: "application",

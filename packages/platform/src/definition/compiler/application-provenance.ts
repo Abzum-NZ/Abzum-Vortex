@@ -7,6 +7,11 @@ import type {
 import { canonicalJson } from "../canonical-json-definition";
 import { explicitSourceTargets } from "./explicit-source-targets";
 import {
+  applicationCompositionProvenance,
+  applicationThemeValueTargets,
+  isApplicationCompositionSourcePath,
+} from "./application-composition-provenance";
+import {
   applicationTypedValueTarget,
   fieldPolicySourceResolvesIdentity,
   isSystemCanonicalPath,
@@ -29,10 +34,7 @@ import {
   valueAtPath,
 } from "./shared";
 import { sourceContractPositions, sourceToCanonicalPath } from "./source-paths";
-import {
-  conditionSourceTargets,
-  isInterfaceOperationFlowTargetPath,
-} from "./source-target-helpers";
+import { isInterfaceOperationFlowTargetPath } from "./source-target-helpers";
 
 const applicationSpecialRoot = (path: Path): boolean =>
   path[0] === "body" &&
@@ -41,172 +43,9 @@ const applicationSpecialRoot = (path: Path): boolean =>
     path[1] === "theme" ||
     (path[1] === "pages" && path.includes("composition")));
 
-const applicationThemeValueTargets = (
-  sourcePath: Path,
-  sourceValueRoot: Path,
-  canonicalRoot: Path,
-): Path[] => {
-  const suffix = sourcePath.slice(sourceValueRoot.length);
-  const mapped = suffix.map((segment) =>
-    typeof segment === "string"
-      ? ((
-          {
-            size_rem: "sizeRem",
-            line_height: "lineHeight",
-            width_rem: "widthRem",
-            color_token: "colorToken",
-            asset_id: "assetId",
-          } as Readonly<Record<string, string>>
-        )[segment] ?? segment)
-      : segment,
-  );
-  return [[...canonicalRoot, ...mapped]];
-};
-
-const applicationPropertyValueTargets = (
-  source: ApplicationSourceDocument,
-  sourcePath: Path,
-  sourceValueRoot: Path,
-  canonicalRoot: Path,
-): Path[] => {
-  const suffix = sourcePath.slice(sourceValueRoot.length);
-  if (suffix[0] === "kind") return [[...canonicalRoot, "kind"]];
-  const leaf = String(suffix.at(-1));
-  const valueKind = String(asObject(valueAtPath(source, sourcePath.slice(0, -1))).kind);
-  const valueLeaf: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-    asset_reference: { asset_id: "assetId" },
-    icon: { icon_key: "iconKey" },
-    theme_token: { token: "tokenKey" },
-    field_reference: { field: "fieldId" },
-    relationship_reference: { relationship: "relationshipId" },
-    action_reference: { action: "actionKey" },
-    page_reference: { page: "pageId" },
-    query_reference: { query: "queryId" },
-    pipeline_reference: { pipeline: "pipelineId" },
-    record_reference: { record_id: "recordId" },
-  };
-  if (
-    leaf === "record_type" &&
-    (valueKind === "record_type_reference" || valueKind === "record_reference")
-  ) {
-    const target = [...canonicalRoot, ...suffix.slice(0, -1), "recordType"] as Path;
-    return [
-      [...target, "state"],
-      [...target, "moduleRootId"],
-      [...target, "recordTypeId"],
-    ];
-  }
-  return [
-    [...canonicalRoot, ...suffix.slice(0, -1), valueLeaf[valueKind]?.[leaf] ?? suffix.at(-1)!],
-  ];
-};
-
-function applicationSlotSourceTargets(
-  source: ApplicationSourceDocument,
-  sourcePath: Path,
-  sourceSlotRoot: Path,
-  canonicalSlotRoot: Path,
-  resolution: Resolution,
-): Path[] | undefined {
-  let sourceRoot = sourceSlotRoot;
-  let canonicalRoot = canonicalSlotRoot;
-  while (true) {
-    const suffix = sourcePath.slice(sourceRoot.length);
-    if (suffix[0] === "order" && typeof suffix[1] === "string") {
-      const authoredOrder = asObject(valueAtPath(source, sourceRoot)).order as JsonObject;
-      const breakpoint = suffix[1];
-      const inherited = [
-        breakpoint,
-        ...(breakpoint === "desktop" && authoredOrder.tablet === undefined ? ["tablet"] : []),
-        ...((
-          breakpoint === "desktop"
-            ? authoredOrder.tablet === undefined && authoredOrder.phone === undefined
-            : breakpoint === "tablet" && authoredOrder.phone === undefined
-        )
-          ? ["phone"]
-          : []),
-      ];
-      return inherited.map((target) => [...canonicalRoot, "order", target, ...suffix.slice(2)]);
-    }
-    if (suffix[0] !== "placements" || typeof suffix[1] !== "string") return undefined;
-    const alias = suffix[1];
-    sourceRoot = [...sourceRoot, "placements", alias];
-    canonicalRoot = [
-      ...canonicalRoot,
-      "placements",
-      resolution.id(source.key, "block_placement", alias, "content"),
-    ];
-    const placementSuffix = sourcePath.slice(sourceRoot.length);
-    const property = placementSuffix[0];
-    if (property === "slots" && typeof placementSuffix[1] === "string") {
-      sourceRoot = [...sourceRoot, "slots", placementSuffix[1]];
-      canonicalRoot = [...canonicalRoot, "slots", placementSuffix[1]];
-      continue;
-    }
-    if (property === "block")
-      return [
-        [
-          ...canonicalRoot,
-          "block",
-          placementSuffix[1] === "block_id" ? "blockId" : "releaseVersion",
-        ],
-      ];
-    if (property === "view_permission") return [[...canonicalRoot, "viewPermissionKey"]];
-    if (property === "use_permission") return [[...canonicalRoot, "usePermissionKey"]];
-    if (property === "query") return [[...canonicalRoot, "queryId"]];
-    if (property === "visibility_condition")
-      return conditionSourceTargets(source as unknown as JsonObject, sourcePath, {
-        sourceRoot: [...sourceRoot, "visibility_condition"],
-        canonicalRoot: [...canonicalRoot, "visibilityCondition"],
-      });
-    if (
-      property === "responsive" &&
-      typeof placementSuffix[1] === "string" &&
-      typeof placementSuffix[2] === "string"
-    ) {
-      const responsive = asObject(asObject(valueAtPath(source, sourceRoot)).responsive);
-      const breakpoint = placementSuffix[1];
-      const inherited = [
-        breakpoint,
-        ...(breakpoint === "desktop" && responsive.tablet === undefined ? ["tablet"] : []),
-        ...((
-          breakpoint === "desktop"
-            ? responsive.tablet === undefined && responsive.phone === undefined
-            : breakpoint === "tablet" && responsive.phone === undefined
-        )
-          ? ["phone"]
-          : []),
-      ];
-      return inherited.map((target) => [
-        ...canonicalRoot,
-        "responsive",
-        target,
-        ...placementSuffix
-          .slice(2)
-          .map((segment) => (segment === "start_column" ? "startColumn" : segment)),
-      ]);
-    }
-    if (property === "theme_overrides" && typeof placementSuffix[1] === "string")
-      return applicationThemeValueTargets(
-        sourcePath,
-        [...sourceRoot, "theme_overrides", placementSuffix[1]],
-        [...canonicalRoot, "themeOverrides", placementSuffix[1]],
-      );
-    if (property === "settings" && typeof placementSuffix[1] === "string")
-      return applicationPropertyValueTargets(
-        source,
-        sourcePath,
-        [...sourceRoot, "settings", placementSuffix[1]],
-        [...canonicalRoot, "settings", placementSuffix[1]],
-      );
-    return undefined;
-  }
-}
-
 function applicationSpecialSourceTargets(
   source: ApplicationSourceDocument,
   sourcePath: Path,
-  resolution: Resolution,
 ): Path[] | undefined {
   if (sourcePath[1] === "platform_block_dependencies" && typeof sourcePath[2] === "number")
     return [
@@ -266,14 +105,6 @@ function applicationSpecialSourceTargets(
           ...sourcePath.slice(4).map((segment) => camelCase(String(segment))),
         ],
       ];
-    if (sourcePath[3] === "layout")
-      return applicationSlotSourceTargets(
-        source,
-        sourcePath,
-        ["body", "shells", sourcePath[2], "layout"],
-        [...shellRoot, "layout"],
-        resolution,
-      );
     if (
       sourcePath[3] === "content_slots" &&
       typeof sourcePath[4] === "number" &&
@@ -297,62 +128,6 @@ function applicationSpecialSourceTargets(
     }
     if (sourcePath[3] === "id") return [[...shellRoot, "shellId"]];
     if (typeof sourcePath[3] === "string") return [[...shellRoot, camelCase(sourcePath[3])]];
-  }
-  if (
-    sourcePath[1] === "pages" &&
-    typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "composition"
-  ) {
-    const page = source.body.pages[sourcePath[2]];
-    if (page === undefined) return undefined;
-    const composition = page.composition;
-    const root: Path = ["content", "pages", sourcePath[2], "composition"];
-    if (sourcePath[4] === "shell_kind") return [[...root, "shellKind"]];
-    if (sourcePath[4] === "shell") return [[...root, "shellId"]];
-    if (sourcePath[4] === "main")
-      return applicationSlotSourceTargets(
-        source,
-        sourcePath,
-        ["body", "pages", sourcePath[2], "composition", "main"],
-        [...root, "main"],
-        resolution,
-      );
-    if (sourcePath[4] === "content" && typeof sourcePath[5] === "string") {
-      const slotAlias = sourcePath[5];
-      return applicationSlotSourceTargets(
-        source,
-        sourcePath,
-        ["body", "pages", sourcePath[2], "composition", "content", slotAlias],
-        [...root, "content", resolution.id(source.key, "shell_content_slot", slotAlias, "content")],
-        resolution,
-      );
-    }
-    if (sourcePath[4] === "step_content" && typeof sourcePath[5] === "string") {
-      const stepAlias = sourcePath[5];
-      const stepId = resolution.id(source.key, "guided_step", stepAlias, "page:" + page.key);
-      if (composition.shell_kind === "default")
-        return applicationSlotSourceTargets(
-          source,
-          sourcePath,
-          ["body", "pages", sourcePath[2], "composition", "step_content", stepAlias],
-          [...root, "stepContent", stepId],
-          resolution,
-        );
-      if (typeof sourcePath[6] !== "string") return undefined;
-      const slotAlias = sourcePath[6];
-      return applicationSlotSourceTargets(
-        source,
-        sourcePath,
-        ["body", "pages", sourcePath[2], "composition", "step_content", stepAlias, slotAlias],
-        [
-          ...root,
-          "stepContent",
-          stepId,
-          resolution.id(source.key, "shell_content_slot", slotAlias, "content"),
-        ],
-        resolution,
-      );
-    }
   }
   return undefined;
 }
@@ -432,8 +207,21 @@ export function applicationProvenance(
   const canonicalLeafSet = new Set(canonicalLeaves.map(pathKey));
   const entries: DefinitionProvenanceEntry[] = [];
   for (const sourcePath of sourceLeaves) {
+    if (isApplicationCompositionSourcePath(sourcePath)) {
+      entries.push(
+        ...applicationCompositionProvenance(
+          source,
+          canonical,
+          sourcePath,
+          resolution,
+          positions,
+          canonicalLeafSet,
+        ),
+      );
+      continue;
+    }
     const targets = applicationSpecialRoot(sourcePath)
-      ? applicationSpecialSourceTargets(source, sourcePath, resolution)
+      ? applicationSpecialSourceTargets(source, sourcePath)
       : (explicitSourceTargets(sourceObject, canonical, sourcePath, positions, resolution) ?? [
           sourceToCanonicalPath(sourceObject, canonical, sourcePath, positions),
         ]);
@@ -454,19 +242,7 @@ export function applicationProvenance(
       const transformed =
         canonicalJson(valueAtPath(source, sourcePath)) !==
         canonicalJson(valueAtPath(canonical, canonicalPath));
-      // A table behaviour's authored event alias resolves to the exact identity used by its
-      // compiled flow binding. No other text setting is allowed to change during compilation.
-      const eventSettingReference =
-        sourcePath.includes("settings") &&
-        sourcePath.at(-2) === "event_id" &&
-        sourcePath.at(-1) === "value" &&
-        valueAtPath(canonical, canonicalPath) ===
-          resolution.id(source.key, "event", String(valueAtPath(source, sourcePath)), "content");
-      if (
-        transformed &&
-        !eventSettingReference &&
-        !sourceTransformationApproved(sourcePath, canonicalPath, positions)
-      ) {
+      if (transformed && !sourceTransformationApproved(sourcePath, canonicalPath, positions)) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
       }
       const pageReference =
@@ -474,44 +250,15 @@ export function applicationProvenance(
         sourcePath[1] === "pages" &&
         typeof sourcePath[2] === "number" &&
         ["permission", "public_action"].includes(String(sourcePath.at(-1)));
-      const sourceParentValue = valueAtPath(source, sourcePath.slice(0, -1));
-      const sourceParent =
-        sourceParentValue !== null &&
-        typeof sourceParentValue === "object" &&
-        !Array.isArray(sourceParentValue)
-          ? (sourceParentValue as JsonObject)
-          : undefined;
-      const propertyReferenceLeaf: Readonly<Record<string, string>> = {
-        action_reference: "action",
-        field_reference: "field",
-        page_reference: "page",
-        pipeline_reference: "pipeline",
-        query_reference: "query",
-        record_reference: "record_type",
-        record_type_reference: "record_type",
-        relationship_reference: "relationship",
-        theme_token: "token",
-      };
-      const propertyReference =
-        sourceParent !== undefined &&
-        propertyReferenceLeaf[String(sourceParent.kind)] === String(sourcePath.at(-1));
       const compositionReference =
-        applicationSpecialRoot(sourcePath) &&
-        (["shell", "parent_placement", "view_permission", "use_permission"].includes(
-          String(sourcePath.at(-1)),
-        ) ||
-          propertyReference);
+        applicationSpecialRoot(sourcePath) && sourcePath.at(-1) === "parent_placement";
       const resolved =
         sourceResolvesIdentity(sourcePath, positions) ||
         recordScopeSourceResolvesIdentity(sourcePath) ||
         fieldPolicySourceResolvesIdentity(sourcePath) ||
         isInterfaceOperationFlowTargetPath(sourceObject, sourcePath) ||
         pageReference ||
-        compositionReference ||
-        eventSettingReference ||
-        (applicationSpecialRoot(sourcePath) &&
-          sourcePath.includes("order") &&
-          typeof sourcePath.at(-1) === "number");
+        compositionReference;
       entries.push({
         canonicalPath,
         origin: resolved ? "resolved" : "source",

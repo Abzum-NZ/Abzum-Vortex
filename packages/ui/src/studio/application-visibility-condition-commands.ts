@@ -3,15 +3,16 @@ import {
   revisionSchema, fingerprintSchema, timestampSchema,
   sourceQualifiedConditionSchema,
   namespacedKeySchema, moduleRootIdSchema, recordTypeIdSchema, semanticVersionSchema,
-  moduleFieldSchema, moduleFieldValueSchemas, builderKeySchema,
+  moduleFieldSchema, moduleFieldValueSchemas, builderKeySchema, sourceItemChildSlots, sourcePageZones,
   type ApplicationSourceDocument, type ConditionNode, type ModuleField,
+  type SourceItem, type SourceItemVortex, type SourcePageData,
 } from "@vortex/platform/schema";
 import { validateStudioCondition, type StudioConditionControlsContext,
   type StudioConditionValidation, type StudioConditionValidationIssue } from "./condition-model";
 import type { StudioCompositionContext } from "./application-composition-commands";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
-type SourceQualifiedCondition = NonNullable<SourceSlot["placements"][string]["visibility_condition"]>;
+type SourceQualifiedCondition = NonNullable<SourceItemVortex["visibility_condition"]>;
 
 export type StudioApplicationConditionContext = Readonly<{
   organizationId: string; rootId: string; key: string; draftRevision: number;
@@ -108,46 +109,44 @@ export const sameStudioVisibilityCondition = (left: ConditionNode | undefined, r
   return false;
 };
 
-type SourceSlot = ApplicationSourceDocument["body"]["shells"][number]["layout"];
-type SourcePlacement = SourceSlot["placements"][string];
+/** The selected item's Vortex metadata, where its visibility condition lives, and its source path. */
 export type StudioVisibilityTarget = Readonly<{ pageAlias: string; recordReference: string;
-  placementAlias: string; path: readonly (string | number)[]; placement: SourcePlacement }>;
+  placementAlias: string; path: readonly (string | number)[]; placement: SourceItemVortex }>;
 
 /** Only a unique, directly page-owned detail placement is editable. */
 export function resolveStudioVisibilityTarget(source: ApplicationSourceDocument,
   selection: StudioSemanticSelection | null): StudioVisibilityTarget | undefined {
   if (selection?.kind !== "placement" || !applicationSourceDocumentSchema.safeParse(source).success) return undefined;
   const placementAlias = selection.placementAlias;
-  const seen: { placement: SourcePlacement; path: (string | number)[]; pageAlias?: string;
+  const seen: { placement: SourceItemVortex; path: (string | number)[]; pageAlias?: string;
     recordReference?: string; top: boolean }[] = [];
-  const visit = (slot: SourceSlot, path: (string | number)[], pageAlias?: string,
+  const visit = (items: readonly SourceItem[], path: (string | number)[], pageAlias?: string,
     recordReference?: string, top = false) => {
-    for (const [alias, placement] of Object.entries(slot.placements)) {
-      const placementPath = [...path, "placements", alias];
-      if (alias === placementAlias) seen.push({ placement, path: placementPath,
+    items.forEach((item, index) => {
+      const itemPath = [...path, index];
+      if (item.props.id === placementAlias) seen.push({ placement: item.props.vortex,
+        path: [...itemPath, "props", "vortex"],
         ...(pageAlias === undefined ? {} : { pageAlias }),
         ...(recordReference === undefined ? {} : { recordReference }), top });
-      for (const [key, child] of Object.entries(placement.slots))
-        visit(child, [...placementPath, "slots", key], pageAlias, recordReference);
-    }
+      for (const [key, children] of sourceItemChildSlots(item))
+        visit(children, [...itemPath, "props", key], pageAlias, recordReference);
+    });
   };
-  source.body.shells.forEach((shell, index) => visit(shell.layout, ["body", "shells", index, "layout"]));
+  const visitData = (data: SourcePageData, path: (string | number)[], pageAlias?: string,
+    recordReference?: string, top = false) => {
+    for (const [zone, items] of sourcePageZones(data))
+      visit(items, zone === "content" ? [...path, "content"] : [...path, "root", "props", zone],
+        pageAlias, recordReference, top);
+  };
+  source.body.shells.forEach((shell, index) =>
+    visit(shell.layout.content, ["body", "shells", index, "layout", "content"]));
   source.body.pages.forEach((page, index) => {
     const path = ["body", "pages", index, "composition"];
     if (page.type === "guided_form") {
-      if (page.composition.shell_kind === "default") {
-        for (const [key, slot] of Object.entries(page.composition.step_content)) visit(slot, [...path, "step_content", key]);
-      } else {
-        for (const [step, slots] of Object.entries(page.composition.step_content))
-          for (const [key, slot] of Object.entries(slots)) visit(slot, [...path, "step_content", step, key]);
-      }
-    } else {
-      const slots = page.composition.shell_kind === "default" ? [["main", page.composition.main] as const]
-        : Object.entries(page.composition.content);
-      for (const [key, slot] of slots) visit(slot,
-        page.composition.shell_kind === "default" ? [...path, key] : [...path, "content", key],
-        page.type === "detail" ? page.id : undefined, page.type === "detail" ? page.record_type : undefined, true);
-    }
+      for (const [key, data] of Object.entries(page.composition.step_content))
+        visitData(data, [...path, "step_content", key]);
+    } else visitData(page.composition, path,
+      page.type === "detail" ? page.id : undefined, page.type === "detail" ? page.record_type : undefined, true);
   });
   const target = seen[0];
   if (seen.length !== 1 || target === undefined || !target.top ||

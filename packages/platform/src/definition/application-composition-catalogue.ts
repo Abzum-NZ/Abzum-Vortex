@@ -18,19 +18,22 @@ const sourcesByIdentity = new Map(
 );
 const catalogueReleaseIdentities = new Map(
   Object.values(PLATFORM_BLOCK_RELEASE_IDENTITIES).map(
-    ({ blockId, key, releaseVersion }) => [`${key}@${releaseVersion}`, blockId],
+    ({ blockId, key, rendererKey, releaseVersion }) => [
+      `${key}@${releaseVersion}`,
+      `${blockId}:${rendererKey}`,
+    ],
   ),
 );
 const sourceReleaseIdentities = new Map(
-  Object.values(sources).map(({ blockId, key, releaseVersion }) => [
+  Object.values(sources).map(({ blockId, key, rendererKey, releaseVersion }) => [
     `${key}@${releaseVersion}`,
-    blockId,
+    `${blockId}:${rendererKey}`,
   ]),
 );
 if (
   catalogueReleaseIdentities.size !== sourceReleaseIdentities.size ||
   [...catalogueReleaseIdentities].some(
-    ([identity, blockId]) => sourceReleaseIdentities.get(identity) !== blockId,
+    ([identity, release]) => sourceReleaseIdentities.get(identity) !== release,
   )
 )
   throw new Error("Platform block release identities do not match their server catalogue data");

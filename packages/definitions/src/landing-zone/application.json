@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "2.0.0",
+  "source_contract_version": "3.0.0",
   "root_alias": "app_landing_zone",
   "key": "vortex.app.landing_zone",
   "kind": "application",
@@ -11,7 +11,10 @@
     "module_bindings": [
       {
         "module": "vortex.landing_zone",
-        "version": { "selection": "exact", "version": "1.0.0" },
+        "version": {
+          "selection": "exact",
+          "version": "1.0.0"
+        },
         "purpose": "primary"
       }
     ],
@@ -48,7 +51,7 @@
         "id": "nav_landing_home",
         "type": "page",
         "label": "Home",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "home",
         "permission": "application.landing_zone.open"
       },
@@ -56,7 +59,7 @@
         "id": "nav_landing_favourites",
         "type": "page",
         "label": "Favourites",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "favourites",
         "permission": "application.landing_zone.open"
       },
@@ -64,7 +67,7 @@
         "id": "nav_landing_bookmarks",
         "type": "page",
         "label": "Bookmarks",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "bookmarks",
         "permission": "application.landing_zone.open"
       },
@@ -72,7 +75,7 @@
         "id": "nav_landing_add_bookmark",
         "type": "page",
         "label": "Add bookmark",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "bookmark_entry",
         "permission": "application.landing_zone.open"
       },
@@ -80,7 +83,7 @@
         "id": "nav_landing_all_applications",
         "type": "page",
         "label": "All applications",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "all_applications",
         "permission": "application.landing_zone.open"
       },
@@ -88,7 +91,7 @@
         "id": "nav_landing_manage_saved_tiles",
         "type": "page",
         "label": "Manage saved tiles",
-        "icon":  "grid",
+        "icon": "grid",
         "page": "manage_saved_tiles",
         "permission": "application.landing_zone.open"
       }
@@ -163,157 +166,149 @@
         "id": "shell_landing_zone",
         "key": "landing_zone_shell",
         "name": "Landing Zone shell",
-        "presentation":  {
-            "sidebar":  {
-                "collapsible":  "icon",
-                "default_collapsed":  false
-            },
-            "top_bar":  {
-                "breadcrumbs":  true,
-                "organization_switcher":  true,
-                "application_switcher":  true,
-                "account_menu":  true,
-                "appearance_toggle":  true
-            }
+        "presentation": {
+          "sidebar": {
+            "collapsible": "icon",
+            "default_collapsed": false
+          },
+          "top_bar": {
+            "breadcrumbs": true,
+            "organization_switcher": true,
+            "application_switcher": true,
+            "account_menu": true,
+            "appearance_toggle": true
+          }
         },
         "layout": {
-          "placements": {
-            "shell_root": {
-              "block": {
-                "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                "release_version": "1.3.0"
-              },
-              "settings": {
-                "direction": { "kind": "choice", "value": "column" },
-                "gap": { "kind": "choice", "value": "medium" },
-                "padding": { "kind": "choice", "value": "medium" },
-                "content_width": { "kind": "choice", "value": "fill" }
-              },
-              "theme_overrides": {},
-              "responsive": {
-                "desktop": {
-                  "visible": true,
-                  "width": { "kind": "fill" },
-                  "height": { "kind": "content" }
-                }
-              },
-              "slots": {
-                "header": {"placements":{},"order":{"desktop":[],"tablet":[],"phone":[]}},
-                "content": {
-                  "placements": {
-                    "shell_body": {
-                      "block": {
-                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                        "release_version": "1.2.0"
-                      },
-                      "settings": {
-                        "direction": {
-                          "kind": "choice",
-                          "value": "row"
-                        },
-                        "gap": {
-                          "kind": "choice",
-                          "value": "medium"
-                        },
-                        "menu_width": {
-                          "kind": "number",
-                          "value": 16
-                        },
-                        "menu_placement": {
-                          "kind": "choice",
-                          "value": "sticky"
-                        },
-                        "content_landmark": {
-                          "kind": "boolean",
-                          "value": true
-                        },
-                        "tablet_menu_width": {
-                          "kind": "number",
-                          "value": 14
-                        },
-                        "phone_direction": {
-                          "kind": "choice",
-                          "value": "column"
-                        },
-                        "phone_menu_placement": {
-                          "kind": "choice",
-                          "value": "flow"
-                        }
-                      },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": { "kind": "fill" },
-                          "height": { "kind": "content" }
-                        }
-                      },
-                      "slots": {
-                        "menu": {
-                          "placements": {
-                            "shell_navigation": {
+          "root": {
+            "props": {
+              "vortex": {
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": [
+            {
+              "type": "platform.renderer.container",
+              "props": {
+                "id": "shell_root",
+                "direction": "column",
+                "gap": "medium",
+                "padding": "medium",
+                "content_width": "fill",
+                "header": [],
+                "content": [
+                  {
+                    "type": "platform.renderer.container",
+                    "props": {
+                      "id": "shell_body",
+                      "direction": "row",
+                      "gap": "medium",
+                      "menu_width": 16,
+                      "menu_placement": "sticky",
+                      "content_landmark": true,
+                      "tablet_menu_width": 14,
+                      "phone_direction": "column",
+                      "phone_menu_placement": "flow",
+                      "menu": [
+                        {
+                          "type": "platform.renderer.application_navigation",
+                          "props": {
+                            "id": "shell_navigation",
+                            "title": "Landing Zone",
+                            "vortex": {
                               "block": {
                                 "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
                                 "release_version": "1.0.0"
                               },
-                              "settings": {
-                                "title": { "kind": "text", "value": "Landing Zone" }
-                              },
                               "theme_overrides": {},
                               "responsive": {
                                 "desktop": {
                                   "visible": true,
-                                  "width": { "kind": "fill" },
-                                  "height": { "kind": "content" }
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
                                 }
-                              },
-                              "slots": {}
+                              }
                             }
-                          },
-                          "order": { "desktop": ["shell_navigation"] }
-                        },
-                        "content": {
-                          "placements": {
-                            "shell_page_body": {
+                          }
+                        }
+                      ],
+                      "content": [
+                        {
+                          "type": "platform.renderer.container",
+                          "props": {
+                            "id": "shell_page_body",
+                            "direction": "row",
+                            "gap": "medium",
+                            "menu": [],
+                            "content": [],
+                            "vortex": {
                               "block": {
                                 "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                                 "release_version": "1.0.0"
                               },
-                              "settings": {
-                                "direction": { "kind": "choice", "value": "row" },
-                                "gap": { "kind": "choice", "value": "medium" }
-                              },
                               "theme_overrides": {},
                               "responsive": {
                                 "desktop": {
                                   "visible": true,
-                                  "width": { "kind": "fill" },
-                                  "height": { "kind": "content" }
-                                }
-                              },
-                              "slots": {
-                                "menu": {
-                                  "placements": {},
-                                  "order": { "desktop": [] }
-                                },
-                                "content": {
-                                  "placements": {},
-                                  "order": { "desktop": [] }
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
                                 }
                               }
                             }
-                          },
-                          "order": { "desktop": ["shell_page_body"] }
+                          }
+                        }
+                      ],
+                      "vortex": {
+                        "block": {
+                          "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                          "release_version": "1.2.0"
+                        },
+                        "theme_overrides": {},
+                        "responsive": {
+                          "desktop": {
+                            "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
                         }
                       }
                     }
+                  }
+                ],
+                "vortex": {
+                  "block": {
+                    "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                    "release_version": "1.3.0"
                   },
-                  "order": { "desktop": ["shell_body"] }
+                  "theme_overrides": {},
+                  "responsive": {
+                    "desktop": {
+                      "visible": true,
+                      "width": {
+                        "kind": "fill"
+                      },
+                      "height": {
+                        "kind": "content"
+                      }
+                    }
+                  }
                 }
               }
             }
-          },
-          "order": { "desktop": ["shell_root"] }
+          ]
         },
         "content_slots": [
           {
@@ -321,7 +316,15 @@
             "key": "primary",
             "label": "Main content",
             "required": true,
-            "allowed_child_categories": ["content", "data", "figures", "record", "actions", "input", "layout"],
+            "allowed_child_categories": [
+              "content",
+              "data",
+              "figures",
+              "record",
+              "actions",
+              "input",
+              "layout"
+            ],
             "parent_placement": "shell_page_body",
             "parent_slot": "content"
           },
@@ -330,7 +333,15 @@
             "key": "rail",
             "label": "Optional rail",
             "required": false,
-            "allowed_child_categories": ["content", "data", "figures", "record", "actions", "input", "layout"],
+            "allowed_child_categories": [
+              "content",
+              "data",
+              "figures",
+              "record",
+              "actions",
+              "input",
+              "layout"
+            ],
             "parent_placement": "shell_page_body",
             "parent_slot": "menu"
           }
@@ -345,93 +356,153 @@
         "type": "dashboard",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "home_favourites_filter": {
-                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
-                  "settings": {
-                    "label": { "kind": "text", "value": "Search favourites" },
-                    "placeholder": { "kind": "text", "value": "Search favourites" },
-                    "match_key": { "kind": "text", "value": "label" },
-                    "match_mode": { "kind": "choice", "value": "contains" },
-                    "case_sensitive": { "kind": "boolean", "value": false },
-                    "empty_message": { "kind": "text", "value": "No favourites match your search." }
-                  },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "home_favourites": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.2.0" },
-                          "query": "vortex.landing_zone:landing_zone_favourites",
-                          "settings": {
-                            "title": { "kind": "text", "value": "Favourites" },
-                            "label_key": { "kind": "text", "value": "label" },
-                            "address_key": { "kind": "text", "value": "external_address" },
-                            "description_key": { "kind": "text", "value": "description" },
-                            "target_kind_key": { "kind": "text", "value": "target_kind" },
-                            "application_key_key": { "kind": "text", "value": "application_key" },
-                            "page_key_key": { "kind": "text", "value": "page_key" },
-                            "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
-                            "organization_id_key": { "kind": "text", "value": "target_organization_id" },
-                            "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
-                            "module_root_id_key": { "kind": "text", "value": "target_module_root_id" },
-                            "module_release_revision_key": { "kind": "text", "value": "target_module_release_revision" },
-                            "record_type_id_key": { "kind": "text", "value": "target_record_type_id" },
-                            "storage_contract_id_key": { "kind": "text", "value": "target_storage_contract_id" },
-                            "record_id_key": { "kind": "text", "value": "record_id" },
-                            "row_action_label": { "kind": "text", "value": "Remove" }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": { "actions": { "placements": {}, "order": { "desktop": [] } } }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.view_filter",
+                  "props": {
+                    "id": "home_favourites_filter",
+                    "label": "Search favourites",
+                    "placeholder": "Search favourites",
+                    "match_key": "label",
+                    "match_mode": "contains",
+                    "case_sensitive": false,
+                    "empty_message": "No favourites match your search.",
+                    "content": [
+                      {
+                        "type": "platform.renderer.link_tiles",
+                        "props": {
+                          "id": "home_favourites",
+                          "title": "Favourites",
+                          "label_key": "label",
+                          "address_key": "external_address",
+                          "description_key": "description",
+                          "target_kind_key": "target_kind",
+                          "application_key_key": "application_key",
+                          "page_key_key": "page_key",
+                          "open_behaviour_key": "open_behaviour",
+                          "organization_id_key": "target_organization_id",
+                          "application_root_id_key": "target_application_root_id",
+                          "module_root_id_key": "target_module_root_id",
+                          "module_release_revision_key": "target_module_release_revision",
+                          "record_type_id_key": "target_record_type_id",
+                          "storage_contract_id_key": "target_storage_contract_id",
+                          "record_id_key": "record_id",
+                          "row_action_label": "Remove",
+                          "actions": [],
+                          "vortex": {
+                            "block": {
+                              "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
+                              "release_version": "1.2.0"
+                            },
+                            "query": "vortex.landing_zone:landing_zone_favourites",
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "release_version": "1.0.0"
                       },
-                      "order": { "desktop": ["home_favourites"] }
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 },
-                "home_applications_filter": {
-                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
-                  "settings": {
-                    "label": { "kind": "text", "value": "Search applications" },
-                    "placeholder": { "kind": "text", "value": "Search applications" },
-                    "match_key": { "kind": "text", "value": "name" },
-                    "match_mode": { "kind": "choice", "value": "contains" },
-                    "case_sensitive": { "kind": "boolean", "value": false },
-                    "empty_message": { "kind": "text", "value": "No applications match your search." }
-                  },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "home_applications": {
-                          "block": { "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33", "release_version": "1.0.0" },
-                          "settings": {
-                            "title": { "kind": "text", "value": "All applications" },
-                            "name_key": { "kind": "text", "value": "name" },
-                            "icon_key": { "kind": "text", "value": "icon" }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": { "side_panel": { "placements": {}, "order": { "desktop": [] } } },
-                          "query": "vortex.landing_zone:landing_zone_applications"
+                {
+                  "type": "platform.renderer.view_filter",
+                  "props": {
+                    "id": "home_applications_filter",
+                    "label": "Search applications",
+                    "placeholder": "Search applications",
+                    "match_key": "name",
+                    "match_mode": "contains",
+                    "case_sensitive": false,
+                    "empty_message": "No applications match your search.",
+                    "content": [
+                      {
+                        "type": "platform.renderer.application_launcher",
+                        "props": {
+                          "id": "home_applications",
+                          "title": "All applications",
+                          "name_key": "name",
+                          "icon_key": "icon",
+                          "side_panel": [],
+                          "vortex": {
+                            "block": {
+                              "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
+                              "release_version": "1.0.0"
+                            },
+                            "query": "vortex.landing_zone:landing_zone_applications",
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "release_version": "1.0.0"
                       },
-                      "order": { "desktop": ["home_applications"] }
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              },
-              "order": { "desktop": ["home_favourites_filter", "home_applications_filter"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       },
       {
@@ -441,61 +512,92 @@
         "type": "dashboard",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "favourites_filter": {
-                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
-                  "settings": {
-                    "label": { "kind": "text", "value": "Search favourites" },
-                    "placeholder": { "kind": "text", "value": "Search favourites" },
-                    "match_key": { "kind": "text", "value": "label" },
-                    "match_mode": { "kind": "choice", "value": "contains" },
-                    "case_sensitive": { "kind": "boolean", "value": false },
-                    "empty_message": { "kind": "text", "value": "No favourites match your search." }
-                  },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "favourites_tiles": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.2.0" },
-                          "query": "vortex.landing_zone:landing_zone_favourites",
-                          "settings": {
-                            "title": { "kind": "text", "value": "Favourites" },
-                            "label_key": { "kind": "text", "value": "label" },
-                            "address_key": { "kind": "text", "value": "external_address" },
-                            "description_key": { "kind": "text", "value": "description" },
-                            "target_kind_key": { "kind": "text", "value": "target_kind" },
-                            "application_key_key": { "kind": "text", "value": "application_key" },
-                            "page_key_key": { "kind": "text", "value": "page_key" },
-                            "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
-                            "organization_id_key": { "kind": "text", "value": "target_organization_id" },
-                            "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
-                            "module_root_id_key": { "kind": "text", "value": "target_module_root_id" },
-                            "module_release_revision_key": { "kind": "text", "value": "target_module_release_revision" },
-                            "record_type_id_key": { "kind": "text", "value": "target_record_type_id" },
-                            "storage_contract_id_key": { "kind": "text", "value": "target_storage_contract_id" },
-                            "record_id_key": { "kind": "text", "value": "record_id" },
-                            "row_action_label": { "kind": "text", "value": "Remove" }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": { "actions": { "placements": {}, "order": { "desktop": [] } } }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.view_filter",
+                  "props": {
+                    "id": "favourites_filter",
+                    "label": "Search favourites",
+                    "placeholder": "Search favourites",
+                    "match_key": "label",
+                    "match_mode": "contains",
+                    "case_sensitive": false,
+                    "empty_message": "No favourites match your search.",
+                    "content": [
+                      {
+                        "type": "platform.renderer.link_tiles",
+                        "props": {
+                          "id": "favourites_tiles",
+                          "title": "Favourites",
+                          "label_key": "label",
+                          "address_key": "external_address",
+                          "description_key": "description",
+                          "target_kind_key": "target_kind",
+                          "application_key_key": "application_key",
+                          "page_key_key": "page_key",
+                          "open_behaviour_key": "open_behaviour",
+                          "organization_id_key": "target_organization_id",
+                          "application_root_id_key": "target_application_root_id",
+                          "module_root_id_key": "target_module_root_id",
+                          "module_release_revision_key": "target_module_release_revision",
+                          "record_type_id_key": "target_record_type_id",
+                          "storage_contract_id_key": "target_storage_contract_id",
+                          "record_id_key": "record_id",
+                          "row_action_label": "Remove",
+                          "actions": [],
+                          "vortex": {
+                            "block": {
+                              "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
+                              "release_version": "1.2.0"
+                            },
+                            "query": "vortex.landing_zone:landing_zone_favourites",
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "release_version": "1.0.0"
                       },
-                      "order": { "desktop": ["favourites_tiles"] }
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              },
-              "order": { "desktop": ["favourites_filter"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       },
       {
@@ -505,61 +607,92 @@
         "type": "dashboard",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "bookmarks_filter": {
-                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
-                  "settings": {
-                    "label": { "kind": "text", "value": "Search bookmarks" },
-                    "placeholder": { "kind": "text", "value": "Search bookmarks" },
-                    "match_key": { "kind": "text", "value": "label" },
-                    "match_mode": { "kind": "choice", "value": "contains" },
-                    "case_sensitive": { "kind": "boolean", "value": false },
-                    "empty_message": { "kind": "text", "value": "No bookmarks match your search." }
-                  },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "bookmarks_tiles": {
-                          "block": { "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47", "release_version": "1.2.0" },
-                          "query": "vortex.landing_zone:landing_zone_tiles",
-                          "settings": {
-                            "title": { "kind": "text", "value": "Bookmarks" },
-                            "label_key": { "kind": "text", "value": "label" },
-                            "address_key": { "kind": "text", "value": "external_address" },
-                            "description_key": { "kind": "text", "value": "description" },
-                            "target_kind_key": { "kind": "text", "value": "target_kind" },
-                            "application_key_key": { "kind": "text", "value": "application_key" },
-                            "page_key_key": { "kind": "text", "value": "page_key" },
-                            "open_behaviour_key": { "kind": "text", "value": "open_behaviour" },
-                            "organization_id_key": { "kind": "text", "value": "target_organization_id" },
-                            "application_root_id_key": { "kind": "text", "value": "target_application_root_id" },
-                            "module_root_id_key": { "kind": "text", "value": "target_module_root_id" },
-                            "module_release_revision_key": { "kind": "text", "value": "target_module_release_revision" },
-                            "record_type_id_key": { "kind": "text", "value": "target_record_type_id" },
-                            "storage_contract_id_key": { "kind": "text", "value": "target_storage_contract_id" },
-                            "record_id_key": { "kind": "text", "value": "record_id" },
-                            "row_action_label": { "kind": "text", "value": "Remove" }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": { "actions": { "placements": {}, "order": { "desktop": [] } } }
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.view_filter",
+                  "props": {
+                    "id": "bookmarks_filter",
+                    "label": "Search bookmarks",
+                    "placeholder": "Search bookmarks",
+                    "match_key": "label",
+                    "match_mode": "contains",
+                    "case_sensitive": false,
+                    "empty_message": "No bookmarks match your search.",
+                    "content": [
+                      {
+                        "type": "platform.renderer.link_tiles",
+                        "props": {
+                          "id": "bookmarks_tiles",
+                          "title": "Bookmarks",
+                          "label_key": "label",
+                          "address_key": "external_address",
+                          "description_key": "description",
+                          "target_kind_key": "target_kind",
+                          "application_key_key": "application_key",
+                          "page_key_key": "page_key",
+                          "open_behaviour_key": "open_behaviour",
+                          "organization_id_key": "target_organization_id",
+                          "application_root_id_key": "target_application_root_id",
+                          "module_root_id_key": "target_module_root_id",
+                          "module_release_revision_key": "target_module_release_revision",
+                          "record_type_id_key": "target_record_type_id",
+                          "storage_contract_id_key": "target_storage_contract_id",
+                          "record_id_key": "record_id",
+                          "row_action_label": "Remove",
+                          "actions": [],
+                          "vortex": {
+                            "block": {
+                              "block_id": "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
+                              "release_version": "1.2.0"
+                            },
+                            "query": "vortex.landing_zone:landing_zone_tiles",
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "release_version": "1.0.0"
                       },
-                      "order": { "desktop": ["bookmarks_tiles"] }
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              },
-              "order": { "desktop": ["bookmarks_filter"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       },
       {
@@ -569,105 +702,275 @@
         "type": "dashboard",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "bookmark_entry_form": {
-                  "block": { "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44", "release_version": "1.0.0" },
-                  "settings": { "title": { "kind": "text", "value": "Bookmark details" } },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "bookmark_entry_label": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": {
-                            "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.label" },
-                            "help_text": { "kind": "text", "value": "Optional label for external bookmarks. Internal application, page, and record names are resolved live." }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_target_kind": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.target_kind" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_application_key": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.application_key" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_page_key": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.page_key" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_record_type": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_type" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_record_id": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_id" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_external_address": {
-                          "block": { "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc", "release_version": "1.0.0" },
-                          "settings": {
-                            "name": { "kind": "text", "value": "external_address" },
-                            "label": { "kind": "text", "value": "External HTTPS address" },
-                            "input_type": { "kind": "choice", "value": "url" }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_description": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": {
-                            "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.description" },
-                            "help_text": { "kind": "text", "value": "Optional description shown with the bookmark." }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "bookmark_entry_submit": {
-                          "block": { "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0" },
-                          "settings": {
-                            "label": { "kind": "text", "value": "Save bookmark" },
-                            "action_kind": { "kind": "choice", "value": "submit" }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "bookmark_entry_form",
+                    "title": "Bookmark details",
+                    "content": [
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "bookmark_entry_label",
+                          "field": "vortex.landing_zone:tile.label",
+                          "help_text": "Optional label for external bookmarks. Internal application, page, and record names are resolved live.",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
                       },
-                      "order": { "desktop": ["bookmark_entry_label", "bookmark_entry_target_kind", "bookmark_entry_application_key", "bookmark_entry_page_key", "bookmark_entry_record_type", "bookmark_entry_record_id", "bookmark_entry_external_address", "bookmark_entry_description", "bookmark_entry_submit"] }
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "bookmark_entry_target_kind",
+                          "field": "vortex.landing_zone:tile.target_kind",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "bookmark_entry_application_key",
+                          "field": "vortex.landing_zone:tile.application_key",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "bookmark_entry_page_key",
+                          "field": "vortex.landing_zone:tile.page_key",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "bookmark_entry_record_type",
+                          "field": "vortex.landing_zone:tile.record_type",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "bookmark_entry_record_id",
+                          "field": "vortex.landing_zone:tile.record_id",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "bookmark_entry_external_address",
+                          "name": "external_address",
+                          "label": "External HTTPS address",
+                          "input_type": "url",
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "bookmark_entry_description",
+                          "field": "vortex.landing_zone:tile.description",
+                          "help_text": "Optional description shown with the bookmark.",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "bookmark_entry_submit",
+                          "label": "Save bookmark",
+                          "action_kind": "submit",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              },
-              "order": { "desktop": ["bookmark_entry_form"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       },
       {
@@ -677,48 +980,79 @@
         "type": "dashboard",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "all_applications_filter": {
-                  "block": { "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15", "release_version": "1.0.0" },
-                  "settings": {
-                    "label": { "kind": "text", "value": "Search applications" },
-                    "placeholder": { "kind": "text", "value": "Search applications" },
-                    "match_key": { "kind": "text", "value": "name" },
-                    "match_mode": { "kind": "choice", "value": "contains" },
-                    "case_sensitive": { "kind": "boolean", "value": false },
-                    "empty_message": { "kind": "text", "value": "No applications match your search." }
-                  },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "all_applications": {
-                          "block": { "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33", "release_version": "1.0.0" },
-                          "settings": {
-                            "title": { "kind": "text", "value": "All applications" },
-                            "name_key": { "kind": "text", "value": "name" },
-                            "icon_key": { "kind": "text", "value": "icon" }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": { "side_panel": { "placements": {}, "order": { "desktop": [] } } },
-                          "query": "vortex.landing_zone:landing_zone_applications"
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.view_filter",
+                  "props": {
+                    "id": "all_applications_filter",
+                    "label": "Search applications",
+                    "placeholder": "Search applications",
+                    "match_key": "name",
+                    "match_mode": "contains",
+                    "case_sensitive": false,
+                    "empty_message": "No applications match your search.",
+                    "content": [
+                      {
+                        "type": "platform.renderer.application_launcher",
+                        "props": {
+                          "id": "all_applications",
+                          "title": "All applications",
+                          "name_key": "name",
+                          "icon_key": "icon",
+                          "side_panel": [],
+                          "vortex": {
+                            "block": {
+                              "block_id": "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",
+                              "release_version": "1.0.0"
+                            },
+                            "query": "vortex.landing_zone:landing_zone_applications",
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "d7e3b8a5-2f49-4e6c-a1d0-9c4b7f2e8a15",
+                        "release_version": "1.0.0"
                       },
-                      "order": { "desktop": ["all_applications"] }
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              },
-              "order": { "desktop": ["all_applications_filter"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       },
       {
@@ -728,62 +1062,138 @@
         "type": "dashboard",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "saved_tiles_summary": {
-                  "block": { "block_id": "addfad00-1b11-4674-83fa-913667f87e79", "release_version": "1.1.0" },
-                  "settings": {
-                    "title": { "kind": "text", "value": "Saved configuration" },
-                    "text": { "kind": "text", "value": "This bounded view shows at most 200 saved tile records returned by the permitted Records query." }
-                  },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {}
-                },
-                "managed_saved_tiles": {
-                  "block": { "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff", "release_version": "1.4.0" },
-                  "query": "vortex.landing_zone:landing_zone_tiles",
-                  "settings": {
-                    "title": { "kind": "text", "value": "Saved tile configuration" },
-                    "empty_message": { "kind": "text", "value": "No saved tile records were returned." },
-                    "refused_message": { "kind": "text", "value": "Saved tiles are unavailable for this account." },
-                    "error_message": { "kind": "text", "value": "Saved tiles could not be read." },
-                    "page_size": { "kind": "number", "value": 200 },
-                    "columns": {
-                      "kind": "list",
-                      "items": [
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.target_kind" }, "label": { "kind": "text", "value": "Saved target type" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.label" }, "label": { "kind": "text", "value": "Saved label" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.application_key" }, "label": { "kind": "text", "value": "Saved application" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.page_key" }, "label": { "kind": "text", "value": "Saved page" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_type" }, "label": { "kind": "text", "value": "Saved record type" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.record_id" }, "label": { "kind": "text", "value": "Saved record identifier" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.external_address" }, "label": { "kind": "text", "value": "Saved external HTTPS address" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.description" }, "label": { "kind": "text", "value": "Saved description" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.open_behaviour" }, "label": { "kind": "text", "value": "Saved open behaviour" }, "format": { "kind": "choice", "value": "text" } } },
-                        { "kind": "group", "properties": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.is_favourite" }, "label": { "kind": "text", "value": "Favourite status" }, "format": { "kind": "choice", "value": "boolean" } } }
-                      ]
-                    },
-                    "row_actions": {
-                      "kind": "list",
-                      "items": [
-                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_edit_favourite" }, "label": { "kind": "text", "value": "Edit favourite" }, "capability": { "kind": "choice", "value": "update" } } },
-                        { "kind": "group", "properties": { "event_id": { "kind": "text", "value": "row_action_landing_zone_remove_tile" }, "label": { "kind": "text", "value": "Remove tile" }, "capability": { "kind": "choice", "value": "delete" } } }
-                      ]
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "saved_tiles_summary",
+                    "title": "Saved configuration",
+                    "text": "This bounded view shows at most 200 saved tile records returned by the permitted Records query.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.1.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
-                  },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {}
+                  }
+                },
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "id": "managed_saved_tiles",
+                    "title": "Saved tile configuration",
+                    "empty_message": "No saved tile records were returned.",
+                    "refused_message": "Saved tiles are unavailable for this account.",
+                    "error_message": "Saved tiles could not be read.",
+                    "page_size": 200,
+                    "columns": [
+                      {
+                        "field": "vortex.landing_zone:tile.target_kind",
+                        "label": "Saved target type",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.label",
+                        "label": "Saved label",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.application_key",
+                        "label": "Saved application",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.page_key",
+                        "label": "Saved page",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.record_type",
+                        "label": "Saved record type",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.record_id",
+                        "label": "Saved record identifier",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.external_address",
+                        "label": "Saved external HTTPS address",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.description",
+                        "label": "Saved description",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.open_behaviour",
+                        "label": "Saved open behaviour",
+                        "format": "text"
+                      },
+                      {
+                        "field": "vortex.landing_zone:tile.is_favourite",
+                        "label": "Favourite status",
+                        "format": "boolean"
+                      }
+                    ],
+                    "row_actions": [
+                      {
+                        "event_id": "row_action_landing_zone_edit_favourite",
+                        "label": "Edit favourite",
+                        "capability": "update"
+                      },
+                      {
+                        "event_id": "row_action_landing_zone_remove_tile",
+                        "label": "Remove tile",
+                        "capability": "delete"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "1.4.0"
+                      },
+                      "query": "vortex.landing_zone:landing_zone_tiles",
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
-              },
-              "order": { "desktop": ["saved_tiles_summary", "managed_saved_tiles"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       },
       {
@@ -794,43 +1204,96 @@
         "record_type": "vortex.landing_zone:tile",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "favourite_status_form": {
-                  "block": { "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44", "release_version": "1.0.0" },
-                  "settings": { "title": { "kind": "text", "value": "Favourite status" } },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "input_landing_tile_is_favourite": {
-                          "block": { "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64", "release_version": "1.0.0" },
-                          "settings": { "field": { "kind": "field_reference", "field": "vortex.landing_zone:tile.is_favourite" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "button_landing_save_favourite": {
-                          "block": { "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0" },
-                          "settings": { "label": { "kind": "text", "value": "Save favourite" }, "action_kind": { "kind": "choice", "value": "submit" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "favourite_status_form",
+                    "title": "Favourite status",
+                    "content": [
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_landing_tile_is_favourite",
+                          "field": "vortex.landing_zone:tile.is_favourite",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
                       },
-                      "order": { "desktop": ["input_landing_tile_is_favourite", "button_landing_save_favourite"] }
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_landing_save_favourite",
+                          "label": "Save favourite",
+                          "action_kind": "submit",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              },
-              "order": { "desktop": ["favourite_status_form"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       },
       {
@@ -841,46 +1304,97 @@
         "record_type": "vortex.landing_zone:tile",
         "permission": "application.landing_zone.open",
         "composition": {
-          "shell_kind": "application",
-          "shell": "shell_landing_zone",
-          "content": {
-            "slot_primary": {
-              "placements": {
-                "remove_tile_form": {
-                  "block": { "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44", "release_version": "1.0.0" },
-                  "settings": { "title": { "kind": "text", "value": "Remove selected tile" } },
-                  "theme_overrides": {},
-                  "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                  "slots": {
-                    "content": {
-                      "placements": {
-                        "remove_tile_explanation": {
-                          "block": { "block_id": "addfad00-1b11-4674-83fa-913667f87e79", "release_version": "1.1.0" },
-                          "settings": {
-                            "title": { "kind": "text", "value": "Remove this saved tile" },
-                            "text": { "kind": "text", "value": "Removing this private tile leaves the application, page, record or external address it names unchanged. You will be asked to confirm before removal." }
-                          },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
-                        },
-                        "button_landing_remove_tile": {
-                          "block": { "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0" },
-                          "settings": { "label": { "kind": "text", "value": "Remove tile" }, "action_kind": { "kind": "choice", "value": "submit" } },
-                          "theme_overrides": {},
-                          "responsive": { "desktop": { "visible": true, "width": { "kind": "fill" }, "height": { "kind": "content" } } },
-                          "slots": {}
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "remove_tile_form",
+                    "title": "Remove selected tile",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text",
+                        "props": {
+                          "id": "remove_tile_explanation",
+                          "title": "Remove this saved tile",
+                          "text": "Removing this private tile leaves the application, page, record or external address it names unchanged. You will be asked to confirm before removal.",
+                          "vortex": {
+                            "block": {
+                              "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                              "release_version": "1.1.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
                       },
-                      "order": { "desktop": ["remove_tile_explanation", "button_landing_remove_tile"] }
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_landing_remove_tile",
+                          "label": "Remove tile",
+                          "action_kind": "submit",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "theme_overrides": {},
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "theme_overrides": {},
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              },
-              "order": { "desktop": ["remove_tile_form"] }
-            },
-            "slot_rail": { "placements": {}, "order": { "desktop": [] } }
-          }
+              ],
+              "slot_rail": [],
+              "vortex": {
+                "shell": "shell_landing_zone",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
         }
       }
     ],
@@ -1269,9 +1783,7 @@
         "outputs": {
           "record": {
             "type": "record_reference",
-            "recordTypeIds": [
-              "vortex.landing_zone:tile"
-            ],
+            "recordTypeIds": ["vortex.landing_zone:tile"],
             "value": {
               "kind": "reference",
               "reference": {
@@ -1288,11 +1800,19 @@
         "id": "landing_zone_open_favourite_status",
         "key": "landing_zone_open_favourite_status",
         "description": "Opens the protected Favourite status form for one returned tile record.",
-        "labels": { "name": "Edit favourite" },
+        "labels": {
+          "name": "Edit favourite"
+        },
         "execution": "interactive",
-        "runAs": { "kind": "initiator" },
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
-          "record_id": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] }
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.landing_zone:tile"]
+          }
         },
         "variables": {},
         "tasks": [
@@ -1301,8 +1821,19 @@
             "type": "interface.navigate",
             "version": "1.0.0",
             "properties": {
-              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_favourite_status" } },
-              "parameters": { "kind": "map", "entries": { "record_id": "{{ inputs.record_id }}" } }
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "page_landing_favourite_status"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
             }
           }
         ],
@@ -1313,15 +1844,29 @@
         "id": "landing_zone_save_favourite_status",
         "key": "landing_zone_save_favourite_status",
         "description": "Saves only the submitted favourite status for the protected tile subject, then returns to saved tile management.",
-        "labels": { "name": "Save favourite" },
+        "labels": {
+          "name": "Save favourite"
+        },
         "execution": "interactive",
-        "runAs": { "kind": "initiator" },
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
-          "record": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] },
-          "is_favourite": { "type": "yes_no", "required": true }
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.landing_zone:tile"]
+          },
+          "is_favourite": {
+            "type": "yes_no",
+            "required": true
+          }
         },
         "variables": {
-          "favourite_values": { "type": "json", "default": {} }
+          "favourite_values": {
+            "type": "json",
+            "default": {}
+          }
         },
         "tasks": [
           {
@@ -1329,11 +1874,23 @@
             "type": "data.set_variable",
             "version": "1.0.0",
             "properties": {
-              "variable": { "kind": "literal", "literal": { "type": "text", "value": "favourite_values" } },
+              "variable": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "favourite_values"
+                }
+              },
               "value": {
                 "kind": "map",
                 "entries": {
-                  "is_favourite": { "kind": "reference", "reference": { "source": "input", "name": "is_favourite" } }
+                  "is_favourite": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "is_favourite"
+                    }
+                  }
                 }
               }
             }
@@ -1343,11 +1900,26 @@
             "type": "record.save",
             "version": "1.0.0",
             "properties": {
-              "record_type": { "kind": "literal", "literal": { "type": "text", "value": "vortex.landing_zone:tile" } },
-              "record": { "kind": "reference", "reference": { "source": "input", "name": "record" } },
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.landing_zone:tile"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
               "values": {
                 "kind": "reference",
-                "reference": { "source": "variable", "name": "favourite_values" }
+                "reference": {
+                  "source": "variable",
+                  "name": "favourite_values"
+                }
               }
             }
           },
@@ -1356,7 +1928,13 @@
             "type": "interface.navigate",
             "version": "1.0.0",
             "properties": {
-              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_manage_saved_tiles" } }
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "page_landing_manage_saved_tiles"
+                }
+              }
             }
           }
         ],
@@ -1364,7 +1942,14 @@
           "record": {
             "type": "record_reference",
             "recordTypeIds": ["vortex.landing_zone:tile"],
-            "value": { "kind": "reference", "reference": { "source": "task_output", "task": "save_favourite_status", "key": "record" } }
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save_favourite_status",
+                "key": "record"
+              }
+            }
           }
         }
       },
@@ -1373,11 +1958,19 @@
         "id": "landing_zone_open_remove_tile",
         "key": "landing_zone_open_remove_tile",
         "description": "Opens the protected removal form for one returned private tile record.",
-        "labels": { "name": "Remove tile" },
+        "labels": {
+          "name": "Remove tile"
+        },
         "execution": "interactive",
-        "runAs": { "kind": "initiator" },
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
-          "record_id": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] }
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.landing_zone:tile"]
+          }
         },
         "variables": {},
         "tasks": [
@@ -1386,8 +1979,19 @@
             "type": "interface.navigate",
             "version": "1.0.0",
             "properties": {
-              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_remove_tile" } },
-              "parameters": { "kind": "map", "entries": { "record_id": "{{ inputs.record_id }}" } }
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "page_landing_remove_tile"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
             }
           }
         ],
@@ -1398,11 +2002,19 @@
         "id": "landing_zone_remove_tile",
         "key": "landing_zone_remove_tile",
         "description": "Confirms removal of the protected private tile subject and returns to saved tile management after the named action succeeds.",
-        "labels": { "name": "Confirm tile removal" },
+        "labels": {
+          "name": "Confirm tile removal"
+        },
         "execution": "interactive",
-        "runAs": { "kind": "initiator" },
+        "runAs": {
+          "kind": "initiator"
+        },
         "inputs": {
-          "record": { "type": "record_reference", "required": true, "recordTypeIds": ["vortex.landing_zone:tile"] }
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.landing_zone:tile"]
+          }
         },
         "variables": {},
         "tasks": [
@@ -1411,8 +2023,20 @@
             "type": "interface.confirm",
             "version": "1.0.0",
             "properties": {
-              "title": { "kind": "literal", "literal": { "type": "text", "value": "Remove tile" } },
-              "message": { "kind": "literal", "literal": { "type": "text", "value": "Remove this tile from your saved tiles? Its target will remain unchanged." } }
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Remove tile"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Remove this tile from your saved tiles? Its target will remain unchanged."
+                }
+              }
             }
           },
           {
@@ -1420,10 +2044,21 @@
             "type": "if",
             "condition": {
               "op": "not",
-              "arg": { "op": "reference", "reference": { "source": "task_output", "task": "confirm_remove_tile", "key": "confirmed" } }
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "confirm_remove_tile",
+                  "key": "confirmed"
+                }
+              }
             },
             "then": [
-              { "id": "stop_remove_tile_declined", "type": "stop", "outcome": "declined" }
+              {
+                "id": "stop_remove_tile_declined",
+                "type": "stop",
+                "outcome": "declined"
+              }
             ]
           },
           {
@@ -1431,8 +2066,17 @@
             "type": "operation.call",
             "version": "1.0.0",
             "properties": {
-              "operation": { "kind": "literal", "literal": { "type": "text", "value": "vortex.landing_zone.tile.remove" } },
-              "inputs": { "kind": "map", "entries": {} }
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.landing_zone.tile.remove"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {}
+              }
             }
           },
           {
@@ -1440,7 +2084,13 @@
             "type": "interface.navigate",
             "version": "1.0.0",
             "properties": {
-              "page": { "kind": "literal", "literal": { "type": "text", "value": "page_landing_manage_saved_tiles" } }
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "page_landing_manage_saved_tiles"
+                }
+              }
             }
           }
         ],
@@ -1455,14 +2105,38 @@
         "event": "form_submit",
         "flow": "landing_zone_bookmark_create",
         "inputs": {
-          "target_kind": { "kind": "caller", "name": "target_kind" },
-          "application_key": { "kind": "caller", "name": "application_key" },
-          "page_key": { "kind": "caller", "name": "page_key" },
-          "record_type": { "kind": "caller", "name": "record_type" },
-          "record_id": { "kind": "caller", "name": "record_id" },
-          "external_address": { "kind": "caller", "name": "external_address" },
-          "label": { "kind": "caller", "name": "label" },
-          "description": { "kind": "caller", "name": "description" }
+          "target_kind": {
+            "kind": "caller",
+            "name": "target_kind"
+          },
+          "application_key": {
+            "kind": "caller",
+            "name": "application_key"
+          },
+          "page_key": {
+            "kind": "caller",
+            "name": "page_key"
+          },
+          "record_type": {
+            "kind": "caller",
+            "name": "record_type"
+          },
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "external_address": {
+            "kind": "caller",
+            "name": "external_address"
+          },
+          "label": {
+            "kind": "caller",
+            "name": "label"
+          },
+          "description": {
+            "kind": "caller",
+            "name": "description"
+          }
         }
       },
       {
@@ -1472,7 +2146,10 @@
         "event": "row_action",
         "flow": "landing_zone_open_favourite_status",
         "inputs": {
-          "record_id": { "kind": "caller", "name": "record_id" }
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
         }
       },
       {
@@ -1482,8 +2159,14 @@
         "event": "form_submit",
         "flow": "landing_zone_save_favourite_status",
         "inputs": {
-          "record": { "kind": "caller", "name": "record" },
-          "is_favourite": { "kind": "caller", "name": "is_favourite" }
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "is_favourite": {
+            "kind": "caller",
+            "name": "is_favourite"
+          }
         }
       },
       {
@@ -1492,7 +2175,12 @@
         "event_id": "row_action_home_favourites_remove_tile",
         "event": "row_action",
         "flow": "landing_zone_open_remove_tile",
-        "inputs": { "record_id": { "kind": "caller", "name": "record_id" } }
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
       },
       {
         "id": "binding_favourites_tiles_remove_tile",
@@ -1500,7 +2188,12 @@
         "event_id": "row_action_favourites_tiles_remove_tile",
         "event": "row_action",
         "flow": "landing_zone_open_remove_tile",
-        "inputs": { "record_id": { "kind": "caller", "name": "record_id" } }
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
       },
       {
         "id": "binding_bookmarks_tiles_remove_tile",
@@ -1508,7 +2201,12 @@
         "event_id": "row_action_bookmarks_tiles_remove_tile",
         "event": "row_action",
         "flow": "landing_zone_open_remove_tile",
-        "inputs": { "record_id": { "kind": "caller", "name": "record_id" } }
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
       },
       {
         "id": "binding_landing_zone_open_remove_tile",
@@ -1517,7 +2215,10 @@
         "event": "row_action",
         "flow": "landing_zone_open_remove_tile",
         "inputs": {
-          "record_id": { "kind": "caller", "name": "record_id" }
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
         }
       },
       {
@@ -1527,7 +2228,10 @@
         "event": "form_submit",
         "flow": "landing_zone_remove_tile",
         "inputs": {
-          "record": { "kind": "caller", "name": "record" }
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          }
         }
       }
     ]
