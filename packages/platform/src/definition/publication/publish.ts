@@ -32,6 +32,7 @@ import {
   type ApplicationDraft,
   type ApplicationSourceDocument,
   type DefinitionResolutionSnapshot,
+  type ModuleSourceDocument,
   type PublishDefinitionResult,
   type SessionContext,
   type StoredDefinitionSource,
@@ -58,6 +59,7 @@ import type {
   DefinitionPublicationRepository,
   DefinitionPublicationTransaction,
   DefinitionReleaseAppend,
+  OwnedModuleRoot,
   ModuleReleasePageCursor,
   ResolvableModuleReleasePage,
   ResolvableModuleRelease,
@@ -450,7 +452,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       published === undefined ||
       published.publication.revision !== anchor ||
       (entry.previousReleaseRevision ?? 0) >= anchor ||
-      (entry.previousReleaseRevision === null && published.publication.releaseVersion !== "1.0.0")
+      // A Module first released inside a later version of its Application starts at that version.
+      (kind === "application" &&
+        entry.previousReleaseRevision === null &&
+        published.publication.releaseVersion !== "1.0.0")
     )
       return invalidStorage("readLatestRelease found inconsistent stored evidence");
     return { stored: entry.release, published };
@@ -851,6 +856,29 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
   }
 }
 
+const ownedModuleRootRowSchema = z
+  .object({
+    root_id: moduleRootIdSchema,
+    definition_key: namespacedKeySchema,
+    draft_revision: safeRevisionSchema,
+    current_release_revision: nullableRevisionSchema,
+    source_fingerprint: fingerprintSchema,
+  })
+  .strict();
+
+const parseOwnedModuleRoot = (row: DatabaseRow): OwnedModuleRoot => {
+  const parsed = ownedModuleRootRowSchema.safeParse(row);
+  if (!parsed.success) return invalidStorage(parsed.error);
+  return {
+    rootId: parsed.data.root_id,
+    key: parsed.data.definition_key,
+    draftRevision: parsed.data.draft_revision as OwnedModuleRoot["draftRevision"],
+    currentReleaseRevision: parsed.data
+      .current_release_revision as OwnedModuleRoot["currentReleaseRevision"],
+    sourceFingerprint: parsed.data.source_fingerprint,
+  };
+};
+
 class DatabasePublicationTransaction
   extends DatabasePublicationReader
   implements DefinitionPublicationTransaction
@@ -864,7 +892,77 @@ class DatabasePublicationTransaction
     return this.readCandidate(rootId);
   }
 
-  async appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
+  async readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]> {
+    const rows = await this.transaction.query`
+      select * from vortex_definition.read_owned_module_roots(${applicationRootId}::uuid)
+    `;
+    return rows.map(parseOwnedModuleRoot);
+  }
+
+  async createOwnedModuleRoot(
+    applicationRootId: string,
+    source: ModuleSourceDocument,
+  ): Promise<OwnedModuleRoot> {
+    const rows = await this.transaction.query`
+      select root_id, definition_key, draft_revision, published_revision as current_release_revision,
+        source_fingerprint
+      from vortex_definition.create_root(
+        ${"module"},
+        ${source.key},
+        ${JSON.stringify(source)}::text::jsonb,
+        ${fingerprintCanonicalValue(source)},
+        ${JSON.stringify(extractStoredSourceIdentityRequirements(source))}::text::jsonb,
+        ${null}::text,
+        ${applicationRootId}::uuid
+      )
+    `;
+    if (rows.length !== 1) return invalidStorage("createOwnedModuleRoot returned no root");
+    return parseOwnedModuleRoot(rows[0]!);
+  }
+
+  async saveOwnedModuleSource(
+    root: OwnedModuleRoot,
+    source: ModuleSourceDocument,
+  ): Promise<OwnedModuleRoot> {
+    const rows = await this.transaction.query`
+      select root_id, definition_key, draft_revision, published_revision as current_release_revision,
+        source_fingerprint
+      from vortex_definition.save_draft(
+        ${root.rootId}::uuid,
+        ${root.draftRevision},
+        ${JSON.stringify(source)}::text::jsonb,
+        ${fingerprintCanonicalValue(source)},
+        ${JSON.stringify(extractStoredSourceIdentityRequirements(source))}::text::jsonb
+      )
+    `;
+    if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    if (rows.length !== 1) return invalidStorage("saveOwnedModuleSource returned several roots");
+    return parseOwnedModuleRoot(rows[0]!);
+  }
+
+  async rehearse<Result>(operation: () => Promise<Result>): Promise<Result> {
+    // Nested rehearsals reuse the name: rollback and release address the most recent savepoint.
+    await this.transaction.query`savepoint vortex_publication_rehearsal`;
+    // A failure aborts the whole request transaction, so only success needs the rollback.
+    const result = await operation();
+    await this.transaction.query`rollback to savepoint vortex_publication_rehearsal`;
+    await this.transaction.query`release savepoint vortex_publication_rehearsal`;
+    return result;
+  }
+
+  appendModuleRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
+    if (release.draft.kind !== "module" || release.compilationOutput.kind !== "module")
+      return invalidStorage("appendModuleRelease received a non-Module release");
+    return this.appendRoot(release);
+  }
+
+  appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
+    if (release.draft.kind !== "application" || release.compilationOutput.kind !== "application")
+      return invalidStorage("appendRelease received a non-Application release");
+    return this.appendRoot(release);
+  }
+
+  private async appendRoot(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
     if (
       release.compilationOutput.resolutionFingerprint !== release.resolutionSnapshot.fingerprint ||
       release.compilationOutput.artifact.resolutionFingerprint !==

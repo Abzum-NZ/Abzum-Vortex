@@ -82,6 +82,21 @@ begin
     end if;
   end if;
 
+  -- A Module is never authored: its draft is only ever the current lowering of the inline Module
+  -- its owning Application's draft holds.
+  if exists (
+    select 1
+    from vortex_definition.roots as root
+    where root.root_id = p_root_id
+      and root.kind = 'module'
+      and not vortex_definition.is_owned_module_source_internal(
+        root.owner_application_root_id, root.organization_id, p_draft_source
+      )
+  ) then
+    raise exception using errcode = '22023',
+      message = 'A Module draft must be an inline Module of its owning Application';
+  end if;
+
   update vortex_definition.drafts as draft
   set
     draft_revision = draft.draft_revision + 1,

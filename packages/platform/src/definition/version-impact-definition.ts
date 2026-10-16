@@ -59,7 +59,7 @@ const assertHistoryRelease = (
   if (release.publication.kind !== kind) refuseVersionImpact("invalid_history");
   if (!stableDefinitionReleaseVersionSchema.safeParse(release.publication.releaseVersion).success)
     refuseVersionImpact("invalid_history");
-  if (index === 0 && release.publication.releaseVersion !== "1.0.0")
+  if (kind === "application" && index === 0 && release.publication.releaseVersion !== "1.0.0")
     refuseVersionImpact("invalid_history");
   if (release.publication.contentFingerprint !== fingerprintCanonicalValue(release.content))
     refuseVersionImpact("content_fingerprint_mismatch");

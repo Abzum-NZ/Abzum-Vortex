@@ -71,7 +71,7 @@ import {
   compileModuleCandidate,
   compileCandidate,
   validateCandidate,
-  prepareFromReader,
+
 } from "./definition-publication-compilation";
 import {
   type ModuleBeforeSaveConditionDraftResult,
@@ -83,6 +83,14 @@ import {
   beforeSaveSemanticFailures,
   compileBeforeSaveState,
 } from "./module-before-save-condition-draft";
+import {
+  applicationCandidate,
+  materializeInlineModules,
+  planApplicationPublication,
+} from "./application-publication";
+
+/** The internal Module releases a rehearsed preparation writes are rolled back with this note. */
+const preparationReleaseNote = "Rehearsed by publication preparation";
 
 export type ApplicationDraftCompilation = Readonly<{
   compilation: ApplicationCompilationOutput;
@@ -612,16 +620,33 @@ export const createDefinitionPublicationService = (
     if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
     await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
-    const { state, previousContent } = await repository.read(context, async (reader) => {
-      const candidate = await reader.readCandidate(parsedCommand.rootId);
-      return {
-        state: await prepareFromReader(context, reader, catalogue, parsedCommand, candidate),
-        previousContent: candidate?.historyEvidence.latestRelease?.content,
-      };
-    });
-    return prepareDefinitionPublicationResultSchema.parse({
-      confirmation: state.confirmation,
-      componentLabels: componentLabelsOf(state.compilationOutput.canonical, previousContent),
+    // Preparation rehearses the whole publication and keeps only the inline Modules' internal
+    // roots and drafts, whose permanent identities the confirmation is computed from.
+    return repository.transaction(context, async (transaction) => {
+      const candidate = applicationCandidate(
+        context,
+        await transaction.lockCandidate(parsedCommand.rootId),
+        parsedCommand,
+      );
+      const roots = await materializeInlineModules(transaction, candidate);
+      const state = await transaction.rehearse(() =>
+        planApplicationPublication(
+          context,
+          transaction,
+          catalogue,
+          candidate,
+          roots,
+          preparationReleaseNote,
+        ),
+      );
+      return prepareDefinitionPublicationResultSchema.parse({
+        confirmation: state.confirmation,
+        componentLabels: componentLabelsOf(
+          state.compilationOutput.canonical,
+          ...state.moduleOutputs.map((output) => output.canonical),
+          candidate.historyEvidence.latestRelease?.content,
+        ),
+      });
     });
   },
 
@@ -710,15 +735,20 @@ export const createDefinitionPublicationService = (
     });
     return repository.transaction(context, async (transaction) => {
       const confirmation = parsedCommand.confirmation;
-      const recomputed = await prepareFromReader(
+      const candidate = applicationCandidate(
+        context,
+        await transaction.lockCandidate(confirmation.rootId),
+        { rootId: confirmation.rootId, expectedDraftRevision: confirmation.expectedDraftRevision },
+      );
+      const roots = await materializeInlineModules(transaction, candidate);
+      // The inline Modules that changed are released here, before the Application, which is last.
+      const recomputed = await planApplicationPublication(
         context,
         transaction,
         catalogue,
-        {
-          rootId: confirmation.rootId,
-          expectedDraftRevision: confirmation.expectedDraftRevision,
-        },
-        await transaction.lockCandidate(confirmation.rootId),
+        candidate,
+        roots,
+        parsedCommand.releaseNote,
         confirmation.dependencyManifest,
       );
       if (
@@ -727,7 +757,7 @@ export const createDefinitionPublicationService = (
       )
         refuse("DEFINITION_CONFIRMATION_MISMATCH");
       if (
-        recomputed.compilationOutput.kind === "application" &&
+        recomputed.compilationOutput.kind !== "application" ||
         recomputed.compilationOutput.platformCompatibilityVersion !==
           APPLICATION_PLATFORM_COMPATIBILITY_VERSION
       )
