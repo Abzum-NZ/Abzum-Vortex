@@ -16,6 +16,14 @@ create index roots_owner_application_idx
   on vortex_definition.roots (owner_application_root_id)
   where owner_application_root_id is not null;
 
+-- A Module root's owning Application is as permanent as its identity.
+drop trigger roots_protect_identity on vortex_definition.roots;
+create trigger roots_protect_identity
+  before update of root_id, organization_id, kind, key, owner_application_root_id, created_at,
+    created_by
+  on vortex_definition.roots
+  for each row execute function vortex_definition.protect_root_identity();
+
 drop function vortex_definition.create_root(text, text, jsonb, text, jsonb, text);
 
 create or replace function vortex_definition.protect_root_identity() returns trigger

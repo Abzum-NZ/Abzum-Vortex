@@ -145,20 +145,40 @@ const releaseInlineModules = async (
       historyEvidence: module.historyEvidence,
       candidate: draftOutput.canonical,
     });
-    if (impact.outcome === "no_change") continue;
+    // A Module is released again when a Module it depends on was, even with no change of its own,
+    // so every release in one Application pins each Module at exactly one release.
+    const latest = module.historyEvidence.latestRelease as {
+      dependencyManifest?: readonly { kind: string; rootId?: unknown; revision?: unknown }[];
+    } | null;
+    const latestPins = new Set(
+      (latest?.dependencyManifest ?? [])
+        .filter((dependency) => dependency.kind === "module")
+        .map(
+          (dependency) =>
+            `${String(dependency.rootId).toLowerCase()}:${String(dependency.revision)}`,
+        ),
+    );
+    const pins = dependencies.modules.map(
+      (release) => `${String(release.rootId).toLowerCase()}:${String(release.releaseRevision)}`,
+    );
+    const repinned =
+      latest !== null &&
+      (pins.length !== latestPins.size || pins.some((pin) => !latestPins.has(pin)));
+    if (impact.outcome === "no_change" && !repinned) continue;
+    const reasons = impact.outcome === "no_change" ? [] : impact.reasons;
     const output = compileCandidate(module, dependencies, resolution, true, catalogue.permissions);
     if (output.kind !== "module") return refuse("DEFINITION_COMPILATION_REFUSED");
     await transaction.appendModuleRelease({
       draft: module.draft,
       compilationOutput: output,
       assignedVersion: version,
-      reasons: impact.reasons,
+      reasons,
       dependencyManifest: manifestFor(dependencies, output, resolution),
       resolutionSnapshot: resolution,
       validationContractVersion: "3.0.0",
       releaseNote,
     });
-    steps.push({ output, reasons: impact.reasons });
+    steps.push({ output, reasons });
   }
   return steps;
 };
