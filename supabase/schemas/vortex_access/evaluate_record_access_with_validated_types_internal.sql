@@ -14,8 +14,6 @@ as $function$
 declare
   declaration_binding jsonb := p_declaration -> 'recordBinding';
   facts_binding jsonb;
-  record_type_item jsonb;
-  field_item jsonb;
   relationship_item jsonb;
   condition_item jsonb;
   record_item jsonb;
@@ -23,7 +21,7 @@ declare
   edge_item jsonb;
   scope_key_count integer;
   seen_type_ids text[] := array[]::text[];
-  seen_field_ids text[];
+  record_types_invalid boolean;
   seen_relationship_ids text[] := array[]::text[];
   seen_condition_ids text[] := array[]::text[];
   seen_record_ids text[] := array[]::text[];
@@ -82,63 +80,79 @@ begin
     into seen_type_ids
     from pg_catalog.jsonb_array_elements(p_facts -> 'recordTypes') as item(value);
   else
-  -- Record types: unique identity, well-formed ownership/field shape.
-  for record_type_item in
-    select value from pg_catalog.jsonb_array_elements(p_facts -> 'recordTypes') as item(value)
-  loop
-    if pg_catalog.jsonb_typeof(record_type_item) <> 'object'
-      or not (record_type_item ?& array[
+  -- Check the complete type and field set in one statement. Every row still
+  -- receives the same shape, identity and duplicate checks; only the repeated
+  -- PL/pgSQL-to-SQL call for each type and field is removed.
+  select coalesce(pg_catalog.array_agg(
+      pg_catalog.lower(record_type_item.value ->> 'recordTypeId')
+      order by record_type_item.ordinality
+    ), array[]::text[]),
+    coalesce(pg_catalog.bool_or(
+      pg_catalog.jsonb_typeof(record_type_item.value) <> 'object'
+      or not (record_type_item.value ?& array[
         'moduleRootId', 'recordTypeId', 'storageContractId', 'storageScope', 'ownershipMode', 'fields'
       ])
       or exists (
-        select 1 from pg_catalog.jsonb_object_keys(record_type_item) as supplied(key)
+        select 1
+        from pg_catalog.jsonb_object_keys(case
+          when pg_catalog.jsonb_typeof(record_type_item.value) = 'object'
+            then record_type_item.value else '{}'::jsonb end
+        ) as supplied(key)
         where supplied.key <> all (array[
           'moduleRootId', 'recordTypeId', 'storageContractId', 'storageScope',
           'ownershipMode', 'ownershipRelationshipId', 'validationContractVersion', 'fields'
         ])
       )
-      or not vortex_platform.is_non_nil_uuid(record_type_item ->> 'moduleRootId')
-      or not vortex_platform.is_non_nil_uuid(record_type_item ->> 'recordTypeId')
-      or not vortex_platform.is_non_nil_uuid(record_type_item ->> 'storageContractId')
-      or record_type_item ->> 'storageScope' not in ('organization_shared', 'application_contained')
-      or record_type_item ->> 'ownershipMode' not in ('none', 'organization_account', 'group', 'inherited')
-      or ((record_type_item ? 'ownershipRelationshipId') <> (record_type_item ->> 'ownershipMode' = 'inherited'))
-      or (record_type_item ? 'ownershipRelationshipId'
-        and not vortex_platform.is_non_nil_uuid(record_type_item ->> 'ownershipRelationshipId'))
-      or (record_type_item ? 'validationContractVersion' and (
-        pg_catalog.jsonb_typeof(record_type_item -> 'validationContractVersion') <> 'string'
-        or record_type_item ->> 'validationContractVersion' <> all (vortex_definition.accepted_contract_version('record_type'))
+      or not vortex_platform.is_non_nil_uuid(record_type_item.value ->> 'moduleRootId')
+      or not vortex_platform.is_non_nil_uuid(record_type_item.value ->> 'recordTypeId')
+      or not vortex_platform.is_non_nil_uuid(record_type_item.value ->> 'storageContractId')
+      or record_type_item.value ->> 'storageScope' not in ('organization_shared', 'application_contained')
+      or record_type_item.value ->> 'ownershipMode' not in ('none', 'organization_account', 'group', 'inherited')
+      or ((record_type_item.value ? 'ownershipRelationshipId') <>
+        (record_type_item.value ->> 'ownershipMode' = 'inherited'))
+      or (record_type_item.value ? 'ownershipRelationshipId'
+        and not vortex_platform.is_non_nil_uuid(record_type_item.value ->> 'ownershipRelationshipId'))
+      or (record_type_item.value ? 'validationContractVersion' and (
+        pg_catalog.jsonb_typeof(record_type_item.value -> 'validationContractVersion') <> 'string'
+        or record_type_item.value ->> 'validationContractVersion'
+          <> all (vortex_definition.accepted_contract_version('record_type'))
       ))
-      or pg_catalog.jsonb_typeof(record_type_item -> 'fields') <> 'array' then
-      raise exception using errcode = '22023', message = 'Record access facts are invalid';
-    end if;
-
-    if pg_catalog.lower(record_type_item ->> 'recordTypeId') = any (seen_type_ids) then
-      raise exception using errcode = '22023', message = 'Record access facts are invalid';
-    end if;
-    seen_type_ids := pg_catalog.array_append(seen_type_ids, pg_catalog.lower(record_type_item ->> 'recordTypeId'));
-
-    seen_field_ids := array[]::text[];
-    for field_item in
-      select value from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
-    loop
-      if pg_catalog.jsonb_typeof(field_item) <> 'object'
-        or not (field_item ?& array['fieldId', 'type'])
-        or exists (
-          select 1 from pg_catalog.jsonb_object_keys(field_item) as supplied(key)
-          where supplied.key <> all (array['fieldId', 'type', 'settings'])
-        )
-        or not vortex_platform.is_non_nil_uuid(field_item ->> 'fieldId')
-        or pg_catalog.jsonb_typeof(field_item -> 'type') <> 'string'
-        or (field_item ? 'settings' and pg_catalog.jsonb_typeof(field_item -> 'settings') <> 'object') then
-        raise exception using errcode = '22023', message = 'Record access facts are invalid';
-      end if;
-      if pg_catalog.lower(field_item ->> 'fieldId') = any (seen_field_ids) then
-        raise exception using errcode = '22023', message = 'Record access facts are invalid';
-      end if;
-      seen_field_ids := pg_catalog.array_append(seen_field_ids, pg_catalog.lower(field_item ->> 'fieldId'));
-    end loop;
-  end loop;
+      or pg_catalog.jsonb_typeof(record_type_item.value -> 'fields') <> 'array'
+      or fields.invalid
+      or fields.duplicate_ids
+    ), false)
+      or pg_catalog.count(*) <> pg_catalog.count(distinct
+        pg_catalog.lower(record_type_item.value ->> 'recordTypeId'))
+  into seen_type_ids, record_types_invalid
+  from pg_catalog.jsonb_array_elements(p_facts -> 'recordTypes')
+    with ordinality as record_type_item(value, ordinality)
+  cross join lateral (
+    select coalesce(pg_catalog.bool_or(
+      pg_catalog.jsonb_typeof(field_item.value) <> 'object'
+      or not (field_item.value ?& array['fieldId', 'type'])
+      or exists (
+        select 1
+        from pg_catalog.jsonb_object_keys(case
+          when pg_catalog.jsonb_typeof(field_item.value) = 'object'
+            then field_item.value else '{}'::jsonb end
+        ) as supplied(key)
+        where supplied.key <> all (array['fieldId', 'type', 'settings'])
+      )
+      or not vortex_platform.is_non_nil_uuid(field_item.value ->> 'fieldId')
+      or pg_catalog.jsonb_typeof(field_item.value -> 'type') <> 'string'
+      or (field_item.value ? 'settings'
+        and pg_catalog.jsonb_typeof(field_item.value -> 'settings') <> 'object')
+    ), false) as invalid,
+    pg_catalog.count(*) <> pg_catalog.count(distinct
+      pg_catalog.lower(field_item.value ->> 'fieldId')) as duplicate_ids
+    from pg_catalog.jsonb_array_elements(case
+      when pg_catalog.jsonb_typeof(record_type_item.value -> 'fields') = 'array'
+        then record_type_item.value -> 'fields' else '[]'::jsonb end
+    ) as field_item(value)
+  ) as fields;
+  if record_types_invalid then
+    raise exception using errcode = '22023', message = 'Record access facts are invalid';
+  end if;
 
   end if;
 
@@ -435,4 +449,3 @@ grant execute on function vortex_access.evaluate_record_access_with_validated_ty
   to vortex_record_adapter, postgres;
 comment on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) is
   'Exact record access evaluation for the ordinary wrapper or page-local eligibility supplied by the fixed record adapter; validates each record fact set and composes each record scope independently.';
-

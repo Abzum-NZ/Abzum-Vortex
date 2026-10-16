@@ -3,7 +3,9 @@ create or replace function vortex_record.read_record_page_decisions_internal(
   p_first_loaded jsonb,
   p_page_declaration jsonb,
   p_page_eligibility jsonb,
-  p_record_ids uuid[]
+  p_record_ids uuid[],
+  p_envelope jsonb,
+  p_narrowed boolean
 )
 returns table (record_id uuid, loaded jsonb, decision jsonb, bounds jsonb)
 language plpgsql
@@ -20,22 +22,29 @@ declare
   page_record_ids uuid[];
   page_concurrency bigint[];
   page_definition_revisions bigint[];
-  narrowed boolean := false;
   decisions jsonb;
   decision_item jsonb;
   facts_item jsonb;
   bounds_by_route jsonb := '{}'::jsonb;
   bounds_key text;
   row_position integer;
-  envelope jsonb := p_first_loaded;
 begin
   -- The page's read decisions in one pass. The first record's facts, loaded by
   -- the exact loader in this invocation, supply the installation-wide part of
   -- every record's facts; each record contributes only its own stored row. A
   -- record type whose read facts can reach other records (an inherited owner
   -- or a relationship route) is not decided here at all, and neither is a
-  -- preview, a protected projection or an expired page eligibility.
+  -- preview, a protected projection or an expired page eligibility. Each
+  -- decided record is returned as its compact record scope (its own stored
+  -- fact, concurrency number and definition revision); with the page envelope
+  -- the caller built once from the first record's facts
+  -- (read_record_page_envelope_internal), it is exactly the facts the exact
+  -- loader gives that record.
   if p_record_type_id is null
+    or pg_catalog.jsonb_typeof(p_envelope) is distinct from 'object'
+    or p_narrowed is null
+    or p_envelope -> 'declaration' is distinct from p_page_declaration
+    or p_envelope -> 'context' is distinct from p_first_loaded -> 'context'
     or pg_catalog.cardinality(p_record_ids) is null
     or pg_catalog.cardinality(p_record_ids) > 201
     or p_first_loaded ->> 'outcome' is distinct from 'loaded'
@@ -110,47 +119,6 @@ begin
     return;
   end if;
 
-  -- When nothing about this record type can reach another record or another
-  -- record type (no total field, and every route of every permission on it is
-  -- an all-record, owner or direct-share route), each record's facts carry
-  -- only its own type and its own permissions, and no relationship: every
-  -- reader of these facts (projection, derived fields, capabilities) looks at
-  -- nothing else.
-  if not exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(p_first_loaded #> '{facts,recordTypes}') as record_type(value)
-      cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
-      where pg_catalog.lower(record_type.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
-        and field.value ->> 'type' = 'total'
-    )
-    and not exists (
-      select 1
-      from pg_catalog.jsonb_each(p_first_loaded -> 'accessPermissions') as declared(key, value)
-      where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
-        and (pg_catalog.jsonb_typeof(declared.value #> '{recordScope,routes}') is distinct from 'array'
-          or exists (
-            select 1
-            from pg_catalog.jsonb_array_elements(
-              case when pg_catalog.jsonb_typeof(declared.value #> '{recordScope,routes}') = 'array'
-                then declared.value #> '{recordScope,routes}' else '[]'::jsonb end
-            ) as route(value)
-            where coalesce(route.value ->> 'kind', '') not in ('all_records', 'ownership', 'direct_share')
-          ))
-    ) then
-    envelope := pg_catalog.jsonb_set(pg_catalog.jsonb_set(pg_catalog.jsonb_set(
-      p_first_loaded, '{facts,relationships}', '[]'::jsonb), '{facts,recordTypes}', (
-        select coalesce(pg_catalog.jsonb_agg(record_type.value order by record_type.ordinality), '[]'::jsonb)
-        from pg_catalog.jsonb_array_elements(p_first_loaded #> '{facts,recordTypes}')
-          with ordinality as record_type(value, ordinality)
-        where pg_catalog.lower(record_type.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
-      )), '{accessPermissions}', (
-        select coalesce(pg_catalog.jsonb_object_agg(declared.key, declared.value), '{}'::jsonb)
-        from pg_catalog.jsonb_each(p_first_loaded -> 'accessPermissions') as declared(key, value)
-        where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
-      ));
-    narrowed := true;
-  end if;
-
   checked_at := pg_catalog.clock_timestamp();
   decisions := vortex_access.decide_record_page_scope_internal(
     context_value, checked_at, p_page_declaration, p_page_eligibility,
@@ -174,12 +142,10 @@ begin
     end if;
     decision := decision_item;
     bounds := null;
-    loaded := pg_catalog.jsonb_set(envelope, '{facts,records}',
-        pg_catalog.jsonb_build_array(facts_item))
-      || pg_catalog.jsonb_build_object(
-        'concurrencyNumber', page_concurrency[row_position],
-        'definitionRevision', page_definition_revisions[row_position],
-        'fieldValues', facts_item -> 'fieldValues');
+    loaded := pg_catalog.jsonb_build_object(
+      'record', facts_item,
+      'concurrencyNumber', page_concurrency[row_position],
+      'definitionRevision', page_definition_revisions[row_position]);
     if decision_item ->> 'outcome' = 'allowed' then
       -- The same contributions have the same field policy: resolve each
       -- distinct contribution set once for the page.
@@ -188,12 +154,13 @@ begin
       bounds := bounds_by_route -> bounds_key;
       if bounds is null then
         bounds := vortex_access.resolve_record_field_bounds_internal(decision_item);
-        if narrowed then
+        if p_narrowed then
           -- Without a total field the derived readable set depends only on the
           -- record type and these bounds, not on the record.
           bounds := bounds || pg_catalog.jsonb_build_object('projectedReadableFieldIds',
             vortex_record.project_derived_readable_field_ids_internal(
-              loaded, p_record_type_id, record_id, bounds -> 'readableFieldIds',
+              vortex_record.read_record_page_row_facts_internal(p_envelope, loaded),
+              p_record_type_id, record_id, bounds -> 'readableFieldIds',
               bounds -> 'readableFieldIds', '[]'::jsonb));
         end if;
         bounds_by_route := bounds_by_route || pg_catalog.jsonb_build_object(bounds_key, bounds);
@@ -204,10 +171,40 @@ begin
 end
 $function$;
 
+create or replace function vortex_record.read_record_page_decisions_internal(
+  p_record_type_id uuid,
+  p_first_loaded jsonb,
+  p_page_declaration jsonb,
+  p_page_eligibility jsonb,
+  p_record_ids uuid[]
+)
+returns table (record_id uuid, loaded jsonb, decision jsonb, bounds jsonb)
+language sql
+volatile
+security invoker
+set search_path = ''
+as $function$
+  select decided.record_id,
+    vortex_record.read_record_page_row_facts_internal(page.envelope, decided.loaded),
+    decided.decision, decided.bounds
+  from vortex_record.read_record_page_envelope_internal(p_record_type_id, p_first_loaded) as page
+  cross join lateral vortex_record.read_record_page_decisions_internal(
+    p_record_type_id, p_first_loaded, p_page_declaration, p_page_eligibility, p_record_ids,
+    page.envelope, page.narrowed
+  ) as decided
+$function$;
+
+alter function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[],jsonb,boolean)
+  owner to vortex_record_adapter;
+revoke all on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[],jsonb,boolean)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 alter function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[])
   owner to vortex_record_adapter;
 revoke all on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
+comment on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[],jsonb,boolean) is
+  'Private page read pass for the fixed record adapter: loads the stored facts of every candidate record of one page in one statement, decides them together through the set-based exact decision with the page eligibility computed once in this invocation, and resolves field bounds once per distinct contribution set; each decided record is returned as its compact record scope, which with the page envelope built once for the page is the facts the exact loader would give it; returns only records it decided, so every other record keeps the exact single-record path.';
+
 comment on function vortex_record.read_record_page_decisions_internal(uuid,jsonb,jsonb,jsonb,uuid[]) is
-  'Private page read pass for the fixed record adapter: loads the stored facts of every candidate record of one page in one statement, decides them together through the set-based exact decision with the page eligibility computed once in this invocation, and resolves field bounds once per distinct contribution set; each decided record carries the facts the exact loader would give it, narrowed to its own record type and permissions when nothing about that type reaches another record or type; returns only records it decided, so every other record keeps the exact single-record path.';
+  'Private page read pass with each decided record carrying its complete read facts: builds the page envelope from the first record''s facts and delegates to the envelope variant.';
