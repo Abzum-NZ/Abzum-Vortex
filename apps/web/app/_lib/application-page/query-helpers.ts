@@ -228,26 +228,29 @@ export const launcherCellKey = (
     : fallback;
 };
 
+/**
+ * The label of every declared option of each choice field, in definition order. These labels only
+ * resolve a STORED value into text on the server; the permission that gates choosing an option is
+ * enforced where options are offered (the field settings), never when a held value is displayed.
+ */
 export const fieldChoiceLabelsOf = (
   module: ModuleRelease,
-  allowedPermissions: ReadonlySet<string>,
 ): Record<string, readonly Readonly<{ value: string; label: string }>[]> =>
   Object.fromEntries(
     module.content.recordTypes.flatMap((recordType) =>
-      recordType.fields.flatMap((field) => {
-        if (field.type !== "several_choices" && field.type !== "choice") return [];
-        const labels = field.settings.options.flatMap((option) => {
-          const permissionId = option.requiredPermissionId;
-          const permissionKey =
-            permissionId === undefined
-              ? undefined
-              : `${String(module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
-          return permissionKey === undefined || allowedPermissions.has(permissionKey)
-            ? [{ value: option.value, label: option.label }]
-            : [];
-        });
-        return [[String(field.fieldId).toLowerCase(), labels] as const];
-      }),
+      recordType.fields.flatMap((field) =>
+        field.type !== "several_choices" && field.type !== "choice"
+          ? []
+          : [
+              [
+                String(field.fieldId).toLowerCase(),
+                field.settings.options.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ] as const,
+            ],
+      ),
     ),
   );
 
