@@ -275,6 +275,9 @@ const sourceLinkSettingsSchema = z
     application_root_required: sourceProvenanceTarget(z.boolean().optional(), [
       "applicationRootIdRequired",
     ]),
+    legacy_person_field: sourceProvenanceTarget(builderKeySchema.optional(), [
+      "legacyPersonFieldId",
+    ]),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z

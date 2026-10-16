@@ -126,6 +126,30 @@ function compileModule(
       );
     const valueContext = valueContextFor(qualified);
     const recordTypeId = resolution.id(definitionKey, "record_type", recordKey, "content");
+    const mappedLegacyFields = new Set<string>();
+    for (const field of recordType.fields as JsonObject[]) {
+      if (field.type !== "link") continue;
+      const linkSettings = field.settings as JsonObject;
+      const legacyKey = linkSettings.legacy_person_field;
+      if (legacyKey === undefined) continue;
+      const matches = (recordType.fields as JsonObject[]).filter(
+        (candidate) => candidate.key === legacyKey && candidate.type === "link_to_person",
+      );
+      if (
+        matches.length !== 1 ||
+        mappedLegacyFields.has(String(legacyKey)) ||
+        field.required === true ||
+        linkSettings.application_root_required !==
+          (matches[0]?.settings as JsonObject | undefined)?.application_root_required
+      ) {
+        const location = resolution.location("field", String(field.key), `record:${recordKey}`);
+        fail("vortex.definition.invalid_object", "invalid_value", {
+          ...location,
+          segments: [...location.segments, { kind: "setting", key: "legacy_person_field" }],
+        });
+      }
+      mappedLegacyFields.add(String(legacyKey));
+    }
     const compiledFields = (recordType.fields as JsonObject[]).map((field) => ({
       fieldId: resolution.id(definitionKey, "field", String(field.id), `record:${recordKey}`),
       key: field.key,

@@ -116,6 +116,14 @@
                                                              "version":  "1.0.0"
                                                          },
                                              "purpose":  "compatible_shared_record_display"
+                                         },
+                                         {
+                                             "module":  "vortex.system_directory",
+                                             "version":  {
+                                                             "selection":  "exact",
+                                                             "version":  "1.0.0"
+                                                         },
+                                             "purpose":  "system_record_display"
                                          }
                                      ],
                  "permissions":  [
@@ -363,7 +371,8 @@
                                                        "application.crm.activity.complete",
                                                        "vortex.crm.tags.record_tag.manage",
                                                        "application.crm.shared_cases.read",
-                                                       "application.crm.shared_cases.collaborate"
+                                                       "application.crm.shared_cases.collaborate",
+                                                       "vortex.system_directory.person.reference_read"
                                                    ]
                                },
                                {
@@ -446,7 +455,8 @@
                                                        "vortex.crm.tags.record_tag.soft_delete",
                                                        "vortex.crm.tags.record_tag.restore",
                                                        "vortex.crm.tags.record_tag.export",
-                                                       "vortex.crm.tags.record_tag.manage"
+                                                       "vortex.crm.tags.record_tag.manage",
+                                                       "vortex.system_directory.person.reference_read"
                                                    ]
                                }
                            ],

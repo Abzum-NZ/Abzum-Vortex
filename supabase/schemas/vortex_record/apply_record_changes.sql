@@ -1351,6 +1351,10 @@ begin
 
   saved_record_id := (mutation ->> 'recordId')::uuid;
   saved_concurrency_number := (mutation ->> 'concurrencyNumber')::bigint;
+  perform vortex_record.mirror_person_links_internal(
+    (meta ->> 'storageContractId')::uuid, organization_id_value,
+    saved_record_id, final_values
+  );
   select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[])
   into changed_field_ids
   from pg_catalog.jsonb_object_keys(
@@ -1526,6 +1530,10 @@ begin
       from pg_catalog.jsonb_object_keys(creation -> 'values') as key;
       inserted_value := vortex_record.insert_named_action_record_internal(
         (creation ->> 'recordTypeId')::uuid, creation -> 'finalValues', submitted_field_ids
+      );
+      perform vortex_record.mirror_person_links_internal(
+        (inserted_value ->> 'storageContractId')::uuid, organization_id_value,
+        (inserted_value ->> 'recordId')::uuid, inserted_value -> 'values'
       );
       created_records := created_records || pg_catalog.jsonb_build_object(
         creation ->> 'ordinal', inserted_value
