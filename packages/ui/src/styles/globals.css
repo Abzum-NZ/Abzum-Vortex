@@ -56,6 +56,22 @@ body {
   a {
     color: inherit;
   }
+
+  /*
+   * Form controls take the theme's font rather than the browser's control font, everywhere a
+   * themed root reaches (the document root, so Studio's own frame too). Zero specificity, so a
+   * component style or utility still decides.
+   */
+  :where([data-vortex-theme]) :where(button, input, select, textarea, optgroup) {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  /* A fieldset groups controls without the browser's own inset, as in shadcn's preflight. */
+  :where([data-vortex-theme]) :where(fieldset) {
+    margin: 0;
+    padding: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

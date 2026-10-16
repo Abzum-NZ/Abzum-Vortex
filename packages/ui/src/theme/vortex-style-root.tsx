@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createVortexStyleRootProps, resolveVortexStyleSelection } from "./vortex-style";
 
 type StyleRootContext = Readonly<{ element: HTMLDivElement | null }>;
 
@@ -13,40 +14,45 @@ const DOCUMENT_THEME_ATTRIBUTES = [
   "data-vortex-menu-accent",
 ] as const;
 
+const platformStyle = createVortexStyleRootProps(resolveVortexStyleSelection());
+
+/** The platform default style attributes, which the document root returns to outside applications. */
+const PLATFORM_STYLE_ATTRIBUTES: Readonly<
+  Record<(typeof DOCUMENT_THEME_ATTRIBUTES)[number], string>
+> = {
+  "data-vortex-style": platformStyle["data-vortex-style"],
+  "data-vortex-menu": platformStyle["data-vortex-menu"],
+  "data-vortex-menu-accent": platformStyle["data-vortex-menu-accent"],
+};
+
 /**
- * While an application surface is mounted the document root carries that application's theme, so
- * the root itself, the body and anything a library places outside the application root paint the
- * application's style, fonts, radius and colours rather than the platform default. Leaving the
- * application puts the platform default back. The viewer's appearance (colour scheme and mode) is
- * never touched: it stays the document root's own.
+ * The document root carries the theme of the application on screen. The server render already gives
+ * it the addressed application's theme, so the first paint is right; this keeps it right across
+ * client-side navigation: an application surface puts its theme on the document root (the same
+ * values the server render wrote), and leaving the application removes them again, so the platform
+ * default `:root` rule applies with the platform style attributes. The viewer's appearance (colour
+ * scheme and mode) is never touched: it stays the document root's own.
  */
 function useDocumentTheme(element: HTMLDivElement | null, enabled: boolean, themeKey: string) {
   React.useLayoutEffect(() => {
     if (!enabled || element === null) return;
     const root = document.documentElement;
-    const attributes = DOCUMENT_THEME_ATTRIBUTES.map(
-      (name) => [name, root.getAttribute(name)] as const,
-    );
-    const properties: [string, string][] = [];
+    const properties: string[] = [];
     for (let index = 0; index < element.style.length; index += 1) {
       const name = element.style.item(index);
       if (!name.startsWith("--")) continue;
-      properties.push([name, root.style.getPropertyValue(name)]);
-      root.style.setProperty(name, element.style.getPropertyValue(name));
+      properties.push(name);
+      const value = element.style.getPropertyValue(name);
+      if (root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value);
     }
-    for (const [name] of attributes) {
+    for (const name of DOCUMENT_THEME_ATTRIBUTES) {
       const value = element.getAttribute(name);
-      if (value !== null) root.setAttribute(name, value);
+      if (value !== null && root.getAttribute(name) !== value) root.setAttribute(name, value);
     }
     return () => {
-      for (const [name, value] of attributes) {
-        if (value === null) root.removeAttribute(name);
-        else root.setAttribute(name, value);
-      }
-      for (const [name, value] of properties) {
-        if (value === "") root.style.removeProperty(name);
-        else root.style.setProperty(name, value);
-      }
+      for (const name of properties) root.style.removeProperty(name);
+      for (const name of DOCUMENT_THEME_ATTRIBUTES)
+        root.setAttribute(name, PLATFORM_STYLE_ATTRIBUTES[name]);
     };
   }, [element, enabled, themeKey]);
 }

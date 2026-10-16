@@ -10,8 +10,10 @@
  * - `document-theme`: the document root's style, radius, fonts, spacing or colours differ from the
  *   application surface's.
  * - `font-family`: a font that is none of its theme root's body, heading or mono fonts.
- * - `border-radius`: a corner radius that is none of its theme root's radius tokens.
- * - `padding`: a padding that is not on its theme root's spacing scale or a density token.
+ * - `border-radius`: outside a shadcn part, a corner radius that is none of its theme root's
+ *   radius tokens.
+ * - `padding`: outside a shadcn part, a padding that is not on its theme root's spacing scale or a
+ *   density token.
  * - `style-variant`: a shadcn component part (`cn-*` class) whose radius, padding or font differs
  *   from what the active style variant gives the same part without the extra utility classes or
  *   inline style the renderer added.
@@ -298,6 +300,15 @@
     const tokens = tokensOf(root);
     const font = normalizeFont(style.fontFamily);
     if (!tokens.fonts.has(font)) report("font-family", element, `"${style.fontFamily}"`);
+    // A shadcn part (`cn-*`) takes radius and padding from its style variant, which may use fixed
+    // values of its own (Maia's checkbox is `rounded-[6px]`); the variant check judges it. Other
+    // elements must sit on the theme's radius and spacing scales.
+    const part = [...element.classList].some((name) => name.startsWith("cn-"));
+    if (part) {
+      for (const difference of variantDifferences(element, style))
+        report("style-variant", element, difference);
+      continue;
+    }
     for (const corner of CORNERS) {
       const value = style.getPropertyValue(corner);
       if (px(value) !== 0 && !radiusOk(value, radiiFor(element, tokens))) {
@@ -312,9 +323,6 @@
         break;
       }
     }
-    if ([...element.classList].some((name) => name.startsWith("cn-")))
-      for (const difference of variantDifferences(element, style))
-        report("style-variant", element, difference);
   }
 
   // Dark mode follows the nearest mode root. Probes in each themed and mode root read the shadcn
