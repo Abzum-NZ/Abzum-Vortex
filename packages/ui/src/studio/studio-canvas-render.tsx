@@ -5,6 +5,7 @@ import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
   canonicalThemeTokenValue,
+  findFieldInputBinding,
   typedSourceSettings,
   type BlockPropertyValueContract,
   type PlatformBlockRelease,
@@ -66,11 +67,8 @@ export function StudioCanvasRecordsProvider({
   return <CanvasRecordsContext.Provider value={records}>{children}</CanvasRecordsContext.Provider>;
 }
 
-/** What the canvas says in place of a data block's records, or nothing when it has them. */
+/** What the canvas says in place of a current data block's records, or nothing when it has them. */
 const recordsNote = (records: StudioCanvasRecords, id: string): string | undefined => {
-  const saved = records.saved.get(id);
-  if (saved === undefined || saved !== records.current.get(id))
-    return records.updating ? "Updating the canvas…" : "Save to show this block's records.";
   if (records.state === "loading") return "Reading records…";
   if (records.state === "not_installed") return "Install this application to show its records here.";
   if (records.state === "unavailable") return "Records could not be read just now.";
@@ -156,6 +154,17 @@ function CanvasBlock({
     return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Adding the block…</div>;
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   const release = releaseOf(registry, props);
+  // A block whose drawing needs what the compiler derives (an automatic field input's control, a
+  // data block's resolved fields) is drawn only from a compile of exactly this block. Until then
+  // it shows that a save draws it; it is never drawn from settings the compiler has not seen.
+  const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
+  if (release !== undefined && !current &&
+    (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release)))
+    return <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground"
+      data-vortex-canvas-pending={id}>
+      <p className="font-medium text-foreground">{release.name}</p>
+      <p>{records.updating ? "Updating the canvas…" : "Save to show this block."}</p>
+    </div>;
   const drawn = renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined);
   if (release === undefined || !studioReleaseReadsQuery(release)) return render(drawn);
   // A data block draws the records its saved version reads, and says so when it has none to show.

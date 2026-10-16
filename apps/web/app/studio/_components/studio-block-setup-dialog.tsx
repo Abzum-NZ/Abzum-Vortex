@@ -3,9 +3,9 @@ import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@vortex/ui/components/dialog";
 import {
-  StudioQueryPicker, StudioSettingFields, studioSettingProblems,
+  StudioQueryPicker, StudioSettingFields, studioBlockChoices, studioSettingProblems,
   type StudioCompositionAddTarget, type StudioCompositionSettings, type StudioPaletteChoice,
-  type StudioQueryChoice, type StudioSettingChoices,
+  type StudioSettingChoices,
 } from "@vortex/ui/studio";
 
 
@@ -23,12 +23,13 @@ export type StudioBlockSetupRequest = Readonly<{
  * its catalogue release has no default for, drawn with the same typed controls as the inspector.
  * Every other setting takes its catalogue default.
  */
-export function StudioBlockSetupDialog({ request, queries, pages, onClose }: Readonly<{
+export function StudioBlockSetupDialog({ request, choices: draftChoices, onClose }: Readonly<{
   request: StudioBlockSetupRequest | null;
-  queries: readonly StudioQueryChoice[];
-  pages: StudioSettingChoices["pages"];
+  /** What reference settings can point at, read from the draft being edited. */
+  choices: StudioSettingChoices;
   onClose: () => void;
 }>) {
+  const queries = draftChoices.queries;
   const [query, setQuery] = useState("");
   const [values, setValues] = useState<StudioCompositionSettings>({});
   const [problem, setProblem] = useState("");
@@ -40,12 +41,8 @@ export function StudioBlockSetupDialog({ request, queries, pages, onClose }: Rea
       : queries.some((candidate) => candidate.reference === request.pageQuery) ? request.pageQuery!
         : queries[0]?.reference ?? "");
   }, [request, queries]);
-  const choices = useMemo((): StudioSettingChoices => {
-    const chosen = queries.find((candidate) => candidate.reference === query);
-    const fields = chosen !== undefined ? chosen.fields
-      : [...new Map(queries.flatMap((candidate) => candidate.fields).map((field) => [field.reference, field])).values()];
-    return { fields, queries, pages };
-  }, [queries, query, pages]);
+  // A block without a query picks any field of the draft; one with a query, only that query's fields.
+  const choices = useMemo(() => studioBlockChoices(draftChoices, query === "" ? null : query), [draftChoices, query]);
   if (request === null) return null;
   const { choice, target } = request;
 

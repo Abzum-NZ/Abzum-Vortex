@@ -10,8 +10,7 @@ import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
   describeStudioCompositionAddTargets,
-  studioQueryChoices,
-  studioSourceFields,
+  studioDraftChoices,
   type StudioBorrowedQueries,
   type StudioCompositionOutcome,
   applyStudioFlowTextCommand,
@@ -834,9 +833,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const addTargets = useMemo(() => canvasPage === undefined ? null
     : describeStudioCompositionAddTargets(compositionContext, canvasPage.id), [compositionContext, canvasPage?.id]);
   // What reference settings and the query picker offer: queries that already exist (own, then borrowed), fields and pages.
-  const queryChoices = useMemo(() => studioQueryChoices(source, borrowedQueries), [source, borrowedQueries]);
-  const sourceFields = useMemo(() => studioSourceFields(source), [source]);
-  const pageChoices = useMemo(() => source.body.pages.map((page) => ({ key: page.key, label: page.name })), [source]);
+  const draftChoices = useMemo(() => studioDraftChoices(source, borrowedQueries), [source, borrowedQueries]);
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(async (area: string) => {
     const pageAlias = canvasPageRef.current;
@@ -1195,7 +1192,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     {selected?.kind === "placement" && inspector.status === "resolved" &&
       <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
         selection={selected} disabled={busy.anyRendered("composition") || noEdit}
-        queries={queryChoices} fields={sourceFields} pages={pageChoices}
+        choices={draftChoices}
         onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
     {selected?.kind === "placement" && inspector.status === "resolved" &&
       <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
@@ -1243,7 +1240,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     <ApplicationDraftAgentTools organizationId={organizationId} history={history}
       catalogue={platformBlockCatalogue} readLifetime={() => lifetime.current} blockedReason={agentBlockedReason}
       select={changeSelection} command={commandComposition} save={save}
-      readQueries={() => studioQueryChoices(applicationSourceDocumentSchema.parse(history.getState().source), borrowedQueries)}
+      readQueries={() => studioDraftChoices(applicationSourceDocumentSchema.parse(history.getState().source), borrowedQueries).queries}
       readPreparedConfirmation={() => preparedRef.current?.confirmation}
       prepare={() => requestPublication("prepare")} publish={(releaseNote) => requestPublication("publish", releaseNote)}
       readPreview={readPreviewContext} />
@@ -1308,7 +1305,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       problem={publicationProblem} published={publishedPublication}
       onPrepare={() => { void requestPublication("prepare"); }}
       onPublish={() => { void requestPublication("publish"); }} />
-    <StudioBlockSetupDialog request={blockSetup} queries={queryChoices} pages={pageChoices} onClose={() => setBlockSetup(null)} />
+    <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />
     {confirmDialog}
   </div>;
 }
