@@ -73,6 +73,7 @@ export const minimumApplicationSource = (
         name: inputs.roleName.trim(),
         home_page: "home",
         permissions: [permissionKey],
+        default_member: true,
       }],
       pages: [{
         id: "page_home",

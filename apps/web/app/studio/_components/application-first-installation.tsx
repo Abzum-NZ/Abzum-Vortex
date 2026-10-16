@@ -59,7 +59,9 @@ const loadMessage = (result: StudioApplicationFirstInstallLoadResult): string =>
 const commandMessage = (result: StudioApplicationFirstInstallCommandResult): string => {
   if (result.kind !== "completed") {
     if (result.kind === "conflict") return "The current release or setup changed. Reload before taking another action.";
-    if (result.kind === "refused" || result.kind === "authentication_required")
+    if (result.kind === "authentication_required")
+      return "Sign in again to install. Accepting the member role needs a sign-in within the last 15 minutes.";
+    if (result.kind === "refused")
       return "Current HUMAN permission or eligibility could not be confirmed. Reload to inspect current access.";
     if (result.stateMayHaveChanged === "unknown")
       return "The outcome could not be confirmed. Reload the protected setup before doing anything else; do not repeat the command automatically.";
@@ -71,7 +73,7 @@ const commandMessage = (result: StudioApplicationFirstInstallCommandResult): str
     return "The command completed. Reload the protected installation before continuing.";
   if (result.action === "activated")
     return result.postCommit.kind === "observed"
-      ? "The application is switched on."
+      ? "The application is switched on. Open it from the launcher."
       : "The application was switched on, but its state could not be read back. Reload to confirm.";
   return result.postCommit.kind === "observed"
     ? "This version was already switched on."
@@ -94,6 +96,7 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
   const [needsReload, setNeedsReload] = useState(false);
   const [message, setMessage] = useState(loadMessage(initialResult));
   const [commandResult, setCommandResult] = useState<StudioApplicationFirstInstallCommandResult | null>(null);
+  const [acceptMemberRole, setAcceptMemberRole] = useState(false);
   const mounted = useRef(false);
   const generation = useRef(0);
   const pendingRef = useRef<PendingAction | null>(null);
@@ -226,14 +229,22 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
 
   const activate = async () => {
     if (load.kind !== "available" || pending !== null || needsReload) return;
+    const memberRole = load.snapshot.memberRole;
     if (!await confirm({
       title: `Activate revision ${load.snapshot.selected.releaseRevision} now?`,
-      description: `Activate ${load.snapshot.selected.releaseVersion}, revision ${load.snapshot.selected.releaseRevision} now? This will make the exact prepared Application and Module set active.`,
+      description: `Activate ${load.snapshot.selected.releaseVersion}, revision ${load.snapshot.selected.releaseRevision} now? This will make the exact prepared Application and Module set active.${acceptMemberRole
+        ? ` You will hold the ${memberRole.name} role and its ${memberRole.permissions.length} permissions.`
+        : " You will not hold any of its roles until an administrator assigns one."}`,
       confirmLabel: "Activate",
       destructive: true,
     })) return;
     await settleCommand("activate", () => activateFirstInstall(selector.organizationId, {
-      kind: "application.first_install.activate", selector, expected: load.snapshot,
+      kind: "application.first_install.activate",
+      selector,
+      expected: load.snapshot,
+      memberRole: acceptMemberRole
+        ? { kind: "accept", sourceRoleId: memberRole.sourceRoleId }
+        : { kind: "decline" },
     }));
   };
 
@@ -298,6 +309,20 @@ export function ApplicationFirstInstallation({ selector, initialResult }: Props)
         <section aria-label="Explicit activation" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
           <h2 className="text-lg font-semibold">Activate the prepared release</h2>
           <p>Activation is a separate, explicit operation for this exact Application and Module release set. Each record type starts with the default lifecycle policy: deleted records can be recovered for 30 days, with no automatic age or count limit.</p>
+          <fieldset aria-label="Member role" className="space-y-2 rounded-lg border p-3">
+            <legend className="px-1 font-semibold">Member role: {snapshot.memberRole.name}</legend>
+            <p>Accept this role to use the application straight away. It gives you these permissions{snapshot.memberRole.privileged ? ", including administrative ones" : ""}:</p>
+            <ul className="list-disc space-y-1 pl-6">
+              {snapshot.memberRole.permissions.map((permission) => <li key={permission.key}>{permission.label}</li>)}
+            </ul>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="application.first_install.accept_member_role"
+                checked={acceptMemberRole} disabled={mutationBlocked}
+                onChange={(event) => setAcceptMemberRole(event.target.checked)} />
+              <span>Accept the {snapshot.memberRole.name} role for myself</span>
+            </label>
+            <p className="text-muted-foreground text-sm">Accepting needs permission to manage roles and assignments, and a sign-in within the last 15 minutes.</p>
+          </fieldset>
           <Button type="button" variant="outline" size="sm" name="application.first_install.activate" disabled={mutationBlocked}
             aria-busy={pending === "activate"}
             onClick={() => void activate()}>

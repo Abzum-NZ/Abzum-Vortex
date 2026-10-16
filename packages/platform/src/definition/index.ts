@@ -33,9 +33,14 @@ export {
 } from "./installation-first-install-app";
 export {
   createFirstInstallCoordinator,
-  verifyFirstInstallActivation,
   type FirstInstallCoordinatorEnvironment,
 } from "./installation-first-install-coordinator";
+export {
+  acceptedApplicationRoleKey,
+  activateFirstInstall,
+  type FirstInstallMemberRole,
+  type FirstInstallMemberRoleChoice,
+} from "./installation-first-install-member-role";
 export { classifyInstallationFailure } from "./installation-failure";
 export {
   activateUpgradeRelease,
