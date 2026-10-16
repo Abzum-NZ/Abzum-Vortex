@@ -24,6 +24,7 @@ import {
   type StudioCompositionCommand,
   type StudioCompositionContext,
   type StudioCompositionDestination,
+  isStudioDataSelection,
   type StudioSemanticSelection,
   type StudioSemanticOutlineNode,
 } from "@vortex/ui/studio";
@@ -46,8 +47,9 @@ import { StudioPublishDialog } from "./studio-publish-dialog";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioHistoryTab } from "./studio-history-tab";
 import { StandardPageAdoption } from "./standard-page-adoption";
-import { StudioDataPanel } from "./studio-data-panel";
-import { ModuleFieldsEditor, type StudioModuleOwnerApplication } from "./module-fields-editor";
+import { useStudioDataTab } from "./studio-data-tab";
+import type { StudioModuleOwnerApplication } from "./module-fields-editor";
+import type { StudioDataModule } from "../_lib/studio-data-model";
 import { StudioTopBar } from "./studio-top-bar";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioInspector } from "./studio-inspector";
@@ -121,6 +123,8 @@ type WorkspaceProps = Readonly<{
       applications: readonly StudioModuleOwnerApplication[];
       searchMetadata?: StudioApplicationSearchMetadata | null;
       borrowedQueries?: StudioBorrowedQueries | null;
+      /** The modules the application uses, read-only in the Data tab. */
+      usedModules?: readonly StudioDataModule[] | null;
       pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
       canvasFrames?: StudioApplicationCanvasFrames | null;
       compileFailure?: StudioCompileFailure | null }>);
@@ -192,6 +196,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         applications={props.applications}
         initialSearchMetadata={props.searchMetadata ?? null}
         initialBorrowedQueries={props.borrowedQueries ?? null}
+        initialUsedModules={props.usedModules ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
         canvasFrames={props.canvasFrames ?? null}
         compileFailure={props.compileFailure ?? null}
@@ -201,7 +206,7 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 }
 
 function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule, applications,
-  initialSearchMetadata, initialBorrowedQueries, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
+  initialSearchMetadata, initialBorrowedQueries, initialUsedModules, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
   platformThemeTokens, themeOptions }: {
   organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
   themeOptions: StudioThemeOptions;
@@ -209,6 +214,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   applications: readonly StudioModuleOwnerApplication[];
   initialSearchMetadata: StudioApplicationSearchMetadata | null;
   initialBorrowedQueries: StudioBorrowedQueries | null;
+  initialUsedModules: readonly StudioDataModule[] | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
   canvasFrames: StudioApplicationCanvasFrames | null;
   compileFailure: StudioCompileFailure | null;
@@ -228,7 +234,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const publicationRequest = useRef<{ epoch: number; cancelled: boolean } | null>(null);
   const [tab, setTab] = useState<StudioRailKey>(initialTab);
   const [releasesSection, setReleasesSection] = useState<StudioReleasesSection>(initialSection);
-  const [moduleKey, setModuleKey] = useState<string | null>(initialModule);
+  const [usedModules, setUsedModules] = useState<readonly StudioDataModule[] | null>(initialUsedModules);
   const [previewPending, setPreviewPending] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
@@ -629,6 +635,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         sourceFingerprint: result.draft.sourceFingerprint, slots: result.pageCompiledSlots, frames: result.canvasFrames,
         failure: result.compileFailure, generation: previous.generation + 1 }));
       setBorrowedQueries((previous) => result.borrowedQueries ?? previous);
+      setUsedModules((previous) => result.usedModules ?? previous);
       searchRefresh.current += 1;
       setSearchMetadata(result.searchMetadata);
     } catch (error) {
@@ -700,6 +707,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         sourceFingerprint: result.draft.sourceFingerprint, slots: result.pageCompiledSlots,
         frames: result.canvasFrames, failure: result.compileFailure, generation: previous.generation + 1 }));
       setBorrowedQueries((previous) => result.borrowedQueries ?? previous);
+      setUsedModules((previous) => result.usedModules ?? previous);
       searchRefresh.current += 1;
       discardSourceImport();
       lifetime.current += 1;
@@ -1011,29 +1019,28 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     }
   };
 
-  // Another module replaces the open module editor, so its unapplied input is discarded only after asking.
-  const openModule = async (next: string) => {
-    if (next === moduleKey) return;
-    if (busy.is("moduleField") && !await confirm({
-      title: "Discard the field change?",
-      description: "The module that is open has a field change you have not applied. It is lost if you open another module.",
-      confirmLabel: "Discard and open",
-    })) return;
-    busy.clear("moduleField");
-    setModuleKey(next);
-  };
-
-  // A field change of an owned inline Module is one edit of the application draft.
-  const applyModuleField = (expected: ApplicationSourceDocument, next: ApplicationSourceDocument): boolean => {
+  // A Data tab change (record type, module or field) is one edit of the application draft.
+  const applyDataChange = (expected: ApplicationSourceDocument, next: ApplicationSourceDocument, change: string): boolean => {
     const current = history.getState();
-    if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || busy.any("moduleField") ||
+    if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || busy.anyOf("publication", "reopening") ||
         canonicalJson(expected) !== canonicalJson(current.source)) return false;
     const parsed = applicationSourceDocumentSchema.safeParse(next);
     if (!parsed.success || !history.edit(parsed.data)) return false;
     busy.clear("moduleField");
-    setMessage("Module field changed. Save to keep it.");
+    setMessage(change);
     return true;
   };
+  const data = useStudioDataTab({ organizationId, rootId: state.rootId, source, saved: savedPreviewDraft.current.source,
+    used: usedModules, applications, initialModule, hidden: tab !== "data",
+    selection: isStudioDataSelection(selected) ? selected : null,
+    disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,
+    search: <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
+      disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}
+      onPendingChange={reportSearchPending} onRefresh={refreshSearchMetadata} onApply={applySearch} />,
+    apply: applyDataChange, onFieldPending: reportModuleFieldPending,
+    choose: (next) => { void chooseSelection(next); }, selectAfterEdit: (next) => { changeSelection(next); },
+    openInTab: (nextTab, next) => { void changeTab(nextTab).then((changed) => { if (changed) void chooseSelection(next); }); },
+  });
 
   const pageLabel = (pageAlias: string, fallback: string) =>
     labels.get(studioSemanticSelectionKey({ kind: "page", pageAlias })) ?? fallback;
@@ -1044,7 +1051,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     : ownerShellKey === undefined ? undefined : labels.get(ownerShellKey);
   const outlineOwnerKey = canvasPage !== undefined ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
     : ownerShellKey;
-  const centreTitle = tab === "data" ? (moduleKey === null ? "Data" : `Module ${moduleKey}`)
+  const centreTitle = tab === "data" ? data.title
       : tab === "releases" ? studioReleasesSections.find((entry) => entry.value === releasesSection)!.label
         : canvasPage !== undefined ? pageLabel(canvasPage.id, canvasPage.name)
           : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item";
@@ -1112,11 +1119,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       selectedAlias={selected?.kind === "navigation" ? selected.navigationItemAlias : null}
       onSelect={(alias) => { void chooseSelection(alias === null ? null : { kind: "navigation", navigationItemAlias: alias }); }}
       onCommand={commandMenu} disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />
-    <StudioDataPanel hidden={tab !== "data"} source={source} applications={applications}
-      open={moduleKey} onOpen={(next) => { void openModule(next); }}
-      search={<ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
-        disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}
-        onPendingChange={reportSearchPending} onRefresh={refreshSearchMetadata} onApply={applySearch} />} />
+    {data.panel}
     {flows.panel(tab !== "flows")}
     <StudioThemePanel hidden={tab !== "theme"} selection={source.body.theme.selection} options={themeOptions}
       disabled={busy.anyRendered("appearance") || state.isSaving || workspaceLifetime === 0} onChange={changeThemeSelection}
@@ -1166,6 +1169,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     note={selected?.kind === "placement" ? undefined : selected?.kind === "flow" || selected?.kind === "flow_step"
       ? tab === "flows" ? undefined : "Open this flow in the Flows tab to change it."
       : selected === null ? undefined : selected.kind === "navigation" ? "Change this menu entry in the Menu tab."
+        : selected.kind === "module" || selected.kind === "record_type" || selected.kind === "field" ? (tab === "data" ? undefined : "Change this in the Data tab.")
         : "This item cannot be edited here."}>
     {(selected?.kind === "flow" || selected?.kind === "flow_step") && tab === "flows" && inspector.status === "resolved" && flows.inspector}
     {selected?.kind === "placement" && inspector.status === "resolved" &&
@@ -1243,7 +1247,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         previewDisabled={state.isSaving || locked || themeOverrideProblems}
         onPublish={openPublish} publishDisabled={busy.isRendered("reopening") || state.isSaving || locked} />}
       panel={panels}
-      inspector={inspectorPanel}
+      inspector={tab === "data" ? data.inspector : inspectorPanel}
       canvas={({ inspectorOpen, toggleInspector }) => <>
         <StudioCanvasToolbar title={centreTitle} breakpoint={canvasBreakpoint} onBreakpoint={setCanvasBreakpoint}
           zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={canvasShown && canvasPage !== undefined}
@@ -1252,15 +1256,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {canvasCentre}
           {tab === "flows" && flows.centre}
-          {/* A module editor keeps its unapplied input while another tab is open. */}
-          <div hidden={tab !== "data"}>
-            {moduleKey === null
-              ? <p className="text-sm text-muted-foreground">Choose a module in the Data panel.</p>
-              : <ModuleFieldsEditor key={`${moduleKey}:${workspaceLifetime}`} organizationId={organizationId}
-                source={source} moduleKey={moduleKey} applications={applications}
-                disabled={noEdit || busy.anyRendered("moduleField")}
-                onPendingChange={reportModuleFieldPending} onApply={applyModuleField} />}
-          </div>
+          {/* The Data tab's field editor keeps its unapplied input while another tab is open. */}
+          <div hidden={tab !== "data"}>{data.centre}</div>
           {tab === "releases" && releasesSection === "history" &&
             <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision} />}
           {tab === "releases" && releasesSection === "page-adoption" &&
@@ -1287,6 +1284,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       onPrepare={() => { void requestPublication("prepare"); }}
       onPublish={() => { void requestPublication("publish"); }} />
     <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />
+    {data.dialog}
     {confirmDialog}
   </div>;
 }
