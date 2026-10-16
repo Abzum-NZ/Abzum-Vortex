@@ -14,6 +14,8 @@ export * from "./application-composition/catalogue-discovery";
 export * from "./application-composition-release-identities";
 export * from "./preview-installation-contracts";
 export * from "./application-flow-bindings";
+// The one flow validator is pure, so Studio judges a flow edit with it before the draft takes it.
+export { validateFlow, type FlowValidationIssue, type FlowValidationOptions } from "./flow-validation";
 export * from "./canonical-json";
 export * from "./definitions";
 export * from "./definition-source";
