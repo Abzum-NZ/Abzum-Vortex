@@ -100,7 +100,7 @@ begin
   -- Step 3: the pinned definitions. Record types, relationships and saved
   -- conditions of every bound Module, plus the declared permissions of the
   -- Application release and of each Module release. Physical tokens are
-  -- resolved here too, and every disagreement refuses.
+  -- resolved here; only record types actually loaded require record_data.
   for binding_item in
     select item.value
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
@@ -135,7 +135,6 @@ begin
         or catalogue_row.module_root_id <> module_root_value
         or catalogue_row.record_type_id <> record_type_id_value
         or catalogue_row.storage_scope is distinct from (record_type_item ->> 'storageScope')
-        or catalogue_row.physical_schema_token <> 'record_data'
         or not exists (
           select 1
           from vortex_record.release_provisions as provision
@@ -217,6 +216,7 @@ begin
           'recordTypeId', record_type_id_value,
           'storageContractId', storage_contract_value,
           'storageScope', record_type_item ->> 'storageScope',
+          'physicalSchemaToken', catalogue_row.physical_schema_token,
           'ownershipMode', record_type_item ->> 'ownershipMode',
           'releaseRevision', release_revision_value,
           'validationContractVersion', release_validation_contract_version,
@@ -351,6 +351,10 @@ begin
     raise exception using errcode = '55000',
       message = 'Record type is not part of the active installation';
   end if;
+  if target_meta ->> 'physicalSchemaToken' is distinct from 'record_data' then
+    raise exception using errcode = '55000',
+      message = 'Record storage disagrees with the installed definition';
+  end if;
   target_table := target_meta ->> 'table';
   target_scope := target_meta ->> 'storageScope';
   target_module_root_id := (target_meta ->> 'moduleRootId')::uuid;
@@ -449,6 +453,10 @@ begin
       limit 1;
       if current_meta is null then
         continue;
+      end if;
+      if current_meta ->> 'physicalSchemaToken' is distinct from 'record_data' then
+        raise exception using errcode = '55000',
+          message = 'Record storage disagrees with the installed definition';
       end if;
 
       load_sql := pg_catalog.format(
