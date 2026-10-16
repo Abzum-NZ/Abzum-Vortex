@@ -192,8 +192,4 @@ set local role vortex_record_adapter;
 drop function vortex_record.prepare_protected_record_restore(p_command_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid);
 drop function vortex_record.read_import_update_targets(p_record_type_id uuid, p_mapped_field_ids jsonb, p_targets jsonb);
 
--- The Realtime integration function is owned by postgres.
-set local role postgres;
--- guard-allow: migration-owner-role Realtime integration function is owned by postgres.
-drop function vortex_platform.may_receive_topic(p_topic text);
 reset role;

@@ -374,7 +374,9 @@ function argumentType(argument: string): string | undefined {
   }
   const firstToken = /^"?([\w$]+)"?/.exec(value)?.[1] ?? "";
   const rest = value.slice(firstToken.length).trim();
-  if (rest && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value))) value = rest;
+  // A first identifier followed by a dot is a schema-qualified type, never an argument name.
+  const qualified = /^"?[\w$]+"?\s*\./.test(value);
+  if (rest && !qualified && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value))) value = rest;
   return normalizedType(value);
 }
 function functions(
