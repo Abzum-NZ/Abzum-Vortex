@@ -5,6 +5,10 @@ relationships, pages, permissions, actions, flows, connections, themes). Generic
 Next.js application render and execute those definitions for many organisations, with access
 enforced by the platform and the database.
 
+## One way only
+
+Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and reset data with demo:setup. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
+
 ## Layout
 
 | Path                   | Contents                                                                        |
@@ -75,7 +79,6 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
   code path draws a block.
 - No absent-setting behaviour: defaults live in definitions (Puck `defaultProps`), not in renderers.
 - One current version of every contract: no `V2`/`V3` copies.
-- No backward compatibility: Vortex is a fresh project. Replace contracts and formats in place, convert shipped definitions in the same change, and reset data with demo:setup. Do not add upgraders, dual readers or compatibility branches for old releases or drafts.
 - One record write path (`apply_record_changes`), one activity append, one idempotency table.
 - No process artefacts in product code: no review receipts, fingerprints, continuity or evidence.
 - Fail loudly on platform-produced data: never turn a parse failure or database error into a silent
