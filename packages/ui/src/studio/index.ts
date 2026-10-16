@@ -18,3 +18,4 @@ export * from "./application-composition-commands";
 export * from "./application-flow-text-commands";
 export * from "./application-visibility-condition-commands";
 export * from "./placement-theme-overrides";
+export { StoredCompositionRefusal, syncStoredBlockDependencies, validateStoredShell } from "./stored-composition";

@@ -50,19 +50,26 @@ type PanelProps = Readonly<{
   outline: StudioSemanticOutline; selectedKey: string; choose: Choose; disabled: boolean; hidden: boolean;
 }>;
 
-export function StudioStructurePanel({ outline, selectedKey, choose, disabled, hidden }: PanelProps) {
+export function StudioStructurePanel({ outline, selectedKey, choose, disabled, hidden, homePageKey, editor }: PanelProps & Readonly<{
+  /** The selection key of the home page, marked in the tree. */
+  homePageKey: string | undefined;
+  /** The controls that add, rename and remove pages and layouts. */
+  editor: ReactNode;
+}>) {
   const [query, setQuery] = useState("");
   // The application, its layouts and its pages; their blocks are in the Outline tab.
   const tree = useMemo(() => {
     const shells = sectionOf(outline, "shells");
     const pages = sectionOf(outline, "pages");
     const sections = [shells, pages].flatMap((section) => section === undefined ? []
-      : [{ ...section, children: section.children.map(withoutChildren) }]);
+      : [{ ...section, children: section.children.map((node) => withoutChildren(
+        node.key === homePageKey ? { ...node, label: `${node.label} (home page)` } : node)) }]);
     return [{ ...outline, children: filterNodes(sections, query) }];
-  }, [outline, query]);
+  }, [outline, query, homePageKey]);
   return <StudioPanelShell title="Structure" description="The application, its layouts and its pages." hidden={hidden}>
     <StudioSearchBox value={query} onChange={setQuery} placeholder="Find a page or layout" label="Find a page or layout" />
     <OutlineList nodes={tree} selectedKey={selectedKey} choose={choose} disabled={disabled} empty="Nothing matches." />
+    {editor}
   </StudioPanelShell>;
 }
 
