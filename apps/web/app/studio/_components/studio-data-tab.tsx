@@ -249,7 +249,7 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
       : { kind: "field", moduleKey: open.moduleKey, recordKey: open.recordKey, fieldKey: open.fieldKey });
     else if (open.kind === "query") choose({ kind: "query", moduleKey: open.moduleKey, queryKey: open.queryKey });
     else if (open.kind === "page") openInTab("structure", { kind: "page", pageAlias: open.pageAlias });
-    else if (open.kind === "flow") openInTab("flows", { kind: "flow", flowAlias: open.flowAlias });
+    else if (open.kind === "flow") openInTab("flows", { kind: "flow", flowAlias: open.flowAlias, moduleKey: open.moduleKey });
     else if (open.kind === "menu") openInTab("menu", { kind: "navigation", navigationItemAlias: open.navigationAlias });
   };
   const owned = useMemo(() => ownedDataModules(source), [source]);
