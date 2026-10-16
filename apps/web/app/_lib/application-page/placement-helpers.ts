@@ -36,7 +36,7 @@ export const first = (value: string | readonly string[] | undefined): string | u
 
 /**
  * One placed item of a projected page: the item itself and, read from it, its Vortex metadata
- * (`props.vortex`) and its settings (`props.settings`).
+ * (`props.vortex`) and its settings (every prop holding a typed canonical value).
  */
 export type PlacedItem = Readonly<{
   placementId: string;
@@ -238,7 +238,7 @@ export const collectPlacements = (projected: Readonly<Record<string, unknown>>):
   const found: PlacedItem[] = [];
   walkPageComposition(
     projected.composition,
-    ({ placementId, item, props, vortex }, formId: string | undefined) => {
+    ({ placementId, item, vortex, settings }, formId: string | undefined) => {
       const block = vortex.block;
       const owner =
         isRecord(block) &&
@@ -250,7 +250,7 @@ export const collectPlacements = (projected: Readonly<Record<string, unknown>>):
         placementId,
         item,
         vortex,
-        settings: isRecord(props.settings) ? props.settings : {},
+        settings,
         ...(owner === undefined ? {} : { formId: owner }),
       });
       return owner;

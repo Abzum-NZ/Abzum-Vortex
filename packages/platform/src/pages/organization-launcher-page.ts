@@ -31,7 +31,7 @@ export const platformPageItem = (
   type: release.rendererKey,
   props: {
     id,
-    settings,
+    ...settings,
     ...Object.fromEntries(emptySlots.map((key) => [key, []])),
     vortex: {
       block: { blockId: release.blockId, releaseVersion: release.releaseVersion },

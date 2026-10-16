@@ -78,7 +78,7 @@ const placementAvailability = (state: PlacementCapabilityState, hasUseGate: bool
     ? {}
     : { availability: "unavailable", unavailableReason: "operation_unavailable" };
 
-const reservedProps = new Set(["id", "settings", "vortex"]);
+const reservedProps = new Set(["id", "vortex"]);
 
 /** One projected item list: refused items dropped, kept items annotated, slot orders filtered. */
 const projectItems = (
@@ -107,6 +107,10 @@ const projectItems = (
     const slotOrders: JsonObject = {};
     for (const [key, value] of Object.entries(props)) {
       if (reservedProps.has(key)) continue;
+      if (!Array.isArray(value)) {
+        projectedProps[key] = value;
+        continue;
+      }
       const children = projectItems(value, states);
       projectedProps[key] = children;
       slotOrders[key] = filteredOrder(object(vortex.slotOrders)[key], children);
@@ -116,7 +120,6 @@ const projectItems = (
         type: item.type,
         props: {
           id: props.id,
-          settings: props.settings,
           ...projectedProps,
           vortex: {
             ...withoutKeys(vortex, [

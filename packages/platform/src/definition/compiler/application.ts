@@ -436,9 +436,9 @@ function compileApplication(
           eventId: resolution.id(definitionKey, "event", String(event.id), "content"),
           key: event.key,
           recordTypeId: resolution.recordType(record).recordTypeId,
-          carriedFieldIds: (event.carries as string[]).map((alias) =>
-            resolution.field(record, alias),
-          ),
+          carriedFieldIds: (event.carries as string[])
+            .map((alias) => resolution.field(record, alias))
+            .sort(compareCanonicalStrings),
           personalOrSensitiveValuesAllowed: false,
         };
       }),

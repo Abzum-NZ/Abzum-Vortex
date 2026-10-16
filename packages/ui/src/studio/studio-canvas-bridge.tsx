@@ -28,31 +28,41 @@ export type StudioCanvasFrame = Readonly<{
 
 const usePuckSelector = createUsePuck();
 
-type VortexOrder = Readonly<{ desktop: readonly string[]; tablet?: readonly string[]; phone?: readonly string[] }>;
-const orderOf = (item: Content[number]): VortexOrder | undefined =>
-  ((item.props as { vortex?: { order?: VortexOrder } }).vortex?.order);
+/** A slot's items; a plain list setting is an array too, but of values, not items. */
+const isContent = (value: unknown): value is Content =>
+  Array.isArray(value) && value.every((entry) =>
+    entry !== null && typeof entry === "object" && "type" in entry && "props" in entry);
+
+type SlotOrder = Readonly<{ tablet?: readonly string[] | undefined; phone?: readonly string[] | undefined }>;
 
 /**
- * The canvas shows a smaller screen in that screen's own order. The arrays are reordered for
- * display only; a canvas showing another size than desktop never sends its data back as an edit.
+ * The canvas shows a smaller screen in that screen's own order: the root slot's stored order and
+ * each block's stored slot orders. The arrays are reordered for display only; a canvas showing
+ * another size than desktop never sends its data back as an edit.
  */
-export const puckDataForBreakpoint = (data: Data, breakpoint: Breakpoint): Data => {
+export const puckDataForBreakpoint = (
+  data: Data,
+  breakpoint: Breakpoint,
+  rootOrder: SlotOrder | undefined,
+): Data => {
   if (breakpoint === "desktop") return data;
-  const reorder = (content: Content): Content => {
-    const order = content.length === 0 ? undefined : orderOf(content[0]!);
-    const sequence = order === undefined ? undefined
-      : breakpoint === "phone" ? order.phone ?? order.tablet ?? order.desktop : order.tablet ?? order.desktop;
+  const reorder = (content: Content, order: SlotOrder | undefined): Content => {
+    const sequence = breakpoint === "phone" ? order?.phone ?? order?.tablet : order?.tablet;
     const position = new Map(sequence?.map((id, index) => [id, index]) ?? []);
     const sorted = sequence === undefined ? [...content] : [...content].sort((left, right) =>
       (position.get(String(left.props.id)) ?? 0) - (position.get(String(right.props.id)) ?? 0));
-    return sorted.map((item) => ({
-      ...item,
-      props: Object.fromEntries(Object.entries(item.props).map(([key, value]) =>
-        [key, key !== "id" && key !== "settings" && key !== "vortex" && Array.isArray(value)
-          ? reorder(value as Content) : value])),
-    })) as Content;
+    return sorted.map((item) => {
+      const orders = (item.props as { vortex?: { slot_orders?: Record<string, SlotOrder> } })
+        .vortex?.slot_orders;
+      return {
+        ...item,
+        props: Object.fromEntries(Object.entries(item.props).map(([key, value]) =>
+          [key, key !== "id" && key !== "vortex" && isContent(value)
+            ? reorder(value, orders?.[key]) : value])),
+      };
+    }) as Content;
   };
-  return { ...data, content: reorder(data.content) };
+  return { ...data, content: reorder(data.content, rootOrder) };
 };
 
 const sameContent = (left: Data, right: Data): boolean =>

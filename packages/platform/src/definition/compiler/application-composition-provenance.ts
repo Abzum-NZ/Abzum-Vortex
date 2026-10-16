@@ -45,7 +45,37 @@ export const isApplicationCompositionSourcePath = (path: Path): boolean =>
   ((path[1] === "shells" && path[3] === "layout") ||
     (path[1] === "pages" && path[3] === "composition"));
 
-type Target = Readonly<{ path: Path; setting: boolean }>;
+/** A canonical leaf one authored leaf feeds; a setting leaf names where its setting value starts. */
+type Target = Readonly<{ path: Path; setting: boolean; settingAt?: number }>;
+
+const isCompiledItem = (value: unknown): boolean => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as JsonObject;
+  const props = item.props;
+  return (
+    typeof item.type === "string" &&
+    props !== null &&
+    typeof props === "object" &&
+    !Array.isArray(props) &&
+    typeof (props as JsonObject).vortex === "object"
+  );
+};
+
+/**
+ * Where the compiled setting holding one canonical leaf starts: the index of its setting key, the
+ * segment after the innermost item's `props` that is not `id`, `vortex` or a child slot. Undefined
+ * when the leaf is not inside a setting value.
+ */
+export const compiledSettingStart = (canonical: unknown, canonicalPath: Path): number | undefined => {
+  for (let at = canonicalPath.length - 2; at >= 1; at -= 1) {
+    const key = canonicalPath[at + 1];
+    if (canonicalPath[at] !== "props" || typeof key !== "string") continue;
+    if (!isCompiledItem(valueAtPath(canonical, canonicalPath.slice(0, at)))) continue;
+    if (key === "id" || key === "vortex") return undefined;
+    return Array.isArray(valueAtPath(canonical, canonicalPath.slice(0, at + 2))) ? undefined : at + 1;
+  }
+  return undefined;
+};
 
 const recordTypeLeaves: Path[] = [
   ["recordType", "state"],
@@ -240,7 +270,7 @@ function itemTargets(
     }
     if (typeof prop !== "string") return undefined;
     const compiledProps = asObject(valueAtPath(canonical, [...placement, "props"]));
-    if (prop !== "settings" && Array.isArray(compiledProps[prop])) {
+    if (Array.isArray(compiledProps[prop])) {
       root = [...itemPath, "props", prop];
       zone = {
         items: [...placement, "props", prop],
@@ -250,11 +280,12 @@ function itemTargets(
       slotOrder = orders[prop] === undefined ? undefined : asObject(orders[prop]);
       continue;
     }
-    const setting = asObject(compiledProps.settings)[prop];
-    if (setting === undefined) return undefined;
+    const setting = compiledProps[prop];
+    if (setting === undefined || prop === "vortex") return undefined;
     return settingLeafTargets(setting, suffix.slice(2)).map((path) => ({
-      path: [...placement, "props", "settings", prop, ...path],
+      path: [...placement, "props", prop, ...path],
       setting: true,
+      settingAt: placement.length + 1,
     }));
   }
 }
@@ -392,7 +423,7 @@ export function applicationCompositionProvenance(
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
   const sourceValue = valueAtPath(source, sourcePath);
   const sourceObject = source as unknown as JsonObject;
-  return targets.map(({ path, setting }) => {
+  return targets.map(({ path, setting, settingAt }) => {
     const canonicalPath = setting
       ? path
       : applicationTypedValueTarget(sourceObject, sourcePath, path, canonicalLeafSet, positions);
@@ -402,7 +433,7 @@ export function applicationCompositionProvenance(
     const transformed = canonicalJson(sourceValue) !== canonicalJson(canonicalValue);
     let resolved: boolean;
     if (setting) {
-      const leafKind = settingKindAt(canonical, canonicalPath);
+      const leafKind = settingKindAt(canonical, canonicalPath, settingAt ?? 0);
       const eventReference =
         canonicalPath.at(-2) === "event_id" &&
         canonicalPath.at(-1) === "value" &&
@@ -442,8 +473,8 @@ export function applicationCompositionProvenance(
 }
 
 /** The kind of the innermost typed setting value holding one canonical setting leaf. */
-const settingKindAt = (canonical: unknown, canonicalPath: Path): string => {
-  let at = canonicalPath.lastIndexOf("settings") + 2;
+const settingKindAt = (canonical: unknown, canonicalPath: Path, settingAt: number): string => {
+  let at = settingAt + 1;
   let value = asObject(valueAtPath(canonical, canonicalPath.slice(0, at)));
   while (
     (value.kind === "group" && canonicalPath[at] === "properties") ||

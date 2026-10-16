@@ -5,6 +5,9 @@ import "@puckeditor/core/puck.css";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
+  compiledItemSlots,
+  compiledPropsSettings,
+  readSourceItem,
   setSourcePageSlot,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
@@ -12,7 +15,12 @@ import {
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
-import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
+import type {
+  BlockPropertyValueContract,
+  CompiledItem,
+  SourceItem,
+  SourcePageZone,
+} from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import { createFullPlatformComponentRegistry } from "../combined-registry";
@@ -35,9 +43,15 @@ import {
   type StudioPlacementThemeResult,
 } from "./placement-theme-overrides";
 import {
-  AuthoredPuckSettingRefusal,
-  createVortexAuthoredPuckAdapter,
-} from "./vortex-authored-puck-adapter";
+  StoredCompositionRefusal,
+  storedItemRelease,
+  storedZoneFromPuck,
+  validateStoredZone,
+  storedZoneAliases,
+  withCopiedFlowBindings,
+  withoutFlowBindingsOf,
+} from "./stored-composition";
+import { StudioCanvasCompiledSettings, studioCanvasConfig } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
 
 export type { StudioCanvasFrame } from "./studio-canvas-bridge";
@@ -45,41 +59,39 @@ export type { StudioCanvasFrame } from "./studio-canvas-bridge";
 /** One compiled content area: its items, exactly as the published definition holds them. */
 type CompiledSlot = readonly CompiledItem[];
 type SourceSlot = SourcePageZone;
-const record = (value: unknown): Record<string, unknown> => {
-  if (value === null || typeof value !== "object" || Array.isArray(value))
-    throw new TypeError("Compiled Puck page data is invalid.");
-  return value as Record<string, unknown>;
-};
+type CompiledSettings = Readonly<Record<string, Readonly<Record<string, BlockPropertyValueContract>>>>;
 
+/**
+ * The settings of each block's last compiled version, by block name. The compiled slot holds the
+ * compiled version of the same stored items, in the same desktop order and with the same slots,
+ * so each stored item reads its compiled item at the same position.
+ */
 const compiledSettingsFor = (
-  authoredData: Data,
-  compiledContent: CompiledSlot,
-): Readonly<Record<string, Readonly<Record<string, unknown>>>> => {
-  const result: Record<string, Readonly<Record<string, unknown>>> = {};
-  const visit = (authoredContent: unknown, compiledContent: unknown): void => {
-    if (!Array.isArray(authoredContent) || !Array.isArray(compiledContent) ||
-      authoredContent.length !== compiledContent.length)
-      throw new TypeError("Compiled Puck page placements do not match their authored page.");
-    for (const [index, authoredRaw] of authoredContent.entries()) {
-      const authoredNode = record(authoredRaw);
-      const compiledNode = record(compiledContent[index]);
-      const authoredProps = record(authoredNode.props);
-      const compiledProps = record(compiledNode.props);
-      const alias = authoredProps.id;
-      if (authoredNode.type !== compiledNode.type || typeof alias !== "string")
-        throw new TypeError("Compiled Puck page placements do not match their authored page.");
-      result[alias] = record(compiledProps.settings);
-      const authoredSlots = Object.keys(authoredProps).filter((key) =>
-        key !== "id" && key !== "settings" && key !== "vortex" && Array.isArray(authoredProps[key]));
-      const compiledSlots = Object.keys(compiledProps).filter((key) =>
-        key !== "id" && key !== "settings" && key !== "vortex" && Array.isArray(compiledProps[key]));
-      if (authoredSlots.length !== compiledSlots.length ||
-        authoredSlots.some((key) => !compiledSlots.includes(key)))
-        throw new TypeError("Compiled Puck page slots do not match their authored page.");
-      for (const key of authoredSlots) visit(authoredProps[key], compiledProps[key]);
+  catalogue: ImmutablePlatformBlockCatalogue,
+  stored: readonly SourceItem[],
+  compiled: CompiledSlot,
+): CompiledSettings => {
+  const result: Record<string, Readonly<Record<string, BlockPropertyValueContract>>> = {};
+  const visit = (items: readonly SourceItem[], compiledItems: readonly CompiledItem[]): void => {
+    if (items.length !== compiledItems.length)
+      throw new TypeError("Compiled page placements do not match their stored page.");
+    for (const [index, item] of items.entries()) {
+      const compiledItem = compiledItems[index]!;
+      const release = storedItemRelease(catalogue, item);
+      if (release === undefined || item.type !== compiledItem.type)
+        throw new TypeError("Compiled page placements do not match their stored page.");
+      result[item.props.id] = compiledPropsSettings(compiledItem.props);
+      const compiledSlots = new Map(compiledItemSlots(compiledItem));
+      for (const [key, { items: children }] of readSourceItem(item, release).slots) {
+        if (children === undefined) continue;
+        const compiledChildren = compiledSlots.get(key);
+        if (compiledChildren === undefined)
+          throw new TypeError("Compiled page slots do not match their stored page.");
+        visit(children, compiledChildren);
+      }
     }
   };
-  visit(authoredData.content, compiledContent);
+  visit(stored, compiled);
   return result;
 };
 
@@ -204,18 +216,21 @@ const breakpoints: readonly Readonly<{ value: Breakpoint; width: string }>[] = [
 const zoneJson = (zone: SourceSlot): string =>
   canonicalJson(JSON.parse(JSON.stringify(zone)) as unknown);
 
-/** Why a content area that does not convert exactly is not editable on the canvas. */
-const roundTripProblem = (
-  adapter: ReturnType<typeof createVortexAuthoredPuckAdapter>,
+/**
+ * Why a content area is not editable on the canvas: its stored data does not pass the stored
+ * composition check, or its compiled version does not match it. Such a content area is shown
+ * read-only rather than risking a silent change to the definition.
+ */
+const storedDataProblem = (
+  catalogue: ImmutablePlatformBlockCatalogue,
   slot: SourceSlot,
-  runtimeSettings: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
 ): string | undefined => {
   try {
-    const back = adapter.fromPuckData(slot, adapter.toPuckData(slot, runtimeSettings));
-    return zoneJson(back) === zoneJson(slot)
-      ? undefined : "STUDIO_CANVAS_ROUND_TRIP_MISMATCH: the content converts back differently";
+    const checked = validateStoredZone(catalogue, slot);
+    return zoneJson(checked) === zoneJson(slot)
+      ? undefined : "STUDIO_CANVAS_STORED_DATA_MISMATCH: the stored content reads back differently";
   } catch (error: unknown) {
-    return `STUDIO_CANVAS_ROUND_TRIP_FAILED: ${error instanceof Error ? error.message : String(error)}`;
+    return `STUDIO_CANVAS_STORED_DATA_REFUSED: ${error instanceof Error ? error.message : String(error)}`;
   }
 };
 
@@ -245,10 +260,12 @@ function ApplicationPageSlotPuckEditor({
   const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
   // The content renders inside the frame's outlet, exactly as a running page's content does.
   const config = useMemo(
-    () => contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)),
+    () => studioCanvasConfig(
+      contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases, platformThemeTokens)),
+      registry,
+    ),
     [registry, fieldInputControlReleases, platformThemeTokens],
   );
-  const adapter = useMemo(() => createVortexAuthoredPuckAdapter(catalogue), [catalogue]);
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
   const [resync, setResync] = useState(0);
@@ -265,30 +282,34 @@ function ApplicationPageSlotPuckEditor({
     () => (originalPage === undefined ? undefined : sourcePageSlotAt(originalPage, at)),
     [originalPage, at.key],
   );
-  const runtimeSettings = useMemo(() => {
-    if (originalSlot === undefined || compiledSlot === undefined) return undefined;
-    // The compiled items are Puck data in the same desktop order, so each authored item reads its
-    // compiled settings directly from the item at the same position.
-    return compiledSettingsFor(adapter.toPuckData(originalSlot), compiledSlot);
-  }, [compiledSlot, originalSlot]);
-  const data = useMemo(() => {
-    if (slot === undefined || runtimeSettings === undefined) return undefined;
-    return adapter.toPuckData(slot, runtimeSettings);
-  }, [runtimeSettings, slot]);
-  // Checked once per opened content area: a content area that would not convert back exactly is
-  // shown read-only rather than risking a silent change to the definition.
-  // Checked whenever the content area or its compiled settings change, and closed until it passes:
-  // a content area that would not convert back exactly is shown read-only rather than risking a
-  // silent change to the definition. Without compiled settings there is nothing to check yet.
+  // The compiled version is read once per compile; a mismatch keeps the canvas closed.
+  const compiled = useMemo((): { settings?: CompiledSettings; problem?: string } => {
+    if (originalSlot === undefined || compiledSlot === undefined) return {};
+    try {
+      return { settings: compiledSettingsFor(catalogue, originalSlot.items, compiledSlot) };
+    } catch (error: unknown) {
+      return { problem: `STUDIO_CANVAS_COMPILED_MISMATCH: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }, [catalogue, compiledSlot, originalSlot]);
+  // Puck's data is the stored content area itself; Puck only needs a root beside it, holding the
+  // config's root defaults that Puck writes into it anyway.
+  const rootProps = useMemo(() => ({ ...config.root?.defaultProps }), [config]);
+  const data = useMemo((): Data | undefined =>
+    slot === undefined || compiled.settings === undefined ? undefined
+      : { root: { props: rootProps }, content: slot.items as unknown as Data["content"] },
+  [compiled.settings, slot, rootProps]);
+  // Checked whenever the content area or its compiled version changes, and closed until it passes.
+  // Without a compiled version there is nothing to draw yet.
   const readOnlyCause = useMemo(() =>
-    slot === undefined || runtimeSettings === undefined
-      ? "STUDIO_CANVAS_ROUND_TRIP_PENDING: no compiled version to check against"
-      : roundTripProblem(adapter, slot, runtimeSettings), [slot, runtimeSettings]);
+    slot === undefined || compiled.settings === undefined
+      ? compiled.problem ?? "STUDIO_CANVAS_COMPILED_PENDING: no compiled version to draw from"
+      : storedDataProblem(catalogue, slot), [catalogue, slot, compiled]);
   useEffect(() => {
-    if (readOnlyCause !== undefined && runtimeSettings !== undefined)
+    if (readOnlyCause !== undefined && compiledSlot !== undefined)
       console.error(`[studio] canvas content area ${pageAlias}/${at.key} is read-only`, readOnlyCause);
   }, [readOnlyCause]);
-  const shown = useMemo(() => data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint), [data, breakpoint]);
+  const shown = useMemo(() => data === undefined ? undefined
+    : puckDataForBreakpoint(data, breakpoint, slot?.order), [data, breakpoint, slot]);
   const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
 
   const [themeProblems, setThemeProblems] = useState<readonly StudioPlacementThemeFailure[]>([]);
@@ -368,13 +389,17 @@ function ApplicationPageSlotPuckEditor({
       const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
       if (matches.length !== 1 || targetSlot === undefined)
         throw new TypeError("The selected page is unavailable.");
-      const editedSlot = adapter.fromPuckData(targetSlot, candidate);
+      const { zone: editedSlot, copies } = storedZoneFromPuck(catalogue, targetSlot, candidate, rootProps);
       // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
       if (zoneJson(editedSlot) === zoneJson(targetSlot)) return;
       const next = structuredClone(current);
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
       if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))
         throw new TypeError("The selected page is unavailable.");
+      const kept = storedZoneAliases(editedSlot);
+      const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
+      next.body.flow_bindings = withoutFlowBindingsOf(
+        withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
       syncPlatformBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
@@ -385,7 +410,7 @@ function ApplicationPageSlotPuckEditor({
       // Puck keeps the refused change in its own state; show the accepted draft again.
       setResync((generation) => generation + 1);
       setMessage(
-        error instanceof AuthoredPuckSettingRefusal
+        error instanceof StoredCompositionRefusal
           ? `This page change could not be applied. ${error.message}. The saved draft and current edits are preserved.`
           : "This page change could not be applied. The saved draft and current edits are preserved.",
       );
@@ -444,6 +469,7 @@ function ApplicationPageSlotPuckEditor({
       )}
       <div className="overflow-x-auto rounded-xl border border-border bg-muted/30 p-2">
         <div className="mx-auto overflow-hidden rounded-lg bg-background" style={{ width, maxWidth: "100%" }}>
+          <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
           <Puck
             config={config}
             data={shown}
@@ -470,6 +496,7 @@ function ApplicationPageSlotPuckEditor({
               platformThemeTokens={platformThemeTokens}
             />
           </Puck>
+          </StudioCanvasCompiledSettings>
         </div>
       </div>
     </section>
