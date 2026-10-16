@@ -43,11 +43,7 @@ function RootList({
         <li key={root.rootId}>
           <Link
             className="block py-2 font-medium underline-offset-4 hover:underline"
-            href={
-              root.kind === "application"
-                ? `/studio/${organizationId}/${root.rootId}`
-                : `/studio/modules/${organizationId}/${root.rootId}`
-            }
+            href={`/studio/${organizationId}/${root.rootId}`}
           >
             {root.name}
           </Link>
@@ -106,11 +102,12 @@ export default async function StudioLandingPage({
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold">Studio</h1>
-        <p className="text-muted-foreground">Applications and modules you can build.</p>
+        <p className="text-muted-foreground">
+          Applications you can build. A module is edited inside the application that owns it.
+        </p>
       </div>
       {organizations.map(({ entry, home }) => {
-        const applications = home.roots.filter((root) => root.kind === "application").sort(byName);
-        const modules = home.roots.filter((root) => root.kind === "module").sort(byName);
+        const applications = [...home.roots].sort(byName);
         return (
           <Card key={entry.organizationId}>
             <CardHeader>
@@ -133,16 +130,6 @@ export default async function StudioLandingPage({
                 >
                   Create an application
                 </Link>
-              </section>
-              <section className="space-y-2">
-                <h2 className="text-lg font-medium">Modules</h2>
-                <RootList
-                  roots={modules}
-                  organizationId={home.organizationId}
-                  size={size}
-                  empty="No modules yet."
-                />
-                {modules.length > size && sizeLinks}
               </section>
             </CardContent>
           </Card>

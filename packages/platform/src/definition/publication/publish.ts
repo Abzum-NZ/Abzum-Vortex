@@ -920,14 +920,13 @@ class DatabasePublicationTransaction
     return parseOwnedModuleRoot(rows[0]!);
   }
 
-  async saveOwnedModuleSource(
+  async stageOwnedModuleSource(
     root: OwnedModuleRoot,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot> {
     const rows = await this.transaction.query`
-      select root_id, definition_key, draft_revision, published_revision as current_release_revision,
-        source_fingerprint
-      from vortex_definition.save_draft(
+      select root_id, definition_key, draft_revision, current_release_revision, source_fingerprint
+      from vortex_definition.stage_owned_module_source(
         ${root.rootId}::uuid,
         ${root.draftRevision},
         ${JSON.stringify(source)}::text::jsonb,
@@ -936,7 +935,7 @@ class DatabasePublicationTransaction
       )
     `;
     if (rows.length === 0) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-    if (rows.length !== 1) return invalidStorage("saveOwnedModuleSource returned several roots");
+    if (rows.length !== 1) return invalidStorage("stageOwnedModuleSource returned several roots");
     return parseOwnedModuleRoot(rows[0]!);
   }
 

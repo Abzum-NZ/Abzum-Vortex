@@ -44,12 +44,10 @@ begin
     where root.root_id = p_root_id
       and root.organization_id = (checked_context ->> 'organizationId')::uuid
     for update;
-    if not found or root_kind is null
-      or root_kind not in ('application', 'module')
-      or (root_kind = 'application' and (
-        origin_kind is null or origin_kind not in ('ordinary', 'platform_system_application')
-      ))
-      or (root_kind = 'module' and origin_kind is not null) then
+    -- Only an Application is drafted: a Module is edited inside its owning Application.
+    if not found or root_kind is distinct from 'application'
+      or origin_kind is null
+      or origin_kind not in ('ordinary', 'platform_system_application') then
       raise exception using errcode = '42501',
         message = 'Definition draft write authority is unavailable';
     end if;
@@ -131,7 +129,7 @@ grant execute on function vortex_definition.validated_builder_draft_write_contex
   to postgres;
 
 comment on function vortex_definition.validated_builder_draft_write_context_internal(uuid) is
-  'Private live human Application and Module draft guard for the existing create/save function owner; locks Access and classified roots and rechecks exact current permissions and deadlines.';
+  'Private live human Application draft guard for the existing create/save function owner; locks Access and classified roots and rechecks exact current permissions and deadlines.';
 
 alter function vortex_definition.validated_builder_draft_write_context_internal(uuid)
   owner to vortex_owner;

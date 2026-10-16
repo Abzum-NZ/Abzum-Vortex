@@ -31,8 +31,7 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import type { SavedConditionLike } from "./saved-condition-revisions";
 import { DefinitionError } from "./definition-error";
 
-export type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
-export type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
+type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
 export type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
 type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection_type" }>;
 export type PublishableCompilationOutput = ApplicationCompilationOutput | ModuleCompilationOutput;
@@ -206,8 +205,8 @@ export interface DefinitionPublicationTransaction extends DefinitionPublicationR
     applicationRootId: string,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot>;
-  /** Writes the current lowering of an inline Module as its internal root's draft. */
-  saveOwnedModuleSource(
+  /** Stages the current lowering of an inline Module in its internal root, for this publication. */
+  stageOwnedModuleSource(
     root: OwnedModuleRoot,
     source: ModuleSourceDocument,
   ): Promise<OwnedModuleRoot>;

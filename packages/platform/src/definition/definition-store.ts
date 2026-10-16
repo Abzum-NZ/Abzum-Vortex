@@ -300,6 +300,8 @@ export const createDefinitionStore = (
           });
         }
         const source = validateSource(command.data.source, permissions);
+        // Only an Application has a draft: a Module is edited inside its owning Application.
+        if (source.kind !== "application") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
         const sourceFingerprint = fingerprintCanonicalValue(source);
         const identityRequirements = extractStoredSourceIdentityRequirements(source);
         const rows = await transaction.query<StoredDraftRow>`

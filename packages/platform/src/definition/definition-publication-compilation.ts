@@ -105,7 +105,7 @@ const assertFinalPublicationValidation = (
   }
 };
 
-export type CompiledModuleCandidate = Readonly<{
+type CompiledModuleCandidate = Readonly<{
   request: z.output<typeof moduleCompilationRequestSchema>;
   output: ModuleOutput;
   dependencyOutputs: readonly DefinitionCompilationOutput[];
@@ -128,7 +128,7 @@ const deriveSavedConditionRevisionsFromHistory = (
   });
 };
 
-export const compileModuleCandidate = (
+const compileModuleCandidate = (
   candidate: DefinitionPublicationCandidate,
   dependencies: ResolvedDependencies,
   resolution: DefinitionResolution,
