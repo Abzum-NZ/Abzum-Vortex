@@ -13,14 +13,21 @@ import {
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import { applicationModuleSources } from "./application-module-lowering";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
-import { compileCandidate, validateCandidate } from "./definition-publication-compilation";
 import {
+  compileApplicationCandidate,
+  compileCandidate,
+  validateCandidate,
+} from "./definition-publication-compilation";
+import {
+  type DefinitionCandidateDraft,
+  type DefinitionDraftCandidate,
   type DefinitionPublicationCandidate,
   type DefinitionPublicationCatalogue,
   type DefinitionPublicationTransaction,
   type ModuleOutput,
   type OwnedModuleRoot,
   type PreparedState,
+  type ResolvableModuleRelease,
   refuse,
 } from "./definition-publication-contracts";
 import {
@@ -28,7 +35,9 @@ import {
   buildResolution,
   manifestFor,
   resolveDependencies,
+  selectCurrentModuleRelease,
 } from "./definition-dependency-resolution";
+import { moduleDependencies } from "./module-dependencies";
 import { assignNextDefinitionVersion } from "./semantic-version";
 import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-definition";
 
@@ -60,7 +69,7 @@ export const applicationCandidate = (
   return checked;
 };
 
-const inlineModuleSources = (candidate: DefinitionPublicationCandidate) =>
+const inlineModuleSources = (candidate: DefinitionCandidateDraft) =>
   candidate.draft.source.kind === "application"
     ? applicationModuleSources(candidate.draft.source)
     : refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
@@ -74,7 +83,8 @@ const inlineModuleSources = (candidate: DefinitionPublicationCandidate) =>
  */
 export const materializeInlineModules = async (
   transaction: DefinitionPublicationTransaction,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
+  unchanged: ReadonlySet<string> = new Set(),
 ): Promise<ReadonlyMap<string, OwnedModuleRoot>> => {
   const owned = new Map(
     (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
@@ -83,6 +93,7 @@ export const materializeInlineModules = async (
   );
   const roots = new Map<string, OwnedModuleRoot>();
   for (const source of inlineModuleSources(candidate)) {
+    if (unchanged.has(source.key)) continue;
     const existing = owned.get(source.key);
     const root =
       existing === undefined
@@ -113,13 +124,15 @@ const releaseInlineModules = async (
   context: SessionContext,
   transaction: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   roots: ReadonlyMap<string, OwnedModuleRoot>,
   version: string,
   releaseNote: string,
+  unchanged: ReadonlySet<string> = new Set(),
 ): Promise<ModuleStep[]> => {
   const steps: ModuleStep[] = [];
   for (const source of inlineModuleSources(candidate)) {
+    if (unchanged.has(source.key)) continue;
     const root = roots.get(source.key);
     if (root === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
     const module = validateCandidate(
@@ -209,7 +222,12 @@ const compileApplication = async (
     catalogue.permissions,
   );
   if (output.kind !== "application") return refuse("DEFINITION_COMPILATION_REFUSED");
-  return { output, resolution, manifest: manifestFor(dependencies, output, resolution) };
+  return {
+    output,
+    resolution,
+    dependencies,
+    manifest: manifestFor(dependencies, output, resolution),
+  };
 };
 
 type CompiledApplication = Awaited<ReturnType<typeof compileApplication>>;
@@ -392,4 +410,114 @@ export const rehearseApplicationPreview = async (
     }
     return transaction.readRehearsedReleases(String(candidate.draft.rootId), pins);
   });
+};
+
+/**
+ * The inline Modules whose current release already is what their publication would leave current.
+ * A Module qualifies when its draft is exactly its released source, every sibling it depends on
+ * qualifies, and its release pins exactly the releases its dependencies resolve to now. Its
+ * publication would compile it, find no change and no new pin, and not release it, so a draft
+ * compile takes the release as it is instead of compiling it again.
+ */
+const releasedUnchangedModules = async (
+  transaction: DefinitionPublicationTransaction,
+  candidate: DefinitionCandidateDraft,
+): Promise<ReadonlySet<string>> => {
+  const owned = new Map(
+    (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
+      (root) => [root.key, root] as const,
+    ),
+  );
+  const sources = inlineModuleSources(candidate);
+  const inlineKeys = new Set(sources.map((source) => source.key));
+  const usedReleases = new Map<string, ResolvableModuleRelease>();
+  const unchanged = new Set<string>();
+  for (const source of sources) {
+    const root = owned.get(source.key);
+    if (
+      root === undefined ||
+      root.currentReleaseRevision === null ||
+      root.draftRevision !== root.currentReleaseRevision ||
+      root.sourceFingerprint !== fingerprintCanonicalValue(source)
+    )
+      continue;
+    const dependencies = moduleDependencies(source).map((dependency) => dependency.module);
+    if (dependencies.some((key) => inlineKeys.has(key) && !unchanged.has(key))) continue;
+    const release = await transaction.readModuleRelease(
+      candidate.draft.organizationId,
+      root.rootId,
+      root.currentReleaseRevision,
+    );
+    if (release === undefined) continue;
+    const pinned = new Set(
+      release.published.dependencyManifest.map((dependency) =>
+        dependency.kind === "module"
+          ? `${String(dependency.rootId).toLowerCase()}:${String(dependency.revision)}`
+          : dependency.kind,
+      ),
+    );
+    const expected: string[] = [];
+    for (const key of dependencies) {
+      const sibling = owned.get(key);
+      if (inlineKeys.has(key)) {
+        expected.push(
+          `${String(sibling?.rootId).toLowerCase()}:${String(sibling?.currentReleaseRevision)}`,
+        );
+        continue;
+      }
+      let used = usedReleases.get(key);
+      if (used === undefined) {
+        used = await selectCurrentModuleRelease(transaction, candidate, key);
+        usedReleases.set(key, used);
+      }
+      expected.push(`${String(used.rootId).toLowerCase()}:${String(used.releaseRevision)}`);
+    }
+    if (pinned.size === expected.length && expected.every((pin) => pinned.has(pin)))
+      unchanged.add(source.key);
+  }
+  return unchanged;
+};
+
+/** The inline Module releases a draft compile holds in memory are never stored; the note only labels them. */
+const draftCompileReleaseNote = "Compiled for the draft";
+
+/**
+ * The Application draft compiled with its own inline Modules, exactly as its publication
+ * compiles them: each inline Module is staged, compiled and released through the publication's
+ * own steps, and the Application is compiled against those releases. Run against the in-memory
+ * publication transaction it writes nothing, so Studio compiles a draft whose Modules add
+ * fields, record types or queries that no installed release has yet.
+ */
+export const compileApplicationWithInlineModules = async (
+  context: SessionContext,
+  transaction: DefinitionPublicationTransaction,
+  catalogue: DefinitionPublicationCatalogue,
+  candidate: DefinitionDraftCandidate,
+) => {
+  const unchanged = await releasedUnchangedModules(transaction, candidate);
+  const roots = await materializeInlineModules(transaction, candidate, unchanged);
+  const version =
+    candidate.currentReleaseVersion === null
+      ? "1.0.0"
+      : assignNextDefinitionVersion(candidate.currentReleaseVersion, "major");
+  await releaseInlineModules(
+    context,
+    transaction,
+    catalogue,
+    candidate,
+    roots,
+    version,
+    draftCompileReleaseNote,
+    unchanged,
+  );
+  const dependencies = await resolveDependencies(transaction, catalogue, candidate);
+  await assertNoCycle(transaction, candidate, dependencies.modules);
+  const resolution = buildResolution(candidate, dependencies, version);
+  const { output } = compileApplicationCandidate(
+    candidate,
+    dependencies,
+    resolution,
+    catalogue.permissions,
+  );
+  return { output, resolution, dependencies };
 };
