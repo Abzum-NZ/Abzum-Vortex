@@ -36,6 +36,7 @@ import {
   repeatableSlotKey,
   type BreakpointOrder,
   type CompiledItemVortex,
+  type BlockPaletteGroup,
   type BlockPropertySchemaContract,
   type BlockPropertyValueContract,
   type ApplicationPuckRootShell,
@@ -43,6 +44,7 @@ import {
   type ProjectedNavigation,
   themeColorSchema,
 } from "@vortex/platform/schema";
+import { PALETTE_GROUP_TITLES } from "./palette-groups";
 import { Checkbox } from "./components/checkbox";
 import { Input } from "./components/input";
 import { Label } from "./components/label";
@@ -1042,15 +1044,6 @@ const layoutField = (
   };
 };
 
-const PALETTE_TITLES: Readonly<Record<string, string>> = Object.freeze({
-  layout: "Layout",
-  content: "Content",
-  data: "Data",
-  figures: "Figures",
-  record: "Record",
-  input: "Inputs",
-  actions: "Actions",
-});
 
 type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
 
@@ -1165,7 +1158,11 @@ export function createVortexPuckConfig(
     categories: Object.fromEntries(
       [...keysByCategory].map(([category, components]) => [
         category,
-        { title: PALETTE_TITLES[category] ?? category, components, defaultExpanded: true },
+        {
+          title: PALETTE_GROUP_TITLES[category as BlockPaletteGroup] ?? category,
+          components,
+          defaultExpanded: true,
+        },
       ]),
     ),
     components,

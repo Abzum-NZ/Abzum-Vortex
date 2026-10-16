@@ -9,6 +9,8 @@ import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
+  describeStudioCompositionAddTargets,
+  studioSourceQueries,
   applyStudioFlowTextCommand,
   applyStudioFlowPresentationCommand,
   applyStudioFlowPresentationMoveCommand,
@@ -28,6 +30,7 @@ import {
   type StudioCompositionCommand,
   type StudioCompositionCommandResult,
   type StudioCompositionContext,
+  type StudioCompositionDestination,
   type StudioFlowTextContext,
   type StudioSemanticSelection,
   type StudioSemanticOutlineNode,
@@ -37,7 +40,7 @@ import {
   type StudioFlowSettingCommand,
 } from "@vortex/ui/studio";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
-import type { StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
+import type { StudioCanvasAddRequest, StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studio/page-puck-editor";
 import { reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
@@ -51,6 +54,7 @@ import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./app
 import { ApplicationSourceImport } from "./application-source-import";
 import { ApplicationSearchEditor } from "./application-search-editor";
 import { StudioPublishDialog } from "./studio-publish-dialog";
+import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioHistoryTab } from "./studio-history-tab";
 import { StandardPageAdoption } from "./standard-page-adoption";
 import { StudioDataPanel } from "./studio-data-panel";
@@ -264,6 +268,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [labelKey, setLabelKey] = useState("");
   const [description, setDescription] = useState("");
   const [themeOverrideProblems, setThemeOverrideProblems] = useState(false);
+  const [paletteHost, setPaletteHost] = useState<HTMLElement | null>(null);
+  const [paletteMessage, setPaletteMessage] = useState("");
+  const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [appearanceEpoch, setAppearanceEpoch] = useState(0);
   const [appearanceValidationEpoch, setAppearanceValidationEpoch] = useState(0);
   const [compositionEpoch, setCompositionEpoch] = useState(0);
@@ -773,6 +780,60 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     return "applied";
   };
 
+  // The one add path for a new block: a drop on the canvas, the palette's Add button and the setup dialog.
+  const runAdd = (command: Extract<StudioCompositionCommand, { kind: "add" }>): string | true => {
+    const current = history.getState();
+    if (!active.current || current.isSaving || busy.any())
+      return "Apply or discard your other change first, then add the block again.";
+    const context: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
+      draftRevision: current.draftRevision, localLifetime: lifetime.current,
+      catalogue: platformBlockCatalogue, source: current.source };
+    const result = applyStudioCompositionCommand(context, context, selection.getSelection(), command);
+    if (result.kind === "refused") return result.reason;
+    if (result.kind !== "applied" || !history.edit(result.source)) {
+      console.error(`[studio] adding a block was refused: STUDIO_ADD_${result.kind.toUpperCase()}`);
+      return "The block could not be added, so the draft is unchanged.";
+    }
+    if (result.placementAlias !== undefined) changeSelection({ kind: "placement", placementAlias: result.placementAlias });
+    setMessage("Block added. Save to keep it.");
+    return true;
+  };
+  const addTargets = useMemo(() => canvasPage === undefined ? null
+    : describeStudioCompositionAddTargets(compositionContext, canvasPage.id), [compositionContext, canvasPage?.id]);
+  const sourceQueries = useMemo(() => studioSourceQueries(source), [source]);
+  const sameDestination = (left: StudioCompositionDestination, right: StudioCompositionDestination) =>
+    left.kind === "root" ? right.kind === "root"
+      : right.kind === "child" && left.parentAlias === right.parentAlias && left.slotKey === right.slotKey;
+  // A block for one place: added at once, or after its setup when it needs settings or data.
+  const addBlock = (request: StudioCanvasAddRequest): boolean => {
+    const pageAlias = canvasPageRef.current;
+    if (pageAlias === undefined || addTargets?.kind !== "available") return false;
+    const target = addTargets.targets.find((candidate) => candidate.area === request.area &&
+      sameDestination(candidate.destination, request.destination));
+    const choice = target?.choices.find((candidate) => candidate.rendererKey === request.rendererKey);
+    // A block this place does not admit still goes to the add command, which names why it is refused.
+    const release = choice ?? [...platformBlockCatalogue.releases].reverse()
+      .find((candidate) => candidate.rendererKey === request.rendererKey);
+    if (release === undefined) return false;
+    const command = { kind: "add", pageAlias, area: request.area, destination: request.destination,
+      index: request.index, blockId: release.blockId, releaseVersion: release.releaseVersion } as const;
+    if (target !== undefined && choice !== undefined && choice.unavailable === undefined &&
+      (choice.setup.length > 0 || choice.needsQuery)) {
+      const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
+      setPaletteMessage("");
+      setBlockSetup({ choice, target, pageQuery: page !== undefined && "query" in page ? page.query : undefined,
+        add: (settings, query) => {
+          const outcome = runAdd({ ...command, settings, query });
+          if (outcome === true) setPaletteMessage(`${choice.name} added. Save to keep it.`);
+          return outcome;
+        } });
+      return false;
+    }
+    const outcome = runAdd({ ...command, settings: {}, query: null });
+    setPaletteMessage(outcome === true ? `${release.name} added. Save to keep it.` : outcome);
+    return outcome === true;
+  };
+
   // The outline's selection change, minus its confirmation: the agent tools refuse instead of discarding input.
   const changeSelection = (next: StudioSemanticSelection | null): boolean => {
     if (!selection.select(next)) return false;
@@ -1021,10 +1082,11 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       editor={<StudioStructureEditor source={source} selected={selected} onCommand={commandStructure}
         disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />} />
     <StudioBlockOutlinePanel {...outlinePanelProps} hidden={tab !== "outline"} ownerKey={outlineOwnerKey} />
-    <StudioComingNextPanel title="Blocks" description="Blocks to add to the page." hidden={tab !== "blocks"}>
-      A searchable palette to drag new blocks onto the page comes next. Today you can rearrange, duplicate and remove
-      blocks on the canvas, and change the selected block in the inspector.
-    </StudioComingNextPanel>
+    <StudioPanelShell title="Blocks" description="Blocks to add to the page on the canvas." hidden={tab !== "blocks"}>
+      {/* The canvas's editor draws the palette here, so its blocks drag with the canvas's own drag and drop. */}
+      <div ref={setPaletteHost} />
+      {canvasPage === undefined && <p className="text-sm text-muted-foreground">Choose a page in Structure to add blocks to it.</p>}
+    </StudioPanelShell>
     <StudioMenuPanel {...outlinePanelProps} hidden={tab !== "menu"} />
     <StudioDataPanel hidden={tab !== "data"} source={source} applications={applications}
       open={moduleKey} onOpen={(next) => { void openModule(next); }}
@@ -1119,7 +1181,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
             rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
           onThemeOverrideProblems={setThemeOverrideProblems}
-          onChange={applyPuckPageEdit} />
+          onChange={applyPuckPageEdit}
+          palette={addTargets === null ? undefined
+            : { host: paletteHost, targets: addTargets, message: paletteMessage, onAdd: addBlock }} />
       </div>}
     {flowPane(busy.anyRendered("flowText", "flowAppend") || noEdit)}
   </section>;
@@ -1192,6 +1256,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       problem={publicationProblem} published={publishedPublication}
       onPrepare={() => { void requestPublication("prepare"); }}
       onPublish={() => { void requestPublication("publish"); }} />
+    <StudioBlockSetupDialog request={blockSetup} queries={sourceQueries} onClose={() => setBlockSetup(null)} />
     {confirmDialog}
   </div>;
 }

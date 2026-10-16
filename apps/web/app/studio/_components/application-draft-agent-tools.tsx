@@ -4,16 +4,19 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { applicationSourceDocumentSchema, describeFailure, type DefinitionPublicationConfirmation,
   type ImmutablePlatformBlockCatalogue, type PublishDefinitionResult } from "@vortex/platform/schema";
 import {
-  describeStudioCompositionPalette,
+  describeStudioCompositionAddTargets,
   describeStudioCompositionRemoval,
   describeStudioCompositionScalarSettings,
   describeStudioCompositionSettings,
   projectStudioSemanticOutline,
+  studioSourceQueries,
   type StudioApplicationDraftHistoryController,
   type StudioApplicationDraftSaveOutcome,
   type StudioCompositionCommand,
   type StudioCompositionCommandResult,
+  type StudioCompositionAddSettings,
   type StudioCompositionContext,
+  type StudioCompositionDestination,
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
@@ -33,7 +36,9 @@ const alias = (what: string) => applicationSourceDocumentSchema.shape.root_alias
 const textValue = z.object({ kind: z.literal("text"), value: z.string() }).strict();
 const booleanValue = z.object({ kind: z.literal("boolean"), value: z.boolean() }).strict();
 const choiceValue = z.object({ kind: z.literal("choice"), value: z.string() }).strict();
-const addSettingValue = z.discriminatedUnion("kind", [textValue, booleanValue, choiceValue]);
+const addSettingValue = z.discriminatedUnion("kind", [textValue, booleanValue, choiceValue,
+  z.object({ kind: z.literal("number"), value: z.number() }).strict(),
+  z.object({ kind: z.literal("field_reference"), value: z.string() }).strict()]);
 const settingValue = z.discriminatedUnion("kind", [textValue, booleanValue, choiceValue,
   z.object({ kind: z.literal("number"), value: z.number() }).strict()]);
 
@@ -59,16 +64,21 @@ const tool = (name: ToolName, description: string, input: z.ZodType, readOnly: b
   ({ name, description, input, readOnly, inputSchema: inputSchema(input) });
 
 const applicationTools: readonly StudioApplicationTool[] = [
-  tool("read_application_draft", "Read the Application draft as it is in the workspace now: revision, unsaved state, the outline of pages, placements, flows and navigation, and for each page the released components that can be added and for each placement its declared settings. Call it first and after any refusal.", z.object({}).strict(), true),
+  tool("read_application_draft", "Read the Application draft as it is in the workspace now: revision, unsaved state, the outline of pages, placements, flows and navigation, for each page the places a new block can go with the blocks each admits, the queries a data block can read, and for each placement its declared settings. Call it first and after any refusal.", z.object({}).strict(), true),
   tool("rename_application_item", "Rename the Application (with its description) or one page, the same edit as the inspector's Apply labels. It changes the workspace draft; call save_application_draft to persist it.",
     z.discriminatedUnion("target", [
       z.object({ target: z.literal("application"), name: z.string().min(1), description: z.string().min(1) }).strict(),
       z.object({ target: z.literal("page"), pageAlias: alias("The page alias from read_application_draft."), name: z.string().min(1) }).strict(),
     ]), false),
-  tool("add_placement", "Add a released component to a page's main region, the same edit as the palette's Add component. Take blockId and releaseVersion from the page's components in read_application_draft; give only settings the component declares. It changes the workspace draft; call save_application_draft to persist it.",
+  tool("add_placement", "Add a new block to one place on a page, the same edit as dropping it from the Blocks palette. Take the place (area and destination) and the block's blockId and releaseVersion from the page's addTargets in read_application_draft. Give exactly the block's setup settings, and for a block that needs a query, one of the draft's queries. The block gets a fresh name and its default settings. It changes the workspace draft; call save_application_draft to persist it.",
     z.object({
-      pageAlias: alias("The page alias from read_application_draft."), blockId: z.string().min(1), releaseVersion: z.string().min(1),
-      placementAlias: alias("A new, unique alias for the placement."), settings: z.record(z.string(), addSettingValue).optional(),
+      pageAlias: alias("The page alias from read_application_draft."), area: z.string().min(1),
+      destination: z.discriminatedUnion("kind", [z.object({ kind: z.literal("root") }).strict(),
+        z.object({ kind: z.literal("child"), parentAlias: z.string().min(1), slotKey: z.string().min(1) }).strict()]),
+      index: z.number().int().min(0).optional().describe("Position in the place; omitted adds the block last."),
+      blockId: z.string().min(1), releaseVersion: z.string().min(1),
+      settings: z.record(z.string(), addSettingValue).optional(),
+      query: z.string().min(1).optional().describe("The query reference a data block reads."),
     }).strict(), false),
   tool("change_placement_settings", "Set or clear the declared settings of a placement, the same edit as the placement's text and declared settings forms. Settings you do not name keep their current values. It changes the workspace draft; call save_application_draft to persist it.",
     z.object({
@@ -181,11 +191,16 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
         ...(page.type === "guided_form" ? { stepAliases: page.steps.map((step) => step.id) } : {}) })),
       outline: trimOutline(outline),
       pages: collect(outline, "page").flatMap((page) => {
-        const palette = describeStudioCompositionPalette(context, page);
-        return [{ page, addableComponents: palette.kind === "available"
-          ? palette.choices.map((choice) => ({ blockId: choice.blockId, releaseVersion: choice.releaseVersion, key: choice.key,
-            name: choice.name, slots: choice.slots, settings: choice.properties })) : palette.kind }];
+        const places = page.kind === "page" ? describeStudioCompositionAddTargets(context, page.pageAlias) : { kind: "invalid" } as const;
+        return [{ page, addTargets: places.kind === "available"
+          ? places.targets.map((target) => ({ area: target.area, destination: target.destination, label: target.label,
+            blocks: target.choices.map((choice) => ({ blockId: choice.blockId, releaseVersion: choice.releaseVersion,
+              key: choice.key, name: choice.name, description: choice.description, group: choice.groupLabel,
+              needsQuery: choice.needsQuery, setup: choice.setup,
+              ...(choice.unavailable === undefined ? {} : { unavailable: choice.unavailable }) })) }))
+          : places.kind }];
       }),
+      queries: studioSourceQueries(applicationSourceDocumentSchema.parse(state.source)),
       placements: collect(outline, "placement").map((placement) => {
         const text = describeStudioCompositionSettings(context, placement);
         const scalar = describeStudioCompositionScalarSettings(context, placement);
@@ -307,13 +322,14 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
         return { outcome: "applied", message: "Applied to the workspace draft. It is not saved until you call save_application_draft.", ...describeNow() };
       }
       if (found.name === "add_placement") {
-        const input = parsed.data as { pageAlias: string; blockId: string; releaseVersion: string; placementAlias: string;
-          settings?: Record<string, { kind: "text" | "boolean" | "choice"; value: string | boolean }> };
+        const input = parsed.data as { pageAlias: string; area: string; destination: StudioCompositionDestination;
+          index?: number; blockId: string; releaseVersion: string; settings?: StudioCompositionAddSettings; query?: string };
         if (!history.getState().source.body.pages.some((page) => page.id === input.pageAlias))
           return { outcome: "not_found", message: "That page is not in the current draft. Call read_application_draft." };
-        const kind = applyCommand({ kind: "page", pageAlias: input.pageAlias }, { kind: "add", blockId: input.blockId,
-          releaseVersion: input.releaseVersion, alias: input.placementAlias, settings: (input.settings ?? {}) as never });
-        return commandOutcome(kind, "add_placement", "No component was added. Use a unique alias and valid declared settings of a release listed in read_application_draft.");
+        const kind = applyCommand({ kind: "page", pageAlias: input.pageAlias }, { kind: "add", pageAlias: input.pageAlias,
+          area: input.area, destination: input.destination, index: input.index ?? Number.MAX_SAFE_INTEGER,
+          blockId: input.blockId, releaseVersion: input.releaseVersion, settings: input.settings ?? {}, query: input.query ?? null });
+        return commandOutcome(kind, "add_placement", "No block was added. Use a place and block listed in read_application_draft, with exactly its setup settings and, for a data block, one of its queries.");
       }
       const input = parsed.data as { placementAlias: string; set?: Record<string, z.infer<typeof settingValue>>; clear?: string[] };
       const placement: StudioSemanticSelection = { kind: "placement", placementAlias: input.placementAlias };

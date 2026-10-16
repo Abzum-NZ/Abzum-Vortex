@@ -48,6 +48,7 @@ export type PlatformBlockReleaseSummary = Readonly<
     | "releaseVersion"
     | "contentFingerprint"
     | "name"
+    | "description"
     | "icon"
     | "paletteGroup"
     | "rendererKey"
@@ -130,6 +131,7 @@ const summarisePlatformBlockRelease = (
     releaseVersion: release.releaseVersion,
     contentFingerprint: release.contentFingerprint,
     name: release.name,
+    description: release.description,
     icon: release.icon,
     paletteGroup: release.paletteGroup,
     rendererKey: release.rendererKey,

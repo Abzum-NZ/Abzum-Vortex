@@ -326,6 +326,10 @@ const generatedAlias = (puckId: string, reserved: ReadonlySet<string>): string =
   return alias;
 };
 
+/** A source-safe block name for a new block, unique among `reserved`: `base`, or `base_2` and so on. */
+export const freshBlockName = (base: string, reserved: ReadonlySet<string>): string =>
+  generatedAlias(base, reserved);
+
 const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
   Object.entries(props).flatMap(([key, value]): [string, unknown[]][] =>
     !reservedItemPropKeys.has(key) && Array.isArray(value) && value.length > 0 && value.every(isSourceItemShape)
