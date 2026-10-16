@@ -6,15 +6,14 @@ import { applicationSourceDocumentSchema, describeFailure, type DefinitionPublic
 import {
   describeStudioCompositionAddTargets,
   describeStudioCompositionRemoval,
-  describeStudioCompositionScalarSettings,
   describeStudioCompositionSettings,
   projectStudioSemanticOutline,
-  studioSourceQueries,
+  type StudioCompositionOutcome,
+  type StudioQueryChoice,
   type StudioApplicationDraftHistoryController,
   type StudioApplicationDraftSaveOutcome,
   type StudioCompositionCommand,
-  type StudioCompositionCommandResult,
-  type StudioCompositionAddSettings,
+  type StudioCompositionSettings,
   type StudioCompositionContext,
   type StudioCompositionDestination,
   type StudioSemanticOutlineNode,
@@ -33,14 +32,13 @@ type ToolName = "read_application_draft" | "rename_application_item" | "add_plac
 type StudioApplicationTool = WebMcpToolDescriptor & Readonly<{ name: ToolName; input: z.ZodType }>;
 
 const alias = (what: string) => applicationSourceDocumentSchema.shape.root_alias.describe(what);
-const textValue = z.object({ kind: z.literal("text"), value: z.string() }).strict();
-const booleanValue = z.object({ kind: z.literal("boolean"), value: z.boolean() }).strict();
-const choiceValue = z.object({ kind: z.literal("choice"), value: z.string() }).strict();
-const addSettingValue = z.discriminatedUnion("kind", [textValue, booleanValue, choiceValue,
-  z.object({ kind: z.literal("number"), value: z.number() }).strict(),
-  z.object({ kind: z.literal("field_reference"), value: z.string() }).strict()]);
-const settingValue = z.discriminatedUnion("kind", [textValue, booleanValue, choiceValue,
-  z.object({ kind: z.literal("number"), value: z.number() }).strict()]);
+/**
+ * One typed setting value as read_application_draft shows it: `{ kind, ... }` of the setting's
+ * declared kind (a text is `{ kind: "text", value }`, a field reference `{ kind: "field_reference",
+ * field: "<module>:<record>.<field>" }`, a list `{ kind: "list", items: [...] }`, a group
+ * `{ kind: "group", properties: {...} }`). The composition command judges it against the declaration.
+ */
+const settingValue = z.object({ kind: z.string().min(1) }).passthrough();
 
 const inputSchema = (schema: z.ZodType) => {
   const json = z.toJSONSchema(schema, { io: "input", unrepresentable: "any" });
@@ -77,15 +75,17 @@ const applicationTools: readonly StudioApplicationTool[] = [
         z.object({ kind: z.literal("child"), parentAlias: z.string().min(1), slotKey: z.string().min(1) }).strict()]),
       index: z.number().int().min(0).optional().describe("Position in the place; omitted adds the block last."),
       blockId: z.string().min(1), releaseVersion: z.string().min(1),
-      settings: z.record(z.string(), addSettingValue).optional(),
+      settings: z.record(z.string(), settingValue).optional().describe("Setting key to its typed value, of the kind its declaration has."),
       query: z.string().min(1).optional().describe("The query reference a data block reads."),
     }).strict(), false),
-  tool("change_placement_settings", "Set or clear the declared settings of a placement, the same edit as the placement's text and declared settings forms. Settings you do not name keep their current values. It changes the workspace draft; call save_application_draft to persist it.",
+  tool("change_placement_settings", "Set or clear the declared settings of a placement, or choose the query a data block reads, the same edit as the inspector's Settings form. Settings you do not name keep their current values. It changes the workspace draft; call save_application_draft to persist it.",
     z.object({
       placementAlias: alias("The placement alias from read_application_draft."),
-      set: z.record(z.string(), settingValue).optional().describe("Setting key to its new value; text settings use kind text, the others kind boolean, choice or number."),
-      clear: z.array(z.string()).optional().describe("Keys of optional settings to omit again."),
-    }).strict().refine((value) => value.set !== undefined || value.clear !== undefined, { message: "Give set or clear." }), false),
+      set: z.record(z.string(), settingValue).optional().describe("Setting key to its new typed value, as read_application_draft shows the current ones."),
+      clear: z.array(z.string()).optional().describe("Keys of settings to leave unset again, so their defaults apply."),
+      query: z.string().min(1).optional().describe("For a data block: one of the queries read_application_draft lists."),
+    }).strict().refine((value) => value.set !== undefined || value.clear !== undefined || value.query !== undefined,
+      { message: "Give set, clear or query." }), false),
   tool("remove_placement", "Remove an unreferenced released placement, the same edit as the Remove placement control. It changes the workspace draft; call save_application_draft to persist it.",
     z.object({ placementAlias: alias("The placement alias from read_application_draft.") }).strict(), false),
   tool("save_application_draft", "Save the workspace draft into the saved Application draft, the same action as Save draft. Nothing is published.", z.object({}).strict(), false),
@@ -151,7 +151,7 @@ const publicationFailure = (operation: "prepare" | "publish", outcome: StudioPub
 };
 
 /** Registers the Application draft tools in the browser agent interface; each one runs the edit its workspace control runs. */
-export function ApplicationDraftAgentTools({ organizationId, history, catalogue, readLifetime, blockedReason, select, command, save,
+export function ApplicationDraftAgentTools({ organizationId, history, catalogue, readLifetime, blockedReason, select, command, readQueries, save,
   readPreparedConfirmation, prepare, publish, readPreview }: {
   organizationId: string;
   history: StudioApplicationDraftHistoryController;
@@ -161,7 +161,9 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
   blockedReason: () => string | undefined;
   select: (next: StudioSemanticSelection | null) => boolean;
   command: (expected: StudioCompositionContext, expectedSelection: StudioSemanticSelection,
-    command: StudioCompositionCommand) => StudioCompositionCommandResult["kind"];
+    command: StudioCompositionCommand) => StudioCompositionOutcome;
+  /** The queries a data block can read now: the application's own, then the borrowed ones. */
+  readQueries: () => readonly StudioQueryChoice[];
   save: () => Promise<StudioApplicationDraftSaveOutcome | undefined>;
   /** The confirmation the last successful Prepare publication produced for the current saved draft, if still valid. */
   readPreparedConfirmation: () => DefinitionPublicationConfirmation | undefined;
@@ -200,29 +202,29 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
               ...(choice.unavailable === undefined ? {} : { unavailable: choice.unavailable }) })) }))
           : places.kind }];
       }),
-      queries: studioSourceQueries(applicationSourceDocumentSchema.parse(state.source)),
+      queries: readQueries(),
       placements: collect(outline, "placement").map((placement) => {
-        const text = describeStudioCompositionSettings(context, placement);
-        const scalar = describeStudioCompositionScalarSettings(context, placement);
+        const settings = describeStudioCompositionSettings(context, placement);
         const removal = describeStudioCompositionRemoval(context, placement);
         return { placement,
-          textSettings: text.kind === "available" ? { declared: text.properties, current: text.settings } : text.kind,
-          declaredSettings: scalar.kind === "available" ? { declared: scalar.properties, current: scalar.settings } : scalar.kind,
+          settings: settings.kind === "available" ? { declared: settings.properties, current: settings.settings,
+            readsQuery: settings.readsQuery, query: settings.query } : settings.kind,
           removable: removal.kind === "available" ? true : removal.kind === "blocked" ? `blocked: ${removal.reason}` : false };
       }),
     };
-  }, [history, contextNow]);
+  }, [history, contextNow, readQueries]);
 
-  const applyCommand = useCallback((target: StudioSemanticSelection, what: StudioCompositionCommand): StudioCompositionCommandResult["kind"] => {
-    if (!select(target)) return "invalid";
+  const applyCommand = useCallback((target: StudioSemanticSelection, what: StudioCompositionCommand): StudioCompositionOutcome => {
+    if (!select(target)) return { kind: "invalid" };
     return command(contextNow(), target, what);
   }, [select, command, contextNow]);
 
-  const commandOutcome = useCallback((kind: StudioCompositionCommandResult["kind"], operation: string, invalidHint: string) => {
+  const commandOutcome = useCallback((result: StudioCompositionOutcome, operation: string, invalidHint: string) => {
+    const kind = result.kind;
     if (kind === "applied") return { outcome: "applied", message: "Applied to the workspace draft. It is not saved until you call save_application_draft.", ...describeNow() };
     console.error(`[studio] agent ${operation} refused: STUDIO_AGENT_COMPOSITION_${kind.toUpperCase()}`);
     return { outcome: kind, message: kind === "stale" ? "The draft or selection changed while the edit was checked. Nothing changed; call read_application_draft and retry."
-      : kind === "unsupported" ? "This release or region is unsupported for this edit. Nothing changed." : invalidHint };
+      : kind === "unsupported" ? "This release or region is unsupported for this edit. Nothing changed." : result.reason ?? invalidHint };
   }, [describeNow]);
 
   const invoke = useCallback(async (descriptor: WebMcpToolDescriptor, candidate: unknown, signal?: AbortSignal): Promise<unknown> => {
@@ -323,15 +325,15 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
       }
       if (found.name === "add_placement") {
         const input = parsed.data as { pageAlias: string; area: string; destination: StudioCompositionDestination;
-          index?: number; blockId: string; releaseVersion: string; settings?: StudioCompositionAddSettings; query?: string };
+          index?: number; blockId: string; releaseVersion: string; settings?: StudioCompositionSettings; query?: string };
         if (!history.getState().source.body.pages.some((page) => page.id === input.pageAlias))
           return { outcome: "not_found", message: "That page is not in the current draft. Call read_application_draft." };
-        const kind = applyCommand({ kind: "page", pageAlias: input.pageAlias }, { kind: "add", pageAlias: input.pageAlias,
+        const outcome = applyCommand({ kind: "page", pageAlias: input.pageAlias }, { kind: "add", pageAlias: input.pageAlias,
           area: input.area, destination: input.destination, index: input.index ?? Number.MAX_SAFE_INTEGER,
           blockId: input.blockId, releaseVersion: input.releaseVersion, settings: input.settings ?? {}, query: input.query ?? null });
-        return commandOutcome(kind, "add_placement", "No block was added. Use a place and block listed in read_application_draft, with exactly its setup settings and, for a data block, one of its queries.");
+        return commandOutcome(outcome, "add_placement", "No block was added. Use a place and block listed in read_application_draft, with exactly its setup settings and, for a data block, one of its queries.");
       }
-      const input = parsed.data as { placementAlias: string; set?: Record<string, z.infer<typeof settingValue>>; clear?: string[] };
+      const input = parsed.data as { placementAlias: string; set?: Record<string, unknown>; clear?: string[]; query?: string };
       const placement: StudioSemanticSelection = { kind: "placement", placementAlias: input.placementAlias };
       if (!collect(projectStudioSemanticOutline({ rootId: history.getState().rootId,
         source: applicationSourceDocumentSchema.parse(history.getState().source), catalogue }), "placement")
@@ -345,30 +347,21 @@ export function ApplicationDraftAgentTools({ organizationId, history, catalogue,
         return commandOutcome(applyCommand(placement, { kind: "remove" }), "remove_placement",
           "Removal is available only for supported presentation placements in private list, detail or dashboard main regions. Nothing changed.");
       }
-      // change_placement_settings: the forms send the complete supplied set, so merge onto the current one.
+      // change_placement_settings: the Settings form sends the complete set, so merge onto the current one.
       const set = input.set ?? {};
       const clear = new Set(input.clear ?? []);
-      if (Object.keys(set).length === 0 && clear.size === 0)
-        return { outcome: "validation_failed", issues: [{ path: "set", message: "Supply at least one setting to set or clear." }], message: "Nothing was requested, so nothing changed." };
       const context = contextNow();
-      const text = describeStudioCompositionSettings(context, placement);
-      const scalar = describeStudioCompositionScalarSettings(context, placement);
-      const textKeys = new Set(text.kind === "available" ? text.properties.map((property) => property.key) : []);
-      const scalarKeys = new Set(scalar.kind === "available" ? scalar.properties.map((property) => property.key) : []);
-      const unknown = [...Object.keys(set), ...clear].filter((key) => !textKeys.has(key) && !scalarKeys.has(key));
+      const current = describeStudioCompositionSettings(context, placement);
+      if (current.kind !== "available")
+        return commandOutcome({ kind: current.kind }, "change_placement_settings", "This placement's settings can't be read. Nothing changed.");
+      const declared = new Set(current.properties.map((property) => property.key));
+      const unknown = [...Object.keys(set), ...clear].filter((key) => !declared.has(key));
       if (unknown.length > 0) return { outcome: "validation_failed", issues: unknown.map((key) => ({ path: key, message: "This placement declares no such setting." })) };
-      const mismatched = Object.entries(set).filter(([key, value]) => textKeys.has(key) ? value.kind !== "text" : value.kind === "text");
-      if (mismatched.length > 0) return { outcome: "validation_failed", issues: mismatched.map(([key]) => ({ path: key, message: "The value kind does not match the declared setting." })) };
-      let last: StudioCompositionCommandResult["kind"] = "applied";
-      if (text.kind === "available" && [...textKeys].some((key) => key in set || clear.has(key))) {
-        const settings = Object.fromEntries(Object.entries({ ...text.settings, ...set }).filter(([key]) => textKeys.has(key) && !clear.has(key)));
-        last = applyCommand(placement, { kind: "settings", settings: settings as never });
-      }
-      if (last === "applied" && scalar.kind === "available" && [...scalarKeys].some((key) => key in set || clear.has(key))) {
-        const settings = Object.fromEntries(Object.entries({ ...scalar.settings, ...set }).filter(([key]) => scalarKeys.has(key) && !clear.has(key)));
-        last = applyCommand(placement, { kind: "scalar_settings", settings: settings as never });
-      }
-      return commandOutcome(last, "change_placement_settings",
+      if (input.query !== undefined && !current.readsQuery)
+        return { outcome: "validation_failed", issues: [{ path: "query", message: "This placement reads no query." }] };
+      const settings = Object.fromEntries(Object.entries({ ...current.settings, ...set }).filter(([key]) => !clear.has(key)));
+      return commandOutcome(applyCommand(placement, { kind: "settings", settings: settings as StudioCompositionSettings,
+        query: input.query ?? current.query }), "change_placement_settings",
         "No change was applied. Supply valid declared values within their limits and every required setting.");
     } catch (error) {
       console.error(`[studio] agent application tool failed: ${describeFailure(error)}`);

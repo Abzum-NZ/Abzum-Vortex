@@ -48,7 +48,7 @@ export default async function StudioApplicationPage({ params, searchParams }: {
     initialTab={tab} initialSection={section}
     initialModule={module !== undefined && moduleRootIdSchema.safeParse(module).success && isStudioModuleTool(tool)
       ? { organizationId: result.organizationId, moduleRootId: module, tool } : undefined}
-    searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}
+    searchMetadata={result.searchMetadata} borrowedQueries={result.borrowedQueries} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}
     platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
     fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
     platformThemeTokens={themeRelease.tokens} />;

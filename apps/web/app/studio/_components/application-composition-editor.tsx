@@ -2,10 +2,10 @@
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
-import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { canonicalJson } from "@vortex/platform/schema";
 import { studioPlacementLabels } from "../_lib/studio-labels";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
@@ -13,25 +13,35 @@ import {
   describeStudioCompositionEdit,
   describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
-  describeStudioCompositionScalarSettings,
   studioSemanticSelectionKey,
+  studioSettingProblems,
+  StudioQueryPicker,
+  StudioSettingFields,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
-  type StudioCompositionCommandResult,
   type StudioCompositionContext,
   type StudioCompositionLayout,
-  type StudioCompositionTextSettings,
-  type StudioCompositionScalarSettings,
+  type StudioCompositionOutcome,
+  type StudioCompositionSettings,
+  type StudioCompositionSettingsModel,
+  type StudioQueryChoice,
+  type StudioQueryField,
   type StudioSemanticSelection,
+  type StudioSettingChoices,
 } from "@vortex/ui/studio";
 
 type Props = Readonly<{
   context: StudioCompositionContext;
   selection: StudioSemanticSelection;
   disabled: boolean;
+  /** The queries a block can read: the application's own, then the borrowed ones. */
+  queries: readonly StudioQueryChoice[];
+  /** Every field of the application's own record types, for blocks that read no query. */
+  fields: readonly StudioQueryField[];
+  pages: StudioSettingChoices["pages"];
   onPendingChange: (pending: boolean) => void;
   onCommand: (expected: StudioCompositionContext, selection: StudioSemanticSelection,
-    command: StudioCompositionCommand) => StudioCompositionCommandResult["kind"];
+    command: StudioCompositionCommand) => StudioCompositionOutcome;
 }>;
 
 type LayoutInputs = Readonly<{
@@ -52,37 +62,12 @@ const sameInputs = (left: LayoutInputs, right: LayoutInputs): boolean =>
   left.visible === right.visible && left.width === right.width && left.height === right.height &&
   (left.width !== "grid" || (left.startColumn === right.startColumn && left.span === right.span)) &&
   (left.height !== "bounded" || left.units === right.units);
-const sameSettings = (left: StudioCompositionTextSettings, right: StudioCompositionTextSettings): boolean =>
-  Object.keys(left).length === Object.keys(right).length && Object.keys(left).every((key) =>
-    Object.hasOwn(right, key) && left[key]?.value === right[key]?.value);
-type ScalarInputs = Readonly<Record<string,
-  Readonly<{ kind: "boolean"; value: boolean }> | Readonly<{ kind: "choice"; value: string }> |
-  Readonly<{ kind: "number"; value: string }>>>;
-const scalarInputsFor = (settings: StudioCompositionScalarSettings): ScalarInputs => {
-  const inputs: Record<string, ScalarInputs[string]> = {};
-  for (const [key, value] of Object.entries(settings))
-    inputs[key] = value.kind === "number" ? { kind: "number", value: String(value.value) } : value;
-  return inputs;
-};
-const sameScalarInputs = (left: ScalarInputs, right: ScalarInputs): boolean =>
-  Object.keys(left).length === Object.keys(right).length && Object.keys(left).every((key) =>
-    Object.hasOwn(right, key) && left[key]?.kind === right[key]?.kind && left[key]?.value === right[key]?.value);
-const parseScalarInputs = (inputs: ScalarInputs): StudioCompositionScalarSettings | undefined => {
-  const settings: Record<string, StudioCompositionScalarSettings[string]> = {};
-  for (const [key, input] of Object.entries(inputs)) {
-    if (input.kind !== "number") {
-      settings[key] = input;
-      continue;
-    }
-    const raw = input.value.trim();
-    // Keep empty, malformed and non-finite buffers distinct from omission and zero.
-    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw)) return undefined;
-    const value = Number(raw);
-    if (!Number.isFinite(value)) return undefined;
-    settings[key] = { kind: "number", value };
-  }
-  return settings;
-};
+/** The settings form's input: the block's set settings and the query it reads. */
+type SettingsInputs = Readonly<{ settings: StudioCompositionSettings; query: string | null }>;
+const settingsInputsFor = (model: StudioCompositionSettingsModel): SettingsInputs =>
+  model.kind === "available" ? { settings: model.settings, query: model.query } : { settings: {}, query: null };
+const sameSettingsInputs = (left: SettingsInputs, right: SettingsInputs): boolean =>
+  left.query === right.query && canonicalJson(left.settings) === canonicalJson(right.settings);
 const fieldClass = "w-full";
 
 /** Stable option key of a move destination: its closed descriptor, not a serialised object. */
@@ -111,19 +96,11 @@ function PlacementCompositionEditor(props: Props) {
     [props.context, props.selection]);
   const settingsModel = useMemo(() => describeStudioCompositionSettings(props.context, props.selection),
     [props.context, props.selection]);
-  const [settingsInputs, setSettingsInputs] = useState<StudioCompositionTextSettings>(() =>
-    settingsModel.kind === "available" ? settingsModel.settings : {});
+  const [settingsInputs, setSettingsInputs] = useState<SettingsInputs>(() => settingsInputsFor(settingsModel));
   const settingsPending = useRef(false);
   const settingsContext = useRef(props.context);
   const selectionKey = studioSemanticSelectionKey(props.selection);
   const settingsSelection = useRef(selectionKey);
-  const scalarModel = useMemo(() => describeStudioCompositionScalarSettings(props.context, props.selection),
-    [props.context, props.selection]);
-  const [scalarInputs, setScalarInputs] = useState<ScalarInputs>(() =>
-    scalarModel.kind === "available" ? scalarInputsFor(scalarModel.settings) : {});
-  const scalarPending = useRef(false);
-  const scalarContext = useRef(props.context);
-  const scalarSelection = useRef(selectionKey);
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const [destinationKey, setDestinationKey] = useState("");
   const movePending = useRef(false);
@@ -135,6 +112,7 @@ function PlacementCompositionEditor(props: Props) {
   const [message, setMessage] = useState("");
   const titleId = useId();
   const hintId = useId();
+  const settingsId = useId();
 
   // Only an accepted history source/selection/breakpoint change resets the form.
   // A failed or cancelled reopen leaves this exact context and these inputs intact.
@@ -145,30 +123,27 @@ function PlacementCompositionEditor(props: Props) {
     pending.current = false;
     movePending.current = false;
     setDestinationKey("");
-    props.onPendingChange(settingsPending.current || scalarPending.current);
+    props.onPendingChange(settingsPending.current);
     setMessage("");
   }, [model, props.context, breakpoint, props.onPendingChange]);
 
-  // Text settings have no breakpoint buffer. Disabled/Save/Reopen changes do
+  // Settings have no breakpoint buffer. Disabled/Save/Reopen changes do
   // not reset inputs; only an accepted source/lifetime/selection resets them.
   useEffect(() => {
     if (settingsContext.current === props.context && settingsSelection.current === selectionKey) return;
-    setSettingsInputs(settingsModel.kind === "available" ? settingsModel.settings : {});
+    setSettingsInputs(settingsInputsFor(settingsModel));
     settingsContext.current = props.context;
     settingsSelection.current = selectionKey;
     settingsPending.current = false;
-    props.onPendingChange(pending.current || movePending.current || scalarPending.current);
+    props.onPendingChange(pending.current || movePending.current);
   }, [settingsModel, props.context, selectionKey, props.onPendingChange]);
 
-  // Scalar inputs share the accepted source/selection lifetime, not a breakpoint or disabled state.
-  useEffect(() => {
-    if (scalarContext.current === props.context && scalarSelection.current === selectionKey) return;
-    setScalarInputs(scalarModel.kind === "available" ? scalarInputsFor(scalarModel.settings) : {});
-    scalarContext.current = props.context;
-    scalarSelection.current = selectionKey;
-    scalarPending.current = false;
-    props.onPendingChange(pending.current || movePending.current || settingsPending.current);
-  }, [scalarModel, props.context, selectionKey, props.onPendingChange]);
+  // The reference settings point at the fields of the data the block reads, or, for a block that
+  // reads none, at the application's own fields.
+  const choices = useMemo((): StudioSettingChoices => {
+    const chosen = props.queries.find((query) => query.reference === settingsInputs.query);
+    return { fields: chosen?.fields ?? props.fields, queries: props.queries, pages: props.pages };
+  }, [props.queries, props.fields, props.pages, settingsInputs.query]);
 
   if (model.kind !== "available" || inputs === null) return <section className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-4">
     <h3 className="font-semibold">Item order and size</h3>
@@ -180,21 +155,20 @@ function PlacementCompositionEditor(props: Props) {
   const baseline = inputsFor(model.layout);
   const dirty = !sameInputs(inputs, baseline);
   const moveDirty = destinationKey !== "";
-  const settingsDirty = settingsModel.kind === "available" && !sameSettings(settingsInputs, settingsModel.settings);
-  const scalarDirty = scalarModel.kind === "available" &&
-    !sameScalarInputs(scalarInputs, scalarInputsFor(scalarModel.settings));
+  const settingsDirty = settingsModel.kind === "available" &&
+    !sameSettingsInputs(settingsInputs, settingsInputsFor(settingsModel));
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
   const update = (next: LayoutInputs) => {
-    if (props.disabled || movePending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context || formBreakpoint.current !== breakpoint) return;
+    if (props.disabled || movePending.current || settingsPending.current || formContext.current !== props.context || formBreakpoint.current !== breakpoint) return;
     const changed = !sameInputs(next, baseline);
     pending.current = changed;
-    props.onPendingChange(changed || movePending.current || settingsPending.current || scalarPending.current);
+    props.onPendingChange(changed || movePending.current || settingsPending.current);
     setInputs(next);
     setMessage("");
   };
   const run = async (command: StudioCompositionCommand) => {
-    if (props.disabled || settingsPending.current || scalarPending.current) return;
+    if (props.disabled || settingsPending.current) return;
     if (command.kind === "remove" && (pending.current || movePending.current)) return;
     if (command.kind === "move" ? pending.current : movePending.current) return;
     if (formContext.current !== props.context || formBreakpoint.current !== breakpoint) {
@@ -217,26 +191,26 @@ function PlacementCompositionEditor(props: Props) {
         destructive: true,
       });
       if (!confirmed) return;
-      if (props.disabled || pending.current || movePending.current || settingsPending.current || scalarPending.current || formContext.current !== expected ||
+      if (props.disabled || pending.current || movePending.current || settingsPending.current || formContext.current !== expected ||
         formBreakpoint.current !== breakpoint) {
         setMessage("The draft or your input changed. Nothing was removed.");
         return;
       }
     }
     const result = props.onCommand(expected, expectedSelection, command);
-    if (result === "applied") {
+    if (result.kind === "applied") {
       pending.current = false;
       movePending.current = false;
       setDestinationKey("");
-      props.onPendingChange(settingsPending.current || scalarPending.current);
+      props.onPendingChange(settingsPending.current);
       setInputs(baseline);
       setMessage("Change made. Save to keep it.");
-    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
-      : result === "unsupported" ? "This item does not support that change. What you typed is kept."
-        : "Nothing changed. Use a valid size, order or destination.");
+    } else setMessage(result.kind === "stale" ? "The draft or your selection changed. What you typed is kept."
+      : result.kind === "unsupported" ? "This item does not support that change. What you typed is kept."
+        : result.reason ?? "Nothing changed. Use a valid size, order or destination.");
   };
   const move = (direction: -1 | 1) => {
-    if (pending.current || movePending.current || settingsPending.current || scalarPending.current || !orderEditable || selectedIndex < 0) return;
+    if (pending.current || movePending.current || settingsPending.current || !orderEditable || selectedIndex < 0) return;
     const nextIndex = selectedIndex + direction;
     if (nextIndex < 0 || nextIndex >= model.order.length) return;
     const next = [...model.order];
@@ -270,17 +244,18 @@ function PlacementCompositionEditor(props: Props) {
     void run({ kind: "move", destination: chosen.destination });
   };
 
-  const updateSettings = (next: StudioCompositionTextSettings) => {
-    if (props.disabled || pending.current || movePending.current || scalarPending.current || settingsModel.kind !== "available" ||
+  const updateSettings = (next: SettingsInputs) => {
+    if (props.disabled || pending.current || movePending.current || settingsModel.kind !== "available" ||
       settingsContext.current !== props.context || settingsSelection.current !== selectionKey) return;
-    settingsPending.current = !sameSettings(next, settingsModel.settings);
-    props.onPendingChange(settingsPending.current || pending.current || movePending.current || scalarPending.current);
+    settingsPending.current = !sameSettingsInputs(next, settingsInputsFor(settingsModel));
+    props.onPendingChange(settingsPending.current || pending.current || movePending.current);
     setSettingsInputs(next);
     setMessage("");
   };
   const applySettings = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (props.disabled || !settingsPending.current || pending.current || movePending.current || scalarPending.current) return;
+    if (props.disabled || !settingsPending.current || pending.current || movePending.current ||
+      settingsModel.kind !== "available") return;
     const expected = settingsContext.current;
     const expectedSelection = props.selection;
     if (expected !== props.context || settingsSelection.current !== selectionKey ||
@@ -288,62 +263,58 @@ function PlacementCompositionEditor(props: Props) {
       setMessage("The draft or your selection changed. What you typed is kept.");
       return;
     }
-    const result = props.onCommand(expected, expectedSelection, { kind: "settings", settings: settingsInputs });
-    if (result === "applied") {
+    if (settingsModel.readsQuery && settingsInputs.query === null) {
+      setMessage("Choose the data this block shows. What you typed is kept.");
+      return;
+    }
+    const problems = studioSettingProblems(settingsInputs.settings, settingsModel.properties);
+    if (problems.length > 0) {
+      setMessage(`${problems.join(" ")} What you typed is kept.`);
+      return;
+    }
+    const result = props.onCommand(expected, expectedSelection,
+      { kind: "settings", settings: settingsInputs.settings, query: settingsInputs.query });
+    if (result.kind === "applied") {
       settingsPending.current = false;
-      props.onPendingChange(pending.current || movePending.current || scalarPending.current);
-      setMessage("Text changed. Save to keep it.");
-    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
-      : result === "unsupported" ? "This item has no text to change. What you typed is kept."
-        : "Nothing changed. Use valid text within its length limits. What you typed is kept.");
-  };
-
-  const updateScalars = (next: ScalarInputs) => {
-    if (props.disabled || pending.current || movePending.current || settingsPending.current || scalarModel.kind !== "available" ||
-      scalarContext.current !== props.context || scalarSelection.current !== selectionKey) return;
-    scalarPending.current = !sameScalarInputs(next, scalarInputsFor(scalarModel.settings));
-    props.onPendingChange(scalarPending.current || pending.current || movePending.current || settingsPending.current);
-    setScalarInputs(next);
-    setMessage("");
-  };
-  const applyScalars = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (props.disabled || !scalarPending.current || pending.current || movePending.current || settingsPending.current) return;
-    const expected = scalarContext.current;
-    const expectedSelection = props.selection;
-    if (expected !== props.context || scalarSelection.current !== selectionKey ||
-      describeStudioCompositionScalarSettings(expected, expectedSelection).kind !== "available") {
-      setMessage("The draft or your selection changed. What you typed is kept.");
-      return;
-    }
-    const settings = parseScalarInputs(scalarInputs);
-    if (settings === undefined) {
-      setMessage("Enter a number for each numeric setting. What you typed is kept.");
-      return;
-    }
-    const result = props.onCommand(expected, expectedSelection, { kind: "scalar_settings", settings });
-    if (result === "applied") {
-      scalarPending.current = false;
-      props.onPendingChange(pending.current || movePending.current || settingsPending.current);
+      props.onPendingChange(pending.current || movePending.current);
       setMessage("Settings changed. Save to keep them.");
-    } else setMessage(result === "stale" ? "The draft or your selection changed. What you typed is kept."
-      : result === "unsupported" ? "This item has no settings to change. What you typed is kept."
-        : "Nothing changed. Enter valid values and fill the required settings. What you typed is kept.");
+    } else setMessage(result.kind === "stale" ? "The draft or your selection changed. What you typed is kept."
+      : result.kind === "unsupported" ? "This item's settings can't be changed here. What you typed is kept."
+        : `${result.reason ?? "Nothing changed. Enter valid values and fill the required settings."} What you typed is kept.`);
   };
 
   return <section className="space-y-4 rounded-xl border bg-card text-card-foreground border-border p-4" aria-labelledby={titleId}>
+    {settingsModel.kind === "available" ? <form className="space-y-3" onSubmit={applySettings} aria-label="Settings">
+      <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty}>
+        <legend className="font-medium">Settings</legend>
+        {settingsModel.readsQuery && <StudioQueryPicker id={`${settingsId}-query`} queries={props.queries}
+          value={settingsInputs.query ?? ""} disabled={props.disabled || dirty || moveDirty}
+          onChange={(query) => updateSettings({ ...settingsInputs, query: query === "" ? null : query })} />}
+        <StudioSettingFields idPrefix={settingsId} properties={settingsModel.properties} values={settingsInputs.settings}
+          choices={choices} disabled={props.disabled || dirty || moveDirty}
+          onChange={(settings) => updateSettings({ ...settingsInputs, settings })} />
+      </fieldset>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={props.disabled || dirty || moveDirty || !settingsDirty}>Apply</Button>
+        <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || !settingsDirty}
+          onClick={() => updateSettings(settingsInputsFor(settingsModel))}>Discard</Button>
+      </div>
+      <p className="text-sm">A setting you leave unset uses its default. Apply puts the change in your draft; Save keeps it.</p>
+      {settingsDirty && <p role="status">Apply or discard the settings before changing anything else on this item.</p>}
+    </form> : <p role="status">{settingsModel.kind === "unsupported"
+      ? "This item's settings can't be changed here." : "This item's settings can't be read."}</p>}
     <h3 id={titleId} className="font-semibold">Order and size</h3>
     <p className="text-sm">{names.get(model.placementAlias) ?? "This item"}. This changes the layout in your draft; nothing runs.</p>
     <label className="block space-y-1"><span>Screen size</span>
-      <NativeSelect className={fieldClass} value={breakpoint} disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty}
+      <NativeSelect className={fieldClass} value={breakpoint} disabled={props.disabled || dirty || moveDirty || settingsDirty}
         onChange={(event) => {
-          if (pending.current || movePending.current || settingsPending.current || scalarPending.current || props.disabled) return;
+          if (pending.current || movePending.current || settingsPending.current || props.disabled) return;
           const value = event.target.value;
           if (value === "desktop" || value === "tablet" || value === "phone") setBreakpoint(value);
         }}>
         <option value="desktop">Desktop</option><option value="tablet">Tablet</option><option value="phone">Phone</option>
       </NativeSelect></label>
-    <fieldset className="space-y-2" disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !orderEditable} aria-describedby={hintId}>
+    <fieldset className="space-y-2" disabled={props.disabled || dirty || moveDirty || settingsDirty || !orderEditable} aria-describedby={hintId}>
       <legend className="font-medium">Order among its neighbours</legend>
       <ol className="list-decimal pl-6">{model.order.map((alias) => <li key={alias}
         aria-current={alias === model.placementAlias ? "true" : undefined}>{names.get(alias) ?? "Item"}</li>)}</ol>
@@ -356,13 +327,13 @@ function PlacementCompositionEditor(props: Props) {
         <Button type="button" variant="outline" size="sm" disabled={selectedIndex < 0 || selectedIndex >= model.order.length - 1}
           onClick={() => move(1)}>Move later</Button>
         {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={!model.explicitOrder}
-          onClick={() => { if (!pending.current) void run({ kind: "order", breakpoint, order: null }); }}>Use the larger screen's order</Button>}
+          onClick={() => { if (!pending.current) void run({ kind: "order", breakpoint, order: null }); }}>Use the larger screen&apos;s order</Button>}
       </div>
     </fieldset>
     <p id={hintId} className="text-sm">Use the buttons, or Alt+Up and Alt+Down. {breakpoint !== "desktop" && !model.responsiveOrder
       ? "This area uses one order at every screen size." : model.explicitOrder ? "This order is set for this screen size." : "This order is inherited from the larger screen size."}</p>
     <form className="space-y-3" onSubmit={applySize}>
-      <fieldset className="space-y-3" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty}>
+      <fieldset className="space-y-3" disabled={props.disabled || moveDirty || settingsDirty}>
         <legend className="font-medium">Size</legend>
         <label className="flex items-center gap-2"><Checkbox checked={inputs.visible}
           disabled={!model.capabilities.responsiveVisibility}
@@ -391,23 +362,23 @@ function PlacementCompositionEditor(props: Props) {
       </fieldset>
       <p className="text-sm">{model.explicitLayout ? "This size is set for this screen size." : "This size is inherited from the larger screen size."}</p>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty}>Apply</Button>
-        <Button type="button" variant="outline" size="sm" disabled={props.disabled || moveDirty || settingsDirty || scalarDirty || !dirty} onClick={() => update(baseline)}>Discard</Button>
-        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || !model.explicitLayout}
-          onClick={() => { if (!pending.current) void run({ kind: "resize", breakpoint, layout: null }); }}>Use the larger screen's size</Button>}
+        <Button type="submit" disabled={props.disabled || moveDirty || settingsDirty || !dirty}>Apply</Button>
+        <Button type="button" variant="outline" size="sm" disabled={props.disabled || moveDirty || settingsDirty || !dirty} onClick={() => update(baseline)}>Discard</Button>
+        {breakpoint !== "desktop" && <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || settingsDirty || !model.explicitLayout}
+          onClick={() => { if (!pending.current) void run({ kind: "resize", breakpoint, layout: null }); }}>Use the larger screen&apos;s size</Button>}
       </div>
     </form>
     <form className="space-y-3" onSubmit={applyDestination}>
-      <fieldset className="space-y-3" disabled={props.disabled || dirty || settingsDirty || scalarDirty || destinations.length === 0}>
+      <fieldset className="space-y-3" disabled={props.disabled || dirty || settingsDirty || destinations.length === 0}>
         <legend className="font-medium">Move to another area</legend>
         <label className="block space-y-1"><span>Where to move it</span>
           <NativeSelect className={fieldClass} required value={destinationKey} onChange={(event) => {
-            if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
+            if (props.disabled || pending.current || settingsPending.current || formContext.current !== props.context) return;
             const key = event.target.value;
             if (key !== "" && !destinations.some((item) => destinationOptionKey(item.destination) === key)) return;
             movePending.current = key !== "";
             setDestinationKey(key);
-            props.onPendingChange(movePending.current || pending.current || settingsPending.current || scalarPending.current);
+            props.onPendingChange(movePending.current || pending.current || settingsPending.current);
             setMessage("");
           }}>
             <option value="">Choose a destination</option>
@@ -418,10 +389,10 @@ function PlacementCompositionEditor(props: Props) {
           </NativeSelect></label>
         <Button type="submit" disabled={!moveDirty}>Move</Button>
         <Button type="button" variant="outline" size="sm" disabled={!moveDirty} onClick={() => {
-          if (props.disabled || pending.current || settingsPending.current || scalarPending.current || formContext.current !== props.context) return;
+          if (props.disabled || pending.current || settingsPending.current || formContext.current !== props.context) return;
           movePending.current = false;
           setDestinationKey("");
-          props.onPendingChange(pending.current || settingsPending.current || scalarPending.current);
+          props.onPendingChange(pending.current || settingsPending.current);
           setMessage("");
         }}>Discard</Button>
       </fieldset>
@@ -433,7 +404,7 @@ function PlacementCompositionEditor(props: Props) {
     <section className="space-y-2" aria-label="Remove item">
       <p className="text-sm">Removes this item from the page. Flows and everything else stay as they are. Save keeps the change.</p>
       <Button type="button" variant="outline" size="sm"
-        disabled={props.disabled || dirty || moveDirty || settingsDirty || scalarDirty || removalModel.kind !== "available"}
+        disabled={props.disabled || dirty || moveDirty || settingsDirty || removalModel.kind !== "available"}
         onClick={() => { void run({ kind: "remove" }); }}>Remove item</Button>
       {removalModel.kind === "blocked" && <p role="status">{removalModel.reason === "required_slot"
         ? "This area needs at least this item."
@@ -443,100 +414,6 @@ function PlacementCompositionEditor(props: Props) {
       {(removalModel.kind === "invalid" || removalModel.kind === "unsupported") &&
         <p role="status">Only display items in the main area of a list, detail or dashboard page can be removed.</p>}
     </section>
-    {settingsModel.kind === "available" ? <form className="space-y-3" onSubmit={applySettings}>
-      <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty || scalarDirty}>
-        <legend className="font-medium">Text</legend>
-        {settingsModel.properties.map((property) => {
-          const supplied = Object.hasOwn(settingsInputs, property.key) ? settingsInputs[property.key] : undefined;
-          return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
-            <legend>{property.label}</legend>
-            <label className="flex items-center gap-2"><Checkbox checked={supplied !== undefined}
-              onCheckedChange={(checked) => {
-                const next = { ...settingsInputs };
-                if (checked) next[property.key] = { kind: "text", value: "" };
-                else delete next[property.key];
-                updateSettings(next);
-              }} />Set this text</label>
-            {supplied !== undefined && <label className="block space-y-1"><span>{property.label} text</span>
-              <Textarea className={fieldClass} required={property.minLength > 0}
-                minLength={property.minLength} maxLength={property.maxLength} value={supplied.value}
-                onChange={(event) => updateSettings({ ...settingsInputs,
-                  [property.key]: { kind: "text", value: event.target.value } })} /></label>}
-            {property.help !== undefined && <p className="text-sm">{property.help}</p>}
-          </fieldset>;
-        })}
-      </fieldset>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}>Apply</Button>
-        <Button type="button" variant="outline" size="sm" disabled={props.disabled || dirty || moveDirty || scalarDirty || !settingsDirty}
-          onClick={() => updateSettings(settingsModel.settings)}>Discard</Button>
-      </div>
-      <p className="text-sm">Text you leave unset is not written to the draft. Apply puts the change in your draft; Save keeps it.</p>
-      {settingsDirty && <p role="status">Apply or discard the text before changing anything else on this item.</p>}
-    </form> : <p role="status">This item has no text that can be edited here.</p>}
-    {scalarModel.kind === "available" && <form className="space-y-3" onSubmit={applyScalars}>
-      <fieldset className="space-y-3" disabled={props.disabled || dirty || moveDirty || settingsDirty}>
-        <legend className="font-medium">Settings</legend>
-        {scalarModel.properties.map((property) => {
-          const supplied = Object.hasOwn(scalarInputs, property.key) ? scalarInputs[property.key] : undefined;
-          const canOmit = !property.required || property.defaultValue !== undefined;
-          const defaultValue = property.defaultValue;
-          const defaultLabel = defaultValue?.kind === "boolean" ? String(defaultValue.value)
-            : defaultValue?.kind === "number" ? String(defaultValue.value)
-            : defaultValue?.kind === "choice" && property.kind === "choice"
-              ? property.options.find((option) => option.key === defaultValue.value)?.label : undefined;
-          return <fieldset key={property.key} className="space-y-2 rounded-xl border bg-card text-card-foreground border-border p-3">
-            <legend>{property.label}</legend>
-            <p className="text-sm">{property.required ? "Required." : "Optional."} {defaultLabel !== undefined
-              ? `If you leave it unset, ${defaultLabel} is used.`
-              : canOmit ? "Not set until you choose a value." : "Choose a value."}</p>
-            <label className="flex items-center gap-2"><Checkbox checked={supplied !== undefined}
-              disabled={!canOmit} onCheckedChange={(checked) => {
-                const next = { ...scalarInputs };
-                if (checked) next[property.key] = property.kind === "boolean"
-                  ? { kind: "boolean", value: false } : property.kind === "number"
-                    ? { kind: "number", value: "" } : { kind: "choice", value: "" };
-                else delete next[property.key];
-                updateScalars(next);
-              }} />Set this option</label>
-            {property.kind === "boolean" && supplied?.kind === "boolean" &&
-              <label className="flex items-center gap-2"><Checkbox checked={supplied.value}
-                onCheckedChange={(checked) => updateScalars({ ...scalarInputs,
-                  [property.key]: { kind: "boolean", value: checked } })} />{property.label}</label>}
-            {property.kind === "choice" && supplied?.kind === "choice" &&
-              <label className="block space-y-1"><span>{property.label}</span>
-                <NativeSelect className={fieldClass} required value={supplied.value} onChange={(event) => {
-                  const value = event.target.value;
-                  if (value !== "" && !property.options.some((option) => option.key === value)) return;
-                  updateScalars({ ...scalarInputs, [property.key]: { kind: "choice", value } });
-                }}><option value="">Choose a value</option>
-                  {property.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-                </NativeSelect></label>}
-            {property.kind === "number" && <p className="text-sm">
-              {property.integer ? "Whole numbers only." : "Fractional numbers are allowed."}
-              {property.minimum !== undefined && ` Minimum: ${property.minimum}.`}
-              {property.maximum !== undefined && ` Maximum: ${property.maximum}.`}
-            </p>}
-            {property.kind === "number" && supplied?.kind === "number" &&
-              <label className="block space-y-1"><span>{property.label}</span>
-                <Input className={fieldClass} type="text" inputMode={property.integer ? "numeric" : "decimal"}
-                  value={supplied.value} onChange={(event) => updateScalars({ ...scalarInputs,
-                    [property.key]: { kind: "number", value: event.target.value } })} />
-              </label>}
-            {property.help !== undefined && <p className="text-sm">{property.help}</p>}
-          </fieldset>;
-        })}
-      </fieldset>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit"
-          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}>Apply</Button>
-        <Button type="button" variant="outline" size="sm"
-          disabled={props.disabled || dirty || moveDirty || settingsDirty || !scalarDirty}
-          onClick={() => updateScalars(scalarInputsFor(scalarModel.settings))}>Discard</Button>
-      </div>
-      <p className="text-sm">A setting you leave unset uses its default. Apply puts the change in your draft; Save keeps it.</p>
-      {scalarDirty && <p role="status">Apply or discard the settings before changing anything else on this item.</p>}
-    </form>}
     <p role="status" aria-live="polite">{message}</p>
     {confirmDialog}
   </section>;

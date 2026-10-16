@@ -7,15 +7,7 @@ import {
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   decideOrganizationAccessBatch,
   createStoredNavigationProjectionService,
-  createProtectedQueryService,
-  createReferenceChoiceService,
-  createRecordsTableQueryResolver,
-  createQueryNoticeQueryResolver,
-  createViewerSafeRecordLinkService,
-  createLinkTilesQueryResolver,
-  createPageSubjectReader,
   type PageSubjectReadResult,
-  type ProjectedRecordLink,
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
 } from "@vortex/platform/server";
@@ -35,7 +27,7 @@ import {
   isRecord,
   compiledPageShellId,
 } from "@vortex/platform/schema";
-import { createApplicationPageLinkReader } from "../application-page-link";
+import { createPlacementReadServices } from "./placement-services";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
@@ -424,76 +416,17 @@ const loadApplicationPageJoined = async (
   const navigation = await navigationRead;
   if (navigation.kind !== "available") return navigation;
 
-  const queries = createProtectedQueryService({ ...dependencies, continuationKey });
-  const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
-  const tables = createRecordsTableQueryResolver(queries);
-  const queryNotices = createQueryNoticeQueryResolver(queries);
-  const recordLinks = createViewerSafeRecordLinkService({
-    ...dependencies,
-    permissions: platformPermissionSource,
-    createInstalledContextLoader(transaction, scope) {
-      if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
-      });
-    },
-  });
-  const applicationPageLinks = createApplicationPageLinkReader({
+  const services = createPlacementReadServices({
+    session,
+    selection,
+    dependencies,
+    continuationKey,
     tenantShortName: address.tenantShortName,
     organizationShortName: address.organizationShortName,
   });
-  const readConcurrently = async <Input, Output>(
-    candidates: readonly Input[],
-    read: (candidate: Input) => Promise<Output>,
-  ): Promise<readonly Output[]> => {
-    if (candidates.length > 10_000) throw new Error("CONCURRENT_READ_BATCH_TOO_LARGE");
-    const results = new Array<Output>(candidates.length);
-    let nextIndex = 0;
-    let failed = false;
-    let failure: unknown;
-    const worker = async (): Promise<void> => {
-      while (true) {
-        if (failed) return;
-        const index = nextIndex++;
-        if (index >= candidates.length) return;
-        try {
-          const candidate = candidates[index];
-          if (candidate === undefined) throw new Error("CONCURRENT_READ_BATCH_INPUT_MISSING");
-          results[index] = await read(candidate);
-        } catch (error) {
-          if (!failed) {
-            failed = true;
-            failure = error;
-          }
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(runtimeDatabasePoolSize(), candidates.length) }, worker),
-    );
-    if (failed) throw failure;
-    return Object.freeze(results);
-  };
-  const linkTiles = createLinkTilesQueryResolver(
-    queries,
-    (viewer, identities) =>
-      readConcurrently(identities, (identity) => recordLinks.read(viewer, identity)),
-    (viewer, selectors) =>
-      readConcurrently(selectors, (selector) => applicationPageLinks.read(viewer, selector)),
-  );
-  const loadCalendarSettings = () =>
-    humanOrganizationRequests(dependencies.identityAuthorityId).run(
-      session,
-      selection,
-      async (transaction, scope) => ({
-        settings: await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction),
-        accessVersion: scope.accessVersion,
-      }),
-    );
-  let calendarSettingsRead: ReturnType<typeof loadCalendarSettings> | undefined;
-  const readCalendarSettings = () => (calendarSettingsRead ??= loadCalendarSettings());
-  const subjects = createPageSubjectReader(dependencies);
+  const { queries, referenceChoices, tables, queryNotices, linkTiles, readCalendarSettings, subjects,
+    readConcurrently } =
+    services;
 
   // The page subject: the one record the page's own address names, of the page's declared record
   // type, read once through the record read path under the viewer's own authority. Nothing here
@@ -643,28 +576,7 @@ const loadApplicationPageJoined = async (
   const adoptSubjectRead = (read: PageSubjectReadResult): void => {
     subjectRead ??= Promise.resolve(read);
   };
-  // One labelled read per page and link target: a link shows its target's name as the viewer may
-  // read it, and a detail address only where the viewer may open that page.
-  const resolveRecordLinks: RecordLinkResolver = async (links) => {
-    const read = await recordLinks.readLabels(session, selection, context, links);
-    if (read.outcome !== "read") return undefined;
-    return new Map(
-      [...read.labels].map(([key, label]): [string, ProjectedRecordLink] => [
-        key,
-        label.outcome === "restricted"
-          ? { kind: "restricted" }
-          : {
-              kind: "record_link",
-              label: label.label,
-              ...(label.detail === undefined
-                ? {}
-                : {
-                    href: `/${encodeURIComponent(address.tenantShortName)}/${encodeURIComponent(address.organizationShortName)}/${encodeURIComponent(label.detail.applicationKey)}/${encodeURIComponent(label.detail.pageKey)}?${new URLSearchParams({ record_id: label.detail.recordId })}`,
-                  }),
-            },
-      ]),
-    );
-  };
+  const resolveRecordLinks: RecordLinkResolver = services.recordLinkResolver(context);
   const placementReaderInput = {
     application,
     recordTypeByPlacement,

@@ -16,12 +16,6 @@ import { PALETTE_GROUP_TITLES } from "../palette-groups";
  * for when the block is added.
  */
 
-/** A required setting the person gives when adding the block: the catalogue has no default for it. */
-export type StudioPaletteSetupField = Readonly<
-  | Extract<BlockPropertySchemaContract, { kind: "text" | "boolean" | "choice" | "number" }>
-  | (BlockPropertySchemaContract & { kind: "field_reference" })
->;
-
 export type StudioPaletteChoice = Readonly<{
   /** Stable identity of this exact block release. */
   id: string;
@@ -37,7 +31,7 @@ export type StudioPaletteChoice = Readonly<{
   /** The block reads its records from a query, chosen when it is added. */
   needsQuery: boolean;
   /** Required settings without a catalogue default, asked for when the block is added. */
-  setup: readonly StudioPaletteSetupField[];
+  setup: readonly BlockPropertySchemaContract[];
   /** Why the block cannot be added yet; absent when it can. */
   unavailable?: string;
 }>;
@@ -58,16 +52,28 @@ const newer = (left: string, right: string): boolean => {
   return false;
 };
 
-const setupKinds = new Set(["text", "boolean", "choice", "number", "field_reference"]);
+const editableKinds = new Set<BlockPropertySchemaContract["kind"]>([
+  "text", "url", "number", "boolean", "choice", "icon", "field_reference", "query_reference", "page_reference",
+]);
+
+/** Whether Studio's typed setting controls edit a setting of this declaration, nested settings included. */
+export const studioSettingEditable = (property: BlockPropertySchemaContract): boolean =>
+  property.kind === "group" ? property.properties.every(studioSettingEditable)
+    : property.kind === "list" ? studioSettingEditable(property.item)
+      : editableKinds.has(property.kind);
+
+/** Whether a block of this release reads its records from a query the person chooses. */
+export const studioReleaseReadsQuery = (release: PlatformBlockRelease): boolean =>
+  release.paletteGroup === "data" || release.paletteGroup === "figures";
 
 /** What a new block of this release needs, or why Studio cannot create one yet. */
 const choiceFor = (release: PlatformBlockRelease): StudioPaletteChoice => {
-  const setup: StudioPaletteSetupField[] = [];
+  const setup: BlockPropertySchemaContract[] = [];
   let unavailable: string | undefined;
   for (const property of release.properties) {
     if (!property.required || property.defaultValue !== undefined) continue;
-    if (setupKinds.has(property.kind)) setup.push(property as StudioPaletteSetupField);
-    else unavailable ??= `It needs its ${property.label} setting, which can't be set when adding a block yet.`;
+    if (studioSettingEditable(property)) setup.push(property);
+    else unavailable ??= `It needs its ${property.label} setting, which Studio can't set yet.`;
   }
   const requiredSlot = release.slots.find((slot) => slot.required && slot.repeats === undefined);
   if (requiredSlot !== undefined)
@@ -83,7 +89,7 @@ const choiceFor = (release: PlatformBlockRelease): StudioPaletteChoice => {
     icon: release.icon,
     group: release.paletteGroup,
     groupLabel: PALETTE_GROUP_TITLES[release.paletteGroup],
-    needsQuery: release.paletteGroup === "data" || release.paletteGroup === "figures",
+    needsQuery: studioReleaseReadsQuery(release),
     setup: Object.freeze(setup),
     ...(unavailable === undefined ? {} : { unavailable }),
   });
@@ -143,22 +149,36 @@ export function groupStudioPaletteChoices(
     ]) })));
 }
 
-/** A query of one of the application's own Modules, and the fields it reads. */
-export type StudioSourceQuery = Readonly<{
+/** One field a query reads, as the qualified field reference a block stores: `<module>:<record>.<field>`. */
+export type StudioQueryField = Readonly<{ reference: string; label: string; type: string }>;
+
+/** A query a data block can read, and the fields it reads. */
+export type StudioQueryChoice = Readonly<{
   /** The qualified query reference a block stores: `<module>:<query>`. */
   reference: string;
   label: string;
-  /** The fields the query selects, as qualified field references: `<module>:<record>.<field>`. */
-  fields: readonly Readonly<{ reference: string; label: string; type: string }>[];
+  fields: readonly StudioQueryField[];
+  /**
+   * For a query of a Module the application only uses, the application that owns it. Such a query
+   * is chosen as it is: it is changed in its own application.
+   */
+  borrowedFrom?: string;
 }>;
 
 /**
- * The queries a new data block can read: those of the Modules the application source holds. A
- * Module the application only uses from another application is not in its source, so its queries
- * are not offered here.
+ * The queries of the Modules an application uses, read on the server from the exact Module
+ * releases its saved draft compiled against. They hold for as long as the draft uses the same
+ * Modules (`usesSignature`).
  */
-export function studioSourceQueries(source: ApplicationSourceDocument): readonly StudioSourceQuery[] {
-  return Object.freeze((source.body.modules ?? []).flatMap((module) => module.queries.map((query) => {
+export type StudioBorrowedQueries = Readonly<{ usesSignature: string; queries: readonly StudioQueryChoice[] }>;
+
+/** The Modules an application uses from other applications, in one comparable spelling. */
+export const studioUsesSignature = (source: ApplicationSourceDocument): string =>
+  JSON.stringify(source.body.uses.map((use) => `${use.application}/${use.module}`).sort());
+
+/** The queries of the application's own Modules: they are in its source. */
+const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
+  (source.body.modules ?? []).flatMap((module) => module.queries.map((query) => {
     const record = module.record_types.find((candidate) => candidate.key === query.record_type);
     const selected = query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
     const fields = selected.flatMap((key) => {
@@ -169,5 +189,38 @@ export function studioSourceQueries(source: ApplicationSourceDocument): readonly
     });
     return Object.freeze({ reference: `${module.key}:${query.key}`, label: query.label ?? query.key,
       fields: Object.freeze(fields) });
-  })));
+  }));
+
+/** Every field of the application's own record types, for a block that reads no query. */
+export const studioSourceFields = (source: ApplicationSourceDocument): readonly StudioQueryField[] =>
+  Object.freeze((source.body.modules ?? []).flatMap((module) => module.record_types.flatMap((record) =>
+    record.fields.map((field) => Object.freeze({
+      reference: `${module.key}:${record.key}.${field.key}`,
+      label: `${record.name}: ${field.label}`, type: field.type,
+    })))));
+
+/**
+ * Every query a data block can read: those of the application's own Modules, then those of the
+ * Modules it uses while the draft still uses them. Creating a query is the Data tab's work; a
+ * block only picks one that exists.
+ */
+export function studioQueryChoices(
+  source: ApplicationSourceDocument,
+  borrowed: StudioBorrowedQueries | null,
+): readonly StudioQueryChoice[] {
+  const used = borrowed !== null && borrowed.usesSignature === studioUsesSignature(source) ? borrowed.queries : [];
+  return Object.freeze([...ownQueries(source), ...used]);
 }
+
+/**
+ * Whether a block may store this query reference: a query of one of the application's own
+ * Modules, or a query of a Module it uses, which the draft compile resolves against that Module's
+ * release.
+ */
+export const studioQueryOffered = (source: ApplicationSourceDocument, reference: string): boolean => {
+  if (ownQueries(source).some((query) => query.reference === reference)) return true;
+  const separator = reference.indexOf(":");
+  const module = reference.slice(0, separator);
+  return separator > 0 && /^[a-z][a-z0-9_]*$/.test(reference.slice(separator + 1)) &&
+    source.body.uses.some((use) => use.module === module);
+};

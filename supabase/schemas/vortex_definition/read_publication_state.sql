@@ -13,6 +13,7 @@ declare
   root_row vortex_definition.roots%rowtype;
   draft_row vortex_definition.drafts%rowtype;
   history_latest_release_revision bigint;
+  history_latest_release_version text;
 begin
   checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
   context_organization_id := (checked_context ->> 'organizationId')::uuid;
@@ -30,7 +31,8 @@ begin
   if not found then
     raise exception using errcode = '23503', message = 'A Definition root requires its current draft';
   end if;
-  select release.release_revision into history_latest_release_revision
+  select release.release_revision, release.release_version
+  into history_latest_release_revision, history_latest_release_version
   from vortex_definition.releases as release
   where release.root_id = p_root_id
   order by release.release_revision desc
@@ -43,6 +45,7 @@ begin
       'createdAt', root_row.created_at, 'createdBy', root_row.created_by
     ),
     'historyLatestReleaseRevision', history_latest_release_revision,
+    'historyLatestReleaseVersion', history_latest_release_version,
     'draft', pg_catalog.jsonb_build_object(
       'rootId', draft_row.root_id, 'organizationId', root_row.organization_id,
       'kind', root_row.kind, 'key', root_row.key, 'draftRevision', draft_row.draft_revision,

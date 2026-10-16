@@ -51,20 +51,55 @@ function canonicalTargetMatches(targetPath: Path, target: string): boolean {
   return false;
 }
 
+type ProvenanceTarget = SourceContractPositions["provenanceTargets"][number];
+type ProvenanceTargetIndex = Readonly<{
+  /** The annotations declared exactly at a source path, by path key. */
+  exact: ReadonlyMap<string, readonly ProvenanceTarget[]>;
+  /** The annotations that also cover every path below their own. */
+  descendants: readonly ProvenanceTarget[];
+}>;
+
+/**
+ * The provenance annotations of one source, indexed once: the compiler asks about every source
+ * leaf, so a scan of every annotation per leaf (each comparing serialised paths) would dominate
+ * the compile.
+ */
+const provenanceTargetIndexes = new WeakMap<SourceContractPositions, ProvenanceTargetIndex>();
+const provenanceTargetIndex = (positions: SourceContractPositions): ProvenanceTargetIndex => {
+  let index = provenanceTargetIndexes.get(positions);
+  if (index === undefined) {
+    const exact = new Map<string, ProvenanceTarget[]>();
+    for (const target of positions.provenanceTargets) {
+      const key = pathKey(target.sourcePath);
+      const list = exact.get(key) ?? [];
+      list.push(target);
+      exact.set(key, list);
+    }
+    index = {
+      exact,
+      descendants: positions.provenanceTargets.filter(
+        (target) => target.annotation.includeDescendants === true,
+      ),
+    };
+    provenanceTargetIndexes.set(positions, index);
+  }
+  return index;
+};
+
 export function sourceTransformationApproved(
   sourcePath: Path,
   canonicalPath: Path,
   positions: SourceContractPositions,
 ): boolean {
-  return positions.provenanceTargets.some(({ sourcePath: annotatedPath, annotation }) => {
-    const sourceMatches =
-      pathKey(annotatedPath) === pathKey(sourcePath) ||
-      (annotation.includeDescendants === true && pathStartsWith(sourcePath, annotatedPath));
-    return (
-      sourceMatches &&
-      annotation.canonicalTargets.some((target) => canonicalTargetMatches(canonicalPath, target))
-    );
-  });
+  const index = provenanceTargetIndex(positions);
+  const approves = ({ annotation }: ProvenanceTarget): boolean =>
+    annotation.canonicalTargets.some((target) => canonicalTargetMatches(canonicalPath, target));
+  return (
+    (index.exact.get(pathKey(sourcePath)) ?? []).some(approves) ||
+    index.descendants.some(
+      (target) => pathStartsWith(sourcePath, target.sourcePath) && approves(target),
+    )
+  );
 }
 
 export function applicationTypedValueTarget(

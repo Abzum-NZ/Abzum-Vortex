@@ -25,6 +25,7 @@ import {
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
+import { readStudioCanvasRecords as readStudioCanvasRecordsWithSession, type StudioCanvasRecordsResult } from "../_lib/studio-canvas-records";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
@@ -131,12 +132,13 @@ export async function createStudioApplication(organizationId: string, candidate:
 }
 
 /**
- * Saves the draft and answers with the draft's recompiled page slots, search metadata and compile
- * failure for the saved revision, so the canvas swaps them in instead of keeping the ones compiled
- * for the revision the workspace was opened on. `recompiled` is null when the saved draft could not
- * be read back for the same revision; the workspace then says so and keeps the saved result.
+ * Saves the draft and nothing else. The draft is compiled for the canvas by the separate
+ * `reopenStudioApplication` request the workspace sends once the save is in, so Save itself does
+ * not wait for a compile; the workspace shows nothing compiled for the new revision as current
+ * until that compile answers for exactly this revision.
  */
 export async function saveStudioApplication(organizationId: string, candidate: unknown) {
+  const s4t0 = performance.now(); // S4TIMING
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
   if (!command.success)
     return refuse("save-application", "STUDIO_SAVE_COMMAND_SCHEMA_INVALID",
@@ -148,20 +150,27 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   if (!validation.valid)
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);
+  const s4t1 = performance.now(); // S4TIMING
   const saved = await saveHumanApplicationDraft(organizationId, command.data);
-  if (saved.kind !== "available") return saved;
-  const loaded = await loadStudioApplicationDraft(organizationId, saved.draft.rootId);
-  const recompiled = loaded.kind === "available" && loaded.draft.draftRevision === saved.draft.draftRevision &&
-    loaded.draft.sourceFingerprint === saved.draft.sourceFingerprint
-    ? { pageCompiledSlots: loaded.pageCompiledSlots, canvasFrames: loaded.canvasFrames, searchMetadata: loaded.searchMetadata, compileFailure: loaded.compileFailure }
-    : null;
-  if (recompiled === null)
-    console.error("[studio] save-application STUDIO_SAVE_RECOMPILE_UNAVAILABLE: the saved revision could not be read back");
-  return { ...saved, recompiled };
+  console.log(`S4TIMING save validate=${Math.round(s4t1 - s4t0)} write=${Math.round(performance.now() - s4t1)}`); // S4TIMING
+  return saved;
 }
 
+/** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
   return loadStudioApplicationDraft(organizationId, applicationRootId);
+}
+
+/** The records the data blocks of one saved draft page area show, read with the builder's own access. */
+export async function readStudioCanvasRecords(organizationId: string, candidate: unknown): Promise<StudioCanvasRecordsResult> {
+  try {
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active")
+      return resolved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    return await readStudioCanvasRecordsWithSession(resolved.session, organizationId, candidate);
+  } catch (error) {
+    return refuse("read-canvas-records", "STUDIO_CANVAS_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
+  }
 }
 
 /** Current protected read precedes all theme-specific descriptors and advisory feedback. */

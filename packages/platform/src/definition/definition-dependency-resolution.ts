@@ -35,7 +35,7 @@ import {
   type ModuleOutput,
   type DefinitionResolution,
   refuse,
-  type DefinitionPublicationCandidate,
+  type DefinitionCandidateDraft,
   type ResolvableModuleRelease,
   type ModuleReleasePageCursor,
   type ResolvableConnectionTypeRelease,
@@ -194,7 +194,7 @@ const sortedManifest = (
   );
 
 const verifyParsedModuleRelease = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   expectedKey: string,
   release: ResolvableModuleRelease,
   parsedOutput: ReturnType<typeof definitionCompilationOutputSchema.safeParse>,
@@ -253,7 +253,7 @@ const verifyParsedModuleRelease = (
 
 /** Every selected, pinned or transitive dependency must satisfy the current Module contract. */
 const verifyModuleRelease = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   expectedKey: string,
   release: ResolvableModuleRelease,
 ): void =>
@@ -266,7 +266,7 @@ const verifyModuleRelease = (
 
 /** Historical enumeration preserves stored semantics before current dependency selection. */
 const verifyHistoricalModuleRelease = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   expectedKey: string,
   release: ResolvableModuleRelease,
 ): void =>
@@ -291,7 +291,7 @@ const sameModuleReleaseLocator = (
 
 const selectModuleRelease = async (
   reader: DefinitionPublicationReader,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   key: string,
   requirements: readonly VersionRequirement[],
 ): Promise<ResolvableModuleRelease> => {
@@ -513,7 +513,7 @@ const resolveApplicationComposition = async (
 export const resolveDependencies = async (
   reader: DefinitionPublicationReader,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ResolvedDependencies> => {
   const moduleGroups = [...groupRequirements(moduleRequirements(candidate.draft))];
@@ -679,7 +679,7 @@ export const resolveDependencies = async (
 
 export const assertNoCycle = async (
   reader: DefinitionPublicationReader,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   modules: readonly ResolvableModuleRelease[],
 ): Promise<void> => {
   const visited = new Set<string>();
@@ -890,7 +890,7 @@ export const manifestFor = (
   ]);
 
 export const buildResolution = (
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   dependencies: ResolvedDependencies,
   ownVersion: string,
 ): DefinitionResolution => {

@@ -11,9 +11,9 @@ import {
 import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
 import type { collectPlacements } from "./placement-helpers";
 import { first } from "./placement-helpers";
-import type { findModuleQuery } from "./query-helpers";
+import type { findModuleQuery, PlacementLogPlace } from "./query-helpers";
 import { logPlacementFailure } from "./query-helpers";
-import type { ApplicationPageLoaderAddress, PageDataState, SearchParameters } from "./types";
+import type { PageDataState, SearchParameters } from "./types";
 
 export const readCalendarPlacement = async (input: {
   readCalendarSettings: () => Promise<
@@ -24,7 +24,7 @@ export const readCalendarPlacement = async (input: {
       accessVersion: number;
     }>
   >;
-  address: ApplicationPageLoaderAddress;
+  address: PlacementLogPlace;
   placementId: string;
   data: Record<string, PageDataState>;
   page: Parameters<typeof collectPlacements>[0];

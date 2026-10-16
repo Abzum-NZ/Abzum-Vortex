@@ -11,6 +11,7 @@ import {
   platformIdSchema,
   revisionSchema,
   selectedOrganizationScopeSchema,
+  semanticVersionSchema,
   storedDefinitionDraftSchema,
   storedModuleDefinitionDraftSchema,
   tenantIdSchema,
@@ -78,6 +79,7 @@ const publicationStateSchema = z
       .strict(),
     draft: requiredJsonSchema,
     historyLatestReleaseRevision: revisionSchema.nullable(),
+    historyLatestReleaseVersion: semanticVersionSchema.nullable(),
     identities: z.array(requiredJsonSchema),
   })
   .strict();
