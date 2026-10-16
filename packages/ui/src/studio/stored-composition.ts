@@ -330,6 +330,9 @@ const generatedAlias = (puckId: string, reserved: ReadonlySet<string>): string =
 export const freshBlockName = (base: string, reserved: ReadonlySet<string>): string =>
   generatedAlias(base, reserved);
 
+const hasBlockReference = (props: Record<string, unknown>): boolean =>
+  plainObject(props.vortex) && plainObject(props.vortex.block);
+
 const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
   Object.entries(props).flatMap(([key, value]): [string, unknown[]][] =>
     !reservedItemPropKeys.has(key) && Array.isArray(value) && value.length > 0 && value.every(isSourceItemShape)
@@ -363,9 +366,11 @@ export const storedZoneFromPuck = (
   // Index the baseline: every block name, and the slot each block was in.
   const baselineAliases = new Set<string>();
   const baselineParent = new Map<string, { parent: SourceItem; key: string }>();
+  const baselineItems = new Map<string, SourceItem>();
   const index = (items: readonly SourceItem[], parent?: SourceItem, key?: string): void => {
     for (const item of items) {
       baselineAliases.add(item.props.id);
+      baselineItems.set(item.props.id, item);
       if (parent !== undefined && key !== undefined) baselineParent.set(item.props.id, { parent, key });
       for (const [slotKey, children] of childSlotsOf(item.props)) index(children as SourceItem[], item, slotKey);
     }
@@ -394,7 +399,16 @@ export const storedZoneFromPuck = (
         key === "id" ? alias : slots.has(key)
           ? rebuild(slots.get(key)!, [...itemAt, "props", key]) : structuredClone(value),
       ]));
-      return { type: node.type, props } as SourceItem;
+      // Puck writes an empty list for every slot the stored block leaves out; that is not an edit.
+      const item = { type: node.type, props } as SourceItem;
+      const release = hasBlockReference(props) ? storedItemRelease(catalogue, item) : undefined;
+      const before = baselineItems.get(alias)?.props;
+      if (release !== undefined)
+        for (const key of readSourceItem(item, release).slots.keys()) {
+          const value = props[key];
+          if (Array.isArray(value) && value.length === 0 && (before === undefined || !(key in before))) delete props[key];
+        }
+      return item;
     });
   const items = rebuild(data.content as unknown[], []);
 
