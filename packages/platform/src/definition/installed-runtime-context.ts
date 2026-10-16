@@ -3,19 +3,14 @@ import "server-only";
 import {
   sameId,
   activeApplicationInstallationEvidenceSchema,
-  sessionContextSchema,
-  systemApplicationBoundReleaseSetResultSchema,
   type ActiveApplicationInstallationEvidence,
   type ApplicationRootId,
   type OrganizationId,
   type PreparedApplicationPermissionRegistration,
-  type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
 import {
   prepareApplicationPermissionRegistrationForHumanRequest,
-  prepareApplicationPermissionRegistrationFromReleaseSet,
-  type PermissionRegistryDefinitionSetReader,
 } from "../access/index";
 import {
   DefinitionError,
@@ -23,14 +18,11 @@ import {
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
-export const installedRuntimeContextErrorCodes = [
-  "INSTALLED_RUNTIME_CONTEXT_REFUSED",
-  "INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE",
-  "INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED",
-  "INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE",
-] as const;
-
-export type InstalledRuntimeContextErrorCode = (typeof installedRuntimeContextErrorCodes)[number];
+type InstalledRuntimeContextErrorCode =
+  | "INSTALLED_RUNTIME_CONTEXT_REFUSED"
+  | "INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE"
+  | "INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED"
+  | "INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE";
 
 /**
  * One trusted application-service context: the exact organisation, installation and bound
@@ -59,20 +51,8 @@ export type InstalledRuntimeContext = Readonly<{
  * Protected Module read of the active installation selected by the trusted human application
  * context, such as `createActiveApplicationInstallationRepository` bound to the resolved request.
  */
-export type InstalledRuntimeActiveInstallationReader = Readonly<{
+type InstalledRuntimeActiveInstallationReader = Readonly<{
   readCurrent(): Promise<ActiveApplicationInstallationEvidence>;
-}>;
-
-export type InstalledRuntimeContextDependencies = Readonly<{
-  /** The resolved installation; never caller-authored, so its bindings are persisted evidence. */
-  activeInstallationReader: InstalledRuntimeActiveInstallationReader;
-  /**
-   * Protected Definition read for one exact system-context-bound release set. The concrete
-   * implementation is composed outside App, so App never holds database authority itself.
-   */
-  definitionReader: PermissionRegistryDefinitionSetReader;
-  /** Server-minted live system context; the target organisation is proved against it, never assumed. */
-  systemContext: () => SessionContext;
 }>;
 
 /** Contexts this loader assembled; a structurally identical object from anywhere else is refused. */
@@ -83,20 +63,6 @@ export const requireInstalledRuntimeContext = (candidate: unknown): InstalledRun
   if (typeof candidate !== "object" || candidate === null || !assembledContexts.has(candidate))
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
   return candidate as InstalledRuntimeContext;
-};
-
-const isLiveSystemContext = (context: SessionContext): boolean => {
-  if (context.callerKind !== "system") return false;
-  const issuedAt = Date.parse(context.issuedAt);
-  const expiresAt = Date.parse(context.expiresAt);
-  const now = Date.now();
-  return (
-    Number.isFinite(issuedAt) &&
-    Number.isFinite(expiresAt) &&
-    issuedAt <= now &&
-    expiresAt > now &&
-    issuedAt < expiresAt
-  );
 };
 
 const failure = (code: InstalledRuntimeContextErrorCode, cause: unknown) =>
@@ -118,87 +84,6 @@ const installationFailure = (error: unknown): DefinitionError<InstalledRuntimeCo
       );
   }
 };
-
-const definitionFailure = (error: unknown): DefinitionError<InstalledRuntimeContextErrorCode> => {
-  switch (databaseErrorCode(error)) {
-    case "DEFINITION_RELEASE_NOT_FOUND":
-      return failure("INSTALLED_RUNTIME_CONTEXT_UNAVAILABLE", error);
-    case "DEFINITION_CONTEXT_REFUSED":
-      return failure("INSTALLED_RUNTIME_CONTEXT_REFUSED", error);
-    case "DEFINITION_RELEASE_INTEGRITY_FAILED":
-      return failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
-    default:
-      return unexpectedDefinitionFailure(
-        "INSTALLED_RUNTIME_CONTEXT_TEMPORARILY_UNAVAILABLE",
-        error,
-        "installed runtime context",
-      );
-  }
-};
-
-/**
- * Assembles the installed runtime context for the resolved organisation and active installation.
- *
- * The installation comes only from the protected active-installation read, never from the caller.
- * The loader then reads the exact bound Application/Module releases under a live system context and
- * rejects any inconsistency between the two: a mismatched organisation, Application root or
- * revision, a missing, extra or different Module release, a duplicate root, or a correlation that
- * does not match the system context. Browser input may select only an address; the route resolves
- * the human request from it before composing these readers.
- */
-export const createInstalledRuntimeContextLoader = (
-  dependencies: InstalledRuntimeContextDependencies,
-) =>
-  Object.freeze({
-    async load(): Promise<InstalledRuntimeContext> {
-      let installationCandidate: unknown;
-      try {
-        installationCandidate = await dependencies.activeInstallationReader.readCurrent();
-      } catch (error) {
-        throw installationFailure(error);
-      }
-      const installation =
-        activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
-      if (!installation.success)
-        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-
-      const contextCandidate = sessionContextSchema.safeParse(dependencies.systemContext());
-      if (!contextCandidate.success || !isLiveSystemContext(contextCandidate.data))
-        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
-      const systemContext = contextCandidate.data;
-      if (
-        !sameId(systemContext.organizationId, installation.data.organizationId) ||
-        (systemContext.applicationRootId !== undefined &&
-          !sameId(systemContext.applicationRootId, installation.data.applicationRootId))
-      )
-        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
-
-      let releaseSetCandidate: unknown;
-      try {
-        releaseSetCandidate = await dependencies.definitionReader.read(systemContext, {
-          applicationRootId: installation.data.applicationRootId,
-          applicationReleaseRevision: installation.data.applicationReleaseRevision,
-        });
-      } catch (error) {
-        throw definitionFailure(error);
-      }
-      return assembleContext(
-        installation.data,
-        parseReleaseSet(releaseSetCandidate),
-        systemContext.organizationId,
-        systemContext.correlationId,
-        (releaseSet) =>
-          prepareApplicationPermissionRegistrationFromReleaseSet(
-            systemContext,
-            {
-              applicationRootId: installation.data.applicationRootId,
-              releaseRevision: installation.data.applicationReleaseRevision,
-            },
-            releaseSet,
-          ),
-      );
-    },
-  });
 
 /**
  * The inputs of a human-request context. The installation comes from the protected
@@ -268,13 +153,6 @@ export const assembleHumanInstalledRuntimeContext = (
       ),
   );
 
-// Parsed into a fresh value so the context never aliases the reader's own result.
-const parseReleaseSet = (candidate: unknown): SystemApplicationBoundReleaseSetResult => {
-  const parsed = systemApplicationBoundReleaseSetResultSchema.safeParse(candidate);
-  if (!parsed.success) throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-  return parsed.data;
-};
-
 /**
  * Verifies that the validated release set matches the installation and assembles the one trusted context.
  * `expectedCorrelationId` is the system correlation when one exists; a human request has none and
@@ -341,4 +219,4 @@ const assembleContext = (
   return context;
 };
 
-export type InstalledRuntimeContextLoader = ReturnType<typeof createInstalledRuntimeContextLoader>;
+export type InstalledRuntimeContextLoader = Readonly<{ load(): Promise<InstalledRuntimeContext> }>;

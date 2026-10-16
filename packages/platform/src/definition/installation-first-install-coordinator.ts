@@ -62,7 +62,7 @@ export type FirstInstallCoordinatorEnvironment = FirstInstallEnvironment &
   Readonly<{ requests: ReturnType<typeof createHumanOrganizationRequestService> }>;
 
 /** The state the caller proved and showed the person before running a first-install command. */
-export type FirstInstallExpectation = Readonly<{
+type FirstInstallExpectation = Readonly<{
   history: FirstInstallHistory;
   selected: Readonly<{ definitionKey: string }>;
   registrationState: FirstInstallRegistrationState;

@@ -16,7 +16,7 @@ type FlowInputDeclaration = Extract<
   { kind: "flow_inputs" }
 >["inputs"][string];
 
-export type WebMcpPropertySchema = Readonly<{
+type WebMcpPropertySchema = Readonly<{
   type: "string" | "integer" | "number" | "boolean" | "array" | "object";
   format?: "date" | "date-time" | "uuid";
   items?: WebMcpPropertySchema;

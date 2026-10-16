@@ -50,7 +50,7 @@ export class ProvisionedSetupError extends Error {
   }
 }
 
-export const provisionedSetupSchema = z
+const provisionedSetupSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
@@ -96,13 +96,13 @@ export const provisionedSetupSchema = z
 
 export type ProvisionedSetup = z.infer<typeof provisionedSetupSchema>;
 
-export type ProvisionedSetupSelector = Readonly<{
+type ProvisionedSetupSelector = Readonly<{
   organizationId: string;
   rootId: string;
   releaseRevision: number;
 }>;
 
-export type ProvisionedSetupBindings = Readonly<{
+type ProvisionedSetupBindings = Readonly<{
   registeredReleaseRevision: number | null;
   moduleBindings: readonly ModuleInstallationBindingEvidence[];
 }>;
@@ -157,7 +157,7 @@ const provisionedModulePins = (
  * and proves it belongs to that release's provisioned module bindings. Access decisions stay with
  * the caller: a setup read is not authority.
  */
-export const readProvisionedLifecycleSetup = async (
+const readProvisionedLifecycleSetup = async (
   transaction: RequestDatabaseTransaction,
   selector: ProvisionedSetupSelector,
   releaseSet: SystemApplicationBoundReleaseSetResult,
@@ -238,7 +238,7 @@ export const readProvisionedLifecycleSetup = async (
  * Proves the setup's organisation limits are this organisation's and that every target's source
  * bindings are exactly the installation's provisioned bindings, once per module.
  */
-export const assertProvisionedSetupMatchesInstallation = (
+const assertProvisionedSetupMatchesInstallation = (
   setup: ProvisionedSetup,
   bindings: ProvisionedSetupBindings,
   organizationId: string,

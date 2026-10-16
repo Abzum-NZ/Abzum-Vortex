@@ -38,7 +38,7 @@ export const first = (value: string | readonly string[] | undefined): string | u
  * One placed item of a projected page: the item itself and, read from it, its Vortex metadata
  * (`props.vortex`) and its settings (`props.settings`).
  */
-export type PlacedItem = Readonly<{
+type PlacedItem = Readonly<{
   placementId: string;
   item: Record<string, unknown>;
   vortex: Record<string, unknown>;
@@ -47,7 +47,7 @@ export type PlacedItem = Readonly<{
 }>;
 
 /** The parts of a placed item the placement predicates read. */
-export type PlacedItemParts = Pick<PlacedItem, "vortex" | "settings">;
+type PlacedItemParts = Pick<PlacedItem, "vortex" | "settings">;
 
 /** Reads only the projected body; shell chrome and permission reasons do not count as content. */
 export const projectedBodyContentAvailable = (

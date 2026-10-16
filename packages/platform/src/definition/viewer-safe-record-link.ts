@@ -37,12 +37,12 @@ import {
   type InstalledRuntimeContextLoader,
 } from "./installed-runtime-context";
 
-export type ViewerSafeRecordLinkInstalledContextLoaderFactory = (
+type ViewerSafeRecordLinkInstalledContextLoaderFactory = (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
 ) => InstalledRuntimeContextLoader;
 
-export type ViewerSafeRecordLinkServiceDependencies = HumanOrganizationRequestDependencies &
+type ViewerSafeRecordLinkServiceDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     /** Compose the existing human installed-context loader for this request transaction and scope. */
     createInstalledContextLoader: ViewerSafeRecordLinkInstalledContextLoaderFactory;

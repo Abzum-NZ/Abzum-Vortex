@@ -10,7 +10,7 @@ import type { ModuleQueryFilterDraftContext } from "./module-query-filter-draft"
 type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
 type SourceCondition = NonNullable<ModuleSourceQuery["filter"]>;
 type ModuleConditionOperand = Extract<ConditionNode, { kind: "comparison" }>["left"];
-export type ModuleQueryFilterMappingResult =
+type ModuleQueryFilterMappingResult =
   | Readonly<{ kind: "available"; filter: SourceCondition | null }>
   | Readonly<{ kind: "invalid" }>
   | Readonly<{ kind: "unsupported" }>;

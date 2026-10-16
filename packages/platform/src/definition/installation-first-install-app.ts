@@ -84,7 +84,7 @@ type PolicyLimits = Pick<
 >;
 
 /** The part of a lifecycle policy a first-install caller is shown. */
-export type VisibleLifecyclePolicyBody =
+type VisibleLifecyclePolicyBody =
   | Readonly<PolicyLimits & { action: "delete"; recoveryWindowDays?: DeletePolicy["recoveryWindowDays"] }>
   | Readonly<
       PolicyLimits &
@@ -100,7 +100,7 @@ export type VisibleLifecyclePolicyBody =
         >
     >;
 
-export const visibleLifecyclePolicyBody = (policy: RecordTypeLifecyclePolicy): VisibleLifecyclePolicyBody => {
+const visibleLifecyclePolicyBody = (policy: RecordTypeLifecyclePolicy): VisibleLifecyclePolicyBody => {
   const common = {
     maxAgeDays: policy.maxAgeDays,
     maxCount: policy.maxCount,
@@ -126,7 +126,7 @@ export const visibleLifecyclePolicyBody = (policy: RecordTypeLifecyclePolicy): V
 };
 
 /** The provisioned setup with every configured policy reduced to its visible body. */
-export const visibleProvisionedSetup = (setup: ProvisionedSetup) => ({
+const visibleProvisionedSetup = (setup: ProvisionedSetup) => ({
   ...setup,
   targets: setup.targets.map((target) => ({
     ...target,
@@ -141,7 +141,7 @@ export const visibleProvisionedSetup = (setup: ProvisionedSetup) => ({
  * Reads the selected release's bound release set inside an application-scoped transaction and
  * proves it names this organisation, application and revision.
  */
-export const readAppScopedFirstInstallReleaseSet = async (
+const readAppScopedFirstInstallReleaseSet = async (
   transaction: RequestDatabaseTransaction,
   environment: FirstInstallEnvironment,
   selector: FirstInstallSelector,
@@ -180,7 +180,7 @@ export const readAppScopedFirstInstallReleaseSet = async (
  * authority, context and every setup access decision are still current, and returns the database
  * time and the earliest moment any of them lapses.
  */
-export const firstInstallAppCompletion = async (
+const firstInstallAppCompletion = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
@@ -239,7 +239,7 @@ export const firstInstallAppCompletion = async (
 };
 
 /** The first-install release set and bindings a draft-change caller may install, with its authority proved. */
-export const readFirstInstallCandidateInTransaction = async (
+const readFirstInstallCandidateInTransaction = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
@@ -288,7 +288,7 @@ export const readFirstInstallCandidateInTransaction = async (
 };
 
 /** Reads the selected release again and proves it is the release already read. */
-export const readFirstInstallCurrentRelease = async (
+const readFirstInstallCurrentRelease = async (
   transaction: RequestDatabaseTransaction,
   environment: FirstInstallEnvironment,
   selector: FirstInstallSelector,
@@ -301,7 +301,7 @@ export const readFirstInstallCurrentRelease = async (
 };
 
 /** Reads the provisioned setup of an exact first-install release inside an application-scoped transaction. */
-export const readFirstInstallProvisionedSetupInTransaction = async (
+const readFirstInstallProvisionedSetupInTransaction = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
@@ -339,7 +339,7 @@ export const readFirstInstallProvisionedSetupInTransaction = async (
 };
 
 /** What an application-scoped first-install transaction has proved before its action runs. */
-export type FirstInstallAppState = Readonly<{
+type FirstInstallAppState = Readonly<{
   context: InstallationHumanContext;
   releaseSet: SystemApplicationBoundReleaseSetResult;
   bindings: InstallationBindings;
@@ -347,7 +347,7 @@ export type FirstInstallAppState = Readonly<{
 }>;
 
 /** The first-install facts a caller holds and expects to still be true. */
-export type FirstInstallExpectation = Readonly<{
+type FirstInstallExpectation = Readonly<{
   history: FirstInstallHistory;
   selected: Readonly<{ definitionKey: string }> & Readonly<Record<string, unknown>>;
   workflows: readonly string[];
@@ -357,7 +357,7 @@ export type FirstInstallExpectation = Readonly<{
  * Reads the provisioned-inactive first-install state inside an application-scoped transaction and
  * proves it is what the caller expects: `matchesSnapshot` judges the caller's own snapshot shape.
  */
-export const readFirstInstallAppState = async (
+const readFirstInstallAppState = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
@@ -407,7 +407,7 @@ export const readFirstInstallAppState = async (
  * Proves, after an archive-connection read, that the release, the setup and the authority are
  * unchanged and that the retained authority had not lapsed when the read finished.
  */
-export const completeFirstInstallConnectionRead = async (
+const completeFirstInstallConnectionRead = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
@@ -432,7 +432,7 @@ export const completeFirstInstallConnectionRead = async (
 };
 
 /** Proves the provisioned setup read again for `release` is the setup already read. */
-export const requireFirstInstallSetupUnchanged = async (
+const requireFirstInstallSetupUnchanged = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   session: IdentitySession,
@@ -450,13 +450,13 @@ export const requireFirstInstallSetupUnchanged = async (
 };
 
 /** The provisioned setup as a first-install caller is shown it. */
-export type VisibleProvisionedSetup = ReturnType<typeof visibleProvisionedSetup>;
+type VisibleProvisionedSetup = ReturnType<typeof visibleProvisionedSetup>;
 
 /** One storage target of the visible setup. */
-export type VisibleProvisionedTarget = VisibleProvisionedSetup["targets"][number];
+type VisibleProvisionedTarget = VisibleProvisionedSetup["targets"][number];
 
 /** What a first-install caller is shown, and later sends back to prove what it saw is still true. */
-export type FirstInstallSnapshot = Readonly<{
+type FirstInstallSnapshot = Readonly<{
   organizationId: OrganizationId;
   rootId: ApplicationRootId;
   selected: Readonly<{
@@ -486,7 +486,7 @@ type FirstInstallHistoryFailure = Readonly<{
  * The draft-history reads a first install is anchored to. History is owned by the Studio
  * application; the first install only asks it for the draft identity and one release's metadata.
  */
-export type FirstInstallHistoryReads = Readonly<{
+type FirstInstallHistoryReads = Readonly<{
   readAccess: (
     organizationId: OrganizationId,
     rootId: ApplicationRootId,
@@ -513,7 +513,7 @@ export type FirstInstallFlowEnvironment = FirstInstallEnvironment &
   }>;
 
 /** The current first-install state, proved for one session: the release set, the snapshot and who proved it. */
-export type FirstInstallCandidate = Readonly<{
+type FirstInstallCandidate = Readonly<{
   selector: FirstInstallSelector;
   history: FirstInstallHistory;
   releaseSet: SystemApplicationBoundReleaseSetResult;
@@ -525,7 +525,7 @@ export type FirstInstallCandidate = Readonly<{
 export type FirstInstallCommandRun = { writeStarted: boolean };
 
 /** Whether two first-install snapshots hold the same content. */
-export const sameFirstInstallSnapshot = (
+const sameFirstInstallSnapshot = (
   expected: FirstInstallSnapshot,
   actual: FirstInstallSnapshot,
 ): boolean => sameContent(expected, actual);
@@ -775,7 +775,7 @@ const assertPolicyCommonFields = (
 };
 
 /** The initial lifecycle policy a first install saves for one storage target. */
-export type FirstInstallPolicyCommand = Readonly<{
+type FirstInstallPolicyCommand = Readonly<{
   selector: FirstInstallSelector;
   expected: FirstInstallSnapshot;
   storageContractId: StorageContractId;

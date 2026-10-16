@@ -32,13 +32,13 @@ import type { FlowOrchestratorResponse } from "./flow-orchestrator-types";
  */
 
 /** What the trusted installation state says about the evidence a caller supplied. */
-export type FormContinuationInstalledRelease =
+type FormContinuationInstalledRelease =
   | Readonly<{ kind: "current"; releaseKey: string }>
   /** The application's active installation is no longer the one the caller saw. */
   | Readonly<{ kind: "stale" }>
   | Readonly<{ kind: "unavailable" }>;
 
-export type FormContinuationInstallationResolver = (
+type FormContinuationInstallationResolver = (
   input: Readonly<{
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
@@ -49,7 +49,7 @@ export type FormContinuationInstallationResolver = (
   }>,
 ) => Promise<FormContinuationInstalledRelease>;
 
-export type FormContinuationServiceDependencies = Readonly<{
+type FormContinuationServiceDependencies = Readonly<{
   orchestrator: Pick<FlowOrchestrator, "start" | "resume">;
   /**
    * Resolves, from the trusted active installation, the exact release of the flow set for the

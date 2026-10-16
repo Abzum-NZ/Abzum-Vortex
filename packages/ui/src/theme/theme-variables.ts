@@ -229,22 +229,6 @@ const fontFamily = (familyKey: string, platformTokens: ThemeTokens): string | un
   return BUILDER_KEY.test(familyKey) ? `"${familyKey.replace(/_/g, " ")}", ${FONT_FALLBACK}` : undefined;
 };
 
-/**
- * The catalogue fonts the theme selects for its body and heading typography.
- * @knipignore #2221 validates that changing font tokens changes the rendered application.
- */
-export function resolveThemeFonts(
-  platformThemeTokens: PlatformThemeTokens,
-  tokens: ThemeTokens = {},
-): readonly ShadcnFontOption[] {
-  const platformTokens: ThemeTokens = platformThemeTokens;
-  const body = tokenOfKind(tokens, "body", "typography");
-  const heading = tokenOfKind(tokens, "heading", "typography");
-  const bodyFont = body === undefined ? PLATFORM_FONTS.body : catalogueFont(body.family, platformTokens);
-  const headingFont = heading === undefined ? bodyFont : catalogueFont(heading.family, platformTokens);
-  return [...new Set([bodyFont, headingFont].filter((font) => font !== undefined))];
-}
-
 function colorPair(tokens: ThemeTokens, key: string): ColorPair | undefined {
   const token = tokens[key];
   if (token?.kind !== "color_pair") return undefined;

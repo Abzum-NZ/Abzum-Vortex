@@ -26,7 +26,6 @@ import {
   type FlowRunResume,
   type FlowRunState,
   type FlowRunStep,
-  type FlowSubject,
 } from "../rules/index";
 import type { FlowContinuationStore } from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
@@ -57,12 +56,10 @@ import {
 } from "./flow-orchestrator-types";
 import { createFlowTaskRunner } from "./flow-task-runner";
 
-export type { FlowSubject };
-
 /** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
 
 /** The seconds a suspended run may wait for the person's answer. */
-export const flowContinuationLifetimeSeconds = 900;
+const flowContinuationLifetimeSeconds = 900;
 const serverMilliseconds = flowMaximumServerSeconds * 1_000;
 
 const refused: FlowOrchestratorResponse = Object.freeze({ kind: "refused" });

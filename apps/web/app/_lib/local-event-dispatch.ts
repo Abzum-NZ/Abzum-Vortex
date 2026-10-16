@@ -13,7 +13,7 @@ import {
  * dispatcher in process with a credential generated for this process alone; hosted deployments keep
  * the protected `/api/events/dispatch` route as their only trigger.
  */
-export type LocalEventDispatcher = Readonly<{
+type LocalEventDispatcher = Readonly<{
   /** One bounded dispatch; throws with the refusal reason or the failed delivery counts. */
   dispatchOnce: () => Promise<number>;
   /** Dispatches until the outbox has nothing left to claim. */

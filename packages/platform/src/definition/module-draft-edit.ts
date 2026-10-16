@@ -33,7 +33,7 @@ import {
   type SelectedOrganizationScope,
 } from "../schema";
 
-export type ModuleDraftSnapshot = Readonly<{
+type ModuleDraftSnapshot = Readonly<{
   organizationId: string;
   rootId: string;
   key: string;
@@ -43,7 +43,7 @@ export type ModuleDraftSnapshot = Readonly<{
   sourceFingerprint: string;
 }>;
 
-export type ModuleDraftAccess = Readonly<{
+type ModuleDraftAccess = Readonly<{
   permission: Readonly<{ key: string; actionKind: string; permissionId: string }> | undefined;
   ownerId: string;
 }>;
@@ -114,7 +114,7 @@ export const snapshotFor = (draft: StoredModuleDefinitionDraft): ModuleDraftSnap
   sourceFingerprint: draft.sourceFingerprint,
 });
 
-export const verifySavedDraft = (
+const verifySavedDraft = (
   candidate: unknown,
   source: ModuleSourceDocument,
   previous: StoredModuleDefinitionDraft,
@@ -156,7 +156,7 @@ export const sameDraft = (
   right: StoredModuleDefinitionDraft,
 ): boolean => canonicalJson(left) === canonicalJson(right);
 
-export const sameSavedDraft = (
+const sameSavedDraft = (
   left: StoredModuleDefinitionDraft,
   right: StoredModuleDefinitionDraft,
 ): boolean =>

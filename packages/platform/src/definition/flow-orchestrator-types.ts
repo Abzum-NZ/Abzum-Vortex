@@ -89,7 +89,7 @@ export const flowReleaseIdentitySchema = z
     flowReleaseFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   })
   .strict();
-export type FlowReleaseIdentity = z.infer<typeof flowReleaseIdentitySchema>;
+type FlowReleaseIdentity = z.infer<typeof flowReleaseIdentitySchema>;
 
 /** Trusted read shape of one committed Event start; callers supply only its intent identifier. */
 export const committedFlowStartIntentSchema = z
@@ -142,7 +142,7 @@ export const committedFlowStartIntentSchema = z
         message: "Application flow release differs from the installation",
       });
   });
-export type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
+type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
 
 export const releaseIdentityForIntent = (intent: CommittedFlowStartIntent): FlowReleaseIdentity => ({
   organizationId: intent.organizationId,
@@ -195,7 +195,7 @@ export type FlowNamedAction = Readonly<{
  * record service (`createRecordSaveService`), in its own transaction under the initiator's verified
  * request. It owns every access, field, rule, calculation and revision decision.
  */
-export type RecordSaveTaskPort = Readonly<{
+type RecordSaveTaskPort = Readonly<{
   save(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -204,7 +204,7 @@ export type RecordSaveTaskPort = Readonly<{
 }>;
 
 /** Confirms that the initiator can currently read a claimed page subject of the exact record type. */
-export type FlowSubjectReadPort = Readonly<{
+type FlowSubjectReadPort = Readonly<{
   read(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -218,7 +218,7 @@ type FlowSelectedRecordReadResult =
   | Readonly<{ outcome: "unavailable" }>;
 
 /** Fresh protected read for the current person and one selected record. */
-export type FlowSelectedRecordReadPort = Readonly<{
+type FlowSelectedRecordReadPort = Readonly<{
   readFields(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -236,7 +236,7 @@ export type FlowSelectedRecordReadPort = Readonly<{
  * record change the flow collected in one apply record changes call. The result is the closed
  * named-action result; any before-save rule warnings travel beside it.
  */
-export type NamedActionRecordPort = Readonly<{
+type NamedActionRecordPort = Readonly<{
   execute(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -409,7 +409,7 @@ export type FlowOrchestratorResponse =
     }>
   | Readonly<{ kind: "refused" }>;
 
-export type RunAuthority =
+type RunAuthority =
   | Readonly<{
       kind: "person";
       session: IdentitySession;

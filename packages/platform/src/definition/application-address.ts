@@ -137,7 +137,7 @@ const addressCandidateReadSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 
-export const permittedApplicationSchema = z
+const permittedApplicationSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
     key: namespacedKeySchema,
@@ -153,7 +153,7 @@ export const permittedApplicationSchema = z
  * the viewer may open that page itself, it is presentation-only, and it carries only the shell and
  * release theme it renders in.
  */
-export const applicationExperienceSchema = z
+const applicationExperienceSchema = z
   .object({
     state: applicationExperienceStateSchema,
     page: pageDefinitionSchema,
@@ -162,7 +162,7 @@ export const applicationExperienceSchema = z
   })
   .strict();
 
-export const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
+const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("available"),
@@ -346,7 +346,7 @@ const addressedActiveApplicationIdentitySchema = z.object({
   applicationReleaseRevision: revisionSchema,
 }).strict();
 
-export type AddressedActiveApplicationIdentity = z.infer<
+type AddressedActiveApplicationIdentity = z.infer<
   typeof addressedActiveApplicationIdentitySchema
 >;
 
@@ -775,7 +775,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
 };
 
 /** Resolves only the active Application identity under its exact HUMAN organization request. */
-export const readAddressedActiveApplicationIdentity = async (
+const readAddressedActiveApplicationIdentity = async (
   sessionCandidate: IdentitySession,
   organizationIdCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
@@ -814,7 +814,7 @@ export const readAddressedActiveApplicationIdentity = async (
 };
 
 /** Resolves an address to a thin current active identity before any Application-scoped read. */
-export const readAddressedApplicationIdentityAtAddress = async (
+const readAddressedApplicationIdentityAtAddress = async (
   sessionCandidate: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
