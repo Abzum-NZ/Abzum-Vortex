@@ -5,7 +5,7 @@ export type SourceChangeRow = Readonly<{ area: string; change: "Added" | "Remove
 /** The areas of an application a builder knows by name; any other area is named from its key. */
 const areaLabels: Readonly<Record<string, string>> = {
   name: "Name", description: "Description", icon: "Icon", home_page: "Home page", search: "Search",
-  module_bindings: "Modules used", permissions: "Permissions", roles: "Access groups", navigation: "Menu",
+  modules: "Modules", uses: "Modules used", permissions: "Permissions", roles: "Access groups", navigation: "Menu",
   shells: "Layouts", pages: "Pages", flows: "Flows", theme: "Appearance", actions: "Actions",
   platform_block_dependencies: "Item types used", connections: "Connections",
 };

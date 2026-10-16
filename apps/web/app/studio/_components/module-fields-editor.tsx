@@ -1,4 +1,5 @@
 "use client";
+import { useReportModuleEditorDirty } from "./module-editor-dirty";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
@@ -66,6 +67,7 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
   const nextKey = adding && record !== undefined && label.trim() !== ""
     ? deriveFieldKey(label, new Set(record.fields.map((item) => item.key))) : undefined;
   const dirty = existing === undefined ? label.trim() !== "" : label !== existing.label || effectiveType !== existing.type || required !== existing.required;
+  useReportModuleEditorDirty(dirty);
 
   const choose = async (value: string) => {
     const [nextRecord, nextField] = JSON.parse(value) as [string, string];

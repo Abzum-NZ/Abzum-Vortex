@@ -20,6 +20,7 @@ import {
   type SourceItem,
   type SourcePageZone,
   type StoredDefinitionDraft,
+  applicationModuleKeys,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
 import {
@@ -406,7 +407,7 @@ export const loadStudioApplicationDraft = async (
           if (JSON.stringify({ records, modules: [...modules.values()] }).length > 999_000)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,
-            sourceFingerprint: draft.sourceFingerprint, bindingsSignature: JSON.stringify(draft.source.body.module_bindings),
+            sourceFingerprint: draft.sourceFingerprint, bindingsSignature: JSON.stringify(applicationModuleKeys(draft.source)),
             resolutionFingerprint: compiled.compilation.resolutionFingerprint, records, modules: [...modules.values()] };
         } catch (error) {
           // A failed metadata refresh never makes old choices authoritative or changes the draft.

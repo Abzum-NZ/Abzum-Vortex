@@ -8,24 +8,7 @@
     "description": "Organisation accounts, invitations, runtime settings, notices and privacy request cases for an organisation administrator, entirely definition-led.",
     "icon": "sliders-horizontal",
     "home_page": "organisation_overview",
-    "module_bindings": [
-      {
-        "module": "vortex.organisation_administration",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.system_directory",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "system_record_display"
-      }
-    ],
+    "uses": [],
     "permissions": [
       {
         "id": "app_permission_open",
@@ -261,11 +244,9 @@
         ]
       }
     ],
-    "queries": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
-    "actions": [],
     "events": [
       {
         "id": "event_organisation_settings_action",

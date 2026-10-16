@@ -1322,6 +1322,8 @@ export const moduleContentSchema = z
     .object({
       name: z.string().min(1).max(120),
       description: z.string().min(1).max(1_000),
+      /** The one Application that owns this Module; every other Application uses it by name. */
+      ownerApplication: namespacedKeySchema,
       dependencies: z.array(moduleDependencySchema),
       recordTypes: z.array(recordTypeDefinitionSchema).min(1).max(100),
       permissions: z.array(permissionDeclarationSchema),

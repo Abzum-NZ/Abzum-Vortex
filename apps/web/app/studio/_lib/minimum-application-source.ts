@@ -10,9 +10,8 @@ export type MinimumApplicationInputs = Readonly<{
   key: string;
   name: string;
   description: string;
+  moduleApplication: string;
   moduleKey: string;
-  moduleVersionSelection: "exact" | "allowed_range";
-  moduleVersion: string;
   roleKey: string;
   roleName: string;
   homeName: string;
@@ -32,8 +31,8 @@ const inputForPath = (path: readonly PropertyKey[]): keyof MinimumApplicationInp
   if (head === "key") return "key";
   if (head !== "body") return undefined;
   if (section === "name" || section === "description") return section;
-  if (section === "module_bindings" && index === "0")
-    return leaf === "module" ? "moduleKey" : leaf === "version" ? "moduleVersion" : undefined;
+  if (section === "uses" && index === "0")
+    return leaf === "module" ? "moduleKey" : leaf === "application" ? "moduleApplication" : undefined;
   if (section === "permissions" && index === "0") return "key";
   if (section === "roles" && index === "0")
     return leaf === "name" ? "roleName" : leaf === "key" ? "roleKey" : "key";
@@ -57,13 +56,8 @@ export const minimumApplicationSource = (
       description: inputs.description.trim(),
       icon: "layout-dashboard",
       home_page: "home",
-      module_bindings: [{
-        module: inputs.moduleKey.trim(),
-        version: inputs.moduleVersionSelection === "exact"
-          ? { selection: "exact", version: inputs.moduleVersion.trim() }
-          : { selection: "allowed_range", expression: inputs.moduleVersion.trim() },
-        purpose: "primary",
-      }],
+      modules: [],
+      uses: [{ application: inputs.moduleApplication.trim(), module: inputs.moduleKey.trim() }],
       permissions: [{
         id: "permission_home",
         key: permissionKey,
@@ -92,11 +86,9 @@ export const minimumApplicationSource = (
         },
       }],
       navigation: [],
-      queries: [],
       pipelines: [],
       connection_bindings: [],
       interfaces: [],
-      actions: [],
       events: [],
       public_addresses: [],
       platform_block_dependencies: [],

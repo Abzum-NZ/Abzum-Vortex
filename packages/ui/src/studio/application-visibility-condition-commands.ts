@@ -6,6 +6,7 @@ import {
   moduleFieldSchema, moduleFieldValueSchemas, builderKeySchema, sourceItemChildSlots, sourcePageZones,
   type ApplicationSourceDocument, type ConditionNode, type ModuleField,
   type SourceItem, type SourceItemVortex, type SourcePageData,
+  applicationModuleKeys,
 } from "@vortex/platform/schema";
 import { validateStudioCondition, type StudioConditionControlsContext,
   type StudioConditionValidation, type StudioConditionValidationIssue } from "./condition-model";
@@ -328,7 +329,7 @@ export function projectStudioVisibilityEditor(context: StudioCompositionContext,
     !Number.isSafeInteger(context.localLifetime) || context.localLifetime < 1 ||
     context.source.key !== context.key || target.pageAlias !== metadata.pageAlias ||
     target.recordReference !== metadata.recordReference ||
-    JSON.stringify(context.source.body.module_bindings) !== metadata.bindingsSignature) return { kind: "stale" };
+    JSON.stringify(applicationModuleKeys(context.source)) !== metadata.bindingsSignature) return { kind: "stale" };
   try {
     const controls = studioVisibilityControlsContext(metadata);
     const condition = projectStudioVisibilityCondition(target.placement.visibility_condition, metadata);

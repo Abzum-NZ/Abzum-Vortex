@@ -237,10 +237,8 @@ export function extractApplicationSourceIdentityRequirements(
 
   add("root", "document", "document", "root", [source.key, source.root_alias]);
   addTopLevel("permission", "permissions");
-  addTopLevel("action", "actions");
   addTopLevel("event", "events");
   addTopLevel("role", "roles");
-  addTopLevel("query", "queries");
   addTopLevel("pipeline", "pipelines");
   addTopLevel("connection_binding", "connection_bindings");
   addTopLevel("public_address", "public_addresses", (component) => [component.path]);
