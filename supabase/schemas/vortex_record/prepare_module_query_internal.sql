@@ -280,14 +280,9 @@ begin
   query_item := resolved -> 'query';
   record_type_item := resolved -> 'recordType';
   record_type_id_value := (resolved ->> 'recordTypeId')::uuid;
-  if preview_mode and (
-    record_type_item ? 'systemProjection'
-    or exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(record_type_item -> 'fields') as item(value)
-      where item.value ->> 'type' in ('calculation', 'total')
-    )
-  ) then
+  -- A preview reads its copy of the records with their stored totals and calculations; a system
+  -- projection is read only through its protected reader, never from a preview.
+  if preview_mode and record_type_item ? 'systemProjection' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
   if prepared_plan is null then

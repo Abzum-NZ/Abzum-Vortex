@@ -3,7 +3,7 @@ create or replace function vortex_definition.is_current_application_address_rele
 )
 returns boolean
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
@@ -26,7 +26,9 @@ begin
       and registration.registration_owner_id =
         (context_value ->> 'applicationRootId')::uuid
       and registration.state = 'active'
-      and registration.source_revision = p_release_revision
+      -- A preview runs the draft under the permissions the installed release registered.
+      and (installation_value ? 'previewInstallationId'
+        or registration.source_revision = p_release_revision)
   );
 exception
   when sqlstate 'P0002' or sqlstate '55000' or sqlstate '23514' then
@@ -34,15 +36,12 @@ exception
 end
 $function$;
 
-alter function vortex_definition.is_current_application_address_release(bigint)
-  owner to postgres;
-
 revoke execute on function vortex_definition.is_current_application_address_release(bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_definition.is_current_application_address_release(bigint)
   to vortex_request;
 
 comment on function vortex_definition.is_current_application_address_release(bigint) is
-  'Checks an internal candidate release against the exact active registration and binding in the validated human application context.';
+  'Checks an internal candidate release against the exact active registration and binding in the validated human application context, or against the pins of the preview installation the context runs.';
 
 alter function vortex_definition.is_current_application_address_release(p_release_revision bigint) owner to vortex_owner;

@@ -13,7 +13,6 @@ export * from "./application-composition/source-composition";
 export * from "./application-composition/catalogue-discovery";
 export * from "./application-composition-release-identities";
 export * from "./preview-installation-contracts";
-export * from "./builder-preview-operations";
 export * from "./application-flow-bindings";
 export * from "./canonical-json";
 export * from "./definitions";

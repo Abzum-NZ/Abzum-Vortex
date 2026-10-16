@@ -11,7 +11,7 @@ begin
   end if;
   select release.record_content
   into strict release_content
-  from vortex_definition.releases as release
+  from vortex_definition.runtime_releases as release
   where release.root_id = p_module_root_id
     and release.release_revision = p_module_release_revision;
   return pg_catalog.jsonb_build_object(

@@ -73,3 +73,17 @@ export const unavailableMessage = (kind: StudioUnavailableKind, reason: string |
     default: return kind satisfies never;
   }
 };
+
+/** Why the saved draft is not running as a preview, and what the person can do. */
+export const previewProblem = (
+  result: Readonly<{ kind: "refused"; reason: string } | { kind: "conflict" } | { kind: "temporarily_unavailable" }>,
+): string =>
+  result.kind === "conflict"
+    ? "The saved draft changed while the preview was being prepared. Choose Revert to saved, then preview again."
+    : result.kind === "temporarily_unavailable"
+      ? "The preview is temporarily unavailable. Your changes are kept; try again."
+      : result.reason === "not_installed"
+        ? "This application has no published version yet, so there is nothing for its preview to run with. Publish it once, then preview."
+        : result.reason === "permission_refused"
+          ? "Previewing needs permission to publish this application. Ask an administrator."
+          : "The preview request was not accepted. Reload Studio and try again.";
