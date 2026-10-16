@@ -42,6 +42,7 @@ import {
   type DefinitionPublicationReader,
   type DefinitionPublicationCatalogue,
 } from "./definition-publication-contracts";
+import { moduleDependencies } from "./module-dependencies";
 
 type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 
@@ -136,12 +137,15 @@ const completeModuleSelection = (fold: ModuleSelectionFold): ResolvableModuleRel
 };
 
 /**
- * A Module names its dependencies (derived from its references when its Application's inline
- * Modules are lowered); an Application accepts the current release of every Module it owns or uses.
+ * A Module depends on the Modules its references name (derived, never stored); an Application
+ * accepts the current release of every Module it owns or uses.
  */
 const moduleRequirements = (draft: StoredDefinitionDraft): Requirement[] =>
   draft.source.kind === "module"
-    ? draft.source.body.dependencies.map((entry) => ({ key: entry.module, version: entry.version }))
+    ? moduleDependencies(draft.source).map((entry) => ({
+        key: entry.module,
+        version: entry.version,
+      }))
     : draft.source.kind === "application"
       ? applicationModuleKeys(draft.source).map((key) => ({
           key,

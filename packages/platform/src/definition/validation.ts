@@ -55,6 +55,7 @@ import { dependencyRule, provenanceRule } from "./validation/provenance-rules";
 import { moduleReferenceRule } from "./validation/module-references";
 import { applicationRule } from "./validation/application-rule";
 import { object, array } from "./validation/helpers";
+import { moduleDependencies } from "./module-dependencies";
 
 export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
@@ -273,7 +274,7 @@ function dependencyKeys(request: PublicationCompilationRequest): string[] {
   const source = request.source as unknown as JsonObject;
   const body = object(source.body);
   if (source.kind === "module")
-    return array(body.dependencies).map((entry) => String(entry.module));
+    return moduleDependencies(source).map((entry) => entry.module);
   if (source.kind === "application")
     return [
       ...array(body.modules).map((module) => String(module.key)),

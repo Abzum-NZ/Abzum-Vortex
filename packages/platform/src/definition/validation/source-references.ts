@@ -13,6 +13,7 @@ import {
 import { object, array } from "./helpers";
 import { actionValueReferenceEntry } from "./action-values";
 import { sourceTranslationContext } from "./source-paths";
+import { moduleDependencies } from "../module-dependencies";
 
 export function sourceLocalReferenceRule(
   context: PreparedValidationContext,
@@ -30,12 +31,9 @@ export function sourceLocalReferenceRule(
       const records = new Map(
         array(body.record_types).map((record) => [String(record.key), record] as const),
       );
-      const dependencies = new Set(
-        array(body.dependencies).map((dependency) => String(dependency.module)),
-      );
-      const dependencyKeys = new Set(
-        array(body.dependencies).map((dependency) => String(dependency.dependency_key)),
-      );
+      const derived = moduleDependencies(source);
+      const dependencies = new Set(derived.map((dependency) => dependency.module));
+      const dependencyKeys = new Set(derived.map((dependency) => dependency.dependency_key));
       const actions = array(body.actions);
       const actionIds = new Set(actions.map((action) => String(action.id)));
       const permissions = new Set(

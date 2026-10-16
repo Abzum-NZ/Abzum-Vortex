@@ -84,7 +84,7 @@ export const materializeInlineModules = async (
         ? await transaction.createOwnedModuleRoot(String(candidate.draft.rootId), source)
         : existing.sourceFingerprint !== fingerprintCanonicalValue(source) ||
             existing.draftRevision === existing.currentReleaseRevision
-          ? await transaction.saveOwnedModuleSource(existing, source)
+          ? await transaction.stageOwnedModuleSource(existing, source)
           : existing;
     roots.set(source.key, root);
   }

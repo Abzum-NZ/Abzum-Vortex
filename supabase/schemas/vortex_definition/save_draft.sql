@@ -70,31 +70,16 @@ begin
       message = 'Definition root does not belong to the context organization';
   end if;
 
-  if human_write then
-    select root.key, root.kind into strict root_key, root_kind
-    from vortex_definition.roots as root
-    where root.root_id = p_root_id;
-    if root_kind is null or root_kind not in ('application', 'module')
-      or p_draft_source ->> 'kind' is distinct from root_kind
-      or p_draft_source ->> 'key' is distinct from root_key then
-      raise exception using errcode = '22023',
-        message = 'Definition draft write source is invalid';
-    end if;
-  end if;
-
-  -- A Module is never authored: its draft is only ever the current lowering of the inline Module
-  -- its owning Application's draft holds.
-  if exists (
-    select 1
-    from vortex_definition.roots as root
-    where root.root_id = p_root_id
-      and root.kind = 'module'
-      and not vortex_definition.is_owned_module_source_internal(
-        root.owner_application_root_id, root.organization_id, p_draft_source
-      )
-  ) then
+  -- Only an Application has a draft. A Module is edited inside its owning Application's draft,
+  -- and only that Application's publication stages the Module's source.
+  select root.key, root.kind into strict root_key, root_kind
+  from vortex_definition.roots as root
+  where root.root_id = p_root_id;
+  if root_kind is distinct from 'application'
+    or p_draft_source ->> 'kind' is distinct from root_kind
+    or p_draft_source ->> 'key' is distinct from root_key then
     raise exception using errcode = '22023',
-      message = 'A Module draft must be an inline Module of its owning Application';
+      message = 'Definition draft write source is invalid';
   end if;
 
   update vortex_definition.drafts as draft

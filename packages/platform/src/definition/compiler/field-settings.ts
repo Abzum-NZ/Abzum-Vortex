@@ -13,6 +13,7 @@ import type { Resolution } from "./resolution";
 import { compatibleVersion } from "./resolution";
 import { asObject, fail, type JsonObject } from "./shared";
 import { condition, type ModuleValueContext, normaliseExact } from "./values";
+import { moduleDependencies } from "../module-dependencies";
 
 function personLinkSettingLocation(
   field: JsonObject,
@@ -54,7 +55,7 @@ export function validatePersonLinkApplicationAccess(
         const expected = resolution.definition(moduleKey, "module");
         let records = localRecords;
         if (moduleKey !== ownKey) {
-          const declarations = (body.dependencies as JsonObject[]).filter(
+          const declarations = (moduleDependencies(source) as unknown as JsonObject[]).filter(
             (dependency) => dependency.module === moduleKey,
           );
           const candidates = dependencyOutputs.filter(
