@@ -4695,7 +4695,7 @@
                          "inputs": {
                              "owner": {
                                  "type": "record_reference",
-                                 "record_types": ["vortex.system_directory:person"],
+                                 "recordTypeIds": ["vortex.system_directory:person"],
                                  "required": true
                              }
                          },
