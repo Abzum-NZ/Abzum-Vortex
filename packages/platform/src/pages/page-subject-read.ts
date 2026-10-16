@@ -54,12 +54,14 @@ export const readPageSubjectInTransaction = async (
   const recordId = recordIdSchema.safeParse(subject.recordId);
   if (!recordTypeId.success || !recordId.success) return { kind: "refused" };
   try {
+    // One read decision answers both the projection and the capabilities.
     const rows = await transaction.query<SubjectRow>`
-      select
-        vortex_record.read_record(${recordTypeId.data}::uuid, ${recordId.data}::uuid) as result,
-        vortex_record.read_record_capabilities(
+      select subject.value -> 'record' as result, subject.value -> 'capabilities' as capabilities
+      from (
+        select vortex_record.read_record_with_capabilities(
           ${recordTypeId.data}::uuid, ${recordId.data}::uuid
-        ) as capabilities
+        ) as value
+      ) as subject
     `;
     const stored = rows[0];
     const readable = readableSubjectSchema.safeParse(stored?.result);

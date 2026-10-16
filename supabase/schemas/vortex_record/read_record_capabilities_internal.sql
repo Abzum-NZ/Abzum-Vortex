@@ -2,7 +2,8 @@ create or replace function vortex_record.read_record_capabilities_internal(
   p_record_type_id uuid,
   p_record_id uuid,
   p_read_facts jsonb,
-  p_read_bounds jsonb
+  p_read_bounds jsonb,
+  p_action_meta jsonb
 )
 returns jsonb
 language plpgsql
@@ -56,8 +57,10 @@ begin
   end if;
   -- Ordinary stored rows already passed the read loader's catalogue checks.
   -- Only a protected projection needs the extra action-context lookup.
+  -- A page passes the context it resolved once for this record type.
   if (p_read_facts ->> 'isSystemProjection')::boolean then
-    meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
+    meta := coalesce(p_action_meta,
+      vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read'));
   end if;
   if meta #>> '{recordType,key}' = 'organization_settings'
     and meta #>> '{recordType,systemProjection,protectedView}' =
@@ -177,8 +180,13 @@ begin
     end if;
     if action_loaded ->> 'outcome' = 'loaded'
       and pg_catalog.jsonb_typeof(action_loaded -> 'declaration') = 'object' then
-      action_decision := vortex_access.evaluate_organization_record_access_internal(
-        action_loaded -> 'declaration', p_record_id, action_loaded -> 'facts'
+      -- An action decided over the read facts reuses their record types, which
+      -- the read decision validated in this invocation; an action that loaded
+      -- its writer's own facts validates them in full.
+      action_decision := vortex_access.evaluate_record_access_with_validated_types_internal(
+        action_loaded -> 'declaration', p_record_id, action_loaded -> 'facts', null,
+        case when action_loaded -> 'facts' is not distinct from p_read_facts -> 'facts'
+          then p_read_facts -> 'facts' -> 'recordTypes' end
       );
       if action_decision ->> 'outcome' = 'allowed' then
         actions := pg_catalog.array_append(actions, action_kind);
@@ -216,10 +224,33 @@ begin
 end
 $function$;
 
+create or replace function vortex_record.read_record_capabilities_internal(
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_read_facts jsonb,
+  p_read_bounds jsonb
+)
+returns jsonb
+language sql
+volatile
+security invoker
+set search_path = ''
+as $function$
+  select vortex_record.read_record_capabilities_internal(
+    p_record_type_id, p_record_id, p_read_facts, p_read_bounds, null::jsonb
+  )
+$function$;
+
+alter function vortex_record.read_record_capabilities_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
 alter function vortex_record.read_record_capabilities_internal(uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 revoke all on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
+comment on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb, jsonb) is
+  'Private record capabilities with an optional protected projection action context the caller resolved once in this invocation for the same record type; otherwise as the four-argument form.';
 comment on function vortex_record.read_record_capabilities_internal(uuid, uuid, jsonb, jsonb) is
   'Private record capabilities: returns the permitted update, delete and restore actions and changeable fields of one readable record, reusing the read facts and field bounds of its read decision.';
