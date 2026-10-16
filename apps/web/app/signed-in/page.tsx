@@ -132,7 +132,7 @@ const organizationsUnavailable = (
                 Your sign-in is still active. Try loading your organisations again.
               </CardDescription>
             </CardHeader>
-            <CardFooter className="flex justify-between gap-3 pt-2">
+            <CardFooter className="flex justify-between gap-3">
               <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
                 Try again
               </Button>

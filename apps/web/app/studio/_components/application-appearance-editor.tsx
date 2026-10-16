@@ -130,7 +130,8 @@ export function ApplicationAppearanceEditor(props: Props) {
     setDescriptors(undefined);
     setFeedback(undefined);
     setBusy(true);
-    props.onPendingChange(true);
+    // Reading the theme after a draft edit is not unapplied input: the values are the draft's own.
+    props.onPendingChange(false);
     setMessage("Reading the theme…");
     const request = { rootId: props.rootId, expectedDraftRevision: props.draftRevision, tokenOverrides: initial };
     void validateStudioApplicationAppearance(props.organizationId, request).then((result) => {
@@ -157,7 +158,8 @@ export function ApplicationAppearanceEditor(props: Props) {
     return () => { active.current = false; generation.current += 1; };
   }, [props.organizationId, props.rootId, props.draftRevision, props.source, props.onPendingChange]);
 
-  useEffect(() => { props.onPendingChange(changed || busy); }, [changed, busy, props.onPendingChange]);
+  // Unapplied input is values the builder typed that differ from the draft; a read or a check in flight is not.
+  useEffect(() => { props.onPendingChange(changed); }, [changed, props.onPendingChange]);
   useEffect(() => () => props.onPendingChange(false), [props.onPendingChange]);
 
   const update = (next: Record<string, StudioThemeTokenValue>) => {
@@ -178,7 +180,7 @@ export function ApplicationAppearanceEditor(props: Props) {
     const ticket = ++generation.current;
     const epoch = validationEpoch.current;
     setBusy(true);
-    props.onPendingChange(true);
+    props.onPendingChange(studioAppearanceValueKey(values) !== baselineKey);
     setFeedback(undefined);
     setMessage("Checking contrast, focus and images…");
     try {

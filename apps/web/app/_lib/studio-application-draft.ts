@@ -30,15 +30,13 @@ import {
   readLiveHumanContext,
   requireBuilderAuthority,
   createDatabaseDefinitionPublicationService,
-  createDatabaseDefinitionPublicationRepository,
   applicationSearchFieldIsSelectable,
   fingerprintCanonicalValue,
   DefinitionCompilationError,
-  type ModuleReleasePageCursor,
-  type ResolvableModuleRelease,
 } from "@vortex/platform/server";
-import type { StudioCompileFailure } from "@vortex/ui/studio";
+import { studioUsesSignature, type StudioBorrowedQueries, type StudioCompileFailure, type StudioQueryChoice } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
+import type { StudioDataModule } from "../studio/_lib/studio-data-model";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
@@ -81,7 +79,7 @@ const loadFailure = (operation: string, error: unknown): StudioApplicationFailur
 };
 
 type StudioApplicationLoadResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
+  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; borrowedQueries: StudioBorrowedQueries | null; usedModules: readonly StudioDataModule[] | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
   | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
@@ -151,7 +149,7 @@ const assertCompiledSlotMatches = (
   }
 };
 
-const pageCompiledSlotsFor = (
+export const pageCompiledSlotsFor = (
   source: StoredApplicationDefinitionDraft["source"],
   canonical: ApplicationContent,
 ): StudioApplicationCompiledPageSlots => {
@@ -203,7 +201,7 @@ type StudioApplicationCreateAccessResult =
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 
 /** Mirrors the writer's protected classification; an unknown existing root is never ordinary. */
-const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
+export const studioDraftTargetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) return { isSystemApplication: false };
   const rows = await transaction.query<ClassificationRow>`
     select outcome, application_origin_kind
@@ -235,7 +233,7 @@ export const loadStudioCreateAccess = async (
         transaction,
         scope,
       ): Promise<StudioAuthorityResult<OrganizationId>> => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts, permissions: platformPermissionSource });
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change" });
         } catch (error) {
@@ -304,8 +302,10 @@ export const loadStudioApplicationDraft = async (
         pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
         canvasFrames: StudioApplicationCanvasFrames | null;
         compileFailure: StudioCompileFailure | null;
+        borrowedQueries: StudioBorrowedQueries | null;
+        usedModules: readonly StudioDataModule[] | null;
       }>>> => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts, permissions: platformPermissionSource });
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
         } catch (error) {
@@ -322,6 +322,8 @@ export const loadStudioApplicationDraft = async (
         let pageCompiledSlots: StudioApplicationCompiledPageSlots | null = null;
         let canvasFrames: StudioApplicationCanvasFrames | null = null;
         let compileFailure: StudioCompileFailure | null = null;
+        let borrowedQueries: StudioBorrowedQueries | null = null;
+        let usedModules: StudioDataModule[] | null = null;
         if (options.compile !== false) try {
           const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
           const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
@@ -338,38 +340,19 @@ export const loadStudioApplicationDraft = async (
           pageCompiledSlots = pageCompiledSlotsFor(draft.source, compiled.compilation.canonical.content);
           canvasFrames = studioCanvasFramesFor(draft.source.body.pages, compiled.compilation.canonical.content);
           const records: StudioApplicationSearchMetadata["records"][number][] = [];
+          const borrowed: StudioQueryChoice[] = [];
+          const used: StudioDataModule[] = [];
           const modules = new Map<string, StudioApplicationSearchMetadata["modules"][number]>();
-          await createDatabaseDefinitionPublicationRepository(transaction).read(context, async (reader) => {
+          // The exact Module releases the draft compiled against, its own inline Modules included.
+          {
             for (const binding of compiled.compilation.canonical.content.moduleBindings) {
               const selections = compiled.compilation.resolvedDependencies.filter((dependency) => dependency.kind === "module" &&
                 sameId(dependency.rootId, binding.moduleRootId) && dependency.exactVersion === binding.resolvedVersion);
               const selection = selections[0];
               if (selections.length !== 1 || selection === undefined) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-              let cursor: ModuleReleasePageCursor | undefined;
-              let release: ResolvableModuleRelease | undefined;
-              let previous: number | null = null;
-              let count = 0;
-              for (;;) {
-                const page = await reader.readModuleReleasePage(scope.organizationId, selection.key, cursor);
-                if (page.rootId === null || page.anchorReleaseRevision === null || !sameId(page.rootId, binding.moduleRootId) || page.entries.length === 0 ||
-                    (cursor !== undefined && (page.anchorReleaseRevision !== cursor.anchorReleaseRevision || !sameId(page.rootId, cursor.rootId))))
-                  throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                for (const entry of page.entries) {
-                  if (++count > 10_000 || entry.previousReleaseRevision !== previous || entry.release.releaseRevision <= (previous ?? 0))
-                    throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                  previous = entry.release.releaseRevision;
-                  if (entry.release.releaseVersion === binding.resolvedVersion) {
-                    if (release !== undefined) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                    release = entry.release;
-                  }
-                }
-                if (page.nextAfterReleaseRevision === null) {
-                  if (previous !== page.anchorReleaseRevision) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                  break;
-                }
-                if (page.nextAfterReleaseRevision !== previous) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-                cursor = { rootId: page.rootId, anchorReleaseRevision: page.anchorReleaseRevision, afterReleaseRevision: page.nextAfterReleaseRevision };
-              }
+              const matches = compiled.moduleReleases.filter((candidate) => sameId(candidate.rootId, binding.moduleRootId) &&
+                candidate.releaseVersion === binding.resolvedVersion);
+              const release = matches.length === 1 ? matches[0] : undefined;
               if (release === undefined || !sameId(release.organizationId, scope.organizationId) ||
                   !sameId(release.rootId, binding.moduleRootId) || release.key !== selection.key ||
                   release.releaseVersion !== binding.resolvedVersion)
@@ -383,6 +366,37 @@ export const loadStudioApplicationDraft = async (
               if (prior !== undefined && canonicalJson(prior) !== canonicalJson(module))
                 throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
               modules.set(identity, module);
+              const use = draft.source.body.uses.find((candidate) => candidate.module === release!.key);
+              const content = release.compilationOutput.canonical.content;
+              // A used Module is shown read-only in the Data tab, as its installed release defines it.
+              if (use !== undefined && !used.some((module) => module.key === release!.key))
+                used.push({ key: release.key, name: content.name, ownerApplication: use.application,
+                  recordTypes: content.recordTypes.map((record) => ({
+                    key: record.key, name: record.singularLabel, pluralName: record.pluralLabel,
+                    titleFieldKey: record.fields.find((field) => sameId(String(field.fieldId), String(record.titleFieldId)))?.key ?? "",
+                    fields: record.fields.map((field) => ({ key: field.key, label: field.label, type: field.type,
+                      required: field.required, unique: field.unique, description: field.helpText ?? "" })),
+                  })),
+                  queries: content.queries.flatMap((query) => {
+                    const recordType = query.recordType.state === "resolved" ? content.recordTypes.find((candidate) =>
+                      sameId(String(candidate.recordTypeId), String((query.recordType as { recordTypeId: string }).recordTypeId))) : undefined;
+                    return recordType === undefined ? [] : [{ key: query.key, recordKey: recordType.key,
+                      label: query.key.replaceAll("_", " ").replace(/^./u, (first) => first.toUpperCase()) }];
+                  }) });
+              // A used Module's queries are offered as they are: they belong to its own application.
+              if (use !== undefined && !borrowed.some((query) => query.reference.startsWith(`${release!.key}:`)))
+                for (const query of content.queries) {
+                  const recordType = query.recordType.state === "resolved" ? content.recordTypes.find((candidate) =>
+                    sameId(String(candidate.recordTypeId), String((query.recordType as { recordTypeId: string }).recordTypeId))) : undefined;
+                  if (recordType === undefined) continue;
+                  borrowed.push({ reference: `${release.key}:${query.key}`, borrowedFrom: use.application,
+                    label: query.key.replaceAll("_", " ").replace(/^./u, (first) => first.toUpperCase()),
+                    fields: query.selectedFieldIds.flatMap((fieldId) => {
+                      const field = recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(fieldId)));
+                      return field === undefined ? [] : [{ reference: `${release!.key}:${recordType.key}.${field.key}`,
+                        label: field.label, type: field.type }];
+                    }) });
+                }
               for (const record of release.compilationOutput.canonical.content.recordTypes) {
                 const fields = record.fields.filter((field) => applicationSearchFieldIsSelectable(record.fields, String(field.fieldId)))
                   .map((field) => ({ reference: `${release!.key}:${record.key}.${field.key}`, fieldId: String(field.fieldId), label: field.label }));
@@ -399,13 +413,15 @@ export const loadStudioApplicationDraft = async (
                     contentFingerprint: release.contentFingerprint, resolutionFingerprint: release.resolutionFingerprint, fields });
               }
             }
-          });
+          }
           const final = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data, expectedDraftRevision: draft.draftRevision });
           if (canonicalJson(final) !== canonicalJson(draft)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
           if (canonicalJson(await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt })) !== canonicalJson(context)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           if (JSON.stringify({ records, modules: [...modules.values()] }).length > 999_000)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
+          borrowedQueries = { usesSignature: studioUsesSignature(draft.source), queries: borrowed };
+          usedModules = used;
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,
             sourceFingerprint: draft.sourceFingerprint, bindingsSignature: JSON.stringify(applicationModuleKeys(draft.source)),
             resolutionFingerprint: compiled.compilation.resolutionFingerprint, records, modules: [...modules.values()] };
@@ -416,7 +432,7 @@ export const loadStudioApplicationDraft = async (
           console.error("STUDIO_DRAFT_COMPILE_FAILED", compileFailure.reasonCode, compileFailure.family, error);
           searchMetadata = null;
         }
-        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, pageCompiledSlots, canvasFrames, compileFailure } };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, borrowedQueries, usedModules, pageCompiledSlots, canvasFrames, compileFailure } };
       },
     );
     if (result.kind === "available")

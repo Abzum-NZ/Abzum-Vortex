@@ -100,13 +100,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   font-variant-numeric: tabular-nums;
 }
 
-.vortex-cell-choice {
-  display: inline-block;
-  padding: 0 var(--vortex-space-sm);
-  border: 0.0625rem solid var(--vortex-border-color);
-  border-radius: 999px;
-}
-
 .vortex-cell-text,
 .vortex-cell-link,
 .vortex-cell-rich-text {
@@ -138,7 +131,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
 }
 
 .vortex-cell-rich-text code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono-family, ui-monospace, monospace);
 }
 
 .vortex-sr-only {

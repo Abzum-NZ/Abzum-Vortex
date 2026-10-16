@@ -2,7 +2,9 @@ import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { resolve, relative, extname, basename, dirname } from "node:path";
 import ts from "typescript";
+import { createHash } from "node:crypto";
 import { guardRules, packageAreas, paths, scannedRuleIds } from "./config.ts";
+import { derivedDefinitionId } from "../../packages/platform/src/definition/derived-definition-id.ts";
 
 type Finding = { rule: string; file: string; line: number; detail: string };
 const root = resolve(import.meta.dirname, "../..");
@@ -202,11 +204,48 @@ for (const file of codeFiles) {
     true,
     file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
+  // Renderers compose the official shadcn components, whose per-style variants decide radius,
+  // padding and fonts. A literal radius, an arbitrary pixel length or an arbitrary font family in a
+  // class name bypasses the theme. The official component sources themselves are exempt.
+  const literalStyleScope =
+    file.startsWith(paths.uiRenderers) && !file.startsWith(paths.uiComponents);
+  const checkLiteralStyle = (text: string, offset: number): void => {
+    for (const match of text.matchAll(/\S+/g)) {
+      const token = match[0];
+      const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "");
+      if (
+        /^-?rounded(?:-[a-z0-9]+)*$/.test(utility) ||
+        /^-?[a-z][a-z0-9-]*-\[[^\]]*\d(?:\.\d+)?px[^\]]*\]$/.test(utility) ||
+        /^font-\[[^\]]+\]$/.test(utility)
+      )
+        add("ui-literal-style", file, lineAt(content, offset + (match.index ?? 0)), token);
+    }
+  };
+  // A class-name context: a `className` attribute, or an argument of cn/cva/clsx at any depth.
+  const isClassNameContext = (node: ts.Node): boolean => {
+    for (let current = node.parent; current !== undefined; current = current.parent) {
+      if (ts.isJsxAttribute(current)) return current.name.getText(source) === "className";
+      if (ts.isCallExpression(current) && /^(?:cn|cva|clsx)$/.test(current.expression.getText(source)))
+        return true;
+      if (ts.isStatement(current) || ts.isFunctionLike(current)) return false;
+    }
+    return false;
+  };
   const checkImport = (specifier: string, offset: number): void => {
     if (violatesLayering(file, specifier))
       add("layering", file, lineAt(content, offset), specifier);
   };
   const visit = (node: ts.Node): void => {
+    if (
+      literalStyleScope &&
+      (ts.isStringLiteral(node) ||
+        ts.isNoSubstitutionTemplateLiteral(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddle(node) ||
+        ts.isTemplateTail(node)) &&
+      isClassNameContext(node)
+    )
+      checkLiteralStyle(node.text, node.getStart(source) + 1);
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
       const specifier = node.moduleSpecifier;
       if (specifier && ts.isStringLiteral(specifier))
@@ -647,6 +686,29 @@ for (const file of files.filter(
           match[0].toLowerCase(),
         );
     }
+}
+
+// The derived Definition identity exists twice: Studio derives in memory what the database will
+// record. Both are held to vectors the SQL function produced: the TypeScript derivation must
+// reproduce them, and the SQL function must be the exact text they were recorded from, so a
+// change to either is refused until the vectors are recorded again from the database.
+{
+  const vectorsFile = "tooling/guard/derived-definition-id-vectors.json";
+  const sqlFile = "supabase/schemas/vortex_definition/derived_definition_id.sql";
+  const recorded = JSON.parse(read(vectorsFile)) as {
+    sqlFingerprint: string;
+    vectors: Array<{ parts: string[]; id: string }>;
+  };
+  const sqlFingerprint = `sha256:${createHash("sha256")
+    .update(read(sqlFile).replace(/\s+/g, " ").trim(), "utf8")
+    .digest("hex")}`;
+  if (sqlFingerprint !== recorded.sqlFingerprint)
+    add("derived-id-parity", sqlFile, 1, `SQL changed since the vectors were recorded (${sqlFingerprint})`);
+  for (const [index, vector] of recorded.vectors.entries()) {
+    const derived = derivedDefinitionId(vector.parts);
+    if (derived !== vector.id)
+      add("derived-id-parity", vectorsFile, index + 1, `${JSON.stringify(vector.parts)}: TypeScript ${derived}, SQL ${vector.id}`);
+  }
 }
 
 // The validator prints a JSON array on stdout and exits 0 (clean) or 1 (failures); anything else

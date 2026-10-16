@@ -8,7 +8,7 @@ import {
   type SourceItem,
   type SourcePageData,
 } from "@vortex/platform/schema";
-import type { StudioSemanticSelection } from "./semantic-selection";
+import { studioFlowLabel, studioFlowTaskEntries, type StudioSemanticSelection } from "./semantic-selection";
 
 /** The current Application draft, whether supplied by history or a direct source load. */
 export type StudioSelectionInspectorDraft = Readonly<{
@@ -47,7 +47,8 @@ type ParsedSelection =
   | Readonly<{ kind: "page"; alias: string }>
   | Readonly<{ kind: "shell"; alias: string }>
   | Readonly<{ kind: "navigation"; alias: string }>
-  | Readonly<{ kind: "flow"; alias: string }>
+  | Readonly<{ kind: "flow"; alias: string; moduleKey: string | null }>
+  | Readonly<{ kind: "flow_step"; alias: string; moduleKey: string | null; taskId: string }>
   | Readonly<{ kind: "placement"; alias: string }>;
 
 const result = <Resolution extends StudioSelectionInspectorResolution>(
@@ -83,17 +84,28 @@ const parseSelection = (
         ? Object.freeze({ kind: "application", applicationRootId: parsedRoot.data })
         : undefined;
     }
+    case "flow": {
+      if (!hasExactKeys(selection, ["kind", "flowAlias", "moduleKey"])) return undefined;
+      const { flowAlias, moduleKey } = selection;
+      if (typeof flowAlias !== "string" || flowAlias.length === 0 ||
+        (moduleKey !== null && typeof moduleKey !== "string")) return undefined;
+      return Object.freeze({ kind: "flow", alias: flowAlias, moduleKey });
+    }
+    case "flow_step": {
+      if (!hasExactKeys(selection, ["kind", "flowAlias", "moduleKey", "taskId"])) return undefined;
+      const { flowAlias, moduleKey, taskId } = selection;
+      if (typeof flowAlias !== "string" || flowAlias.length === 0 || typeof taskId !== "string" || taskId.length === 0 ||
+        (moduleKey !== null && typeof moduleKey !== "string")) return undefined;
+      return Object.freeze({ kind: "flow_step", alias: flowAlias, moduleKey, taskId });
+    }
     case "page":
     case "shell":
     case "navigation":
-    case "flow":
     case "placement": {
       const aliasField =
         selection.kind === "navigation"
           ? "navigationItemAlias"
-          : selection.kind === "flow"
-            ? "flowAlias"
-            : selection.kind === "placement"
+          : selection.kind === "placement"
               ? "placementAlias"
               : selection.kind === "shell"
                 ? "shellAlias"
@@ -255,16 +267,22 @@ export const resolveStudioSelectionInspectorContext = (
         break;
       }
       case "flow":
-        candidates = source.body.flows.flatMap((flow, index) =>
-          flow.id === parsedSelection.alias
-            ? [{
-                alias: flow.id,
-                label: readableKey(flow.key, "Flow"),
-                sourcePath: ["body", "flows", index],
-              }]
-            : [],
-        );
+      case "flow_step": {
+        const moduleIndex = parsedSelection.moduleKey === null ? -1
+          : source.body.modules.findIndex((module) => module.key === parsedSelection.moduleKey);
+        const owner = parsedSelection.moduleKey === null ? source.body.flows : source.body.modules[moduleIndex]?.flows ?? [];
+        const ownerPath: SourcePath = parsedSelection.moduleKey === null ? ["body", "flows"]
+          : ["body", "modules", moduleIndex, "flows"];
+        candidates = owner.flatMap((flow, index): InspectorCandidate[] => {
+          if (flow.id !== parsedSelection.alias) return [];
+          if (parsedSelection.kind === "flow")
+            return [{ alias: flow.id, label: studioFlowLabel(flow), sourcePath: [...ownerPath, index] }];
+          return studioFlowTaskEntries(flow).filter(({ task }) => task.id === parsedSelection.taskId)
+            .map(({ task, path }) => ({ alias: task.id, label: `${studioFlowLabel(flow)}: ${readableKey(task.type, "Step")}`,
+              sourcePath: [...ownerPath, index, ...path] }));
+        });
         break;
+      }
       case "placement":
         candidates = placementCandidates(source, parsedSelection.alias);
         break;

@@ -1,11 +1,13 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
   sameId,
   saveDefinitionDraftCommandSchema,
+  sourceApplicationThemeSchema,
   sourceThemeTokenValueSchema,
   translateDefinitionRuleFailures,
   type ApplicationContent,
@@ -25,6 +27,8 @@ import {
 import { createHumanApplicationDraft, saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
+import { readStudioCanvasRecords as readStudioCanvasRecordsWithSession, type StudioCanvasRecordsResult } from "../_lib/studio-canvas-records";
+import { readStudioDataRecords as readStudioDataRecordsWithSession, type StudioDataRecordsResult } from "../_lib/studio-data-records";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
@@ -36,6 +40,8 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
+import { tokenName } from "./_lib/studio-labels";
+import type { StudioThemeResolution } from "./_lib/studio-theme-options";
 
 const refuse = <Result>(operation: string, code: string, fallback: Result, cause?: unknown): Result =>
   mapWebError(cause, { route: "studio/actions", operation, code, fallback });
@@ -131,10 +137,10 @@ export async function createStudioApplication(organizationId: string, candidate:
 }
 
 /**
- * Saves the draft and answers with the draft's recompiled page slots, search metadata and compile
- * failure for the saved revision, so the canvas swaps them in instead of keeping the ones compiled
- * for the revision the workspace was opened on. `recompiled` is null when the saved draft could not
- * be read back for the same revision; the workspace then says so and keeps the saved result.
+ * Saves the draft and nothing else. The draft is compiled for the canvas by the separate
+ * `reopenStudioApplication` request the workspace sends once the save is in, so Save itself does
+ * not wait for a compile; the workspace shows nothing compiled for the new revision as current
+ * until that compile answers for exactly this revision.
  */
 export async function saveStudioApplication(organizationId: string, candidate: unknown) {
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
@@ -149,19 +155,36 @@ export async function saveStudioApplication(organizationId: string, candidate: u
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);
   const saved = await saveHumanApplicationDraft(organizationId, command.data);
-  if (saved.kind !== "available") return saved;
-  const loaded = await loadStudioApplicationDraft(organizationId, saved.draft.rootId);
-  const recompiled = loaded.kind === "available" && loaded.draft.draftRevision === saved.draft.draftRevision &&
-    loaded.draft.sourceFingerprint === saved.draft.sourceFingerprint
-    ? { pageCompiledSlots: loaded.pageCompiledSlots, canvasFrames: loaded.canvasFrames, searchMetadata: loaded.searchMetadata, compileFailure: loaded.compileFailure }
-    : null;
-  if (recompiled === null)
-    console.error("[studio] save-application STUDIO_SAVE_RECOMPILE_UNAVAILABLE: the saved revision could not be read back");
-  return { ...saved, recompiled };
+  return saved;
 }
 
+/** The saved draft compiled for the canvas: its page slots, frames, choices and compile failure. */
 export async function reopenStudioApplication(organizationId: string, applicationRootId: string) {
   return loadStudioApplicationDraft(organizationId, applicationRootId);
+}
+
+/** The records the data blocks of one saved draft page area show, read with the builder's own access. */
+export async function readStudioCanvasRecords(organizationId: string, candidate: unknown): Promise<StudioCanvasRecordsResult> {
+  try {
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active")
+      return resolved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    return await readStudioCanvasRecordsWithSession(resolved.session, organizationId, candidate);
+  } catch (error) {
+    return refuse("read-canvas-records", "STUDIO_CANVAS_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
+  }
+}
+
+/** One page of the records of a record type or query in the running application, read with the builder's own access. */
+export async function readStudioDataRecords(organizationId: string, candidate: unknown): Promise<StudioDataRecordsResult> {
+  try {
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active")
+      return resolved.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    return await readStudioDataRecordsWithSession(resolved.session, organizationId, candidate);
+  } catch (error) {
+    return refuse("read-data-records", "STUDIO_DATA_RECORDS_FAILED", { kind: "temporarily_unavailable" } as const, error);
+  }
 }
 
 /** Current protected read precedes all theme-specific descriptors and advisory feedback. */
@@ -259,5 +282,52 @@ export async function validateStudioPlacementThemeOverrides(
   } catch (error) {
     console.error("STUDIO_PLACEMENT_THEME_CHECK_FAILED", error);
     return { kind: "temporarily_unavailable" };
+  }
+}
+
+const themeFailureWords: Readonly<Record<string, string>> = {
+  INSUFFICIENT_CONTRAST: "does not have enough contrast to be read",
+  HIDDEN_FOCUS: "would hide the focus outline",
+  TRANSLUCENT_BACKGROUND: "is see-through where a solid colour is needed",
+  UNKNOWN_THEME_OPTION: "is not an option of the pinned shadcn catalogue",
+  REFUSED_THEME_OPTION: "is refused by the platform's readability check",
+};
+const themeDimensionWords: Readonly<Record<string, string>> = {
+  style: "The style", baseColor: "The base colour", theme: "The theme colour", chartColor: "The chart colour",
+  radius: "The radius", menuColor: "The menu colour", menuAccent: "The menu accent", iconLibrary: "The icon library",
+  bodyFont: "The font", headingFont: "The heading font",
+};
+const describeThemeFailure = (failure: Readonly<{ code: string; tokenKey?: string | undefined }>): string => {
+  const words = themeFailureWords[failure.code] ?? `is refused (${failure.code.toLowerCase().replaceAll("_", " ")})`;
+  if (failure.tokenKey === undefined) return `This combination ${words}.`;
+  const subject = themeDimensionWords[failure.tokenKey] ?? `The colour “${tokenName(failure.tokenKey)}”`;
+  return `${subject} ${words} with these settings.`;
+};
+
+const themeRequestSchema = z.object({ rootId: z.string().min(1).max(200), theme: sourceApplicationThemeSchema }).strict();
+
+/**
+ * Resolves a candidate application theme with the producer publication uses, for the Theme tab's
+ * check before an edit and for the canvas, which draws the draft's theme as it is edited. The
+ * theme must keep the draft's pinned base release; only its selection and overrides change.
+ */
+export async function resolveStudioApplicationTheme(organizationId: string, candidate: unknown): Promise<StudioThemeResolution> {
+  const request = themeRequestSchema.safeParse(candidate);
+  if (!request.success) return refuse("resolve-theme", "STUDIO_THEME_REQUEST_INVALID", { kind: "refused" } as const, request.error);
+  const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId, { compile: false });
+  if (loaded.kind !== "available") return { kind: loaded.kind };
+  const draft = loaded.draft;
+  if (draft.rootId !== request.data.rootId ||
+    canonicalJson(draft.source.body.theme.base) !== canonicalJson(request.data.theme.base))
+    return refuse("resolve-theme", "STUDIO_THEME_BASE_MISMATCH", { kind: "refused" } as const);
+  try {
+    const release = findPinnedPlatformThemeRelease(request.data.theme.base);
+    if (release === undefined) return refuse("resolve-theme", "STUDIO_THEME_RELEASE_UNKNOWN", { kind: "refused" } as const);
+    const result = materialiseApplicationTheme(request.data.theme, draft.key, release);
+    if (result.valid) return { kind: "available", valid: true, theme: result.theme };
+    console.error(`[studio] theme resolution refused: ${result.failures.map((failure) => `${failure.code}:${failure.tokenKey ?? ""}`).slice(0, 8).join(",")}`);
+    return { kind: "available", valid: false, problems: [...new Set(result.failures.map(describeThemeFailure))].slice(0, 6) };
+  } catch (error) {
+    return refuse("resolve-theme", "STUDIO_THEME_RESOLUTION_FAILED", { kind: "temporarily_unavailable" } as const, error);
   }
 }

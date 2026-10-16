@@ -24,6 +24,7 @@ import { IconLibraryProvider } from "./icons";
 import type { ApplicationShellRuntime } from "./navigation/application-shell";
 import { DateFormatProvider } from "./display/date-format-context";
 import { Button } from "./components/button";
+import { Item } from "./components/item";
 import { validatePlacementTree, type Breakpoint } from "./definition-error";
 import {
   assertRuntimeInputKeysArePlacements,
@@ -283,19 +284,19 @@ export function PagePuckRenderer({
   const guidedSummary =
     step?.summary !== true || guidedSummaryValues === undefined ? null : (
       <section aria-label="Review your answers" className="mt-6">
-        <h2 className="text-lg font-semibold">Review your answers</h2>
+        <h2 className="font-heading text-lg font-semibold">Review your answers</h2>
         <dl className="mt-3 grid gap-3">
           {Object.entries(guidedSummaryValues).map(([field, value]) => (
-            <div key={field} className="rounded-md border p-3">
+            <Item key={field} variant="outline" size="sm" className="flex-col items-start">
               <dt className="font-medium">{field}</dt>
-              <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+              <dd className="whitespace-pre-wrap text-sm text-muted-foreground">
                 {value === null
                   ? "Empty"
                   : typeof value === "string"
                     ? value
                     : JSON.stringify(value)}
               </dd>
-            </div>
+            </Item>
           ))}
         </dl>
       </section>
@@ -369,6 +370,7 @@ export function PagePuckRenderer({
       {...vortexStyleProps}
       style={{ ...themeRootProps.style, ...vortexStyleProps.style }}
       {...(applicationSurface ? { "data-vortex-application-surface": "" } : {})}
+      documentTheme={applicationSurface}
     >
       <style href="vortex-ui-styles" precedence="default">
         {ALL_UI_STYLES_CSS}

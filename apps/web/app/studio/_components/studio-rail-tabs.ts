@@ -8,7 +8,7 @@ export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
   { key: "structure", label: "Structure", icon: "sitemap", width: 16 },
   { key: "outline", label: "Outline", icon: "list-tree", width: 18 },
   { key: "blocks", label: "Blocks", icon: "blocks", width: 18 },
-  { key: "menu", label: "Menu", icon: "menu", width: 18 },
+  { key: "menu", label: "Menu", icon: "menu", width: 22 },
   { key: "data", label: "Data", icon: "database", width: 20 },
   { key: "flows", label: "Flows", icon: "workflow", width: 16 },
   { key: "theme", label: "Theme", icon: "palette", width: 24 },
@@ -19,8 +19,8 @@ export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
 export const isStudioRailKey = (value: unknown): value is StudioRailKey =>
   studioRailTabs.some((tab) => tab.key === value);
 
-/** The tabs whose centre is the page canvas; Data and Releases draw their own editor there. */
-export const railShowsCanvas = (key: StudioRailKey): boolean => key !== "data" && key !== "releases";
+/** The tabs whose centre is the page canvas; Data, Flows and Releases draw their own editor there. */
+export const railShowsCanvas = (key: StudioRailKey): boolean => key !== "data" && key !== "flows" && key !== "releases";
 
 /** What the Releases tab can open in the centre. */
 export type StudioReleasesSection = "history" | "page-adoption" | "import";

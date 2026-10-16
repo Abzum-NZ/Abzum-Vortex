@@ -29,6 +29,8 @@ import { DefinitionCompilationError, DefinitionError, isVersionImpactRefusal } f
 type Failure = Readonly<{
   kind: "refused" | "conflict" | "dependency_unavailable" | "no_change" | "temporarily_unavailable";
   reason?: string;
+  /** For a compilation refusal, the name of the block it is about, when it is about one. */
+  blockAlias?: string;
 }>;
 export type HumanDefinitionPublicationPreparationResult = Failure |
   Readonly<{ kind: "available"; preparation: PrepareDefinitionPublicationResult }>;
@@ -102,6 +104,16 @@ const dependencyCodes = [
   "DEFINITION_DEPENDENCY_SUBSTITUTED", "DEFINITION_DEPENDENCY_CYCLE",
 ];
 
+/** The compilation refusal an error is or wraps: compilation refusals reach the person located. */
+const compilationRefusal = (error: unknown): DefinitionCompilationError | undefined => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    if (current instanceof DefinitionCompilationError) return current;
+    current = current.cause;
+  }
+  return undefined;
+};
+
 const classifyFailure = (error: unknown): Failure => {
   if (error instanceof DefinitionError && error.code === "DEFINITION_NO_CHANGE")
     return { kind: "no_change", reason: "no_change" };
@@ -118,8 +130,12 @@ const classifyFailure = (error: unknown): Failure => {
     reason: error.code === "BUILDER_PERMISSION_REFUSED" ? "release_permission_missing"
       : "recent_authentication_required",
   };
-  if (error instanceof DefinitionCompilationError)
-    return { kind: "refused", reason: `compilation_${error.ruleCode.toLowerCase()}` };
+  const compilation = compilationRefusal(error);
+  if (compilation !== undefined) {
+    const block = compilation.location?.segments.find((segment) => segment.kind === "block");
+    return { kind: "refused", reason: `compilation_${compilation.ruleCode.toLowerCase()}`,
+      ...(block === undefined ? {} : { blockAlias: block.key }) };
+  }
   if (isVersionImpactRefusal(error)) return { kind: "refused", reason: "version_impact_refused" };
   if (error instanceof DefinitionError && error.code !== "DEFINITION_PUBLICATION_FAILED")
     return { kind: "refused", reason: error.code.replace(/^DEFINITION_/, "").toLowerCase() };

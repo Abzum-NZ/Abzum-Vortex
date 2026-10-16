@@ -76,12 +76,12 @@ import {
   summaryAggregateCellValue,
   summaryAggregateLabel,
   requestState,
+  type PlacementLogPlace,
 } from "./query-helpers";
 import type {
   PlacementFlowBinding,
   PageDataState,
   ApplicationPageModel,
-  ApplicationPageLoaderAddress,
   PageSubjectType,
   SearchParameters,
   BoardContinuationTarget,
@@ -207,7 +207,7 @@ export const readPlacement = async (
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
     referenceChoiceFirstPages: Map<string, ReferenceChoiceFirstPage>;
-    address: ApplicationPageLoaderAddress;
+    address: PlacementLogPlace;
     subjectType: PageSubjectType | undefined;
     parameters: SearchParameters;
     dependencies: HumanOrganizationRequestDependencies;

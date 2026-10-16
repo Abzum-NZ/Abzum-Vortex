@@ -11,8 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@vortex/ui/components/button";
-import { Input } from "@vortex/ui/components/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@vortex/ui/components/input-group";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@vortex/ui/components/sheet";
 import { Icon, type VortexIconName } from "@vortex/ui";
 import { cn } from "@vortex/ui/lib/utils";
@@ -95,7 +99,8 @@ const readWideOnServer = () => false;
  */
 function PaneSlot({ host }: Readonly<{ host: HTMLDivElement | null }>) {
   const attach = useCallback((slot: HTMLDivElement | null) => {
-    if (slot !== null && host !== null) slot.appendChild(host);
+    // The slot holds exactly the current host: one a re-run effect replaced does not stay behind it.
+    if (slot !== null && host !== null) slot.replaceChildren(host);
   }, [host]);
   return <div ref={attach} className="contents" />;
 }
@@ -199,13 +204,17 @@ export function StudioFrame<Key extends string>({
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
+  // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
+  // and a new host would remount every panel and lose its unapplied input.
+  const madeHosts = useRef<PaneHosts | null>(null);
   useEffect(() => {
     const create = () => {
       const host = document.createElement("div");
       host.className = "flex h-full min-h-0 flex-col";
       return host;
     };
-    setHosts({ panel: create(), inspector: create() });
+    madeHosts.current ??= { panel: create(), inspector: create() };
+    setHosts(madeHosts.current);
   }, []);
   const choose = async (key: Key) => {
     if (key === activeTab) {
@@ -301,16 +310,19 @@ export function StudioSearchBox({ value, onChange, placeholder, label }: Readonl
   label: string;
 }>) {
   return (
-    <div className="relative">
-      <Icon name="search" className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder}
-        aria-label={label} className="px-8" />
+    <InputGroup>
+      <InputGroupInput value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder}
+        aria-label={label} />
+      <InputGroupAddon>
+        <Icon name="search" />
+      </InputGroupAddon>
       {value.length === 0 ? null : (
-        <Button type="button" variant="ghost" size="icon-xs" aria-label={`Clear ${label.toLowerCase()}`}
-          onClick={() => onChange("")} className="absolute top-1/2 right-1 -translate-y-1/2">
-          <Icon name="close" />
-        </Button>
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton size="icon-xs" aria-label={`Clear ${label.toLowerCase()}`} onClick={() => onChange("")}>
+            <Icon name="close" />
+          </InputGroupButton>
+        </InputGroupAddon>
       )}
-    </div>
+    </InputGroup>
   );
 }
