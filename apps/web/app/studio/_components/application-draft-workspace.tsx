@@ -1169,6 +1169,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     note={selected?.kind === "placement" ? undefined : selected?.kind === "flow" || selected?.kind === "flow_step"
       ? tab === "flows" ? undefined : "Open this flow in the Flows tab to change it."
       : selected === null ? undefined : selected.kind === "navigation" ? "Change this menu entry in the Menu tab."
+        : selected.kind === "module" || selected.kind === "record_type" || selected.kind === "field" ? (tab === "data" ? undefined : "Change this in the Data tab.")
         : "This item cannot be edited here."}>
     {(selected?.kind === "flow" || selected?.kind === "flow_step") && tab === "flows" && inspector.status === "resolved" && flows.inspector}
     {selected?.kind === "placement" && inspector.status === "resolved" &&
