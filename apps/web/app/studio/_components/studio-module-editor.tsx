@@ -14,22 +14,12 @@ import { ModuleQueryFilterEditor } from "./module-query-filter-editor";
 import { ModuleBeforeSaveConditionEditor } from "./module-before-save-condition-editor";
 import { ModulePublicationEditor } from "./module-publication-editor";
 import { StudioUnavailable } from "./studio-unavailable";
-
-/** The module editors the Data tab hosts; each saves the module's own draft, separate from the application. */
-export type StudioModuleTool = "fields" | "labels" | "queries" | "before-save" | "publish";
-export const studioModuleTools: readonly Readonly<{ value: StudioModuleTool; label: string }>[] = [
-  { value: "fields", label: "Fields" },
-  { value: "labels", label: "Field labels" },
-  { value: "queries", label: "Saved views" },
-  { value: "before-save", label: "Rules before saving" },
-  { value: "publish", label: "Publish module" },
-];
-
-export type StudioModuleTarget = Readonly<{ organizationId: string; moduleRootId: string; tool: StudioModuleTool }>;
+import { ModuleEditorDirtyProvider } from "./module-editor-dirty";
+import type { StudioModuleTarget } from "../_lib/studio-module-tools";
 
 type Loaded = Readonly<{ kind: "loading" }> | Readonly<{ kind: "ready"; editor: ReactNode }>;
 
-/** Reads the chosen module tool's draft (the same loaders its own page uses) and draws that editor. */
+/** Reads the chosen module tool's draft through its server actions (the one read path) and draws that editor. */
 const loadEditor = async ({ organizationId, moduleRootId, tool }: StudioModuleTarget): Promise<ReactNode> => {
   const key = `${organizationId}:${moduleRootId}`;
   switch (tool) {
@@ -62,8 +52,13 @@ const loadEditor = async ({ organizationId, moduleRootId, tool }: StudioModuleTa
   }
 };
 
-/** A module editor embedded in the Data tab's centre; it is read again whenever the target changes. */
-export function StudioModuleEditor({ target }: Readonly<{ target: StudioModuleTarget }>) {
+/**
+ * A module editor embedded in the Data tab's centre; it is read again whenever the target changes.
+ * `onDirtyChange` reports whether the editor holds unsaved input, so the workspace asks before replacing it.
+ */
+export function StudioModuleEditor({ target, onDirtyChange }: Readonly<{
+  target: StudioModuleTarget; onDirtyChange: (dirty: boolean) => void;
+}>) {
   const [loaded, setLoaded] = useState<Loaded>({ kind: "loading" });
   useEffect(() => {
     let current = true;
@@ -75,5 +70,7 @@ export function StudioModuleEditor({ target }: Readonly<{ target: StudioModuleTa
     });
     return () => { current = false; };
   }, [target.organizationId, target.moduleRootId, target.tool]);
-  return loaded.kind === "loading" ? <p role="status" className="p-6">Opening the module…</p> : loaded.editor;
+  return <ModuleEditorDirtyProvider onChange={onDirtyChange}>
+    {loaded.kind === "loading" ? <p role="status" className="p-6">Opening the module…</p> : loaded.editor}
+  </ModuleEditorDirtyProvider>;
 }

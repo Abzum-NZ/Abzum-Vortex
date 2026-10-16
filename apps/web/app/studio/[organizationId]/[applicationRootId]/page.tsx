@@ -5,6 +5,8 @@ import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { ApplicationDraftWorkspace, type StudioWorkspacePlace } from "../../_components/application-draft-workspace";
 import { findPinnedPlatformThemeRelease } from "../../_lib/pinned-platform-theme-release";
+import { isStudioModuleTool } from "../../_lib/studio-module-tools";
+import { moduleRootIdSchema } from "@vortex/platform/schema";
 import {
   FIELD_INPUT_CONTROL_RELEASES,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
@@ -30,9 +32,9 @@ const loadWorkspacePlace = async (organizationId: string, applicationKey: string
 
 export default async function StudioApplicationPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; applicationRootId: string }>;
-  searchParams: Promise<{ tab?: string; section?: string }>;
+  searchParams: Promise<{ tab?: string; section?: string; module?: string; tool?: string }>;
 }) {
-  const [{ organizationId, applicationRootId }, { tab, section }] = await Promise.all([params, searchParams]);
+  const [{ organizationId, applicationRootId }, { tab, section, module, tool }] = await Promise.all([params, searchParams]);
   const result = await loadStudioApplicationDraft(organizationId, applicationRootId);
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;
@@ -44,6 +46,8 @@ export default async function StudioApplicationPage({ params, searchParams }: {
   return <ApplicationDraftWorkspace key={`${result.organizationId}:${result.draft.rootId}`}
     mode="existing" organizationId={result.organizationId} draft={result.draft} place={place}
     initialTab={tab} initialSection={section}
+    initialModule={module !== undefined && moduleRootIdSchema.safeParse(module).success && isStudioModuleTool(tool)
+      ? { organizationId: result.organizationId, moduleRootId: module, tool } : undefined}
     searchMetadata={result.searchMetadata} pageCompiledSlots={result.pageCompiledSlots} canvasFrames={result.canvasFrames} compileFailure={result.compileFailure}
     platformBlockCatalogue={IMMUTABLE_PLATFORM_BLOCK_CATALOGUE}
     fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}

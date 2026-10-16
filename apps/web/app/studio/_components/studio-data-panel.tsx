@@ -4,7 +4,7 @@ import { Button } from "@vortex/ui/components/button";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 import { StudioPanelShell } from "./studio-frame";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
-import { studioModuleTools, type StudioModuleTarget } from "./studio-module-editor";
+import { studioModuleTools, type StudioModuleTarget } from "../_lib/studio-module-tools";
 
 /**
  * The Data tab's panel: the modules this application uses, each with the editors for its fields,
