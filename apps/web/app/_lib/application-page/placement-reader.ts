@@ -213,7 +213,6 @@ export const readPlacement = async (
     dependencies: HumanOrganizationRequestDependencies;
     subjectId: ReturnType<typeof recordIdSchema.safeParse>;
     readSubject: (recordTypeId: string, recordId: string) => Promise<PageSubjectReadResult>;
-    allowedPermissions: Set<string>;
     linkTiles: ReturnType<typeof createLinkTilesQueryResolver>;
     queryNotices: ReturnType<typeof createQueryNoticeQueryResolver>;
     boardContinuation: BoardContinuationTarget | undefined;
@@ -247,7 +246,6 @@ export const readPlacement = async (
     dependencies,
     subjectId,
     readSubject,
-    allowedPermissions,
     linkTiles,
     queryNotices,
     boardContinuation,
@@ -469,7 +467,7 @@ export const readPlacement = async (
           ? {}
           : {
               fieldLabels: fieldLabelsOf(subjectModule),
-              fieldChoiceLabels: fieldChoiceLabelsOf(subjectModule, allowedPermissions),
+              fieldChoiceLabels: fieldChoiceLabelsOf(subjectModule),
               fieldDateTypes: fieldDateTypesOf(subjectModule),
               fieldLinkTypes: fieldLinkTypesOf(subjectModule),
             }),
@@ -906,7 +904,7 @@ export const readPlacement = async (
         settings,
         pageParameters,
         fieldLabels,
-        fieldChoiceLabels: fieldChoiceLabelsOf(bound.module, allowedPermissions),
+        fieldChoiceLabels: fieldChoiceLabelsOf(bound.module),
         fieldDateTypes: fieldDateTypesOf(bound.module),
         fieldLinkTypes: fieldLinkTypesOf(bound.module),
         resolveRecordLinks,
@@ -1010,7 +1008,7 @@ export const readPlacement = async (
         settings,
         ...(detailLinks === undefined ? {} : { recordLinks: detailLinks }),
         fieldLabels: fieldLabelsOf(detailModule),
-        fieldChoiceLabels: fieldChoiceLabelsOf(detailModule, allowedPermissions),
+        fieldChoiceLabels: fieldChoiceLabelsOf(detailModule),
         fieldDateTypes: fieldDateTypesOf(detailModule),
         fieldLinkTypes: fieldLinkTypesOf(detailModule),
       },
