@@ -3880,7 +3880,8 @@
                              "breadcrumbs":  true,
                              "organization_switcher":  true,
                              "application_switcher":  true,
-                             "account_menu":  true
+                             "account_menu":  true,
+                             "appearance_toggle":  true
                          }
                      },
                      "layout": {
@@ -4110,7 +4111,8 @@
                              "breadcrumbs":  true,
                              "organization_switcher":  false,
                              "application_switcher":  false,
-                             "account_menu":  false
+                             "account_menu":  false,
+                             "appearance_toggle":  true
                          }
                      },
                      "layout": {
@@ -4692,7 +4694,8 @@
                          },
                          "inputs": {
                              "owner": {
-                                 "type": "organization_account_reference",
+                                 "type": "record_reference",
+                                 "record_types": ["vortex.system_directory:person"],
                                  "required": true
                              }
                          },

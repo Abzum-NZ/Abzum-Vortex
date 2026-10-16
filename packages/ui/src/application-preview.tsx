@@ -35,7 +35,7 @@ import {
   type DisplaySemanticEvent,
   type DisplaySemanticEventName,
 } from "./display/projected-data";
-import type { PlatformThemeTokens, ThemeMode } from "./theme";
+import type { PlatformThemeTokens } from "./theme";
 
 /**
  * Browser side of the exact-draft Application preview (#597).
@@ -357,7 +357,6 @@ export type ApplicationPreviewProps = Readonly<{
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
   breakpoint?: Breakpoint;
-  themeMode?: ThemeMode;
   locale?: string;
   timeZone?: string;
   className?: string;
@@ -392,7 +391,6 @@ export function ApplicationPreview({
   fieldInputControlReleases,
   platformThemeTokens,
   breakpoint = artifact.breakpoint,
-  themeMode,
   locale,
   timeZone,
   className,
@@ -549,7 +547,6 @@ export function ApplicationPreview({
           pageId={artifact.pageId}
           {...(artifact.activeStepId === undefined ? {} : { activeStepId: artifact.activeStepId })}
           breakpoint={breakpoint}
-          themeMode={themeMode}
           locale={locale}
           timeZone={timeZone}
           runtimeInputs={runtimeInputs}

@@ -298,6 +298,7 @@ const applicationShellPresentationSchema = z
         organizationSwitcher: z.boolean(),
         applicationSwitcher: z.boolean(),
         accountMenu: z.boolean(),
+        appearanceToggle: z.boolean(),
       })
       .strict(),
   })
@@ -333,6 +334,7 @@ const sourceApplicationShellPresentationSchema = z
           organization_switcher: sourceProvenanceUnchanged(z.boolean()),
           application_switcher: sourceProvenanceUnchanged(z.boolean()),
           account_menu: sourceProvenanceUnchanged(z.boolean()),
+          appearance_toggle: sourceProvenanceUnchanged(z.boolean()),
         })
         .strict(),
     ),

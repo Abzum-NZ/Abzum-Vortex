@@ -450,7 +450,9 @@ const readBoardMemberPage = async (
         filterableFieldIds: command.filterableFieldIds,
         searchableFieldIds: [],
         boardMember: command.selector,
-      })}::text::jsonb
+      })}::text::jsonb,
+      ${"forward"}::text,
+      ${null}::uuid
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -482,7 +484,9 @@ const readGroupedMemberPage = async (
         filterableFieldIds: command.filterableFieldIds,
         searchableFieldIds: [],
         groupMember: selector,
-      })}::text::jsonb
+      })}::text::jsonb,
+      ${"forward"}::text,
+      ${null}::uuid
     ) as result
   `;
   const page = groupedMemberPageReadSchema.safeParse(one(rows));
