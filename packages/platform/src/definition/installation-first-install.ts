@@ -6,7 +6,6 @@ import {
   canonicalJson,
   sameId,
   systemApplicationBoundReleaseSetResultSchema,
-  workflowIdSchema,
   type ApplicationRootId,
   type OrganizationId,
   type SelectedOrganizationScope,
@@ -79,27 +78,6 @@ export const sameFirstInstallRelease = (
     return { application: omit(value.application), modules: value.modules.map(omit) };
   };
   return sameContent(withoutCorrelation(left), withoutCorrelation(right));
-};
-
-/** The application's own workflow dependencies, each once, sorted. */
-export const firstInstallWorkflows = (
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-): string[] => {
-  const seen = new Set<string>();
-  for (const dependency of releaseSet.application.dependencyManifest) {
-    if (
-      dependency.kind !== "application_workflow" ||
-      !sameId(dependency.applicationRootId, releaseSet.application.rootId)
-    )
-      continue;
-    const workflow = workflowIdSchema.safeParse(dependency.workflowId);
-    if (!workflow.success || seen.has(workflow.data.toLowerCase()))
-      installationProblem("application_workflow_dependency_invalid", "refused", undefined, {
-        cause: workflow.success ? undefined : workflow.error,
-      });
-    seen.add(workflow.data.toLowerCase());
-  }
-  return [...seen].sort();
 };
 
 const moduleSetFingerprint = (releaseSet: SystemApplicationBoundReleaseSetResult): string =>
