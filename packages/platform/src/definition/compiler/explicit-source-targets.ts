@@ -192,17 +192,6 @@ export function explicitSourceTargets(
   if (
     source.kind === "module" &&
     sourcePath[0] === "body" &&
-    sourcePath[1] === "dependencies" &&
-    typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "module" &&
-    sourcePath.length === 4
-  ) {
-    const base: Path = ["content", "dependencies", sourcePath[2]];
-    return ["moduleRootId", "moduleKey", "resolvedVersion"].map((key) => [...base, key]);
-  }
-  if (
-    source.kind === "module" &&
-    sourcePath[0] === "body" &&
     sourcePath[1] === "contributions" &&
     typeof sourcePath[2] === "number" &&
     typeof sourcePath[3] === "string"

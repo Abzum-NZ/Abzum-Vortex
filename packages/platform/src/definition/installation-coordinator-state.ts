@@ -37,10 +37,10 @@ import {
   type InstallationReleaseTarget,
 } from "./installation-coordinator-contracts";
 
-export type BindingRow = Readonly<{ bindings: unknown }>;
-export type AccessRow = Readonly<{ access_change: unknown }>;
+type BindingRow = Readonly<{ bindings: unknown }>;
+type AccessRow = Readonly<{ access_change: unknown }>;
 
-export const installationBindingsSchema = z
+const installationBindingsSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
@@ -72,8 +72,8 @@ export const installationDrainResultSchema = z
   .strict();
 
 export type InstallationBindings = z.infer<typeof installationBindingsSchema>;
-export type ExpectedModuleBinding = Readonly<{ moduleRootId: ModuleRootId; bindingRevision: number }>;
-export type ModulePin = Readonly<{ moduleRootId: ModuleRootId; moduleReleaseRevision: number }>;
+type ExpectedModuleBinding = Readonly<{ moduleRootId: ModuleRootId; bindingRevision: number }>;
+type ModulePin = Readonly<{ moduleRootId: ModuleRootId; moduleReleaseRevision: number }>;
 export type ContributionGroup = ModulePin & Readonly<{
   contributions: readonly ResolvedContributionBinding[];
 }>;
@@ -281,7 +281,7 @@ export const recordOutcome = async (
   `;
 };
 
-export type DrainRow = Readonly<{ drain_result: unknown }>;
+type DrainRow = Readonly<{ drain_result: unknown }>;
 
 /** Moves one exact active installation to draining through the fixed protected operation. */
 export const drainInstallation = async (
@@ -412,13 +412,13 @@ export const releaseEvidenceKey = (release: PermissionRegistryDefinitionRelease)
     release.contentFingerprint, release.resolutionFingerprint,
   ]);
 
-export const permissionIdentity = (entry: PermissionRegistryEntryCandidate): string =>
+const permissionIdentity = (entry: PermissionRegistryEntryCandidate): string =>
   JSON.stringify([
     entry.applicationRootId, entry.ownerKind, entry.ownerId, entry.permission.permissionId,
   ]);
 
 /** Used only after each candidate has been verified against its own exact release. */
-export const permissionAuthorityKey = (entry: PermissionRegistryEntryCandidate): string =>
+const permissionAuthorityKey = (entry: PermissionRegistryEntryCandidate): string =>
   JSON.stringify([
     permissionIdentity(entry),
     fingerprintPermissionMeaning(entry.ownerKind, entry.ownerId, entry.permission),

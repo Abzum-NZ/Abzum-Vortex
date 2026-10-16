@@ -155,7 +155,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
     Readonly<{ kind: "published"; publication: PublishDefinitionResult }>;
   const execute = async (
     session: IdentitySession, candidateOrganizationId: string, candidate: unknown,
-    mode: "prepare" | "publish", definitionKind: HumanDefinitionKind,
+    mode: "prepare" | "publish",
   ): Promise<Failure | Readonly<{ kind: "available"; value: Value }>> => {
     const organization = organizationIdSchema.safeParse(candidateOrganizationId);
     const prepare = mode === "prepare" ? prepareDefinitionPublicationCommandSchema.safeParse(candidate) : undefined;
@@ -164,9 +164,8 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
       rootId: publish.data.confirmation.rootId,
       expectedDraftRevision: publish.data.confirmation.expectedDraftRevision,
     } : undefined;
-    const root = definitionKind === "application"
-      ? applicationRootIdSchema.safeParse(supplied?.rootId)
-      : moduleRootIdSchema.safeParse(supplied?.rootId);
+    // Only an Application is published; its inline Modules are released inside its publication.
+    const root = applicationRootIdSchema.safeParse(supplied?.rootId);
     if (!organization.success || supplied === undefined || !root.success) {
       console.error(`[publication] ${mode} refused reason=command_invalid cause=schema/none`);
       return { kind: "refused", reason: "command_invalid" };
@@ -178,18 +177,14 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
       try {
         if (!sameId(scope.organizationId, organization.data)) throw new PublicationContextRefused("organization_mismatch");
         const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-        const authority = createBuilderAuthority({ transaction, scope,
-          targetFacts: definitionKind === "application" ? targetFacts : moduleTargetFacts,
+        const authority = createBuilderAuthority({ transaction, scope, targetFacts,
           permissions: dependencies.catalogue.permissions });
         await requireBuilderAuthority(authority, { kind: "publication", rootId: command.rootId });
-        const initial = definitionKind === "application"
-          ? await readApplicationDefinitionDraft(transaction, scope, {
-            rootId: applicationRootIdSchema.parse(root.data), expectedDraftRevision: command.expectedDraftRevision,
-          })
-          : await readModuleDefinitionDraft(transaction, scope, {
-            rootId: moduleRootIdSchema.parse(root.data), expectedDraftRevision: command.expectedDraftRevision,
-          });
-        if (initial.kind !== definitionKind) throw new PublicationContextRefused("draft_kind_mismatch");
+        const readDraftAtRevision = () => readApplicationDefinitionDraft(transaction, scope, {
+          rootId: root.data, expectedDraftRevision: command.expectedDraftRevision,
+        });
+        const initial = await readDraftAtRevision();
+        if (initial.kind !== "application") throw new PublicationContextRefused("draft_kind_mismatch");
         // A draft not saved since the last release has nothing to publish.
         if (initial.publishedRevision !== undefined && initial.publishedRevision !== null &&
           initial.draftRevision <= initial.publishedRevision)
@@ -221,14 +216,8 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
             throw new DefinitionError("DEFINITION_PUBLICATION_FAILED");
           value = { kind: "published", publication };
         }
-        const final = definitionKind === "application"
-          ? await readApplicationDefinitionDraft(transaction, scope, {
-            rootId: applicationRootIdSchema.parse(root.data), expectedDraftRevision: command.expectedDraftRevision,
-          })
-          : await readModuleDefinitionDraft(transaction, scope, {
-            rootId: moduleRootIdSchema.parse(root.data), expectedDraftRevision: command.expectedDraftRevision,
-          });
-        if (final.kind !== definitionKind || !sameId(final.rootId, initial.rootId) || !sameId(final.organizationId, initial.organizationId) ||
+        const final = await readDraftAtRevision();
+        if (final.kind !== "application" || !sameId(final.rootId, initial.rootId) || !sameId(final.organizationId, initial.organizationId) ||
           final.key !== initial.key || final.draftRevision !== initial.draftRevision ||
           final.sourceFingerprint !== initial.sourceFingerprint ||
           canonicalJson(final.source) !== canonicalJson(initial.source) ||
@@ -236,9 +225,7 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
           final.updatedAt !== initial.updatedAt || !sameId(final.updatedBy, initial.updatedBy) ||
           final.publishedRevision !== (value.kind === "published" ? value.publication.releaseRevision : initial.publishedRevision))
           throw new DefinitionError("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
-        await (definitionKind === "application" ? targetFacts : moduleTargetFacts)(
-          transaction, scope, command.rootId,
-        );
+        await targetFacts(transaction, scope, command.rootId);
         const completion = await readLiveHumanContext(transaction, { scope, session, issuedAt });
         if (canonicalJson(completion) !== canonicalJson(context)) throw new PublicationContextRefused("session_context_changed");
         await assertLiveCompletion(dependencies.catalogue.permissions, transaction, completion,
@@ -254,9 +241,10 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
         throw error;
       }
     };
-    const result = mode === "publish"
-      ? await dependencies.requests.runChange(session, { organizationId: organization.data }, operation)
-      : await dependencies.requests.run(session, { organizationId: organization.data }, operation);
+    // Preparation writes the inline Modules' internal drafts, so it is a change as well.
+    const result = await dependencies.requests.runChange(
+      session, { organizationId: organization.data }, operation,
+    );
     if (result.kind === "available") return { kind: "available", value: result.value };
     if (failure !== undefined) return failure;
     const reason = result.kind === "unavailable" ? "organization_unavailable" : "request_failed";
@@ -327,14 +315,14 @@ export const createHumanDefinitionPublisher = (dependencies: HumanDefinitionPubl
     ): Promise<HumanDefinitionPublicationDraftResult> =>
       readDraft(session, organizationId, rootId, definitionKind),
     prepare: async (session: IdentitySession, organizationId: string, candidate: unknown,
-      definitionKind: HumanDefinitionKind): Promise<HumanDefinitionPublicationPreparationResult> => {
-      const result = await execute(session, organizationId, candidate, "prepare", definitionKind);
+    ): Promise<HumanDefinitionPublicationPreparationResult> => {
+      const result = await execute(session, organizationId, candidate, "prepare");
       return result.kind !== "available" ? result : result.value.kind === "prepared"
         ? { kind: "available", preparation: result.value.preparation } : { kind: "temporarily_unavailable" };
     },
     publish: async (session: IdentitySession, organizationId: string, candidate: unknown,
-      definitionKind: HumanDefinitionKind): Promise<HumanDefinitionPublicationResult> => {
-      const result = await execute(session, organizationId, candidate, "publish", definitionKind);
+    ): Promise<HumanDefinitionPublicationResult> => {
+      const result = await execute(session, organizationId, candidate, "publish");
       return result.kind !== "available" ? result : result.value.kind === "published"
         ? { kind: "available", publication: result.value.publication } : { kind: "temporarily_unavailable" };
     },

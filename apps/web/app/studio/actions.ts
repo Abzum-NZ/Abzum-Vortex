@@ -93,11 +93,11 @@ export async function reviewStudioApplicationSource(
 
 /** Separate explicit requests: preparation never installs or publishes a release. */
 export async function prepareStudioApplicationPublication(organizationId: string, candidate: unknown) {
-  return prepareHumanDefinitionPublication(organizationId, candidate, "application");
+  return prepareHumanDefinitionPublication(organizationId, candidate);
 }
 
 export async function publishStudioApplication(organizationId: string, candidate: unknown) {
-  return publishHumanDefinition(organizationId, candidate, "application");
+  return publishHumanDefinition(organizationId, candidate);
 }
 
 /** Metadata is resolved only from the server's active human session and exact saved draft. */

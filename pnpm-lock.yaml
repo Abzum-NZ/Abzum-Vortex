@@ -243,12 +243,6 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
-      '@vortex/definitions':
-        specifier: workspace:*
-        version: link:packages/definitions
-      '@vortex/platform':
-        specifier: workspace:*
-        version: link:packages/platform
       eslint:
         specifier: 9.39.5
         version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)
@@ -264,9 +258,6 @@ importers:
       supabase:
         specifier: 'catalog:'
         version: 2.117.0
-      tsx:
-        specifier: 'catalog:'
-        version: 4.23.15
       turbo:
         specifier: 2.11.2
         version: 2.11.2
@@ -361,9 +352,6 @@ importers:
       server-only:
         specifier: 0.0.1
         version: 0.0.1
-      shadcn:
-        specifier: 4.21.0
-        version: 4.21.0(supports-color@7.2.0)(typescript@5.9.3)
       zod:
         specifier: 4.6.5
         version: 4.6.5

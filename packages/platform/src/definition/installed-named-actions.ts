@@ -3,7 +3,7 @@ import type { FlowNamedAction } from "./flow-orchestrator-types";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import type { ActionInputDefinition } from "./module-contracts";
 
-export type InstalledNamedActionDescriptor = Readonly<{
+type InstalledNamedActionDescriptor = Readonly<{
   key: string;
   named: FlowNamedAction;
   setsChoice: Readonly<{ fieldId: string; option: string }> | undefined;

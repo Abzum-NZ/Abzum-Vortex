@@ -87,7 +87,7 @@ import { z } from "zod";
  * result a permission refusal has, so a caller learns nothing about which operations exist.
  */
 
-export const protectedOperationIdentitySchema = z
+const protectedOperationIdentitySchema = z
   .object({
     serviceId: z.guid(),
     operationId: z.guid(),
@@ -95,7 +95,7 @@ export const protectedOperationIdentitySchema = z
   })
   .strict();
 
-export type ProtectedOperationIdentity = z.infer<typeof protectedOperationIdentitySchema>;
+type ProtectedOperationIdentity = z.infer<typeof protectedOperationIdentitySchema>;
 
 /**
  * The identity of the claimed protected effect, when the caller has one. Passing it lets an
@@ -115,7 +115,7 @@ type ProtectedOperationExecutionRequestBase = Readonly<{
   effectKey?: ProtectedOperationEffectKey;
 }>;
 
-export type ProtectedOperationExecutionRequest =
+type ProtectedOperationExecutionRequest =
   | (ProtectedOperationExecutionRequestBase &
       Readonly<{ session: IdentitySession; executionAuthorityContext?: never }>)
   | (ProtectedOperationExecutionRequestBase &
@@ -129,7 +129,7 @@ type DurableProtectedOperationExecutionRequest = Readonly<{
 }>;
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
-export type ProtectedOperationValue = JsonValue;
+type ProtectedOperationValue = JsonValue;
 
 /** The safe results the executor itself can report. */
 type ProtectedOperationFailure =
@@ -137,7 +137,7 @@ type ProtectedOperationFailure =
   | Readonly<{ outcome: "conflict"; diagnostic?: FlowRefusalFeedback }>
   | Readonly<{ outcome: "failed" }>;
 
-export type ProtectedOperationExecution =
+type ProtectedOperationExecution =
   | Readonly<{
       outcome: "completed" | "committed";
       outputs: Readonly<Record<string, ProtectedOperationValue>>;
@@ -239,7 +239,7 @@ type ProtectedOperationServices = Readonly<{
   }>;
 }>;
 
-export type ProtectedOperationExecutorDependencies = ProtectedOperationServices & Readonly<{
+type ProtectedOperationExecutorDependencies = ProtectedOperationServices & Readonly<{
   /** Services bound to the actor's one request transaction and resolved scope. */
   durableOperations?: (
     transaction: RequestDatabaseTransaction,

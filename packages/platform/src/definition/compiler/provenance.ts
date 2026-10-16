@@ -1,6 +1,7 @@
 import type { DefinitionProvenanceEntry } from "../../schema";
 import { canonicalJson } from "../canonical-json-definition";
 import { explicitSourceTargets } from "./explicit-source-targets";
+import { moduleReferencePaths } from "../module-dependencies";
 import type { Resolution } from "./resolution";
 import {
   asObject,
@@ -283,6 +284,26 @@ export function provenanceFor(
         origin: "resolved",
         sourcePath,
         ruleCode: RESOLUTION_RULE,
+      });
+  }
+
+  // A Module's dependencies are derived from its references, so each traces to the first source
+  // leaf that references that Module, resolved to the exact release the compiler bound.
+  if (sourceObject.kind === "module") {
+    const references = moduleReferencePaths(sourceObject);
+    const dependencies = valueAtPath(canonical, ["content", "dependencies"]);
+    if (Array.isArray(dependencies))
+      dependencies.forEach((dependency, index) => {
+        const moduleKey = asObject(dependency).moduleKey;
+        const sourcePath = references.get(String(moduleKey))?.[0];
+        if (sourcePath === undefined) fail("vortex.definition.invalid_compilation_output", "invalid_value");
+        for (const canonicalPath of leafPaths(dependency))
+          entries.push({
+            canonicalPath: ["content", "dependencies", index, ...canonicalPath],
+            origin: "resolved",
+            sourcePath,
+            ruleCode: RESOLUTION_RULE,
+          });
       });
   }
 

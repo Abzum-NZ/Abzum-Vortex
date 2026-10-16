@@ -29,7 +29,7 @@ import type { RequestDatabaseTransaction } from "../db/index";
 import { z } from "zod";
 import type { PreparedInstallationRuntimeSourceReader } from "./installation-runtime-bundle-app";
 
-export type InstallerRequests = Pick<
+type InstallerRequests = Pick<
   ReturnType<typeof createHumanOrganizationRequestService>,
   "runChange"
 >;

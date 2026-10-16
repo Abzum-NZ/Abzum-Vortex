@@ -31,8 +31,7 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import type { SavedConditionLike } from "./saved-condition-revisions";
 import { DefinitionError } from "./definition-error";
 
-export type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
-export type ModuleSourceQuery = ModuleSourceDocument["body"]["queries"][number];
+type SourceIdentityAssignments = DefinitionResolutionSnapshot["identities"];
 export type ModuleOutput = Extract<DefinitionCompilationOutput, { kind: "module" }>;
 type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection_type" }>;
 export type PublishableCompilationOutput = ApplicationCompilationOutput | ModuleCompilationOutput;
@@ -187,11 +186,36 @@ export type DefinitionReleaseAppend = Readonly<{
   releaseNote: string;
 }>;
 
+/** One internal Module root an Application owns, with its draft and current release revisions. */
+export type OwnedModuleRoot = Readonly<{
+  rootId: ModuleRootId;
+  key: string;
+  draftRevision: Revision;
+  currentReleaseRevision: Revision | null;
+  sourceFingerprint: Fingerprint;
+}>;
+
 export interface DefinitionPublicationTransaction extends DefinitionPublicationReader {
   /** Re-reads immediately before compilation; appendRelease owns the atomic row lock/check. */
   lockCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
+  /** The internal Module roots one Application owns. */
+  readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]>;
+  /** Creates the internal root of one of an Application's inline Modules, owned by it. */
+  createOwnedModuleRoot(
+    applicationRootId: string,
+    source: ModuleSourceDocument,
+  ): Promise<OwnedModuleRoot>;
+  /** Stages the current lowering of an inline Module in its internal root, for this publication. */
+  stageOwnedModuleSource(
+    root: OwnedModuleRoot,
+    source: ModuleSourceDocument,
+  ): Promise<OwnedModuleRoot>;
+  /** Appends one internal Module release inside its owning Application's publication. */
+  appendModuleRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult>;
   /** Must append the release and manifest and advance only this root's pointer atomically. */
   appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult>;
+  /** Runs an operation whose writes are undone afterwards: a rehearsal of a publication. */
+  rehearse<Result>(operation: () => Promise<Result>): Promise<Result>;
 }
 
 export interface DefinitionPublicationRepository {

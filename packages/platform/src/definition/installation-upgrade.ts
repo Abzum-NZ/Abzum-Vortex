@@ -276,7 +276,12 @@ const assertStateEligible = (
     if (!allowEqual) installationProblem("selected_release_not_newer", "refused", "not_newer");
     return;
   }
-  if (!sameModules) installationProblem("module_set_changed", "refused", "module_set_changed");
+  // A newer Application version releases its changed Modules with it, so an upgrade moves to the
+  // new pinned Module releases; only the set of Modules the Application binds must stay the same.
+  const moduleRoots = (releaseSet: UpgradeState["activeReleaseSet"]) =>
+    releaseSet.modules.map((module) => module.rootId.toLowerCase()).sort();
+  if (!same(moduleRoots(state.activeReleaseSet), moduleRoots(state.selectedReleaseSet)))
+    installationProblem("module_set_changed", "refused", "module_set_changed");
 };
 
 /** Whether two snapshots describe the same organisation, application, releases and bindings. */
@@ -735,7 +740,7 @@ const verifyCoordinatorActivation = (
   return { outcome: "unchanged", previousActiveRevision: null };
 };
 
-export type UpgradeActivation = Readonly<{
+type UpgradeActivation = Readonly<{
   outcome: "activated" | "unchanged";
   previousActiveRevision: number | null;
   activeAtCommitRevision: number;

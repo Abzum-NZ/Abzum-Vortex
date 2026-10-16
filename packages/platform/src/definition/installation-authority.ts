@@ -28,7 +28,7 @@ import {
 import { builderRecentAuthentication, deriveBuilderRequirements } from "./builder-authority";
 import type { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 
-export type InstallationProblemKind =
+type InstallationProblemKind =
   | "conflict"
   | "refused"
   | "authentication_required"

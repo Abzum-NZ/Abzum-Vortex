@@ -8,7 +8,7 @@ import {
   type TelemetryInput,
 } from "../schema";
 
-export type AppTelemetryCollectorDependencies = Readonly<{
+type AppTelemetryCollectorDependencies = Readonly<{
   downstream?: ServiceTelemetryPort;
 }>;
 
