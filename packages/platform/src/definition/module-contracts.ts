@@ -35,7 +35,6 @@ import {
   exactDecimalTextSchema,
   exactDecimalWithinBounds,
   inspectRecordRichText,
-  personLinkValueSchema,
   recordLinkValueSchema,
   recordRichTextDocumentSchema,
   type FormattedTextAllowedBlock,
@@ -257,24 +256,12 @@ const linkSettingsSchema = z
     reverseKey: builderKeySchema,
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     applicationRootIdRequired: z.boolean().optional(),
-    legacyPersonFieldId: fieldIdSchema.optional(),
   })
   .strict();
 const multiLinkSettingsSchema = z
   .object({
     targets: z.array(recordTypeReferenceSchema).min(2).max(20),
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
-  })
-  .strict();
-const personLinkSettingsSchema = z
-  .object({
-    audience: z.enum([
-      "organization_accounts",
-      "application_accounts",
-      "organization_identities_and_external_requesters",
-    ]),
-    applicationRootIdRequired: z.boolean(),
-    onPersonDeactivation: z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
   })
   .strict();
 /** A named field or one exact decimal literal. A date offset takes only these. */
@@ -543,7 +530,6 @@ const fieldMembers = [
   moduleFieldMember("table", tableSettingsSchema, tableDefaultSchema),
   moduleFieldMember("link", linkSettingsSchema, recordLinkValueSchema),
   moduleFieldMember("link_to_one_of_several", multiLinkSettingsSchema, recordLinkValueSchema),
-  moduleFieldMember("link_to_person", personLinkSettingsSchema, personLinkValueSchema),
   moduleFieldMember("calculation", calculationSettingsSchema, noDefaultSchema),
   moduleFieldMember("total", totalSettingsSchema, noDefaultSchema),
   moduleFieldMember("attachment", attachmentSettingsSchema, noDefaultSchema),
@@ -731,7 +717,6 @@ export const moduleFieldSchema = z
       case "email_address":
       case "phone_number":
       case "web_address":
-      case "link_to_person":
         break;
     }
   });
@@ -1054,7 +1039,6 @@ export const moduleSystemProjectionSchema = z
 const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
   "reference_number",
   "table",
-  "link",
   "link_to_one_of_several",
   "total",
   "attachment",

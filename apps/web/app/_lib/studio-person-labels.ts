@@ -1,7 +1,6 @@
 import "server-only";
 
 import { describeFailure, organizationIdSchema } from "@vortex/platform/schema";
-import { readVisiblePersonLabels } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import type { StudioPersonLabel } from "./studio-application-restore-contracts";
@@ -22,7 +21,13 @@ export async function readStudioPersonLabel(
       return { kind: "unavailable" };
     }
     const result = await humanOrganizationRequests().run(resolved.session, { organizationId: organizationIdSchema.parse(organizationId) },
-      async (transaction): Promise<ReadonlyMap<string, string>> => readVisiblePersonLabels(transaction, [organizationAccountId]));
+      async (transaction): Promise<ReadonlyMap<string, string>> => {
+        const rows = await transaction.query<{ record_id: string; display_name: string }>`
+          select record_id::text, display_name
+          from vortex_record.read_studio_person_label(${organizationAccountId}::uuid)
+        `;
+        return new Map(rows.map((row) => [row.record_id.toLowerCase(), row.display_name]));
+      });
     if (result.kind !== "available") {
       console.error(`[studio] person label read was not available: STUDIO_PERSON_LABEL_READ_${result.kind.toUpperCase()}`);
       return { kind: "unavailable" };

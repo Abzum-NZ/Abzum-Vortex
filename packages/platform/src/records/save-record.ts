@@ -847,7 +847,6 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             const unsupportedChecks = values.pendingChecks.filter(
               (check) =>
                 check.kind !== "record_reference" &&
-                check.kind !== "person_reference" &&
                 !(
                   command.data.previewInstallationId !== undefined &&
                   check.kind === "choice_permission"
@@ -931,21 +930,6 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 "[record] protected save persistence refused",
                 contractError(stored.reasonCode ?? "RECORD_SAVE_REFUSED", stored.reasonCode),
               );
-            if (
-              stored.outcome === "refused" &&
-              stored.reasonCode === "person_reference_unavailable"
-            ) {
-              const fieldId = fieldIdSchema.safeParse(stored.fieldId);
-              if (!fieldId.success) throw contractError("RECORD_SAVE_FIELD_ID_INVALID", stored);
-              if (!prepared.readableFieldIds.has(fieldId.data))
-                return safeRefusal(prepared.correlationId, "operation_refused");
-              return saveRecordResultSchema.parse({
-                contractVersion: "2.0.0",
-                outcome: "correction_required",
-                correlationId: prepared.correlationId,
-                corrections: [{ code: "invalid_value", fieldId: fieldId.data }],
-              });
-            }
             if (stored.outcome === "refused")
               return safeRefusal(
                 prepared.correlationId,

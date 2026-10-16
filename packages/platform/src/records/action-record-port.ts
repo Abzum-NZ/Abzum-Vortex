@@ -325,11 +325,8 @@ const parsePreparation = (candidate: unknown): ActionPreparation => {
 const pendingCheckIsAuthorized = (
   check: RecordFieldValuePendingCheck,
   singleRequiredPermissionId: string | undefined,
-  actorOrganizationAccountId: string,
-): boolean =>
+ ): boolean =>
   check.kind === "record_reference" ||
-  (check.kind === "person_reference" &&
-    check.organizationAccountId.toLowerCase() === actorOrganizationAccountId.toLowerCase()) ||
   (check.kind === "choice_permission" &&
     singleRequiredPermissionId !== undefined &&
     check.permissionId.toLowerCase() === singleRequiredPermissionId.toLowerCase());
@@ -456,7 +453,6 @@ const creationFinalValues = (
           !pendingCheckIsAuthorized(
             check,
             prepared.singleRequiredPermissionId,
-            prepared.actorOrganizationAccountId,
           ),
       )
     )
@@ -894,7 +890,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                     !pendingCheckIsAuthorized(
                       check,
                       prepared.singleRequiredPermissionId,
-                      prepared.actorOrganizationAccountId,
                     ),
                 )
               )
@@ -1037,7 +1032,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                     !pendingCheckIsAuthorized(
                       check,
                       prepared.singleRequiredPermissionId,
-                      prepared.actorOrganizationAccountId,
                     ),
                 )
               )
@@ -1054,7 +1048,6 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
                       !pendingCheckIsAuthorized(
                         check,
                         prepared.singleRequiredPermissionId,
-                        prepared.actorOrganizationAccountId,
                       ),
                   ),
                 )

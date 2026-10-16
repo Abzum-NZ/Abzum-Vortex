@@ -4022,7 +4022,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.iam.core:access_request.beneficiary_person"
+                            "field": "vortex.iam.core:access_request.beneficiary"
                           },
                           "label": {
                             "kind": "text",
@@ -4154,7 +4154,7 @@
                         "properties": {
                           "field": {
                             "kind": "field_reference",
-                            "field": "vortex.iam.core:access_request.beneficiary_person"
+                            "field": "vortex.iam.core:access_request.beneficiary"
                           },
                           "label": {
                             "kind": "text",

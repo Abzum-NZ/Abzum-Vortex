@@ -175,30 +175,12 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
-            "type": "link_to_person",
-            "settings": {
-              "audience": "organisation_accounts",
-              "application_root_required": false,
-              "on_person_deactivation": "retain_reference"
-            }
-          },
-          {
-            "id": "fld_contact_owner_person",
-            "key": "relationship_owner_person",
-            "label": "Relationship owner",
-            "required": false,
-            "unique": false,
-            "filterable": true,
-            "sortable": false,
-            "personal_data": "none",
-            "public_display": "refused",
             "type": "link",
             "settings": {
               "target": "vortex.system_directory:person",
-              "reverse_key": "relationship_owner_person_references",
+              "reverse_key": "relationship_owner_references",
               "on_parent_delete": "empty_optional",
-              "application_root_required": false,
-              "legacy_person_field": "relationship_owner"
+              "application_root_required": false
             }
           },
           {
@@ -243,8 +225,8 @@
           },
           {
             "id": "fld_contact_owner_person_relationship",
-            "key": "relationship_owner_person",
-            "from_field": "relationship_owner_person",
+            "key": "relationship_owner",
+            "from_field": "relationship_owner",
             "to_record_type": "vortex.system_directory:person",
             "cardinality": "many_to_one",
             "on_parent_delete": "empty_optional"
@@ -508,7 +490,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner_person",
+            "relationship_owner",
             "email_consent"
           ],
           "changeable_fields": [
@@ -517,7 +499,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner_person",
+            "relationship_owner",
             "email_consent"
           ]
         }
@@ -546,7 +528,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner_person",
+            "relationship_owner",
             "email_consent"
           ],
           "changeable_fields": []
@@ -576,7 +558,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner_person",
+            "relationship_owner",
             "email_consent"
           ],
           "changeable_fields": [
@@ -585,7 +567,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner_person",
+            "relationship_owner",
             "email_consent"
           ]
         }
@@ -654,7 +636,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner_person",
+            "relationship_owner",
             "email_consent"
           ],
           "changeable_fields": []
@@ -935,7 +917,7 @@
                 "last_name": "{{ inputs.last_name }}",
                 "email": "{{ trigger.record.email }}",
                 "company": "{{ inputs.company }}",
-                "relationship_owner_person": "{{ execution.actor }}"
+                "relationship_owner": "{{ execution.actor }}"
               }
             }
           },
@@ -1118,7 +1100,7 @@
           "full_name",
           "email",
           "company",
-          "relationship_owner_person"
+          "relationship_owner"
         ],
         "filter": null,
         "group_by": [],

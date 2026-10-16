@@ -47,7 +47,6 @@ declare
   result_storage_ids uuid[] := array[]::uuid[];
   any_change boolean := false;
   is_projection boolean;
-  person_pair boolean;
   protected_view_key text;
   reader_schema_value text;
   reader_function_value text;
@@ -479,31 +478,11 @@ begin
       where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value
       for update;
       if found then
-        person_pair := field_value #>> '{settings,legacyPersonFieldId}' is not null;
-        if not person_pair and field_value ->> 'type' = 'link_to_person' then
-          select exists (
-            select 1
-            from pg_catalog.jsonb_array_elements(record_type -> 'fields') as paired(value)
-            where paired.value ->> 'type' = 'link'
-              and paired.value #>> '{settings,legacyPersonFieldId}' = field_id_value::text
-          ) or exists (
-            select 1
-            from vortex_record.field_storage_mappings as paired
-            where paired.storage_contract_id = storage_id
-              and paired.state = 'active'
-              and paired.field_definition ->> 'type' = 'link'
-              and paired.field_definition #>> '{settings,legacyPersonFieldId}' = field_id_value::text
-          ) into person_pair;
-        end if;
         if stored_field.physical_column_token <> column_token
           or stored_field.database_value_type <> database_type
           or stored_field.state <> 'active'
-          or (person_pair and vortex_record.field_storage_meaning(stored_field.field_definition)
-              - 'required' - 'filterable' - 'sortable'
-              is distinct from vortex_record.field_storage_meaning(field_value)
-                - 'required' - 'filterable' - 'sortable')
-          or (not person_pair and vortex_record.field_storage_meaning(stored_field.field_definition)
-              is distinct from vortex_record.field_storage_meaning(field_value))
+          or vortex_record.field_storage_meaning(stored_field.field_definition)
+            is distinct from vortex_record.field_storage_meaning(field_value)
           or not exists (
             select 1
             from pg_catalog.pg_attribute as attribute
@@ -516,18 +495,6 @@ begin
           ) then
           raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
         end if;
-        -- The paired legacy column must accept a new-link-only create until
-        -- apply_record_changes mirrors its value within the same transaction.
-        -- Old releases still enforce their original required field on save.
-        if field_value ->> 'type' = 'link_to_person'
-          and (stored_field.field_definition ->> 'required')::boolean
-          and not (field_value ->> 'required')::boolean
-          and person_pair then
-          execute pg_catalog.format(
-            'alter table record_data.%I alter column %I drop not null',
-            table_token, column_token
-          );
-        end if;
       else
         if not is_projection then
           if stored_catalogue.storage_contract_id is not null
@@ -537,9 +504,7 @@ begin
           execute pg_catalog.format(
             'alter table record_data.%I add column %I %s%s',
             table_token, column_token, sql_type,
-            case when (field_value ->> 'required')::boolean
-                and field_value #>> '{settings,legacyPersonFieldId}' is null
-              then ' not null' else '' end
+            case when (field_value ->> 'required')::boolean then ' not null' else '' end
           );
         end if;
         insert into vortex_record.field_storage_mappings (
@@ -674,12 +639,6 @@ begin
       end if;
     end loop;
   end loop;
-
-  -- The release declares each legacy Person field paired with its new link.
-  -- Both field columns and relationship mappings now exist for every record type.
-  perform vortex_record.backfill_person_links_internal(
-    p_module_root_id, p_module_release_revision
-  );
 
   select pg_catalog.array_agg(value order by value) into result_storage_ids
   from pg_catalog.unnest(result_storage_ids) as item(value);

@@ -185,30 +185,12 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
-            "type": "link_to_person",
-            "settings": {
-              "audience": "application_accounts",
-              "application_root_required": true,
-              "on_person_deactivation": "retain_reference"
-            }
-          },
-          {
-            "id": "fld_activity_owner_person",
-            "key": "owner_person",
-            "label": "Owner",
-            "required": true,
-            "unique": false,
-            "filterable": true,
-            "sortable": false,
-            "personal_data": "none",
-            "public_display": "refused",
             "type": "link",
             "settings": {
               "target": "vortex.system_directory:person",
-              "reverse_key": "owner_person_references",
+              "reverse_key": "owner_references",
               "on_parent_delete": "empty_optional",
-              "application_root_required": true,
-              "legacy_person_field": "owner"
+              "application_root_required": true
             }
           },
           {
@@ -247,9 +229,9 @@
             "on_parent_delete": "empty_optional"
           },
           {
-            "id": "fld_activity_owner_person_relationship",
-            "key": "owner_person",
-            "from_field": "owner_person",
+            "id": "fld_activity_owner_relationship",
+            "key": "owner",
+            "from_field": "owner",
             "to_record_type": "vortex.system_directory:person",
             "cardinality": "many_to_one",
             "on_parent_delete": "empty_optional"
@@ -281,7 +263,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner_person",
+            "owner",
             "notes"
           ],
           "changeable_fields": [
@@ -291,7 +273,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner_person",
+            "owner",
             "notes"
           ]
         }
@@ -319,7 +301,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner_person",
+            "owner",
             "notes"
           ],
           "changeable_fields": []
@@ -348,7 +330,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner_person",
+            "owner",
             "notes"
           ],
           "changeable_fields": [
@@ -358,7 +340,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner_person",
+            "owner",
             "notes"
           ]
         }
@@ -426,7 +408,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner_person",
+            "owner",
             "notes"
           ],
           "changeable_fields": []
@@ -533,7 +515,7 @@
           "due_at",
           "completed",
           "regarding",
-          "owner_person"
+          "owner"
         ],
         "filter": {
           "field": "completed",

@@ -52,8 +52,6 @@ const asRecordLink = (value: JsonValue): RecordLinkReference | undefined => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
   const keys = Object.keys(value);
   const { recordTypeId, recordId } = value;
-  if (keys.length === 1 && typeof value.organizationAccountId === "string")
-    return { organizationAccountId: value.organizationAccountId };
   return keys.length === 2 &&
     typeof recordTypeId === "string" &&
     typeof recordId === "string"

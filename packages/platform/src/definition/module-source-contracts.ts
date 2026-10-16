@@ -364,7 +364,6 @@ const moduleSourceSystemProjectionSchema = z
 const systemProjectionRefusedFieldTypes: ReadonlySet<string> = new Set([
   "reference_number",
   "table",
-  "link",
   "link_to_one_of_several",
   "total",
   "attachment",

@@ -31,7 +31,6 @@ import {
   inspectRecordRichText,
   recordRichTextDocumentSchema,
   sourceExactDecimalTextSchema,
-  sourcePersonLinkValueSchema,
   sourceRecordLinkValueSchema,
   type FormattedTextAllowedBlock,
 } from "../records/module-field-values";
@@ -275,9 +274,6 @@ const sourceLinkSettingsSchema = z
     application_root_required: sourceProvenanceTarget(z.boolean().optional(), [
       "applicationRootIdRequired",
     ]),
-    legacy_person_field: sourceProvenanceTarget(builderKeySchema.optional(), [
-      "legacyPersonFieldId",
-    ]),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z
@@ -293,23 +289,6 @@ const sourceMultiLinkSettingsSchema = z
     ),
   })
   .strict();
-const sourcePersonLinkSettingsSchema = z
-  .object({
-    audience: sourceProvenanceTarget(
-      z.enum([
-        "organisation_accounts",
-        "application_accounts",
-        "organisation_identities_and_external_requesters",
-      ]),
-      ["audience"],
-    ),
-    application_root_required: sourceProvenanceTarget(z.boolean(), ["applicationRootIdRequired"]),
-    on_person_deactivation: sourceProvenanceUnchanged(
-      z.enum(["retain_reference", "empty_optional", "refuse_deactivation"]),
-    ),
-  })
-  .strict();
-
 /** Closed safety limits for one nested numeric expression are declared in ./common. */
 const sourceCalculationNumberOperationSchema = z.enum(["add", "subtract", "multiply", "divide"]);
 const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
@@ -629,7 +608,6 @@ const sourceFieldMembers = [
   sourceField("table", sourceTableSettingsSchema, sourceTableDefaultSchema),
   sourceField("link", sourceLinkSettingsSchema, sourceRecordLinkValueSchema),
   sourceField("link_to_one_of_several", sourceMultiLinkSettingsSchema, sourceRecordLinkValueSchema),
-  sourceField("link_to_person", sourcePersonLinkSettingsSchema, sourcePersonLinkValueSchema),
   sourceField("calculation", sourceCalculationSettingsSchema, noDefaultSchema),
   sourceField("total", sourceTotalSettingsSchema, noDefaultSchema),
   sourceField("attachment", sourceAttachmentSettingsSchema, noDefaultSchema),
@@ -817,7 +795,6 @@ export const moduleSourceFieldSchema = z
       case "email_address":
       case "phone_number":
       case "web_address":
-      case "link_to_person":
         break;
     }
   });

@@ -208,30 +208,12 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
-            "type": "link_to_person",
-            "settings": {
-              "audience": "organisation_accounts",
-              "application_root_required": false,
-              "on_person_deactivation": "retain_reference"
-            }
-          },
-          {
-            "id": "fld_record_tag_by_person",
-            "key": "assigned_by_person",
-            "label": "Assigned by",
-            "required": false,
-            "unique": false,
-            "filterable": true,
-            "sortable": false,
-            "personal_data": "none",
-            "public_display": "refused",
             "type": "link",
             "settings": {
               "target": "vortex.system_directory:person",
-              "reverse_key": "assigned_by_person_references",
+              "reverse_key": "assigned_by_references",
               "on_parent_delete": "empty_optional",
-              "application_root_required": false,
-              "legacy_person_field": "assigned_by"
+              "application_root_required": false
             }
           }
         ],
@@ -259,8 +241,8 @@
           },
           {
             "id": "fld_record_tag_by_person_relationship",
-            "key": "assigned_by_person",
-            "from_field": "assigned_by_person",
+            "key": "assigned_by",
+            "from_field": "assigned_by",
             "to_record_type": "vortex.system_directory:person",
             "cardinality": "many_to_one",
             "on_parent_delete": "empty_optional"
@@ -437,15 +419,13 @@
             "tag",
             "record",
             "assigned_at",
-            "assigned_by_person",
             "assigned_by"
           ],
           "changeable_fields": [
             "tag",
             "record",
             "assigned_at",
-            "assigned_by",
-            "assigned_by_person"
+            "assigned_by"
           ]
         }
       },
@@ -469,7 +449,7 @@
             "tag",
             "record",
             "assigned_at",
-            "assigned_by_person"
+            "assigned_by"
           ],
           "changeable_fields": []
         }
@@ -534,7 +514,7 @@
             "tag",
             "record",
             "assigned_at",
-            "assigned_by_person"
+            "assigned_by"
           ],
           "changeable_fields": []
         }

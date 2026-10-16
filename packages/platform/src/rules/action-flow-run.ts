@@ -166,16 +166,6 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
           ? candidate.recordId
           : undefined,
       );
-    case "link_to_person":
-      return mapped("organization_account_reference", (candidate) =>
-        isPlainObject(candidate) && typeof candidate.organizationAccountId === "string"
-          ? candidate.organizationAccountId
-          : undefined,
-      );
-    case "organization_account_reference":
-      return mapped("organization_account_reference", text);
-    // A calculated or total value carries whichever type its formula or source field has, so it is
-    // typed by the shape it was stored with.
     case "calculation":
     case "total":
       if (isPlainObject(value) && typeof value.amount === "string")

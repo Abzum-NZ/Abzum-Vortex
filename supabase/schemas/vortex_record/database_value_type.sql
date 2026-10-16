@@ -22,7 +22,6 @@ CREATE FUNCTION vortex_record.database_value_type(p_field jsonb) RETURNS text
     when 'date_time' then 'timestamp_with_time_zone'
     when 'link' then 'json'
     when 'link_to_one_of_several' then 'json'
-    when 'link_to_person' then 'json'
     when 'formatted_text' then 'json'
     when 'several_choices' then 'json'
     when 'table' then 'json'

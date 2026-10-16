@@ -12,7 +12,6 @@ import {
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
   moduleFieldValueSchemas,
-  personLinkValueSchema,
   recordLinkValueSchema,
   sourceExactDecimalTextSchema,
 } from "../schema";
@@ -200,7 +199,6 @@ export const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", 
   groupTypedValue("web_address", groupStringValueSchema),
   groupTypedValue("link", recordLinkValueSchema),
   groupTypedValue("link_to_one_of_several", recordLinkValueSchema),
-  groupTypedValue("link_to_person", personLinkValueSchema),
 ]);
 export type ProtectedQueryGroupValue = z.infer<typeof protectedQueryGroupValueSchema>;
 

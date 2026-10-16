@@ -10,7 +10,6 @@ export { resolveInstalledPageIdentity } from "./standard-page-resolution";
 
 export {
   createViewerSafeRecordLinkService,
-  readVisiblePersonLabels,
   recordLinkLabelKey,
   type RecordLinkLabel,
   type RecordLinkLabelsResult,

@@ -622,7 +622,7 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
-                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.owner_person"},
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.owner"},
                                                                                                                                   "label": {"kind":"text","value":"Owner"}
                                                                                                                                 }
                                                                                                                               },
@@ -1060,7 +1060,7 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
-                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.owner_person"},
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.cases:case.owner"},
                                                                                                                                   "label": {"kind":"text","value":"Owner"}
                                                                                                                                 }
                                                                                                                               },
@@ -1146,7 +1146,7 @@
                                                                                                                    }
                                                                                                      },
         "attachments_sd_case": {"block": {"block_id": "39217bcc-8fd1-4825-afca-e97598a13f0a", "release_version": "1.0.0"}, "settings": {"title": {"kind": "text", "value": "Attachments"}, "field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case.attachments"}, "empty_message": {"kind": "text", "value": "No files are attached to this case yet."}, "refused_message": {"kind": "text", "value": "Attachments on this case are not available to your account."}, "error_message": {"kind": "text", "value": "Attachments on this case could not be read."}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}},
-        "comments_sd_case": {"block": {"block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff", "release_version": "1.3.0"}, "settings": {"title": {"kind": "text", "value": "Comments"}, "empty_message": {"kind": "text", "value": "This case has no comments yet."}, "columns": {"kind": "list", "items": [{"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.created_at"}, "label": {"kind": "text", "value": "Added"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.created_by_person"}, "label": {"kind": "text", "value": "Author"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.body"}, "label": {"kind": "text", "value": "Comment"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.customer_visible"}, "label": {"kind": "text", "value": "Customer visible"}}}]}, "query_parameters": {"kind": "list", "items": [{"kind": "group", "properties": {"input": {"kind": "text", "value": "case"}, "source": {"kind": "choice", "value": "page"}, "page_parameter": {"kind": "text", "value": "record_id"}}}]}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}, "query": "vortex.service_desk.cases:service_desk_case_comments"},
+        "comments_sd_case": {"block": {"block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff", "release_version": "1.3.0"}, "settings": {"title": {"kind": "text", "value": "Comments"}, "empty_message": {"kind": "text", "value": "This case has no comments yet."}, "columns": {"kind": "list", "items": [{"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.created_at"}, "label": {"kind": "text", "value": "Added"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.created_by"}, "label": {"kind": "text", "value": "Author"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.body"}, "label": {"kind": "text", "value": "Comment"}}}, {"kind": "group", "properties": {"field": {"kind": "field_reference", "field": "vortex.service_desk.cases:case_comment.customer_visible"}, "label": {"kind": "text", "value": "Customer visible"}}}]}, "query_parameters": {"kind": "list", "items": [{"kind": "group", "properties": {"input": {"kind": "text", "value": "case"}, "source": {"kind": "choice", "value": "page"}, "page_parameter": {"kind": "text", "value": "record_id"}}}]}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}, "query": "vortex.service_desk.cases:service_desk_case_comments"},
         "button_edit_case": {"block": {"block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b", "release_version": "1.0.0"}, "view_permission": "application.service_desk.case.update", "settings": {"label": {"kind": "text", "value": "Edit"}, "action_kind": {"kind": "choice", "value": "action"}, "variant": {"kind": "choice", "value": "secondary"}}, "theme_overrides": {}, "responsive": {"desktop": {"visible": true, "width": {"kind": "fill"}, "height": {"kind": "content"}}}, "slots": {}}
                                                                                    },
                                                                     "order":  {
@@ -1275,7 +1275,7 @@
                                                                                                                                                        "form_customer_company": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.3.0"},"settings":{"name":{"kind":"text","value":"customer_company"},"label":{"kind":"text","value":"Customer company"},"required":{"kind":"boolean","value":true},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.crm.organisations:service_desk_customers"},"label_field":{"kind":"field_reference","field":"vortex.crm.organisations:company.name"}}},"initial_value":{"kind":"group","properties":{"page_parameter":{"kind":"text","value":"customer_company"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                        "form_requester": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.1.0"},"settings":{"name":{"kind":"text","value":"requester"},"label":{"kind":"text","value":"Requester"},"required":{"kind":"boolean","value":true},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.crm.people:service_desk_requesters"},"label_field":{"kind":"field_reference","field":"vortex.crm.people:contact.full_name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                        "form_service_level": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.1.0"},"settings":{"name":{"kind":"text","value":"service_level"},"label":{"kind":"text","value":"Service level"},"required":{"kind":"boolean","value":true},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.service_desk.sla:service_desk_service_levels"},"label_field":{"kind":"field_reference","field":"vortex.service_desk.sla:service_level.name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
-                                                                                                                                                       "input_service_desk_case_create_owner": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.3.0"},"settings":{"name":{"kind":"text","value":"owner_person"},"label":{"kind":"text","value":"Owner"},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.system_directory:people"},"label_field":{"kind":"field_reference","field":"vortex.system_directory:person.display_name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                       "input_service_desk_case_create_owner": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.3.0"},"settings":{"name":{"kind":"text","value":"owner"},"label":{"kind":"text","value":"Owner"},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.system_directory:people"},"label_field":{"kind":"field_reference","field":"vortex.system_directory:person.display_name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                        "form_submit_3":  {
                                                                                                                                                                              "block":  {
                                                                                                                                                                                            "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -1405,7 +1405,7 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
-                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.author_person"},
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.author"},
                                                                                                                                   "label": {"kind":"text","value":"Author"}
                                                                                                                                 }
                                                                                                                               }
@@ -1547,7 +1547,7 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
-                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.author_person"},
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.author"},
                                                                                                                                   "label": {"kind":"text","value":"Author"}
                                                                                                                                 }
                                                                                                                               }
@@ -1600,7 +1600,7 @@
                                                          "title",
                                                          "body",
                                                          "review_date",
-                                                         "author_person"
+                                                         "author"
                                                      ],
                                    "rate_limit_per_minute":  60,
                                    "composition":  {
@@ -1649,7 +1649,7 @@
                                                                                                                               {
                                                                                                                                 "kind": "group",
                                                                                                                                 "properties": {
-                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.author_person"},
+                                                                                                                                  "field": {"kind":"field_reference","field":"vortex.service_desk.knowledge:article.author"},
                                                                                                                                   "label": {"kind":"text","value":"Author"}
                                                                                                                                 }
                                                                                                                               }
@@ -1965,7 +1965,7 @@
 
                                                                                                                                                                                                                            }
                                                                                                                                                                                                              },
-                                                                                                                                                                            "input_service_desk_case_edit_owner": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.3.0"},"settings":{"name":{"kind":"text","value":"owner_person"},"label":{"kind":"text","value":"Owner"},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.system_directory:people"},"label_field":{"kind":"field_reference","field":"vortex.system_directory:person.display_name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
+                                                                                                                                                                            "input_service_desk_case_edit_owner": {"block":{"block_id":"2bd013f9-48ad-43d3-a6eb-7fc3c130cf87","release_version":"1.3.0"},"settings":{"name":{"kind":"text","value":"owner"},"label":{"kind":"text","value":"Owner"},"choice_source":{"kind":"group","properties":{"query":{"kind":"query_reference","query":"vortex.system_directory:people"},"label_field":{"kind":"field_reference","field":"vortex.system_directory:person.display_name"}}}},"theme_overrides":{},"responsive":{"desktop":{"visible":true,"width":{"kind":"fill"},"height":{"kind":"content"}}},"slots":{}},
                                                                                                                                                                             "submit_service_desk_case_edit":  {
                                                                                                                                                                                                                   "block":  {
                                                                                                                                                                                                                                 "block_id":  "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -2544,7 +2544,7 @@
                                                                                                                                         {
                                                                                                                                           "kind": "group",
                                                                                                                                           "properties": {
-                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.relationship_owner_person"},
+                                                                                                                                            "field": {"kind":"field_reference","field":"vortex.crm.people:contact.relationship_owner"},
                                                                                                                                             "label": {"kind":"text","value":"Relationship owner"}
                                                                                                                                           }
                                                                                                                                         },
@@ -4255,7 +4255,7 @@
                                  "type": "json",
                                  "required": true
                              },
-                             "owner_person": {"type":"json","required":false},
+                             "owner": {"type":"json","required":false},
                              "service_level_record": {
                                  "type": "record_reference",
                                  "recordTypeIds": [
@@ -4398,7 +4398,7 @@
                                                      "name": "requester"
                                                  }
                                              },
-                                             "owner_person": {"kind":"reference","reference":{"source":"input","name":"owner_person"}},
+                                             "owner": {"kind":"reference","reference":{"source":"input","name":"owner"}},
                                              "service_level": {
                                                  "kind": "reference",
                                                  "reference": {
@@ -5637,7 +5637,7 @@
                                  "kind": "caller",
                                  "name": "requester"
                              },
-                             "owner_person": {"kind":"caller","name":"owner_person"},
+                             "owner": {"kind":"caller","name":"owner"},
                              "service_level_record": {
                                  "kind": "caller",
                                  "name": "service_level"

@@ -11,11 +11,12 @@ const fields = [
   {
     key: "actor",
     label: "Actor",
-    type: "link_to_person",
+    type: "link",
     settings: {
-      audience: "organisation_accounts",
+      target: "vortex.system_directory:person",
+      reverse_key: "activity_actor_references",
+      on_parent_delete: "empty_optional",
       application_root_required: false,
-      on_person_deactivation: "retain_reference",
     },
   },
   { key: "action", label: "Action", type: "text", settings: { max_length: 40 } },

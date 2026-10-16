@@ -10,7 +10,6 @@ import {
   moduleFieldSchema,
   moneyValueSchema,
   organizationAccountIdSchema,
-  personLinkValueSchema,
   recordLinkValueSchema,
   type ConditionNode,
   type JsonValue,
@@ -253,8 +252,6 @@ const semanticTypeForField = (field: ModuleField): StudioConditionSemanticType =
     case "link":
     case "link_to_one_of_several":
       return "record_reference";
-    case "link_to_person":
-      return "organization_account_reference";
     case "calculation":
     case "total": {
       const resultType = field.settings.resultType;
@@ -481,8 +478,7 @@ export const literalMatchesType = (value: JsonValue, type: StudioConditionSemant
       return recordLinkValueSchema.safeParse(value).success;
     case "organization_account_reference":
       return (
-        organizationAccountIdSchema.safeParse(value).success ||
-        personLinkValueSchema.safeParse(value).success
+        organizationAccountIdSchema.safeParse(value).success
       );
   }
 };

@@ -165,30 +165,12 @@
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
-            "type": "link_to_person",
-            "settings": {
-              "audience": "application_accounts",
-              "application_root_required": true,
-              "on_person_deactivation": "empty_optional"
-            }
-          },
-          {
-            "id": "fld_case_owner_person",
-            "key": "owner_person",
-            "label": "Owner",
-            "required": false,
-            "unique": false,
-            "filterable": true,
-            "sortable": false,
-            "personal_data": "none",
-            "public_display": "refused",
             "type": "link",
             "settings": {
               "target": "vortex.system_directory:person",
-              "reverse_key": "owner_person_references",
+              "reverse_key": "owner_references",
               "on_parent_delete": "empty_optional",
-              "application_root_required": true,
-              "legacy_person_field": "owner"
+              "application_root_required": true
             }
           },
           {
@@ -416,9 +398,9 @@
             "on_parent_delete": "refuse"
           },
           {
-            "id": "fld_case_owner_person_relationship",
-            "key": "owner_person",
-            "from_field": "owner_person",
+            "id": "fld_case_owner_relationship",
+            "key": "owner",
+            "from_field": "owner",
             "to_record_type": "vortex.system_directory:person",
             "cardinality": "many_to_one",
             "on_parent_delete": "empty_optional"
@@ -507,30 +489,12 @@
             "sortable": false,
             "personal_data": "personal",
             "public_display": "refused",
-            "type": "link_to_person",
-            "settings": {
-              "audience": "organisation_identities_and_external_requesters",
-              "application_root_required": false,
-              "on_person_deactivation": "retain_reference"
-            }
-          },
-          {
-            "id": "fld_comment_by_person",
-            "key": "created_by_person",
-            "label": "Created by",
-            "required": false,
-            "unique": false,
-            "filterable": true,
-            "sortable": false,
-            "personal_data": "personal",
-            "public_display": "refused",
             "type": "link",
             "settings": {
               "target": "vortex.system_directory:person",
-              "reverse_key": "created_by_person_references",
+              "reverse_key": "created_by_references",
               "on_parent_delete": "empty_optional",
-              "application_root_required": false,
-              "legacy_person_field": "created_by"
+              "application_root_required": false
             }
           },
           {
@@ -558,8 +522,8 @@
           },
           {
             "id": "fld_comment_by_person_relationship",
-            "key": "created_by_person",
-            "from_field": "created_by_person",
+            "key": "created_by",
+            "from_field": "created_by",
             "to_record_type": "vortex.system_directory:person",
             "cardinality": "many_to_one",
             "on_parent_delete": "empty_optional"
@@ -590,7 +554,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner_person",
+            "owner",
             "status",
             "priority",
             "service_level",
@@ -606,7 +570,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner_person",
+            "owner",
             "status",
             "priority",
             "service_level",
@@ -640,7 +604,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner_person",
+            "owner",
             "status",
             "priority",
             "service_level",
@@ -676,7 +640,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner_person",
+            "owner",
             "status",
             "priority",
             "service_level",
@@ -692,7 +656,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner_person",
+            "owner",
             "status",
             "priority",
             "service_level",
@@ -766,7 +730,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner_person",
+            "owner",
             "status",
             "priority",
             "service_level",
@@ -800,16 +764,14 @@
             "case",
             "body",
             "customer_visible",
-            "created_by_person",
-            "created_at",
-            "created_by"
+            "created_by",
+            "created_at"
           ],
           "changeable_fields": [
             "case",
             "body",
             "customer_visible",
             "created_by",
-            "created_by_person",
             "created_at"
           ]
         }
@@ -834,7 +796,7 @@
             "case",
             "body",
             "customer_visible",
-            "created_by_person",
+            "created_by",
             "created_at"
           ],
           "changeable_fields": []
@@ -860,14 +822,14 @@
             "case",
             "body",
             "customer_visible",
-            "created_by_person",
+            "created_by",
             "created_at"
           ],
           "changeable_fields": [
             "case",
             "body",
             "customer_visible",
-            "created_by_person",
+            "created_by",
             "created_at"
           ]
         }
@@ -932,7 +894,7 @@
             "case",
             "body",
             "customer_visible",
-            "created_by_person",
+            "created_by",
             "created_at"
           ],
           "changeable_fields": []
@@ -956,7 +918,6 @@
         },
         "field_policy": {
           "readable_fields": [
-            "owner_person",
             "owner"
           ],
           "changeable_fields": [
@@ -1026,7 +987,8 @@
             "key": "owner",
             "label": "Owner",
             "required": true,
-            "type": "organisation_account_reference"
+            "type": "record_reference",
+            "record_types": ["vortex.system_directory:person"]
           }
         ],
         "tasks": [
@@ -2141,7 +2103,7 @@
         ],
         "select": [
           "created_at",
-          "created_by_person",
+          "created_by",
           "body",
           "customer_visible",
           "case"
@@ -2172,7 +2134,7 @@
           "subject",
           "customer_company",
           "requester",
-          "owner_person",
+          "owner",
           "status",
           "priority",
           "resolution_due_at",

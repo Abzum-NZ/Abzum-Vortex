@@ -471,7 +471,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
           recordId: companyIds[contact.companyIndex]!,
         },
         email_consent: index % 3 !== 2,
-        relationship_owner_person: personOwner,
+        relationship_owner: personOwner,
       },
       crmOwnerGroupId,
     );
@@ -528,7 +528,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       due_at: dueAt.toISOString(),
       completed: false,
       regarding: { recordTypeId: contactType.recordTypeId, recordId: contactId },
-      owner_person: personOwner,
+      owner: personOwner,
     });
   }
 
@@ -662,7 +662,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         },
         status: serviceCase.status,
         priority: serviceCase.priority,
-        owner_person: personOwner,
+        owner: personOwner,
         service_level: { recordTypeId: serviceLevelType.recordTypeId, recordId: serviceLevelId },
         opened_at: openedAt.toISOString(),
         first_response_due_at: firstResponseDueAt.toISOString(),

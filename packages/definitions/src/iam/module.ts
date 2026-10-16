@@ -107,7 +107,7 @@ const requestReadable = [
   "title",
   "request_type",
   "state",
-  "beneficiary_person",
+  "beneficiary",
   "target_role_key",
   "target_group_key",
   "target_group",
@@ -271,26 +271,12 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
             label: "Beneficiary",
             filterable: true,
             personal_data: "personal",
-            type: "link_to_person",
-            settings: {
-              audience: "organisation_accounts",
-              application_root_required: false,
-              on_person_deactivation: "retain_reference",
-            },
-          },
-          {
-            ...fieldBase,
-            id: "fld_iam_request_beneficiary_person",
-            key: "beneficiary_person",
-            label: "Beneficiary",
-            personal_data: "personal",
             type: "link",
             settings: {
               target: "vortex.system_directory:person",
               reverse_key: "beneficiary_references",
               on_parent_delete: "empty_optional",
               application_root_required: false,
-              legacy_person_field: "beneficiary",
             },
           },
           {
@@ -387,8 +373,8 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
         relationships: [
           {
             id: "rel_iam_request_beneficiary_person",
-            key: "beneficiary_person",
-            from_field: "beneficiary_person",
+            key: "beneficiary",
+            from_field: "beneficiary",
             to_record_type: "vortex.system_directory:person",
             cardinality: "many_to_one",
             on_parent_delete: "empty_optional",
@@ -535,7 +521,7 @@ export const iamModule: ModuleSourceDocument = moduleSourceDocumentSchema.parse(
           "title",
           "request_type",
           "state",
-          "beneficiary_person",
+          "beneficiary",
           "submitted_at"
         ],
         "filter": null,

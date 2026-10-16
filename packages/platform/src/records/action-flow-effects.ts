@@ -331,9 +331,7 @@ const writtenValue = (
         ? prepared.existingValues[subjectField.fieldId]
         : null;
     } else if (reference.source === "execution_actor") {
-      if (field.type === "link_to_person")
-        value = { organizationAccountId: prepared.actorOrganizationAccountId };
-      else if (field.type === "link") {
+      if (field.type === "link") {
         if (field.settings.target.state !== "resolved")
           throw new Error("Named action actor link target is unresolved");
         value = {

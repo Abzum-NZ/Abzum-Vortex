@@ -890,7 +890,6 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
         "web_address",
         "link",
         "link_to_one_of_several",
-        "link_to_person",
       ]);
       const numericAggregateFieldTypes = new Set(["whole_number", "decimal_number", "money"]);
       const extremaFieldTypes = new Set([

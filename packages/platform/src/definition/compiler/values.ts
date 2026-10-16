@@ -49,13 +49,6 @@ export function normaliseModuleFieldValue(
         recordId: link.record_id,
       };
     }
-    case "link_to_person": {
-      if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
-      const person = value as JsonObject;
-      return "organization_account_id" in person
-        ? { organizationAccountId: person.organization_account_id }
-        : value;
-    }
     case "table": {
       if (!Array.isArray(value)) return value;
       const settings = asObject(field.settings);
