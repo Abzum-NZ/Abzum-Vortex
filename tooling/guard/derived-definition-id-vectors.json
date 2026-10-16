@@ -1,0 +1,76 @@
+{
+  "note": "Recorded by running vortex_definition.derived_definition_id on a database. When the SQL function changes, record the vectors and sqlFingerprint again from the database; the guard compares both with the TypeScript derivation.",
+  "sqlFingerprint": "sha256:970dbf9469fae5605b08286bb792c512636f5ee1c0384f7363790006238f4c2e",
+  "vectors": [
+    {
+      "parts": [
+        "owned_module_root",
+        "976237d6-a416-41d3-82b8-47c1c506743b",
+        "vortex.crm.people"
+      ],
+      "id": "c80d2be6-67bb-862c-bf92-933e95905d13"
+    },
+    {
+      "parts": [
+        "owned_module_root",
+        "00000000-0000-4000-8000-000000000001",
+        "acme.sales.leads"
+      ],
+      "id": "71ecd736-5fb7-837d-9745-9d164469bce2"
+    },
+    {
+      "parts": [
+        "source_identity",
+        "6e6ccc4b-7965-4813-bfdf-2904e1e4e651",
+        "record_owner:rt_contact",
+        "field",
+        "fld_contact_nickname"
+      ],
+      "id": "26f5abdf-11bf-82f0-88f7-337488a6442d"
+    },
+    {
+      "parts": [
+        "source_identity",
+        "89e1b919-8ca1-4eb1-9787-b2e6591c329e",
+        "content",
+        "record_type",
+        "rt_company"
+      ],
+      "id": "3c443c3f-7a97-8038-8b70-d6d2309e45d7"
+    },
+    {
+      "parts": [
+        "source_identity",
+        "89e1b919-8ca1-4eb1-9787-b2e6591c329e",
+        "content",
+        "query",
+        "q_companies"
+      ],
+      "id": "686a2895-5fb5-87d1-b99f-72de8ac1473f"
+    },
+    {
+      "parts": [
+        "source_identity",
+        "1305c380-585c-4fec-b167-35645fcca9f8",
+        "rule_owner:flow_x",
+        "rule_node",
+        "node é ü 日本"
+      ],
+      "id": "526817bd-1be3-851b-8b19-3dc7287aed95"
+    },
+    {
+      "parts": [
+        "a"
+      ],
+      "id": "0cc175b9-c0f1-86a8-b1c3-99e269772661"
+    },
+    {
+      "parts": [
+        "",
+        "",
+        ""
+      ],
+      "id": "2e6f2bd5-dba2-882b-b662-ac46923808ce"
+    }
+  ]
+}

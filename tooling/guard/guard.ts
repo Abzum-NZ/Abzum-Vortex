@@ -2,7 +2,9 @@ import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { resolve, relative, extname, basename, dirname } from "node:path";
 import ts from "typescript";
+import { createHash } from "node:crypto";
 import { guardRules, packageAreas, paths, scannedRuleIds } from "./config.ts";
+import { derivedDefinitionId } from "../../packages/platform/src/definition/derived-definition-id.ts";
 
 type Finding = { rule: string; file: string; line: number; detail: string };
 const root = resolve(import.meta.dirname, "../..");
@@ -647,6 +649,29 @@ for (const file of files.filter(
           match[0].toLowerCase(),
         );
     }
+}
+
+// The derived Definition identity exists twice: Studio derives in memory what the database will
+// record. Both are held to vectors the SQL function produced: the TypeScript derivation must
+// reproduce them, and the SQL function must be the exact text they were recorded from, so a
+// change to either is refused until the vectors are recorded again from the database.
+{
+  const vectorsFile = "tooling/guard/derived-definition-id-vectors.json";
+  const sqlFile = "supabase/schemas/vortex_definition/derived_definition_id.sql";
+  const recorded = JSON.parse(read(vectorsFile)) as {
+    sqlFingerprint: string;
+    vectors: Array<{ parts: string[]; id: string }>;
+  };
+  const sqlFingerprint = `sha256:${createHash("sha256")
+    .update(read(sqlFile).replace(/\s+/g, " ").trim(), "utf8")
+    .digest("hex")}`;
+  if (sqlFingerprint !== recorded.sqlFingerprint)
+    add("derived-id-parity", sqlFile, 1, `SQL changed since the vectors were recorded (${sqlFingerprint})`);
+  for (const [index, vector] of recorded.vectors.entries()) {
+    const derived = derivedDefinitionId(vector.parts);
+    if (derived !== vector.id)
+      add("derived-id-parity", vectorsFile, index + 1, `${JSON.stringify(vector.parts)}: TypeScript ${derived}, SQL ${vector.id}`);
+  }
 }
 
 // The validator prints a JSON array on stdout and exits 0 (clean) or 1 (failures); anything else
