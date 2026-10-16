@@ -23,6 +23,7 @@ import {
   flowFormulaSchema,
   type Revision,
 } from "../schema";
+import { applicationModuleKeys } from "./application-module-sources";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import {
   requireBuilderAuthority,
@@ -225,7 +226,7 @@ const projectDraftConditionContexts = (
     if (!valid) continue;
     contexts.push({
       sourceFingerprint,
-      bindingsSignature: JSON.stringify(source.body.module_bindings),
+      bindingsSignature: JSON.stringify(applicationModuleKeys(source)),
       pageAlias: page.id,
       recordReference: page.record_type,
       fieldRecordReference: `${moduleKey}:${record.key}`,

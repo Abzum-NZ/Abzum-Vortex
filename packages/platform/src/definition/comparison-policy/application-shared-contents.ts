@@ -116,8 +116,6 @@ export const compareApplicationSharedContent = (
         right.moduleRootId,
         left,
         right,
-        [],
-        "purpose",
       ),
     () => "major",
   );

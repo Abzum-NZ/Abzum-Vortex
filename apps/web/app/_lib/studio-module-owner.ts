@@ -10,9 +10,9 @@ export type StudioModuleOwnerResult =
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /**
- * The application whose draft uses a module: a module's editors live in that application's Studio
+ * The application whose draft owns a module: a module's editors live in that application's Studio
  * Data tab. Reads the organisation's roots and the application drafts with the builder's own access;
- * when several applications use the module, the first by name owns the link.
+ * only one application owns a module; the first match by name is returned.
  */
 export const loadStudioModuleOwner = async (
   organizationId: string,
@@ -31,7 +31,7 @@ export const loadStudioModuleOwner = async (
       console.error(`[studio] module owner lookup skipped application ${application.rootId}: ${loaded.kind}`);
       continue;
     }
-    if (loaded.draft.source.body.module_bindings.some((binding) => binding.module === module.key))
+    if (loaded.draft.source.body.modules.some((owned) => owned.key === module.key))
       return { kind: "owned", organizationId: home.organizationId, applicationRootId: application.rootId };
   }
   return { kind: "unowned", organizationId: home.organizationId };

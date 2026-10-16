@@ -21,6 +21,27 @@ export function explicitSourceTargets(
   positions: SourceContractPositions,
   resolution: Resolution,
 ): Path[] | undefined {
+  // An inline Module and a used Module each compile to the Application's binding of that Module
+  // release, in `modules` then `uses` order. The Module key names the whole binding; every other
+  // part of an inline Module is compiled into the Module release the binding pins.
+  if (
+    source.kind === "application" &&
+    sourcePath[0] === "body" &&
+    (sourcePath[1] === "modules" || sourcePath[1] === "uses") &&
+    typeof sourcePath[2] === "number"
+  ) {
+    const owned = (asObject(source.body).modules as unknown[]).length;
+    const base: Path = [
+      "content",
+      "moduleBindings",
+      sourcePath[1] === "modules" ? sourcePath[2] : owned + sourcePath[2],
+    ];
+    const namesModule =
+      sourcePath.length === 4 && sourcePath[3] === (sourcePath[1] === "modules" ? "key" : "module");
+    return namesModule
+      ? leafPaths(valueAtPath(canonical, base), base)
+      : [[...base, "moduleRootId"]];
+  }
   const searchTargets = applicationSearchTargets(source, canonical, sourcePath);
   if (searchTargets !== undefined) return searchTargets;
   if (isInterfaceOperationFlowTargetPath(source, sourcePath))
@@ -266,18 +287,6 @@ export function explicitSourceTargets(
     if (sourcePath[3] === "group_by" && typeof sourcePath[4] === "number")
       return [[...base, "groupByFieldIds", sourcePath[4]]];
   }
-  if (
-    source.kind === "application" &&
-    sourcePath[0] === "body" &&
-    sourcePath[1] === "module_bindings" &&
-    typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "module" &&
-    sourcePath.length === 4
-  )
-    return [
-      ["content", "moduleBindings", sourcePath[2], "moduleRootId"],
-      ["content", "moduleBindings", sourcePath[2], "resolvedVersion"],
-    ];
   if (
     source.kind === "application" &&
     sourcePath[0] === "body" &&

@@ -77,5 +77,6 @@ export {
   readProvisionedSetupInTransaction,
   type ProvisionedSetup,
 } from "./installation-provisioned-setup";
-export { compileModulesOffline, type OfflineSourceFailure } from "./offline-source-validation";
+export type { OfflineSourceFailure } from "./offline-source-validation";
+export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";

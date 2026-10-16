@@ -1,7 +1,7 @@
 import { normalizeExactDecimal, type DefinitionCompilationOutput } from "../../schema";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import type { Resolution } from "./resolution";
-import { asObject, fail, type JsonObject, objectFromUniqueEntries } from "./shared";
+import { applicationModuleKeysOf, asObject, fail, type JsonObject, objectFromUniqueEntries } from "./shared";
 
 export type ModuleValueContext = Readonly<{
   field: (reference: string, alias?: string) => JsonObject | undefined;
@@ -297,8 +297,7 @@ export function applicationModuleValueIndex(
   const fieldsById = new Map<string, { field: JsonObject }>();
   const actionsByKey = new Map<string, ApplicationActionValuePair>();
   const queryIdsByReference = new Map<string, string>();
-  for (const binding of body.module_bindings as JsonObject[]) {
-    const moduleKey = String(binding.module);
+  for (const moduleKey of applicationModuleKeysOf(body)) {
     const expected = resolution.definition(moduleKey, "module");
     const candidates = dependencyOutputs.filter(
       (candidate) => candidate.kind === "module" && candidate.artifact.definitionKey === moduleKey,

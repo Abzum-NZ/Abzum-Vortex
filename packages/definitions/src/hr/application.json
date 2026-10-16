@@ -8,22 +8,10 @@
     "description": "Department directory and forms for this organisation.",
     "icon": "users",
     "home_page": "hr_departments",
-    "module_bindings": [
+    "uses": [
       {
-        "module": "vortex.hr",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.system_directory",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "system_record_display"
+        "application": "vortex.app.organisation_administration",
+        "module": "vortex.system_directory"
       }
     ],
     "permissions": [
@@ -142,11 +130,9 @@
         "permission": "application.hr.open"
       }
     ],
-    "queries": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
-    "actions": [],
     "events": [
       {
         "id": "event_hr_open_department",

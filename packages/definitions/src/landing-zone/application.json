@@ -8,16 +8,7 @@
     "description": "A personal start page for permitted applications and privately owned tiles.",
     "icon": "grid",
     "home_page": "home",
-    "module_bindings": [
-      {
-        "module": "vortex.landing_zone",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      }
-    ],
+    "uses": [],
     "permissions": [
       {
         "id": "app_permission_open",
@@ -96,11 +87,9 @@
         "permission": "application.landing_zone.open"
       }
     ],
-    "queries": [],
     "pipelines": [],
     "connection_bindings": [],
     "interfaces": [],
-    "actions": [],
     "events": [
       {
         "id": "form_submit_landing_zone_bookmark_create",

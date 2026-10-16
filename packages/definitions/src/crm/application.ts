@@ -4,6 +4,7 @@ import {
 } from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 import { loadApplicationSource } from "../application-source-loader";
+import { crmModules } from "./module";
 
 /**
  * CRM ships its own catalogue selection rather than the platform default, so an installed
@@ -30,4 +31,5 @@ const selection = sourceApplicationThemeSelectionSchema.parse({
 export const application: ApplicationSourceDocument = loadApplicationSource(
   authoredSource,
   selection,
+  crmModules,
 );
