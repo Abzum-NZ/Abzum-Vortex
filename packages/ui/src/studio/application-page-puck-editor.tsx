@@ -197,6 +197,14 @@ const breakpoints: readonly Readonly<{ value: Breakpoint; label: string; width: 
   { value: "phone", label: "Phone", width: "390px" },
 ];
 
+/**
+ * The canonical form of an authored zone for comparison. A zone with no responsive order carries
+ * `order: undefined`, and optional item metadata may be absent; JSON drops both, so equal zones
+ * compare equal and canonicalJson never sees an undefined property.
+ */
+const zoneJson = (zone: SourceSlot): string =>
+  canonicalJson(JSON.parse(JSON.stringify(zone)) as unknown);
+
 /** Why a content area that does not convert exactly is not editable on the canvas. */
 const roundTripProblem = (
   adapter: ReturnType<typeof createVortexAuthoredPuckAdapter>,
@@ -205,7 +213,7 @@ const roundTripProblem = (
 ): string | undefined => {
   try {
     const back = adapter.fromPuckData(slot, adapter.toPuckData(slot, runtimeSettings));
-    return canonicalJson(back) === canonicalJson(slot)
+    return zoneJson(back) === zoneJson(slot)
       ? undefined : "STUDIO_CANVAS_ROUND_TRIP_MISMATCH: the content converts back differently";
   } catch (error: unknown) {
     return `STUDIO_CANVAS_ROUND_TRIP_FAILED: ${error instanceof Error ? error.message : String(error)}`;
@@ -365,7 +373,7 @@ function ApplicationPageSlotPuckEditor({
         throw new TypeError("The selected page is unavailable.");
       const editedSlot = adapter.fromPuckData(targetSlot, candidate);
       // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
-      if (canonicalJson(editedSlot) === canonicalJson(targetSlot)) return;
+      if (zoneJson(editedSlot) === zoneJson(targetSlot)) return;
       const next = structuredClone(current);
       const nextPage = next.body.pages.find((item) => item.id === pageAlias);
       if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))
