@@ -20,13 +20,10 @@ export const metadata: Metadata = {
 };
 
 /**
- * The registered platform theme's variables, as the theme renderer emits them. The bootstrap landing, sign-in, organisation chooser and
+ * The registered platform theme, as the theme renderer emits it. The bootstrap landing, sign-in, organisation chooser and
  * error pages read them before any organisation is known, so they reveal no organisation theme.
  */
-const PLATFORM_THEME_STYLE = createThemeRootProps(
-  undefined,
-  DEFAULT_PLATFORM_THEME_RELEASE.tokens,
-).style;
+const PLATFORM_THEME = createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
 
 /**
  * The platform root's style attributes. No organisation is known here, so they resolve to the
@@ -44,8 +41,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       lang="en"
       className={SHADCN_FONT_VARIABLE_CLASSES.join(" ")}
       {...PLATFORM_VORTEX_STYLE}
+      data-vortex-theme={PLATFORM_THEME["data-vortex-theme"]}
       data-vortex-theme-mode={appearanceRoot["data-vortex-theme-mode"]}
-      style={{ ...PLATFORM_THEME_STYLE, ...PLATFORM_VORTEX_STYLE.style, ...appearanceRoot.style }}
+      style={{ ...PLATFORM_THEME.style, ...PLATFORM_VORTEX_STYLE.style, ...appearanceRoot.style }}
     >
       <body>
         <AppearanceProvider initial={appearance}>{children}</AppearanceProvider>

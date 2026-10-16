@@ -33,10 +33,23 @@ body {
   color: var(--vortex-text);
 }
 
+/*
+ * The document root carries the current theme (the platform default outside applications, the
+ * application's own theme inside one), so the root itself and everything portalled to the body
+ * paint the theme's body font rather than the browser's serif default.
+ */
+html {
+  font-family: var(--font-sans-family);
+}
+
 body {
-  font-family: var(--vortex-font-family);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Sonner injects its own system font stack on the toast region; the toast follows the theme font. */
+[data-vortex-style] [data-sonner-toaster] {
+  font-family: var(--font-sans-family);
 }
 
 @layer base {

@@ -113,7 +113,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
                 />
                 <FieldLabel
                   htmlFor={optionId}
-                  className="min-h-[44px] min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]"
+                  className="min-h-11 min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]"
                 >
                   {option.label}
                 </FieldLabel>

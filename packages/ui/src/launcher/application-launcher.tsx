@@ -3,7 +3,7 @@
 import type { ReactElement } from "react";
 import { Icon, resolveVortexIconName } from "../icons";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { DisplayStateContainer } from "../display/display-state-container";
@@ -69,7 +69,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                 <Empty
                   role="status"
                   data-vortex-display-state="empty"
-                  className="border border-dashed border-border py-12 text-muted-foreground"
+                  className="border border-dashed border-border text-muted-foreground"
                   aria-label={`${context.accessibleName}: empty`}
                 >
                   <EmptyHeader>
@@ -121,13 +121,13 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                               : undefined
                           }
                         >
-                          <CardHeader className="gap-3 pb-3">
+                          <CardHeader>
                             <div className="flex items-start gap-3">
-                              <div
+                              <EmptyMedia
+                                variant="icon"
                                 className={cn(
-                                  "flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/60 text-foreground transition-colors",
-                                  openable &&
-                                    "group-hover:border-primary/40 group-hover:bg-primary/10 group-hover:text-primary",
+                                  "size-10 transition-colors",
+                                  openable && "group-hover:bg-primary/10 group-hover:text-primary",
                                 )}
                                 aria-hidden="true"
                               >
@@ -141,13 +141,13 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                                     iconName === undefined ? "neutral" : undefined
                                   }
                                 />
-                              </div>
+                              </EmptyMedia>
                               <div className="flex min-w-0 flex-1 flex-col gap-1">
-                                <CardTitle className="font-heading text-base font-semibold leading-tight text-foreground transition-colors group-hover:text-primary">
+                                <CardTitle className="transition-colors group-hover:text-primary">
                                   {name}
                                 </CardTitle>
                                 {description === "" ? null : (
-                                  <CardDescription className="line-clamp-2 text-xs text-muted-foreground leading-normal">
+                                  <CardDescription className="line-clamp-2">
                                     {description}
                                   </CardDescription>
                                 )}
@@ -155,7 +155,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                             </div>
                           </CardHeader>
                           {openable ? (
-                            <CardFooter className="mt-auto pt-0">
+                            <CardFooter className="mt-auto">
                               <RowActionControl
                                 recordId={row.recordId}
                                 name={name}

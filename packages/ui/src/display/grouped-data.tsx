@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../components/card";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { DisplayCellView } from "./cell";
 import { DisplayHeader, RowActionControl, SelectionControl } from "./controls";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
@@ -43,8 +44,8 @@ export function GroupedDataDisplay(props: DisplayRenderProps<GroupedPayload>): R
             >
               <Card>
                 <CardHeader>
-                  <CardTitle>
-                    <h3 className="m-0 font-heading text-lg font-semibold">{group.label}</h3>
+                  <CardTitle role="heading" aria-level={3}>
+                    {group.label}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -60,10 +61,11 @@ export function GroupedDataDisplay(props: DisplayRenderProps<GroupedPayload>): R
                             ? undefined
                             : row.cells[group.secondaryKey];
                         return (
-                          <li
+                          <Item
                             key={row.recordId}
-                            data-vortex-record-id={row.recordId}
-                            className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-background p-3"
+                            variant="outline"
+                            size="sm"
+                            render={<li data-vortex-record-id={row.recordId} />}
                           >
                             <SelectionControl
                               row={row}
@@ -71,22 +73,24 @@ export function GroupedDataDisplay(props: DisplayRenderProps<GroupedPayload>): R
                               selected={group.selectedRecordIds?.includes(row.recordId) ?? false}
                               events={events}
                             />
-                            <div className="flex min-w-0 flex-1 flex-col">
-                              <span className="font-semibold">
+                            <ItemContent className="min-w-0">
+                              <ItemTitle>
                                 <DisplayCellView value={heading ?? { kind: "empty" }} />
-                              </span>
+                              </ItemTitle>
                               {secondary === undefined ? null : (
-                                <span className="text-muted-foreground">
+                                <ItemDescription>
                                   <DisplayCellView value={secondary} />
-                                </span>
+                                </ItemDescription>
                               )}
-                            </div>
-                            <RowActionControl
-                              recordId={row.recordId}
-                              name={name}
-                              events={events}
-                            />
-                          </li>
+                            </ItemContent>
+                            <ItemActions>
+                              <RowActionControl
+                                recordId={row.recordId}
+                                name={name}
+                                events={events}
+                              />
+                            </ItemActions>
+                          </Item>
                         );
                       })}
                     </ul>

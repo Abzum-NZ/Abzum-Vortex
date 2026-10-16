@@ -9,7 +9,7 @@ export default function AuthLoading() {
       aria-live="polite"
     >
       <Card className="w-full max-w-md sm:max-w-lg border-border bg-card text-card-foreground shadow-sm">
-        <CardContent className="flex items-center gap-4 text-muted-foreground py-6">
+        <CardContent className="flex items-center gap-4 text-muted-foreground">
           <Spinner aria-hidden="true" />
           <p className="text-sm">Loading secure access…</p>
         </CardContent>

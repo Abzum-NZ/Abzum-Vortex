@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Badge } from "../components/badge";
 import { DefinitionRenderError } from "../definition-error";
 import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
 import { FormattedTime } from "./date-format-context";
@@ -66,9 +67,9 @@ export function DisplayCellView({
       return <FormattedTime className="vortex-cell-date" iso={value.iso} />;
     case "choice":
       return (
-        <span className="vortex-cell-choice" data-vortex-choice-key={value.key}>
+        <Badge variant="outline" data-vortex-choice-key={value.key}>
           {value.label}
-        </span>
+        </Badge>
       );
     case "link":
       // Re-checked here because this view is exported and may receive unparsed values.

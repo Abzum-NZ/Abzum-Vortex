@@ -499,8 +499,8 @@ function ApplicationPageSlotPuckEditor({
           </ul>
         </div>
       )}
-      <div className="overflow-x-auto rounded-xl border border-border bg-muted/30 p-2">
-        <div className="mx-auto overflow-hidden rounded-lg bg-background" style={{ width, maxWidth: "100%" }}>
+      <div className="overflow-x-auto border border-border bg-muted/30 p-2">
+        <div className="mx-auto overflow-hidden bg-background" style={{ width, maxWidth: "100%" }}>
           <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
           <Puck
             config={config}
