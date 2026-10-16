@@ -236,6 +236,8 @@ export const createDefinitionStore = (
         });
       }
       const source = validateSource(command.data.source, permissions);
+      // A Module root is internal: only its owning Application's publication creates one.
+      if (source.kind !== "application") throw new DefinitionError("INVALID_DEFINITION_COMMAND");
       if (
         mode.kind === "trusted_application" &&
         (source.kind !== "application" ||
@@ -244,11 +246,7 @@ export const createDefinitionStore = (
       )
         throw new DefinitionError("INVALID_DEFINITION_COMMAND");
       const applicationOriginKind =
-        source.kind === "module"
-          ? null
-          : mode.kind === "trusted_application"
-            ? mode.applicationOriginKind
-            : "ordinary";
+        mode.kind === "trusted_application" ? mode.applicationOriginKind : "ordinary";
       const sourceFingerprint = fingerprintCanonicalValue(source);
       const identityRequirements = extractStoredSourceIdentityRequirements(source);
       const rows = await transaction.query<StoredDraftRow>`
@@ -259,7 +257,8 @@ export const createDefinitionStore = (
           ${JSON.stringify(source)}::text::jsonb,
           ${sourceFingerprint},
           ${JSON.stringify(identityRequirements)}::text::jsonb,
-          ${applicationOriginKind}::text
+          ${applicationOriginKind}::text,
+          ${null}::uuid
         )
       `;
       if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
@@ -320,4 +319,3 @@ export const createDefinitionStore = (
     },
   };
 };
-

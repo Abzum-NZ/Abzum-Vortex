@@ -5,14 +5,10 @@ import { reopenModuleFieldLabel } from "../module-field-label-actions";
 import { reopenModuleFields } from "../modules/[organizationId]/[moduleRootId]/fields/actions";
 import { loadModuleQueryFilter } from "../modules/[organizationId]/[moduleRootId]/queries/actions";
 import { loadModuleBeforeSaveCondition } from "../modules/[organizationId]/[moduleRootId]/before-save/actions";
-import {
-  loadStudioModulePublicationDraft, prepareStudioModulePublication, publishStudioModule,
-} from "../modules/[organizationId]/[moduleRootId]/publish/actions";
 import { ModuleFieldsWorkspace } from "./module-fields-workspace";
 import { ModuleFieldLabelEditor } from "./module-field-label-editor";
 import { ModuleQueryFilterEditor } from "./module-query-filter-editor";
 import { ModuleBeforeSaveConditionEditor } from "./module-before-save-condition-editor";
-import { ModulePublicationEditor } from "./module-publication-editor";
 import { StudioUnavailable } from "./studio-unavailable";
 import { ModuleEditorDirtyProvider } from "./module-editor-dirty";
 import type { StudioModuleTarget } from "../_lib/studio-module-tools";
@@ -41,14 +37,6 @@ const loadEditor = async ({ organizationId, moduleRootId, tool }: StudioModuleTa
     case "before-save":
       return <ModuleBeforeSaveConditionEditor key={key} organizationId={organizationId} moduleRootId={moduleRootId}
         initial={await loadModuleBeforeSaveCondition(organizationId, moduleRootId)} />;
-    case "publish": {
-      const result = await loadStudioModulePublicationDraft(organizationId, moduleRootId);
-      if (result.kind !== "available") return <StudioUnavailable subject="Module publication" result={result} />;
-      if (result.draft.kind !== "module")
-        return <StudioUnavailable subject="Module publication" result={{ kind: "refused", reason: "draft_kind_mismatch" }} />;
-      return <ModulePublicationEditor key={key} draft={result.draft}
-        prepare={prepareStudioModulePublication} publish={publishStudioModule} />;
-    }
   }
 };
 
