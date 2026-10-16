@@ -13,6 +13,7 @@ declare
   selected_application_root_id uuid;
   selected_application_release_revision bigint;
   selected_bindings jsonb;
+  bindings_incomplete boolean;
 begin
   if p_organization_id is null or p_application_root_id is null then
     raise exception using errcode = '22023', message = 'Active Application context is required';
@@ -53,38 +54,40 @@ begin
     raise exception using errcode = '23514', message = 'Active Application release evidence is invalid';
   end if;
 
-  if not exists (
-    select 1
-    from vortex_definition.reachable_module_dependency_edges(
-      selected_application_root_id, selected_application_release_revision
-    )
-  ) or exists (
-    select 1
+  -- The same exact pin set is used by all three completeness checks. Materialize
+  -- it within this statement so a read never traverses the release graph three
+  -- times; no caller-writable state or cross-request cache is involved.
+  with pins as materialized (
+    select node.target_root_id, node.target_release_revision
     from vortex_definition.reachable_module_dependency_edges(
       selected_application_root_id, selected_application_release_revision
     ) as node
-    left join vortex_definition.installation_bindings as binding
-      on binding.organization_id = selected_organization_id
-      and binding.application_root_id = selected_application_root_id
-      and binding.module_root_id = node.target_root_id
-    where binding.state is distinct from 'active'
-      or binding.application_release_revision is distinct from selected_application_release_revision
-      or binding.module_release_revision is distinct from node.target_release_revision
-  ) or exists (
-    select 1
-    from vortex_definition.installation_bindings as binding
-    where binding.organization_id = selected_organization_id
-      and binding.application_root_id = selected_application_root_id
-      and binding.state = 'active'
-      and not exists (
-        select 1
-        from vortex_definition.reachable_module_dependency_edges(
-          selected_application_root_id, selected_application_release_revision
-        ) as node
-        where node.target_root_id = binding.module_root_id
-          and node.target_release_revision = binding.module_release_revision
-      )
-  ) then
+  )
+  select not exists (select 1 from pins)
+    or exists (
+      select 1
+      from pins as node
+      left join vortex_definition.installation_bindings as binding
+        on binding.organization_id = selected_organization_id
+        and binding.application_root_id = selected_application_root_id
+        and binding.module_root_id = node.target_root_id
+      where binding.state is distinct from 'active'
+        or binding.application_release_revision is distinct from selected_application_release_revision
+        or binding.module_release_revision is distinct from node.target_release_revision
+    ) or exists (
+      select 1
+      from vortex_definition.installation_bindings as binding
+      where binding.organization_id = selected_organization_id
+        and binding.application_root_id = selected_application_root_id
+        and binding.state = 'active'
+        and not exists (
+          select 1 from pins as node
+          where node.target_root_id = binding.module_root_id
+            and node.target_release_revision = binding.module_release_revision
+        )
+    )
+  into bindings_incomplete;
+  if bindings_incomplete then
     raise exception using errcode = '55000', message = 'Active Application Module bindings are incomplete';
   end if;
 
