@@ -1,5 +1,9 @@
 export {
+  APPEARANCE_COOKIE,
+  createAppearanceRootProps,
   createThemeRootProps,
+  parseThemeMode,
+  type AppearanceRootProps,
   resolvePlacementTheme,
   resolveThemeFonts,
   type ApplicationTheme,

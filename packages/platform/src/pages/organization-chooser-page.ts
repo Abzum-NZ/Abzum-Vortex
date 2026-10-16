@@ -40,6 +40,7 @@ export const organizationChooserShell = applicationShellSchema.parse({
       organizationSwitcher: false,
       applicationSwitcher: false,
       accountMenu: true,
+      appearanceToggle: true,
     },
   },
 });

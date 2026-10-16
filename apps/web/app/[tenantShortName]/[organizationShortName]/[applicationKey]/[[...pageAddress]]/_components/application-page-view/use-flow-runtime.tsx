@@ -381,7 +381,6 @@ export function useFlowRuntime({
           <div ref={dialogFormRef} className="flex flex-col gap-4">
             <UnsavedWorkProvider>
               <PagePuckRenderer
-                themeMode="system"
                 composition={surface.composition}
                 registry={platformComponentRegistry}
                 fieldInputControlReleases={fieldInputControlReleases}

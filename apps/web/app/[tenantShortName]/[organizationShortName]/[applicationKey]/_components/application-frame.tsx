@@ -305,7 +305,6 @@ export function ApplicationFrame({
         <PageNavigationBusyContext.Provider value={pageTransitionPending}>
           <PagePuckRenderer
             overlay={<Toaster position="bottom-right" />}
-            themeMode="system"
             applicationSurface
             composition={frame}
             registry={registry}

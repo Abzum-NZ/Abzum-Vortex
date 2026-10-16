@@ -160,7 +160,6 @@ export function StudioCanvasBridge({
       shells={frame.shells}
       {...(shell === undefined ? {} : { shell })}
       theme={frame.theme}
-      themeMode="system"
       projectedNavigation={frame.navigation}
       resolvePageHref={() => "#"}
       onNavigatePage={ignoreNavigation}

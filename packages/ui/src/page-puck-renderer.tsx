@@ -18,7 +18,6 @@ import {
   VortexStyleRoot,
   type ApplicationTheme,
   type PlatformThemeTokens,
-  type ThemeMode,
 } from "./theme";
 import { IconLibraryProvider } from "./icons";
 import type { ApplicationShellRuntime } from "./navigation/application-shell";
@@ -210,8 +209,6 @@ export type PagePuckRendererProps = Readonly<{
    * without one the readable platform defaults apply.
    */
   theme?: ApplicationTheme | undefined;
-  /** Light, dark or system appearance for the runtime page or preview canvas. */
-  themeMode?: ThemeMode | undefined;
   /** Organisation or viewer BCP 47 locale for date presentation. */
   locale?: string | undefined;
   /** Organisation or viewer IANA time zone for timestamp presentation. */
@@ -263,7 +260,6 @@ export function PagePuckRenderer({
   onPrefetchPage,
   currentPageId,
   theme,
-  themeMode,
   locale,
   timeZone,
   applicationShellRuntime,
@@ -292,7 +288,7 @@ export function PagePuckRenderer({
   const applicationTheme = theme ?? ("theme" in composition ? composition.theme : undefined);
   const tokens = applicationTheme?.tokens ?? {};
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
-  const themeRootProps = createThemeRootProps(applicationTheme, platformThemeTokens, themeMode);
+  const themeRootProps = createThemeRootProps(applicationTheme, platformThemeTokens);
   const vortexStyleProps = createVortexStyleRootProps(vortexStyle);
   const metadata: VortexPuckMetadata = {
     ...(breakpoint === undefined ? {} : { breakpoint }),
