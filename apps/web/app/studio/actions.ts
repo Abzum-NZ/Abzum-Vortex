@@ -138,7 +138,6 @@ export async function createStudioApplication(organizationId: string, candidate:
  * until that compile answers for exactly this revision.
  */
 export async function saveStudioApplication(organizationId: string, candidate: unknown) {
-  const s4t0 = performance.now(); // S4TIMING
   const command = saveDefinitionDraftCommandSchema.safeParse(candidate);
   if (!command.success)
     return refuse("save-application", "STUDIO_SAVE_COMMAND_SCHEMA_INVALID",
@@ -150,9 +149,7 @@ export async function saveStudioApplication(organizationId: string, candidate: u
   if (!validation.valid)
     return refuse("save-application", `STUDIO_SAVE_SOURCE_INVALID:${failureCodes(validation)}`,
       { kind: "refused", reason: "source_invalid" } as const);
-  const s4t1 = performance.now(); // S4TIMING
   const saved = await saveHumanApplicationDraft(organizationId, command.data);
-  console.log(`S4TIMING save validate=${Math.round(s4t1 - s4t0)} write=${Math.round(performance.now() - s4t1)}`); // S4TIMING
   return saved;
 }
 

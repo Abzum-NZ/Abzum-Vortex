@@ -303,7 +303,6 @@ export const createDefinitionPublicationService = (
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
     await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
     return repository.read(context, async (reader) => {
-      const s4a = performance.now(); // S4TIMING
       // The draft and its current release's version; the published release itself is read and
       // verified by preparation and publication, which judge the draft against it.
       const candidate = validateDraftCandidate(
@@ -311,14 +310,11 @@ export const createDefinitionPublicationService = (
         await reader.readDraftCandidate(parsedCommand.rootId),
         parsedCommand,
       );
-      const s4b = performance.now(); // S4TIMING
       // Another definition kind at this root is refused exactly like a missing draft.
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
         refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const dependencies = await resolveDependencies(reader, catalogue, candidate);
-      const s4c = performance.now(); // S4TIMING
       await assertNoCycle(reader, candidate, dependencies.modules);
-      console.log(`S4TIMING compile candidate=${Math.round(s4b - s4a)} dependencies=${Math.round(s4c - s4b)} cycle=${Math.round(performance.now() - s4c)}`); // S4TIMING
       const currentVersion = candidate.currentReleaseVersion ?? "1.0.0";
       const resolution = buildResolution(candidate, dependencies, currentVersion);
       // The compile is a pure function of exactly what this key names, so the same draft revision
@@ -343,14 +339,12 @@ export const createDefinitionPublicationService = (
       ]);
       const cached = readCachedApplicationDraftCompilation(cacheKey);
       if (cached !== undefined) return cached;
-      const s4d = performance.now(); // S4TIMING
       const compilation = compileApplicationCandidate(
         candidate,
         dependencies,
         resolution,
         catalogue.permissions,
       ).output;
-      console.log(`S4TIMING compile pure=${Math.round(performance.now() - s4d)}`); // S4TIMING
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION

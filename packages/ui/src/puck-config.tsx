@@ -596,7 +596,13 @@ export function createVortexPuckConfig(
   // Only slot fields: Puck finds a block's slots through them. A placement's settings, layout and
   // theme are edited by Studio's own typed inspector, never through Puck fields.
   const buildFields = (release: PlatformBlockRelease, settings: PlacementSettings) => {
-    const fields: Record<string, Field> = {};
+    // Every other prop is declared as an object with no fields of its own, so Puck's walk over a
+    // placement never reads a key inside it (such as the `content` of `vortex.slotOrders`) as a slot.
+    const opaque: Field = { type: "object", objectFields: {} };
+    const fields: Record<string, Field> = {
+      vortex: opaque,
+      ...Object.fromEntries(release.properties.map((property) => [property.key, opaque])),
+    };
     for (const slot of release.slots) {
       const allow = slot.allowedChildCategories.flatMap(
         (category) => keysByCategory.get(category) ?? [],

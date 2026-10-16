@@ -90,6 +90,8 @@ const renderProps = (
   props: Readonly<Record<string, unknown>>,
   release: PlatformBlockRelease | undefined,
   compiled: Readonly<Record<string, BlockPropertyValueContract>> | undefined,
+  /** The stored item is exactly the one `compiled` was compiled from, so its compiled settings stand alone. */
+  exact = false,
 ): Record<string, unknown> => {
   const vortex = (props.vortex ?? {}) as StoredVortex;
   const result: Record<string, unknown> = { ...props };
@@ -100,7 +102,8 @@ const renderProps = (
       delete result[property.key];
     }
     // A block added since the last compile draws with its release's defaults, as publication writes them.
-    Object.assign(result, compiled ?? catalogueDefaults(release), typedSourceSettings(authored, release.properties).settings);
+    Object.assign(result, compiled ?? catalogueDefaults(release),
+      exact && compiled !== undefined ? {} : typedSourceSettings(authored, release.properties).settings);
   }
   result.vortex = {
     block: { blockId: vortex.block?.block_id, releaseVersion: vortex.block?.release_version },
@@ -160,7 +163,8 @@ function CanvasBlock({
   const puck = (props.puck ?? {}) as { metadata?: Record<string, unknown> };
   // No wrapper around the block itself: its own layout wrapper stays the child of its slot.
   return note === undefined
-    ? render({ ...drawn, puck: { ...puck, metadata: { ...puck.metadata, runtimeInputs: { [id]: { data: records.records[id] } } } } })
+    ? render({ ...renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined, true),
+        puck: { ...puck, metadata: { ...puck.metadata, runtimeInputs: { [id]: { data: records.records[id] } } } } })
     : <>
         <p className="text-xs text-muted-foreground" data-vortex-canvas-records-note={id}>{note}</p>
         {render(drawn)}

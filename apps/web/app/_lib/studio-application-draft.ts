@@ -325,7 +325,6 @@ export const loadStudioApplicationDraft = async (
         let compileFailure: StudioCompileFailure | null = null;
         let borrowedQueries: StudioBorrowedQueries | null = null;
         if (options.compile !== false) try {
-          const s4c0 = performance.now(); // S4TIMING
           const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
           const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
             .compileApplicationDraft(context, { rootId: draft.rootId, expectedDraftRevision: draft.draftRevision });
@@ -338,7 +337,6 @@ export const loadStudioApplicationDraft = async (
               compiled.compilation.artifact.contentFingerprint !== fingerprintCanonicalValue(compiled.compilation.canonical.content) ||
               compiled.compilation.artifact.resolutionFingerprint !== compiled.compilation.resolutionFingerprint)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-          const s4c1 = performance.now(); // S4TIMING
           pageCompiledSlots = pageCompiledSlotsFor(draft.source, compiled.compilation.canonical.content);
           canvasFrames = studioCanvasFramesFor(draft.source.body.pages, compiled.compilation.canonical.content);
           const records: StudioApplicationSearchMetadata["records"][number][] = [];
@@ -427,7 +425,6 @@ export const loadStudioApplicationDraft = async (
           if (canonicalJson(await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt })) !== canonicalJson(context)) throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
           if (JSON.stringify({ records, modules: [...modules.values()] }).length > 999_000)
             throw new Error("STUDIO_SEARCH_METADATA_UNAVAILABLE");
-          console.log(`S4TIMING load compile=${Math.round(s4c1 - s4c0)} after=${Math.round(performance.now() - s4c1)}`); // S4TIMING
           borrowedQueries = { usesSignature: studioUsesSignature(draft.source), queries: borrowed };
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,
             sourceFingerprint: draft.sourceFingerprint, bindingsSignature: JSON.stringify(applicationModuleKeys(draft.source)),
