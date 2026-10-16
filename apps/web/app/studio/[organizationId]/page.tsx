@@ -69,12 +69,10 @@ function RootTable({
 
 export default async function StudioOrganizationPage({
   params,
-  searchParams,
 }: Readonly<{
   params: Promise<{ organizationId: string }>;
-  searchParams: Promise<{ notice?: string }>;
 }>) {
-  const [{ organizationId }, { notice }] = await Promise.all([params, searchParams]);
+  const { organizationId } = await params;
   const result = await loadStudioOrganizationHome(organizationId);
   if (result.kind !== "available")
     return (
@@ -105,12 +103,6 @@ export default async function StudioOrganizationPage({
           New application
         </Link>
       </div>
-      {notice === "module-without-application" && (
-        <p role="status" className="rounded-md border border-border bg-card p-3 text-sm text-card-foreground">
-          That module is not used by any application in this organization yet. A module is edited in the
-          Data tab of an application that uses it, so add the module to an application first.
-        </p>
-      )}
       {result.mayHaveMore && (
         <p role="status" className="text-sm text-muted-foreground">
           Showing the first 200 definitions. More may exist in this organization.
