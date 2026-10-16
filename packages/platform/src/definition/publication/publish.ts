@@ -54,6 +54,7 @@ import {
 } from "./read";
 import { createDefinitionPublicationService } from "../definition-publication";
 import type {
+  DefinitionDraftCandidate,
   DefinitionPublicationCandidate,
   DefinitionPublicationReader,
   DefinitionPublicationRepository,
@@ -169,6 +170,7 @@ const publicationStateSchema = z
     draft: databaseStoredDraftSchema,
     identities: z.array(sourceIdentityAssignmentSchema),
     historyLatestReleaseRevision: nullableRevisionSchema,
+    historyLatestReleaseVersion: semanticVersionSchema.nullable(),
   })
   .strict();
 const publicationHistoryPageSchema = z
@@ -373,7 +375,10 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     return rows.map(parseOwnedModuleRoot);
   }
 
-  async readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined> {
+  /** The draft, its identities and its current release's revision and version, checked as one. */
+  private async readPublicationState(
+    rootId: string,
+  ): Promise<z.infer<typeof publicationStateSchema> | undefined> {
     const rows = await this.transaction.query`
       select vortex_definition.read_publication_state(${rootId}) as publication_state
     `;
@@ -390,12 +395,26 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       state.root.kind !== state.draft.kind ||
       state.root.key !== state.draft.key ||
       state.root.currentReleaseRevision !== (state.draft.publishedRevision ?? null) ||
-      !currentIdentityLookupMatches(state.draft.source, state.identities)
+      !currentIdentityLookupMatches(state.draft.source, state.identities) ||
+      state.root.currentReleaseRevision !== state.historyLatestReleaseRevision ||
+      (state.historyLatestReleaseRevision === null) !== (state.historyLatestReleaseVersion === null)
     )
-      return invalidStorage("readCandidate found inconsistent stored evidence");
+      return invalidStorage("readPublicationState found inconsistent stored evidence");
+    return state;
+  }
 
-    if (state.root.currentReleaseRevision !== state.historyLatestReleaseRevision)
-      return invalidStorage("readCandidate found inconsistent stored evidence");
+  async readDraftCandidate(rootId: string): Promise<DefinitionDraftCandidate | undefined> {
+    const state = await this.readPublicationState(rootId);
+    return state === undefined ? undefined : {
+      draft: state.draft,
+      identities: state.identities,
+      currentReleaseVersion: state.historyLatestReleaseVersion,
+    };
+  }
+
+  async readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined> {
+    const state = await this.readPublicationState(rootId);
+    if (state === undefined) return undefined;
     const anchor = state.root.currentReleaseRevision;
     const latest =
       anchor === null
@@ -407,6 +426,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             state.draft.key,
             String(state.draft.rootId),
           );
+    if (latest !== undefined &&
+      latest.published.publication.releaseVersion !== state.historyLatestReleaseVersion)
+      return invalidStorage("readCandidate found inconsistent stored evidence");
     const historyEvidence = definitionPublicationHistoryEvidenceSchema.safeParse({
       kind: state.draft.kind,
       definitionKey: state.draft.key,

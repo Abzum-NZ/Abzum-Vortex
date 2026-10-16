@@ -41,6 +41,7 @@ import {
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
+import { uniqueValueRefusal, violatedUniqueFieldId } from "./unique-violation";
 export { calculateAndFinalize, operationClock };
 
 type PreparationRow = DatabaseRow & { readonly preparation: unknown };
@@ -508,6 +509,38 @@ const persist = async (
   return candidate as StoredResult;
 };
 
+/**
+ * A write that another record's unique value defeated becomes a correction located on that field,
+ * worded from the definition's labels. The database's unique index is the one rule, so the check is
+ * exact under concurrent writes; the failed statement rolled the whole save back, so nothing was
+ * written. A field the caller neither reads nor submitted is never named.
+ */
+const uniqueValueCorrection = (
+  error: unknown,
+  prepared: PreparedSave | undefined,
+  command: SaveRecordCommand,
+): SaveRecordResult | undefined => {
+  const fieldId = violatedUniqueFieldId(error);
+  if (fieldId === undefined || prepared === undefined) return undefined;
+  const correction = uniqueValueRefusal(prepared.recordType, fieldId);
+  if (correction === undefined) return undefined;
+  console.error(
+    `[record] save refused RECORD_SAVE_VALUE_NOT_UNIQUE: field=${correction.fieldId} ${describeFailure(error)}`,
+  );
+  const named =
+    prepared.readableFieldIds.has(correction.fieldId) ||
+    Object.keys(command.submittedValues).some(
+      (submitted) => submitted.toLowerCase() === correction.fieldId.toLowerCase(),
+    );
+  if (!named) return safeRefusal(prepared.correlationId, "operation_refused");
+  return saveRecordResultSchema.parse({
+    contractVersion: "2.0.0",
+    outcome: "correction_required",
+    correlationId: prepared.correlationId,
+    corrections: [correction],
+  });
+};
+
 const settingsFieldId = (
   recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>,
   key: string,
@@ -650,8 +683,9 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const attempted: {
           rules?: BeforeSaveRuleExecution;
+          prepared?: PreparedSave;
         } = {};
-        const result = await requests.runChange(
+        const result = await requests.runChangeWithRefusal(
           caller,
           selection,
           async (transaction, _scope, issuedAt) => {
@@ -724,6 +758,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               }
               attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
             }
+            attempted.prepared = prepared;
 
             const settings = await readOrganizationRuntimeSettings(transaction);
             const totalClock =
@@ -960,6 +995,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               backgroundDelivery: stored.backgroundDelivery,
             });
           },
+          (_code, error) => uniqueValueCorrection(error, attempted.prepared, command.data),
         );
 
         if (result.kind !== "available") return result;

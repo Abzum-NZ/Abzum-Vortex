@@ -204,11 +204,48 @@ for (const file of codeFiles) {
     true,
     file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
+  // Renderers compose the official shadcn components, whose per-style variants decide radius,
+  // padding and fonts. A literal radius, an arbitrary pixel length or an arbitrary font family in a
+  // class name bypasses the theme. The official component sources themselves are exempt.
+  const literalStyleScope =
+    file.startsWith(paths.uiRenderers) && !file.startsWith(paths.uiComponents);
+  const checkLiteralStyle = (text: string, offset: number): void => {
+    for (const match of text.matchAll(/\S+/g)) {
+      const token = match[0];
+      const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "");
+      if (
+        /^-?rounded(?:-[a-z0-9]+)*$/.test(utility) ||
+        /^-?[a-z][a-z0-9-]*-\[[^\]]*\d(?:\.\d+)?px[^\]]*\]$/.test(utility) ||
+        /^font-\[[^\]]+\]$/.test(utility)
+      )
+        add("ui-literal-style", file, lineAt(content, offset + (match.index ?? 0)), token);
+    }
+  };
+  // A class-name context: a `className` attribute, or an argument of cn/cva/clsx at any depth.
+  const isClassNameContext = (node: ts.Node): boolean => {
+    for (let current = node.parent; current !== undefined; current = current.parent) {
+      if (ts.isJsxAttribute(current)) return current.name.getText(source) === "className";
+      if (ts.isCallExpression(current) && /^(?:cn|cva|clsx)$/.test(current.expression.getText(source)))
+        return true;
+      if (ts.isStatement(current) || ts.isFunctionLike(current)) return false;
+    }
+    return false;
+  };
   const checkImport = (specifier: string, offset: number): void => {
     if (violatesLayering(file, specifier))
       add("layering", file, lineAt(content, offset), specifier);
   };
   const visit = (node: ts.Node): void => {
+    if (
+      literalStyleScope &&
+      (ts.isStringLiteral(node) ||
+        ts.isNoSubstitutionTemplateLiteral(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddle(node) ||
+        ts.isTemplateTail(node)) &&
+      isClassNameContext(node)
+    )
+      checkLiteralStyle(node.text, node.getStart(source) + 1);
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
       const specifier = node.moduleSpecifier;
       if (specifier && ts.isStringLiteral(specifier))

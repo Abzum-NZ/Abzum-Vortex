@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "../lib/utils";
 
 /**
- * The data table: a bordered, rounded surface that scrolls inside its own container, with a header
+ * The data table: a bordered surface that scrolls inside its own container, with a header
  * that stays visible while the rows scroll and a quiet hover state on every row.
  */
 function Table({
@@ -16,7 +16,7 @@ function Table({
     <div
       data-slot="table-container"
       className={cn(
-        "cn-table-container max-h-[70vh] max-w-full rounded-lg border bg-card text-card-foreground",
+        "cn-table-container max-h-[70vh] max-w-full border bg-card text-card-foreground",
         containerClassName,
       )}
     >

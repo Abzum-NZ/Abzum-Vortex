@@ -6,10 +6,6 @@
  * the rest) hold no palette here: the Vortex theme bridge (packages/ui/src/theme/theme-variables.ts) sets
  * every one of them from the resolved theme on the root element and on each themed container.
  */
-[data-vortex-style] {
-  --spacing: var(--vortex-component-spacing, 0.25rem);
-}
-
 @layer base {
   /*
    * Tailwind's preflight is not loaded (see globals.css), so the reset the component classes rely

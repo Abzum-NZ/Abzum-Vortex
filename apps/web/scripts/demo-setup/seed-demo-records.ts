@@ -24,6 +24,7 @@ import { loadCurrentSetupState, type SetupState } from "../development-setup/sta
 import {
   additionalContacts,
   cases,
+  demoColleagues,
   hrDepartments,
   hrEmployees,
   hrEntitlementYear,
@@ -33,6 +34,7 @@ import {
   tasks,
 } from "./demo-seed-data";
 import { loadLocalWebEnvironment } from "./local-environment";
+import { ensureLocalIdentity, inviteLocalMember } from "./local-members";
 
 const uuidNamespace = Buffer.from("6d1f0c523b7a4c4e8a510e1a7b0c9d00", "hex");
 
@@ -555,6 +557,17 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
         },
       }),
     );
+  for (const colleague of demoColleagues)
+    await inviteLocalMember(
+      {
+        organizationId: facts.system.organizationId,
+        stewardIdentityId: facts.stewardIdentityId,
+        identityAuthorityId: facts.identityAuthorityId,
+      },
+      await ensureLocalIdentity(colleague.email, colleague.displayName),
+      colleague.email,
+      colleague.displayName,
+    );
   const employeeIds: string[] = [];
   for (const [index, employee] of hrEmployees.entries())
     employeeIds.push(
@@ -671,7 +684,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
   }
 
   process.stdout.write(
-    `[demo seed] ${setupKey}: ${companies.length} CRM companies, ${contactSeeds.length} contacts, ${opportunities.length} opportunities, ${leads.length} leads; ${cases.length} Service Desk cases, a service calendar and SLA; ${tasks.length} tasks; ${hrEmployees.length} HR employees and ${hrLeaveRequests.length} leave requests.\n`,
+    `[demo seed] ${setupKey}: ${companies.length} CRM companies, ${contactSeeds.length} contacts, ${opportunities.length} opportunities, ${leads.length} leads; ${cases.length} Service Desk cases, a service calendar and SLA; ${tasks.length} tasks; ${demoColleagues.length} colleagues; ${hrEmployees.length} HR employees and ${hrLeaveRequests.length} leave requests.\n`,
   );
 };
 

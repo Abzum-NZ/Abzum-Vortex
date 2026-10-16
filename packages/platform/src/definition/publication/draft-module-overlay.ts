@@ -108,6 +108,7 @@ export const createDraftModuleOverlay = (
   };
   const reader: DefinitionPublicationReader = {
     readCandidate: (rootId) => storedReader.readCandidate(rootId),
+    readDraftCandidate: (rootId) => storedReader.readDraftCandidate(rootId),
     readOwnedModuleRoots: (applicationRootId) =>
       storedReader.readOwnedModuleRoots(applicationRootId),
     readModuleReleasePage: (organizationId, moduleKey, cursor) =>
@@ -189,6 +190,17 @@ export const createDraftModuleOverlay = (
     },
     async lockCandidate(rootId) {
       return candidates.get(key(rootId)) ?? reader.readCandidate(rootId);
+    },
+    async readDraftCandidate(rootId) {
+      const held = candidates.get(key(rootId));
+      return held === undefined
+        ? reader.readDraftCandidate(rootId)
+        : {
+            draft: held.draft,
+            identities: held.identities,
+            currentReleaseVersion:
+              held.historyEvidence.latestRelease?.publication.releaseVersion ?? null,
+          };
     },
     readOwnedModuleRoots: (applicationRootId) => reader.readOwnedModuleRoots(applicationRootId),
 

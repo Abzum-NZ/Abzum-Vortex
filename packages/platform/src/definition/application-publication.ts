@@ -13,8 +13,14 @@ import {
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import { applicationModuleSources } from "./application-module-lowering";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
-import { compileCandidate, validateCandidate } from "./definition-publication-compilation";
 import {
+  compileApplicationCandidate,
+  compileCandidate,
+  validateCandidate,
+} from "./definition-publication-compilation";
+import {
+  type DefinitionCandidateDraft,
+  type DefinitionDraftCandidate,
   type DefinitionPublicationCandidate,
   type DefinitionPublicationCatalogue,
   type DefinitionPublicationTransaction,
@@ -63,7 +69,7 @@ export const applicationCandidate = (
   return checked;
 };
 
-const inlineModuleSources = (candidate: DefinitionPublicationCandidate) =>
+const inlineModuleSources = (candidate: DefinitionCandidateDraft) =>
   candidate.draft.source.kind === "application"
     ? applicationModuleSources(candidate.draft.source)
     : refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
@@ -77,7 +83,7 @@ const inlineModuleSources = (candidate: DefinitionPublicationCandidate) =>
  */
 export const materializeInlineModules = async (
   transaction: DefinitionPublicationTransaction,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   unchanged: ReadonlySet<string> = new Set(),
 ): Promise<ReadonlyMap<string, OwnedModuleRoot>> => {
   const owned = new Map(
@@ -118,7 +124,7 @@ const releaseInlineModules = async (
   context: SessionContext,
   transaction: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
   roots: ReadonlyMap<string, OwnedModuleRoot>,
   version: string,
   releaseNote: string,
@@ -415,7 +421,7 @@ export const rehearseApplicationPreview = async (
  */
 const releasedUnchangedModules = async (
   transaction: DefinitionPublicationTransaction,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionCandidateDraft,
 ): Promise<ReadonlySet<string>> => {
   const owned = new Map(
     (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
@@ -486,13 +492,14 @@ export const compileApplicationWithInlineModules = async (
   context: SessionContext,
   transaction: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
-  candidate: DefinitionPublicationCandidate,
+  candidate: DefinitionDraftCandidate,
 ) => {
   const unchanged = await releasedUnchangedModules(transaction, candidate);
   const roots = await materializeInlineModules(transaction, candidate, unchanged);
-  const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
   const version =
-    latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
+    candidate.currentReleaseVersion === null
+      ? "1.0.0"
+      : assignNextDefinitionVersion(candidate.currentReleaseVersion, "major");
   await releaseInlineModules(
     context,
     transaction,
@@ -503,5 +510,14 @@ export const compileApplicationWithInlineModules = async (
     draftCompileReleaseNote,
     unchanged,
   );
-  return compileApplication(transaction, catalogue, candidate, version, false);
+  const dependencies = await resolveDependencies(transaction, catalogue, candidate);
+  await assertNoCycle(transaction, candidate, dependencies.modules);
+  const resolution = buildResolution(candidate, dependencies, version);
+  const { output } = compileApplicationCandidate(
+    candidate,
+    dependencies,
+    resolution,
+    catalogue.permissions,
+  );
+  return { output, resolution, dependencies };
 };

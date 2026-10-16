@@ -61,16 +61,24 @@ export function refuse(code: DefinitionPublicationFailureCode): never {
 }
 
 /** Read model needed to compile one current draft. Implementations must tenant-scope every method. */
-type DefinitionPublicationCandidateCommon = Readonly<{
+export type DefinitionCandidateDraft = Readonly<{
   draft: StoredDefinitionDraft;
   identities: SourceIdentityAssignments;
 }>;
 
 /**
+ * What compiling a draft for the builder needs: the draft, its identities and the version of its
+ * current release, which the compile names as its own version. Unlike publication it does not
+ * read or verify the published release itself.
+ */
+export type DefinitionDraftCandidate = DefinitionCandidateDraft &
+  Readonly<{ currentReleaseVersion: SemanticVersion | null }>;
+
+/**
  * Repositories return the latest release, which the database anchors as current, and for a
  * Module each saved condition's most recent published form (empty for an Application).
  */
-export type DefinitionPublicationCandidate = DefinitionPublicationCandidateCommon &
+export type DefinitionPublicationCandidate = DefinitionCandidateDraft &
   Readonly<{
     historyEvidence: DefinitionPublicationHistoryEvidence;
     savedConditionHistory: readonly SavedConditionLike[];
@@ -118,6 +126,8 @@ export interface DefinitionPublicationReader {
   readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
   /** The internal Module roots one Application owns. */
   readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]>;
+  /** The draft, its identities and its current release version, without the release itself. */
+  readDraftCandidate(rootId: string): Promise<DefinitionDraftCandidate | undefined>;
   readModuleReleasePage(
     organizationId: OrganizationId,
     key: string,

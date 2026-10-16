@@ -1,9 +1,11 @@
 import type {
   ProtectedQuerySummaryAggregateResult,
   InstalledRuntimeContext,
-  PermittedApplication,
   LinkFieldType,
 } from "@vortex/platform/server";
+
+/** Where a placement read is logged from: the application and the page, never a value. */
+export type PlacementLogPlace = Readonly<{ application: Readonly<{ key: string }>; pageKey: string }>;
 import type { DisplayCellValue } from "@vortex/ui";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
@@ -262,7 +264,7 @@ export const fieldChoiceLabelsOf = (
  * value, row, query input or secret, so the log names the failing step without leaking data.
  */
 export const logPlacementFailure = (
-  address: Readonly<{ application: PermittedApplication; pageKey: string }>,
+  address: PlacementLogPlace,
   placementId: string,
   reason:
     | "query_not_bound"

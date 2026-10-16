@@ -43,7 +43,7 @@ import {
   type PreparedDefinitionPublication,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
-import { validateCandidate } from "./definition-publication-compilation";
+import { validateDraftCandidate } from "./definition-publication-compilation";
 import {
   applicationCandidate,
   materializeInlineModules,
@@ -302,9 +302,11 @@ export const createDefinitionPublicationService = (
     const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
     await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
     return repository.read(context, async (reader) => {
-      const candidate = validateCandidate(
+      // The draft and its current release's version; the published release itself is read and
+      // verified by preparation and publication, which judge the draft against it.
+      const candidate = validateDraftCandidate(
         context,
-        await reader.readCandidate(parsedCommand.rootId),
+        await reader.readDraftCandidate(parsedCommand.rootId),
         parsedCommand,
       );
       // Another definition kind at this root is refused exactly like a missing draft.
@@ -329,6 +331,7 @@ export const createDefinitionPublicationService = (
         candidate.draft.draftRevision,
         candidate.draft.sourceFingerprint,
         candidate.draft.publishedRevision ?? null,
+        candidate.currentReleaseVersion,
         ownedRoots.map((root) => [
           root.key,
           root.rootId,

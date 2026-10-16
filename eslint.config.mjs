@@ -22,6 +22,19 @@ export default tseslint.config(
       },
     },
   },
+  // The off-theme detector runs in the browser on a rendered page.
+  {
+    files: ["tooling/theme/off-theme-detector.js"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        document: "readonly",
+        getComputedStyle: "readonly",
+        SVGElement: "readonly",
+        window: "readonly",
+      },
+    },
+  },
   {
     files: ["**/*.ts", "**/*.tsx"],
     rules: {

@@ -2,6 +2,9 @@ export const paths = {
   schema: ["packages/platform/src/schema.ts"],
   platform: ["packages/platform/src/"],
   ui: ["packages/ui/src/"],
+  // The official shadcn component sources; every other packages/ui source is a renderer.
+  uiComponents: "packages/ui/src/components/",
+  uiRenderers: "packages/ui/src/",
   definitions: ["packages/definitions/src/"],
   web: ["apps/web/"],
   // Scripts and development setup name shipped applications on purpose; they are not engines.
@@ -93,6 +96,13 @@ export const guardRules = {
     reviewBy: "2027-01-15",
     description: "Source file names ending in -v2 or later",
   },
+  "ui-literal-style": {
+    tier: "blocking",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "Literal rounded-*, arbitrary px or arbitrary font-family classes in packages/ui renderers (outside the shadcn components)",
+  },
   "file-size": {
     tier: "warning",
     owner: "lead",
@@ -141,6 +151,7 @@ export const scannedRuleIds = new Set([
   "versioned-export",
   "versioned-file",
   "file-size",
+  "ui-literal-style",
   "definition-validation",
   "derived-id-parity",
 ]);
