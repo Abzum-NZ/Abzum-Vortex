@@ -147,15 +147,15 @@ function NumberControl({ id, property, value, onChange, disabled }: ControlProps
     }} />;
 }
 
-/** A closed choice among labelled options, with the unset state named by what it means. */
-function OptionControl({ id, value, options, unset, disabled, onChange }: Readonly<{
+/** A closed choice among labelled options, with the unset state named by what it means (none when a value is always chosen). */
+export function StudioOptionControl({ id, value, options, unset, disabled, onChange }: Readonly<{
   id: string; value: string; options: readonly Readonly<{ value: string; label: string }>[];
-  unset: string; disabled: boolean; onChange: (value: string) => void;
+  unset?: string | undefined; disabled: boolean; onChange: (value: string) => void;
 }>): ReactElement {
   const known = value === "" || options.some((option) => option.value === value);
   return <NativeSelect id={id} className="w-full" disabled={disabled} value={value}
     aria-invalid={!known} onChange={(event) => onChange(event.target.value)}>
-    <NativeSelectOption value="">{unset}</NativeSelectOption>
+    {unset === undefined ? null : <NativeSelectOption value="">{unset}</NativeSelectOption>}
     {known ? null : <NativeSelectOption value={value}>{`${value} (not offered here)`}</NativeSelectOption>}
     {options.map((option) => <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>)}
   </NativeSelect>;
@@ -193,28 +193,28 @@ function SettingControl(props: ControlProps): ReactElement {
     }
     case "choice": {
       const defaultKey = property.defaultValue?.kind === "choice" ? property.defaultValue.value : undefined;
-      return <OptionControl id={id} disabled={disabled} value={value?.kind === "choice" ? value.value : ""}
+      return <StudioOptionControl id={id} disabled={disabled} value={value?.kind === "choice" ? value.value : ""}
         unset={unsetLabel(property, property.options.find((option) => option.key === defaultKey)?.label)}
         options={property.options.map((option) => ({ value: option.key, label: option.label }))}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "choice", value: next })} />;
     }
     case "field_reference":
-      return <OptionControl id={id} disabled={disabled} value={value?.kind === "field_reference" ? value.field : ""}
+      return <StudioOptionControl id={id} disabled={disabled} value={value?.kind === "field_reference" ? value.field : ""}
         unset={choices.fields.length === 0 ? "Choose the data first" : unsetLabel(property, undefined)}
         options={choices.fields.map((field) => ({ value: field.reference, label: field.label }))}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "field_reference", field: next })} />;
     case "query_reference":
-      return <OptionControl id={id} disabled={disabled} value={value?.kind === "query_reference" ? value.query : ""}
+      return <StudioOptionControl id={id} disabled={disabled} value={value?.kind === "query_reference" ? value.query : ""}
         unset={unsetLabel(property, undefined)}
         options={choices.queries.map((query) => ({ value: query.reference, label: queryChoiceLabel(query) }))}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "query_reference", query: next })} />;
     case "page_reference":
-      return <OptionControl id={id} disabled={disabled} value={value?.kind === "page_reference" ? value.page : ""}
+      return <StudioOptionControl id={id} disabled={disabled} value={value?.kind === "page_reference" ? value.page : ""}
         unset={unsetLabel(property, undefined)}
         options={choices.pages.map((page) => ({ value: page.key, label: page.label }))}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "page_reference", page: next })} />;
     case "record_type_reference":
-      return <OptionControl id={id} disabled={disabled} value={value?.kind === "record_type_reference" ? value.record_type : ""}
+      return <StudioOptionControl id={id} disabled={disabled} value={value?.kind === "record_type_reference" ? value.record_type : ""}
         unset={unsetLabel(property, undefined)}
         options={choices.recordTypes.map((recordType) => ({ value: recordType.key, label: recordType.label }))}
         onChange={(next) => onChange(next === "" ? undefined : { kind: "record_type_reference", record_type: next })} />;

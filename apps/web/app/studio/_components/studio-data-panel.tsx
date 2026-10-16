@@ -5,7 +5,8 @@ import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { StudioPanelShell, StudioSearchBox } from "./studio-frame";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import type { StudioDataModule, StudioDataRecordType, StudioDataSelection } from "../_lib/studio-data-model";
+import type { StudioDataSelection } from "@vortex/ui/studio";
+import type { StudioDataModule, StudioDataRecordType } from "../_lib/studio-data-model";
 
 const sameSelection = (left: StudioDataSelection | null, right: StudioDataSelection): boolean =>
   left !== null && JSON.stringify(left) === JSON.stringify(right);

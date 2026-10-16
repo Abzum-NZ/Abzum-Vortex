@@ -357,7 +357,7 @@ const describePlace = (source: ApplicationSourceDocument, path: Path): InlineRec
     }
     const item = typeof partIndex === "number" ? at(module, [part!, partIndex]) as Record<string, unknown> | undefined : undefined;
     const itemName = typeof item?.label === "string" ? item.label : typeof item?.name === "string" ? item.name
-      : typeof item?.key === "string" ? String(item.key).replaceAll("_", " ") : "";
+      : typeof item?.key === "string" ? String(item.key).replace(`${module.key}.`, "").replace(/[._]+/g, " ") : "";
     switch (part) {
       case "queries":
         return { label: `Query ${itemName}`, open: { kind: "query", moduleKey: module.key, queryKey: String(item?.key ?? "") } };

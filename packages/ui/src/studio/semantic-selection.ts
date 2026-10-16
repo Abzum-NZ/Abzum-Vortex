@@ -30,7 +30,23 @@ export type StudioSemanticSelection =
   | Readonly<{ kind: "shell"; shellAlias: string }>
   | Readonly<{ kind: "navigation"; navigationItemAlias: string }>
   | Readonly<{ kind: "flow"; flowAlias: string }>
-  | Readonly<{ kind: "placement"; placementAlias: string }>;
+  | Readonly<{ kind: "placement"; placementAlias: string }>
+  /** A Module the Application owns or uses, by its key; the Data tab shows it. */
+  | Readonly<{ kind: "module"; moduleKey: string }>
+  /** A record type of an owned or used Module, by the Module key and its permanent key. */
+  | Readonly<{ kind: "record_type"; moduleKey: string; recordKey: string }>
+  /** A field of a record type, by its permanent key. */
+  | Readonly<{ kind: "field"; moduleKey: string; recordKey: string; fieldKey: string }>
+  /** A query of an owned or used Module, by its key. */
+  | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>;
+
+/** The Data tab's kinds of selection: Modules and what they hold. */
+export type StudioDataSelection = Extract<StudioSemanticSelection, { kind: "module" | "record_type" | "field" | "query" }>;
+
+/** Whether a selection is one the Data tab shows. */
+export const isStudioDataSelection = (selection: StudioSemanticSelection | null): selection is StudioDataSelection =>
+  selection !== null && (selection.kind === "module" || selection.kind === "record_type" ||
+    selection.kind === "field" || selection.kind === "query");
 
 export type StudioSemanticPlacementOwner = Extract<
   StudioSemanticSelection,
@@ -97,6 +113,10 @@ type SelectionIndex = Readonly<{
   navigationItemAliases: ReadonlySet<string>;
   flowAliases: ReadonlySet<string>;
   placementOwners: ReadonlyMap<string, StudioSemanticPlacementOwner>;
+  /** Owned Module keys, and the keys of their record types, fields and queries. */
+  dataKeys: ReadonlySet<string>;
+  /** Used Module keys: their owner defines what they hold, so any of their items may be selected. */
+  usedModuleKeys: ReadonlySet<string>;
 }>;
 
 export type StudioSemanticSelectionListener = (
@@ -342,6 +362,14 @@ const normalizeSelection = (
       return Object.freeze({ kind: "flow", flowAlias: selection.flowAlias });
     case "placement":
       return Object.freeze({ kind: "placement", placementAlias: selection.placementAlias });
+    case "module":
+      return Object.freeze({ kind: "module", moduleKey: selection.moduleKey });
+    case "record_type":
+      return Object.freeze({ kind: "record_type", moduleKey: selection.moduleKey, recordKey: selection.recordKey });
+    case "field":
+      return Object.freeze({ kind: "field", moduleKey: selection.moduleKey, recordKey: selection.recordKey, fieldKey: selection.fieldKey });
+    case "query":
+      return Object.freeze({ kind: "query", moduleKey: selection.moduleKey, queryKey: selection.queryKey });
     default:
       return undefined;
   }
@@ -362,6 +390,23 @@ export const studioSemanticSelectionKey = (selection: StudioSemanticSelection): 
       return `flow:${selection.flowAlias}`;
     case "placement":
       return `placement:${selection.placementAlias}`;
+    case "module":
+      return `module:${selection.moduleKey}`;
+    case "record_type":
+      return `record_type:${selection.moduleKey}:${selection.recordKey}`;
+    case "field":
+      return `field:${selection.moduleKey}:${selection.recordKey}.${selection.fieldKey}`;
+    case "query":
+      return `query:${selection.moduleKey}:${selection.queryKey}`;
+  }
+};
+
+/** The item that holds a Data selection: a field's record type, a record type's or query's Module. */
+const dataParent = (selection: StudioSemanticSelection): StudioSemanticSelection | undefined => {
+  switch (selection.kind) {
+    case "field": return { kind: "record_type", moduleKey: selection.moduleKey, recordKey: selection.recordKey };
+    case "record_type": case "query": return { kind: "module", moduleKey: selection.moduleKey };
+    default: return undefined;
   }
 };
 
@@ -385,6 +430,11 @@ const containsSelection = (
       return index.flowAliases.has(selection.flowAlias);
     case "placement":
       return index.placementOwners.has(selection.placementAlias);
+    case "module":
+    case "record_type":
+    case "field":
+    case "query":
+      return index.usedModuleKeys.has(selection.moduleKey) || index.dataKeys.has(studioSemanticSelectionKey(selection));
   }
 };
 
@@ -416,7 +466,21 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
     }
   });
 
+  const dataKeys = new Set<string>();
+  for (const module of draft.source.body.modules) {
+    const moduleKey = module.key;
+    dataKeys.add(studioSemanticSelectionKey({ kind: "module", moduleKey }));
+    for (const record of module.record_types) {
+      dataKeys.add(studioSemanticSelectionKey({ kind: "record_type", moduleKey, recordKey: record.key }));
+      for (const field of record.fields)
+        dataKeys.add(studioSemanticSelectionKey({ kind: "field", moduleKey, recordKey: record.key, fieldKey: field.key }));
+    }
+    for (const query of module.queries) dataKeys.add(studioSemanticSelectionKey({ kind: "query", moduleKey, queryKey: query.key }));
+  }
+
   return {
+    dataKeys,
+    usedModuleKeys: new Set(draft.source.body.uses.map((use) => use.module)),
     applicationRootId: draft.rootId,
     pageAliases,
     shellAliases,
@@ -468,7 +532,10 @@ export const createStudioSemanticSelectionStore = (
               ? ownerSelection
               : applicationSelection(index.applicationRootId);
         } else {
-          next = applicationSelection(index.applicationRootId);
+          // A Data item that left the draft selects what held it, when that is still there.
+          let parent = dataParent(selection);
+          while (parent !== undefined && !containsSelection(index, parent)) parent = dataParent(parent);
+          next = parent ?? applicationSelection(index.applicationRootId);
         }
       }
 

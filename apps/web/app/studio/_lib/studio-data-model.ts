@@ -22,13 +22,6 @@ export type StudioDataModule = Readonly<{
   queries: readonly StudioDataQuery[];
 }>;
 
-/** What the Data tab has selected: a module, a record type, one of its fields, or a query. */
-export type StudioDataSelection =
-  | Readonly<{ kind: "module"; moduleKey: string }>
-  | Readonly<{ kind: "record_type"; moduleKey: string; recordKey: string }>
-  | Readonly<{ kind: "field"; moduleKey: string; recordKey: string; fieldKey: string }>
-  | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>;
-
 const sentence = (key: string): string => {
   const words = key.replaceAll("_", " ");
   return words.length === 0 ? key : words[0]!.toUpperCase() + words.slice(1);

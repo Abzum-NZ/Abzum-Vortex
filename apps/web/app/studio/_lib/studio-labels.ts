@@ -16,6 +16,10 @@ export const studioKindLabel = (kind: StudioSemanticSelection["kind"] | "section
     case "section": return "Group";
     case "guided_step": return "Step";
     case "slot": return "Area";
+    case "module": return "Module";
+    case "record_type": return "Record type";
+    case "field": return "Field";
+    case "query": return "Query";
   }
 };
 
