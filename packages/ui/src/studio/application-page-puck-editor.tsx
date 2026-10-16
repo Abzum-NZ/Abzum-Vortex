@@ -51,6 +51,7 @@ import {
   storedZoneAliases,
   withCopiedFlowBindings,
   withoutFlowBindingsOf,
+  syncStoredBlockDependencies,
 } from "./stored-composition";
 import { StudioCanvasCompiledSettings, studioCanvasConfig } from "./studio-canvas-render";
 import { puckDataForBreakpoint, StudioCanvasBridge, type StudioCanvasFrame } from "./studio-canvas-bridge";
@@ -146,31 +147,6 @@ export type ApplicationPagePuckEditorProps = Readonly<{
 }>;
 
 /** Edits one content slot of a page; a page with several slots or guided steps lets the person pick. */
-/** The dependency list must name exactly the releases the placements use; a Puck edit can add or drop one. */
-type PlatformBlockDependency = ApplicationSourceDocument["body"]["platform_block_dependencies"][number];
-const syncPlatformBlockDependencies = (source: ApplicationSourceDocument): void => {
-  const used = new Map<string, { block_id: string; release_version: string }>();
-  const collect = (value: unknown): void => {
-    if (Array.isArray(value)) return value.forEach(collect);
-    if (typeof value !== "object" || value === null) return;
-    const record = value as Record<string, unknown>;
-    const block = record.block as Record<string, unknown> | undefined;
-    if (typeof block?.block_id === "string" && typeof block.release_version === "string")
-      used.set(`${block.block_id}@${block.release_version}`,
-        { block_id: block.block_id, release_version: block.release_version });
-    Object.values(record).forEach(collect);
-  };
-  collect(source.body.pages);
-  collect(source.body.shells);
-  const kept = source.body.platform_block_dependencies.filter((dependency) =>
-    used.has(`${dependency.block_id}@${dependency.release_version}`));
-  for (const [identity, release] of used)
-    if (!kept.some((dependency) => `${dependency.block_id}@${dependency.release_version}` === identity))
-      kept.push({ kind: "platform_block", ...release } as PlatformBlockDependency);
-  kept.sort((left, right) => left.block_id < right.block_id ? -1 : left.block_id > right.block_id ? 1
-    : left.release_version < right.release_version ? -1 : left.release_version > right.release_version ? 1 : 0);
-  source.body.platform_block_dependencies = kept;
-};
 
 const isItemList = (value: unknown): value is SourceItem[] =>
   Array.isArray(value) && value.every((entry) =>
@@ -440,7 +416,7 @@ function ApplicationPageSlotPuckEditor({
       const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
       next.body.flow_bindings = withoutFlowBindingsOf(
         withCopiedFlowBindings(next.body.flow_bindings, copies), removed);
-      syncPlatformBlockDependencies(next);
+      syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;
       setMessage("");

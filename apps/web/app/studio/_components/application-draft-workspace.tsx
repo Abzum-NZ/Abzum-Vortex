@@ -80,6 +80,8 @@ import {
 } from "../_lib/application-source-import";
 import { conflictMessage, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
 import { NewApplicationWorkspace } from "./new-application-workspace";
+import { StudioStructureEditor } from "./studio-structure-editor";
+import { applyStudioStructureCommand, type StudioStructureCommand, type StudioStructureResult } from "../_lib/application-structure";
 
 // The canvas pulls in @xyflow/react; load it only when a flow is open.
 const ApplicationFlowCanvas = dynamic(
@@ -1060,9 +1062,25 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item";
   const chooseNode = (node: StudioSemanticOutlineNode) => { if (node.selection !== null) void chooseSelection(node.selection); };
   const outlinePanelProps = { outline, selectedKey: selectionKey, choose: chooseNode, disabled: busy.isRendered("publication") };
+  // The Structure tab's one edit path: a checked command on the current draft, taken by the draft history.
+  const commandStructure = (command: StudioStructureCommand): StudioStructureResult => {
+    if (!active.current || busy.any() || history.getState().isSaving)
+      return { kind: "refused", message: "Apply or discard the change that is waiting, or let the save finish, then try again." };
+    const result = applyStudioStructureCommand({ source: history.getState().source, catalogue: platformBlockCatalogue, describePlacement }, command);
+    if (result.kind !== "applied") return result;
+    if (!history.edit(result.source))
+      return { kind: "refused", message: "The draft history did not accept this change, so nothing was changed." };
+    changeSelection(result.select ?? { kind: "application", applicationRootId: draft.rootId });
+    setMessage(result.message);
+    return result;
+  };
+  const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
 
   const panels = <>
-    <StudioStructurePanel {...outlinePanelProps} hidden={tab !== "structure"} />
+    <StudioStructurePanel {...outlinePanelProps} hidden={tab !== "structure"}
+      homePageKey={homePage === undefined ? undefined : studioSemanticSelectionKey({ kind: "page", pageAlias: homePage.id })}
+      editor={<StudioStructureEditor source={source} selected={selected} onCommand={commandStructure}
+        disabled={busy.anyRendered() || state.isSaving || workspaceLifetime === 0} />} />
     <StudioBlockOutlinePanel {...outlinePanelProps} hidden={tab !== "outline"} ownerKey={outlineOwnerKey} />
     <StudioPanelShell title="Blocks" description="Blocks to add to the page on the canvas." hidden={tab !== "blocks"}>
       {/* The canvas's editor draws the palette here, so its blocks drag with the canvas's own drag and drop. */}
