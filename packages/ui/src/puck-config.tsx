@@ -31,6 +31,7 @@ import {
 } from "react";
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
+  compiledPropsSettings,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   type BreakpointOrder,
@@ -535,19 +536,6 @@ const renderPropertyEditor = (
   }
 };
 
-/** The declared settings among a placement's props: each declared property's own prop. */
-const placementSettingsOf = (
-  release: PlatformBlockRelease,
-  props: Readonly<Record<string, unknown>>,
-): PlacementSettings => {
-  const settings: Record<string, BlockPropertyValueContract> = {};
-  for (const property of release.properties) {
-    const value = ownEntry(props, property.key);
-    if (value !== undefined) settings[property.key] = value as BlockPropertyValueContract;
-  }
-  return settings;
-};
-
 /** The names of the slot fields a placement of this release has, given its settings. */
 const declaredSlotKeys = (
   release: PlatformBlockRelease,
@@ -606,9 +594,9 @@ function PlacementBlock(props: {
     );
   const release = registration.metadata;
   const Implementation = implementationFor(release);
-  // Each declared setting is its own prop; Puck writes `undefined` for an untouched field, and a
-  // declared setting is either present or absent.
-  const settings = placementSettingsOf(release, componentProps);
+  // Each setting is its own kind-tagged prop, including those the compiler derives beyond the
+  // release declarations; Puck writes `undefined` for an untouched field, which is absent.
+  const settings = compiledPropsSettings(componentProps);
   validateAccessibleName(settings, release.capabilities, location);
 
   // A placement whose use is unavailable stays viewable but never receives an invocable callback,
@@ -1152,7 +1140,7 @@ export function createVortexPuckConfig(
       resolveFields: (data: { props: Record<string, unknown> }) =>
         buildFields(
           release,
-          hasRepeatableSlot ? placementSettingsOf(release, data.props) : defaults,
+          hasRepeatableSlot ? compiledPropsSettings(data.props) : defaults,
           (data.props.vortex as { responsive?: unknown } | undefined)?.responsive,
         ),
       render: (componentProps) => (

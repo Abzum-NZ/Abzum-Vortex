@@ -205,9 +205,11 @@ export const compiledItemSlots = (item: CompiledItem): [string, CompiledItem[]][
   );
 
 /**
- * The settings of an item's props, keyed by property: every prop but `id`, `vortex` and the child
- * slots. A setting is a kind-tagged object and a slot an array, so no release is needed to tell
- * them apart. A prop whose value is `undefined` is absent.
+ * The settings of an item's props, keyed by property: every kind-tagged object prop but `vortex`.
+ * A setting is a kind-tagged object and a slot an array, so no release is needed to tell them
+ * apart, and the settings the compiler derives beyond the block's own declarations (a field
+ * input's control, name and requirement) are read like any other. Props a renderer receives
+ * besides the item's own (Puck's context, host wrappers) carry no kind and are not settings.
  */
 export const compiledPropsSettings = (
   props: Readonly<Record<string, unknown>>,
@@ -219,7 +221,8 @@ export const compiledPropsSettings = (
         value !== undefined &&
         value !== null &&
         typeof value === "object" &&
-        !Array.isArray(value),
+        !Array.isArray(value) &&
+        typeof (value as { kind?: unknown }).kind === "string",
     ),
   ) as Record<string, BlockPropertyValueContract>;
 
