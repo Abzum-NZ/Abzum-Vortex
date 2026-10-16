@@ -167,7 +167,12 @@ type CompiledView = Readonly<{
 }>;
 
 /** Words a person can act on for a publication the platform declined. */
-const publicationProblemText = (kind: string, reason: string | undefined): string => {
+const publicationProblemText = (kind: string, reason: string | undefined, blockAlias?: string): string => {
+  // A compilation refusal names its rule and, when it is about one, the block, so it can be fixed.
+  if (reason?.startsWith("compilation_") === true) {
+    const rule = reason.slice("compilation_".length).replace(/^vortex.definition./u, "").replaceAll("_", " ");
+    return `This draft does not compile, so it cannot be published: ${rule}${blockAlias === undefined ? "" : ` (block ${blockAlias})`}. Change it, save, and try again.`;
+  }
   switch (kind) {
     case "no_change": return "Nothing has changed since the last published version, so there is nothing new to publish.";
     case "dependency_unavailable":
@@ -549,7 +554,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           setPublicationProblem("The summary did not match the saved draft, so nothing can be published from it. Close this window and try again.");
           return { kind: "unverified" };
         }
-        setPublicationProblem(publicationProblemText(result.kind, result.reason));
+        setPublicationProblem(publicationProblemText(result.kind, result.reason, "blockAlias" in result ? result.blockAlias : undefined));
         return { kind: "declined", result: result.kind, reason: result.reason };
       }
       if (prepared === null) return { kind: "not_started", reason: "not_prepared" };
@@ -574,7 +579,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         setPublicationProblem(publicationProblemText("temporarily_unavailable", undefined));
         return { kind: "unverified" };
       }
-      setPublicationProblem(publicationProblemText(result.kind, result.reason));
+      setPublicationProblem(publicationProblemText(result.kind, result.reason, "blockAlias" in result ? result.blockAlias : undefined));
       // A transient failure of the append may still have completed.
       return result.kind === "temporarily_unavailable" ? { kind: "unverified" }
         : { kind: "declined", result: result.kind, reason: result.reason };
