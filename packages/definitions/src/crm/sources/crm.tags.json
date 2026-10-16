@@ -221,7 +221,7 @@
             "label": "Assigned by",
             "required": false,
             "unique": false,
-            "filterable": false,
+            "filterable": true,
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
@@ -437,13 +437,15 @@
             "tag",
             "record",
             "assigned_at",
+            "assigned_by_person",
             "assigned_by"
           ],
           "changeable_fields": [
             "tag",
             "record",
             "assigned_at",
-            "assigned_by"
+            "assigned_by",
+            "assigned_by_person"
           ]
         }
       },
@@ -467,7 +469,7 @@
             "tag",
             "record",
             "assigned_at",
-            "assigned_by"
+            "assigned_by_person"
           ],
           "changeable_fields": []
         }
@@ -532,7 +534,7 @@
             "tag",
             "record",
             "assigned_at",
-            "assigned_by"
+            "assigned_by_person"
           ],
           "changeable_fields": []
         }

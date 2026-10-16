@@ -178,7 +178,7 @@
             "label": "Owner",
             "required": false,
             "unique": false,
-            "filterable": false,
+            "filterable": true,
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
@@ -520,7 +520,7 @@
             "label": "Created by",
             "required": false,
             "unique": false,
-            "filterable": false,
+            "filterable": true,
             "sortable": false,
             "personal_data": "personal",
             "public_display": "refused",
@@ -590,7 +590,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner",
+            "owner_person",
             "status",
             "priority",
             "service_level",
@@ -606,7 +606,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner",
+            "owner_person",
             "status",
             "priority",
             "service_level",
@@ -640,7 +640,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner",
+            "owner_person",
             "status",
             "priority",
             "service_level",
@@ -676,7 +676,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner",
+            "owner_person",
             "status",
             "priority",
             "service_level",
@@ -692,7 +692,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner",
+            "owner_person",
             "status",
             "priority",
             "service_level",
@@ -766,7 +766,7 @@
             "description",
             "customer_company",
             "requester",
-            "owner",
+            "owner_person",
             "status",
             "priority",
             "service_level",
@@ -800,14 +800,16 @@
             "case",
             "body",
             "customer_visible",
-            "created_by",
-            "created_at"
+            "created_by_person",
+            "created_at",
+            "created_by"
           ],
           "changeable_fields": [
             "case",
             "body",
             "customer_visible",
             "created_by",
+            "created_by_person",
             "created_at"
           ]
         }
@@ -832,7 +834,7 @@
             "case",
             "body",
             "customer_visible",
-            "created_by",
+            "created_by_person",
             "created_at"
           ],
           "changeable_fields": []
@@ -858,14 +860,14 @@
             "case",
             "body",
             "customer_visible",
-            "created_by",
+            "created_by_person",
             "created_at"
           ],
           "changeable_fields": [
             "case",
             "body",
             "customer_visible",
-            "created_by",
+            "created_by_person",
             "created_at"
           ]
         }
@@ -930,7 +932,7 @@
             "case",
             "body",
             "customer_visible",
-            "created_by",
+            "created_by_person",
             "created_at"
           ],
           "changeable_fields": []
@@ -954,6 +956,7 @@
         },
         "field_policy": {
           "readable_fields": [
+            "owner_person",
             "owner"
           ],
           "changeable_fields": [
@@ -2138,7 +2141,7 @@
         ],
         "select": [
           "created_at",
-          "created_by",
+          "created_by_person",
           "body",
           "customer_visible",
           "case"
@@ -2169,7 +2172,7 @@
           "subject",
           "customer_company",
           "requester",
-          "owner",
+          "owner_person",
           "status",
           "priority",
           "resolution_due_at",

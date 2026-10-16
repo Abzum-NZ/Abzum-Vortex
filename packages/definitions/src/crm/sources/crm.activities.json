@@ -179,7 +179,7 @@
             "id": "fld_activity_owner",
             "key": "owner",
             "label": "Owner",
-            "required": true,
+            "required": false,
             "unique": false,
             "filterable": true,
             "sortable": false,
@@ -196,9 +196,9 @@
             "id": "fld_activity_owner_person",
             "key": "owner_person",
             "label": "Owner",
-            "required": false,
+            "required": true,
             "unique": false,
-            "filterable": false,
+            "filterable": true,
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
@@ -281,7 +281,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner",
+            "owner_person",
             "notes"
           ],
           "changeable_fields": [
@@ -291,7 +291,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner",
+            "owner_person",
             "notes"
           ]
         }
@@ -319,7 +319,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner",
+            "owner_person",
             "notes"
           ],
           "changeable_fields": []
@@ -348,7 +348,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner",
+            "owner_person",
             "notes"
           ],
           "changeable_fields": [
@@ -358,7 +358,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner",
+            "owner_person",
             "notes"
           ]
         }
@@ -426,7 +426,7 @@
             "completed",
             "duration_minutes",
             "regarding",
-            "owner",
+            "owner_person",
             "notes"
           ],
           "changeable_fields": []
@@ -533,7 +533,7 @@
           "due_at",
           "completed",
           "regarding",
-          "owner"
+          "owner_person"
         ],
         "filter": {
           "field": "completed",

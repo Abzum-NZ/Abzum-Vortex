@@ -164,7 +164,7 @@ const queryCommand = (
       query,
     },
     labelFieldId: settings.labelFieldId,
-    pageSize: 50,
+    pageSize: 40,
   });
   return parsed.success ? parsed.data : undefined;
 };

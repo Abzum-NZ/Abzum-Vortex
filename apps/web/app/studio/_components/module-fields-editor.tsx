@@ -165,7 +165,9 @@ export function ModuleFieldsEditor({ draft: baseline, onDraftChange: setBaseline
           <NativeSelect id="module-field-selection" className="w-full" value={selected} disabled={busy || locked} onChange={(event) => choose(event.target.value)}>
             {baseline.source.body.record_types.map((item) => <optgroup key={item.id} label={item.name}>
               <option value={selectionValue(item.id, "")}>Add a new field to {item.name}</option>
-              {item.fields.map((field) => <option key={field.id} value={selectionValue(item.id, field.id)}>{field.label} ({typeLabel(field.type)})</option>)}
+              {item.fields.filter((field) => !item.fields.some((candidate) =>
+                candidate.type === "link" && candidate.settings.legacy_person_field === field.key,
+              )).map((field) => <option key={field.id} value={selectionValue(item.id, field.id)}>{field.label} ({typeLabel(field.type)})</option>)}
             </optgroup>)}
           </NativeSelect>
         </div>

@@ -188,7 +188,7 @@
             "label": "Relationship owner",
             "required": false,
             "unique": false,
-            "filterable": false,
+            "filterable": true,
             "sortable": false,
             "personal_data": "none",
             "public_display": "refused",
@@ -508,7 +508,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner",
+            "relationship_owner_person",
             "email_consent"
           ],
           "changeable_fields": [
@@ -517,7 +517,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner",
+            "relationship_owner_person",
             "email_consent"
           ]
         }
@@ -546,7 +546,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner",
+            "relationship_owner_person",
             "email_consent"
           ],
           "changeable_fields": []
@@ -576,7 +576,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner",
+            "relationship_owner_person",
             "email_consent"
           ],
           "changeable_fields": [
@@ -585,7 +585,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner",
+            "relationship_owner_person",
             "email_consent"
           ]
         }
@@ -654,7 +654,7 @@
             "email",
             "phone",
             "company",
-            "relationship_owner",
+            "relationship_owner_person",
             "email_consent"
           ],
           "changeable_fields": []
@@ -934,7 +934,8 @@
                 "first_name": "{{ inputs.first_name }}",
                 "last_name": "{{ inputs.last_name }}",
                 "email": "{{ trigger.record.email }}",
-                "company": "{{ inputs.company }}"
+                "company": "{{ inputs.company }}",
+                "relationship_owner_person": "{{ execution.actor }}"
               }
             }
           },
@@ -1117,7 +1118,7 @@
           "full_name",
           "email",
           "company",
-          "relationship_owner"
+          "relationship_owner_person"
         ],
         "filter": null,
         "group_by": [],
