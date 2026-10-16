@@ -1,4 +1,5 @@
 import {
+  flowTaskRegistry,
   readSourceItem,
   reservedItemPropKeys,
   sourcePageRootSlots,
@@ -31,7 +32,50 @@ export type StudioSemanticSelection =
   | Readonly<{ kind: "navigation"; navigationItemAlias: string }>
   /** A flow of the application (`moduleKey` null) or of one of the Modules it owns. */
   | Readonly<{ kind: "flow"; flowAlias: string; moduleKey: string | null }>
+  /** One step of such a flow, by its task id (unique within the flow). */
+  | Readonly<{ kind: "flow_step"; flowAlias: string; moduleKey: string | null; taskId: string }>
   | Readonly<{ kind: "placement"; placementAlias: string }>;
+
+type SourceFlowTaskOf = ApplicationSourceDocument["body"]["flows"][number]["tasks"][number];
+
+/** Every authored task of a flow in display order, with its path inside the flow. */
+export const studioFlowTaskEntries = (
+  flow: Readonly<{ tasks: readonly SourceFlowTaskOf[]; errors?: readonly SourceFlowTaskOf[] | undefined;
+    finally?: readonly SourceFlowTaskOf[] | undefined }>,
+): Readonly<{ task: SourceFlowTaskOf; path: readonly (string | number)[] }>[] => {
+  const entries: { task: SourceFlowTaskOf; path: readonly (string | number)[] }[] = [];
+  const walk = (tasks: readonly SourceFlowTaskOf[] | undefined, path: readonly (string | number)[]) => {
+    (tasks ?? []).forEach((task, index) => {
+      const taskPath = [...path, index];
+      entries.push({ task, path: taskPath });
+      if ("then" in task) { walk(task.then, [...taskPath, "then"]); walk(task.else, [...taskPath, "else"]); }
+      if ("cases" in task) {
+        task.cases.forEach((branch, caseIndex) => walk(branch.tasks, [...taskPath, "cases", caseIndex, "tasks"]));
+        walk(task.default, [...taskPath, "default"]);
+      }
+      if ("tasks" in task) walk(task.tasks, [...taskPath, "tasks"]);
+      if ("branches" in task) task.branches.forEach((branch, branchIndex) => walk(branch, [...taskPath, "branches", branchIndex]));
+    });
+  };
+  walk(flow.tasks, ["tasks"]);
+  walk(flow.errors, ["errors"]);
+  walk(flow.finally, ["finally"]);
+  return entries;
+};
+
+/** The flow a flow or flow-step selection belongs to. */
+export const studioFlowOfSelection = (
+  selection: StudioSemanticSelection | null,
+): Extract<StudioSemanticSelection, { kind: "flow" }> | null =>
+  selection?.kind === "flow" ? selection
+    : selection?.kind === "flow_step"
+      ? Object.freeze({ kind: "flow", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey })
+      : null;
+
+const studioWords = (key: string): string => {
+  const words = key.trim().replace(/[-_.]+/g, " ").replace(/\s+/g, " ");
+  return words === "" ? key : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+};
 
 export type StudioSemanticPlacementOwner = Extract<
   StudioSemanticSelection,
@@ -59,6 +103,11 @@ export type StudioSemanticSelectionTraversalNode =
       kind: "flow";
       label: string;
       selection: Extract<StudioSemanticSelection, { kind: "flow" }>;
+    }>
+  | Readonly<{
+      kind: "flow_step";
+      label: string;
+      selection: Extract<StudioSemanticSelection, { kind: "flow_step" }>;
     }>
   | Readonly<{
       kind: "shell";
@@ -325,7 +374,14 @@ export const traverseStudioSemanticSelectionDraft = (
             const selection = Object.freeze({
               kind: "flow", flowAlias: flow.id, moduleKey: owner.moduleKey,
             } as const);
-            visit(Object.freeze({ kind: "flow", label: studioFlowLabel(flow), selection }));
+            visit(Object.freeze({ kind: "flow", label: studioFlowLabel(flow), selection }), () => {
+              for (const { task } of studioFlowTaskEntries(flow))
+                visit(Object.freeze({
+                  kind: "flow_step",
+                  label: Object.values(flowTaskRegistry).find((entry) => entry.type === task.type)?.title ?? studioWords(task.type),
+                  selection: Object.freeze({ kind: "flow_step", flowAlias: flow.id, moduleKey: owner.moduleKey, taskId: task.id } as const),
+                }));
+            });
           }
       });
     },
@@ -349,6 +405,10 @@ const normalizeSelection = (
       return typeof selection.moduleKey === "string" || selection.moduleKey === null
         ? Object.freeze({ kind: "flow", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey })
         : undefined;
+    case "flow_step":
+      return (typeof selection.moduleKey === "string" || selection.moduleKey === null) && typeof selection.taskId === "string"
+        ? Object.freeze({ kind: "flow_step", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey, taskId: selection.taskId })
+        : undefined;
     case "placement":
       return Object.freeze({ kind: "placement", placementAlias: selection.placementAlias });
     default:
@@ -369,6 +429,8 @@ export const studioSemanticSelectionKey = (selection: StudioSemanticSelection): 
       return `navigation:${selection.navigationItemAlias}`;
     case "flow":
       return `flow:${selection.moduleKey ?? ""}:${selection.flowAlias}`;
+    case "flow_step":
+      return `flow_step:${selection.moduleKey ?? ""}:${selection.flowAlias}:${selection.taskId}`;
     case "placement":
       return `placement:${selection.placementAlias}`;
   }
@@ -392,6 +454,8 @@ const containsSelection = (
       return index.navigationItemAliases.has(selection.navigationItemAlias);
     case "flow":
       return index.flowKeys.has(studioSemanticSelectionKey(selection));
+    case "flow_step":
+      return index.flowKeys.has(studioSemanticSelectionKey(selection));
     case "placement":
       return index.placementOwners.has(selection.placementAlias);
   }
@@ -411,6 +475,9 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
         navigationItemAliases.add(node.selection.navigationItemAlias);
         break;
       case "flow":
+        flowKeys.add(studioSemanticSelectionKey(node.selection));
+        break;
+      case "flow_step":
         flowKeys.add(studioSemanticSelectionKey(node.selection));
         break;
       case "shell":
@@ -476,6 +543,10 @@ export const createStudioSemanticSelectionStore = (
             ownerSelection !== undefined && containsSelection(index, ownerSelection)
               ? ownerSelection
               : applicationSelection(index.applicationRootId);
+        } else if (selection.kind === "flow_step") {
+          // A removed step leaves its flow selected.
+          const flow = studioFlowOfSelection(selection);
+          next = flow !== null && containsSelection(index, flow) ? flow : applicationSelection(index.applicationRootId);
         } else {
           next = applicationSelection(index.applicationRootId);
         }

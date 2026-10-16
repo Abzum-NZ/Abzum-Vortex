@@ -12,6 +12,7 @@ export const studioKindLabel = (kind: StudioSemanticSelection["kind"] | "section
     case "shell": return "Layout";
     case "navigation": return "Menu entry";
     case "flow": return "Flow";
+    case "flow_step": return "Flow step";
     case "placement": return "Item";
     case "section": return "Group";
     case "guided_step": return "Step";

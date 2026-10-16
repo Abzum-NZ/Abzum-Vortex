@@ -19,8 +19,8 @@ export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
 export const isStudioRailKey = (value: unknown): value is StudioRailKey =>
   studioRailTabs.some((tab) => tab.key === value);
 
-/** The tabs whose centre is the page canvas; Data and Releases draw their own editor there. */
-export const railShowsCanvas = (key: StudioRailKey): boolean => key !== "data" && key !== "releases";
+/** The tabs whose centre is the page canvas; Data, Flows and Releases draw their own editor there. */
+export const railShowsCanvas = (key: StudioRailKey): boolean => key !== "data" && key !== "flows" && key !== "releases";
 
 /** What the Releases tab can open in the centre. */
 export type StudioReleasesSection = "history" | "page-adoption" | "import";
