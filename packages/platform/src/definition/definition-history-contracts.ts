@@ -57,27 +57,18 @@ export const definitionReleaseMetadataCommandSchema = z.discriminatedUnion("kind
 ]);
 
 /**
- * The request restores only an immutable release selected by permanent root and revision.
+ * The request restores only an immutable Application release selected by permanent root and
+ * revision (a Module has no draft of its own).
  * Source, actor, timestamp, identity evidence and provenance are server-owned.
  */
-export const restoreDefinitionDraftCommandSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("module"),
-      rootId: moduleRootIdSchema,
-      targetReleaseRevision: revisionSchema,
-      expectedDraftRevision: revisionSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("application"),
-      rootId: applicationRootIdSchema,
-      targetReleaseRevision: revisionSchema,
-      expectedDraftRevision: revisionSchema,
-    })
-    .strict(),
-]);
+export const restoreDefinitionDraftCommandSchema = z
+  .object({
+    kind: z.literal("application"),
+    rootId: applicationRootIdSchema,
+    targetReleaseRevision: revisionSchema,
+    expectedDraftRevision: revisionSchema,
+  })
+  .strict();
 
 /** The only metadata exposed by history listing and exact-release inspection. */
 export const definitionReleaseMetadataSchema = z

@@ -41,7 +41,7 @@ begin
     on release.root_id = root.root_id
     and release.release_revision = root.current_release_revision
   where root.organization_id = (checked_context ->> 'organizationId')::uuid
-    and root.kind in ('application', 'module')
+    and root.kind = 'application'
   order by coalesce(
     nullif(pg_catalog.btrim(draft.draft_source -> 'body' ->> 'name'), ''),
     nullif(pg_catalog.btrim(release.authored_source -> 'body' ->> 'name'), ''),
@@ -57,6 +57,6 @@ grant execute on function vortex_definition.list_organization_builder_roots()
   to vortex_request;
 
 comment on function vortex_definition.list_organization_builder_roots() is
-  'Lists at most 200 application and module roots in the validated human request organization for a permitted builder.';
+  'Lists at most 200 Application roots in the validated human request organization for a permitted builder; Modules are internal to the Application that owns them.';
 
 alter function vortex_definition.list_organization_builder_roots() owner to vortex_owner;

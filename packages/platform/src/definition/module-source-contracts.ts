@@ -9,7 +9,6 @@ import {
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
 import { descriptionSchema, jsonValueSchema, labelSchema } from "../catalogue/common";
-import { versionRequirementSchema } from "./definitions";
 import {
   authoredSourceBase,
   refineActionTaskIds,
@@ -923,30 +922,14 @@ export const sourceApplicationModuleSchema = z
 export type SourceApplicationModule = z.infer<typeof sourceApplicationModuleSchema>;
 
 /**
- * The internal Module release unit derived from an Application's inline Module: the same body plus
- * its owning Application and the dependencies derived from its references. It is never authored.
+ * The internal Module release unit derived from an Application's inline Module: exactly the same
+ * body plus its owning Application. It is never authored, and holds no dependencies: the compiler
+ * derives those from its references every time (`moduleDependencies`).
  */
 const moduleSourceBodySchema = z
   .object({
     ...moduleSourceBodyFields,
     owner_application: sourceProvenanceUnchanged(namespacedKeySchema),
-    dependencies: sourceProvenanceUnchanged(
-      z
-        .array(
-          z
-            .object({
-              dependency_key: sourceProvenanceUnchanged(builderKeySchema),
-              module: sourceProvenanceTarget(namespacedKeySchema, [
-                "moduleRootId",
-                "moduleKey",
-                "resolvedVersion",
-              ]),
-              version: sourceProvenanceUnchanged(versionRequirementSchema, true),
-            })
-            .strict(),
-        )
-        .max(100),
-    ),
     // Optional rather than defaulted so an authored source that declares no contributions
     // keeps the exact fingerprint it had before contributions existed.
     contributions: sourceProvenanceUnchanged(
@@ -954,20 +937,7 @@ const moduleSourceBodySchema = z
     ),
   })
   .strict()
-  .superRefine((value, context) => {
-    refineModuleSourceBody(value, context);
-    // Contributions resolve their target by a local dependency key, so a Module that
-    // declares contributions needs unambiguous keys. Modules without contributions keep
-    // their existing acceptance unchanged.
-    if ((value.contributions ?? []).length === 0) return;
-    const keys = value.dependencies.map((dependency) => dependency.dependency_key);
-    if (new Set(keys).size !== keys.length)
-      context.addIssue({
-        code: "custom",
-        path: ["dependencies"],
-        message: "Module dependency keys must be unique when contributions are declared",
-      });
-  });
+  .superRefine(refineModuleSourceBody);
 
 export const moduleSourceDocumentSchema = z
   .object({

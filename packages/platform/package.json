@@ -17,7 +17,6 @@
     "re2js": "catalog:",
     "semver": "catalog:",
     "server-only": "0.0.1",
-    "shadcn": "4.21.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

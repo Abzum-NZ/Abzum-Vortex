@@ -9,6 +9,7 @@ import {
   normaliseModuleTypedValue,
   normaliseMoney,
 } from "./values";
+import { moduleDependencies } from "../module-dependencies";
 
 const permissionScopeRouteRank: Readonly<Record<string, number>> = {
   all_records: 0,
@@ -33,10 +34,9 @@ export function permissionScopeSourceOwners(source: JsonObject): string[] {
 }
 
 export function moduleFieldPermissionSourceOwners(source: JsonObject): string[] {
-  const body = asObject(source.body);
   return [
     String(source.key),
-    ...(body.dependencies as JsonObject[]).map((dependency) => String(dependency.module)),
+    ...moduleDependencies(source).map((dependency) => dependency.module),
   ];
 }
 

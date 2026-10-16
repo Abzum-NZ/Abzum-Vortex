@@ -42,7 +42,6 @@ export const privateInvalidationTransportLimits = Object.freeze({
 
 export type WebPrivateInvalidationSelectors = z.infer<typeof privateInvalidationSelectorsSchema>;
 export type WebPrivateInvalidationScope = Readonly<z.infer<typeof privateInvalidationScopeSchema>>;
-export type WebPrivateInvalidationControl = z.infer<typeof privateInvalidationControlSchema>;
 
 type WebPrivateInvalidationConnection =
   | Readonly<{ kind: "ready"; scope: WebPrivateInvalidationScope; reconnected: boolean }>

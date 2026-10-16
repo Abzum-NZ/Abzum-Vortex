@@ -230,9 +230,19 @@ begin
       message = 'Definition root does not belong to the context organization';
   end if;
 
+  -- A Module release is internal to its owning Application's publication: a person publishes
+  -- only an ordinary Application, and the Modules an ordinary Application owns.
   if human_publication and (root_row.kind not in ('application', 'module')
     or (root_row.kind = 'application'
-      and root_row.application_origin_kind is distinct from 'ordinary')) then
+      and root_row.application_origin_kind is distinct from 'ordinary')
+    or (root_row.kind = 'module' and not exists (
+      select 1
+      from vortex_definition.roots as owner_root
+      where owner_root.root_id = root_row.owner_application_root_id
+        and owner_root.organization_id = root_row.organization_id
+        and owner_root.kind = 'application'
+        and owner_root.application_origin_kind = 'ordinary'
+    ))) then
     raise exception using errcode = '42501',
       message = 'Definition publication authority is unavailable';
   end if;
@@ -755,6 +765,53 @@ begin
     where grouped.dependency_reference is null or grouped.duplicate_count <> 1
   ) then
     raise exception using errcode = '22023', message = 'Definition dependency manifest repeats or omits a subject';
+  end if;
+
+  -- An Application release is written last in its publication. It pins every inline Module it
+  -- owns at that Module's current release, appended earlier in the same publication when it
+  -- changed, and every Module it uses at the release its owning Application's current release
+  -- pins, so one Application's publication never moves another's.
+  if root_row.kind = 'application' and (
+    exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(dependency_manifest_value) as dependency(value)
+      join vortex_definition.roots as target_root
+        on target_root.root_id = (dependency.value ->> 'rootId')::uuid
+      where dependency.value ->> 'kind' = 'module'
+        and case
+          when target_root.owner_application_root_id = p_root_id then
+            target_root.current_release_revision
+              is distinct from (dependency.value ->> 'releaseRevision')::bigint
+          else not exists (
+            select 1
+            from vortex_definition.roots as owner_root
+            join vortex_definition.release_dependencies as pin
+              on pin.root_id = owner_root.root_id
+              and pin.release_revision = owner_root.current_release_revision
+            where owner_root.root_id = target_root.owner_application_root_id
+              and pin.dependency_kind = 'module'
+              and pin.target_root_id = target_root.root_id
+              and pin.target_release_revision = (dependency.value ->> 'releaseRevision')::bigint
+          )
+        end
+    )
+    or exists (
+      select 1
+      from vortex_definition.roots as owned_root
+      join pg_catalog.jsonb_array_elements(
+        coalesce(draft_row.draft_source #> '{body,modules}', '[]'::jsonb)
+      ) as inline_module(value) on inline_module.value ->> 'key' = owned_root.key
+      where owned_root.owner_application_root_id = p_root_id
+        and not exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(dependency_manifest_value) as dependency(value)
+          where dependency.value ->> 'kind' = 'module'
+            and (dependency.value ->> 'rootId')::uuid = owned_root.root_id
+        )
+    )
+  ) then
+    raise exception using errcode = '23514',
+      message = 'An Application release must pin its own Modules at their current release and used Modules at their owner''s current pin';
   end if;
 
   -- Field policy is an immutable part of a newly published permission. Validate

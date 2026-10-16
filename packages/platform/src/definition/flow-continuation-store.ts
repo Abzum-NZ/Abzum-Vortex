@@ -16,7 +16,7 @@ import { z } from "zod";
  * release, and consuming it is one atomic single-use step in the database.
  */
 
-export type FlowContinuationBinding = Readonly<{
+type FlowContinuationBinding = Readonly<{
   organizationId: string;
   identityId: string;
   flowId: string;
@@ -53,7 +53,7 @@ export type FlowEffectPrincipal =
   | Readonly<{ kind: "specified_account"; id: string }>
   | Readonly<{ kind: "system"; id: string }>;
 
-export type FlowEffectKey = Readonly<{
+type FlowEffectKey = Readonly<{
   runId: string;
   organizationId: string;
   principal: FlowEffectPrincipal;
@@ -63,7 +63,7 @@ export type FlowEffectKey = Readonly<{
   iteration: string;
 }>;
 
-export type FlowEffectClaim =
+type FlowEffectClaim =
   | Readonly<{ kind: "claimed" }>
   | Readonly<{ kind: "completed"; outcome: string; outputs: Readonly<Record<string, unknown>> }>
   | Readonly<{ kind: "in_progress" }>

@@ -28,8 +28,6 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
-    "@vortex/definitions": "workspace:*",
-    "@vortex/platform": "workspace:*",
     "@eslint/js": "9.39.5",
     "@types/node": "24.13.6",
     "eslint": "9.39.5",
@@ -39,7 +37,6 @@
     "supabase": "catalog:",
     "turbo": "2.11.2",
     "typescript": "5.9.3",
-    "tsx": "catalog:",
     "typescript-eslint": "8.70.0"
   }
 }

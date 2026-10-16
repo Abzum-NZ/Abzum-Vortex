@@ -225,7 +225,7 @@ const identityMatchesReleaseSet = (
   }
 };
 
-export type HumanInstalledPageBundleContextDependencies = Readonly<{
+type HumanInstalledPageBundleContextDependencies = Readonly<{
   transaction: RequestDatabaseTransaction;
   scope: HumanInstalledRuntimeContextDependencies["scope"];
 }>;

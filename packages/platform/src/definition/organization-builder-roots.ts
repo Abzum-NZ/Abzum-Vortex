@@ -5,7 +5,6 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   applicationRootIdSchema,
   databaseRevision,
-  moduleRootIdSchema,
   namespacedKeySchema,
   revisionSchema,
 } from "../schema";
@@ -13,18 +12,17 @@ import {
 const rowSchema = z
   .object({
     root_id: z.string(),
-    kind: z.enum(["application", "module"]),
+    kind: z.literal("application"),
     definition_key: namespacedKeySchema,
     display_name: z.string().nullable(),
     draft_revision: revisionSchema.nullable(),
     current_release_revision: revisionSchema.nullable(),
-    application_origin_kind: z.enum(["ordinary", "platform_system_application"]).nullable(),
+    application_origin_kind: z.enum(["ordinary", "platform_system_application"]),
   })
   .strict();
 
 export type OrganizationBuilderRoot = Readonly<{
   rootId: string;
-  kind: "application" | "module";
   key: string;
   name: string;
   draftRevision: number | null;
@@ -52,18 +50,9 @@ export const listOrganizationBuilderRoots = async (
           ? null
           : databaseRevision(row.current_release_revision),
     });
-    const rootId =
-      parsed.kind === "application"
-        ? applicationRootIdSchema.parse(parsed.root_id)
-        : moduleRootIdSchema.parse(parsed.root_id);
-    if (
-      (parsed.kind === "module" && parsed.application_origin_kind !== null) ||
-      (parsed.kind === "application" && parsed.application_origin_kind === null)
-    )
-      throw new Error("STUDIO_ROOT_LIST_STORAGE_INVALID");
+    const rootId = applicationRootIdSchema.parse(parsed.root_id);
     return {
       rootId,
-      kind: parsed.kind,
       key: parsed.definition_key,
       name: parsed.display_name ?? parsed.definition_key,
       draftRevision: parsed.draft_revision,

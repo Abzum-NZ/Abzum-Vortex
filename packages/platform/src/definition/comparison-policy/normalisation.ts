@@ -46,11 +46,22 @@ const normaliseRecordType = (recordType: RecordValue): RecordValue => ({
   customActionIds: sorted(recordType.customActionIds as unknown[]),
 });
 
+/**
+ * A Module release version moves with the Application that publishes it, so a pinned release
+ * version is not itself a change: the pinned Module's own content changes carry the impact.
+ */
+const withoutPinnedVersion = (entries: unknown[]): RecordValue[] =>
+  (entries as RecordValue[]).map((entry) => {
+    const { resolvedVersion, version, ...rest } = entry;
+    void resolvedVersion;
+    return asRecord(version).selection === "exact" ? rest : { ...rest, version };
+  });
+
 export const normaliseModuleContent = <T extends ModuleContent>(content: T): T => {
   const value = asRecord(content);
   return {
     ...value,
-    dependencies: sorted(value.dependencies as unknown[], "moduleRootId"),
+    dependencies: sorted(withoutPinnedVersion(value.dependencies as unknown[]), "moduleRootId"),
     recordTypes: sorted(
       (value.recordTypes as RecordValue[]).map(normaliseRecordType),
       "recordTypeId",
@@ -112,7 +123,7 @@ export const normaliseApplicationSharedContent = (content: ApplicationContent): 
   const value = asRecord(structuredClone(content));
   return {
     ...value,
-    moduleBindings: sorted(value.moduleBindings as unknown[], "moduleRootId"),
+    moduleBindings: sorted(withoutPinnedVersion(value.moduleBindings as unknown[]), "moduleRootId"),
     experiences: sorted((value.experiences as unknown[] | undefined) ?? [], "state"),
     roles: sorted(
       (value.roles as RecordValue[]).map((role) => ({

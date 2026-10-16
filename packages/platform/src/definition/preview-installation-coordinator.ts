@@ -47,7 +47,7 @@ type PreviewInstallationDraftCompiler = Readonly<{
   ): Promise<PreviewInstallationCandidate>;
 }>;
 
-export const previewInstallationCoordinatorErrorCodes = [
+const previewInstallationCoordinatorErrorCodes = [
   "INVALID_PREVIEW_INSTALLATION_COMMAND",
   "PREVIEW_INSTALLATION_REFUSED",
   "PREVIEW_INSTALLATION_PERMISSION_REFUSED",
@@ -57,10 +57,10 @@ export const previewInstallationCoordinatorErrorCodes = [
   "PREVIEW_INSTALLATION_FAILED",
 ] as const;
 
-export type PreviewInstallationCoordinatorErrorCode =
+type PreviewInstallationCoordinatorErrorCode =
   (typeof previewInstallationCoordinatorErrorCodes)[number];
 
-export type PreviewInstallationCoordinatorDependencies = Readonly<{
+type PreviewInstallationCoordinatorDependencies = Readonly<{
   installerRequests: InstallerRequests;
   builderAuthority(
     transaction: RequestDatabaseTransaction,

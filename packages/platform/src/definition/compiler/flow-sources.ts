@@ -27,6 +27,7 @@ import {
   fail,
   type JsonObject,
 } from "./shared";
+import { moduleDependencies } from "../module-dependencies";
 
 /**
  * Compiles the flows a module or application owns to permanent identities, refusing an
@@ -48,9 +49,7 @@ function compileOwnedFlowSources(
   const body = asObject(source.body);
   const moduleDependencyEntries =
     source.kind === "module"
-      ? Array.isArray(body.dependencies)
-        ? (body.dependencies as JsonObject[])
-        : []
+      ? (moduleDependencies(source) as unknown as JsonObject[])
       : source.kind === "application"
         ? applicationModuleKeysOf(body).map((module) => ({ module, version: CURRENT_MODULE_RELEASE }))
         : [];

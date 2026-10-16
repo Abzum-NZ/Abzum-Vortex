@@ -3,11 +3,8 @@ import { organizationIdSchema, revisionSchema } from "../catalogue/identifiers";
 
 /**
  * SIX Group List One (Current Currency & Funds), published 2026-01-01.
- * This immutable version is the source of the initial SQL reference seed.
- * A later List One publication needs a new version and a forward migration.
- * @knipignore The seed verifier resolves this export name from source text; #2236 consumes the frozen input.
  */
-export const currentIso4217Alpha3CodesV2026_01_01 = [
+const currentIso4217Alpha3CodesV2026_01_01 = [
   "AED",
   "AFN",
   "ALL",
@@ -192,18 +189,12 @@ const currentIso4217Alpha3CodeSetV2026_01_01 = new Set<string>(
   currentIso4217Alpha3CodesV2026_01_01,
 );
 
-/**
- * Immutable source of the initial organisation-settings date-format seed.
- * @knipignore The seed verifier resolves this export name from source text; #2236 consumes the frozen input.
- */
-export const organizationRuntimeSettingsDateFormatsV2026_09_29 = [
+export const organizationRuntimeSettingsDateFormats = [
   "short",
   "medium",
   "long",
   "full",
 ] as const;
-export const organizationRuntimeSettingsDateFormats =
-  organizationRuntimeSettingsDateFormatsV2026_09_29;
 const [shortDateFormat, mediumDateFormat, longDateFormat, fullDateFormat] =
   organizationRuntimeSettingsDateFormats;
 export const organizationRuntimeSettingsDateFormatOptions = [
@@ -213,18 +204,12 @@ export const organizationRuntimeSettingsDateFormatOptions = [
   { value: fullDateFormat, label: "Full" },
 ] as const;
 
-/**
- * Immutable source of the initial organisation-settings number-format seed.
- * @knipignore The seed verifier resolves this export name from source text; #2236 consumes the frozen input.
- */
-export const organizationRuntimeSettingsNumberFormatsV2026_09_29 = [
+export const organizationRuntimeSettingsNumberFormats = [
   "auto",
   "always",
   "min2",
   "never",
 ] as const;
-export const organizationRuntimeSettingsNumberFormats =
-  organizationRuntimeSettingsNumberFormatsV2026_09_29;
 const [
   automaticNumberFormat,
   alwaysDecimalNumberFormat,

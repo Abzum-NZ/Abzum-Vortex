@@ -331,7 +331,7 @@ export type ReferenceChoiceFirstPage = Readonly<{
 }>;
 
 /** The record types a link field may point at; a selected value must be one of them. */
-export type SelectedReferenceChoiceField = Readonly<{
+type SelectedReferenceChoiceField = Readonly<{
   key: string;
   required: boolean;
   targets: readonly RecordTypeReference[];
