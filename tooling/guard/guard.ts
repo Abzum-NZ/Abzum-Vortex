@@ -374,7 +374,9 @@ function argumentType(argument: string): string | undefined {
   }
   const firstToken = /^"?([\w$]+)"?/.exec(value)?.[1] ?? "";
   const rest = value.slice(firstToken.length).trim();
-  if (rest && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value))) value = rest;
+  // A first identifier followed by a dot is a schema-qualified type, never an argument name.
+  const qualified = /^"?[\w$]+"?\s*\./.test(value);
+  if (rest && !qualified && (/^(?:p_|arg_|v_)/i.test(firstToken) || !typeHeadPattern.test(value))) value = rest;
   return normalizedType(value);
 }
 function functions(
@@ -528,7 +530,9 @@ for (const file of migrationFiles) {
     const close = closingParenthesis(content, open);
     const name = functionNamePattern.exec(match[0])?.[1]?.replaceAll('"', "").toLowerCase();
     if (close < 0 || !name) continue;
-    const argumentTypes = splitArguments(content.slice(open + 1, close)).map(normalizedType);
+    const argumentTypes = splitArguments(content.slice(open + 1, close))
+      .map(argumentType)
+      .filter((type): type is string => type !== undefined);
     events.push({ kind: "drop", offset: start, identity: `${name}(${argumentTypes.join(",")})` });
   }
   for (const match of content.matchAll(renameFunctionPattern)) {
