@@ -47,10 +47,10 @@ import {
   fail,
   type JsonObject,
   objectFromUniqueEntries,
+  applicationModuleKeysOf,
+  CURRENT_MODULE_RELEASE,
 } from "./shared";
 import {
-  actionInput,
-  actionTaskValue,
   applicationModuleValueIndex,
   type ApplicationModuleValueIndex,
   condition,
@@ -269,14 +269,37 @@ function compileApplication(
         };
   // An application never owns a query: the Query engine runs only the queries a Module exposes, so
   // every page and placement binds a dependency-qualified Module query instead.
-  const ownedQuery = (body.queries as JsonObject[])[0];
-  if (ownedQuery !== undefined)
-    fail(
-      "vortex.definition.application_query_references",
-      "broken_reference",
-      resolution.location("query", String(ownedQuery.key)),
-    );
   const queries: never[] = [];
+  // Each Module release records the one Application that owns it: an inline Module must be owned
+  // by this Application, and a used Module by the Application the source names.
+  const expectedOwners: [string, string][] = [
+    ...(body.modules as JsonObject[]).map((module): [string, string] => [
+      String(module.key),
+      definitionKey,
+    ]),
+    ...(body.uses as JsonObject[]).map((use): [string, string] => [
+      String(use.module),
+      String(use.application),
+    ]),
+  ];
+  for (const [moduleKey, owner] of expectedOwners) {
+    const expected = resolution.definition(moduleKey, "module");
+    const release = dependencyOutputs.find(
+      (output) =>
+        output.kind === "module" &&
+        output.artifact.rootId === expected.rootId &&
+        output.artifact.exactVersion === expected.exactVersion,
+    );
+    if (
+      release?.kind !== "module" ||
+      release.canonical.content.ownerApplication !== owner
+    )
+      fail(
+        "vortex.definition.application_module_bindings",
+        "scope_conflict",
+        resolution.location("module", moduleKey),
+      );
+  }
   const wildcardPermissions = permissions
     .filter((permission) => permission.administrative === false)
     .sort((left, right) => compareCanonicalStrings(String(left.key), String(right.key)));
@@ -299,14 +322,15 @@ function compileApplication(
       name: body.name,
       description: body.description,
       icon: body.icon,
-      moduleBindings: (body.module_bindings as JsonObject[]).map((binding) => {
-        const requirement = binding.version as Parameters<typeof compatibleVersion>[0];
-        const target = resolution.definition(String(binding.module), "module");
+      // Each release pins the exact Module release it was compiled against, so publishing one
+      // Application never changes which release of a shared Module another Application uses.
+      moduleBindings: applicationModuleKeysOf(body).map((moduleKey) => {
+        const target = resolution.definition(moduleKey, "module");
+        const resolvedVersion = exactVersion(resolution, moduleKey, "module", CURRENT_MODULE_RELEASE);
         return {
           moduleRootId: target.rootId,
-          version: requirement,
-          resolvedVersion: exactVersion(resolution, String(binding.module), "module", requirement),
-          purpose: binding.purpose,
+          version: { selection: "exact", version: resolvedVersion },
+          resolvedVersion,
         };
       }),
       navigation: (body.navigation as JsonObject[]).map(function visit(item): unknown {
@@ -404,98 +428,8 @@ function compileApplication(
         };
       }),
       permissions,
-      actions: (body.actions as JsonObject[]).map((action) => {
-        const record = String(action.record_type);
-        const localField = (alias: string) => resolution.field(record, alias);
-        const subjectContext = valueIndex.record(record) ? valueIndex.context(record) : undefined;
-        return {
-          actionId: resolution.id(definitionKey, "action", String(action.id), "content"),
-          key: action.key,
-          label: action.label,
-          subjectRecordTypeId: resolution.recordType(record).recordTypeId,
-          ...(action.permission_alternatives
-            ? { permissionKeys: action.permission_alternatives }
-            : { permissionKey: action.permission }),
-          sharing: action.sharing,
-          inputs: (action.inputs as JsonObject[]).map((input) => actionInput(input, resolution)),
-          ...(action.precondition
-            ? { precondition: condition(action.precondition, localField, subjectContext) }
-            : {}),
-          tasks: (action.tasks as JsonObject[]).map((task) => {
-            const id = String(task.id);
-            const properties = asObject(task.properties);
-            switch (String(task.type)) {
-              case "record.set_fields":
-                return {
-                  id,
-                  type: "record.set_fields",
-                  properties: {
-                    values: objectFromUniqueEntries(
-                      Object.entries(asObject(properties.values)).map(([key, value]) => {
-                        const fieldId = localField(key);
-                        const pair = valueIndex.fieldById(fieldId);
-                        return [
-                          fieldId,
-                          actionTaskValue(value, pair?.field, pair ? subjectContext : undefined),
-                        ];
-                      }),
-                    ),
-                  },
-                };
-              case "record.create": {
-                const target = String(properties.record_type);
-                const targetContext = valueIndex.record(target)
-                  ? valueIndex.context(target)
-                  : undefined;
-                return {
-                  id,
-                  type: "record.create",
-                  properties: {
-                    recordType: resolution.recordType(target),
-                    values: objectFromUniqueEntries(
-                      Object.entries(asObject(properties.values)).map(([key, value]) => {
-                        const fieldId = resolution.field(target, key);
-                        return [
-                          fieldId,
-                          actionTaskValue(
-                            value,
-                            valueIndex.fieldById(fieldId)?.field,
-                            targetContext,
-                          ),
-                        ];
-                      }),
-                    ),
-                  },
-                };
-              }
-              case "record.changes":
-                return {
-                  id,
-                  type: "record.changes",
-                  properties: {
-                    changes: (properties.changes as JsonObject[]).map((change) => ({
-                      kind: "copy_relationships",
-                      relationshipIds: (change.relationships as string[]).map((alias) =>
-                        resolution.relationship(record, alias),
-                      ),
-                      targetInputKey: change.target_input,
-                    })),
-                  },
-                };
-              case "record.delete":
-                return { id, type: "record.delete", properties: {} };
-              case "event.announce":
-                return {
-                  id,
-                  type: "event.announce",
-                  properties: { eventKey: properties.event },
-                };
-              default:
-                return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-            }
-          }),
-        };
-      }),
+      // Every action belongs to a Module; an Application declares none of its own.
+      actions: [],
       events: (body.events as JsonObject[]).map((event) => {
         const record = String(event.record_type);
         return {

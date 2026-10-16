@@ -1,4 +1,5 @@
 "use client";
+import { useReportModuleEditorDirty } from "./module-editor-dirty";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect } from "@vortex/ui/components/native-select";
@@ -82,6 +83,7 @@ export function ModuleTextFieldSettingsEditor({ draft, onDraftChange, locked }: 
   const buffer = useRef({ baseline, selectedKey, maxLength });
   const selected = choices.find((field) => selectionKey(field) === selectedKey);
   const dirty = selected !== undefined && maxLength !== String(selected.maxLength);
+  useReportModuleEditorDirty(dirty);
 
   useEffect(() => {
     active.current = true;

@@ -16,7 +16,7 @@ export function StudioOutline({ node, selectedKey, choose, disabled = false }: {
         aria-pressed={selectedKey === studioSemanticSelectionKey(node.selection)} onClick={() => choose(node)}>
         <span className="min-w-0 break-words">{node.label}</span>
       </Button>}
-    {node.children.length > 0 && <ul className="space-y-1 border-l border-border pl-3">
+    {node.children.length > 0 && <ul className="list-none space-y-1 border-l border-border pl-3">
       {node.children.map((child) => <StudioOutline key={child.key} node={child} selectedKey={selectedKey} choose={choose} disabled={disabled} />)}
     </ul>}
   </li>;

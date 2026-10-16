@@ -1,17 +1,16 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import {
-  compileModulesOffline,
   createImmutableDefinitionPublicationCatalogue,
   validateApplicationsOffline,
 } from "@vortex/platform/server";
-import { shippedApplications, shippedModuleSources } from "@vortex/definitions";
+import { shippedApplications } from "@vortex/definitions";
 import { describeFailure } from "@vortex/platform/schema";
 import { installedReleaseCatalogue } from "../../app/_lib/definition-catalogue";
 import { platformPermissionSource } from "../../app/_lib/platform-permission-source";
 
 /**
- * Compiles every shipped Module and Application source the way publication does, without a database, and
+ * Compiles every shipped Application source and the Modules inside it the way publication does, without a database, and
  * prints (or, with `--json`, returns as data for `pnpm guard`) one entry per failure naming the source file, the definition, the located part and the
  * reason. It exits non-zero on any failure; `pnpm guard` runs it.
  */
@@ -43,16 +42,11 @@ const declaration = (definitionKey: string): { path: string; line: number } => {
 };
 
 const main = async (): Promise<void> => {
-  const modules = compileModulesOffline(shippedModuleSources, platformPermissionSource);
-  const failures = [
-    ...modules.failures,
-    ...(await validateApplicationsOffline(
-      shippedApplications.map(({ source }) => source),
-      modules.compiled,
-      createImmutableDefinitionPublicationCatalogue(installedReleaseCatalogue),
-      platformPermissionSource,
-    )),
-  ];
+  const { failures, moduleCount } = await validateApplicationsOffline(
+    shippedApplications.map(({ source }) => source),
+    createImmutableDefinitionPublicationCatalogue(installedReleaseCatalogue),
+    platformPermissionSource,
+  );
   const describe = (failure: (typeof failures)[number]): string =>
     `${failure.definitionKey} ${failure.stage} ${failure.code} at ${failure.location}${failure.detail === undefined ? "" : `: ${failure.detail}`}`;
   if (process.argv.includes("--json"))
@@ -71,7 +65,7 @@ const main = async (): Promise<void> => {
     }
     if (failures.length === 0)
       console.log(
-        `Definition validation passed (${shippedModuleSources.length} Modules, ${shippedApplications.length} Applications).`,
+        `Definition validation passed (${shippedApplications.length} Applications, ${moduleCount} Modules).`,
       );
   }
   if (failures.length > 0) process.exitCode = 1;

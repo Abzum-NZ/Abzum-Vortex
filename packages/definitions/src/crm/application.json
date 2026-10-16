@@ -68,62 +68,10 @@
         }
       ]
     },
-    "module_bindings": [
+    "uses": [
       {
-        "module": "vortex.crm.organisations",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.crm.people",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.crm.opportunities",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.crm.activities",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.crm.tags",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "primary"
-      },
-      {
-        "module": "vortex.service_desk.cases",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "compatible_shared_record_display"
-      },
-      {
-        "module": "vortex.system_directory",
-        "version": {
-          "selection": "exact",
-          "version": "1.0.0"
-        },
-        "purpose": "system_record_display"
+        "application": "vortex.app.organisation_administration",
+        "module": "vortex.system_directory"
       }
     ],
     "permissions": [
@@ -144,24 +92,6 @@
         "action_kind": "named",
         "named_action": "manage",
         "administrative": true
-      },
-      {
-        "id": "app_permission_3",
-        "key": "application.crm.shared_cases.read",
-        "label": "Read granted case summaries",
-        "description": "Allows read granted case summaries.",
-        "action_kind": "named",
-        "named_action": "read",
-        "administrative": false
-      },
-      {
-        "id": "app_permission_4",
-        "key": "application.crm.shared_cases.collaborate",
-        "label": "Collaborate on granted cases",
-        "description": "Allows collaborate on granted cases.",
-        "action_kind": "named",
-        "named_action": "collaborate",
-        "administrative": false
       },
       {
         "id": "app_permission_5",
@@ -370,8 +300,6 @@
           "vortex.crm.activities.activity.complete",
           "application.crm.activity.complete",
           "vortex.crm.tags.record_tag.manage",
-          "application.crm.shared_cases.read",
-          "application.crm.shared_cases.collaborate",
           "vortex.system_directory.person.reference_read"
         ]
       },
@@ -383,8 +311,6 @@
         "permissions": [
           "application.crm.open",
           "application.crm.manage",
-          "application.crm.shared_cases.read",
-          "application.crm.shared_cases.collaborate",
           "vortex.crm.organisations.company.create",
           "application.crm.company.create",
           "vortex.crm.organisations.company.read",
@@ -530,19 +456,10 @@
             "icon": "grid",
             "page": "crm_activities",
             "permission": "application.crm.activity.read"
-          },
-          {
-            "id": "nav_crm_cases",
-            "type": "page",
-            "label": "Shared cases",
-            "icon": "life-buoy",
-            "page": "crm_shared_cases",
-            "permission": "application.crm.shared_cases.read"
           }
         ]
       }
     ],
-    "queries": [],
     "pages": [
       {
         "id": "page_crm_dashboard",
@@ -1308,80 +1225,6 @@
                         "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
                         "release_version": "1.3.0"
                       },
-                      "theme_overrides": {},
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              ],
-              "vortex": {
-                "shell": "shell_crm",
-                "slot_orders": {}
-              }
-            }
-          },
-          "content": []
-        }
-      },
-      {
-        "id": "page_crm_shared_cases",
-        "key": "crm_shared_cases",
-        "name": "Shared cases",
-        "type": "list",
-        "record_type": "vortex.service_desk.cases:case",
-        "permission": "application.crm.shared_cases.read",
-        "query": "vortex.service_desk.cases:crm_shared_cases",
-        "composition": {
-          "root": {
-            "props": {
-              "slot_primary": [
-                {
-                  "type": "platform.renderer.table",
-                  "props": {
-                    "id": "content_7",
-                    "columns": [
-                      {
-                        "field": "vortex.service_desk.cases:case.case_number",
-                        "label": "Case number"
-                      },
-                      {
-                        "field": "vortex.service_desk.cases:case.subject",
-                        "label": "Subject"
-                      },
-                      {
-                        "field": "vortex.service_desk.cases:case.status",
-                        "label": "Status"
-                      },
-                      {
-                        "field": "vortex.service_desk.cases:case.priority",
-                        "label": "Priority"
-                      },
-                      {
-                        "field": "vortex.service_desk.cases:case.customer_company",
-                        "label": "Customer company"
-                      },
-                      {
-                        "field": "vortex.service_desk.cases:case.resolved_at",
-                        "label": "Resolved at"
-                      }
-                    ],
-                    "title": "Shared cases",
-                    "vortex": {
-                      "block": {
-                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "1.2.0"
-                      },
-                      "query": "vortex.service_desk.cases:crm_shared_cases",
                       "theme_overrides": {},
                       "responsive": {
                         "desktop": {
@@ -4147,149 +3990,8 @@
         "time_targets": []
       }
     ],
-    "connection_bindings": [
-      {
-        "id": "crm_email",
-        "connection_type": "vortex.connection.email",
-        "required_operations": ["send_message", "send_template"],
-        "key": "crm_email",
-        "version": {
-          "selection": "exact",
-          "version": "2.0.0"
-        }
-      },
-      {
-        "id": "crm_calendar",
-        "connection_type": "vortex.connection.calendar",
-        "required_operations": ["create_event", "cancel_event"],
-        "key": "crm_calendar",
-        "version": {
-          "selection": "exact",
-          "version": "2.0.0"
-        }
-      }
-    ],
-    "interfaces": [
-      {
-        "id": "iface_crm_v1",
-        "key": "vortex.interface.crm",
-        "version": "1.0.0",
-        "operations": [
-          {
-            "id": "iface_crm_v1_operation_1",
-            "key": "list_companies",
-            "description": "List Companies through this interface.",
-            "input_shape": {},
-            "output_shape": {
-              "name": {
-                "type": "text",
-                "required": true,
-                "target_binding": {
-                  "kind": "query_field",
-                  "field": "vortex.crm.organisations:company.name"
-                }
-              }
-            },
-            "authentication": "organisation_token",
-            "permission": "vortex.crm.organisations.company.read",
-            "visibility": "organisation_private",
-            "rate_limit_per_minute": 120,
-            "maximum_request_bytes": 1000000,
-            "duplicate_protection": "not_required",
-            "target": {
-              "kind": "query",
-              "key": "crm_companies"
-            },
-            "error_codes": ["request_refused", "validation_failed"],
-            "method": "GET",
-            "path": "/list-companies"
-          },
-          {
-            "id": "iface_crm_v1_operation_2",
-            "key": "convert_lead",
-            "description": "Convert an existing Lead through this interface.",
-            "input_shape": {
-              "lead": {
-                "type": "record_reference",
-                "required": true,
-                "target_binding": {
-                  "kind": "action_subject"
-                }
-              },
-              "first_name": {
-                "type": "text",
-                "required": true,
-                "target_binding": {
-                  "kind": "action_input",
-                  "key": "first_name"
-                }
-              },
-              "last_name": {
-                "type": "text",
-                "required": true,
-                "target_binding": {
-                  "kind": "action_input",
-                  "key": "last_name"
-                }
-              },
-              "company": {
-                "type": "record_reference",
-                "required": false,
-                "target_binding": {
-                  "kind": "action_input",
-                  "key": "company"
-                }
-              }
-            },
-            "output_shape": {},
-            "authentication": "organisation_token",
-            "permission": "vortex.crm.people.lead.convert",
-            "visibility": "organisation_private",
-            "rate_limit_per_minute": 120,
-            "maximum_request_bytes": 1000000,
-            "duplicate_protection": "required",
-            "target": {
-              "kind": "flow",
-              "flow": "crm_form_flow_3"
-            },
-            "error_codes": ["request_refused", "validation_failed"],
-            "method": "POST",
-            "path": "/convert-lead"
-          },
-          {
-            "id": "iface_crm_v1_operation_3",
-            "key": "list_opportunities",
-            "description": "List Opportunities through this interface.",
-            "input_shape": {},
-            "output_shape": {
-              "name": {
-                "type": "text",
-                "required": true,
-                "target_binding": {
-                  "kind": "query_field",
-                  "field": "vortex.crm.opportunities:opportunity.name"
-                }
-              }
-            },
-            "authentication": "organisation_token",
-            "permission": "vortex.crm.opportunities.opportunity.read",
-            "visibility": "organisation_private",
-            "rate_limit_per_minute": 120,
-            "maximum_request_bytes": 1000000,
-            "duplicate_protection": "not_required",
-            "target": {
-              "kind": "query",
-              "key": "crm_pipeline"
-            },
-            "error_codes": ["request_refused", "validation_failed"],
-            "method": "GET",
-            "path": "/list-opportunities"
-          }
-        ],
-        "state": "supported"
-      }
-    ],
-    "actions": [],
+    "connection_bindings": [],
+    "interfaces": [],
     "events": [
       {
         "id": "form_submit_crm_company_merge",

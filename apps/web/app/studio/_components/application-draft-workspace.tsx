@@ -1,17 +1,11 @@
 "use client";
-import { Button } from "@vortex/ui/components/button";
-import { Input } from "@vortex/ui/components/input";
-import { Textarea } from "@vortex/ui/components/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vortex/ui/components/tabs";
-import { TechnicalDetails } from "@vortex/ui/components/technical-details";
-
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -36,6 +30,7 @@ import {
   type StudioCompositionContext,
   type StudioFlowTextContext,
   type StudioSemanticSelection,
+  type StudioSemanticOutlineNode,
   type StudioFlowEditResult,
   type StudioFlowInsertCommand,
   type StudioFlowRemoveCommand,
@@ -46,7 +41,7 @@ import type { StudioCanvasBreakpoint, StudioCanvasFrame } from "@vortex/ui/studi
 import { reopenStudioApplication, saveStudioApplication,
   prepareStudioApplicationPublication, publishStudioApplication, validateStudioPlacementThemeOverrides } from "../actions";
 import { applyStudioItemLabels } from "../_lib/application-item-labels";
-import { createStudioPlacementDescriber, studioKindLabel, studioOutlineLabels } from "../_lib/studio-labels";
+import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
 import { ApplicationDraftAgentTools, type StudioPublicationOutcome } from "./application-draft-agent-tools";
 import { ApplicationAppearanceEditor } from "./application-appearance-editor";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
@@ -54,13 +49,25 @@ import { ApplicationVisibilityConditionEditor, type StudioVisibilityWorkspaceSna
 import { ApplicationFlowEditor } from "./application-flow-editor";
 import { ApplicationDraftPreview, type SavedHomepagePreviewContext } from "./application-draft-preview";
 import { ApplicationSourceImport } from "./application-source-import";
-import { StudioThreePaneShell } from "./studio-three-pane-shell";
 import { ApplicationSearchEditor } from "./application-search-editor";
-import { StudioOutline } from "./studio-outline";
 import { StudioPublishDialog } from "./studio-publish-dialog";
 import { StudioHistoryTab } from "./studio-history-tab";
 import { StandardPageAdoption } from "./standard-page-adoption";
-import { StudioModulesPanel } from "./studio-modules-panel";
+import { StudioDataPanel } from "./studio-data-panel";
+import { StudioModuleEditor } from "./studio-module-editor";
+import type { StudioModuleTarget } from "../_lib/studio-module-tools";
+import { StudioTopBar } from "./studio-top-bar";
+import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
+import { StudioInspector } from "./studio-inspector";
+import { StudioReleasesPanel } from "./studio-releases-panel";
+import {
+  StudioBlockOutlinePanel, StudioComingNextPanel, StudioFlowsPanel, StudioMenuPanel, StudioStructurePanel,
+} from "./studio-outline-panels";
+import {
+  isStudioRailKey, isStudioReleasesSection, railShowsCanvas, studioRailTabs, studioReleasesSections,
+  type StudioRailKey, type StudioReleasesSection,
+} from "./studio-rail-tabs";
+import { StudioFrame, StudioPanelShell } from "./studio-frame";
 import { useStudioBusy, type StudioBusyExcept } from "./use-studio-busy";
 import type { StudioApplicationSearchMetadata } from "../../_lib/studio-application-draft";
 import type { StudioApplicationCanvasFrames, StudioApplicationCompiledPageSlots } from "../../_lib/studio-application-draft";
@@ -88,13 +95,12 @@ const canvasFrameFor = (frames: StudioApplicationCanvasFrames | null, pageAlias:
   };
 };
 
-export type StudioWorkspaceTab = "design" | "preview" | "modules" | "history" | "page-adoption";
-const workspaceTabs: readonly Readonly<{ value: StudioWorkspaceTab; label: string }>[] = [
-  { value: "design", label: "Design" }, { value: "preview", label: "Preview" }, { value: "modules", label: "Modules" },
-  { value: "history", label: "History" }, { value: "page-adoption", label: "Page adoption" },
-];
-const isWorkspaceTab = (value: unknown): value is StudioWorkspaceTab =>
-  workspaceTabs.some((tab) => tab.value === value);
+/** Where the workspace sits: the organisation it belongs to and the running application it builds. */
+export type StudioWorkspacePlace = Readonly<{
+  organizationName: string;
+  /** The running application, for Back to app; absent when the organisation's address is unknown. */
+  applicationHref: string | undefined;
+}>;
 
 type WorkspaceProps = Readonly<{
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
@@ -103,7 +109,11 @@ type WorkspaceProps = Readonly<{
 }> & (
   | Readonly<{ mode: "new"; organizationId: string }>
   | Readonly<{ mode: "existing"; organizationId: string; draft: StudioStoredApplicationDraft;
+      place: StudioWorkspacePlace;
       initialTab?: string | undefined;
+      initialSection?: string | undefined;
+      /** A module editor to open in the Data tab (a standalone module address redirects here). */
+      initialModule?: StudioModuleTarget | undefined;
       searchMetadata?: StudioApplicationSearchMetadata | null;
       pageCompiledSlots?: StudioApplicationCompiledPageSlots | null;
       canvasFrames?: StudioApplicationCanvasFrames | null;
@@ -125,7 +135,6 @@ const samePublicationSnapshot = (left: PublicationSnapshot, right: PublicationSn
   left.sourceFingerprint === right.sourceFingerprint && left.source === right.source &&
   left.selectionKey === right.selectionKey && left.lifetime === right.lifetime && left.generation === right.generation;
 
-const inputClass = "w-full";
 
 class StudioSaveError extends Error {
   constructor(readonly code: string, readonly reason?: string) {
@@ -157,7 +166,7 @@ const publicationProblemText = (kind: string, reason: string | undefined): strin
       return "A module or component this application needs is not available in a compatible version. Publish or install it first.";
     case "conflict": return "The draft changed while this window was open. Close it and open Publish again.";
     case "temporarily_unavailable":
-      return "Publishing could not be confirmed. It may have gone through: check the History tab before trying again.";
+      return "Publishing could not be confirmed. It may have gone through: check Releases before trying again.";
     default: return unavailableMessage(kind === "refused" ? "refused" : "temporarily_unavailable", reason);
   }
 };
@@ -165,8 +174,10 @@ const publicationProblemText = (kind: string, reason: string | undefined): strin
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new"
     ? <NewApplicationWorkspace organizationId={props.organizationId} />
-    : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft}
-        initialTab={isWorkspaceTab(props.initialTab) ? props.initialTab : "design"}
+    : <ExistingApplicationWorkspace organizationId={props.organizationId} draft={props.draft} place={props.place}
+        initialTab={isStudioRailKey(props.initialTab) ? props.initialTab : "structure"}
+        initialSection={isStudioReleasesSection(props.initialSection) ? props.initialSection : "history"}
+        initialModule={props.initialModule ?? null}
         initialSearchMetadata={props.searchMetadata ?? null}
         pageCompiledSlots={props.pageCompiledSlots ?? null}
         canvasFrames={props.canvasFrames ?? null}
@@ -176,9 +187,11 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
         platformThemeTokens={props.platformThemeTokens} />;
 }
 
-function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initialSearchMetadata, pageCompiledSlots, canvasFrames,
-  compileFailure, platformBlockCatalogue, fieldInputControlReleases, platformThemeTokens }: {
-  organizationId: string; draft: StudioStoredApplicationDraft; initialTab: StudioWorkspaceTab;
+function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab, initialSection, initialModule,
+  initialSearchMetadata, pageCompiledSlots, canvasFrames, compileFailure, platformBlockCatalogue, fieldInputControlReleases,
+  platformThemeTokens }: {
+  organizationId: string; draft: StudioStoredApplicationDraft; place: StudioWorkspacePlace;
+  initialTab: StudioRailKey; initialSection: StudioReleasesSection; initialModule: StudioModuleTarget | null;
   initialSearchMetadata: StudioApplicationSearchMetadata | null;
   pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
   canvasFrames: StudioApplicationCanvasFrames | null;
@@ -197,7 +210,13 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const readProvisionalSave = () => provisionalSave.current;
   const publicationEpoch = useRef(0);
   const publicationRequest = useRef<{ epoch: number; cancelled: boolean } | null>(null);
-  const [tab, setTab] = useState<StudioWorkspaceTab>(initialTab);
+  const [tab, setTab] = useState<StudioRailKey>(initialTab);
+  const [releasesSection, setReleasesSection] = useState<StudioReleasesSection>(initialSection);
+  const [moduleTarget, setModuleTarget] = useState<StudioModuleTarget | null>(initialModule);
+  // Whether the open module editor holds unsaved input (it saves the module's own draft, not this one).
+  const [moduleDirty, setModuleDirty] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
   const [canvasBreakpoint, setCanvasBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   const [publishOpen, setPublishOpen] = useState(false);
   const [publicationNote, setPublicationNote] = useState("");
@@ -228,7 +247,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
         result.kind === "conflict" || result.kind === "refused" ? result.reason : undefined);
     },
   }));
-  const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source }));
+  const [selection] = useState(() => createStudioSemanticSelectionStore({ rootId: draft.rootId, source: draft.source, catalogue: platformBlockCatalogue }));
   const [state, setState] = useState(() => history.getState());
   const [selected, setSelected] = useState(() => selection.getSelection());
   const [searchMetadata, setSearchMetadata] = useState<StudioApplicationSearchMetadata | null>(initialSearchMetadata);
@@ -259,17 +278,19 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
     (selected?.kind === "application" || (selected?.kind === "page" && selectedPage !== undefined));
   const currentLabel = selected?.kind === "application" ? source.body.name : selectedPage?.name ?? "";
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
-  // The canvas draws the selected page, or the page that holds the selected block.
-  const placementPages = useMemo(() => {
-    const owners = new Map<string, string>();
-    traverseStudioSemanticSelectionDraft({ rootId: state.rootId, source }, ({ phase, node }) => {
-      if (phase === "enter" && node.kind === "placement" && node.owner.kind === "page")
-        owners.set(node.selection.placementAlias, node.owner.pageAlias);
+  // The page or layout that holds each block: the canvas draws a block's page, the Outline lists its owner's blocks.
+  const placementOwners = useMemo(() => {
+    const owners = new Map<string, Readonly<{ kind: "page"; pageAlias: string } | { kind: "shell"; shellAlias: string }>>();
+    traverseStudioSemanticSelectionDraft({ rootId: state.rootId, source, catalogue: platformBlockCatalogue }, ({ phase, node }) => {
+      if (phase === "enter" && node.kind === "placement")
+        owners.set(node.selection.placementAlias, node.owner.kind === "page"
+          ? { kind: "page", pageAlias: node.owner.pageAlias } : { kind: "shell", shellAlias: node.owner.shellAlias });
     });
     return owners;
-  }, [state.rootId, source]);
+  }, [state.rootId, source, platformBlockCatalogue]);
+  const selectedOwner = selected?.kind === "placement" ? placementOwners.get(selected.placementAlias) : undefined;
   const canvasPageAlias = selected?.kind === "page" ? selected.pageAlias
-    : selected?.kind === "placement" ? placementPages.get(selected.placementAlias) : undefined;
+    : selectedOwner?.kind === "page" ? selectedOwner.pageAlias : undefined;
   const canvasPage = canvasPageAlias === undefined ? undefined
     : source.body.pages.find((page) => page.id === canvasPageAlias);
   const canvasPageRef = useRef(canvasPage?.id);
@@ -320,7 +341,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       publicationEpoch.current += 1;
       setPreparedPublication(null);
       previewGeneration.current += 1;
-      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentSchema.parse(next.source) });
+      selection.reconcile({ rootId: next.rootId, source: applicationSourceDocumentSchema.parse(next.source), catalogue: platformBlockCatalogue });
       setState(next);
     });
     const unsubscribeSelection = selection.subscribe((next) => {
@@ -341,7 +362,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
 
   // Leaving the page (a review page, another address, a reload) with edits that are not saved is confirmed by the browser.
   // Typed input that is not applied yet (name, appearance, composition, search, source import) is lost on unload too.
-  const unsavedWork = state.isDirty || busy.anyRendered();
+  const unsavedWork = state.isDirty || busy.anyRendered() || moduleDirty;
   useEffect(() => {
     if (!unsavedWork) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
@@ -368,7 +389,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
           result.draft.sourceFingerprint !== saved.sourceFingerprint || canonicalJson(result.draft.source) !== canonicalJson(expectedSource)) return;
       const metadata = result.searchMetadata;
       if (metadata.organizationId !== organizationId || metadata.rootId !== current.rootId || metadata.draftRevision !== current.draftRevision ||
-          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(expectedSource.body.module_bindings)) return;
+          metadata.sourceFingerprint !== saved.sourceFingerprint || metadata.bindingsSignature !== JSON.stringify(applicationModuleKeys(expectedSource))) return;
       setSearchMetadata(metadata);
     } catch (error) {
       console.error("[studio] refreshing the module list failed", describeFailure(error));
@@ -379,7 +400,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const currentSearchMetadata = searchMetadata !== null && searchMetadata.organizationId === organizationId &&
     searchMetadata.rootId === state.rootId &&
     searchMetadata.draftRevision === state.draftRevision && searchMetadata.sourceFingerprint === savedPreviewDraft.current.sourceFingerprint &&
-    searchMetadata.bindingsSignature === JSON.stringify(source.body.module_bindings) &&
+    searchMetadata.bindingsSignature === JSON.stringify(applicationModuleKeys(source)) &&
     canonicalJson(state.source) === canonicalJson(savedPreviewDraft.current.source) ? searchMetadata : null;
   const compositionContext = useMemo<StudioCompositionContext>(() => ({
     organizationId, rootId: state.rootId, key: draft.key, draftRevision: state.draftRevision,
@@ -788,24 +809,31 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
     return undefined;
   };
 
-  // The flow editors are drawn only on the Design tab, so leaving it discards their unapplied input (after asking).
-  const changeTab = async (next: StudioWorkspaceTab) => {
-    if (next === tab) return;
-    if (tab === "design" && next !== "design" && busy.anyOf("flowEditor", "flowSetting", "flowAppend")) {
-      if (!await confirm({
-        title: "Leave the flow editor?",
-        description: "Changes you have not applied in the flow editor are discarded if you leave this tab.",
-        confirmLabel: "Discard and leave",
-      })) return;
-      busy.clear("flowEditor", "flowSetting", "flowAppend");
-      setFlowEpoch((value) => value + 1);
-    }
+  // The centre draws the canvas for every rail tab except Data and Releases, and not while previewing.
+  const canvasShown = !previewing && railShowsCanvas(tab);
+  // The flow editors are drawn only with the canvas, so leaving it discards their unapplied input (after asking).
+  const leaveCanvas = async (): Promise<boolean> => {
+    if (!busy.anyOf("flowEditor", "flowSetting", "flowAppend")) return true;
+    if (!await confirm({
+      title: "Leave the flow editor?",
+      description: "Changes you have not applied in the flow editor are discarded if you leave the canvas.",
+      confirmLabel: "Discard and leave",
+    })) return false;
+    busy.clear("flowEditor", "flowSetting", "flowAppend");
+    setFlowEpoch((value) => value + 1);
+    return true;
+  };
+  const changeTab = async (next: StudioRailKey): Promise<boolean> => {
+    if (next === tab && !previewing) return true;
+    if (canvasShown && !railShowsCanvas(next) && !await leaveCanvas()) return false;
+    setPreviewing(false);
     setTab(next);
+    return true;
   };
 
   const describePlacement = useMemo(() => createStudioPlacementDescriber(platformBlockCatalogue), [platformBlockCatalogue]);
-  const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source }, describePlacement),
-    [state.rootId, source, describePlacement]);
+  const outline = useMemo(() => projectStudioSemanticOutline({ rootId: state.rootId, source, catalogue: platformBlockCatalogue }, describePlacement),
+    [state.rootId, source, platformBlockCatalogue, describePlacement]);
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const savedStateLabel = state.isSaving ? "Saving…" : state.isDirty ? "Unsaved changes" : "Saved";
@@ -822,7 +850,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
   const canPrepare = readPublicationSnapshot() !== null;
   const noEdit = state.isSaving || workspaceLifetime === 0;
 
-  const flowPane = (disabled: boolean) => tab === "design" && selected?.kind === "flow" && inspector.status === "resolved" && <>
+  const flowPane = (disabled: boolean) => canvasShown && selected?.kind === "flow" && inspector.status === "resolved" && <>
     <ApplicationFlowCanvas key={`canvas-${flowEpoch}`} context={compositionContext} selection={selected}
       disabled={busy.anyRendered("flowSetting") || noEdit}
       onSettingPendingChange={reportFlowSettingPending}
@@ -849,226 +877,283 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
               JSON.stringify(option.neighborPath) === JSON.stringify(command.neighborPath)))} />
   </>;
 
-  return <main className="space-y-4 p-6" aria-busy={busy.isRendered("publication") || state.isSaving || busy.isRendered("reopening")}>
+
+  const commandVisibility: Parameters<typeof ApplicationVisibilityConditionEditor>[0]["onCommand"] =
+    (expected, expectedSelection, metadata, condition, isCurrentResponse) => {
+      const current = history.getState();
+      const currentSelection = selection.getSelection();
+      if (!active.current || current.isSaving || busy.any("condition") ||
+        currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
+        currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
+      const currentContext: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
+        draftRevision: current.draftRevision, localLifetime: lifetime.current,
+        catalogue: platformBlockCatalogue, source: current.source };
+      const result = applyStudioVisibilityCondition(expected, currentContext, currentSelection, metadata, condition);
+      if (result.kind !== "applied") return result;
+      const latest = history.getState();
+      const latestSelection = selection.getSelection();
+      if (!active.current || latest.isSaving || busy.any("condition") ||
+        latest.source !== current.source || latest.rootId !== current.rootId ||
+        latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
+        latestSelection?.kind !== "placement" || latestSelection.placementAlias !== currentSelection.placementAlias ||
+        !isCurrentResponse()) return { kind: "stale" };
+      if (!history.edit(result.source)) return { kind: "invalid", issues: [] };
+      setMessage("Visibility rule changed. Save to keep it.");
+      return result;
+    };
+
+  const applySourceImport: Parameters<typeof ApplicationSourceImport>[0]["onApply"] = (expected, candidate) => {
+    if (!sameStudioApplicationSourceImportSnapshot(expected, readSourceImportSnapshot())) return "stale";
+    const parsed = applicationSourceDocumentSchema.safeParse(candidate);
+    if (!parsed.success || parsed.data.key !== expected.key || parsed.data.root_alias !== expected.rootAlias) return "stale";
+    const current = history.getState();
+    if (canonicalJson(parsed.data) === canonicalJson(current.source)) return "unchanged";
+    if (!sameStudioApplicationSourceImportSnapshot(expected, readSourceImportSnapshot())) return "stale";
+    if (!history.edit(parsed.data)) return "stale";
+    // Reset old inspector buffers only after the one accepted history replacement.
+    lifetime.current += 1;
+    setWorkspaceLifetime(lifetime.current);
+    discardSourceImport();
+    setConditionEpoch((value) => value + 1);
+    reportConditionPending(false);
+    setAppearanceEpoch((value) => value + 1);
+    setAppearanceValidationEpoch((value) => value + 1);
+    reportAppearancePending(false);
+    setCompositionEpoch((value) => value + 1);
+    reportCompositionPending(false);
+    setFlowEpoch((value) => value + 1);
+    resetFlowPending();
+    reportFlowAppendPending(false);
+    const currentSelection = selection.getSelection();
+    setLabel(currentSelection?.kind === "application" ? parsed.data.body.name
+      : currentSelection?.kind === "page"
+        ? parsed.data.body.pages.find((page) => page.id === currentSelection.pageAlias)?.name ?? "" : "");
+    setDescription(parsed.data.body.description);
+    setMessage("Imported changes are in your draft. Save to keep them.");
+    return "applied";
+  };
+
+  const applySearch: Parameters<typeof ApplicationSearchEditor>[0]["onApply"] = (expected, search) => {
+    const current = history.getState();
+    if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || current.isDirty ||
+        busy.any("search") || canonicalJson(expected) !== canonicalJson(current.source) ||
+        (search !== undefined && currentSearchMetadata === null)) return false;
+    const candidate = structuredClone(expected);
+    if (search === undefined) delete candidate.body.search;
+    else candidate.body.search = search;
+    const parsed = applicationSourceDocumentSchema.safeParse(candidate);
+    if (!parsed.success || !history.edit(parsed.data)) return false;
+    setSearchMetadata(null); searchRefresh.current += 1;
+    setPreparedPublication(null); previewGeneration.current += 1;
+    return true;
+  };
+
+  // Preview shows the saved draft, so it saves first; a save that does not go through keeps the canvas.
+  const togglePreview = async () => {
+    if (previewing) { setPreviewing(false); return; }
+    if (canvasShown && !await leaveCanvas()) return;
+    if (history.getState().isDirty) {
+      const result = await save();
+      if (result?.kind !== "saved") return;
+    }
+    setPreviewing(true);
+  };
+
+  // Another module or tool replaces the open module editor, so its unsaved input is discarded only after asking.
+  const openModuleTarget = async (next: StudioModuleTarget) => {
+    if (moduleTarget !== null && next.moduleRootId === moduleTarget.moduleRootId && next.tool === moduleTarget.tool) return;
+    if (moduleDirty && !await confirm({
+      title: "Discard the unsaved module change?",
+      description: "The module editor that is open has changes that are not saved. They are lost if you open another one.",
+      confirmLabel: "Discard and open",
+    })) return;
+    setModuleDirty(false);
+    setModuleTarget(next);
+  };
+
+  const pageLabel = (pageAlias: string, fallback: string) =>
+    labels.get(studioSemanticSelectionKey({ kind: "page", pageAlias })) ?? fallback;
+  // The layout open in Outline: selected directly, or the layout that holds the selected block.
+  const ownerShellKey = selected?.kind === "shell" ? selectionKey
+    : selectedOwner?.kind === "shell" ? studioSemanticSelectionKey(selectedOwner) : undefined;
+  const breadcrumbItem = canvasPage !== undefined ? pageLabel(canvasPage.id, canvasPage.name)
+    : ownerShellKey === undefined ? undefined : labels.get(ownerShellKey);
+  const outlineOwnerKey = canvasPage !== undefined ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
+    : ownerShellKey;
+  const openModule = currentModuleMetadata?.modules.find((module) => module.moduleRootId === moduleTarget?.moduleRootId);
+  const centreTitle = previewing ? "Preview of the saved draft"
+    : tab === "data" ? (moduleTarget === null ? "Data" : `Module ${openModule?.key ?? ""}`.trim())
+      : tab === "releases" ? studioReleasesSections.find((entry) => entry.value === releasesSection)!.label
+        : canvasPage !== undefined ? pageLabel(canvasPage.id, canvasPage.name)
+          : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item";
+  const chooseNode = (node: StudioSemanticOutlineNode) => { if (node.selection !== null) void chooseSelection(node.selection); };
+  const outlinePanelProps = { outline, selectedKey: selectionKey, choose: chooseNode, disabled: busy.isRendered("publication") };
+
+  const panels = <>
+    <StudioStructurePanel {...outlinePanelProps} hidden={tab !== "structure"} />
+    <StudioBlockOutlinePanel {...outlinePanelProps} hidden={tab !== "outline"} ownerKey={outlineOwnerKey} />
+    <StudioComingNextPanel title="Blocks" description="Blocks to add to the page." hidden={tab !== "blocks"}>
+      A searchable palette to drag new blocks onto the page comes next. Today you can rearrange, duplicate and remove
+      blocks on the canvas, and change the selected block in the inspector.
+    </StudioComingNextPanel>
+    <StudioMenuPanel {...outlinePanelProps} hidden={tab !== "menu"} />
+    <StudioDataPanel hidden={tab !== "data"} metadata={currentModuleMetadata} refreshing={refreshingSearch}
+      refreshDisabled={state.isSaving || state.isDirty || locked} onRefresh={refreshSearchMetadata}
+      open={moduleTarget} onOpen={(next) => { void openModuleTarget(next); }}
+      search={<ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
+        disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}
+        onPendingChange={reportSearchPending} onRefresh={refreshSearchMetadata} onApply={applySearch} />} />
+    <StudioFlowsPanel {...outlinePanelProps} hidden={tab !== "flows"} />
+    <StudioPanelShell title="Theme" hidden={tab !== "theme"}
+      description="Colours, type and corners for the whole application. Save to see them on the canvas.">
+      <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
+        rootId={state.rootId} draftRevision={state.draftRevision} source={source}
+        validationEpoch={appearanceValidationEpoch}
+        disabled={busy.anyRendered("appearance") || state.isSaving} onPendingChange={reportAppearancePending}
+        onApply={(expected, next) => {
+          const current = history.getState();
+          if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || busy.any("appearance") ||
+              current.rootId !== state.rootId || current.draftRevision !== state.draftRevision ||
+              current.source !== state.source || expected !== source) return false;
+          const applied = history.edit(next);
+          if (applied) setMessage("Appearance changed. Save to keep it.");
+          return applied;
+        }} />
+    </StudioPanelShell>
+    <StudioComingNextPanel title="Access" description="Who can see each page and block." hidden={tab !== "access"}>
+      Roles, their permissions and each role&apos;s home page will be set here next. Today a selected block&apos;s
+      visibility rule is set in the inspector.
+    </StudioComingNextPanel>
+    <StudioReleasesPanel hidden={tab !== "releases"} section={releasesSection} onSection={setReleasesSection}
+      savedStateLabel={savedStateLabel} />
+  </>;
+
+  const inspectorPanel = <StudioInspector inspector={inspector}
+    title={inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : ""}
+    labels={editable ? {
+      isApplication: selected?.kind === "application", label, description,
+      inputDisabled: busy.anyRendered("labels", "appearance"), applyDisabled: busy.anyRendered("labels"),
+      discardDisabled: busy.anyOfRendered("publication", "search", "sourceImport", "reopening") || !pendingLabels,
+      onLabel: (value) => {
+        if (busy.anyOf("publication", "sourceImport", "search", "condition", "reopening")) return;
+        busy.touch("labels");
+        setLabel(value);
+      },
+      onDescription: (value) => {
+        if (busy.anyOf("publication", "sourceImport", "search", "condition", "reopening")) return;
+        busy.touch("labels");
+        setDescription(value);
+      },
+      onApply: applyLabels,
+      onDiscard: () => {
+        if (busy.anyOf("publication", "sourceImport", "search", "reopening")) return;
+        setLabel(currentLabel); setDescription(source.body.description);
+      },
+    } : undefined}
+    note={selected?.kind === "placement" ? undefined : selected?.kind === "flow"
+      ? "Select a step in the flow to change its text or calculation."
+      : selected === null ? undefined : "This item cannot be edited here."}>
+    {selected?.kind === "placement" && inspector.status === "resolved" &&
+      <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
+        selection={selected} disabled={busy.anyRendered("composition") || noEdit}
+        onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
+    {selected?.kind === "placement" && inspector.status === "resolved" &&
+      <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
+        selection={selected} saved={savedPreviewDraft.current}
+        busy={busy.anyOfRendered("publication", "search", "sourceImport", "reopening") || state.isSaving}
+        disabled={busy.anyRendered("condition") || noEdit}
+        readSnapshot={readVisibilitySnapshot} onPendingChange={reportConditionPending}
+        onCommand={commandVisibility} />}
+  </StudioInspector>;
+
+  const canvasCentre = canvasShown && <section className={canvasPage !== undefined ? "space-y-3"
+    : "space-y-3 rounded-xl border border-border bg-card p-4 text-card-foreground"} aria-label="Selected item">
+    {selected?.kind === "application" && <p>{source.body.description}</p>}
+    {selected?.kind === "placement" && canvasPage === undefined &&
+      <p>This block is part of a layout. Change it in the inspector.</p>}
+    {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" &&
+      <p className="text-sm text-muted-foreground">Choose a page in Structure to arrange it here.</p>}
+    {/* The canvas measures its container, so it is drawn only while it is showing; its edits live in the draft history. */}
+    {canvasPage !== undefined && inspector.status === "resolved" &&
+      <div style={{ zoom: canvasZoom / 100 }}>
+        <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source}
+          compiledSource={compiled.source}
+          platformBlockCatalogue={platformBlockCatalogue}
+          fieldInputControlReleases={fieldInputControlReleases}
+          platformThemeTokens={platformThemeTokens}
+          pageAlias={canvasPage.id} compiledSlots={compiled.slots?.[canvasPage.id]}
+          frame={canvasFrameFor(compiled.frames, canvasPage.id)}
+          selectedPlacementAlias={selected?.kind === "placement" ? selected.placementAlias : null}
+          onSelectPlacement={selectFromCanvas}
+          breakpoint={canvasBreakpoint}
+          disabled={locked || noEdit}
+          compileFailure={compiled.failure}
+          validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
+            rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
+          onThemeOverrideProblems={setThemeOverrideProblems}
+          onChange={applyPuckPageEdit} />
+      </div>}
+    {flowPane(busy.anyRendered("flowText", "flowAppend") || noEdit)}
+  </section>;
+
+  return <div aria-busy={busy.isRendered("publication") || state.isSaving || busy.isRendered("reopening")}>
     <ApplicationDraftAgentTools organizationId={organizationId} history={history}
       catalogue={platformBlockCatalogue} readLifetime={() => lifetime.current} blockedReason={agentBlockedReason}
       select={changeSelection} command={commandComposition} save={save}
       readPreparedConfirmation={() => preparedRef.current?.confirmation}
       prepare={() => requestPublication("prepare")} publish={(releaseNote) => requestPublication("publish", releaseNote)}
       readPreview={readPreviewContext} />
-    <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-      <h1 className="mr-2 truncate text-lg font-semibold">{source.body.name}</h1>
-      <span className="text-sm text-muted-foreground">{savedStateLabel}</span>
-      <div className="ml-auto flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" size="sm" disabled={!state.canUndo || locked}
-          onClick={() => { if (!busy.any()) history.undo(); }}>Undo</Button>
-        <Button type="button" variant="outline" size="sm" disabled={!state.canRedo || locked}
-          onClick={() => { if (!busy.any()) history.redo(); }}>Redo</Button>
-        <Button type="button" variant="outline" size="sm" disabled={busy.anyOfRendered("publication", "reopening") || state.isSaving}
-          onClick={reopen}>Revert to saved</Button>
-        <Button type="button" size="sm" disabled={!state.isDirty || themeOverrideProblems || state.isSaving || locked} onClick={save}>Save</Button>
-        <Button type="button" size="sm" variant="outline" disabled={busy.isRendered("reopening") || state.isSaving || locked} onClick={openPublish}>Publish…</Button>
-      </div>
-      <p role="status" aria-live="polite" className="w-full text-sm text-muted-foreground">{pendingNote} {message}</p>
-    </div>
-    <Tabs value={tab} onValueChange={(next) => { if (isWorkspaceTab(next)) void changeTab(next); }}>
-      <TabsList variant="line" aria-label="Workspace sections">
-        {workspaceTabs.map((entry) => <TabsTrigger key={entry.value} value={entry.value}>{entry.label}</TabsTrigger>)}
-      </TabsList>
-      <TabsContent value="design" keepMounted className="space-y-6 pt-4">
-        <StudioThreePaneShell
-          topBar={null}
-          outline={(closeOutline) => <ul><StudioOutline node={outline} selectedKey={selectionKey} disabled={busy.isRendered("publication")} choose={async (node) => {
-                if (await chooseSelection(node.selection)) closeOutline();
-              }} /></ul>}
-          canvas={
-            <section className={canvasPage !== undefined
-              ? "space-y-3 bg-card text-card-foreground"
-              : "space-y-3 rounded-xl border bg-card text-card-foreground border-border p-4"} aria-label="Selected item">
-              <h2 className="font-semibold">{canvasPage !== undefined ? labels.get(`page:${canvasPage.id}`) ?? canvasPage.name
-                : inspector.status === "resolved" ? selectedName ?? inspector.descriptor.label : "Select an item"}</h2>
-              {selected?.kind === "application" && <p>{source.body.description}</p>}
-              {selected?.kind === "placement" && canvasPage === undefined &&
-                <p>This block is part of a layout. Change it in the inspector.</p>}
-              {/* The canvas measures its container, so it is drawn only while the Design tab is showing; its edits live in the draft history. */}
-              {tab === "design" && canvasPage !== undefined && inspector.status === "resolved" &&
-                <ApplicationPagePuckEditor key={`canvas:${canvasPage.id}`} source={source}
-                  compiledSource={compiled.source}
-                  platformBlockCatalogue={platformBlockCatalogue}
-                  fieldInputControlReleases={fieldInputControlReleases}
-                  platformThemeTokens={platformThemeTokens}
-                  pageAlias={canvasPage.id} compiledSlots={compiled.slots?.[canvasPage.id]}
-                  frame={canvasFrameFor(compiled.frames, canvasPage.id)}
-                  selectedPlacementAlias={selected?.kind === "placement" ? selected.placementAlias : null}
-                  onSelectPlacement={selectFromCanvas}
-                  breakpoint={canvasBreakpoint} onBreakpointChange={setCanvasBreakpoint}
-                  disabled={locked || noEdit}
-                  compileFailure={compiled.failure}
-                  validateThemeOverrides={(theme, placements) => validateStudioPlacementThemeOverrides(organizationId, {
-                    rootId: draft.rootId, expectedDraftRevision: history.getState().draftRevision, theme, placements })}
-                  onThemeOverrideProblems={setThemeOverrideProblems}
-                  onChange={applyPuckPageEdit} />}
-              {flowPane(busy.anyRendered("flowText", "flowAppend") || noEdit)}
-            </section>
-          }
-          inspector={<>
-              {inspector.status === "resolved" && <>
-                <p className="text-sm text-muted-foreground">{studioKindLabel(inspector.descriptor.kind)}</p>
-                <TechnicalDetails>
-                  <dl className="space-y-1">
-                    <div><dt className="font-semibold">Kind</dt><dd>{inspector.descriptor.kind}</dd></div>
-                    <div><dt className="font-semibold">Alias</dt><dd className="break-all"><code>{inspector.descriptor.alias}</code></dd></div>
-                    <div><dt className="font-semibold">Source path</dt><dd className="break-all"><code>{inspector.descriptor.sourcePath || "/"}</code></dd></div>
-                  </dl>
-                </TechnicalDetails>
-              </>}
-              {editable ? <form className="space-y-3" onSubmit={applyLabels}>
-                <label className="block space-y-1"><span>Name</span>
-                  <Input className={inputClass} required maxLength={selected?.kind === "application" ? 120 : 60}
-                    disabled={busy.anyRendered("labels", "appearance")} value={label} onChange={(event) => {
-                      if (busy.anyOf("publication", "sourceImport", "search", "condition", "reopening")) return;
-                      busy.touch("labels");
-                      setLabel(event.target.value);
-                    }} /></label>
-                {selected?.kind === "application" && <label className="block space-y-1"><span>Description</span>
-                  <Textarea className={inputClass} required maxLength={1000} disabled={busy.anyRendered("labels", "appearance")}
-                    value={description} onChange={(event) => {
-                      if (busy.anyOf("publication", "sourceImport", "search", "condition", "reopening")) return;
-                      busy.touch("labels");
-                      setDescription(event.target.value);
-                    }} /></label>}
-                <Button disabled={busy.anyRendered("labels")} type="submit">Apply</Button>
-                <Button disabled={busy.anyOfRendered("publication", "search", "sourceImport", "reopening") || !pendingLabels} type="button" onClick={() => {
-                  if (busy.anyOf("publication", "sourceImport", "search", "reopening")) return;
-                  setLabel(currentLabel); setDescription(source.body.description);
-                }}>Discard</Button>
-                <p className="text-sm">Apply puts the change in your draft. Save keeps it.</p>
-              </form> : selected?.kind === "placement" ? null : <p>{selected?.kind === "flow"
-                ? "Select a step in the flow to change its text or calculation."
-                : "This item cannot be edited here."}</p>}
-              {selected?.kind === "placement" && inspector.status === "resolved" &&
-                <ApplicationCompositionEditor key={compositionEpoch} context={compositionContext}
-                  selection={selected} disabled={busy.anyRendered("composition") || noEdit}
-                  onPendingChange={reportCompositionPending} onCommand={commandComposition} />}
-              {selected?.kind === "placement" && inspector.status === "resolved" &&
-                <ApplicationVisibilityConditionEditor key={`${conditionEpoch}:${selectionKey}`} context={compositionContext}
-                  selection={selected} saved={savedPreviewDraft.current}
-                  busy={busy.anyOfRendered("publication", "search", "sourceImport", "reopening") || state.isSaving}
-                  disabled={busy.anyRendered("condition") || noEdit}
-                  readSnapshot={readVisibilitySnapshot} onPendingChange={reportConditionPending}
-                  onCommand={(expected, expectedSelection, metadata, condition, isCurrentResponse) => {
-                    const current = history.getState();
-                    const currentSelection = selection.getSelection();
-                    if (!active.current || current.isSaving || busy.any("condition") ||
-                      currentSelection?.kind !== "placement" || expectedSelection.kind !== "placement" ||
-                      currentSelection.placementAlias !== expectedSelection.placementAlias || !isCurrentResponse()) return { kind: "stale" };
-                    const currentContext: StudioCompositionContext = { organizationId, rootId: current.rootId, key: draft.key,
-                      draftRevision: current.draftRevision, localLifetime: lifetime.current,
-                      catalogue: platformBlockCatalogue, source: current.source };
-                    const result = applyStudioVisibilityCondition(expected, currentContext, currentSelection, metadata, condition);
-                    if (result.kind !== "applied") return result;
-                    const latest = history.getState();
-                    const latestSelection = selection.getSelection();
-                    if (!active.current || latest.isSaving || busy.any("condition") ||
-                      latest.source !== current.source || latest.rootId !== current.rootId ||
-                      latest.draftRevision !== current.draftRevision || lifetime.current !== currentContext.localLifetime ||
-                      latestSelection?.kind !== "placement" || latestSelection.placementAlias !== currentSelection.placementAlias ||
-                      !isCurrentResponse()) return { kind: "stale" };
-                    if (!history.edit(result.source)) return { kind: "invalid", issues: [] };
-                    setMessage("Visibility rule changed. Save to keep it.");
-                    return result;
-                  }} />}
-              {selected?.kind === "application" && inspector.status === "resolved" &&
-                <ApplicationAppearanceEditor key={appearanceEpoch} organizationId={organizationId}
-                  rootId={state.rootId} draftRevision={state.draftRevision} source={source}
-                  validationEpoch={appearanceValidationEpoch}
-                  disabled={busy.anyRendered("appearance") || state.isSaving} onPendingChange={reportAppearancePending}
-                  onApply={(expected, next) => {
-                    const current = history.getState();
-                    if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || busy.any("appearance") ||
-                        current.rootId !== state.rootId || current.draftRevision !== state.draftRevision ||
-                        current.source !== state.source || expected !== source) return false;
-                    const applied = history.edit(next);
-                    if (applied) setMessage("Appearance changed. Save to keep it.");
-                    return applied;
-                  }} />}
-          </>} />
-        <ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
-          disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}
-          onPendingChange={reportSearchPending} onRefresh={refreshSearchMetadata}
-          onApply={(expected, search) => {
-            const current = history.getState();
-            if (!active.current || lifetime.current !== workspaceLifetime || current.isSaving || current.isDirty ||
-                busy.any("search") || canonicalJson(expected) !== canonicalJson(current.source) ||
-                (search !== undefined && currentSearchMetadata === null)) return false;
-            const candidate = structuredClone(expected);
-            if (search === undefined) delete candidate.body.search;
-            else candidate.body.search = search;
-            const parsed = applicationSourceDocumentSchema.safeParse(candidate);
-            if (!parsed.success || !history.edit(parsed.data)) return false;
-            setSearchMetadata(null); searchRefresh.current += 1;
-            setPreparedPublication(null); previewGeneration.current += 1;
-            return true;
-          }} />
-        <details className="rounded-xl border bg-card p-4 text-card-foreground">
-          <summary className="cursor-pointer font-semibold">Import from source (advanced)</summary>
-          <div className="pt-3">
+    <StudioFrame tabs={studioRailTabs} activeTab={tab} onTabChange={changeTab}
+      topBar={<StudioTopBar
+        location={{ organizationName: place.organizationName, organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
+          applicationName: source.body.name, item: breadcrumbItem,
+          onApplication: () => { void chooseSelection({ kind: "application", applicationRootId: draft.rootId }); } }}
+        savedStateLabel={savedStateLabel} status={`${pendingNote} ${message}`}
+        canUndo={state.canUndo} canRedo={state.canRedo} undoDisabled={locked}
+        onUndo={() => { if (!busy.any()) history.undo(); }} onRedo={() => { if (!busy.any()) history.redo(); }}
+        onRevert={() => { void reopen(); }} revertDisabled={busy.anyOfRendered("publication", "reopening") || state.isSaving}
+        onSave={() => { void save(); }} saveDisabled={!state.isDirty || themeOverrideProblems || state.isSaving || locked}
+        backToAppHref={place.applicationHref}
+        onPreview={() => { void togglePreview(); }} previewing={previewing}
+        previewDisabled={!previewing && (state.isSaving || locked || themeOverrideProblems)}
+        onPublish={openPublish} publishDisabled={busy.isRendered("reopening") || state.isSaving || locked} />}
+      panel={panels}
+      inspector={inspectorPanel}
+      canvas={({ inspectorOpen, toggleInspector }) => <>
+        <StudioCanvasToolbar title={centreTitle} breakpoint={canvasBreakpoint} onBreakpoint={setCanvasBreakpoint}
+          zoom={canvasZoom} onZoom={setCanvasZoom} showsCanvas={canvasShown && canvasPage !== undefined}
+          previewing={previewing} onEndPreview={() => setPreviewing(false)}
+          inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} />
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          {previewing && <ApplicationDraftPreview context={readPreviewContext()} readContext={readPreviewContext}
+            platformBlockCatalogue={platformBlockCatalogue}
+            fieldInputControlReleases={fieldInputControlReleases}
+            platformThemeTokens={platformThemeTokens} />}
+          {canvasCentre}
+          {/* A module editor keeps its unapplied input while another tab is open. */}
+          <div hidden={tab !== "data" || previewing}>
+            {moduleTarget === null
+              ? <p className="text-sm text-muted-foreground">Choose a module and what to change in the Data panel.</p>
+              : <StudioModuleEditor target={moduleTarget} onDirtyChange={setModuleDirty} />}
+          </div>
+          {tab === "releases" && !previewing && releasesSection === "history" &&
+            <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision} />}
+          {tab === "releases" && !previewing && releasesSection === "page-adoption" &&
+            <StandardPageAdoption organizationId={organizationId} rootId={state.rootId}
+              disabledReason={state.isDirty || locked ? "Save your changes first; a choice here changes the saved draft." : undefined}
+              onSaved={() => { void reopen(); }} />}
+          {/* The import keeps its unapplied input (and its pending flag) while another tab is open. */}
+          <section hidden={tab !== "releases" || previewing || releasesSection !== "import"} aria-label="Import from source"
+            className="space-y-3">
+            <p className="text-sm text-muted-foreground">Replace the draft with a source document. This is for advanced use; the change is checked before it reaches your draft.</p>
             <ApplicationSourceImport key={sourceImportPanelEpoch}
               disabled={busy.anyRendered("sourceImport") || noEdit}
               readSnapshot={readSourceImportSnapshot}
               onPendingChange={(pending) => reportSourceImportPending(pending, sourceImportPanelEpoch)}
-              onApply={(expected, candidate) => {
-                if (!sameStudioApplicationSourceImportSnapshot(expected, readSourceImportSnapshot())) return "stale";
-                const parsed = applicationSourceDocumentSchema.safeParse(candidate);
-                if (!parsed.success || parsed.data.key !== expected.key || parsed.data.root_alias !== expected.rootAlias) return "stale";
-                const current = history.getState();
-                if (canonicalJson(parsed.data) === canonicalJson(current.source)) return "unchanged";
-                if (!sameStudioApplicationSourceImportSnapshot(expected, readSourceImportSnapshot())) return "stale";
-                if (!history.edit(parsed.data)) return "stale";
-                // Reset old inspector buffers only after the one accepted history replacement.
-                lifetime.current += 1;
-                setWorkspaceLifetime(lifetime.current);
-                discardSourceImport();
-                setConditionEpoch((value) => value + 1);
-                reportConditionPending(false);
-                setAppearanceEpoch((value) => value + 1);
-                setAppearanceValidationEpoch((value) => value + 1);
-                reportAppearancePending(false);
-                setCompositionEpoch((value) => value + 1);
-                reportCompositionPending(false);
-                setFlowEpoch((value) => value + 1);
-                resetFlowPending();
-                reportFlowAppendPending(false);
-                const currentSelection = selection.getSelection();
-                setLabel(currentSelection?.kind === "application" ? parsed.data.body.name
-                  : currentSelection?.kind === "page"
-                    ? parsed.data.body.pages.find((page) => page.id === currentSelection.pageAlias)?.name ?? "" : "");
-                setDescription(parsed.data.body.description);
-                setMessage("Imported changes are in your draft. Save to keep them.");
-                return "applied";
-              }} />
-          </div>
-        </details>
-      </TabsContent>
-      <TabsContent value="preview" className="pt-4">
-        <ApplicationDraftPreview context={readPreviewContext()} readContext={readPreviewContext}
-          platformBlockCatalogue={platformBlockCatalogue}
-          fieldInputControlReleases={fieldInputControlReleases}
-          platformThemeTokens={platformThemeTokens} />
-      </TabsContent>
-      <TabsContent value="modules" className="pt-4">
-        <StudioModulesPanel metadata={currentModuleMetadata} refreshing={refreshingSearch}
-          refreshDisabled={state.isSaving || state.isDirty || locked} onRefresh={refreshSearchMetadata} />
-      </TabsContent>
-      <TabsContent value="history" className="pt-4">
-        <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision} />
-      </TabsContent>
-      <TabsContent value="page-adoption" className="pt-4">
-        <StandardPageAdoption organizationId={organizationId} rootId={state.rootId}
-          disabledReason={state.isDirty || locked ? "Save your changes first; a choice here changes the saved draft." : undefined}
-          onSaved={() => { void reopen(); }} />
-      </TabsContent>
-    </Tabs>
+              onApply={applySourceImport} />
+          </section>
+        </div>
+      </>} />
     <StudioPublishDialog open={publishOpen} onOpenChange={closePublish}
       hasUnsavedChanges={state.isDirty} saving={state.isSaving} onSave={() => { void save(); }}
       canPrepare={canPrepare} preparing={preparing} publishing={busy.isRendered("publication") && !preparing}
@@ -1077,6 +1162,5 @@ function ExistingApplicationWorkspace({ organizationId, draft, initialTab, initi
       onPrepare={() => { void requestPublication("prepare"); }}
       onPublish={() => { void requestPublication("publish"); }} />
     {confirmDialog}
-  </main>;
+  </div>;
 }
-

@@ -1,4 +1,5 @@
 "use client";
+import { useReportModuleEditorDirty } from "./module-editor-dirty";
 import { Button } from "@vortex/ui/components/button";
 import { NativeSelect } from "@vortex/ui/components/native-select";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -141,6 +142,7 @@ export function ModuleQueryFilterEditor({ organizationId, moduleRootId, initial 
   const localValidation = controlValidation ?? computedValidation;
   const staged = !sameModuleQueryFilter(working, applied);
   const dirty = !sameModuleQueryFilter(applied, baseline);
+  useReportModuleEditorDirty(dirty || staged);
   const selectedChoice = queryChoices.find((choice) => choice.alias === selectedAlias);
 
   const clearLocalHistory = () => {

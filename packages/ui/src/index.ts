@@ -348,7 +348,7 @@ export {
   type ApplicationPreviewSimulatedEffect,
 } from "./application-preview";
 
-export { AppearanceProvider } from "./navigation/appearance-toggle";
+export { AppearanceProvider, AppearanceToggle } from "./navigation/appearance-toggle";
 
 // Theme variables and shared component styles
 export {

@@ -2,7 +2,7 @@
 import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { ConditionNode } from "@vortex/platform/schema";
+import { applicationModuleKeys, type ConditionNode } from "@vortex/platform/schema";
 import {
   StudioConditionControls, parseStudioApplicationConditionContext,
   projectStudioVisibilityEditor, resolveStudioVisibilityTarget, sameStudioVisibilityValue, sameStudioVisibilityCondition,
@@ -59,7 +59,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       target.pageAlias !== savedTarget.pageAlias || target.recordReference !== savedTarget.recordReference ||
       snapshot.saved.organizationId !== snapshot.context.organizationId || snapshot.saved.rootId !== snapshot.context.rootId ||
       snapshot.saved.key !== snapshot.context.key || snapshot.saved.draftRevision !== snapshot.context.draftRevision ||
-      JSON.stringify(snapshot.context.source.body.module_bindings) !== JSON.stringify(snapshot.saved.source.body.module_bindings)) {
+      JSON.stringify(applicationModuleKeys(snapshot.context.source)) !== JSON.stringify(applicationModuleKeys(snapshot.saved.source))) {
       setStatus("A visibility rule needs a saved detail page and the same modules as the saved draft. Save your changes first.");
       return;
     }

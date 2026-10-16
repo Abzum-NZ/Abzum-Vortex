@@ -276,7 +276,8 @@ function dependencyKeys(request: PublicationCompilationRequest): string[] {
     return array(body.dependencies).map((entry) => String(entry.module));
   if (source.kind === "application")
     return [
-      ...array(body.module_bindings).map((entry) => String(entry.module)),
+      ...array(body.modules).map((module) => String(module.key)),
+      ...array(body.uses).map((use) => String(use.module)),
       ...array(body.connection_bindings).map((entry) => String(entry.connection_type)),
     ];
   return [];

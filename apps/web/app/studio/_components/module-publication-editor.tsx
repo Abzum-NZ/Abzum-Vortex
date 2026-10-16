@@ -1,4 +1,5 @@
 "use client";
+import { useReportModuleEditorDirty } from "./module-editor-dirty";
 
 import { PublicationSummary } from "./publication-summary";
 import { useState } from "react";
@@ -82,6 +83,7 @@ export function ModulePublicationEditor({
   const [componentLabels, setComponentLabels] = useState<ComponentLabels>([]);
   const [release, setRelease] = useState<PublishedRelease | null>(null);
   const [releaseNote, setReleaseNote] = useState("");
+  useReportModuleEditorDirty(releaseNote.trim().length > 0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 

@@ -7,6 +7,7 @@ import {
   type SourceItemVortex,
 } from "@vortex/platform/schema";
 import { loadApplicationSource } from "../application-source-loader";
+import { tasksModule } from "./module";
 
 const {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
@@ -163,13 +164,7 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
       description: "A small task list and creation form.",
       icon: "check-square",
       home_page: "tasks",
-      module_bindings: [
-        {
-          module: "vortex.tasks",
-          version: { selection: "exact", version: "1.0.0" },
-          purpose: "primary",
-        },
-      ],
+      uses: [],
       permissions: [
         {
           id: "perm_app_tasks_read",
@@ -217,11 +212,9 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
           permission: createPage,
         },
       ],
-      queries: [],
       pipelines: [],
       connection_bindings: [],
       interfaces: [],
-      actions: [],
       events: [
         {
           id: "event_task_create",
@@ -294,4 +287,5 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
     },
   },
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+  [tasksModule],
 );

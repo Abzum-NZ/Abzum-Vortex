@@ -1,17 +1,22 @@
 import {
-  isSourceItemShape,
+  readSourceItem,
   reservedItemPropKeys,
   sourcePageRootSlots,
   type ApplicationRootId,
   type ApplicationSourceDocument,
+  type ImmutablePlatformBlockCatalogue,
   type SourceItem,
   type SourcePageData,
 } from "@vortex/platform/schema";
 
-/** The editable Application source and its permanent Definition root identity. */
+/**
+ * The editable Application source, its permanent Definition root identity and the block catalogue
+ * whose releases decide which props of a placed item are child slots.
+ */
 export type StudioApplicationSelectionDraft = Readonly<{
   rootId: ApplicationRootId;
   source: ApplicationSourceDocument;
+  catalogue: ImmutablePlatformBlockCatalogue;
 }>;
 
 /**
@@ -120,17 +125,25 @@ const authoredLabel = (value: string | undefined, fallback: string): string => {
 };
 
 /**
- * The item's child slots read from its props alone: every array prop that holds only items,
- * including an empty one. Every other prop but `id` and `vortex` is a plain setting.
+ * The item's child slots as its block release declares them (read by `readSourceItem`), with the
+ * items placed in each; every other prop but `id` and `vortex` is a plain setting. An item whose
+ * release the catalogue does not hold has no slots.
  */
-const itemPropsByRole = (item: SourceItem) => {
+const itemPropsByRole = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem) => {
+  const { block_id: blockId, release_version: releaseVersion } = item.props.vortex.block;
+  const release = catalogue.releases.find(
+    (candidate) => candidate.blockId === blockId && candidate.releaseVersion === releaseVersion,
+  );
   const slots: [string, SourceItem[]][] = [];
-  const settings: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(item.props)) {
-    if (reservedItemPropKeys.has(key)) continue;
-    if (Array.isArray(value) && value.every(isSourceItemShape)) slots.push([key, value]);
-    else settings[key] = value;
-  }
+  if (release !== undefined)
+    for (const [key, slot] of readSourceItem(item, release).slots)
+      if (slot.items !== undefined) slots.push([key, slot.items]);
+  const slotKeys = new Set(slots.map(([key]) => key));
+  const settings = Object.fromEntries(
+    Object.entries(item.props).filter(
+      ([key]) => !reservedItemPropKeys.has(key) && !slotKeys.has(key),
+    ),
+  );
   return { slots, settings };
 };
 
@@ -167,7 +180,7 @@ export const traverseStudioSemanticSelectionDraft = (
     visit(Object.freeze({ kind: "slot", slotAlias, label }), () => {
       for (const item of items) {
         const placementAlias = item.props.id;
-        const { slots, settings } = itemPropsByRole(item);
+        const { slots, settings } = itemPropsByRole(draft.catalogue, item);
         const selection = Object.freeze({ kind: "placement", placementAlias } as const);
         visit(
           Object.freeze({

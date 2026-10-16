@@ -219,7 +219,6 @@ export const moduleBindingSchema = z
     moduleRootId: moduleRootIdSchema,
     version: versionRequirementSchema,
     resolvedVersion: semanticVersionSchema,
-    purpose: builderKeySchema,
     lineageId: lineageIdSchema.optional(),
   })
   .strict();

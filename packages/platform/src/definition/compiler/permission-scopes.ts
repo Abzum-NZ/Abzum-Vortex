@@ -2,7 +2,7 @@ import type { DefinitionCompilationOutput } from "../../schema";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import type { Resolution } from "./resolution";
 import { compatibleVersion } from "./resolution";
-import { asObject, fail, type JsonObject } from "./shared";
+import { applicationModuleKeysOf, asObject, CURRENT_MODULE_RELEASE, fail, type JsonObject } from "./shared";
 import {
   type ModuleValueContext,
   normaliseExact,
@@ -28,7 +28,7 @@ export function permissionScopeSourceOwners(source: JsonObject): string[] {
     ? [String(source.key)]
     : [
         String(source.key),
-        ...(body.module_bindings as JsonObject[]).map((binding) => String(binding.module)),
+        ...applicationModuleKeysOf(body),
       ];
 }
 
@@ -162,16 +162,15 @@ export function applicationPermissionSharingConditions(
   const moduleKey = qualifiedRecordType.slice(0, separator);
   const expectedModule = resolution.definition(moduleKey, "module");
   const recordType = resolution.recordType(qualifiedRecordType);
-  const bindings = (asObject(source.body).module_bindings as JsonObject[]).filter(
-    (binding) => binding.module === moduleKey,
+  const bindings = applicationModuleKeysOf(asObject(source.body)).filter(
+    (key) => key === moduleKey,
   );
   const matches = dependencyOutputs.filter(
     (output) => output.kind === "module" && output.artifact.definitionKey === moduleKey,
   );
   if (bindings.length !== 1 || matches.length !== 1)
     fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
-  const binding = bindings[0]!;
-  const requirement = binding.version as Parameters<typeof compatibleVersion>[0];
+  const requirement = CURRENT_MODULE_RELEASE;
   const output = matches[0]!;
   if (output.kind !== "module")
     fail("vortex.definition.saved_condition_revision_required", "unresolved_reference");
