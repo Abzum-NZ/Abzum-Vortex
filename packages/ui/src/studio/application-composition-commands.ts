@@ -481,7 +481,7 @@ const plainSource = (source: unknown): void => {
     const entry = pending.pop()!;
     const value = entry.value;
     if (value === null || typeof value !== "object") {
-      if (value !== undefined && typeof value !== "string" && typeof value !== "number" &&
+      if (value !== undefined && value !== null && typeof value !== "string" && typeof value !== "number" &&
         typeof value !== "boolean") return refuse();
       continue;
     }
@@ -611,7 +611,9 @@ export const describeStudioCompositionAddTargets = (context: StudioCompositionCo
 
 const groupsTaken = (target: StudioCompositionAddTarget): string => {
   const labels = [...new Set(target.choices.map((choice) => choice.groupLabel.toLowerCase()))];
-  return labels.length === 0 ? "it takes no new blocks" : `it takes ${labels.join(", ")} blocks`;
+  if (labels.length === 0) return "it takes no new blocks";
+  const listed = labels.length === 1 ? labels[0]! : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)!}`;
+  return `it takes ${listed} blocks`;
 };
 
 /**

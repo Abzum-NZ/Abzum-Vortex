@@ -124,7 +124,10 @@ const matches = (choice: StudioPaletteChoice, words: readonly string[]): boolean
   return words.every((word) => haystack.includes(word));
 };
 
-/** The choices that match the search, in palette groups in catalogue group order. */
+/**
+ * The choices that match the search, in palette groups in catalogue group order; in each group the
+ * blocks that can be added come first.
+ */
 export function groupStudioPaletteChoices(
   choices: readonly StudioPaletteChoice[],
   searchText: string,
@@ -134,7 +137,10 @@ export function groupStudioPaletteChoices(
   for (const group of Object.keys(PALETTE_GROUP_TITLES) as BlockPaletteGroup[]) groups.set(group, []);
   for (const choice of choices) if (matches(choice, words)) groups.get(choice.group)?.push(choice);
   return Object.freeze([...groups].filter(([, list]) => list.length > 0).map(([group, list]) =>
-    Object.freeze({ group, label: PALETTE_GROUP_TITLES[group], choices: Object.freeze(list) })));
+    Object.freeze({ group, label: PALETTE_GROUP_TITLES[group], choices: Object.freeze([
+      ...list.filter((choice) => choice.unavailable === undefined),
+      ...list.filter((choice) => choice.unavailable !== undefined),
+    ]) })));
 }
 
 /** A query of one of the application's own Modules, and the fields it reads. */

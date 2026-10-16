@@ -64,7 +64,7 @@ const tool = (name: ToolName, description: string, input: z.ZodType, readOnly: b
   ({ name, description, input, readOnly, inputSchema: inputSchema(input) });
 
 const applicationTools: readonly StudioApplicationTool[] = [
-  tool("read_application_draft", "Read the Application draft as it is in the workspace now: revision, unsaved state, the outline of pages, placements, flows and navigation, and for each page the released components that can be added and for each placement its declared settings. Call it first and after any refusal.", z.object({}).strict(), true),
+  tool("read_application_draft", "Read the Application draft as it is in the workspace now: revision, unsaved state, the outline of pages, placements, flows and navigation, for each page the places a new block can go with the blocks each admits, the queries a data block can read, and for each placement its declared settings. Call it first and after any refusal.", z.object({}).strict(), true),
   tool("rename_application_item", "Rename the Application (with its description) or one page, the same edit as the inspector's Apply labels. It changes the workspace draft; call save_application_draft to persist it.",
     z.discriminatedUnion("target", [
       z.object({ target: z.literal("application"), name: z.string().min(1), description: z.string().min(1) }).strict(),
