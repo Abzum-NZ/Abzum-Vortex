@@ -528,7 +528,9 @@ for (const file of migrationFiles) {
     const close = closingParenthesis(content, open);
     const name = functionNamePattern.exec(match[0])?.[1]?.replaceAll('"', "").toLowerCase();
     if (close < 0 || !name) continue;
-    const argumentTypes = splitArguments(content.slice(open + 1, close)).map(normalizedType);
+    const argumentTypes = splitArguments(content.slice(open + 1, close))
+      .map(argumentType)
+      .filter((type): type is string => type !== undefined);
     events.push({ kind: "drop", offset: start, identity: `${name}(${argumentTypes.join(",")})` });
   }
   for (const match of content.matchAll(renameFunctionPattern)) {
