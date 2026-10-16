@@ -880,11 +880,13 @@ export const sourceApplicationBodySchema = z
           path,
           message: "Page content may bind only slots declared by its shell",
         });
-      if (required.some((slotId) => (content.get(slotId)?.length ?? 0) === 0))
+      // The one content-slot rule: a required slot is present on the page; it may hold no blocks yet,
+      // and then renders as an empty area. The compiler and the runtime rely on it.
+      if (required.some((slotId) => !content.has(slotId)))
         context.addIssue({
           code: "custom",
           path,
-          message: "Page content must bind non-empty content to every required shell slot",
+          message: "Page content must bind every required shell slot (it may be empty)",
         });
     };
     for (const [pageIndex, page] of value.pages.entries()) {

@@ -895,8 +895,12 @@ const applyScalarSettings = (current: StudioCompositionContext, selection: Studi
   return sameValue(parsed, current.source) ? { kind: "invalid" } : { kind: "applied", source: parsed };
 };
 
-/** Read only declared placement identity positions, never arbitrary literal data. */
-const removalReference = (source: ApplicationSourceDocument, alias: string,
+/**
+ * What still names a placement (its flow bindings, or a flow task that targets it), read only from
+ * declared placement identity positions, never arbitrary literal data. `aliases` is every placement
+ * in the application.
+ */
+export const studioPlacementRemovalReference = (source: ApplicationSourceDocument, alias: string,
   aliases: ReadonlySet<string>): StudioCompositionRemovalReason | undefined => {
   if (source.body.flow_bindings.some((binding) => binding.control === alias)) return "flow_control";
   const target = (value: unknown, qualified: boolean,
@@ -1019,7 +1023,7 @@ const resolveRemoval = (context: StudioCompositionContext,
       if (block.block_id === release.blockId && block.release_version === release.releaseVersion)
         releaseUses += 1;
     }
-  const reason = removalReference(source, alias, aliases);
+  const reason = studioPlacementRemovalReference(source, alias, aliases);
   return reason === undefined ? { kind: "available", removal: {
     source, target, alias, willRemoveUnusedRelease: releaseUses === 1,
   } } : { kind: "blocked", reason };
