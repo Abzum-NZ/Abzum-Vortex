@@ -25,6 +25,7 @@ declare
   module_pin record;
   owned_release record;
   application_content_value jsonb;
+  system_projection_ids_value uuid[] := array[]::uuid[];
   resolved_modules_value jsonb := '[]'::jsonb;
   storage_identities_value jsonb := '[]'::jsonb;
 begin
@@ -285,6 +286,14 @@ begin
     if owned_release.owner_kind = 'application' then
       application_content_value := owned_release.release #> '{compilation_output,canonical,content}';
     end if;
+    -- A system projection is the platform's own live read model: no preview role reaches it.
+    system_projection_ids_value := system_projection_ids_value || coalesce((
+      select pg_catalog.array_agg((record_type.value ->> 'recordTypeId')::uuid)
+      from pg_catalog.jsonb_array_elements(
+        coalesce(owned_release.release #> '{compilation_output,canonical,content,recordTypes}', '[]'::jsonb)
+      ) as record_type(value)
+      where record_type.value ? 'systemProjection'
+    ), array[]::uuid[]);
     insert into vortex_access.preview_permission_entries (
       preview_installation_id, entry, held
     )
@@ -332,10 +341,11 @@ begin
 
   -- The builder holds every role of the draft: a permission is held when a role selects it, an
   -- Application-wide selection taking only the Application's ordinary permissions, as it does
-  -- at installation.
+  -- at installation. A permission on a system projection is never held in a preview.
   update vortex_access.preview_permission_entries as preview_entry
   set held = true
   where preview_entry.preview_installation_id = preview_installation_id_value
+    and not coalesce((preview_entry.entry).record_type_id = any(system_projection_ids_value), false)
     and exists (
       select 1
       from pg_catalog.jsonb_array_elements(application_content_value -> 'roles') as role(value)
