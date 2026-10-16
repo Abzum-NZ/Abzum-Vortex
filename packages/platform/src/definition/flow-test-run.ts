@@ -72,7 +72,7 @@ type PreviewInstallationReader = Readonly<{
   ): Promise<PreviewInstallation>;
 }>;
 
-export type FlowTestRunDependencies = Readonly<{
+type FlowTestRunDependencies = Readonly<{
   previews: PreviewInstallationReader;
   records: PreviewRecordTaskPort;
   /** Reads the exact published Module release pinned by the preview, not the current release. */

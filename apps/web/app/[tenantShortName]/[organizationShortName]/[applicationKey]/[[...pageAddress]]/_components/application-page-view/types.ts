@@ -1,5 +1,4 @@
 import type {
-  PagePuckRendererProps,
   ControlSemanticEvent,
   FormBlockRuntime,
 } from "@vortex/ui";
@@ -23,8 +22,6 @@ export type TableContinuationTarget = Readonly<{
   fromAddress?: true;
   request: Readonly<{ page: number; pageDirection: "forward" | "backward"; continuationToken?: string }>;
 }>;
-
-export type ApplicationShellRuntime = NonNullable<PagePuckRendererProps["applicationShellRuntime"]>;
 
 export type GuidedFormActions = Readonly<{
   advance: (request: GuidedFormStepRequest) => Promise<GuidedFormStepActionResult>;

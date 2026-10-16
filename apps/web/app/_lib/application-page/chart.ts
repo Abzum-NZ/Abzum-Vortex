@@ -15,7 +15,7 @@ import type { ModuleField, ModuleRelease } from "./types";
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 
 /** Why a chart placement cannot be projected; each is a stable code written to the placement log. */
-export type ChartProjectionFailure =
+type ChartProjectionFailure =
   | "chart_settings_invalid"
   | "chart_group_invalid"
   | "chart_measure_invalid";

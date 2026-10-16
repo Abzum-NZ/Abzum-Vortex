@@ -7,7 +7,7 @@ type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
-export interface OperationsAlertSinkDependencies {
+interface OperationsAlertSinkDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
 }
 

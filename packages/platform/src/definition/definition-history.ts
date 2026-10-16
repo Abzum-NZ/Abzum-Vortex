@@ -46,7 +46,7 @@ import {
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
-export const definitionHistoryErrorCodes = [
+const definitionHistoryErrorCodes = [
   "INVALID_DEFINITION_HISTORY_COMMAND",
   "INVALID_DEFINITION_RESTORE_COMMAND",
   "INVALID_DEFINITION_HISTORY_RESULT",
@@ -60,7 +60,7 @@ export const definitionHistoryErrorCodes = [
   "DEFINITION_RESTORE_FAILED",
 ] as const;
 
-export type DefinitionHistoryErrorCode = (typeof definitionHistoryErrorCodes)[number];
+type DefinitionHistoryErrorCode = (typeof definitionHistoryErrorCodes)[number];
 
 const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
   .extend({ ownerScope: z.string().min(1).max(500) })

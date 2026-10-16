@@ -7,7 +7,7 @@ import catalogue from "../catalogue/catalogue/shadcn-fonts.json";
  * and `heading` typography tokens, and the theme bridge (packages/ui/src/theme/theme-variables.ts) turns
  * the family a token names into a CSS variable for the renderer to paint with.
  */
-export type ShadcnFont = Readonly<{
+type ShadcnFont = Readonly<{
   /** The shadcn/create font id, for example `inter` or `source-sans-3`. */
   id: string;
   label: string;
@@ -21,7 +21,7 @@ export type ShadcnFont = Readonly<{
   licence: string;
 }>;
 
-export type ShadcnFontCatalogue = Readonly<{
+type ShadcnFontCatalogue = Readonly<{
   schemaVersion: string;
   registry: Readonly<{ package: string; packageVersion: string }>;
   defaults: Readonly<{ bodyFont: string; headingFont: string }>;
@@ -30,10 +30,10 @@ export type ShadcnFontCatalogue = Readonly<{
   fonts: readonly ShadcnFont[];
 }>;
 
-export const shadcnFontCatalogue = catalogue as ShadcnFontCatalogue;
+const shadcnFontCatalogue = catalogue as ShadcnFontCatalogue;
 
 /** Every catalogue font, in the pinned preset's order. */
-export const shadcnFonts: readonly ShadcnFont[] = shadcnFontCatalogue.fonts;
+const shadcnFonts: readonly ShadcnFont[] = shadcnFontCatalogue.fonts;
 
 /** The heading font option that paints headings in the selected body font. */
 export const SHADCN_HEADING_FONT_INHERIT = shadcnFontCatalogue.headingInherit;
@@ -54,24 +54,6 @@ const requireFont = (id: string): ShadcnFont => {
  * catalogue font's family key is its id with underscores: `source-sans-3` is `source_sans_3`.
  */
 export const shadcnFontFamilyKey = (font: ShadcnFont): string => font.id.replace(/-/g, "_");
-
-/** The catalogue font a typography token's family key names, or undefined for any other family. */
-export const findShadcnFontByFamilyKey = (familyKey: string): ShadcnFont | undefined =>
-  shadcnFonts.find((font) => shadcnFontFamilyKey(font) === familyKey);
-
-const CATEGORY_FALLBACKS: Readonly<Record<string, string>> = {
-  serif: 'ui-serif, Georgia, Cambria, "Times New Roman", serif',
-  monospace: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-};
-const SANS_FALLBACK =
-  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
-
-/**
- * The CSS font-family stack for one catalogue font: its declared family first, then local system
- * fonts of the same category when the family is not available.
- */
-export const shadcnFontStack = (font: ShadcnFont): string =>
-  `"${font.family}", ${CATEGORY_FALLBACKS[font.category] ?? SANS_FALLBACK}`;
 
 /**
  * The body and heading fonts a selection paints with; `inherit` paints headings in the body font.

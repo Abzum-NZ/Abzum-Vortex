@@ -51,7 +51,7 @@ const installationRuntimeBundleKey = (
   };
 };
 
-export const buildInstallationRuntimeBundleWriteCommand = (
+const buildInstallationRuntimeBundleWriteCommand = (
   sourceCandidate: PreparedInstallationRuntimeSource,
 ): InstallationRuntimeBundleWriteCommand => {
   const sourceManifest = installationRuntimeBundleSourceManifestSchema.parse(

@@ -740,7 +740,7 @@ const verifyCoordinatorActivation = (
   return { outcome: "unchanged", previousActiveRevision: null };
 };
 
-export type UpgradeActivation = Readonly<{
+type UpgradeActivation = Readonly<{
   outcome: "activated" | "unchanged";
   previousActiveRevision: number | null;
   activeAtCommitRevision: number;

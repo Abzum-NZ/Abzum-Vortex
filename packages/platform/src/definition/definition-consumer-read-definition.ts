@@ -10,17 +10,6 @@ import {
 } from "./definition-release-integrity";
 import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
-export const definitionConsumerReadErrorCodes = [
-  "INVALID_DEFINITION_READ_COMMAND",
-  "DEFINITION_RELEASE_NOT_FOUND",
-  "DEFINITION_CONTEXT_REFUSED",
-  "DEFINITION_DEPENDENCY_UNAVAILABLE",
-  "DEFINITION_RELEASE_INTEGRITY_FAILED",
-  "DEFINITION_READ_FAILED",
-] as const;
-
-export type DefinitionConsumerReadErrorCode = (typeof definitionConsumerReadErrorCodes)[number];
-
 const moduleDependencyTargetSchema = z
   .object({
     rootId: moduleRootIdSchema,
