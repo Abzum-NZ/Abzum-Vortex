@@ -88,11 +88,9 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
       : outline.entries.find((candidate) => samePath(candidate.path, path));
     const next: StudioSemanticSelection = entry === undefined ? flowSelection
       : { kind: "flow_step", flowAlias: flowSelection.flowAlias, moduleKey: flowSelection.moduleKey, taskId: entry.task.id };
-    // Moving between the steps of the open flow discards only the step's own unapplied settings, after asking;
-    // nothing else on the Flows tab holds input a step change could lose.
-    if (busy.is("flowStep")) void choose(next);
-    else select(next);
-  }, [flowSelection, outline, choose, select, busy]);
+    // A step change asks first only when unapplied input would be lost, like every other selection.
+    void choose(next);
+  }, [flowSelection, outline, choose]);
   const starts = useMemo(() => flowSelection === null ? [] : describeStudioFlowStarts(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel]);
   const recordTypes = useMemo(() => source.body.modules.flatMap((module) => module.record_types.map((recordType) => ({
