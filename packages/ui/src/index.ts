@@ -44,6 +44,7 @@ export {
 export {
   computePlacementClassName,
   computePlacementStyle,
+  computeSlotOrderCss,
   LAYOUT_CLASS_NAMES,
   LAYOUT_ONLY_STYLES_CSS,
 } from "./layout-styles";
@@ -59,22 +60,13 @@ export {
 
 // Page composition resolution and the single Puck page renderer
 export {
-  resolveRootPlacementSlot,
-  resolveShellLayout,
-  type GuidedFormComposition,
+  materialisedPageOf,
+  renderedPageOf,
+  selectRenderedLayout,
   type MaterialisedApplicationComposition,
-  type PlacementSlot,
-  type ProjectedPlacementAvailability,
-  type ProjectedPlacementSlot,
-  type ProjectedPageCapability,
+  type RenderedPage,
 } from "./page-composition";
 export { PagePuckRenderer, type PagePuckRendererProps } from "./page-puck-renderer";
-export {
-  createVortexPuckAdapter,
-  VortexPuckAdapterError,
-  type VortexPuckContent,
-  type VortexPuckData,
-} from "./vortex-puck-adapter";
 
 // Per-Block Display Payload & Event Contracts
 export {

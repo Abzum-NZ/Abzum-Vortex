@@ -17,7 +17,7 @@ import {
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
   type FormFlowFeedback,
-  type ProjectedPageCapability,
+  type RenderedPage,
   type PlatformThemeTokens,
   type ApplicationWebMcpRuntime,
   isClientPageChange,
@@ -29,6 +29,7 @@ import {
   type ProjectedApplicationFrame,
   type ReferenceChoiceSelectionEvidence,
   isRecord,
+  walkPageComposition,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -66,20 +67,10 @@ import {
 /** Every placement id of the page's own content, nested placements and guided step content included. */
 const placementIdsOf = (content: Readonly<Record<string, unknown>>): ReadonlySet<string> => {
   const ids = new Set<string>();
-  const visit = (slot: unknown): void => {
-    if (!isRecord(slot) || !isRecord(slot.placements)) return;
-    for (const [placementId, placement] of Object.entries(slot.placements)) {
-      ids.add(placementId);
-      if (isRecord(placement) && isRecord(placement.slots))
-        for (const child of Object.values(placement.slots)) visit(child);
-    }
-  };
-  const composition = content.composition;
-  if (isRecord(composition)) {
-    visit(composition.main);
-    if (isRecord(composition.stepContent))
-      for (const step of Object.values(composition.stepContent)) visit(step);
-  }
+  walkPageComposition(content.composition, ({ placementId }) => {
+    ids.add(placementId);
+    return undefined;
+  });
   return ids;
 };
 
@@ -624,7 +615,7 @@ export function ApplicationPageViewContent({
               </>
             )
           }
-          composition={currentContent as unknown as ProjectedPageCapability}
+          composition={currentContent as unknown as RenderedPage}
           registry={platformComponentRegistry}
           fieldInputControlReleases={fieldInputControlReleases}
           platformThemeTokens={platformThemeTokens}

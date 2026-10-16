@@ -28,7 +28,7 @@ import type { PageSubjectType, PageDataState, SearchParameters } from "./types";
 
 export const readAttachmentListPlacement = async (input: {
   block: unknown;
-  placement: ReturnType<typeof collectPlacements>[number]["placement"];
+  placement: ReturnType<typeof collectPlacements>[number];
   pageDefinition: PageDefinition;
   subjectType: PageSubjectType | undefined;
   pageSubjectRecordTypeId: string | undefined;
@@ -63,7 +63,7 @@ export const readAttachmentListPlacement = async (input: {
   if (
     !isRecord(block) ||
     block.releaseVersion !== ATTACHMENT_LIST_BLOCK_RELEASE.releaseVersion ||
-    placement.queryId !== undefined ||
+    placement.vortex.queryId !== undefined ||
     pageDefinition.type !== "detail" ||
     subjectType?.state !== "resolved" ||
     pageSubjectRecordTypeId === undefined

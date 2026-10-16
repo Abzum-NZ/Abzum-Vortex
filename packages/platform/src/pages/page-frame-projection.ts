@@ -1,6 +1,9 @@
-import type { ApplicationShell } from "../definition/application-composition/page-composition";
+import type {
+  ApplicationShell,
+  CompiledLayout,
+} from "../definition/application-composition/page-composition";
+import { itemPropSlots } from "./placement-walk";
 
-type PlacementSlot = ApplicationShell["layout"];
 type JsonObject = Record<string, unknown>;
 
 /**
@@ -17,7 +20,7 @@ export type ShellOutletLocation =
 /** The viewer's application frame: the projected shell without the page content. */
 export type ProjectedApplicationFrame = Readonly<{
   shellId?: string;
-  composition: Readonly<{ main: PlacementSlot }>;
+  composition: CompiledLayout;
   outlet: ShellOutletLocation;
 }>;
 
@@ -28,17 +31,23 @@ export type SplitProjectedPage = Readonly<{
 }>;
 
 const object = (value: unknown): JsonObject => value as JsonObject;
+const items = (value: unknown): JsonObject[] => value as JsonObject[];
 
-const emptySlot = (): PlacementSlot => ({
-  placements: {},
-  order: { desktop: [], tablet: [], phone: [] },
-});
+const layoutOf = (content: JsonObject[], order: unknown): CompiledLayout =>
+  ({
+    root: { props: { vortex: { slotOrders: { content: order } } } },
+    content,
+  }) as unknown as CompiledLayout;
+
+const emptyLayout = (): CompiledLayout => layoutOf([], { tablet: [], phone: [] });
 
 /** Ancestor placement identities from the root down to and including the named placement. */
-const pathTo = (slot: PlacementSlot, placementId: string): readonly string[] | undefined => {
-  for (const [id, placement] of Object.entries(slot.placements)) {
+const pathTo = (list: unknown, placementId: string): readonly string[] | undefined => {
+  for (const item of items(list)) {
+    const props = object(item.props);
+    const id = String(props.id);
     if (id === placementId) return [id];
-    for (const child of Object.values(placement.slots)) {
+    for (const [, child] of itemPropSlots(props)) {
       const nested = pathTo(child, placementId);
       if (nested !== undefined) return [id, ...nested];
     }
@@ -56,7 +65,9 @@ export const shellOutletLocation = (shell: ApplicationShell | undefined): ShellO
       placementId: String(first.parentPlacementId),
       slotKey: first.parentSlotKey,
     };
-  const paths = shell.contentSlots.map((binding) => pathTo(shell.layout, String(binding.parentPlacementId)));
+  const paths = shell.contentSlots.map((binding) =>
+    pathTo(shell.layout.content, String(binding.parentPlacementId)),
+  );
   if (paths.some((path) => path === undefined)) return { kind: "root" };
   const [head, ...others] = paths as readonly (readonly string[])[];
   let common = 0;
@@ -70,54 +81,64 @@ export const shellOutletLocation = (shell: ApplicationShell | undefined): ShellO
   return placementId === undefined ? { kind: "root" } : { kind: "placement", placementId };
 };
 
-/** Locates a placement and the slot that holds it in a projected slot tree. */
+/** Locates an item, and the props and slot key of the item holding it, in a projected list. */
 const locate = (
-  slot: JsonObject,
+  list: unknown,
   placementId: string,
-): Readonly<{ parent: JsonObject; placement: JsonObject }> | undefined => {
-  const placements = object(slot.placements);
-  const direct = placements[placementId];
-  if (direct !== undefined) return { parent: slot, placement: object(direct) };
-  for (const placement of Object.values(placements))
-    for (const child of Object.values(object(object(placement).slots))) {
-      const found = locate(object(child), placementId);
+  parent?: Readonly<{ props: JsonObject; slotKey: string }>,
+):
+  | Readonly<{
+      item: JsonObject;
+      parent: Readonly<{ props: JsonObject; slotKey: string }> | undefined;
+    }>
+  | undefined => {
+  for (const item of items(list)) {
+    const props = object(item.props);
+    if (String(props.id) === placementId) return { item, parent };
+    for (const [slotKey, child] of itemPropSlots(props)) {
+      const found = locate(child, placementId, { props, slotKey });
       if (found !== undefined) return found;
     }
+  }
   return undefined;
+};
+
+/** Empties one item's slot in place, with its breakpoint order. */
+const emptySlot = (props: JsonObject, slotKey: string): void => {
+  props[slotKey] = [];
+  const vortex = object(props.vortex);
+  vortex.slotOrders = { ...object(vortex.slotOrders), [slotKey]: { tablet: [], phone: [] } };
 };
 
 const splitRoot = (
   root: unknown,
   outlet: ShellOutletLocation,
-): Readonly<{ frame: PlacementSlot; content: JsonObject }> => {
-  if (outlet.kind === "root") return { frame: emptySlot(), content: object(root) };
+): Readonly<{ frame: CompiledLayout; content: CompiledLayout }> => {
+  if (outlet.kind === "root") return { frame: emptyLayout(), content: root as CompiledLayout };
   const frame = structuredClone(object(root));
-  const found = locate(frame, outlet.placementId);
+  const found = locate(frame.content, outlet.placementId);
   if (found === undefined)
     // The viewer may not see the placement that holds the content, so no content is shown, exactly
     // as when the content is composed into that placement.
-    return { frame: frame as PlacementSlot, content: emptySlot() };
+    return { frame: frame as unknown as CompiledLayout, content: emptyLayout() };
+  const props = object(found.item.props);
   if (outlet.kind === "slot") {
-    const slots = object(found.placement.slots);
-    const content = object(slots[outlet.slotKey] ?? emptySlot());
-    slots[outlet.slotKey] = emptySlot();
-    return { frame: frame as PlacementSlot, content };
+    const content = items(props[outlet.slotKey] ?? []);
+    const order = object(object(props.vortex).slotOrders)[outlet.slotKey] ?? {
+      tablet: [],
+      phone: [],
+    };
+    emptySlot(props, outlet.slotKey);
+    return { frame: frame as unknown as CompiledLayout, content: layoutOf(content, order) };
   }
-  const original = locate(object(root), outlet.placementId);
-  const order = object(found.parent.order);
-  const content = {
-    placements: { [outlet.placementId]: structuredClone(original?.placement) },
-    order: Object.fromEntries(
-      Object.entries(order).map(([breakpoint, ids]) => [
-        breakpoint,
-        (ids as readonly string[]).filter((id) => id === outlet.placementId),
-      ]),
-    ),
-  };
+  const original = locate(object(root).content, outlet.placementId);
+  const content = layoutOf([structuredClone(original!.item)], {
+    tablet: [outlet.placementId],
+    phone: [outlet.placementId],
+  });
   // The frame keeps the holding placement's position, emptied, so the outlet takes its place.
-  for (const key of Object.keys(object(found.placement.slots)))
-    object(found.placement.slots)[key] = emptySlot();
-  return { frame: frame as PlacementSlot, content };
+  for (const [slotKey] of itemPropSlots(props)) emptySlot(props, slotKey);
+  return { frame: frame as unknown as CompiledLayout, content };
 };
 
 /**
@@ -134,28 +155,21 @@ export const splitProjectedPage = (
   const composition = object(projected.composition);
   // The content renders inside the frame's outlet, so it names no shell of its own.
   const page = Object.fromEntries(Object.entries(projected).filter(([key]) => key !== "shellId"));
-  if ("main" in composition) {
-    const { frame, content } = splitRoot(composition.main, outlet);
-    return {
-      frame: {
-        ...(shell === undefined ? {} : { shellId: String(shell.shellId) }),
-        composition: { main: frame },
-        outlet,
-      },
-      content: { ...page, composition: { main: content } },
-    };
+  const frameOf = (frame: CompiledLayout): ProjectedApplicationFrame => ({
+    ...(shell === undefined ? {} : { shellId: String(shell.shellId) }),
+    composition: frame,
+    outlet,
+  });
+  if (composition.stepContent === undefined) {
+    const { frame, content } = splitRoot(composition, outlet);
+    return { frame: frameOf(frame), content: { ...page, composition: content } };
   }
   const stepContent = object(composition.stepContent);
   const steps = Object.entries(stepContent).map(
     ([stepId, root]) => [stepId, splitRoot(root, outlet)] as const,
   );
-  const frame = steps[0]?.[1].frame ?? emptySlot();
   return {
-    frame: {
-      ...(shell === undefined ? {} : { shellId: String(shell.shellId) }),
-      composition: { main: frame },
-      outlet,
-    },
+    frame: frameOf(steps[0]?.[1].frame ?? emptyLayout()),
     content: {
       ...page,
       composition: {

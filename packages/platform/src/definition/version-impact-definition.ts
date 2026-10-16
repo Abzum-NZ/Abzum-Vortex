@@ -136,11 +136,8 @@ const parseVersionImpactRequest = (input: unknown): SupportedVersionImpactReques
   return parsed.data;
 };
 
-const assertEvidenceContractVersions = (
-  request: SupportedVersionImpactRequest,
-  evidence: DefinitionPublicationHistoryEvidence,
-): void => {
-  const allowed = request.kind === "module" ? "3.0.0" : "2.0.0";
+const assertEvidenceContractVersions = (evidence: DefinitionPublicationHistoryEvidence): void => {
+  const allowed = "3.0.0";
   if (
     evidence.latestRelease !== null &&
     evidence.latestRelease.publication.validationContractVersion !== allowed
@@ -162,7 +159,7 @@ const compareParsedDefinitionVersionImpact = (
     refuseVersionImpact("unresolved_candidate");
   if (evidence === undefined) assertHistory(request);
   else {
-    assertEvidenceContractVersions(request, evidence);
+    assertEvidenceContractVersions(evidence);
     assertCandidateHistoryBinding(request, latest);
   }
 
@@ -242,7 +239,7 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
 export const compareDefinitionVersionImpactWithEvidence = (
   input: Readonly<{
     kind: "module" | "application";
-    validationContractVersion: "2.0.0" | "3.0.0";
+    validationContractVersion: "3.0.0";
     historyEvidence: DefinitionPublicationHistoryEvidence;
     candidate: unknown;
   }>,

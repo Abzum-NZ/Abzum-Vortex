@@ -173,11 +173,12 @@ export const projectPlacementBindings = (
  * for it and it never decides the page's availability, so the page may stream it after the frame.
  * Every placement this accepts writes its data entry in {@link readPlacement}.
  */
-export const isStreamablePlacement = ({
-  placement,
-}: ReturnType<typeof collectPlacements>[number]): boolean => {
-  if (typeof placement.queryId !== "string" || hasReferenceChoiceSource(placement)) return false;
-  const block = placement.block;
+export const isStreamablePlacement = (
+  placement: ReturnType<typeof collectPlacements>[number],
+): boolean => {
+  if (typeof placement.vortex.queryId !== "string" || hasReferenceChoiceSource(placement))
+    return false;
+  const block = placement.vortex.block;
   const blockIs = (release: Readonly<{ blockId: string }>): boolean =>
     isRecord(block) && typeof block.blockId === "string" && sameId(block.blockId, release.blockId);
   if (blockIs(ATTACHMENT_LIST_BLOCK_RELEASE) || blockIs(CALENDAR_BLOCK_RELEASE)) return false;
@@ -226,8 +227,9 @@ export const readPlacement = async (
     adoptSubjectRead: (subject: PageSubjectReadResult) => void;
     markSubjectUnreadable: () => void;
   },
-  { placementId, placement, formId }: ReturnType<typeof collectPlacements>[number],
+  placement: ReturnType<typeof collectPlacements>[number],
 ): Promise<void> => {
+  const { placementId, formId } = placement;
   const {
     pageDefinition,
     pageSubjectRecordTypeId,
@@ -259,7 +261,7 @@ export const readPlacement = async (
     adoptSubjectRead,
     markSubjectUnreadable,
   } = input;
-  const block = placement.block;
+  const block = placement.vortex.block;
   const isAttachmentListBlock =
     isRecord(block) &&
     typeof block.blockId === "string" &&
@@ -411,7 +413,8 @@ export const readPlacement = async (
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
-  const queryId = typeof placement.queryId === "string" ? placement.queryId : undefined;
+  const queryId =
+    typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
   const queryBoundLauncher = isApplicationLauncherPlacement(placement) && queryId !== undefined;
   const queryBoundSummary = (isSummaryValuesBlock || isChartBlock) && queryId !== undefined;
   const queryBoundBoard = isBoardBlock && queryId !== undefined;
@@ -557,7 +560,9 @@ export const readPlacement = async (
       context,
       session,
       selection,
-      placement: placement as unknown as Parameters<typeof projectBoardPlacement>[0]["placement"],
+      placement: placement.item as unknown as Parameters<
+        typeof projectBoardPlacement
+      >[0]["placement"],
       parameters,
       queries,
       ...(continuation === undefined ? {} : { continuation }),

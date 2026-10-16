@@ -133,7 +133,7 @@ export const verifyDefinitionCatalogueDependencies = async (
       continue;
     }
     if (dependency.kind === "platform_block") {
-      if (validationContractVersion !== "2.0.0") return "invalid";
+      if (validationContractVersion !== "3.0.0") return "invalid";
       const release = await catalogue.readPlatformBlockRelease(
         dependency.blockId,
         dependency.releaseVersion,
@@ -151,7 +151,7 @@ export const verifyDefinitionCatalogueDependencies = async (
       dependency.kind === "protected_operation" &&
       dependency.operation.owner.kind === "platform_service"
     ) {
-      if (validationContractVersion !== "2.0.0") return "invalid";
+      if (validationContractVersion !== "3.0.0") return "invalid";
       const release = await catalogue.readPlatformServiceOperationRelease?.(
         dependency.operation.owner.serviceId,
         dependency.operation.operationId,
@@ -182,8 +182,8 @@ export const verifyDefinitionCatalogueDependencies = async (
     )
       continue;
     // A platform-theme dependency exists only in an Application manifest, and the sole
-    // Application contract pair is 2.0.0.
-    if (validationContractVersion !== "2.0.0") return "invalid";
+    // Application validation contract is 3.0.0.
+    if (validationContractVersion !== "3.0.0") return "invalid";
     const catalogueThemeId = platformIdSchema.safeParse(dependency.catalogueThemeId);
     if (!catalogueThemeId.success) return "invalid";
     const release = await catalogue.readPlatformThemeRelease(

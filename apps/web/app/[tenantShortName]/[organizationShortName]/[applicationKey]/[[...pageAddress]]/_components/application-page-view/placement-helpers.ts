@@ -9,7 +9,7 @@ import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   isRecord,
   walkPageComposition,
-  walkPlacements,
+  walkPlacementData,
 } from "@vortex/platform/schema";
 import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import { isPlatformRelease } from "./form-surface";
@@ -20,8 +20,8 @@ export const placementEventNamesByPage = (
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Readonly<Record<string, ReadonlySet<string>>> => {
   const eventNames: Record<string, ReadonlySet<string>> = {};
-  walkPageComposition(page.composition, ({ placementId, placement }) => {
-    const block = placement.block;
+  walkPageComposition(page.composition, ({ placementId, vortex }) => {
+    const block = vortex.block;
     if (
       isRecord(block) &&
       typeof block.blockId === "string" &&
@@ -42,11 +42,11 @@ export const applicationLauncherPlacementIds = (
   registry: ReturnType<typeof createFullPlatformComponentRegistry>,
 ): Set<string> => {
   const placementIds = new Set<string>();
-  walkPageComposition(page.composition, ({ placementId, placement }) => {
+  walkPageComposition(page.composition, ({ placementId, vortex }) => {
     if (
       isPlatformRelease(
         registry,
-        placement.block,
+        vortex.block,
         PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_LAUNCHER_BLOCK_RELEASE,
       )
     )
@@ -56,9 +56,10 @@ export const applicationLauncherPlacementIds = (
   return placementIds;
 };
 
-export const placementIdsInSlot = (candidate: unknown): ReadonlySet<string> => {
+/** Every placement identity of one projected layout (a page's or one guided step's). */
+export const placementIdsInLayout = (candidate: unknown): ReadonlySet<string> => {
   const result = new Set<string>();
-  walkPlacements(candidate, ({ placementId }) => {
+  walkPlacementData(candidate, ({ placementId }) => {
     result.add(placementId);
     return undefined;
   });

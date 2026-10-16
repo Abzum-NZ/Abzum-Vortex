@@ -33,7 +33,8 @@ import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from 
 import {
   repeatableSlotItemIdentities,
   repeatableSlotKey,
-  type BlockPlacementContract,
+  type BreakpointOrder,
+  type CompiledItemVortex,
   type BlockPropertySchemaContract,
   type BlockPropertyValueContract,
   type ApplicationPuckRootShell,
@@ -155,19 +156,15 @@ export type VortexPuckMetadata = Readonly<{
 type FieldInputControlReleases = FieldInputControlReleaseMap;
 
 /**
- * The part of a placement that is not a block setting. It is the `vortex` prop the Vortex Puck
- * adapter writes, so a definition placement round-trips through Puck data without loss.
+ * The part of a placement that is not a block setting: the compiled item's `vortex` prop, exactly
+ * as the published definition carries it.
  */
 export type VortexPlacementMeta = Readonly<{
-  block: BlockPlacementContract["block"];
-  responsive: BlockPlacementContract["responsive"];
-  themeOverrides: BlockPlacementContract["themeOverrides"];
-  /** Authored slot order retained for editing; preview Puck arrays use the selected breakpoint. */
-  order?: Readonly<{
-    desktop: readonly string[];
-    tablet: readonly string[];
-    phone: readonly string[];
-  }>;
+  block: CompiledItemVortex["block"];
+  responsive: CompiledItemVortex["responsive"];
+  themeOverrides: CompiledItemVortex["themeOverrides"];
+  /** The complete tablet and phone order of each child slot; a slot array is its desktop order. */
+  slotOrders?: Readonly<Record<string, BreakpointOrder>>;
   availability?: "unavailable";
   unavailableReason?: "operation_unavailable";
 }>;
@@ -606,7 +603,7 @@ function PlacementBlock(props: {
       ...(vortex.availability === undefined
         ? {}
         : { availability: vortex.availability, unavailableReason: vortex.unavailableReason }),
-    } as unknown as BlockPlacementContract,
+    },
     location,
   );
   const suppliedInputs = ownEntry(metadataIn.runtimeInputs, placementId);

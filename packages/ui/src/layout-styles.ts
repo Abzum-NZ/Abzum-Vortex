@@ -1,14 +1,20 @@
 import type { CSSProperties } from "react";
-import type { BlockPlacementContract } from "@vortex/platform/schema";
+import {
+  compiledItemSlots,
+  type BreakpointOrder,
+  type CompiledItem,
+  type CompiledLayout,
+  type ResponsivePlacement,
+} from "@vortex/platform/schema";
 
 /**
  * One breakpoint's declared layout values. Derived from the canonical placement contract rather
  * than a separate declaration so the renderer and the schema cannot drift.
  */
-type PlacementLayoutContract = BlockPlacementContract["responsive"]["desktop"];
+type PlacementLayoutContract = ResponsivePlacement["desktop"];
 
 /** Complete per-breakpoint layout declaration for one placement. */
-export type ResponsivePlacementLayouts = BlockPlacementContract["responsive"];
+export type ResponsivePlacementLayouts = ResponsivePlacement;
 
 /**
  * Breakpoint thresholds shared by the responsive stylesheet and the browser breakpoint provider.
@@ -177,6 +183,47 @@ export function computeResponsiveSelectorCss(
     css += `@media ${LAYOUT_BREAKPOINT_MEDIA[breakpoint]} { ${selector} { ${responsiveLayoutDeclarations(responsive[breakpoint], gridItem)}; } }\n`;
   }
   return css;
+}
+
+const orderSelector = (placementId: string): string =>
+  `[data-vortex-layout-wrapper][data-vortex-placement-id="${placementId.replace(
+    /[^A-Za-z0-9_-]/gu,
+    (c) => `\\${(c.codePointAt(0) ?? 0xfffd).toString(16)} `,
+  )}"]`;
+
+/**
+ * CSS that shows each slot's children in its declared tablet and phone order. A slot array is its
+ * desktop order, so a slot whose tablet and phone orders equal it needs no rule. A live page gets
+ * media rules for both narrower breakpoints; an explicit preview breakpoint gets that breakpoint's
+ * order directly.
+ */
+export function computeSlotOrderCss(
+  layout: CompiledLayout,
+  breakpoint?: "desktop" | "tablet" | "phone",
+): string {
+  const rules: Record<"tablet" | "phone", string[]> = { tablet: [], phone: [] };
+  const visit = (items: readonly CompiledItem[], order: BreakpointOrder | undefined): void => {
+    const desktop = items.map((item) => item.props.id);
+    if (
+      order !== undefined &&
+      (order.tablet.some((id, index) => id !== desktop[index]) ||
+        order.phone.some((id, index) => id !== desktop[index]))
+    )
+      for (const target of ["tablet", "phone"] as const)
+        order[target].forEach((id, index) =>
+          rules[target].push(`${orderSelector(id)} { order: ${index}; }`),
+        );
+    for (const item of items)
+      for (const [slotKey, children] of compiledItemSlots(item))
+        visit(children, item.props.vortex.slotOrders[slotKey]);
+  };
+  visit(layout.content, layout.root.props.vortex.slotOrders.content);
+  if (breakpoint === "desktop") return "";
+  if (breakpoint !== undefined) return rules[breakpoint].join("\n");
+  return (["tablet", "phone"] as const)
+    .filter((target) => rules[target].length > 0)
+    .map((target) => `@media ${LAYOUT_BREAKPOINT_MEDIA[target]} { ${rules[target].join(" ")} }`)
+    .join("\n");
 }
 
 /**

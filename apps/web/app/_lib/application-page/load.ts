@@ -36,6 +36,7 @@ import {
   fieldIdSchema,
   sameId,
   isRecord,
+  compiledPageShellId,
 } from "@vortex/platform/schema";
 import { createApplicationPageLinkReader } from "../application-page-link";
 import { readApplicationReleaseAdoption } from "../application-release-adoption";
@@ -280,8 +281,9 @@ const loadApplicationPageJoined = async (
     const targets = allPlacements.filter(({ placementId }) =>
       sameId(placementId, boardContinuation.placementId),
     );
-    const target = targets[0]?.placement;
+    const target = targets[0];
     if (
+      target === undefined ||
       targets.length !== 1 ||
       !isBoardPlacement(target) ||
       projectedUseAvailability(target) !== "available"
@@ -292,8 +294,9 @@ const loadApplicationPageJoined = async (
     const targets = allPlacements.filter(({ placementId }) =>
       sameId(placementId, tableContinuation.placementId),
     );
-    const target = targets[0]?.placement;
+    const target = targets[0];
     if (
+      target === undefined ||
       targets.length !== 1 ||
       !isTablePlacement(target) ||
       projectedUseAvailability(target) !== "available"
@@ -307,13 +310,12 @@ const loadApplicationPageJoined = async (
   }> = [];
   const gatedPermissions = new Map<string, PermissionEntry>();
   let needsDateTimeZones = false;
-  for (const { placement } of allPlacements) {
+  for (const placement of allPlacements) {
     const control = fieldControl(placement);
     if (control === "date_time") needsDateTimeZones = true;
     if (control !== "choice" && control !== "several_choices") continue;
     const source = fieldForPlacement(placement, context.releaseSet.modules);
-    const settings = placement.settings;
-    const options = isRecord(settings) ? settings.options : undefined;
+    const options = placement.settings.options;
     if (
       source === undefined ||
       (source.field.type !== "choice" && source.field.type !== "several_choices") ||
@@ -357,9 +359,7 @@ const loadApplicationPageJoined = async (
   }
 
   const displayedFieldIds = new Set(
-    allPlacements.flatMap(({ placement }) => {
-      const settings = placement.settings;
-      if (!isRecord(settings)) return [];
+    allPlacements.flatMap(({ settings }) => {
       const contractSettings = settings as Readonly<Record<string, BlockPropertyValueContract>>;
       const detail = readRecordDetailContract(contractSettings);
       const table = readRecordsTableContract(contractSettings);
@@ -572,8 +572,8 @@ const loadApplicationPageJoined = async (
   )
     return { kind: "unavailable" };
   const editFormPlacementIds = new Set(
-    allPlacements.flatMap(({ placementId, placement }) => {
-      const block = placement.block;
+    allPlacements.flatMap(({ placementId, vortex }) => {
+      const block = vortex.block;
       const isFormContainer =
         isRecord(block) &&
         typeof block.blockId === "string" &&
@@ -594,7 +594,8 @@ const loadApplicationPageJoined = async (
   const selectedForProjection =
     selectedPlacementIds === undefined ? undefined : new Set(selectedPlacementIds);
   if (selectedForProjection !== undefined)
-    for (const { placementId, placement, formId } of allPlacements) {
+    for (const placement of allPlacements) {
+      const { placementId, formId } = placement;
       const editFormId = editFormPlacementIds.has(placementId)
         ? placementId
         : formId !== undefined && editFormPlacementIds.has(formId)
@@ -610,7 +611,7 @@ const loadApplicationPageJoined = async (
           if (
             entry.formId !== undefined &&
             sameId(entry.formId, editFormId) &&
-            isEditFieldPlacement(entry.placement)
+            isEditFieldPlacement(entry)
           )
             selectedForProjection.add(entry.placementId.toLowerCase());
       }
@@ -620,8 +621,8 @@ const loadApplicationPageJoined = async (
       ? allPlacements
       : allPlacements.filter((entry) => selectedForProjection.has(entry.placementId.toLowerCase()));
   const hasQueryBoundLauncher = placements.some(
-    ({ placement }) =>
-      isApplicationLauncherPlacement(placement) && typeof placement.queryId === "string",
+    (placement) =>
+      isApplicationLauncherPlacement(placement) && typeof placement.vortex.queryId === "string",
   );
   const permittedApplicationsRead = hasQueryBoundLauncher
     ? await loadPermittedApplicationsAtAddress(
@@ -663,9 +664,9 @@ const loadApplicationPageJoined = async (
   // missing, malformed, of another type or organisation, or not readable. The page then does not
   // exist for them.
   let subjectUnreadable = false;
-  for (const { placementId, placement } of placements)
+  for (const placement of placements)
     if (fieldControl(placement) === "date_time")
-      data[placementId] = {
+      data[placement.placementId] = {
         status: "ready",
         values: { kind: "date_time_input", ...dateTimeZones },
       };
@@ -796,8 +797,8 @@ const loadApplicationPageJoined = async (
     };
     return visitFlow(flowId);
   };
-  const groupCreateBindings = placements.flatMap(({ placementId, placement }) => {
-    const block = placement.block;
+  const groupCreateBindings = placements.flatMap(({ placementId, vortex }) => {
+    const block = vortex.block;
     if (
       !isRecord(block) ||
       typeof block.blockId !== "string" ||
@@ -922,9 +923,9 @@ const loadApplicationPageJoined = async (
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
   if (pageDefinition.type !== "guided_form") {
-    for (const { placementId, placement } of placements) {
+    for (const { placementId, vortex } of placements) {
       if (!editFormPlacementIds.has(placementId)) continue;
-      const block = placement.block;
+      const block = vortex.block;
       if (
         !isRecord(block) ||
         typeof block.blockId !== "string" ||
@@ -942,7 +943,7 @@ const loadApplicationPageJoined = async (
       }
       const fields = placements.filter((entry) => {
         if (entry.formId !== placementId || entry.placementId === placementId) return false;
-        return isEditFieldPlacement(entry.placement);
+        return isEditFieldPlacement(entry);
       });
       const baseline: Record<string, JsonValue> = {};
       const projected: Record<string, PageDataState> = {};
@@ -950,7 +951,7 @@ const loadApplicationPageJoined = async (
       for (const entry of fields) {
         let projectedField:
           Readonly<{ key: string; value: JsonValue; data: PageDataState }> | undefined;
-        if (isUnboundReferenceChoicePlacement(entry.placement)) {
+        if (isUnboundReferenceChoicePlacement(entry)) {
           const firstPage = referenceChoiceFirstPages.get(entry.placementId);
           const definition =
             firstPage === undefined
@@ -979,7 +980,7 @@ const loadApplicationPageJoined = async (
           });
         } else {
           projectedField = projectEditField(
-            entry.placement,
+            entry,
             subjectRecordType,
             subjectRow.row.values,
             dateTimeZones,
@@ -1046,8 +1047,7 @@ const loadApplicationPageJoined = async (
     data[entry.placementId] = { status: "loading" };
   }
   const permittedKeys = new Set(address.application.pageKeys);
-  const applicationShellId =
-    "shellId" in pageDefinition.composition ? pageDefinition.composition.shellId : undefined;
+  const applicationShellId = compiledPageShellId(pageDefinition.composition) ?? undefined;
   const applicationShell =
     applicationShellId === undefined
       ? undefined

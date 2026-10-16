@@ -23,7 +23,7 @@ import {
   readBoardPlacementContract,
   richTextDocumentSchema,
   sameId,
-  type BlockPlacementContract,
+  type ProjectedItem,
   type BoardColumnSelector,
   type BoardPlacementContract,
   type IdentitySession,
@@ -38,11 +38,7 @@ type BoardQueries = Pick<
   ReturnType<typeof createProtectedQueryService>,
   "boardMembers" | "boardInitialPages" | "boardSummary"
 >;
-type PermissionProjectedPlacement = BlockPlacementContract &
-  Readonly<{
-    availability?: "unavailable";
-    unavailableReason?: "operation_unavailable";
-  }>;
+type PermissionProjectedPlacement = ProjectedItem;
 type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;
 
 const lower = (value: string): string => value.toLowerCase();
@@ -379,12 +375,13 @@ export const projectBoardPlacement = async (
       !sameId(String(input.selection.applicationRootId), String(context.applicationRootId))
     )
       return unavailable("board_selection_mismatch");
-    if (input.placement.availability === "unavailable")
+    if (input.placement.props.vortex.availability === "unavailable")
       return refused("board_placement_unavailable");
-    if (input.placement.queryId === undefined) return unavailable("board_query_not_bound");
+    if (input.placement.props.vortex.queryId === undefined)
+      return unavailable("board_query_not_bound");
 
-    const contract = readBoardPlacementContract(input.placement.settings);
-    const binding = findInstalledQuery(context, String(input.placement.queryId));
+    const contract = readBoardPlacementContract(input.placement.props.settings);
+    const binding = findInstalledQuery(context, String(input.placement.props.vortex.queryId));
     if (contract === undefined || binding === undefined)
       return unavailable("board_settings_invalid");
     const fields = fieldsFor(binding.module, binding.query);

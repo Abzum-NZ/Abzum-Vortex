@@ -32,7 +32,7 @@ import {
   type SafeFlowResultDescriptor,
   isRecord,
   sameId,
-  walkPlacements,
+  walkPageComposition,
   type PlacementVisitor,
 } from "../schema";
 import {
@@ -233,7 +233,7 @@ const hasVisibleOwningFormField = (
   );
   type Ancestry = Readonly<{ currentFormId: string | undefined; ancestorsVisible: boolean }>;
   const visitPlacement: PlacementVisitor<Ancestry> = (
-    { placementId, placement: value },
+    { placementId, props, vortex: value },
     { currentFormId, ancestorsVisible },
   ) => {
     const block = value.block;
@@ -252,14 +252,14 @@ const hasVisibleOwningFormField = (
       isRecord(block) &&
       typeof block.blockId === "string" &&
       typeof block.releaseVersion === "string" &&
-      isRecord(value.settings)
+      isRecord(props.settings)
     ) {
       const blockId = block.blockId;
       const releaseVersion = block.releaseVersion;
       const registeredInput = inputReleases.some(
         (release) => sameId(release.blockId, blockId) && release.releaseVersion === releaseVersion,
       );
-      const name = value.settings.name;
+      const name = props.settings.name;
       if (
         registeredInput &&
         isRecord(name) &&
@@ -274,10 +274,7 @@ const hasVisibleOwningFormField = (
 
   for (const page of pages) {
     if (!isRecord(page) || !isRecord(page.composition)) continue;
-    const composition = page.composition;
-    if ("main" in composition) walkPlacements(composition.main, visitPlacement, root);
-    if ("content" in composition) walkPlacements(composition.content, visitPlacement, root);
-    if ("stepContent" in composition) walkPlacements(composition.stepContent, visitPlacement, root);
+    walkPageComposition(page.composition, visitPlacement, root);
   }
 
   if (

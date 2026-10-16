@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PageDefinition } from "../schema";
+import type { CompiledLayout, PageDefinition } from "../schema";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 
 export type PlacementCapabilityState = Readonly<{
@@ -78,58 +78,89 @@ const placementAvailability = (state: PlacementCapabilityState, hasUseGate: bool
     ? {}
     : { availability: "unavailable", unavailableReason: "operation_unavailable" };
 
-const projectSlot = (
-  slotCandidate: unknown,
+const reservedProps = new Set(["id", "settings", "vortex"]);
+
+/** One projected item list: refused items dropped, kept items annotated, slot orders filtered. */
+const projectItems = (
+  itemsCandidate: unknown,
   states: PageCapabilityState["placements"],
-): JsonObject => {
-  const slot = object(slotCandidate);
-  const placements = object(slot.placements);
-  const projected = Object.fromEntries(
-    Object.entries(placements).flatMap(([placementId, candidate]) => {
-      const state = states[placementId];
-      const placement = object(candidate);
-      if (
-        (placement.viewPermissionKey !== undefined && state?.viewAllowed !== true) ||
-        (placement.visibilityCondition !== undefined && state?.conditionAllowed !== true) ||
-        state?.actionAvailable === false
-      )
-        return [];
-      const effectiveState: PlacementCapabilityState = {
-        viewAllowed: true,
-        useAllowed: placement.usePermissionKey === undefined || state?.useAllowed === true,
-        operationRequired: state?.operationRequired === true,
-        operationBound: state?.operationBound === true,
-      };
-      const slots = Object.fromEntries(
-        Object.entries(object(placement.slots)).map(([key, child]) => [
-          key,
-          projectSlot(child, states),
-        ]),
-      );
-      return [
-        [
-          placementId,
-          {
-            ...withoutKeys(placement, [
+): JsonObject[] =>
+  (itemsCandidate as unknown[]).flatMap((candidate) => {
+    const item = object(candidate);
+    const props = object(item.props);
+    const vortex = object(props.vortex);
+    const placementId = String(props.id);
+    const state = states[placementId];
+    if (
+      (vortex.viewPermissionKey !== undefined && state?.viewAllowed !== true) ||
+      (vortex.visibilityCondition !== undefined && state?.conditionAllowed !== true) ||
+      state?.actionAvailable === false
+    )
+      return [];
+    const effectiveState: PlacementCapabilityState = {
+      viewAllowed: true,
+      useAllowed: vortex.usePermissionKey === undefined || state?.useAllowed === true,
+      operationRequired: state?.operationRequired === true,
+      operationBound: state?.operationBound === true,
+    };
+    const projectedProps: JsonObject = {};
+    const slotOrders: JsonObject = {};
+    for (const [key, value] of Object.entries(props)) {
+      if (reservedProps.has(key)) continue;
+      const children = projectItems(value, states);
+      projectedProps[key] = children;
+      slotOrders[key] = filteredOrder(object(vortex.slotOrders)[key], children);
+    }
+    return [
+      {
+        type: item.type,
+        props: {
+          id: props.id,
+          settings: props.settings,
+          ...projectedProps,
+          vortex: {
+            ...withoutKeys(vortex, [
               "viewPermissionKey",
               "usePermissionKey",
               "visibilityCondition",
             ]),
-            slots,
-            ...placementAvailability(effectiveState, placement.usePermissionKey !== undefined),
+            slotOrders,
+            ...placementAvailability(effectiveState, vortex.usePermissionKey !== undefined),
           },
-        ],
-      ];
-    }),
-  );
-  const retained = new Set(Object.keys(projected));
-  const order = Object.fromEntries(
-    Object.entries(object(slot.order)).map(([breakpoint, ids]) => [
+        },
+      },
+    ];
+  });
+
+/** A breakpoint order keeping only the items the projection retained. */
+const filteredOrder = (order: unknown, items: readonly JsonObject[]): JsonObject => {
+  const retained = new Set(items.map((item) => String(object(item.props).id)));
+  return Object.fromEntries(
+    Object.entries(object(order)).map(([breakpoint, ids]) => [
       breakpoint,
       (ids as string[]).filter((id) => retained.has(id)),
     ]),
   );
-  return { placements: projected, order };
+};
+
+/** One projected layout: its root zone's items and order. */
+const projectLayout = (
+  layout: CompiledLayout,
+  states: PageCapabilityState["placements"],
+): JsonObject => {
+  const content = projectItems(layout.content, states);
+  return {
+    root: {
+      props: {
+        vortex: {
+          slotOrders: {
+            content: filteredOrder(layout.root.props.vortex.slotOrders.content, content),
+          },
+        },
+      },
+    },
+    content,
+  };
 };
 
 const project = (
@@ -141,7 +172,7 @@ const project = (
   if (resolved.roots.kind === "page")
     return {
       ...withoutKeys(source, ["accessPermissionKey"]),
-      composition: { main: projectSlot(resolved.roots.main, states) },
+      composition: projectLayout(resolved.roots.main, states),
     };
   return {
     ...withoutKeys(source, ["accessPermissionKey"]),
@@ -149,7 +180,7 @@ const project = (
       stepContent: Object.fromEntries(
         Object.entries(resolved.roots.stepContent).map(([stepId, root]) => [
           stepId,
-          projectSlot(root, states),
+          projectLayout(root, states),
         ]),
       ),
     },

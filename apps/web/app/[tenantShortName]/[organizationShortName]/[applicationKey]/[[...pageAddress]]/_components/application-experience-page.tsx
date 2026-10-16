@@ -8,6 +8,7 @@ import {
   type ApplicationAccount,
   createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
+  renderedPageOf,
   type FieldInputControlReleaseMap,
   type PlatformThemeTokens,
 } from "@vortex/ui";
@@ -44,6 +45,7 @@ export function ApplicationExperiencePage({
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
+  const rendered = useMemo(() => renderedPageOf(page, shells), [page, shells]);
   return (
     <ApplicationAccountActionsProvider
       actions={{
@@ -55,11 +57,11 @@ export function ApplicationExperiencePage({
       }}
     >
       <PagePuckRenderer
-        composition={page}
+        composition={rendered.page}
+        {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
         registry={platformComponentRegistry}
         fieldInputControlReleases={fieldInputControlReleases}
         platformThemeTokens={platformThemeTokens}
-        shells={shells}
         pageId={page.pageId}
         theme={theme}
       />
