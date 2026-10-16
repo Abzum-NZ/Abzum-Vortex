@@ -15,10 +15,12 @@ import {
   shellIdSchema,
 } from "../../catalogue/identifiers";
 import { positiveFiniteSchema } from "./shared";
-import { type BlockPropertyValueContract, blockPropertyValueSchema } from "./block-property-values";
+import type { BlockPropertyValueContract } from "./block-property-values";
+import { typedSettingValue } from "./block-property-schema";
 import {
   platformBlockDependenciesSchema,
   platformBlockReferenceSchema,
+  releaseSettingDeclarations,
 } from "./platform-block-release";
 import { themeTokenValueSchema, applicationThemeSchema } from "./theme";
 
@@ -155,8 +157,9 @@ export const canonicalThemeTokenValue = (value: Record<string, unknown>): unknow
  * The compiled, engine-facing layout takes Puck 0.23's data shape, exactly as the runtime renders
  * it, and the same shape as the authored item. An item is `{ type, props }`: `type` is the block
  * release's renderer key, `props.id` the placement identity, every other prop but `vortex` either
- * one setting (its typed canonical value, an object tagged with its `kind`) or one child slot (an
- * array of items, in desktop order), and `props.vortex` the resolved
+ * one setting (its plain value, exactly as the stored item holds it, with references resolved to
+ * canonical identities) or one child slot (an array of items, in desktop order), and `props.vortex`
+ * the resolved
  * Vortex metadata: the exact block release, access and data bindings, theme overrides, the complete
  * responsive layout and the complete tablet and phone order of every child slot.
  */
@@ -176,7 +179,7 @@ export type CompiledItemVortex = {
 export type CompiledItemProps = {
   id: string;
   vortex: CompiledItemVortex;
-  /** One setting (its typed canonical value) or one child slot (an array of items). */
+  /** One setting (its plain value) or one child slot (an array of items). */
   [key: string]: unknown;
 };
 
@@ -196,35 +199,42 @@ export type ProjectedItem = {
 /** The props of an item that are neither settings nor child slots. */
 export const compiledItemReservedProps: ReadonlySet<string> = new Set(["id", "vortex"]);
 
-/** The item's child slots, in prop order: every array prop but `id` and `vortex`. */
+/**
+ * The item's child slots: exactly the slots its compiled metadata orders, in that order. The
+ * compiler orders every slot it fills from the release's slot declarations, so no prop is taken
+ * for a slot by its shape; an empty list setting is never a slot.
+ */
 export const compiledItemSlots = (item: CompiledItem): [string, CompiledItem[]][] =>
-  Object.entries(item.props).flatMap(([key, value]): [string, CompiledItem[]][] =>
-    compiledItemReservedProps.has(key) || !Array.isArray(value)
-      ? []
-      : [[key, value as CompiledItem[]]],
-  );
+  Object.keys(item.props.vortex.slotOrders).map((key): [string, CompiledItem[]] => [
+    key,
+    item.props[key] as CompiledItem[],
+  ]);
 
 /**
- * The settings of an item's props, keyed by property: every kind-tagged object prop but `vortex`.
- * A setting is a kind-tagged object and a slot an array, so no release is needed to tell them
- * apart, and the settings the compiler derives beyond the block's own declarations (a field
- * input's control, name and requirement) are read like any other. Props a renderer receives
- * besides the item's own (Puck's context, host wrappers) carry no kind and are not settings.
+ * The typed settings of a compiled item's props, read by the declaration of its block release:
+ * each property and derived property the release declares, when the props hold it, typed as the
+ * canonical value of that declaration. No other prop is a setting: slots, Puck's context and host
+ * wrappers are never read. A held value that is not a value of its declaration fails loudly.
  */
-export const compiledPropsSettings = (
+export const compiledItemSettings = (
   props: Readonly<Record<string, unknown>>,
-): Record<string, BlockPropertyValueContract> =>
-  Object.fromEntries(
-    Object.entries(props).filter(
-      ([key, value]) =>
-        !compiledItemReservedProps.has(key) &&
-        value !== undefined &&
-        value !== null &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        typeof (value as { kind?: unknown }).kind === "string",
-    ),
-  ) as Record<string, BlockPropertyValueContract>;
+  release: Parameters<typeof releaseSettingDeclarations>[0],
+): Record<string, BlockPropertyValueContract> => {
+  const settings: Record<string, BlockPropertyValueContract> = {};
+  for (const declaration of releaseSettingDeclarations(release)) {
+    if (!Object.hasOwn(props, declaration.key)) continue;
+    const value = props[declaration.key];
+    // Puck writes `undefined` for an untouched field, which is absent.
+    if (value === undefined) continue;
+    const typed = typedSettingValue(value, declaration);
+    if (typed === undefined)
+      throw new TypeError(
+        `Setting '${declaration.key}' of placement '${String(props.id)}' is not a ${declaration.kind} value`,
+      );
+    settings[declaration.key] = typed;
+  }
+  return settings;
+};
 
 /** Every item in the list and their descendants, depth first in desktop order. */
 export const compiledItemTree = (
@@ -277,6 +287,29 @@ const refineZoneOrders = (
   }
 };
 
+/** Whether a value has the shape of a compiled item: a renderer type and props with metadata. */
+const isItemShaped = (value: unknown): boolean =>
+  value !== null &&
+  typeof value === "object" &&
+  typeof (value as { type?: unknown }).type === "string" &&
+  typeof (value as { props?: { vortex?: unknown } }).props?.vortex === "object";
+
+/**
+ * A plain setting value: text, a number, a boolean, a list of values or an object of values. A
+ * list of compiled items is a slot, never a setting, so an item array never reads as one.
+ */
+const plainSettingSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number().finite(),
+    z.boolean(),
+    z.array(plainSettingSchema).refine((items) => !items.some(isItemShaped), {
+      message: "A list of compiled items is a slot, not a setting",
+    }),
+    z.record(z.string(), plainSettingSchema),
+  ]),
+);
+
 const compiledItemVortexSchema = z
   .object({
     block: platformBlockReferenceSchema,
@@ -299,14 +332,24 @@ export const compiledItemSchema: z.ZodType<CompiledItem> = z.lazy(() =>
           id: containedComponentIdSchema,
           vortex: compiledItemVortexSchema,
         })
-        .catchall(z.union([z.array(compiledItemSchema), blockPropertyValueSchema]))
+        // A prop is a child slot (its items) or one plain setting value; the slots are exactly
+        // those the item's `vortex.slotOrders` orders.
+        .catchall(z.union([compiledItemsSchema, plainSettingSchema]))
         .superRefine((props, context) => {
+          const slotKeys = new Set(Object.keys(props.vortex.slotOrders));
           const zones = new Map<string, readonly CompiledItem[]>();
           for (const [key, value] of Object.entries(props)) {
             if (compiledItemReservedProps.has(key)) continue;
             if (!builderKeySchema.safeParse(key).success)
               context.addIssue({ code: "custom", path: [key], message: "Invalid prop key" });
-            if (Array.isArray(value)) zones.set(key, value as CompiledItem[]);
+            const slot = Array.isArray(value) && value.every(isItemShaped);
+            if (slotKeys.has(key) && slot) zones.set(key, value as CompiledItem[]);
+            else if (slotKeys.has(key) || (Array.isArray(value) && value.length > 0 && slot))
+              context.addIssue({
+                code: "custom",
+                path: [key],
+                message: "A prop is a slot exactly when the item orders it as one",
+              });
           }
           refineZoneOrders(
             props.vortex.slotOrders as Record<string, BreakpointOrder>,
@@ -319,7 +362,8 @@ export const compiledItemSchema: z.ZodType<CompiledItem> = z.lazy(() =>
     .strict(),
 ) as unknown as z.ZodType<CompiledItem>;
 
-const compiledItemsSchema = z.array(compiledItemSchema);
+const compiledItemsSchema: z.ZodType<CompiledItem[]> = z.lazy(() => z.array(compiledItemSchema));
+
 
 /** The compiled root zone of a layout. */
 export const compiledRootZone = "content";

@@ -4442,6 +4442,190 @@
         "required": false
       }
     ],
+    "derivedProperties": [
+      {
+        "kind": "text",
+        "key": "name",
+        "label": "Field name",
+        "help": "Key of this field in form values and events: lowercase words separated by underscores",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "boolean",
+        "key": "required",
+        "label": "Required",
+        "help": "Whether the field is required",
+        "required": false
+      },
+      {
+        "kind": "choice",
+        "key": "control",
+        "label": "Control",
+        "help": "Input control derived from the referenced field's type",
+        "required": true,
+        "options": [
+          {
+            "key": "text",
+            "label": "Text"
+          },
+          {
+            "key": "rich_text",
+            "label": "Rich text"
+          },
+          {
+            "key": "number",
+            "label": "Number"
+          },
+          {
+            "key": "boolean",
+            "label": "Yes or no"
+          },
+          {
+            "key": "date",
+            "label": "Date"
+          },
+          {
+            "key": "date_time",
+            "label": "Date and time"
+          },
+          {
+            "key": "choice",
+            "label": "Choice"
+          },
+          {
+            "key": "several_choices",
+            "label": "Several choices"
+          },
+          {
+            "key": "link",
+            "label": "Link"
+          }
+        ]
+      },
+      {
+        "kind": "boolean",
+        "key": "multiline",
+        "label": "Multiline",
+        "help": "Render as multi-line textarea",
+        "required": false
+      },
+      {
+        "kind": "choice",
+        "key": "input_type",
+        "label": "Input type",
+        "help": "HTML input type",
+        "required": false,
+        "options": [
+          {
+            "key": "text",
+            "label": "Text"
+          },
+          {
+            "key": "email",
+            "label": "Email"
+          },
+          {
+            "key": "password",
+            "label": "Password"
+          },
+          {
+            "key": "tel",
+            "label": "Telephone"
+          },
+          {
+            "key": "url",
+            "label": "URL"
+          }
+        ]
+      },
+      {
+        "kind": "boolean",
+        "key": "integer",
+        "label": "Integer only",
+        "help": "Restrict input to whole numbers",
+        "required": false
+      },
+      {
+        "kind": "choice",
+        "key": "display_time_zone",
+        "label": "Display time zone",
+        "required": false,
+        "options": [
+          {
+            "key": "person",
+            "label": "Person"
+          },
+          {
+            "key": "organization",
+            "label": "Organization"
+          },
+          {
+            "key": "utc",
+            "label": "UTC"
+          }
+        ]
+      },
+      {
+        "kind": "list",
+        "key": "options",
+        "label": "Options",
+        "help": "Declared field values offered by this input",
+        "required": false,
+        "minimumItems": 0,
+        "maximumItems": 200,
+        "item": {
+          "kind": "group",
+          "key": "option",
+          "label": "Option",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Value",
+              "help": "Exact option value declared by the module field",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 120
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 120
+            }
+          ]
+        }
+      },
+      {
+        "kind": "number",
+        "key": "maximum_selections",
+        "label": "Maximum selections",
+        "required": false,
+        "integer": true,
+        "minimum": 1,
+        "maximum": 200
+      },
+      {
+        "kind": "list",
+        "key": "record_types",
+        "label": "Allowed record types",
+        "help": "The record types this link input may reference",
+        "required": true,
+        "minimumItems": 1,
+        "maximumItems": 20,
+        "item": {
+          "kind": "record_type_reference",
+          "key": "record_type",
+          "label": "Record type",
+          "required": true
+        }
+      }
+    ],
     "slots": [],
     "capabilities": {
       "responsiveVisibility": true,

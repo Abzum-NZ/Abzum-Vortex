@@ -31,6 +31,7 @@ export {
 // Definition & Render Errors
 export {
   DefinitionRenderError,
+  placementSettings,
   validateAccessibleName,
   validatePlacementSlots,
   validatePlacementTree,

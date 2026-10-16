@@ -1,5 +1,7 @@
 import {
   applicationToolBundleSchema,
+  compiledItemSettings,
+  compiledPageItems,
   descriptionSchema,
   ruleIdSchema,
   type ApplicationDraft,
@@ -9,12 +11,14 @@ import {
   type NavigationItem,
   type ModuleCompilationOutput,
   type DefinitionCompilationOutput,
+  type BlockPropertyValueContract,
+  type PlatformBlockRelease,
 } from "../../schema";
 import { compareCanonicalStrings } from "../canonical-json-definition";
 import { deriveFormCommitActionKeys } from "../form-commit";
 import { standardRecordActions } from "./module";
 import type { Resolution } from "./resolution";
-import { applicationModuleKeysOf, asObject, type JsonObject } from "./shared";
+import { applicationModuleKeysOf, asObject, fail, type JsonObject } from "./shared";
 
 type ApplicationToolDraft = ApplicationToolBundleInput["tools"][number];
 type ApplicationToolStandardRecordAction = Extract<
@@ -51,6 +55,7 @@ const applicationToolDescription = (
  * than described with an invented contract.
  */
 export function compileApplicationToolBundle(
+  releases: readonly PlatformBlockRelease[],
   canonical: ApplicationDraft,
   source: JsonObject,
   resolution: Resolution,
@@ -271,6 +276,25 @@ export function compileApplicationToolBundle(
     }
   };
   collectQueryIds(content.pages);
+  // A placement setting names a query by its plain identity; its release declares it a query
+  // reference, at the top level or inside a group or list.
+  const collectSettingQueryIds = (value: BlockPropertyValueContract): void => {
+    if (value.kind === "query_reference") referencedQueryIds.add(String(value.queryId));
+    else if (value.kind === "group")
+      Object.values(value.properties).forEach(collectSettingQueryIds);
+    else if (value.kind === "list") value.items.forEach(collectSettingQueryIds);
+  };
+  for (const page of content.pages)
+    for (const item of compiledPageItems(page.composition)) {
+      const release = releases.find(
+        (candidate) =>
+          String(candidate.blockId) === String(item.props.vortex.block.blockId) &&
+          candidate.releaseVersion === item.props.vortex.block.releaseVersion,
+      );
+      if (release === undefined)
+        fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      Object.values(compiledItemSettings(item.props, release)).forEach(collectSettingQueryIds);
+    }
   for (const definition of content.interfaces)
     for (const operation of definition.operations)
       if (operation.target.kind === "query") {

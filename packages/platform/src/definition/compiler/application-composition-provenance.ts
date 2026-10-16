@@ -1,4 +1,10 @@
-import type { ApplicationSourceDocument, DefinitionProvenanceEntry } from "../../schema";
+import {
+  releaseSettingDeclarations,
+  type ApplicationSourceDocument,
+  type BlockPropertySchemaContract,
+  type DefinitionProvenanceEntry,
+  type PlatformBlockRelease,
+} from "../../schema";
 import { canonicalJson } from "../canonical-json-definition";
 import { applicationTypedValueTarget, sourceResolvesIdentity } from "./provenance";
 import type { Resolution } from "./resolution";
@@ -45,8 +51,8 @@ export const isApplicationCompositionSourcePath = (path: Path): boolean =>
   ((path[1] === "shells" && path[3] === "layout") ||
     (path[1] === "pages" && path[3] === "composition"));
 
-/** A canonical leaf one authored leaf feeds; a setting leaf names where its setting value starts. */
-type Target = Readonly<{ path: Path; setting: boolean; settingAt?: number }>;
+/** A canonical leaf one authored leaf feeds; a setting leaf names the kind of value it lies in. */
+type Target = Readonly<{ path: Path; setting: boolean; kind?: string }>;
 
 const isCompiledItem = (value: unknown): boolean => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -63,38 +69,23 @@ const isCompiledItem = (value: unknown): boolean => {
 
 /**
  * Where the compiled setting holding one canonical leaf starts: the index of its setting key, the
- * segment after the innermost item's `props` that is not `id`, `vortex` or a child slot. Undefined
- * when the leaf is not inside a setting value.
+ * segment after the innermost item's `props` that is not `id`, `vortex` or a child slot its
+ * `vortex.slotOrders` orders. Undefined when the leaf is not inside a setting value.
  */
 export const compiledSettingStart = (canonical: unknown, canonicalPath: Path): number | undefined => {
   for (let at = canonicalPath.length - 2; at >= 1; at -= 1) {
     const key = canonicalPath[at + 1];
     if (canonicalPath[at] !== "props" || typeof key !== "string") continue;
-    if (!isCompiledItem(valueAtPath(canonical, canonicalPath.slice(0, at)))) continue;
+    const item = valueAtPath(canonical, canonicalPath.slice(0, at));
+    if (!isCompiledItem(item)) continue;
     if (key === "id" || key === "vortex") return undefined;
-    return Array.isArray(valueAtPath(canonical, canonicalPath.slice(0, at + 2))) ? undefined : at + 1;
+    const slotOrders = asObject(asObject(asObject(asObject(item).props).vortex).slotOrders);
+    return Object.hasOwn(slotOrders, key) ? undefined : at + 1;
   }
   return undefined;
 };
 
-const recordTypeLeaves: Path[] = [
-  ["recordType", "state"],
-  ["recordType", "moduleRootId"],
-  ["recordType", "recordTypeId"],
-];
-
-/** The canonical leaf each value kind keeps its authored plain value in. */
-const settingValueLeaf: Readonly<Record<string, string>> = {
-  asset_reference: "assetId",
-  icon: "iconKey",
-  theme_token: "tokenKey",
-  field_reference: "fieldId",
-  relationship_reference: "relationshipId",
-  action_reference: "actionKey",
-  page_reference: "pageId",
-  query_reference: "queryId",
-  pipeline_reference: "pipelineId",
-};
+const recordTypeLeaves: Path[] = [["state"], ["moduleRootId"], ["recordTypeId"]];
 
 /** Kinds whose authored plain value names an identity that compilation resolves. */
 const resolvedSettingKinds: ReadonlySet<string> = new Set([
@@ -108,36 +99,58 @@ const resolvedSettingKinds: ReadonlySet<string> = new Set([
   "theme_token",
 ]);
 
-/** The canonical leaves, relative to one canonical setting value, of one plain authored leaf. */
-const settingLeafTargets = (value: unknown, rest: Path): Path[] => {
-  const typed = asObject(value);
-  switch (typed.kind) {
+/** Kinds whose plain value is one reference that compilation resolves to a canonical identity. */
+const referenceSettingKinds: ReadonlySet<string> = new Set([
+  "asset_reference",
+  "icon",
+  "theme_token",
+  "field_reference",
+  "relationship_reference",
+  "action_reference",
+  "page_reference",
+  "query_reference",
+  "pipeline_reference",
+]);
+
+/**
+ * The canonical leaves, relative to one compiled setting value, of one plain authored leaf, read by
+ * the declaration the setting fills: a compiled setting keeps the authored plain shape, except that
+ * a record reference spells its keys in camel case and a record type resolves to its reference.
+ */
+const settingLeafTargets = (
+  declaration: BlockPropertySchemaContract,
+  rest: Path,
+): { path: Path; kind: string }[] => {
+  switch (declaration.kind) {
     case "group": {
       const key = String(rest[0]);
-      return settingLeafTargets(asObject(typed.properties)[key], rest.slice(1)).map((path) => [
-        "properties",
-        key,
-        ...path,
-      ]);
+      const property = declaration.properties.find((candidate) => candidate.key === key);
+      if (property === undefined)
+        return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+      return settingLeafTargets(property, rest.slice(1)).map(({ path, kind }) => ({
+        path: [key, ...path],
+        kind,
+      }));
     }
     case "list": {
       const index = rest[0];
       if (typeof index !== "number")
         return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-      return settingLeafTargets((typed.items as unknown[])[index], rest.slice(1)).map((path) => [
-        "items",
-        index,
-        ...path,
-      ]);
+      return settingLeafTargets(declaration.item, rest.slice(1)).map(({ path, kind }) => ({
+        path: [index, ...path],
+        kind,
+      }));
     }
-    case "rich_text":
-      return [["value", ...rest]];
     case "record_reference":
-      return rest[0] === "record_id" ? [["recordId"]] : recordTypeLeaves;
+      return (
+        rest[0] === "record_id"
+          ? [["recordId"]]
+          : recordTypeLeaves.map((leaf) => ["recordType", ...leaf])
+      ).map((path) => ({ path, kind: declaration.kind }));
     case "record_type_reference":
-      return recordTypeLeaves;
+      return recordTypeLeaves.map((path) => ({ path, kind: declaration.kind }));
     default:
-      return [[settingValueLeaf[String(typed.kind)] ?? "value"]];
+      return [{ path: rest, kind: declaration.kind }];
   }
 };
 
@@ -174,6 +187,7 @@ const slotOrderPath = (holder: Path, key: string): Path => [...holder, "slotOrde
  * phone order. Each item keeps its array position, so its compiled item is at the same index.
  */
 function itemTargets(
+  releases: readonly PlatformBlockRelease[],
   source: ApplicationSourceDocument,
   canonical: unknown,
   sourcePath: Path,
@@ -270,7 +284,8 @@ function itemTargets(
     }
     if (typeof prop !== "string") return undefined;
     const compiledProps = asObject(valueAtPath(canonical, [...placement, "props"]));
-    if (Array.isArray(compiledProps[prop])) {
+    const compiledSlots = asObject(asObject(compiledProps.vortex).slotOrders);
+    if (Object.hasOwn(compiledSlots, prop)) {
       root = [...itemPath, "props", prop];
       zone = {
         items: [...placement, "props", prop],
@@ -280,18 +295,30 @@ function itemTargets(
       slotOrder = orders[prop] === undefined ? undefined : asObject(orders[prop]);
       continue;
     }
-    const setting = compiledProps[prop];
-    if (setting === undefined || prop === "vortex") return undefined;
-    return settingLeafTargets(setting, suffix.slice(2)).map((path) => ({
+    if (compiledProps[prop] === undefined) return undefined;
+    const block = asObject(vortex.block);
+    const release = releases.find(
+      (candidate) =>
+        String(candidate.blockId) === String(block.block_id) &&
+        String(candidate.releaseVersion) === String(block.release_version),
+    );
+    const declaration =
+      release === undefined
+        ? undefined
+        : releaseSettingDeclarations(release).find((property) => property.key === prop);
+    if (declaration === undefined)
+      return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    return settingLeafTargets(declaration, suffix.slice(2)).map(({ path, kind }) => ({
       path: [...placement, "props", prop, ...path],
       setting: true,
-      settingAt: placement.length + 1,
+      kind,
     }));
   }
 }
 
 /** The authored zone a page-data leaf belongs to and the compiled zone it becomes. */
 function pageDataTargets(
+  releases: readonly PlatformBlockRelease[],
   source: ApplicationSourceDocument,
   canonical: unknown,
   sourcePath: Path,
@@ -333,6 +360,7 @@ function pageDataTargets(
     ).map((path) => ({ path, setting: false }));
   if (suffix[0] === "content")
     return itemTargets(
+      releases,
       source,
       canonical,
       sourcePath,
@@ -344,6 +372,7 @@ function pageDataTargets(
     return undefined;
   if (suffix[2] !== "vortex")
     return itemTargets(
+      releases,
       source,
       canonical,
       sourcePath,
@@ -357,11 +386,12 @@ function pageDataTargets(
 /**
  * The provenance of one authored layout leaf. The compiler maps each leaf itself: item aliases
  * resolve to placement identities and order positions, block and binding references resolve to
- * their identities, and a plain setting value lands in its typed canonical value. A text setting
- * keeps its value unchanged except a table behaviour's event alias, which resolves to the exact
- * event identity its flow binding uses.
+ * their identities, and a plain setting value lands in the same plain compiled value, read by the
+ * declaration of its block release. A text setting keeps its value unchanged except a table
+ * behaviour's event alias, which resolves to the exact event identity its flow binding uses.
  */
 export function applicationCompositionProvenance(
+  releases: readonly PlatformBlockRelease[],
   source: ApplicationSourceDocument,
   canonical: unknown,
   sourcePath: Path,
@@ -384,6 +414,7 @@ export function applicationCompositionProvenance(
     };
     if (suffix[0] === "content")
       targets = itemTargets(
+        releases,
         source,
         canonical,
         sourcePath,
@@ -417,13 +448,21 @@ export function applicationCompositionProvenance(
         resolution.id(source.key, "guided_step", step, `page:${page.key}`),
       ];
     }
-    targets = pageDataTargets(source, canonical, sourcePath, dataRoot, canonicalData, resolution);
+    targets = pageDataTargets(
+      releases,
+      source,
+      canonical,
+      sourcePath,
+      dataRoot,
+      canonicalData,
+      resolution,
+    );
   }
   if (targets === undefined || targets.length === 0)
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
   const sourceValue = valueAtPath(source, sourcePath);
   const sourceObject = source as unknown as JsonObject;
-  return targets.map(({ path, setting, settingAt }) => {
+  return targets.map(({ path, setting, kind }) => {
     const canonicalPath = setting
       ? path
       : applicationTypedValueTarget(sourceObject, sourcePath, path, canonicalLeafSet, positions);
@@ -433,13 +472,12 @@ export function applicationCompositionProvenance(
     const transformed = canonicalJson(sourceValue) !== canonicalJson(canonicalValue);
     let resolved: boolean;
     if (setting) {
-      const leafKind = settingKindAt(canonical, canonicalPath, settingAt ?? 0);
+      const leafKind = kind ?? "";
       const eventReference =
-        canonicalPath.at(-2) === "event_id" &&
-        canonicalPath.at(-1) === "value" &&
+        canonicalPath.at(-1) === "event_id" &&
         canonicalValue === resolution.id(source.key, "event", String(sourceValue), "content");
       const referenceLeaf =
-        settingValueLeaf[leafKind] !== undefined ||
+        referenceSettingKinds.has(leafKind) ||
         leafKind === "record_reference" ||
         leafKind === "record_type_reference";
       // A text, number, choice or rich-text value never changes; only references resolve.
@@ -471,17 +509,3 @@ export function applicationCompositionProvenance(
     };
   });
 }
-
-/** The kind of the innermost typed setting value holding one canonical setting leaf. */
-const settingKindAt = (canonical: unknown, canonicalPath: Path, settingAt: number): string => {
-  let at = settingAt + 1;
-  let value = asObject(valueAtPath(canonical, canonicalPath.slice(0, at)));
-  while (
-    (value.kind === "group" && canonicalPath[at] === "properties") ||
-    (value.kind === "list" && canonicalPath[at] === "items")
-  ) {
-    at += 2;
-    value = asObject(valueAtPath(canonical, canonicalPath.slice(0, at)));
-  }
-  return String(value.kind);
-};
