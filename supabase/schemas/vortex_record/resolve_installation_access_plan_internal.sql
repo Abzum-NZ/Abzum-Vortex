@@ -141,7 +141,7 @@ begin
     select release.compilation_output #> '{canonical,content}',
       release.validation_contract_version
     into strict release_content, release_validation_contract_version
-    from vortex_definition.releases as release
+    from vortex_definition.runtime_releases as release
     where release.root_id = module_root_value
       and release.release_revision = release_revision_value;
 
@@ -372,19 +372,11 @@ begin
     end loop;
   end loop;
 
-  if preview_installation_id_value is null then
-    select release.compilation_output #> '{canonical,content}'
-    into strict release_content
-    from vortex_definition.releases as release
-    where release.root_id = application_root_id_value
-      and release.release_revision = application_release_revision_value;
-  else
-    release_content := p_installation #> '{candidate,compilation,canonical,content}';
-    if pg_catalog.jsonb_typeof(release_content) is distinct from 'object' then
-      raise exception using errcode = '55000',
-        message = 'Preview Application candidate is unavailable';
-    end if;
-  end if;
+  select release.compilation_output #> '{canonical,content}'
+  into strict release_content
+  from vortex_definition.runtime_releases as release
+  where release.root_id = application_root_id_value
+    and release.release_revision = application_release_revision_value;
 
   for permission_item in
     select item.value

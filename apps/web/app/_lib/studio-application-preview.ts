@@ -1,124 +1,45 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
+import {
+  createBuilderAuthority,
+  createDatabaseDefinitionPublicationService,
+  createPreviewInstallationCoordinator,
+  DefinitionError,
+  previewApplicationKey,
+  type BuilderTargetFactsReader,
+  type DatabaseRow,
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentSchema,
-  builderKeySchema,
-  fingerprintSchema,
   organizationIdSchema,
   revisionSchema,
-  type ApplicationCompilationOutput,
-  type ApplicationSourceDocument,
-  type Fingerprint,
+  sameId,
   type IdentitySession,
-  type OrganizationId,
-  } from "@vortex/platform/schema";
-import type { DatabaseRow} from "@vortex/platform/server";
-import {
-  applicationPreviewBreakpoints,
-  BuilderAuthorityError,
-  compileApplicationPreviewDraft,
-  createDatabaseDefinitionPublicationService,
-  fingerprintCanonicalValue,
-  materialiseApplicationPreview,
-  readApplicationDefinitionDraft,
-  readLiveHumanContext,
-  requireBuilderAuthority,
-  type ApplicationPreviewArtifact,
-  type ApplicationPreviewRefusalReason,
-} from "@vortex/platform/server";
+} from "@vortex/platform/schema";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
+import { loadOrganizationLauncher } from "./organization-context";
+import { organizationAddressPath } from "./address-paths";
 
-const savedHomepageRequestSchema = z.object({
-  rootId: applicationRootIdSchema,
-  draftRevision: revisionSchema,
-  sourceFingerprint: fingerprintSchema,
-  breakpoint: z.enum(applicationPreviewBreakpoints),
-  pageKey: builderKeySchema.optional(),
-  stepAlias: z.string().min(1).max(160).regex(/^[a-z][a-z0-9_]*$/).optional(),
-}).strict().refine((value) => value.stepAlias === undefined || value.pageKey !== undefined);
+const previewRequestSchema = z
+  .object({
+    rootId: applicationRootIdSchema,
+    draftRevision: revisionSchema,
+  })
+  .strict();
 
-type SavedPreviewSelection = Readonly<{
-  pageKey: string;
-  stepAlias?: string;
-  pageId: string;
-  activeStepId?: string;
-}>;
-
+/** The running preview of a saved draft: where it opens, which draft it runs and until when. */
 export type StudioApplicationPreviewResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; key: string;
-      sourceFingerprint: Fingerprint; resolutionFingerprint: Fingerprint;
-      selection: SavedPreviewSelection;
-      artifact: ApplicationPreviewArtifact }>
-  | Readonly<{ kind: "refused"; reason: ApplicationPreviewRefusalReason }>
+  | Readonly<{ kind: "provisioned"; href: string; draftRevision: number; expiresAt: string }>
+  | Readonly<{ kind: "refused"; reason: "invalid_request" | "permission_refused" | "not_installed" }>
   | Readonly<{ kind: "conflict" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 
 class ContextRefused extends Error {}
-
-const sameUuid = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
-
-const samePath = (left: readonly (string | number)[] | undefined, right: readonly (string | number)[]): boolean =>
-  left !== undefined && left.length === right.length && left.every((part, index) => part === right[index]);
-
-/** Bind authored aliases to the compiler's identity evidence, never to a guessed UUID. */
-const hasResolvedIdentity = (
-  output: ApplicationCompilationOutput,
-  sourcePath: readonly (string | number)[],
-  canonicalPath: readonly (string | number)[],
-): boolean => {
-  const matches = output.provenance.filter((entry) =>
-    samePath(entry.sourcePath, sourcePath) || samePath(entry.canonicalPath, canonicalPath));
-  const entry = matches[0];
-  return matches.length === 1 && entry !== undefined && entry.origin === "resolved" &&
-    samePath(entry.sourcePath, sourcePath) && samePath(entry.canonicalPath, canonicalPath);
-};
-
-const resolveSavedSelection = (
-  source: ApplicationSourceDocument,
-  output: ApplicationCompilationOutput,
-  selectors: Pick<z.infer<typeof savedHomepageRequestSchema>, "pageKey" | "stepAlias">,
-): SavedPreviewSelection | undefined => {
-  const pageKey = selectors.pageKey ?? source.body.home_page;
-  const sourceMatches = source.body.pages.map((page, index) => ({ page, index }))
-    .filter(({ page }) => page.key === pageKey);
-  const canonicalMatches = output.canonical.content.pages.map((page, index) => ({ page, index }))
-    .filter(({ page }) => page.key === pageKey);
-  const authored = sourceMatches[0];
-  const compiled = canonicalMatches[0];
-  if (sourceMatches.length !== 1 || canonicalMatches.length !== 1 ||
-    authored === undefined || compiled === undefined || authored.index !== compiled.index ||
-    source.body.pages.length !== output.canonical.content.pages.length ||
-    authored.page.type !== compiled.page.type || !hasResolvedIdentity(output,
-      ["body", "pages", authored.index, "id"], ["content", "pages", compiled.index, "pageId"]))
-    return undefined;
-  const selected = { pageKey, pageId: String(compiled.page.pageId) };
-  if (authored.page.type !== "guided_form" || compiled.page.type !== "guided_form")
-    return selectors.stepAlias === undefined ? selected : undefined;
-  const sourceSteps = authored.page.steps;
-  const canonicalSteps = compiled.page.steps;
-  if (sourceSteps.length !== canonicalSteps.length || sourceSteps.some((step, index) =>
-    step.name !== canonicalSteps[index]?.name || step.summary !== canonicalSteps[index]?.summary))
-    return undefined;
-  const stepAlias = selectors.stepAlias ?? sourceSteps[0]?.id;
-  const stepMatches = sourceSteps.map((step, index) => ({ step, index }))
-    .filter(({ step }) => step.id === stepAlias);
-  const step = stepMatches[0];
-  const canonicalStep = step === undefined ? undefined : canonicalSteps[step.index];
-  if (stepMatches.length !== 1 || step === undefined || canonicalStep === undefined ||
-    !hasResolvedIdentity(output, ["body", "pages", authored.index, "steps", step.index, "id"],
-      ["content", "pages", compiled.index, "steps", step.index, "id"]))
-    return undefined;
-  return { ...selected, stepAlias: step.step.id, activeStepId: String(canonicalStep.id) };
-};
 
 /** No default classification exists for an addressed root, including an unknown root. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
@@ -135,94 +56,71 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
   return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
 };
 
-const safeFailure = (error: unknown): StudioApplicationPreviewResult => {
-  if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
-    return { kind: "conflict" };
-  if (error instanceof ContextRefused || error instanceof BuilderAuthorityError ||
-    (error instanceof DefinitionError &&
-      (error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_ROOT_MISSING")))
-    return { kind: "refused", reason: "context_refused" };
-  console.error("[studio] application preview failed unexpectedly", error);
+const coordinator = () =>
+  createPreviewInstallationCoordinator({
+    installerRequests: humanOrganizationRequests(),
+    releaseCatalogue: installedReleaseCatalogue,
+    builderAuthority: (transaction, scope) =>
+      createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource }),
+    draftRehearsal: (transaction, authority) =>
+      createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority),
+  });
+
+const failure = (error: unknown): StudioApplicationPreviewResult => {
+  const code = error instanceof DefinitionError ? error.code : undefined;
+  switch (code) {
+    case "PREVIEW_INSTALLATION_STALE":
+      return { kind: "conflict" };
+    case "PREVIEW_INSTALLATION_PERMISSION_REFUSED":
+    case "PREVIEW_INSTALLATION_REFUSED":
+      return { kind: "refused", reason: "permission_refused" };
+    case "INVALID_PREVIEW_INSTALLATION_COMMAND":
+      return { kind: "refused", reason: "invalid_request" };
+    case "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE":
+      return { kind: "temporarily_unavailable" };
+  }
+  console.error("[studio] preview provisioning failed", error);
   return { kind: "temporarily_unavailable" };
 };
 
-/** Server-resolved session only. The action never accepts a session, source or canonical page. */
-export const previewSavedStudioApplication = async (
+/**
+ * Provisions, or replaces, the running preview of the saved Application draft at the given
+ * revision and returns its address. The session is the server-resolved one; the browser names
+ * only the root and the saved revision it expects.
+ */
+export const provisionStudioApplicationPreview = async (
   session: IdentitySession,
   candidateOrganizationId: string,
   candidate: unknown,
 ): Promise<StudioApplicationPreviewResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
-  const parsed = savedHomepageRequestSchema.safeParse(candidate);
-  if (!organization.success || !parsed.success) return { kind: "refused", reason: "invalid_request" };
-  const request = { kind: "application" as const, rootId: parsed.data.rootId,
-    draftRevision: parsed.data.draftRevision, breakpoint: parsed.data.breakpoint, sampleData: [] };
+  const request = previewRequestSchema.safeParse(candidate);
+  if (!organization.success || !request.success)
+    return { kind: "refused", reason: "invalid_request" };
+  let preview;
   try {
-    const result = await humanOrganizationRequests().run(
-      session, { organizationId: organization.data },
-      async (transaction, scope, issuedAt): Promise<StudioApplicationPreviewResult> => {
-        try {
-          if (!sameUuid(scope.organizationId, organization.data)) throw new ContextRefused();
-          const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
-          const operation = { kind: "draft_change" as const, rootId: request.rootId };
-          await requireBuilderAuthority(authority, operation);
-          const command = { rootId: request.rootId, expectedDraftRevision: request.draftRevision };
-          const initial = await readApplicationDefinitionDraft(transaction, scope, command);
-          if (initial.sourceFingerprint !== parsed.data.sourceFingerprint) return { kind: "conflict" };
-          const source = applicationSourceDocumentSchema.safeParse(initial.source);
-          if (!source.success) return { kind: "refused", reason: "content_invalid" };
-          const compiler = createDatabaseDefinitionPublicationService(
-            installedReleaseCatalogue, transaction, authority,
-          );
-          const compiled = await compileApplicationPreviewDraft(compiler, context, request);
-          if (compiled.status === "refused")
-            return compiled.refusal.reason === "draft_stale_or_missing"
-              ? { kind: "conflict" } : { kind: "refused", reason: compiled.refusal.reason };
-          const output = compiled.compiled.compilation;
-          const envelope = output.canonical.envelope;
-          if (!sameUuid(envelope.rootId, initial.rootId) ||
-            !sameUuid(envelope.organizationId, initial.organizationId) ||
-            envelope.key !== initial.key || envelope.draftRevision !== initial.draftRevision ||
-            envelope.publishedRevision !== initial.publishedRevision ||
-            envelope.createdAt !== initial.createdAt || !sameUuid(envelope.createdBy, initial.createdBy) ||
-            envelope.updatedAt !== initial.updatedAt || !sameUuid(envelope.updatedBy, initial.updatedBy) ||
-            !sameUuid(output.artifact.rootId, initial.rootId) || output.artifact.definitionKey !== initial.key ||
-            output.artifact.resolutionFingerprint !== output.resolutionFingerprint ||
-            output.artifact.contentFingerprint !== fingerprintCanonicalValue(output.canonical.content) ||
-            compiled.compiled.currentReleaseRevision !== (initial.publishedRevision ?? null))
-            return { kind: "conflict" };
-          const selection = resolveSavedSelection(source.data, output, parsed.data);
-          if (selection === undefined) return { kind: "refused", reason: "invalid_request" };
-          const materialised = materialiseApplicationPreview({ request: { ...request,
-            pageId: selection.pageId, ...(selection.activeStepId === undefined
-              ? {} : { activeStepId: selection.activeStepId }) }, draft: compiled.draft });
-          if (materialised.status === "refused")
-            return { kind: "refused", reason: materialised.refusal.reason };
-          const final = await readApplicationDefinitionDraft(transaction, scope, command);
-          if (!sameUuid(final.rootId, initial.rootId) ||
-            !sameUuid(final.organizationId, initial.organizationId) || final.key !== initial.key ||
-            final.draftRevision !== initial.draftRevision || final.sourceFingerprint !== initial.sourceFingerprint ||
-            final.publishedRevision !== initial.publishedRevision ||
-            final.createdAt !== initial.createdAt || !sameUuid(final.createdBy, initial.createdBy) ||
-            final.updatedAt !== initial.updatedAt || !sameUuid(final.updatedBy, initial.updatedBy))
-            return { kind: "conflict" };
-          await requireBuilderAuthority(authority, operation);
-          const completion = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-          if (!sameUuid(completion.identityAuthorityId, context.identityAuthorityId) ||
-            !sameUuid(completion.correlationId, context.correlationId))
-            throw new ContextRefused();
-          return { kind: "available", organizationId: scope.organizationId, key: initial.key,
-            sourceFingerprint: initial.sourceFingerprint, resolutionFingerprint: output.resolutionFingerprint,
-            selection, artifact: materialised.artifact };
-        } catch (error) {
-          return safeFailure(error);
-        }
-      },
-    );
-    return result.kind === "available" ? result.value : result.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" } : { kind: "refused", reason: "context_refused" };
-  } catch {
-    return { kind: "temporarily_unavailable" };
+    preview = await coordinator().create(session, {
+      organizationId: organization.data,
+      applicationRootId: request.data.rootId,
+      expectedDraftRevision: request.data.draftRevision,
+    });
+  } catch (error) {
+    if (error instanceof DefinitionError && error.code === "PREVIEW_INSTALLATION_FAILED") {
+      const cause = (error as { cause?: unknown }).cause;
+      if (cause instanceof Error && /no release to preview/i.test(cause.message))
+        return { kind: "refused", reason: "not_installed" };
+    }
+    return failure(error);
   }
+  const launcher = await loadOrganizationLauncher(session);
+  if (launcher.kind !== "available") return { kind: "temporarily_unavailable" };
+  const entry = launcher.entries.find((item) => sameId(item.organizationId, preview.organizationId));
+  if (entry === undefined) return { kind: "refused", reason: "permission_refused" };
+  // The preview's own address: its home page opens there, as an installed Application's does.
+  return {
+    kind: "provisioned",
+    href: `${organizationAddressPath(entry.tenantShortName, entry.organizationShortName)}/${encodeURIComponent(previewApplicationKey(preview.previewInstallationId))}`,
+    draftRevision: preview.draftRevision,
+    expiresAt: preview.expiresAt,
+  };
 };

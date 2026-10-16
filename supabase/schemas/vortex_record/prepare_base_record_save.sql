@@ -122,20 +122,12 @@ begin
     then vortex_definition.read_current_active_installation()
     else preview_installation end;
 
-  if preview_installation is null then
-    select release.record_content
-    into strict application_content
-    from vortex_definition.releases as release
-    where release.root_id = (meta -> 'context' ->> 'applicationRootId')::uuid
-      and release.release_revision =
-        (installation ->> 'applicationReleaseRevision')::bigint;
-  else
-    application_content :=
-      installation #> '{candidate,compilation,canonical,content}';
-    if pg_catalog.jsonb_typeof(application_content) is distinct from 'object' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused');
-    end if;
-  end if;
+  select release.record_content
+  into strict application_content
+  from vortex_definition.runtime_releases as release
+  where release.root_id = (meta -> 'context' ->> 'applicationRootId')::uuid
+    and release.release_revision =
+      (installation ->> 'applicationReleaseRevision')::bigint;
 
   unsupported := exists (
     select 1

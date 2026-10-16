@@ -949,6 +949,25 @@ class DatabasePublicationTransaction
     return result;
   }
 
+  async readRehearsedReleases(
+    applicationRootId: string,
+    pins: readonly Readonly<{ rootId: string; releaseRevision: number }>[],
+  ): Promise<readonly Readonly<{ release: unknown; dependencies: unknown }>[]> {
+    const rows = await this.transaction.query<DatabaseRow & { readonly releases: unknown }>`
+      select vortex_definition.read_rehearsed_preview_releases(
+        ${applicationRootId}::uuid,
+        ${JSON.stringify(pins)}::text::jsonb
+      ) as releases
+    `;
+    const parsed = z
+      .array(z.object({ release: z.record(z.string(), z.unknown()), dependencies: z.array(z.unknown()) }).strict())
+      .max(201)
+      .safeParse(rows.length === 1 ? rows[0]?.releases : undefined);
+    if (!parsed.success || parsed.data.length !== pins.length)
+      return invalidStorage("readRehearsedReleases returned other releases than the rehearsal wrote");
+    return parsed.data;
+  }
+
   appendModuleRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult> {
     if (release.draft.kind !== "module" || release.compilationOutput.kind !== "module")
       return invalidStorage("appendModuleRelease received a non-Module release");

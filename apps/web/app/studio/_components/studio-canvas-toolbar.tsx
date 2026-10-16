@@ -14,7 +14,7 @@ export const studioCanvasZooms = [50, 75, 100, 125] as const;
 export type StudioCanvasZoom = (typeof studioCanvasZooms)[number];
 
 /** Above the canvas: what it is showing, the screen size and zoom it is drawn at, and the inspector toggle. */
-export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZoom, showsCanvas, previewing, onEndPreview,
+export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZoom, showsCanvas,
   inspectorOpen, onToggleInspector }: Readonly<{
   title: string;
   breakpoint: StudioCanvasBreakpoint;
@@ -23,16 +23,12 @@ export function StudioCanvasToolbar({ title, breakpoint, onBreakpoint, zoom, onZ
   onZoom: (zoom: StudioCanvasZoom) => void;
   /** Screen size and zoom apply to the page canvas only. */
   showsCanvas: boolean;
-  previewing: boolean;
-  onEndPreview: () => void;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
 }>) {
   const step = studioCanvasZooms.indexOf(zoom);
   return <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1">
     <h2 className="min-w-0 truncate text-sm font-medium">{title}</h2>
-    {previewing && <Button type="button" variant="outline" size="sm" onClick={onEndPreview}>
-      <Icon name="chevron-left" />Back to editing</Button>}
     <div className="ml-auto flex flex-wrap items-center gap-2">
       {showsCanvas && <>
         <div role="group" aria-label="Screen size" className="flex gap-1">

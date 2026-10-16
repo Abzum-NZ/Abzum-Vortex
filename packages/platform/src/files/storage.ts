@@ -181,16 +181,38 @@ export const moduleInstallationBindingEvidenceSchema = z
   })
   .strict();
 
-/** The complete active binding set selected from trusted human application context. */
+/** One record type's isolated storage in a preview, beside the storage of its release. */
+const previewStorageIdentitySchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseRevision: revisionSchema,
+    recordTypeId: z.uuid(),
+    releaseStorageContractId: storageContractIdSchema,
+    previewStorageContractId: storageContractIdSchema,
+  })
+  .strict();
+
+/**
+ * The complete active binding set selected from trusted human application context. A preview
+ * request's installation is the preview's: its address and isolated storage come with it.
+ */
 export const activeApplicationInstallationEvidenceSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     applicationReleaseRevision: revisionSchema,
     moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
+    previewInstallationId: z.uuid().optional(),
+    storageIdentities: z.array(previewStorageIdentitySchema).max(10_000).optional(),
   })
   .strict()
   .superRefine((value, context) => {
+    if ((value.previewInstallationId === undefined) !== (value.storageIdentities === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["storageIdentities"],
+        message: "Only a preview installation has isolated storage",
+      });
     const moduleRootIds = value.moduleBindings.map((binding) => binding.moduleRootId);
     if (new Set(moduleRootIds).size !== moduleRootIds.length)
       context.addIssue({
