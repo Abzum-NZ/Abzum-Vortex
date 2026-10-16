@@ -1008,7 +1008,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       blocks on the canvas, and change the selected block in the inspector.
     </StudioComingNextPanel>
     <StudioMenuPanel {...outlinePanelProps} hidden={tab !== "menu"} />
-    <StudioDataPanel hidden={tab !== "data"} source={source}
+    <StudioDataPanel hidden={tab !== "data"} source={source} applications={applications}
       open={moduleKey} onOpen={(next) => { void openModule(next); }}
       search={<ApplicationSearchEditor source={source} metadata={currentSearchMetadata}
         disabled={busy.anyRendered("search") || state.isSaving || refreshingSearch || state.isDirty || workspaceLifetime === 0}

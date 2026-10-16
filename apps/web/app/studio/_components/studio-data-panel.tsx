@@ -4,15 +4,18 @@ import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { StudioPanelShell } from "./studio-frame";
+import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 
 /**
  * The Data tab's panel: the modules this application owns, edited here in its draft, and the
  * modules it uses from other applications, which are read-only here. The application's search
  * settings follow below.
  */
-export function StudioDataPanel({ hidden, source, open, onOpen, search }: Readonly<{
+export function StudioDataPanel({ hidden, source, applications, open, onOpen, search }: Readonly<{
   hidden: boolean;
   source: ApplicationSourceDocument;
+  /** The organisation's applications, to name the owner of a used module. */
+  applications: readonly StudioModuleOwnerApplication[];
   /** The key of the module open in the centre. */
   open: string | null;
   onOpen: (moduleKey: string) => void;
@@ -45,7 +48,8 @@ export function StudioDataPanel({ hidden, source, open, onOpen, search }: Readon
             <p className="break-all text-sm font-medium">{use.module}</p>
             <Badge variant="outline">Read-only</Badge>
           </div>
-          <p className="break-all text-xs text-muted-foreground">Owned by {use.application}</p>
+          <p className="break-all text-xs text-muted-foreground">Owned by {applications.find((application) =>
+            application.key === use.application)?.name ?? use.application}</p>
           <Button type="button" size="xs" variant={current ? "secondary" : "outline"} aria-pressed={current}
             onClick={() => onOpen(use.module)}>Details</Button>
         </li>;
