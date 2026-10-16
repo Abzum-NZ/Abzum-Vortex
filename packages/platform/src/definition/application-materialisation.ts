@@ -1042,14 +1042,9 @@ export const materialiseApplicationComposition = (
       reject("vortex.definition.application_block_references", "unknown_property");
     const content = new Map<string, CompiledZone>();
     for (const [alias, slot] of shell.contentSlots) {
+      // Whether a required slot is present is the source schema's one rule; an empty slot compiles.
       const authored = authoredContent.get(alias);
-      if (authored === undefined) {
-        if (slot.required)
-          reject("vortex.definition.application_block_references", "required_value");
-        continue;
-      }
-      if (slot.required && authored.items.length === 0)
-        reject("vortex.definition.application_block_references", "required_value");
+      if (authored === undefined) continue;
       content.set(
         slot.canonicalId,
         compileSlot(authored, {

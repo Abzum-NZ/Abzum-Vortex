@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { ApplicationSourceDocument } from "@vortex/platform/schema";
+import { sourcePageShell, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -8,7 +8,7 @@ import { Input } from "@vortex/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
-  studioStructureShellChoices, type StudioStructureCommand, type StudioStructureResult,
+  studioStructureDefaultShell, studioStructureShellChoices, type StudioStructureCommand, type StudioStructureResult,
 } from "../_lib/application-structure";
 import { StudioField } from "./studio-field";
 
@@ -40,6 +40,9 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
   const what = page !== undefined ? "page" : "layout";
   const [rename, setRename] = useState(target?.name ?? "");
   useEffect(() => { setRename(target?.name ?? ""); }, [target?.id, target?.name]);
+  const pageShell = page === undefined ? null : sourcePageShell(page.composition);
+  const [moveTo, setMoveTo] = useState(pageShell ?? "");
+  useEffect(() => { setMoveTo(pageShell ?? ""); }, [page?.id, pageShell]);
 
   const run = (command: StudioStructureCommand): boolean => {
     const result = onCommand(command);
@@ -48,7 +51,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
   };
   const openForm = (next: Form) => {
     setForm(next); setNewName(""); setFeedback(null); setAddToMenu(true);
-    setShellChoice(choices.find((choice) => choice.unavailable === undefined)?.shellAlias ?? "");
+    setShellChoice(studioStructureDefaultShell(source) ?? "");
   };
   const submitNew = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -90,10 +93,8 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
         <StudioField label="Layout" hint="The frame the page is drawn in. People who can open the home page can open the new page.">
           {(control) => <NativeSelect {...control} value={shellChoice} disabled={disabled}
             onChange={(event) => setShellChoice(event.target.value)}>
-            {choices.map((choice) => <NativeSelectOption key={choice.shellAlias ?? ""} value={choice.shellAlias ?? ""}
-              disabled={choice.unavailable !== undefined}>
-              {choice.unavailable === undefined ? choice.label : `${choice.label} (${choice.unavailable})`}
-            </NativeSelectOption>)}
+            {choices.map((choice) => <NativeSelectOption key={choice.shellAlias ?? ""} value={choice.shellAlias ?? ""}>
+              {choice.label}</NativeSelectOption>)}
           </NativeSelect>}
         </StudioField>
         <label className="flex items-center gap-2 text-sm">
@@ -125,6 +126,18 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
         <Button type="button" size="sm" variant="destructive" disabled={disabled} onClick={() => { void remove(); }}>
           {page !== undefined ? "Remove page" : "Remove layout"}</Button>
       </div>
+      {page !== undefined && <div className="flex flex-wrap items-end gap-2">
+        <StudioField label="Layout" hint="Blocks move to the area of the same name in the new layout.">
+          {(control) => <NativeSelect {...control} value={moveTo} disabled={disabled}
+            onChange={(event) => setMoveTo(event.target.value)}>
+            {choices.map((choice) => <NativeSelectOption key={choice.shellAlias ?? ""} value={choice.shellAlias ?? ""}>
+              {choice.label}</NativeSelectOption>)}
+          </NativeSelect>}
+        </StudioField>
+        <Button type="button" size="sm" variant="outline" disabled={disabled || moveTo === (pageShell ?? "")}
+          onClick={() => run({ kind: "move_page", pageAlias: page.id, shellAlias: moveTo === "" ? null : moveTo })}>
+          Move to layout</Button>
+      </div>}
     </form>}
     {feedback !== null && <p role={feedback.kind === "refused" ? "alert" : "status"}
       className={feedback.kind === "refused" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
