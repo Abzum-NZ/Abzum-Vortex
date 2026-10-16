@@ -1,10 +1,8 @@
 import "server-only";
 
 import { describeFailure } from "../schema";
-import { InstallationArchiveConnectionError } from "./installation-archive-connections";
 import { InstallationProblem, type InstallationProblemShape } from "./installation-authority";
 import { DefinitionError, classifyDatabaseError } from "./definition-error";
-import { ProvisionedSetupError } from "./installation-provisioned-setup";
 
 /**
  * What an installation failure is shown to the caller as. The cause is logged here (class and
@@ -14,8 +12,6 @@ import { ProvisionedSetupError } from "./installation-provisioned-setup";
 export const classifyInstallationFailure = (error: unknown): InstallationProblemShape => {
   console.error(`[studio] application installation failed: ${describeFailure(error)}`);
   if (error instanceof InstallationProblem) return error.problem;
-  if (error instanceof InstallationArchiveConnectionError) return { kind: error.reason };
-  if (error instanceof ProvisionedSetupError) return { kind: "refused" };
   if (error instanceof DefinitionError) {
     switch (error.code) {
       case "APPLICATION_INSTALLATION_STALE":

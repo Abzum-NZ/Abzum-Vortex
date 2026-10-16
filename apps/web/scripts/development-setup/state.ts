@@ -34,12 +34,6 @@ export type SetupState = {
   releases: Record<string, PublishedRelease>;
   installerRoleGranted: boolean;
   definitionRoleGranted: boolean;
-  lifecyclePolicies: Record<string, boolean>;
-  /**
-   * Organisation-shared record types whose one lifecycle policy is stored, by storage contract id.
-   * Every application that binds the owning module needs it, but only the first stores it.
-   */
-  sharedLifecyclePolicies: Record<string, boolean>;
   /** Every application was installed once for this organisation. */
   setupCompleted: boolean;
   /** A default initialization attempt was durably recorded before its protected write. */
@@ -101,8 +95,6 @@ const setupStateDocumentSchema = z
     releases: z.record(z.string(), publishedReleaseSchema),
     installerRoleGranted: z.boolean(),
     definitionRoleGranted: z.boolean(),
-    lifecyclePolicies: z.record(z.string(), z.boolean()),
-    sharedLifecyclePolicies: z.record(z.string(), z.boolean()),
     setupCompleted: z.boolean(),
     defaultApplicationInitializationAttempted: z.boolean(),
     defaultApplicationInitializationAttemptRevision: setupRevisionSchema.nullable(),
@@ -182,8 +174,6 @@ export const loadSetupState = (
   let drafts: Record<string, CreatedDraft> = {};
   let installerRoleGranted = false;
   let definitionRoleGranted = false;
-  let lifecyclePolicies: Record<string, boolean> = {};
-  let sharedLifecyclePolicies: Record<string, boolean> = {};
   let setupCompleted = false;
   let defaultApplicationInitializationAttempted = false;
   let defaultApplicationInitializationAttemptRevision: number | null = null;
@@ -204,8 +194,6 @@ export const loadSetupState = (
       drafts = stored.drafts;
       installerRoleGranted = stored.installerRoleGranted;
       definitionRoleGranted = stored.definitionRoleGranted;
-      lifecyclePolicies = stored.lifecyclePolicies;
-      sharedLifecyclePolicies = stored.sharedLifecyclePolicies;
       setupCompleted = stored.setupCompleted;
       defaultApplicationInitializationAttempted = stored.defaultApplicationInitializationAttempted;
       defaultApplicationInitializationAttemptRevision =
@@ -222,8 +210,6 @@ export const loadSetupState = (
     releases,
     installerRoleGranted,
     definitionRoleGranted,
-    lifecyclePolicies,
-    sharedLifecyclePolicies,
     setupCompleted,
     defaultApplicationInitializationAttempted,
     defaultApplicationInitializationAttemptRevision,
@@ -240,8 +226,6 @@ export const loadSetupState = (
             releases: state.releases,
             installerRoleGranted: state.installerRoleGranted,
             definitionRoleGranted: state.definitionRoleGranted,
-            lifecyclePolicies: state.lifecyclePolicies,
-            sharedLifecyclePolicies: state.sharedLifecyclePolicies,
             setupCompleted: state.setupCompleted,
             defaultApplicationInitializationAttempted:
               state.defaultApplicationInitializationAttempted,

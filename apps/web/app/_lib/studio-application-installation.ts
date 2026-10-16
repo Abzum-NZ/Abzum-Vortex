@@ -10,10 +10,8 @@ import {
 } from "@vortex/platform/schema";
 import {
   FirstInstallUnavailable,
-  ProvisionedSetupError,
   installationProblem,
   type InstallationProblemShape,
-  type FirstInstallCommandRun,
   type FirstInstallEnvironment,
   type FirstInstallFlowEnvironment,
   activateUpgradeRelease,
@@ -26,15 +24,12 @@ import {
   type UpgradeReleaseIdentity,
   type UpgradeState,
   createFirstInstallCoordinator,
-  createRecordTypeLifecyclePolicyService,
   readCurrentFirstInstallCandidate,
-  readFirstInstallArchiveOptions,
-  saveFirstInstallInitialPolicy,
   verifyFirstInstallActivation,
 } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue, releaseSetContainsCustomComponents } from "./definition-catalogue";
-import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
+import { humanOrganizationRequests } from "./server-composition";
 import {
   inspectStudioApplicationReleaseHistory,
   loadStudioApplicationHistoryAccess,
@@ -46,15 +41,11 @@ import {
   studioApplicationInstallationReleaseIdentitySchema,
   studioApplicationInstallationSelectorSchema,
   studioApplicationInstallationSnapshotSchema,
-  studioApplicationArchiveOptionsQuerySchema,
-  studioApplicationArchiveOptionsResultSchema,
   studioApplicationFirstInstallActivateCommandSchema,
   studioApplicationFirstInstallCommandResultSchema,
   studioApplicationFirstInstallLoadResultSchema,
   studioApplicationFirstInstallPrepareCommandSchema,
-  studioApplicationFirstInstallSaveCommandSchema,
   studioApplicationFirstInstallSelectorSchema,
-  type StudioApplicationArchiveOptionsResult,
   type StudioApplicationFirstInstallCommandResult,
   type StudioApplicationFirstInstallLoadResult,
   type StudioApplicationFirstInstallSelector,
@@ -87,7 +78,6 @@ const firstInstallFlowEnvironment = (): FirstInstallFlowEnvironment => ({
     readAccess: loadStudioApplicationHistoryAccess,
     inspectRelease: inspectStudioApplicationReleaseHistory,
   },
-  lifecyclePolicies: createRecordTypeLifecyclePolicyService(humanOrganizationRequestDependencies()),
 });
 
 const unavailable = (reason: NonNullable<Problem["unavailableReason"]>) =>
@@ -257,10 +247,6 @@ export const installSelectedStudioApplicationRelease = async (
 const firstInstallLoadFailure = (error: unknown): StudioApplicationFirstInstallLoadResult => {
   if (error instanceof FirstInstallUnavailable)
     return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "unavailable", reason: error.reason });
-  if (error instanceof ProvisionedSetupError && error.reason !== "refused") {
-    console.error(`[studio] application installation failed: ${describeFailure(error)}`);
-    return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "unavailable", reason: error.reason });
-  }
   const failure = classifyInstallationFailure(error);
   if (failure.kind === "conflict")
     return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "conflict" });
@@ -362,65 +348,6 @@ export const prepareStudioApplicationFirstInstall = async (
   }
 };
 
-const archiveOptionsFailure = (error: unknown): StudioApplicationArchiveOptionsResult => {
-  const failure = classifyInstallationFailure(error);
-  if (failure.kind === "conflict")
-    return studioApplicationArchiveOptionsResultSchema.parse({ kind: "conflict" });
-  if (failure.kind === "refused" || failure.kind === "authentication_required")
-    return studioApplicationArchiveOptionsResultSchema.parse({ kind: "refused" });
-  return studioApplicationArchiveOptionsResultSchema.parse({ kind: "temporarily_unavailable" });
-};
-
-export const loadStudioApplicationArchiveOptions = async (
-  organizationIdCandidate: string,
-  queryCandidate: unknown,
-): Promise<StudioApplicationArchiveOptionsResult> => {
-  const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
-  const query = studioApplicationArchiveOptionsQuerySchema.safeParse(queryCandidate);
-  if (!organizationId.success || !query.success ||
-    !firstInstallCommandMatches(organizationId.data, query.data.selector, query.data.expected))
-    return studioApplicationArchiveOptionsResultSchema.parse({ kind: "refused" });
-  try {
-    const page = await readFirstInstallArchiveOptions(
-      firstInstallFlowEnvironment(), await firstInstallSession(), query.data,
-    );
-    return studioApplicationArchiveOptionsResultSchema.parse({
-      kind: "available",
-      options: page.options.map(({ destinationFingerprint: _privateFingerprint, ...option }) => option),
-      ...(page.nextAfterConnectionInstanceId === undefined
-        ? {}
-        : { nextAfterConnectionInstanceId: page.nextAfterConnectionInstanceId }),
-    });
-  } catch (error) {
-    return archiveOptionsFailure(error);
-  }
-};
-
-export const saveStudioApplicationFirstInstallPolicy = async (
-  organizationIdCandidate: string,
-  commandCandidate: unknown,
-): Promise<StudioApplicationFirstInstallCommandResult> => {
-  const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
-  const command = studioApplicationFirstInstallSaveCommandSchema.safeParse(commandCandidate);
-  if (!organizationId.success || !command.success ||
-    !firstInstallCommandMatches(organizationId.data, command.data.selector, command.data.expected))
-    return studioApplicationFirstInstallCommandResultSchema.parse({
-      kind: "refused", stateMayHaveChanged: false,
-    });
-
-  const run: FirstInstallCommandRun = { writeStarted: false };
-  try {
-    await saveFirstInstallInitialPolicy(
-      firstInstallFlowEnvironment(), await firstInstallSession(), command.data, run,
-    );
-    return studioApplicationFirstInstallCommandResultSchema.parse({
-      kind: "completed", action: "policy_saved", stateMayHaveChanged: true,
-    });
-  } catch (error) {
-    return firstInstallCommandFailure(error, run.writeStarted ? "unknown" : false);
-  }
-};
-
 export const activateStudioApplicationFirstInstall = async (
   organizationIdCandidate: string,
   commandCandidate: unknown,
@@ -439,9 +366,7 @@ export const activateStudioApplicationFirstInstall = async (
     const candidate = await readCurrentFirstInstallCandidate(
       environment, await firstInstallSession(), command.data.selector, command.data.expected,
     );
-    if (candidate.snapshot.registrationState !== "provisioned_inactive" ||
-      candidate.snapshot.setup === null ||
-      candidate.snapshot.setup.targets.some((target) => target.policy.state !== "configured"))
+    if (candidate.snapshot.registrationState !== "provisioned_inactive")
       return studioApplicationFirstInstallCommandResultSchema.parse({
         kind: "refused", stateMayHaveChanged: false,
       });

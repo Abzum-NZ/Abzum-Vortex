@@ -8,10 +8,7 @@ import {
   createApplicationInstallationCoordinator,
   type ApplicationInstallationCoordinatorDependencies,
 } from "@vortex/platform/server";
-import {
-  applicationRootIdSchema,
-  type IdentityAuthorityId,
-} from "@vortex/platform/schema";
+import type { IdentityAuthorityId } from "@vortex/platform/schema";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
   createPreparedInstallationRuntimeSourceReader,
@@ -27,7 +24,7 @@ import {
   type SystemContextFacts,
 } from "./development-authority";
 import type { DevelopmentSetupManifest } from "./manifest";
-import { initializeLifecycleLimits, storeInitialLifecyclePolicies } from "./lifecycle";
+import { initializeLifecycleLimits } from "./lifecycle";
 import type { PublishedRelease, SetupState } from "./state";
 import { DefinitionError } from "@vortex/platform/server";
 
@@ -77,9 +74,8 @@ const release = (facts: InstallFacts, key: string): PublishedRelease => {
 };
 
 /**
- * Prepares one exact release, stores its source-bound runtime bundle, and then stores the initial
- * record-type lifecycle policies the activation gate requires. A release that is already active is
- * left alone.
+ * Prepares one exact release and stores its source-bound runtime bundle. Activation gives every
+ * record type its lifecycle policy. A release that is already active is left alone.
  */
 const prepareRelease = async (
   facts: InstallFacts,
@@ -103,25 +99,7 @@ const prepareRelease = async (
         return undefined;
       throw error;
     });
-  if (prepared === undefined || facts.state.lifecyclePolicies[applicationKey] === true) return;
-  const context = mintSystemContext(facts.system);
-  const releaseSet = await definitionReader(facts).read(context, {
-    applicationRootId: applicationRootIdSchema.parse(published.rootId),
-    applicationReleaseRevision: published.releaseRevision,
-  });
-  const stored = await storeInitialLifecyclePolicies({
-    identityAuthorityId: facts.identityAuthorityId,
-    organizationId: facts.system.organizationId,
-    stewardIdentityId: facts.stewardIdentityId,
-    applicationRootId: published.rootId,
-    releaseSet,
-    bindings: prepared.moduleBindings,
-    sharedPolicies: facts.state.sharedLifecyclePolicies,
-    saveProgress: () => facts.state.save(),
-  });
-  facts.state.lifecyclePolicies[applicationKey] = true;
-  facts.state.save();
-  log(`prepared ${applicationKey} with ${stored} lifecycle policies`);
+  if (prepared !== undefined) log(`prepared ${applicationKey}: ${prepared.outcome}`);
 };
 
 /** Prepares and activates one exact release; a release that is already active is unchanged. */
