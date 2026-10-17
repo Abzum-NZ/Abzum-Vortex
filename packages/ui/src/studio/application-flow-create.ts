@@ -13,8 +13,9 @@ import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } fr
 
 /**
  * Creating a flow and binding it, the one way flows are created and bound:
- * - for an action: an interactive flow started by the person, with one Show message step, and one
- *   flow binding of the control's action event to it (the existing `flow_bindings` model);
+ * - for an action control: an interactive flow started by the person, with one Show message step,
+ *   and one flow binding of the control's action event to it (the existing `flow_bindings` model);
+ *   on a record page the flow reads the record the page shows as its `record_id` input;
  * - for a control event with its steps given (a generated page's Open, New, Edit and Save): an
  *   interactive flow with exactly those inputs, steps and outputs, bound to that control event;
  * - for another control of an existing flow (each form of a guided form): one more binding;
@@ -29,7 +30,8 @@ type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
 export type StudioFlowControlEvent = SourceBinding["event"];
 
 export type StudioFlowCreateCommand =
-  | Readonly<{ kind: "action"; controlAlias: string; name: string }>
+  /** On a record page, the flow gets the record the page shows as its record_id input. */
+  | Readonly<{ kind: "action"; controlAlias: string; name: string; recordType: string | null }>
   | Readonly<{ kind: "control"; controlAlias: string; event: StudioFlowControlEvent; name: string; description: string;
       inputs: SourceFlow["inputs"]; tasks: SourceFlow["tasks"]; outputs: SourceFlow["outputs"];
       bindingInputs: SourceBinding["inputs"] }>
@@ -45,8 +47,11 @@ export type StudioFlowCreateResult =
   | Readonly<{ kind: "refused"; reason: string }>;
 
 export type StudioFlowCreateChoices = Readonly<{
-  /** Controls that raise an action and have no flow bound to it yet. */
-  actions: readonly Readonly<{ controlAlias: string; label: string }>[];
+  /**
+   * Action controls (buttons that are not a form's Save or Continue, which submit their form to
+   * its own flow) with no flow bound yet; on a record page, the record type the page shows.
+   */
+  actions: readonly Readonly<{ controlAlias: string; label: string; recordType: string | null }>[];
   /** Record types of the Modules this application owns. */
   recordTypes: readonly Readonly<{ moduleKey: string; moduleName: string; recordTypeKey: string; label: string }>[];
 }>;
@@ -58,13 +63,16 @@ export const projectStudioFlowCreateChoices = (
 ): StudioFlowCreateChoices => {
   const bound = new Set(draft.source.body.flow_bindings.filter((binding) => binding.event === "action")
     .map((binding) => binding.control));
-  const actions: { controlAlias: string; label: string }[] = [];
+  const actions: { controlAlias: string; label: string; recordType: string | null }[] = [];
   traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
     if (phase !== "enter" || node.kind !== "placement" || bound.has(node.selection.placementAlias)) return;
     const release = draft.catalogue.releases.find((candidate) => String(candidate.blockId) === node.block.block_id &&
       String(candidate.releaseVersion) === node.block.release_version);
-    if (release?.supportedEvents.includes("action") === true)
-      actions.push({ controlAlias: node.selection.placementAlias, label: controlLabel(node.selection.placementAlias) });
+    if (release?.supportedEvents.includes("action") !== true || node.settings.action_kind === "submit") return;
+    const owner = node.owner;
+    const page = owner.kind === "page" ? draft.source.body.pages.find((candidate) => candidate.id === owner.pageAlias) : undefined;
+    const recordType = page?.type === "detail" && "record_type" in page && typeof page.record_type === "string" ? page.record_type : null;
+    actions.push({ controlAlias: node.selection.placementAlias, label: controlLabel(node.selection.placementAlias), recordType });
   });
   const recordTypes = draft.source.body.modules.flatMap((module) => module.record_types.map((recordType) => ({
     moduleKey: module.key, moduleName: module.name, recordTypeKey: recordType.key,
@@ -174,11 +182,14 @@ export const applyStudioFlowCreate = (
     const key = keyFrom(name, new Set(body.flows.flatMap((entry) => [entry.id, entry.key])));
     if (key === undefined) return { kind: "refused", reason: "No free name could be made for this flow. Choose another name." };
     const flow = command.kind === "action"
-      ? interactiveFlow(key, name, { inputs: {}, outputs: {},
+      ? interactiveFlow(key, name, { outputs: {},
+        inputs: command.recordType === null ? {}
+          : { record_id: { type: "record_reference", required: true, recordTypeIds: [command.recordType] } },
         tasks: [{ id: "show_message", type: "interface.show_message", version: "1.0.0", properties: { message: message("Edit this message") } }] })
       : interactiveFlow(key, name, { description: command.description, inputs: command.inputs, tasks: command.tasks, outputs: command.outputs });
     const binding = command.kind === "action"
-      ? bindControl(body, command.controlAlias, "action", key, {})
+      ? bindControl(body, command.controlAlias, "action", key,
+        command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } })
       : bindControl(body, command.controlAlias, command.event, key, command.bindingInputs);
     body.flows.push(flow);
     return created(candidate, flow, null, binding);
