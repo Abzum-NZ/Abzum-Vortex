@@ -47,6 +47,16 @@ begin
   from pg_catalog.jsonb_array_elements(query_content -> 'queries') as item(value)
   where pg_catalog.lower(item.value ->> 'queryId') = pg_catalog.lower(p_query_id::text)
   limit 1;
+  -- No authored query has this identity: a record type of this Module, listed by its own.
+  if query_item is null then
+    select vortex_record.record_type_listing_query_internal(p_module_root_id, item.value)
+    into query_item
+    from pg_catalog.jsonb_array_elements(
+      coalesce(query_content -> 'recordTypes', '[]'::jsonb)
+    ) as item(value)
+    where pg_catalog.lower(item.value ->> 'recordTypeId') = pg_catalog.lower(p_query_id::text)
+    limit 1;
+  end if;
   if query_item is null
     or query_item #>> '{recordType,state}' is distinct from 'resolved'
     or not coalesce(pg_catalog.pg_input_is_valid(query_item #>> '{recordType,moduleRootId}', 'uuid'), false)

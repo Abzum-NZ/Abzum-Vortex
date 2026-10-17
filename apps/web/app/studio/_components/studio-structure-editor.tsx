@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { sourcePageShell, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -10,21 +11,27 @@ import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell, studioStructureShellChoices, type StudioStructureCommand, type StudioStructureResult,
 } from "../_lib/application-structure";
+import { studioAccessGateChoices } from "../_lib/application-access";
 import { StudioField } from "./studio-field";
+import { StudioRecordPageForm } from "./studio-record-page-form";
 
 type Feedback = Readonly<{ kind: "applied" | "refused"; message: string }>;
-type Form = "none" | "page" | "shell";
+type Form = "none" | "page" | "record" | "shell";
 
 /**
  * The Structure tab's controls: add a page or a layout, and rename, remove or make home the page or
  * layout selected in the tree. Each control sends one command; a refusal is shown here, where it was
  * asked for, and nothing changes.
  */
-export function StudioStructureEditor({ source, selected, disabled, onCommand }: Readonly<{
+export function StudioStructureEditor({ source, selected, disabled, onCommand, onPreview, onOpenAccess }: Readonly<{
   source: ApplicationSourceDocument;
   selected: StudioSemanticSelection | null;
   disabled: boolean;
   onCommand: (command: StudioStructureCommand) => StudioStructureResult;
+  /** Runs a command on the current draft without keeping it, for a preview of what it adds. */
+  onPreview: (command: StudioStructureCommand) => StudioStructureResult;
+  /** Opens the Access tab, where who can open a page is set. */
+  onOpenAccess: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const [form, setForm] = useState<Form>("none");
@@ -40,6 +47,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
   const what = page !== undefined ? "page" : "layout";
   const [rename, setRename] = useState(target?.name ?? "");
   useEffect(() => { setRename(target?.name ?? ""); }, [target?.id, target?.name]);
+  const gate = page === undefined ? undefined : studioAccessGateChoices(source).find((choice) => choice.key === page.permission);
   const pageShell = page === undefined ? null : sourcePageShell(page.composition);
   const [moveTo, setMoveTo] = useState(pageShell ?? "");
   useEffect(() => { setMoveTo(pageShell ?? ""); }, [page?.id, pageShell]);
@@ -80,10 +88,15 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
     <div className="flex flex-wrap gap-2">
       <Button type="button" size="sm" variant={form === "page" ? "secondary" : "outline"} disabled={disabled}
         aria-expanded={form === "page"} onClick={() => openForm(form === "page" ? "none" : "page")}>Add page</Button>
+      <Button type="button" size="sm" variant={form === "record" ? "secondary" : "outline"} disabled={disabled}
+        aria-expanded={form === "record"} onClick={() => openForm(form === "record" ? "none" : "record")}>
+        Add page for a record type</Button>
       <Button type="button" size="sm" variant={form === "shell" ? "secondary" : "outline"} disabled={disabled}
         aria-expanded={form === "shell"} onClick={() => openForm(form === "shell" ? "none" : "shell")}>Add layout</Button>
     </div>
-    {form !== "none" && <form className="space-y-3 rounded-md border border-border p-3" onSubmit={submitNew}
+    {form === "record" && <StudioRecordPageForm source={source} disabled={disabled} onPreview={onPreview}
+      onCommand={(command) => run(command)} onClose={() => setForm("none")} />}
+    {(form === "page" || form === "shell") && <form className="space-y-3 rounded-md border border-border p-3" onSubmit={submitNew}
       aria-label={form === "page" ? "New page" : "New layout"}>
       <StudioField label={form === "page" ? "Page name" : "Layout name"}>
         {(control) => <Input {...control} value={newName} maxLength={60} disabled={disabled} autoFocus
@@ -137,6 +150,13 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand }:
         <Button type="button" size="sm" variant="outline" disabled={disabled || moveTo === (pageShell ?? "")}
           onClick={() => run({ kind: "move_page", pageAlias: page.id, shellAlias: moveTo === "" ? null : moveTo })}>
           Move to layout</Button>
+      </div>}
+      {page !== undefined && <div className="space-y-1">
+        <p className="text-sm font-medium">Who can open it</p>
+        <p className="text-sm text-muted-foreground">{gate === undefined
+          ? "This page names a permission the application does not declare."
+          : `People who hold “${gate.label}”: ${gate.roles.length === 0 ? "no role holds it yet" : gate.roles.join(", ")}.`}</p>
+        <Button type="button" size="sm" variant="outline" onClick={onOpenAccess}><Icon name="shield" />Change in Access</Button>
       </div>}
     </form>}
     {feedback !== null && <p role={feedback.kind === "refused" ? "alert" : "status"}

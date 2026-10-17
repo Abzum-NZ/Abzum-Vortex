@@ -30,6 +30,7 @@ declare
   target_module_root_id uuid;
   target_release_revision bigint;
   target_is_system_projection boolean;
+  preview_target boolean;
   target_source_sql text;
   target_projection_definition jsonb;
   target_projection_sort_key text;
@@ -185,6 +186,11 @@ begin
     );
   end if;
 
+  -- A preview reads its own copy of every record type except a system projection: that is the
+  -- platform's live read model, which a preview reads on the live path under the reader's own
+  -- live access, never as the preview's owner.
+  preview_target := p_installation ? 'previewInstallationId' and not target_is_system_projection;
+
   -- Step 4: the declaration. Every record-scoped permission of this action
   -- kind declared for this exact record type, owned by the context Application
   -- or by the record type's own Module, in the canonical order the eligibility
@@ -213,7 +219,7 @@ begin
 
   declaration := case
     when required_permissions is null
-      and not (p_installation ? 'previewInstallationId') then null
+      and not preview_target then null
     else pg_catalog.jsonb_build_object(
       'operationKey', 'record.' || p_action_kind,
       'action', pg_catalog.jsonb_build_object('actionKind', p_action_kind),
@@ -229,7 +235,7 @@ begin
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object(
-        'kind', case when p_installation ? 'previewInstallationId'
+        'kind', case when preview_target
           then 'preview_owner' else 'permission' end
       )
     )
@@ -526,7 +532,7 @@ begin
     'definitionRevision', target_definition_revision,
     'moduleReleaseRevision', target_release_revision,
     'fieldValues', target_fact -> 'fieldValues'
-  ) || case when p_installation ? 'previewInstallationId'
+  ) || case when preview_target
     then pg_catalog.jsonb_build_object(
       'previewInstallationId', p_installation -> 'previewInstallationId'
     )

@@ -1,8 +1,8 @@
 // Per-Block Payload & Event Contracts
+export { parseBoardPayload } from "./board-payload";
 export type { ChartPayload } from "./chart";
 export {
   DISPLAY_EVENT_NAMES,
-  parseBoardPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
   parseGroupedPayload,
