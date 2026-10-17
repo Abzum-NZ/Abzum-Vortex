@@ -1191,23 +1191,15 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "form_customer_company",
-                                "name": "customer_company",
-                                "label": "Customer company",
-                                "required": true,
-                                "choice_source": {
-                                  "query": "vortex.service_desk.cases:service_desk_customers",
-                                  "label_field": "vortex.crm.organisations:company.name"
-                                },
-                                "initial_value": {
-                                  "page_parameter": "customer_company"
-                                },
+                                "field": "vortex.service_desk.cases:case.customer_company",
+                                "initial_record_parameter": "customer_company",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.3.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -1224,20 +1216,14 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "form_requester",
-                                "name": "requester",
-                                "label": "Requester",
-                                "required": true,
-                                "choice_source": {
-                                  "query": "vortex.service_desk.cases:service_desk_requesters",
-                                  "label_field": "vortex.crm.people:contact.full_name"
-                                },
+                                "field": "vortex.service_desk.cases:case.requester",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {
@@ -1254,20 +1240,14 @@
                               }
                             },
                             {
-                              "type": "platform.renderer.choice_input",
+                              "type": "platform.renderer.field_input",
                               "props": {
                                 "id": "form_service_level",
-                                "name": "service_level",
-                                "label": "Service level",
-                                "required": true,
-                                "choice_source": {
-                                  "query": "vortex.service_desk.sla:service_desk_service_levels",
-                                  "label_field": "vortex.service_desk.sla:service_level.name"
-                                },
+                                "field": "vortex.service_desk.cases:case.service_level",
                                 "vortex": {
                                   "block": {
-                                    "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                                    "release_version": "1.1.0"
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
                                   },
                                   "responsive": {
                                     "desktop": {

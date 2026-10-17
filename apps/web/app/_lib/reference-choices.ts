@@ -24,7 +24,6 @@ import {
 import {
   CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
   CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
-  CHOICE_INPUT_BLOCK_RELEASE_1_3_0,
   FORM_CONTAINER_BLOCK_RELEASE,
   placementSettings as typedPlacementSettings,
 } from "@vortex/platform/server";
@@ -40,17 +39,15 @@ type ChoicePlacementSettings = Readonly<{
   fieldKey: string;
   queryId: string;
   labelFieldId: string;
-  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
+  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
-  initialValue?: Readonly<{ pageParameter: string }>;
 }>;
 
 export type ReferenceChoiceFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  releaseVersion: "1.1.0" | "1.2.0" | "1.3.0";
+  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
-  initialValue?: Readonly<{ pageParameter: string }>;
 }>;
 
 type ReferenceChoiceFormFieldIndex = ReadonlyMap<string, ReferenceChoiceFormField>;
@@ -79,8 +76,7 @@ export const hasReferenceChoiceSource = (placement: PlacedParts): boolean => {
     typeof block.blockId === "string" &&
     sameId(block.blockId, CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId) &&
     (block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.releaseVersion ||
-      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion ||
-      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_3_0.releaseVersion) &&
+      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion) &&
     Object.hasOwn(settings, "choice_source")
   );
 };
@@ -98,12 +94,9 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
   )
     return undefined;
   const fieldKey = builderKeySchema.safeParse(name.value);
-  const releaseVersion = blockOf(placement)?.releaseVersion as "1.1.0" | "1.2.0" | "1.3.0";
+  const releaseVersion = blockOf(placement)?.releaseVersion as "1.1.0" | "1.2.0";
   let dependency: ChoicePlacementSettings["dependency"];
-  if (
-    (releaseVersion === "1.2.0" || releaseVersion === "1.3.0") &&
-    source.properties.input !== undefined
-  ) {
+  if (releaseVersion === "1.2.0" && source.properties.input !== undefined) {
     const input = source.properties.input;
     if (
       input.kind !== "group" ||
@@ -117,20 +110,6 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
     if (!key.success || !from.success) return undefined;
     dependency = { key: key.data, fromField: from.data };
   }
-  let initialValue: ChoicePlacementSettings["initialValue"];
-  const initial = settings?.initial_value;
-  if (initial !== undefined) {
-    // An initial record can only seed a Choice that lists its own records, never a dependent one.
-    if (
-      releaseVersion !== "1.3.0" ||
-      dependency !== undefined ||
-      initial.kind !== "group" ||
-      Object.keys(initial.properties).length !== 1 ||
-      initial.properties.page_parameter?.kind !== "text"
-    )
-      return undefined;
-    initialValue = { pageParameter: initial.properties.page_parameter.value };
-  }
   return fieldKey.success
     ? {
         fieldKey: fieldKey.data,
@@ -138,7 +117,6 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
         labelFieldId: source.properties.label_field.fieldId,
         releaseVersion,
         ...(dependency === undefined ? {} : { dependency }),
-        ...(initialValue === undefined ? {} : { initialValue }),
       }
     : undefined;
 };
@@ -193,7 +171,6 @@ const referenceChoiceFieldForPlacement = (
     command,
     releaseVersion: settings.releaseVersion,
     ...(settings.dependency === undefined ? {} : { dependency: settings.dependency }),
-    ...(settings.initialValue === undefined ? {} : { initialValue: settings.initialValue }),
   };
 };
 
