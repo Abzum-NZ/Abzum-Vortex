@@ -16,7 +16,7 @@ import {
 } from "../schema";
 import { createDatabaseApplicationReleaseAdoptionReleaseSetService } from "./application-bound-release-set";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
-import { installationProblem } from "./installation-authority";
+import { InstallationProblem, installationProblem } from "./installation-authority";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
   DefinitionError,
@@ -94,9 +94,19 @@ export const readInstallationBindings = async (
   transaction: RequestDatabaseTransaction,
   rootId: string,
 ): Promise<InstallationBindings> => {
+  // The reader takes the installation authority lock; its refusal is the installer lacking that
+  // authority (the install permission and delegated management of the organisation catalogue).
   const rows = await transaction.query<DatabaseRow>`
-    select vortex_definition.read_application_installation_bindings(${rootId}::uuid) as bindings
-  `;
+      select vortex_definition.read_application_installation_bindings(${rootId}::uuid) as bindings
+    `.catch((error: unknown) => {
+    if (classifyDatabaseError(error) === "refused")
+      throw new InstallationProblem(
+        { kind: "refused", memberRoleRefusal: "installation_authority" },
+        "installation_authority_refused",
+        { cause: error },
+      );
+    throw error;
+  });
   if (rows.length !== 1)
     installationProblem("bindings_row_missing", "refused", "installation_incomplete");
   const parsed = installationBindingsSchema.safeParse(rows[0]?.bindings);

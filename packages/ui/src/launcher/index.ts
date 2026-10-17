@@ -26,7 +26,6 @@ export { ViewFilter } from "./view-filter";
 // Launcher Registrations & Registry
 export {
   LAUNCHER_COMPONENT_REGISTRATIONS,
-  createLauncherComponentRegistry,
 } from "./registrations";
 
 // Link Navigation and the Navigate task (#1013)

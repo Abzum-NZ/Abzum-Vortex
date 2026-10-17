@@ -1,4 +1,4 @@
-import { moduleFieldTypeLabels, type ApplicationSourceDocument, type ModuleFieldType } from "@vortex/platform/schema";
+import { moduleFieldTypeLabels, type ApplicationSourceDocument, type ModuleField, type ModuleFieldType } from "@vortex/platform/schema";
 
 /**
  * What the current published versions of the application's own modules hold, as qualified
@@ -7,9 +7,24 @@ import { moduleFieldTypeLabels, type ApplicationSourceDocument, type ModuleField
  */
 export type StudioPublishedData = Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
 
+/**
+ * The compiled fields of every record type the saved draft binds (`module:record`), with their
+ * identities, as the draft compile of one saved revision produced them. A query filter's typed
+ * controls work on these; null when the draft did not compile.
+ */
+export type StudioCompiledFields = Readonly<{
+  draftRevision: number;
+  recordTypes: Readonly<Record<string, readonly ModuleField[]>>;
+}>;
+
 /** One field as the Data tab's schema grid shows it. */
 export type StudioDataField = Readonly<{
   key: string; label: string; type: string; required: boolean; unique: boolean; description: string;
+  filterable: boolean; sortable: boolean;
+  /** Its personal data class: special personal data is never indexed for search. */
+  personalData: string;
+  /** The priority its module indexes it for search with; absent when it is not indexed. */
+  searchPriority?: "first" | "normal" | "last";
 }>;
 
 /** One record type in the Data tab's tree, from the draft (owned) or the installed module (used). */
@@ -18,7 +33,11 @@ export type StudioDataRecordType = Readonly<{
 }>;
 
 /** One query of a module, by the record type it reads. */
-export type StudioDataQuery = Readonly<{ key: string; label: string; recordKey: string }>;
+export type StudioDataQuery = Readonly<{
+  key: string; label: string; recordKey: string;
+  /** Whether it groups records or adds totals: then it reads as a summary, not as a list. */
+  summary: boolean;
+}>;
 
 /** A module in the Data tab: one the application owns (edited here) or one it uses (read-only). */
 export type StudioDataModule = Readonly<{
@@ -51,11 +70,12 @@ export const ownedDataModules = (source: ApplicationSourceDocument): readonly St
       key: record.key, name: record.name, pluralName: record.plural_name, titleFieldKey: record.title_field,
       fields: record.fields.map((field) => ({
         key: field.key, label: field.label, type: field.type, required: field.required, unique: field.unique,
-        description: field.help_text ?? "",
+        description: field.help_text ?? "", filterable: field.filterable, sortable: field.sortable,
+        personalData: field.personal_data, ...(field.search_priority === undefined ? {} : { searchPriority: field.search_priority }),
       })),
     })),
     queries: module.queries.map((query) => ({
-      key: query.key, label: queryLabel(query),
+      key: query.key, label: queryLabel(query), summary: query.group_by.length > 0 || query.aggregates.length > 0,
       recordKey: query.record_type.includes(":") ? query.record_type.slice(query.record_type.indexOf(":") + 1) : query.record_type,
     })),
   }));

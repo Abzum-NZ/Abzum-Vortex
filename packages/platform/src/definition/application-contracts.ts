@@ -787,6 +787,8 @@ export const applicationRoleSchema = z
         })
         .strict(),
     ]),
+    /** Present only on the application's one default member role (see `applicationRolesSchema`). */
+    defaultMember: z.literal(true).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -797,6 +799,17 @@ export const applicationRoleSchema = z
         message: "Compiled application-role permissions must be unique exact keys",
       });
   });
+/**
+ * An application's roles. Exactly one is its default member role: a first install offers that
+ * role to the installer, and the installer's explicit acceptance makes it theirs.
+ */
+export const applicationRolesSchema = z
+  .array(applicationRoleSchema)
+  .min(1)
+  .refine((roles) => roles.filter((role) => role.defaultMember === true).length === 1, {
+    message: "Exactly one role must be the application's default member role",
+  });
+
 export const applicationConnectionBindingSchema = z
   .object({
     bindingId: containedComponentIdSchema,
@@ -955,7 +968,7 @@ const applicationSharedContentSchema = z
     moduleBindings: z.array(moduleBindingSchema),
     navigation: z.array(navigationItemSchema),
     experiences: z.array(applicationExperienceSchema).max(3).optional(),
-    roles: z.array(applicationRoleSchema).min(1),
+    roles: applicationRolesSchema,
     queries: z.array(queryDefinitionSchema),
     pipelines: z.array(pipelineSchema),
     permissions: z.array(permissionDeclarationSchema),

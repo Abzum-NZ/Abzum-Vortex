@@ -1,12 +1,9 @@
 import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import {
-  createPlatformComponentRegistry,
   noRuntimeInputs,
   type PlatformComponentRegistration,
-  type PlatformComponentRegistry,
 } from "../registry";
 
 /**
@@ -40,10 +37,3 @@ export const LAYOUT_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistrat
       parsePayload: noRuntimeInputs,
     }),
   ]);
-
-/** Creates an immutable PlatformComponentRegistry populated with all general layout components. */
-export function createLayoutComponentRegistry(
-  platformReleases: readonly PlatformBlockRelease[],
-): PlatformComponentRegistry {
-  return createPlatformComponentRegistry(LAYOUT_COMPONENT_REGISTRATIONS, platformReleases);
-}
