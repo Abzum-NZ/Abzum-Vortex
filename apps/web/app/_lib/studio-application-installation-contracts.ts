@@ -47,6 +47,30 @@ export const studioApplicationInstallationSnapshotSchema = z
   })
   .strict();
 
+/**
+ * The roles this upgrade leaves waiting for acceptance, with plain-English changes, or
+ * `unavailable` when the upgrader may not read roles (they are then accepted in role administration).
+ */
+const studioApplicationRoleRevisionsSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("listed"),
+      roles: z
+        .array(
+          z
+            .object({
+              roleId: roleIdSchema,
+              label: z.string().min(1).max(200),
+              changes: z.array(z.string().min(1).max(400)).min(1).max(200),
+            })
+            .strict(),
+        )
+        .max(100),
+    })
+    .strict(),
+  z.object({ kind: z.literal("unavailable") }).strict(),
+]);
+
 const studioApplicationInstallationUnavailableReasonSchema = z.enum([
   "not_installed",
   "not_newer",
@@ -61,6 +85,9 @@ export const studioApplicationInstallationLoadResultSchema = z.discriminatedUnio
     .object({
       kind: z.literal("available"),
       snapshot: studioApplicationInstallationSnapshotSchema,
+      roleRevisions: studioApplicationRoleRevisionsSchema,
+      /** The selected version's release note, or null when it could not be read. */
+      releaseNote: z.string().max(2_000).nullable(),
     })
     .strict(),
   z
@@ -78,6 +105,8 @@ export const studioApplicationInstallationCommandSchema = z
     kind: z.literal("application.release.install_selected"),
     selector: studioApplicationInstallationSelectorSchema,
     expected: studioApplicationInstallationSnapshotSchema,
+    /** The listed roles whose revision the upgrader accepts in the same action. */
+    acceptRoleIds: z.array(roleIdSchema).max(100),
   })
   .strict();
 
@@ -101,6 +130,7 @@ export const studioApplicationInstallationCommandResultSchema = z.union([
       activeAtCommitRevision: revisionSchema,
       postCommit: postCommitObservationSchema,
       registrationMayHaveChanged: z.literal(true),
+      acceptedRoleIds: z.array(roleIdSchema).max(100),
     })
     .strict(),
   z
@@ -112,6 +142,7 @@ export const studioApplicationInstallationCommandResultSchema = z.union([
       activeAtCommitRevision: revisionSchema,
       postCommit: postCommitObservationSchema,
       registrationMayHaveChanged: z.boolean(),
+      acceptedRoleIds: z.array(roleIdSchema).max(100),
     })
     .strict(),
   z

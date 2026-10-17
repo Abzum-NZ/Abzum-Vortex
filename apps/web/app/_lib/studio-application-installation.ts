@@ -14,13 +14,14 @@ import {
   type InstallationProblemShape,
   type FirstInstallEnvironment,
   type FirstInstallFlowEnvironment,
-  activateUpgradeRelease,
+  readUpgradeRoleRevisions,
+  upgradeWithRoleRevisions,
   classifyInstallationFailure,
   readUpgradeActiveObservation,
   readUpgradeAuthorizedState,
   sameUpgradeSelectedSnapshot,
   sameUpgradeSnapshotState,
-  type UpgradeEnvironment,
+  type UpgradeRoleEnvironment,
   type UpgradeReleaseIdentity,
   type UpgradeState,
   activateFirstInstall,
@@ -119,12 +120,63 @@ const releaseIdentity = (release: UpgradeReleaseIdentity): StudioApplicationInst
 
 const same = (left: unknown, right: unknown): boolean => canonicalJson(left) === canonicalJson(right);
 
-const upgradeEnvironment = (): UpgradeEnvironment => ({
+const upgradeEnvironment = (): UpgradeRoleEnvironment => ({
   requests: humanOrganizationRequests(),
   catalogue: installedReleaseCatalogue,
   permissions: platformPermissionSource,
   containsCustomComponents: releaseSetContainsCustomComponents,
+  accessAdministration: createOrganizationAccessAdministrationService(humanOrganizationRequestDependencies()),
 });
+
+/** The selected version's release note for the confirmation; a failed read is logged and shows none. */
+const readReleaseNote = async (selector: StudioApplicationInstallationSelector): Promise<string | null> => {
+  const access = await loadStudioApplicationHistoryAccess(selector.organizationId, selector.rootId);
+  if (access.kind !== "available") {
+    console.error(`[studio] upgrade release note unavailable: history ${access.kind}`);
+    return null;
+  }
+  const inspected = await inspectStudioApplicationReleaseHistory(selector.organizationId, {
+    rootId: selector.rootId,
+    expected: {
+      draftRevision: access.snapshot.draftRevision,
+      sourceFingerprint: access.snapshot.sourceFingerprint,
+      anchorReleaseRevision: access.snapshot.anchorReleaseRevision,
+    },
+    releaseRevision: selector.releaseRevision,
+  });
+  if (inspected.kind !== "available") {
+    console.error(`[studio] upgrade release note unavailable: release ${inspected.kind}`);
+    return null;
+  }
+  return inspected.metadata.releaseNote;
+};
+
+/**
+ * The roles the upgrade would leave waiting for acceptance. An upgrader who may not read roles
+ * still upgrades; the roles are then accepted in role administration, so this read failing is logged, not fatal.
+ */
+const readRoleRevisions = async (
+  selector: StudioApplicationInstallationSelector,
+  authorized: AuthorizedState,
+  session: IdentitySession,
+) => {
+  if (authorized.snapshot.selected.releaseRevision <= authorized.snapshot.active.releaseRevision)
+    return { kind: "listed" as const, roles: [] };
+  try {
+    const revisions = await readUpgradeRoleRevisions(upgradeEnvironment(), session, selector, authorized.state);
+    return {
+      kind: "listed" as const,
+      roles: revisions.map((revision) => ({
+        roleId: revision.roleId,
+        label: revision.label,
+        changes: revision.changes,
+      })),
+    };
+  } catch (error) {
+    console.error(`[studio] upgrade role revisions unavailable: ${describeFailure(error)}`);
+    return { kind: "unavailable" as const };
+  }
+};
 
 const withCurrentAuthorizedState = async (
   selector: StudioApplicationInstallationSelector,
@@ -163,6 +215,8 @@ export const loadStudioApplicationInstallation = async (
     return studioApplicationInstallationLoadResultSchema.parse({
       kind: "available",
       snapshot: authorized.snapshot,
+      roleRevisions: await readRoleRevisions(selector.data, authorized, session),
+      releaseNote: await readReleaseNote(selector.data),
     });
   } catch (error) {
     return toLoadFailure(classifyInstallationFailure(error));
@@ -208,17 +262,19 @@ export const installSelectedStudioApplicationRelease = async (
         activeAtCommitRevision: currentActiveRevision,
         postCommit,
         registrationMayHaveChanged: false,
+        acceptedRoleIds: [],
       });
     }
     if (!sameUpgradeSnapshotState(command.data.expected, currentSnapshot))
       return toCommandFailure({ kind: "conflict" }, false);
 
     invocationStarted = true;
-    const activation = await activateUpgradeRelease(
+    const { activation, acceptedRoleIds } = await upgradeWithRoleRevisions(
       upgradeEnvironment(),
       command.data.selector,
       current.state,
       session,
+      command.data.acceptRoleIds,
     );
     let postCommit: { kind: "observed"; active: StudioApplicationInstallationReleaseIdentity } |
       { kind: "unavailable" } = { kind: "unavailable" };
@@ -239,6 +295,7 @@ export const installSelectedStudioApplicationRelease = async (
       activeAtCommitRevision: activation.activeAtCommitRevision,
       postCommit,
       registrationMayHaveChanged: invocationStarted,
+      acceptedRoleIds,
     });
   } catch (error) {
     return toCommandFailure(classifyInstallationFailure(error), invocationStarted ? "unknown" : false);

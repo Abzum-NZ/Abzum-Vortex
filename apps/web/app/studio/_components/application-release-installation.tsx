@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState } from "react";
@@ -84,6 +85,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   const [pending, setPending] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [message, setMessage] = useState(loadMessage(initialResult));
+  const [confirm, confirmDialog] = useConfirm();
   const outcomeHeading = useRef<HTMLHeadingElement>(null);
   const mounted = useRef(false);
   const generation = useRef(0);
@@ -104,6 +106,9 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   }, []);
 
   const snapshot = state.load.kind === "available" ? state.load.snapshot : null;
+  const roleRevisions = state.load.kind === "available" ? state.load.roleRevisions : null;
+  const listedRoles = roleRevisions?.kind === "listed" ? roleRevisions.roles : [];
+  const releaseNote = state.load.kind === "available" ? state.load.releaseNote : null;
   const snapshotId = snapshot === null ? null : snapshotKey(snapshot);
   const snapshotExpiry = snapshot?.validUntil ?? null;
   const expired = snapshot !== null && now >= Date.parse(snapshot.validUntil);
@@ -127,6 +132,28 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   const install = async () => {
     if (!mounted.current || pendingRef.current || snapshot === null || expired ||
       snapshot.selected.releaseRevision <= snapshot.active.releaseRevision) return;
+    // The same shared confirmation as a first install: the version change, what is new, and the
+    // roles it changes, with one explicit choice to accept them in the same step.
+    let acceptRoles = false;
+    const confirmed = await confirm({
+      title: `Upgrade to version ${snapshot.selected.releaseVersion}?`,
+      description: `The application moves from version ${snapshot.active.releaseVersion} to ${snapshot.selected.releaseVersion}.`,
+      details: <>
+        {releaseNote !== null && <p><span className="font-medium">What&apos;s new:</span> {releaseNote}</p>}
+        {listedRoles.length > 0 && <>
+          <p>These roles change. Until a change is accepted, people in the role keep exactly the access they have now.</p>
+          <ul className="list-disc space-y-1 pl-5">
+            {listedRoles.map((role) => <li key={role.roleId}><span className="font-medium">{role.label}</span>: {role.changes.join("; ")}</li>)}
+          </ul>
+        </>}
+        {roleRevisions?.kind === "unavailable" && <p>The roles this version changes could not be read with your access. People keep the access they have; accept role changes in role administration.</p>}
+      </>,
+      ...(listedRoles.length > 0
+        ? { choice: { label: "Accept for these roles", onChange: (checked: boolean) => { acceptRoles = checked; } } }
+        : {}),
+      confirmLabel: "Upgrade",
+    });
+    if (!confirmed || !mounted.current || pendingRef.current) return;
     pendingRef.current = true;
     setPending(true);
     setMessage("Checking current authority and installing the selected release.");
@@ -142,6 +169,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         kind: "application.release.install_selected",
         selector,
         expected: snapshot,
+        acceptRoleIds: acceptRoles ? listedRoles.map((role) => role.roleId) : [],
       });
       if (!current()) return;
       const parsed = studioApplicationInstallationCommandResultSchema.safeParse(returned.command);
@@ -206,9 +234,25 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         <p>This page upgrades an application that is already installed, to a version that keeps the same modules. First installs, older versions and adding or removing modules are not available here.</p>
       </section>
       {expired && <p className="rounded-xl border bg-card text-card-foreground p-3">Your access was checked a while ago. Reload before continuing.</p>}
+      {snapshot.selected.releaseRevision > snapshot.active.releaseRevision && roleRevisions !== null &&
+        <section aria-label="Role changes in this version" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
+          <h2 className="text-lg font-semibold">Role changes</h2>
+          {roleRevisions.kind === "unavailable"
+            ? <p>The roles this version changes could not be read with your access. People keep the access they have; accept role changes in role administration.</p>
+            : listedRoles.length === 0
+              ? <p>This version changes no role. People keep the access they have.</p>
+              : <>
+                <p>These roles change in this version. Until a change is accepted, people in the role keep exactly the access they have now. You can accept the changes when you confirm the upgrade, or later in role administration.</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {listedRoles.map((role) => <li key={role.roleId}><span className="font-medium">{role.label}</span>: {role.changes.join("; ")}</li>)}
+                </ul>
+              </>}
+        </section>}
       {state.command !== null && <section className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
         <h2 ref={outcomeHeading} tabIndex={-1} className="text-lg font-semibold">Result</h2>
         <p>{commandText(state.command)}</p>
+        {state.command.kind === "completed" && state.command.acceptedRoleIds.length > 0 &&
+          <p>Role changes accepted with the upgrade: {state.command.acceptedRoleIds.length}.</p>}
         {state.command.kind === "completed" && <TechnicalDetails><dl className="space-y-2">
           <div><dt className="font-semibold">Selected release revision</dt><dd>{state.command.selected.releaseRevision}</dd></div>
           <div><dt className="font-semibold">Active at commit</dt><dd>{state.command.activeAtCommitRevision}</dd></div>
@@ -230,5 +274,6 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
         </Button>
       </section>
     </>}
+    {confirmDialog}
   </main>;
 }

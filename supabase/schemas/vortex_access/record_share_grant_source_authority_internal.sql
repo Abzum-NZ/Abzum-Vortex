@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_access.record_share_grant_source_authority_internal(p_context jsonb, p_module_root_id uuid, p_record_type_id uuid) RETURNS jsonb
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -56,24 +56,33 @@ begin
       )
       and not (entry.record_scope ? 'savedCondition')
   ), effective as materialized (
-    select candidate.*
+    -- The caller's own path decides the field policy: the meaning its role
+    -- accepted, which may be narrower than the registered one.
+    select candidate.record_type_id, candidate.action_kind,
+      (path.permission_entry).field_policy as field_policy
     from candidates as candidate
-    where exists (
-      select 1
-      from vortex_access.evaluate_permission_role_path_internal(
-        p_context,
-        checked_at,
-        pg_catalog.jsonb_build_object(
-          'applicationRootId', context_application_root_id,
-          'ownerKind', candidate.owner_kind,
-          'ownerId', candidate.owner_id,
-          'permissionId', candidate.permission_id
-        ),
-        pg_catalog.jsonb_build_object('actionKind', candidate.action_kind),
-        candidate.record_type_id
-      ) as path
-      where path.path_valid_until > checked_at
-    )
+    cross join lateral vortex_access.evaluate_permission_role_path_internal(
+      p_context,
+      checked_at,
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', context_application_root_id,
+        'ownerKind', candidate.owner_kind,
+        'ownerId', candidate.owner_id,
+        'permissionId', candidate.permission_id
+      ),
+      pg_catalog.jsonb_build_object('actionKind', candidate.action_kind),
+      candidate.record_type_id
+    ) as path
+    where path.path_valid_until > checked_at
+      and (path.permission_entry).record_scope is not null
+      and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          (path.permission_entry).record_scope -> 'routes'
+        ) as accepted_route(value)
+        where accepted_route.value ->> 'kind' = 'all_records'
+      )
+      and not ((path.permission_entry).record_scope ? 'savedCondition')
   ), shareable_types as materialized (
     select distinct effective.record_type_id
     from effective
