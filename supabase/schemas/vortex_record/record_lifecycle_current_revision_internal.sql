@@ -8,7 +8,7 @@ declare
 begin
   begin
     loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'delete', p_record_id, null
+      p_record_type_id, 'delete', p_record_id, null, null::jsonb
     );
     if loaded ->> 'outcome' is distinct from 'loaded'
       or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then

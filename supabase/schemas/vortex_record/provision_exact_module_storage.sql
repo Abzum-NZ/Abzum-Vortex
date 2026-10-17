@@ -261,7 +261,7 @@ begin
            null::uuid as deleted_by,
            null::timestamptz as removal_due_at,
            %s
-         from %I.%I(null::uuid, null::integer) as projection',
+         from %I.%I(null::uuid[], ''record_id'', ''ascending'', null, null) as projection',
         table_token, p_module_root_id, record_type_id_value, storage_id,
         p_module_release_revision, field_columns_sql,
         reader_schema_value, reader_function_value

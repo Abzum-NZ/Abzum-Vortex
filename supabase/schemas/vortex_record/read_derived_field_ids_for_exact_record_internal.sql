@@ -12,7 +12,7 @@ begin
     or pg_catalog.jsonb_typeof(p_seen_derived_field_keys) <> 'array' then
     return null;
   end if;
-  loaded := vortex_record.load_record_access_facts_internal(p_record_type_id, 'read', p_record_id, null);
+  loaded := vortex_record.load_record_access_facts_internal(p_record_type_id, 'read', p_record_id, null, null::jsonb);
   if loaded ->> 'outcome' <> 'loaded' or pg_catalog.jsonb_typeof(loaded -> 'declaration') <> 'object' then
     return null;
   end if;

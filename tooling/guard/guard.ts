@@ -631,6 +631,9 @@ for (const file of migrationFiles) {
   }
 }
 const canonicalFunctions = new Set<string>();
+// One name has one signature: two forms of a name make Postgres resolve a call by argument types, so
+// no single call shape names the function, and a drop must be repeated for every form.
+const canonicalDeclarations = new Map<string, Array<{ file: string; line: number }>>();
 // Canonical files still identical to a baseline function inherit its comments, allowances included.
 const baselineCopies = new Set<string>();
 for (const file of files.filter(
@@ -639,6 +642,10 @@ for (const file of files.filter(
   const content = read(file);
   for (const [key, value] of functions(content)) {
     canonicalFunctions.add(value.identity);
+    const canonicalName = value.identity.slice(0, value.identity.indexOf("("));
+    const declarations = canonicalDeclarations.get(canonicalName);
+    if (declarations) declarations.push({ file, line: lineAt(content, value.offset) });
+    else canonicalDeclarations.set(canonicalName, [{ file, line: lineAt(content, value.offset) }]);
     const migration = latest.get(key);
     const matchesMigration =
       migration !== undefined &&
@@ -667,6 +674,15 @@ for (const file of files.filter(
       }
   }
 }
+for (const [name, declarations] of canonicalDeclarations)
+  if (declarations.length > 1)
+    for (const declaration of declarations)
+      add(
+        "sql-overload",
+        declaration.file,
+        declaration.line,
+        `${name} is declared ${declarations.length} times in the canonical sources; one name has one signature`,
+      );
 for (const [identity, migration] of latestLive)
   // The generated baseline predates canonical files; every function a forward migration creates needs one.
   if (!canonicalFunctions.has(identity) && !baselineMigrationFiles.has(migration.file))

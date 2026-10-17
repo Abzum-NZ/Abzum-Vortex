@@ -158,28 +158,8 @@ begin
 end
 $function$;
 
-create or replace function vortex_access.list_organization_group_memberships_projection(p_record_id uuid, p_page_size integer)
-returns table (
-  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
-)
-language sql volatile security definer set search_path = ''
-as $function$
-  select projected.* from vortex_access.list_organization_group_memberships_projection(
-    case when p_record_id is null then null else array[p_record_id] end,
-    'record_id', 'ascending', null, null
-  ) as projected
-$function$;
-
 revoke all on function vortex_access.list_organization_group_memberships_projection(uuid[], text, text, jsonb, integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.list_organization_group_memberships_projection(uuid[], text, text, jsonb, integer)
   to vortex_owner, vortex_record_adapter, postgres;
 alter function vortex_access.list_organization_group_memberships_projection(uuid[], text, text, jsonb, integer) owner to vortex_owner;
-
-revoke all on function vortex_access.list_organization_group_memberships_projection(uuid, integer)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_group_memberships_projection(uuid, integer)
-  to vortex_owner, vortex_record_adapter, postgres;
-comment on function vortex_access.list_organization_group_memberships_projection(uuid, integer) is
-  'Registered group memberships projection with original visibility and record-id order; delegates to the bounded reader.';
-alter function vortex_access.list_organization_group_memberships_projection(uuid, integer) owner to vortex_owner;
