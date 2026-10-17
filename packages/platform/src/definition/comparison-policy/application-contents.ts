@@ -10,6 +10,8 @@ import {
   compareSet,
   compareKeyed,
   compareOrderedEntries,
+  fieldDisplayEntry,
+  presentationOnlyValue,
   finaliseReasons,
   sorted,
 } from "./shared";
@@ -34,29 +36,6 @@ type PlacementContext = {
   pageId?: string;
 };
 
-const presentationPropertyValue = (value: unknown): boolean => {
-  const property = asRecord(value);
-  switch (property.kind) {
-    case "text":
-    case "number":
-    case "boolean":
-    case "choice":
-    case "rich_text":
-    case "url":
-    case "asset_reference":
-    case "icon":
-    case "field_reference":
-      // Showing or entering a field the module declares adds to a page; it changes nothing there.
-      return true;
-    case "group":
-      return Object.values(asRecord(property.properties)).every(presentationPropertyValue);
-    case "list":
-      return (property.items as unknown[]).every(presentationPropertyValue);
-    default:
-      return false;
-  }
-};
-
 /** The child slots of one compiled item: exactly the slots its `vortex.slotOrders` orders. */
 const itemSlots = (item: RecordValue): [string, RecordValue[]][] => {
   const props = asRecord(item.props);
@@ -73,7 +52,7 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
-    Object.values(placementSettings(props)).every(presentationPropertyValue) &&
+    Object.values(placementSettings(props)).every(presentationOnlyValue) &&
     itemSlots(item).every(([, children]) =>
       children.every((child) => placementSubtreeIsOptionalPresentation(asRecord(child))),
     )
@@ -318,8 +297,9 @@ const comparePlacements = (
     for (const key of new Set([...Object.keys(before.settings), ...Object.keys(after.settings)])) {
       const previousSetting = asRecord(before.settings[key]);
       const candidateSetting = asRecord(after.settings[key]);
-      // A list setting (fields, columns) compares entry by entry: appending or reordering is minor.
-      if (previousSetting.kind === "list" && candidateSetting.kind === "list")
+      // A list setting compares entry by entry: appending an entry that only shows a field
+      // (a detail field, a column) or reordering is minor; any other append is major.
+      if (previousSetting?.kind === "list" && candidateSetting?.kind === "list")
         compareOrderedEntries(
           reasons,
           previousSetting.items as unknown[],
@@ -327,6 +307,7 @@ const comparePlacements = (
           "block_placement",
           id,
           "behavior",
+          fieldDisplayEntry,
         );
       else
         pushChange(

@@ -880,11 +880,15 @@ export const compareModuleContents = (
       ),
     );
   const previousFieldIds = fieldIds(previous);
+  // The fields this release adds: only they may join a permission or a query additively.
+  const addedFieldIds = new Set(
+    [...fieldIds(candidate)].filter((fieldId) => !previousFieldIds.has(fieldId)),
+  );
   comparePermissions(
     reasons,
     previous.permissions as RecordValue[],
     candidate.permissions as RecordValue[],
-    new Set([...fieldIds(candidate)].filter((fieldId) => !previousFieldIds.has(fieldId))),
+    addedFieldIds,
   );
   compareKeyed(
     reasons,
@@ -942,8 +946,9 @@ export const compareModuleContents = (
     "queryId",
     "query",
     // Label and description are presentation, and the selected fields are an ordered list of
-    // entries (appending or reordering is minor). Every other declared part of a published query
-    // changes what consumers receive, so it is a major change.
+    // entries: appending a field added in this same release, or reordering, is minor; appending a
+    // field that already existed exposes it to every consumer, so it is major. Every other
+    // declared part of a published query changes what consumers receive: major.
     (left, right) => {
       const { selectedFieldIds: leftSelected, ...leftRest } = left;
       const { selectedFieldIds: rightSelected, ...rightRest } = right;
@@ -958,6 +963,7 @@ export const compareModuleContents = (
         "query",
         right.queryId,
         "behavior",
+        (fieldId) => addedFieldIds.has(String(fieldId)),
       );
     },
   );

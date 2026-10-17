@@ -132,10 +132,12 @@ export const compareApplicationSharedContent = (
     "role",
     (left, right) => compareRole(reasons, left, right),
   );
+  // An Application declares no fields of its own, so no field is new to its permissions.
   comparePermissions(
     reasons,
     previous.permissions as RecordValue[],
     candidate.permissions as RecordValue[],
+    new Set(),
   );
   compareKeyed(
     reasons,
@@ -383,16 +385,17 @@ const compareRole = (
 };
 
 /**
- * Permissions compare by identity. A field policy's readable and changeable fields compare as sets:
- * a field the candidate adds to its record type (in `addedFieldIds`) joining a policy is an
- * addition (minor), since no existing data becomes reachable; any other change to who reads or
- * changes which field is a permission change (major).
+ * Permissions compare by identity. A field policy's readable and changeable fields compare as sets,
+ * and any change other than a field added in this same release (in `addedFieldIds`) joining a
+ * policy is major. A field the candidate adds joining a policy removes or narrows nothing, so the
+ * release is minor; it still changes that permission's meaning fingerprint, so every installed role
+ * holding it needs acceptance before the wider field access applies, whatever the version class.
  */
 export const comparePermissions = (
   reasons: VersionImpactReason[],
   previous: RecordValue[],
   candidate: RecordValue[],
-  addedFieldIds: ReadonlySet<string> = new Set(),
+  addedFieldIds: ReadonlySet<string>,
 ): void => {
   compareKeyed(reasons, previous, candidate, "permissionId", "permission", (left, right) => {
     const id = right.permissionId;
