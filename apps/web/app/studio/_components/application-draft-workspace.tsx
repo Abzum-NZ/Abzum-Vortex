@@ -108,6 +108,8 @@ export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
   /** The running application, for Back to app; absent when the organisation's address is unknown. */
   applicationHref: string | undefined;
+  /** The App Store, where a published version is installed or upgraded to; absent like the above. */
+  appStoreHref: string | undefined;
 }>;
 
 type WorkspaceProps = Readonly<{
@@ -299,6 +301,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const compileEpoch = useRef(0);
   const [compiling, setCompiling] = useState(false);
   const [message, setMessage] = useState("");
+  // After a version is published, the top bar offers the App Store, where it is installed or upgraded to.
+  const [offerAppStore, setOfferAppStore] = useState(false);
   const [label, setLabel] = useState("");
   // The selection the name and description fields were loaded for; a field loaded for another item is never an unapplied edit.
   const [labelKey, setLabelKey] = useState("");
@@ -508,6 +512,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
         previewGeneration.current += 1;
         setMessage(`Version ${parsed.data.releaseVersion} published.`);
+        setOfferAppStore(true);
         setReleaseListGeneration((generation) => generation + 1);
         closePublish(false);
         return { kind: "published", publication: parsed.data };
@@ -538,6 +543,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     }
   };
   const openPublish = () => {
+    setOfferAppStore(false);
     setPublicationProblem("");
     setPublicationNote("");
     setPublishOpen(true);
@@ -1264,6 +1270,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           applicationName: source.body.name, item: breadcrumbItem,
           onApplication: () => { void chooseSelection({ kind: "application", applicationRootId: draft.rootId }); } }}
         savedStateLabel={savedStateLabel} status={`${pendingNote} ${message}`}
+        statusLink={offerAppStore && place.appStoreHref !== undefined
+          ? { label: "Open in App Store to install or upgrade", href: place.appStoreHref } : undefined}
         canUndo={state.canUndo} canRedo={state.canRedo} undoDisabled={locked}
         onUndo={() => { if (!busy.any()) history.undo(); }} onRedo={() => { if (!busy.any()) history.redo(); }}
         onRevert={() => { void reopen(); }} revertDisabled={busy.anyOfRendered("publication", "reopening") || state.isSaving}
