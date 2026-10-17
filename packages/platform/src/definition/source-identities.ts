@@ -127,6 +127,8 @@ export function extractSourceIdentityRequirements(
       addIdentified("field", ownerScope, scope, field);
     for (const relationship of objects(recordType.relationships))
       addIdentified("relationship", ownerScope, scope, relationship);
+    for (const pipeline of objects(recordType.pipelines))
+      addIdentified("pipeline", ownerScope, scope, pipeline);
   }
   addTopLevel("extension_point", "extension_points");
   addTopLevel("sharing_condition", "sharing_conditions");
@@ -239,7 +241,6 @@ export function extractApplicationSourceIdentityRequirements(
   addTopLevel("permission", "permissions");
   addTopLevel("event", "events");
   addTopLevel("role", "roles");
-  addTopLevel("pipeline", "pipelines");
   addTopLevel("connection_binding", "connection_bindings");
   addTopLevel("public_address", "public_addresses", (component) => [component.path]);
 

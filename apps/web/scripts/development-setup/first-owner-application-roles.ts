@@ -1,5 +1,7 @@
-import { createHash } from "node:crypto";
-import { createOrganizationAccessAdministrationService } from "@vortex/platform/server";
+import {
+  acceptedApplicationRoleKey,
+  createOrganizationAccessAdministrationService,
+} from "@vortex/platform/server";
 import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
@@ -36,14 +38,12 @@ const roleIdentity = (role: OrganizationAdministrationRoleSummary): string | und
     ? `${role.source.applicationRootId.toLowerCase()}:${role.source.sourceRoleId.toLowerCase()}`
     : undefined;
 
-const roleKeyForTemplate = (template: OrganizationAdministrationApplicationRoleTemplate): string => {
-  const digest = createHash("sha256")
-    .update(templateIdentity(template))
-    .digest("hex")
-    .slice(0, 12);
-  const readableKey = template.key.slice(0, 20).replace(/_+$/, "") || "role";
-  return `local_${readableKey}_${digest}`;
-};
+const roleKeyForTemplate = (template: OrganizationAdministrationApplicationRoleTemplate): string =>
+  acceptedApplicationRoleKey(
+    template.reference.applicationRootId,
+    template.reference.sourceRoleId,
+    template.key,
+  );
 
 const listTemplates = async (
   administration: AccessAdministration,

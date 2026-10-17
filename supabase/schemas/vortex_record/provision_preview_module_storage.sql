@@ -120,7 +120,8 @@ begin
     );
     shape_fingerprint := vortex_record.storage_meaning_fingerprint(preview_record_type);
 
-    -- The live storage this record type's records are copied from, when it has any.
+    -- The live storage of this record type, when it has any: the builder's readable records are
+    -- seeded from it after provisioning, under the builder's own live access.
     select catalogue.physical_table_token into live_table_token
     from vortex_record.storage_catalogue as catalogue
     where catalogue.storage_contract_id = storage_id
@@ -198,12 +199,6 @@ begin
       end if;
     end loop;
 
-    if live_table_token is not null then
-      perform vortex_record.copy_live_records_to_preview_internal(
-        p_preview_installation_id, storage_id, preview_storage_id
-      );
-    end if;
-
     insert into vortex_record.preview_storage_bindings (
       preview_installation_id, storage_contract_id, module_root_id,
       module_release_revision, record_type_id, release_storage_contract_id
@@ -237,4 +232,4 @@ revoke all on function vortex_record.provision_preview_module_storage(uuid, uuid
 grant execute on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint)
   to vortex_owner;
 comment on function vortex_record.provision_preview_module_storage(uuid, uuid, bigint) is
-  'Creates isolated Record storage for every record type of one exact Module release of a preview, its rehearsed release or a stored one, seeded with a copy of the organisation''s live records, without provisioning its live release identities.';
+  'Creates empty isolated Record storage for every record type of one exact Module release of a preview, its rehearsed release or a stored one, without provisioning its live release identities.';

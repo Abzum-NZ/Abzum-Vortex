@@ -26,6 +26,7 @@ import {
   organizationAccessExactPermissionSchema,
 } from "./organization-access-decision";
 import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
+import { permissionFieldPolicySchema, permissionRecordScopeSchema } from "./permissions";
 
 export const organizationAdministrationGroupSchema = z
   .object({
@@ -329,8 +330,17 @@ export const organizationAdministrationRoleDetailSchema = z
   .object({
     ...organizationAdministrationRoleFields,
     description: descriptionSchema,
-    /** Stored accepted configuration only; this is not an effective-access result. */
-    acceptedPermissions: z.array(organizationAdministrationPermissionSchema),
+    /**
+     * Stored accepted configuration only; this is not an effective-access result. Each entry
+     * carries the meaning the role accepted (its record scope and field policy), which may be
+     * older than the registered one until the role revision is accepted.
+     */
+    acceptedPermissions: z.array(
+      organizationAdministrationPermissionSchema.safeExtend({
+        recordScope: permissionRecordScopeSchema.optional(),
+        fieldPolicy: permissionFieldPolicySchema.optional(),
+      }),
+    ),
   })
   .strict()
   .superRefine((value, context) => {

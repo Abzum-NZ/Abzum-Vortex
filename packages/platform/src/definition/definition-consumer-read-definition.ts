@@ -1,6 +1,6 @@
 import "server-only";
 
-import { storedDefinitionCompilationOutputSchema, definitionConsumerReadDependencyManifestSchema, definitionConsumerReadResultSchema, definitionResolutionSnapshotSchema, fingerprintSchema, moduleRootIdSchema, organizationIdSchema, platformIdSchema, revisionSchema, assertModuleContractPair, selectApplicationContractPair, semanticVersionSchema, stableDefinitionReleaseVersionSchema, type DefinitionConsumerReadResult, type ExactDefinitionDependency, type SessionContext } from "../schema";
+import { definitionCompilationOutputSchema, definitionConsumerReadDependencyManifestSchema, definitionConsumerReadResultSchema, definitionResolutionSnapshotSchema, fingerprintSchema, moduleRootIdSchema, organizationIdSchema, platformIdSchema, revisionSchema, assertModuleContractPair, selectApplicationContractPair, semanticVersionSchema, stableDefinitionReleaseVersionSchema, type DefinitionConsumerReadResult, type ExactDefinitionDependency, type SessionContext } from "../schema";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import {
@@ -32,7 +32,7 @@ export const storedConsumerReleaseEvidenceSchema = z
     validationContractVersion: semanticVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
-    compilationOutput: storedDefinitionCompilationOutputSchema,
+    compilationOutput: definitionCompilationOutputSchema,
     resolutionSnapshot: definitionResolutionSnapshotSchema,
     dependencyManifest: definitionConsumerReadDependencyManifestSchema,
     moduleDependencyTargets: z.array(moduleDependencyTargetSchema).max(10_000),
@@ -286,10 +286,6 @@ export const projectStoredConsumerRelease = async (
     output.kind === "application"
       ? applicationDraftFromStoredRelease(output).content
       : output.canonical.content;
-  const platformCompatibilityVersion =
-    release.kind === "application" && output.kind === "application"
-      ? output.platformCompatibilityVersion
-      : undefined;
   const result = definitionConsumerReadResultSchema.safeParse({
     kind: release.kind,
     organizationId: release.organizationId,
@@ -301,11 +297,15 @@ export const projectStoredConsumerRelease = async (
     contentFingerprint: release.contentFingerprint,
     resolutionFingerprint: release.resolutionFingerprint,
     content,
+    // An Application consumer release always carries the platform compatibility its release was
+    // compiled under; the release evidence above makes the field's absence a refusal, not a gap.
     ...(release.kind === "application" && output.kind === "application"
-      ? { toolBundle: output.toolBundle }
+      ? {
+          toolBundle: output.toolBundle,
+          platformCompatibilityVersion: output.platformCompatibilityVersion,
+        }
       : {}),
     dependencyManifest: release.dependencyManifest,
-    ...(platformCompatibilityVersion !== undefined ? { platformCompatibilityVersion } : {}),
     correlationId,
   });
   if (!result.success)

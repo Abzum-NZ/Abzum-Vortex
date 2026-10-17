@@ -28,6 +28,8 @@ begin
   where preview.preview_installation_id = address_value::uuid
     and preview.organization_id = (context_value ->> 'organizationId')::uuid
     and preview.application_root_id = (context_value ->> 'applicationRootId')::uuid
+    and preview.previewer_organization_account_id =
+      (context_value ->> 'organizationAccountId')::uuid
     and preview.expires_at > pg_catalog.statement_timestamp();
   if not found then
     raise exception using errcode = '42501',

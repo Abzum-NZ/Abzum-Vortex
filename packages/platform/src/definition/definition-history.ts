@@ -25,6 +25,7 @@ import {
   type StoredDefinitionDraft,
 } from "../schema";
 import { z } from "zod";
+import { applicationSourceContractVersion } from "./application-contract-versions";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
@@ -69,7 +70,7 @@ const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
 type RestoreEvidence = StoredConsumerReleaseEvidence & {
   authoredSource: z.infer<typeof storedDefinitionSourceSchema>;
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
-  sourceContractVersion: "2.0.0" | "3.0.0";
+  sourceContractVersion: typeof applicationSourceContractVersion;
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
   humanDraftSnapshot?: HumanDraftSnapshot | undefined;
   humanCurrentDraft?: StoredDefinitionDraft | undefined;
@@ -118,7 +119,7 @@ const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
     authoredSource: storedDefinitionSourceSchema,
     sourceFingerprint: fingerprintSchema,
-    sourceContractVersion: z.enum(["2.0.0", "3.0.0"]),
+    sourceContractVersion: z.literal(applicationSourceContractVersion),
     identityEvidence: z.array(currentIdentityEvidenceSchema),
     humanDraftSnapshot: humanDraftSnapshotSchema.optional(),
     humanCurrentDraft: storedDefinitionDraftSchema.optional(),
