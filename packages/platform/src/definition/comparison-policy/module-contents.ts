@@ -690,6 +690,89 @@ const compareRecordType = (
         right.relationshipId,
       ),
   );
+  // A new pipeline limits the moves a save accepts; removing one, or a transition, narrows them too.
+  compareKeyed(
+    reasons,
+    previous.pipelines as RecordValue[],
+    candidate.pipelines as RecordValue[],
+    "pipelineId",
+    "pipeline",
+    (left, right) => comparePipeline(reasons, left, right),
+    () => "major",
+  );
+};
+
+const comparePipeline = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue,
+  candidate: RecordValue,
+): void => {
+  const id = candidate.pipelineId;
+  pushChange(
+    reasons,
+    previous.name,
+    candidate.name,
+    "patch",
+    "presentation_changed",
+    "pipeline",
+    "name",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.key,
+    candidate.key,
+    "major",
+    "component_key_changed",
+    "pipeline",
+    "key",
+    id,
+  );
+  pushChange(
+    reasons,
+    previous.stageFieldId,
+    candidate.stageFieldId,
+    "major",
+    "existing_behavior_changed",
+    "pipeline",
+    "behavior",
+    id,
+  );
+  compareSet(
+    reasons,
+    previous.transitions as unknown[],
+    candidate.transitions as unknown[],
+    "pipeline",
+    id,
+    "behavior",
+  );
+  compareKeyed(
+    reasons,
+    previous.stages as RecordValue[],
+    candidate.stages as RecordValue[],
+    "option",
+    "pipeline_stage",
+    (left, right) =>
+      pushChange(
+        reasons,
+        left.tone,
+        right.tone,
+        "patch",
+        "presentation_changed",
+        "pipeline_stage",
+        "name",
+        id,
+      ),
+    () => "minor",
+    () => id,
+  );
+  const beforeOrder = (previous.stages as RecordValue[]).map((stage) => stage.option);
+  const afterOrder = (candidate.stages as RecordValue[]).map((stage) => stage.option);
+  if (
+    same([...beforeOrder].sort(compareUnknownText), [...afterOrder].sort(compareUnknownText)) &&
+    !same(beforeOrder, afterOrder)
+  )
+    reasons.push(makeReason("patch", "presentation_changed", "pipeline", "order", id));
 };
 
 export const compareSimpleComponent = (

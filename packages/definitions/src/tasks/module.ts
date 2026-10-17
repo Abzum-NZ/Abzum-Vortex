@@ -63,6 +63,7 @@ export const tasksModule: SourceApplicationModule = sourceApplicationModuleSchem
           settings: { max_length: 500 },
         },
       ],
+      pipelines: [],
       relationships: [],
     },
   ],

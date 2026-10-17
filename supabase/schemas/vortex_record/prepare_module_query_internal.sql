@@ -111,6 +111,11 @@ begin
   end if;
   if p_prior_plan is not null then
     prepared_plan := p_prior_plan;
+    -- A plan for a system projection is a live plan, in a preview too: see below.
+    if preview_mode and not (prepared_plan ? 'preview')
+      and prepared_plan -> 'recordType' ? 'systemProjection' then
+      preview_mode := false;
+    end if;
     if preview_mode then
       if pg_catalog.jsonb_typeof(prepared_plan) is distinct from 'object'
         or prepared_plan ->> 'outcome' is distinct from 'prepared'
@@ -254,6 +259,17 @@ begin
   if preview_mode then
     begin
       resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      -- A system projection has no preview copy: it is the platform's live read model, which a
+      -- preview reads on the live path, under the reader's own live access and never under the
+      -- preview's roles.
+      if resolved is null then
+        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+        if resolved -> 'recordType' ? 'systemProjection' then
+          preview_mode := false;
+        else
+          resolved := null;
+        end if;
+      end if;
     exception
       -- A refused access context or a stale preview is the expected refusal; any
       -- other failure is logged with its cause before the same safe refusal.

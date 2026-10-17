@@ -292,8 +292,9 @@ export const logPlacementFailure = (
     | "chart_measure_invalid"
     | "placement_read_failed"
     | "choice_settings_invalid"
-    | "choice_initial_value_invalid"
-    | "choice_initial_value_unavailable"
+    | "link_initial_value_invalid"
+    | "link_initial_value_unavailable"
+    | "link_titles_unavailable"
     | BoardPlacementFailureCause
     | "board_payload_invalid",
   detail?: string,

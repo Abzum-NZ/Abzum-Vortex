@@ -88,7 +88,10 @@ begin
                   'namedAction', catalogue.named_action
                 )
               ),
-              'administrative', catalogue.administrative
+              'administrative', catalogue.administrative,
+              -- The meaning the role accepted, which may be older than the registered one.
+              'recordScope', catalogue.record_scope,
+              'fieldPolicy', catalogue.field_policy
             )
           ) order by permission.entry_ordinal
         ),

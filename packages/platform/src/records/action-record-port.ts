@@ -380,7 +380,9 @@ const ruleReasonFromIssues = (
   const issue = issues.find(
     (issue) =>
       issue.requirement !== undefined &&
-      (issue.code === "before_save_rule_refused" || issue.code === "required_field_missing"),
+      (issue.code === "before_save_rule_refused" ||
+        issue.code === "required_field_missing" ||
+        issue.code === "stage_move_refused"),
   );
   if (issue?.requirement === undefined) return undefined;
   if (preparation !== undefined && issue.recordKey !== undefined && issue.recordKey !== "root") {

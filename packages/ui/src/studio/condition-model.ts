@@ -63,6 +63,9 @@ export type StudioConditionOperandRole =
   | "declared_input"
   | "event_value"
   | "variable"
+  | "step_output"
+  | "record_field"
+  | "run_value"
   | "trusted_account_context"
   | "host_context";
 
@@ -185,6 +188,9 @@ const roleLabels: Readonly<Record<StudioConditionOperandRole, string>> = {
   declared_input: "Declared inputs",
   event_value: "Event values",
   variable: "Variables",
+  step_output: "Earlier steps",
+  record_field: "Record fields",
+  run_value: "The run",
   trusted_account_context: "Trusted account context",
   host_context: "Host context",
 };

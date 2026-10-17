@@ -6,10 +6,11 @@ import {
   type ApplicationRootId, type ApplicationSourceDocument, type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import {
-  applyStudioFlowCommand, applyStudioFlowCreate, describeStudioFlowStarts, projectStudioFlowCreateChoices,
+  applyStudioFlowCommand, applyStudioFlowCreate, applyStudioFlowStart, describeStudioFlowStarts, projectStudioFlowCreateChoices,
+  projectStudioFlowDraftChoices, projectStudioFlowStart,
   samePath, studioFlowOfSelection, studioFlowOutline, studioSemanticSelectionKey,
   type StudioApplicationDraftHistoryController, type StudioFlowCommand, type StudioFlowContext,
-  type StudioFlowCreateCommand, type StudioFlowEditResult, type StudioFlowPath, type StudioFlowSelection,
+  type StudioFlowCreateCommand, type StudioFlowEditResult, type StudioFlowPath, type StudioFlowSelection, type StudioFlowStartDraft,
   type StudioSemanticSelection, type StudioSemanticSelectionStore,
 } from "@vortex/ui/studio";
 import type { StudioBusy } from "./use-studio-busy";
@@ -29,7 +30,7 @@ const StudioFlowCanvas = dynamic(
  * every other Studio edit is.
  */
 export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, selectionStore, busy, active, lifetime, workspaceLifetime,
-  source, selected, catalogue, labels, applications, pages, disabled, epoch, setMessage, choose, select, openFlowsTab }: Readonly<{
+  source, selected, catalogue, labels, applications, disabled, epoch, setMessage, choose, select, openFlowsTab }: Readonly<{
   organizationId: string;
   draftKey: string;
   rootId: ApplicationRootId;
@@ -46,7 +47,6 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
   /** Selection key to the label Studio shows for it. */
   labels: ReadonlyMap<string, string>;
   applications: readonly StudioModuleOwnerApplication[];
-  pages: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
   /** Bumped when unapplied input is discarded (selection change, reopen, import). */
   epoch: number;
@@ -93,16 +93,16 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
   }, [flowSelection, outline, choose]);
   const starts = useMemo(() => flowSelection === null ? [] : describeStudioFlowStarts(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel]);
-  const recordTypes = useMemo(() => source.body.modules.flatMap((module) => module.record_types.map((recordType) => ({
-    key: `${module.key}:${recordType.key}`, label: `${"name" in recordType && typeof recordType.name === "string" ? recordType.name : recordType.key} (${module.name})`,
-  }))), [source]);
+  const draftChoices = useMemo(() => projectStudioFlowDraftChoices({ rootId, source, catalogue }), [rootId, source, catalogue]);
+  const start = useMemo(() => flowSelection === null ? null : projectStudioFlowStart(source, flowSelection,
+    (control) => draftChoices.forms.find((form) => form.alias === control)?.fields ?? []), [source, flowSelection, draftChoices]);
   const createChoices = useMemo(() => projectStudioFlowCreateChoices({ rootId, source, catalogue }, controlLabel),
     [rootId, source, catalogue, controlLabel]);
 
   // The one flow edit path: a command on the current draft, refused unless nothing else is waiting.
   const command = (expected: StudioFlowContext, expectedSelection: StudioFlowSelection, flowCommand: StudioFlowCommand): StudioFlowEditResult => {
     const blocked = () => !active.current || history.getState().isSaving ||
-      busy.any(...(flowCommand.kind === "set_task_settings" ? ["flowStep" as const] : []));
+      busy.any(...(flowCommand.kind === "set_step" ? ["flowStep" as const] : []));
     if (blocked()) return { kind: "stale", reason: "Another change is being applied or is waiting for you. Apply or discard it, then retry." };
     const current = history.getState();
     const currentContext: StudioFlowContext = { organizationId, rootId: current.rootId, key: draftKey,
@@ -114,6 +114,23 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
     }
     if (blocked() || history.getState().source !== current.source)
       return { kind: "stale", reason: "The draft changed while this edit was being checked. Retry." };
+    if (!history.edit(result.source)) return { kind: "invalid", reason: "The draft did not accept this change, so nothing was changed." };
+    setMessage("Flow changed. Save to keep it.");
+    return result;
+  };
+
+  // How the flow starts is written through the same checked path as a step change.
+  const startCommand = (expected: StudioFlowContext, draft: StudioFlowStartDraft): StudioFlowEditResult => {
+    if (flowSelection === null || !active.current || history.getState().isSaving || busy.any("flowStep"))
+      return { kind: "stale", reason: "Another change is being applied or is waiting for you. Apply or discard it, then retry." };
+    const current = history.getState();
+    const currentContext: StudioFlowContext = { organizationId, rootId: current.rootId, key: draftKey,
+      draftRevision: current.draftRevision, localLifetime: lifetime.current, source: current.source as ApplicationSourceDocument };
+    const result = applyStudioFlowStart(currentContext, expected, selectionStore.getSelection(), flowSelection, draft);
+    if (result.kind !== "applied") {
+      console.error(`[studio] flow start edit refused (${result.kind}): ${result.reason}`, result.cause === undefined ? "" : describeFailure(result.cause));
+      return result;
+    }
     if (!history.edit(result.source)) return { kind: "invalid", reason: "The draft did not accept this change, so nothing was changed." };
     setMessage("Flow changed. Save to keep it.");
     return result;
@@ -153,9 +170,10 @@ export function useStudioFlowsTab({ organizationId, draftKey, rootId, history, s
           label={`Workflow canvas of ${labels.get(selectionKey) ?? "the flow"}`} />
       </div>;
 
-  const inspector: ReactNode = flowSelection === null || outline === null ? null
+  const inspector: ReactNode = flowSelection === null || outline === null || start === null ? null
     : <StudioFlowInspector key={`${selectionKey}:${epoch}:${stepId ?? ""}`} context={context} selection={flowSelection}
-      lists={outline.lists} stepPath={stepPath} starts={starts} pages={pages} recordTypes={recordTypes} disabled={disabled}
+      lists={outline.lists} stepPath={stepPath} choices={draftChoices} start={start} controlLabel={controlLabel} disabled={disabled}
+      onStart={startCommand}
       ownerNote={owner === undefined ? undefined : `This flow belongs to the module ${owner.name}, which this application owns.`}
       onCommand={command} onSelectStep={selectStep} onPendingChange={reportPending} />;
 

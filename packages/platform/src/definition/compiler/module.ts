@@ -215,6 +215,19 @@ function compileModule(
       customActionIds: (recordType.custom_actions as string[]).map((alias) =>
         resolution.id(definitionKey, "action", alias, "content"),
       ),
+      pipelines: (recordType.pipelines as JsonObject[]).map((pipeline) => ({
+        pipelineId: resolution.id(
+          definitionKey,
+          "pipeline",
+          String(pipeline.id),
+          `record:${recordKey}`,
+        ),
+        key: pipeline.key,
+        name: pipeline.name,
+        stageFieldId: resolution.field(qualified, String(pipeline.stage_field)),
+        stages: pipeline.stages,
+        transitions: pipeline.transitions,
+      })),
     };
   });
   validateLinkApplicationAccess(

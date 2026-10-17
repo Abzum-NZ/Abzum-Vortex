@@ -340,10 +340,10 @@ export function findOperationCallIssue(
 /** The declared inputs of the named action that owns one choice option, by input key. */
 type OwnedActionInputs = ReadonlyMap<string, Readonly<{ required: boolean; type: string }>>;
 
-/** Finds the named action that owns an option of a choice field of a record type. */
+/** Finds the named action that owns an option of a choice field (named by its key) of a record type. */
 type OptionActionLookup = (
   recordTypeId: string,
-  fieldId: string,
+  fieldKey: string,
   option: string,
 ) => OwnedActionInputs | undefined;
 
@@ -362,8 +362,8 @@ const acceptedLiteralTypes: Readonly<Record<string, readonly string[]>> = {
 
 /**
  * Checks every Save record task that supplies `action_inputs` against the inputs of the action it
- * runs. The action is the one that owns the option the task saves, so the saved value must name
- * that option literally; the supplied map may then name only inputs the action declares, supply
+ * runs. The action is the one that owns the option the task saves, so the saved values must be one
+ * field set to that option as a fixed value; the supplied map may then name only inputs the action declares, supply
  * every input it requires (a form's submitted values are supplied by reference), and give a
  * literal of the declared type.
  */
@@ -388,23 +388,19 @@ export function findActionInputsIssue(
         family,
       });
       const values = properties.values;
-      const saved =
-        values?.kind === "literal" &&
-        values.literal.type === "json" &&
-        typeof values.literal.value === "object" &&
-        values.literal.value !== null &&
-        !Array.isArray(values.literal.value)
-          ? Object.entries(values.literal.value)
-          : [];
+      // The saved values are one field set to the option as a fixed value.
+      const saved = values?.kind === "map" ? Object.entries(values.entries) : [];
+      const only = saved.length === 1 ? saved[0]! : undefined;
+      const option = only?.[1].kind === "literal" ? only[1].literal.value : undefined;
       const recordTypeId = literalIdentity(properties.record_type);
       if (
         supplied.kind !== "map" ||
         recordTypeId === undefined ||
-        saved.length !== 1 ||
-        typeof saved[0]![1] !== "string"
+        only === undefined ||
+        typeof option !== "string"
       )
         return issue("invalid_value");
-      const declared = lookup(recordTypeId, saved[0]![0], saved[0]![1]);
+      const declared = lookup(recordTypeId, only[0], option);
       if (declared === undefined) return issue("invalid_value");
       for (const [name, value] of Object.entries(supplied.entries)) {
         const input = declared.get(name);

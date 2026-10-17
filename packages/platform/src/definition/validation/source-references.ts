@@ -378,14 +378,6 @@ export function sourceLocalReferenceRule(
       visitNavigation(array(body.navigation));
       if (!pages.has(String(body.home_page))) valid = false;
       for (const role of array(body.roles)) if (!pages.has(String(role.home_page))) valid = false;
-      for (const pipeline of array(body.pipelines)) {
-        const stages = new Set(array(pipeline.stages).map((stage) => String(stage.key)));
-        for (const transition of array(pipeline.transitions))
-          if (!stages.has(String(transition.from)) || !stages.has(String(transition.to)))
-            valid = false;
-        if (array(pipeline.time_targets).some((target) => !stages.has(String(target.stage))))
-          valid = false;
-      }
       for (const definition of array(body.interfaces))
         for (const operation of array(definition.operations)) {
           const target = object(operation.target);

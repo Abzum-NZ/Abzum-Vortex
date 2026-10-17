@@ -36,6 +36,14 @@ import {
 } from "../access/permissions";
 import { moduleSourceFieldSchema } from "./module-source-fields";
 import { moduleSourceActionInputSchema } from "./module-source-action-inputs";
+import {
+  maximumPipelineStages,
+  maximumPipelineTransitions,
+  maximumRecordTypePipelines,
+  pipelineShapeProblems,
+  pipelineStageSchema,
+  pipelineTransitionSchema,
+} from "./record-type-pipelines";
 
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;
@@ -427,9 +435,53 @@ const moduleSourceRecordTypeSchema = z
         )
         .max(500),
     ),
+    /** The lifecycles of its choice fields: stage order, colours and the moves a save accepts. */
+    pipelines: sourceProvenanceUnchanged(
+      z
+        .array(
+          z
+            .object({
+              id: sourceProvenanceTarget(sourceAliasSchema, ["pipelineId"]),
+              key: sourceProvenanceUnchanged(builderKeySchema),
+              name: sourceProvenanceUnchanged(labelSchema),
+              stage_field: sourceProvenanceTarget(builderKeySchema, ["stageFieldId"]),
+              stages: sourceProvenanceUnchanged(
+                z.array(pipelineStageSchema).min(1).max(maximumPipelineStages),
+                true,
+              ),
+              transitions: sourceProvenanceUnchanged(
+                z.array(pipelineTransitionSchema).max(maximumPipelineTransitions),
+                true,
+              ),
+            })
+            .strict(),
+        )
+        .max(maximumRecordTypePipelines),
+    ),
   })
   .strict()
   .superRefine((value, context) => {
+    const pipelineKeys = new Set<string>();
+    const stageFields = new Set<string>();
+    for (const [index, pipeline] of value.pipelines.entries()) {
+      if (pipelineKeys.has(pipeline.key) || stageFields.has(pipeline.stage_field))
+        context.addIssue({
+          code: "custom",
+          path: ["pipelines", index],
+          message: "A choice field has at most one pipeline, and each pipeline its own key",
+        });
+      pipelineKeys.add(pipeline.key);
+      stageFields.add(pipeline.stage_field);
+      const field = value.fields.find((candidate) => candidate.key === pipeline.stage_field);
+      const options =
+        field?.type === "choice" ? field.settings.options.map((option) => option.value) : undefined;
+      for (const problem of pipelineShapeProblems(pipeline, options))
+        context.addIssue({
+          code: "custom",
+          path: ["pipelines", index, ...problem.path],
+          message: problem.message,
+        });
+    }
     if (value.fields.filter((field) => field.sortable).length > 8)
       context.addIssue({
         code: "custom",

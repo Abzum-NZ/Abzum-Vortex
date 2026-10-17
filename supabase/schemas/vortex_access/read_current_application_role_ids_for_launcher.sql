@@ -15,6 +15,24 @@ begin
     return;
   end if;
 
+  -- In a preview the builder who opened it holds every role of the previewed draft.
+  if nullif(
+    pg_catalog.current_setting('vortex_record.preview_installation_id', true), ''
+  ) is not null then
+    return query
+    select distinct role_id.value
+    from vortex_access.request_application_registration_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (context_value ->> 'applicationRootId')::uuid,
+      (context_value ->> 'organizationAccountId')::uuid
+    ) as registration
+    cross join lateral pg_catalog.unnest(registration.role_ids) as role_id(value)
+    where registration.registration_kind = 'preview'
+      and registration.valid_until > checked_at
+    order by role_id.value;
+    return;
+  end if;
+
   return query
   with current_roles as (
     select role.role_id, role.source_role_id, revision.assignment_policy,
@@ -155,6 +173,6 @@ grant execute on function vortex_access.read_current_application_role_ids_for_la
   to vortex_request;
 
 comment on function vortex_access.read_current_application_role_ids_for_launcher() is
-  'Returns only current direct or group application-role source identities for the validated human application context; page authority is checked separately.';
+  'Returns only current direct or group application-role source identities for the validated human application context, or every role of the previewed draft for the builder of a preview; page authority is checked separately.';
 
 alter function vortex_access.read_current_application_role_ids_for_launcher() owner to vortex_owner;

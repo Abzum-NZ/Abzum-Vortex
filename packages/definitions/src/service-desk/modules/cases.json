@@ -315,6 +315,70 @@
           }
         }
       ],
+      "pipelines": [
+        {
+          "id": "pipe_sd_case",
+          "key": "case_lifecycle",
+          "name": "Case lifecycle",
+          "stage_field": "status",
+          "stages": [
+            {
+              "option": "new",
+              "tone": "neutral"
+            },
+            {
+              "option": "triage",
+              "tone": "chart_1"
+            },
+            {
+              "option": "in_progress",
+              "tone": "primary"
+            },
+            {
+              "option": "waiting_customer",
+              "tone": "chart_3"
+            },
+            {
+              "option": "resolved",
+              "tone": "chart_2"
+            },
+            {
+              "option": "closed",
+              "tone": "neutral"
+            }
+          ],
+          "transitions": [
+            {
+              "from": "new",
+              "to": "triage"
+            },
+            {
+              "from": "triage",
+              "to": "in_progress"
+            },
+            {
+              "from": "in_progress",
+              "to": "waiting_customer"
+            },
+            {
+              "from": "waiting_customer",
+              "to": "in_progress"
+            },
+            {
+              "from": "in_progress",
+              "to": "resolved"
+            },
+            {
+              "from": "waiting_customer",
+              "to": "resolved"
+            },
+            {
+              "from": "resolved",
+              "to": "closed"
+            }
+          ]
+        }
+      ],
       "relationships": [
         {
           "id": "fld_case_company_relationship",
@@ -442,6 +506,7 @@
           "settings": {}
         }
       ],
+      "pipelines": [],
       "relationships": [
         {
           "id": "fld_comment_case_relationship",

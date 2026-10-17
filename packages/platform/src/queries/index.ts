@@ -154,6 +154,16 @@ export {
 } from "./reference-choice-contracts";
 
 export {
+  createRecordChoiceReader,
+  recordChoicePageSizes,
+  recordChoiceTargetSchema,
+  type RecordChoice,
+  type RecordChoiceCommand,
+  type RecordChoiceRead,
+  type RecordChoiceTarget,
+} from "./record-choices";
+
+export {
   createReferenceChoiceService,
   projectReferenceChoiceInputValues,
   resolveReferenceChoiceSelection,

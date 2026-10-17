@@ -27,7 +27,6 @@ declare
   supplied_key text;
   supplied_value jsonb;
   contract_version text;
-  exact_values boolean;
   canonical_decimal constant text :=
     '^(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]*[1-9])?))$';
 begin
@@ -45,10 +44,9 @@ begin
   contract_version := p_source_record_type ->> 'validationContractVersion';
   if not (p_source_record_type ? 'validationContractVersion')
     or pg_catalog.jsonb_typeof(p_source_record_type -> 'validationContractVersion') is distinct from 'string'
-    or contract_version not in ('1.0.0', '2.0.0', '3.0.0') then
+    or contract_version <> all (vortex_definition.accepted_contract_version('record_type')) then
     raise exception using errcode = '22023', message = 'Typed record condition is invalid';
   end if;
-  exact_values := contract_version in ('2.0.0', '3.0.0');
 
   scope_condition := p_record_scope -> 'savedCondition';
   if pg_catalog.jsonb_typeof(scope_condition) is distinct from 'object' then
@@ -102,9 +100,9 @@ begin
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
     semantic_type := case
-      when exact_values and field_kind = 'decimal_number' then 'decimal_number'
-      when exact_values and field_kind = 'money' then 'money'
-      when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+      when field_kind = 'decimal_number' then 'decimal_number'
+      when field_kind = 'money' then 'money'
+      when field_kind = 'whole_number' then 'number'
       when field_kind = 'yes_no' then 'boolean'
       when field_kind = 'date' then 'date'
       when field_kind = 'date_time' then 'date_time'
@@ -120,9 +118,9 @@ begin
     if field_kind in ('calculation', 'total') then
       result_kind := field_entry #>> '{settings,resultType}';
       semantic_type := case
-        when exact_values and result_kind = 'decimal_number' then 'decimal_number'
-        when exact_values and result_kind = 'money' then 'money'
-        when result_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+        when result_kind = 'decimal_number' then 'decimal_number'
+        when result_kind = 'money' then 'money'
+        when result_kind = 'whole_number' then 'number'
         when result_kind = 'yes_no' then 'boolean'
         when result_kind = 'date' then 'date'
         when result_kind = 'date_time' then 'date_time'
@@ -179,7 +177,7 @@ begin
         parameter_type in (
           'text', 'number', 'boolean', 'date', 'date_time'
         )
-        or (exact_values and parameter_type in ('decimal_number', 'money'))
+        or parameter_type in ('decimal_number', 'money')
       )
       or parameter_types ? parameter_key then
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
@@ -440,18 +438,169 @@ end
 $function$;
 
 create or replace function vortex_access.list_organization_activity_entries_projection(
-  p_record_id uuid, p_page_size integer
+  p_record_ids uuid[],
+  p_sort_key text,
+  p_direction text,
+  p_after jsonb,
+  p_limit integer
 )
 returns table (
-  organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
+  organization_id uuid,
+  record_id uuid,
+  revision bigint,
+  attribute_values jsonb
 )
-language sql volatile security definer set search_path = ''
+language plpgsql
+volatile
+security definer
+set search_path = ''
 as $function$
-  select projected.*
-  from vortex_access.list_organization_activity_entries_projection(
-    case when p_record_id is null then null else array[p_record_id] end,
-    'occurred_at', 'descending', null, null
-  ) as projected
+declare
+  checked_context jsonb;
+  visible_organization_id uuid;
+  actor_identity_id uuid;
+  actor_account_id uuid;
+  person_record_type_id uuid;
+  decision_outcome text;
+  decision_organization_id uuid;
+  decision_account_id uuid;
+  audit_projection boolean;
+  after_occurred_at timestamptz;
+  after_record_id uuid;
+  keyset_sql text := '';
+  base_sql text;
+  source_sql text;
+  order_sql text;
+  scan_sql text;
+begin
+  if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
+    or p_sort_key is null or p_direction is null
+    or (p_limit is not null and p_limit < 1) then
+    raise exception using errcode = '22023', message = 'Activity projection bounds are invalid';
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) <> 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+      or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) <> 'string'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string' then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end if;
+    begin
+      after_occurred_at := (p_after -> 'sortKey' ->> 0)::timestamptz;
+      after_record_id := (p_after ->> 'recordId')::uuid;
+    exception when invalid_text_representation or datetime_field_overflow then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end;
+    keyset_sql := case when p_direction = 'descending'
+      then ' and (entry.occurred_at, entry.activity_id) < ($6, $7)'
+      else ' and (entry.occurred_at, entry.activity_id) > ($6, $7)' end;
+  end if;
+  begin
+    checked_context := vortex_access.validated_human_request_context();
+    visible_organization_id := (checked_context ->> 'organizationId')::uuid;
+    actor_identity_id := (checked_context ->> 'identityId')::uuid;
+    actor_account_id := (checked_context ->> 'organizationAccountId')::uuid;
+    perform 1 from vortex_access.resolve_human_organization_scope(
+      actor_identity_id, visible_organization_id
+    );
+  exception
+    when insufficient_privilege or no_data_found then
+      return;
+  end;
+
+  select evaluated.outcome, evaluated.organization_id, evaluated.organization_account_id
+  into decision_outcome, decision_organization_id, decision_account_id
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.permissions.read',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', vortex_access.required_platform_permission(
+        'platform.organization.permissions.read'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  audit_projection := coalesce(
+    decision_outcome = 'eligible'
+      and decision_organization_id = visible_organization_id
+      and decision_account_id = actor_account_id,
+    false
+  );
+
+  select (item.value ->> 'recordTypeId')::uuid into strict person_record_type_id
+  from pg_catalog.jsonb_array_elements(
+    vortex_definition.read_current_active_installation() -> 'moduleBindings'
+  ) as binding(value)
+  join vortex_definition.runtime_releases as release
+    on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+    and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+  cross join lateral pg_catalog.jsonb_array_elements(
+    release.compilation_output #> '{canonical,content,recordTypes}'
+  ) as item(value)
+  where item.value #>> '{systemProjection,protectedView}' = 'organization_accounts';
+
+  order_sql := pg_catalog.format(
+    ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
+    case when p_direction = 'descending' then 'desc' else 'asc' end,
+    case when p_direction = 'descending' then 'desc' else 'asc' end
+  );
+  base_sql := $scan$select entry.*
+    from vortex_record.organization_activity_entries as entry
+    where entry.organization_id = $1
+      and entry.occurred_at >= pg_catalog.statement_timestamp() - interval '90 days'
+      and ($2 is null or entry.activity_id = any($2))$scan$;
+  if audit_projection then
+    source_sql := base_sql || keyset_sql || order_sql;
+  else
+    source_sql := 'select visible.* from (('
+      || base_sql
+      || ' and entry.actor_kind = ''organization_account'' and entry.actor_id = $4'
+      || keyset_sql || order_sql
+      || ') union all ('
+      || base_sql
+      || ' and entry.actor_kind = ''identity'' and entry.actor_id = $5'
+      || keyset_sql || order_sql
+      || ')) as visible'
+      || pg_catalog.format(' order by visible.occurred_at %s, visible.activity_id %s limit $8',
+        case when p_direction = 'descending' then 'desc' else 'asc' end,
+        case when p_direction = 'descending' then 'desc' else 'asc' end);
+  end if;
+  scan_sql := $scan$select
+    entry.organization_id,
+    entry.activity_id,
+    1::bigint,
+    pg_catalog.jsonb_build_object(
+      'organization_id', entry.organization_id::text,
+      'revision', 1,
+      'occurred_at', entry.occurred_at,
+      'actor_kind', case entry.actor_kind
+        when 'organization_account' then 'Person'
+        when 'identity' then 'Platform operator'
+        when 'system' then 'System'
+        when 'public_session' then 'Public visitor'
+        else 'Other' end,
+      'actor', case when entry.actor_kind = 'organization_account'
+        then pg_catalog.jsonb_build_object(
+          'recordTypeId', person_record_type_id::text,
+          'recordId', entry.actor_id::text
+        )
+        else null end,
+      'action', entry.action,
+      'subject_count', pg_catalog.cardinality(entry.subject_ids),
+      'changed_field_count', case when $3
+        then pg_catalog.cardinality(entry.changed_field_ids) else null end
+    )
+  from ($scan$ || source_sql || $scan$) as entry$scan$
+    || pg_catalog.format(' order by entry.occurred_at %s, entry.activity_id %s',
+      case when p_direction = 'descending' then 'desc' else 'asc' end,
+      case when p_direction = 'descending' then 'desc' else 'asc' end);
+  return query execute scan_sql using visible_organization_id, p_record_ids,
+    audit_projection, actor_account_id, actor_identity_id,
+    after_occurred_at, after_record_id, p_limit;
+end
 $function$;
 
 revoke all on function vortex_access.list_organization_activity_entries_projection(
@@ -4322,7 +4471,6 @@ declare
   semantic_type text;
   column_entry jsonb;
   database_value_type text;
-  exact_values boolean;
   parameter_offset integer;
   supported boolean;
   compiled jsonb;
@@ -4538,8 +4686,6 @@ begin
         limit 1;
 
         if condition_entry is not null then
-          exact_values := coalesce(target_meta ->> 'validationContractVersion', '')
-            in ('2.0.0', '3.0.0');
           condition_field_types := '{}'::jsonb;
           condition_field_columns := '{}'::jsonb;
           condition_field_database_types := '{}'::jsonb;
@@ -4556,9 +4702,9 @@ begin
               -- saved-condition evaluator: calculation and total fields have no
               -- fixed stored value here and stay out of the map.
               semantic_type := case
-                when exact_values and field_kind = 'decimal_number' then 'decimal_number'
-                when exact_values and field_kind = 'money' then 'money'
-                when field_kind in ('whole_number', 'decimal_number', 'money') then 'number'
+                when field_kind = 'decimal_number' then 'decimal_number'
+                when field_kind = 'money' then 'money'
+                when field_kind = 'whole_number' then 'number'
                 when field_kind = 'yes_no' then 'boolean'
                 when field_kind = 'date' then 'date'
                 when field_kind = 'date_time' then 'date_time'
@@ -4851,6 +4997,11 @@ begin
   end if;
   if p_prior_plan is not null then
     prepared_plan := p_prior_plan;
+    -- A plan for a system projection is a live plan, in a preview too: see below.
+    if preview_mode and not (prepared_plan ? 'preview')
+      and prepared_plan -> 'recordType' ? 'systemProjection' then
+      preview_mode := false;
+    end if;
     if preview_mode then
       if pg_catalog.jsonb_typeof(prepared_plan) is distinct from 'object'
         or prepared_plan ->> 'outcome' is distinct from 'prepared'
@@ -4994,6 +5145,17 @@ begin
   if preview_mode then
     begin
       resolved := vortex_record.resolve_preview_module_query_internal(p_module_root_id, p_query_id);
+      -- A system projection has no preview copy: it is the platform's live read model, which a
+      -- preview reads on the live path, under the reader's own live access and never under the
+      -- preview's roles.
+      if resolved is null then
+        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+        if resolved -> 'recordType' ? 'systemProjection' then
+          preview_mode := false;
+        else
+          resolved := null;
+        end if;
+      end if;
     exception
       -- A refused access context or a stale preview is the expected refusal; any
       -- other failure is logged with its cause before the same safe refusal.
