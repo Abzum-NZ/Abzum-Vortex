@@ -22,6 +22,7 @@ import {
 } from "../components/dropdown-menu";
 import { Icon } from "../icons/icon";
 import { cellValueToText, DisplayCellView } from "./cell";
+import { formatLocaleNumber } from "./date-format";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
@@ -51,7 +52,7 @@ type BoardMover = Readonly<{
   dragged: RefObject<BoardMoveCard | undefined>;
 }>;
 
-const countText = (count: number): string => new Intl.NumberFormat("en").format(count);
+const countText = (count: number): string => formatLocaleNumber(count);
 
 function MetricValue({
   value,

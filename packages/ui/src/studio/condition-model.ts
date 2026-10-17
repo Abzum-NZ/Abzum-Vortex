@@ -17,6 +17,7 @@ import {
   type ModuleField,
   isRecord,
 } from "@vortex/platform/schema";
+import { formatIsoDate } from "../display/date-format";
 
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
@@ -918,13 +919,7 @@ export const infoForExpectedLiteral = (
 export const literalInputValue = (value: JsonValue): string =>
   value === null ? "" : typeof value === "string" ? value : String(value);
 
-export const localDateTimeInputValue = (value: JsonValue): string => {
+export const localDateTimeInputValue = (value: JsonValue, timeZone: string): string => {
   if (typeof value !== "string" || !isValidInstant(value)) return "";
-  const instant = new Date(value);
-  if (Number.isNaN(instant.getTime())) return "";
-  const pad = (part: number): string => String(part).padStart(2, "0");
-  const year = String(instant.getFullYear()).padStart(4, "0");
-  const date = `${year}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}`;
-  const time = `${pad(instant.getHours())}:${pad(instant.getMinutes())}:${pad(instant.getSeconds())}`;
-  return `${date}T${time}`;
+  return formatIsoDate(value, { timeZone }, "input") ?? "";
 };

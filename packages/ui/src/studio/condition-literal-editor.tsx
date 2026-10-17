@@ -2,6 +2,7 @@
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { NativeSelect } from "@vortex/ui/components/native-select";
+import { useDateFormatOptions } from "../display/date-format-context";
 import {
   jsonValueSchema,
   isRecord,
@@ -38,6 +39,7 @@ export function LiteralEditor({
   onCommit,
   onInvalid,
 }: LiteralEditorProps) {
+  const { timeZone } = useDateFormatOptions();
   const error = errorForPath(validation, path);
   const label = collectionElementType && collectionElementType !== "text"
     ? `Literal value (${collectionElementType.replaceAll("_", " ")} list, JSON array)`
@@ -165,7 +167,7 @@ export function LiteralEditor({
             aria-invalid={error !== undefined}
             type="datetime-local"
             step={1}
-            value={localDateTimeInputValue(operand.value)}
+            value={localDateTimeInputValue(operand.value, timeZone ?? "UTC")}
             onChange={(event) => {
               const next = event.currentTarget.value;
               if (next === "") {

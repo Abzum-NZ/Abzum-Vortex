@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Icon } from "@vortex/ui";
+import { FormattedTime, Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 
 /**
@@ -12,10 +12,6 @@ export function DraftPreviewNotice({
   expiresAt,
   studioHref,
 }: Readonly<{ draftRevision: number; expiresAt: string; studioHref: string }>) {
-  const until = new Date(expiresAt).toLocaleString("en-NZ", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
   return (
     <div
       role="status"
@@ -26,7 +22,7 @@ export function DraftPreviewNotice({
       <p className="min-w-0 flex-1">
         <strong>Preview of draft revision {draftRevision}.</strong> It runs on a copy of your
         organisation&apos;s records; nothing saved here reaches the installed application. It ends{" "}
-        {until}.
+        <FormattedTime iso={expiresAt} />.
       </p>
       <Button variant="outline" size="sm" nativeButton={false} render={<Link href={studioHref} />}>
         <Icon name="chevron-left" />

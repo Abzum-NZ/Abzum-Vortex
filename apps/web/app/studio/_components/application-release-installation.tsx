@@ -82,7 +82,7 @@ const commandText = (result: StudioApplicationInstallationCommandResult): string
 export function ApplicationReleaseInstallation({ selector, initialResult }: Props) {
   const [state, setState] = useState<State>({ load: initialResult, command: null });
   const [pending, setPending] = useState(false);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number | null>(null);
   const [message, setMessage] = useState(loadMessage(initialResult));
   const outcomeHeading = useRef<HTMLHeadingElement>(null);
   const mounted = useRef(false);
@@ -95,6 +95,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
 
   useEffect(() => {
     mounted.current = true;
+    setNow(Date.now());
     generation.current += 1;
     return () => {
       mounted.current = false;
@@ -106,7 +107,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   const snapshot = state.load.kind === "available" ? state.load.snapshot : null;
   const snapshotId = snapshot === null ? null : snapshotKey(snapshot);
   const snapshotExpiry = snapshot?.validUntil ?? null;
-  const expired = snapshot !== null && now >= Date.parse(snapshot.validUntil);
+  const expired = snapshot !== null && (now === null || now >= Date.parse(snapshot.validUntil));
   useEffect(() => {
     if (snapshotExpiry === null || snapshotId === null) return;
     const deadline = Date.parse(snapshotExpiry);

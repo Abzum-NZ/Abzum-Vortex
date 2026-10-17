@@ -17,7 +17,7 @@ import type {
   StudioApplicationRestoreReceipt,
   StudioApplicationRestoreSelector,
 } from "../../_lib/studio-application-restore-contracts";
-import { formatStudioTimestamp } from "./studio-time";
+import { FormattedTime } from "@vortex/ui";
 
 type FailureKind = StudioApplicationRestoreFailure["kind"];
 type Pending = "reload" | "restore";
@@ -244,7 +244,7 @@ export function ApplicationReleaseRestore({
         <dl className="space-y-3">
           <div><dt className="font-semibold">Selected version</dt><dd>{displayedLoad.metadata.releaseVersion}</dd></div>
           <div><dt className="font-semibold">Status</dt><dd>{displayedLoad.metadata.isCurrent ? "Current published version" : "Earlier published version"}</dd></div>
-          <div><dt className="font-semibold">Published</dt><dd><time dateTime={displayedLoad.metadata.publishedAt}>{formatStudioTimestamp(displayedLoad.metadata.publishedAt)}</time></dd></div>
+          <div><dt className="font-semibold">Published</dt><dd><FormattedTime iso={displayedLoad.metadata.publishedAt} /></dd></div>
           <div><dt className="font-semibold">Published by</dt><dd>{personText(displayedLoad.publishedBy)}</dd></div>
           <div><dt className="font-semibold">Note</dt><dd className="whitespace-pre-wrap break-words">{displayedLoad.metadata.releaseNote}</dd></div>
         </dl>
@@ -288,7 +288,7 @@ export function ApplicationReleaseRestore({
       <h2 className="text-xl font-semibold">Restored</h2>
       <dl className="space-y-2">
         <div><dt className="font-semibold">Restored by</dt><dd>{personText(receipt.restoredByLabel)}</dd></div>
-        <div><dt className="font-semibold">When</dt><dd><time dateTime={receipt.restoredAt}>{formatStudioTimestamp(receipt.restoredAt)}</time></dd></div>
+        <div><dt className="font-semibold">When</dt><dd><FormattedTime iso={receipt.restoredAt} /></dd></div>
       </dl>
       <TechnicalDetails><dl className="space-y-2">
         <div><dt className="font-semibold">New saved draft revision</dt><dd>{receipt.draftRevision}</dd></div>

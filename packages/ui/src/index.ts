@@ -138,6 +138,7 @@ export {
   TableDisplay,
   cellValueToText,
   formatIsoDate,
+  FormattedTime,
   getAccessibleName,
   richTextToPlainText,
   type DisplayRenderProps,
