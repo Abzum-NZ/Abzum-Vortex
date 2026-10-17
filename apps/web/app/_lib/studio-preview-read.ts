@@ -29,8 +29,8 @@ export type StudioPreviewSelection = Readonly<{
 /**
  * Where Studio's canvas and Data tab read the records of the saved draft: the builder's own preview
  * installation of that draft, with its runtime context and the running application's own readers.
- * The preview runs the draft's data shape: it is moved to each saved revision that changes records,
- * queries or access, and runs as it is through presentation-only edits. Every read in it runs under
+ * The preview follows the draft: it moves to each saved revision in the background, keeping its
+ * records, and reads meanwhile run on it as it is. Every read in it runs under
  * the builder's preview access, as the preview itself decides it: the draft's roles for the
  * Application's own permissions, the builder's own live access for people and every other system
  * projection, and no record-share authority.
@@ -40,6 +40,8 @@ export type StudioPreviewRead =
       kind: "available";
       /** The saved draft at exactly the requested revision. */
       draft: StoredApplicationDefinitionDraft;
+      /** The preview still runs an older revision's data shape and moves to this one meanwhile. */
+      behind: boolean;
       selection: StudioPreviewSelection;
       context: InstalledRuntimeContext;
       dependencies: HumanOrganizationRequestDependencies;
@@ -97,5 +99,5 @@ export const openStudioPreviewRead = async (
   const services = createPlacementReadServices({ session, selection, dependencies,
     continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
     organizationShortName: entry.organizationShortName });
-  return { kind: "available", draft: state.draft, selection, context: installed.value, dependencies, services };
+  return { kind: "available", draft: state.draft, behind: preview.behind, selection, context: installed.value, dependencies, services };
 };

@@ -266,7 +266,7 @@ export const createPreviewInstallationCoordinator = (
               expectedDraftRevision,
             }),
       );
-      return builderRequest(
+      const result = await builderRequest(
         session.data,
         { organizationId, applicationRootId, previewInstallationId },
         applicationRootId,
@@ -283,6 +283,7 @@ export const createPreviewInstallationCoordinator = (
           return refreshed;
         },
       );
+      return result;
     },
   });
 };

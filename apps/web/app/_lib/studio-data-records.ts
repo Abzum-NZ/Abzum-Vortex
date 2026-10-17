@@ -54,6 +54,8 @@ export type StudioDataRecordsResult =
       rows: readonly Readonly<{ id: string; cells: Readonly<Record<string, string>> }>[];
       next?: string;
       previous?: string;
+      /** Read from the preview while it still runs an older revision's data shape: read again shortly. */
+      behind: boolean;
     }>
   /** A query that groups records or adds totals: its groups, each with its count and totals, and its overall totals. */
   | Readonly<{
@@ -64,9 +66,12 @@ export type StudioDataRecordsResult =
       groups: readonly Readonly<{ key: string; values: readonly string[]; count: number; totals: readonly StudioDataTotal[] }>[];
       totalRowCount: number;
       totals: readonly StudioDataTotal[];
+      behind: boolean;
     }>
   /** The saved draft revision does not have this module, record type or query: save first. */
   | Readonly<{ kind: "not_saved" }>
+  /** The preview is still moving to the saved revision that has this: read again shortly. */
+  | Readonly<{ kind: "following" }>
   /** The saved draft changed since the revision the request names: read again for the current one. */
   | Readonly<{ kind: "conflict" }>
   /** The record type has no query without inputs to read its records through. */
@@ -144,18 +149,20 @@ export const readStudioDataRecords = async (
     const preview = await openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision);
     if (preview.kind !== "available") return preview;
 
-    const { context, selection, services } = preview;
+    const { context, selection, services, behind } = preview;
+    // What the preview does not have yet, while it still moves to this revision, follows shortly.
+    const missing = behind ? { kind: "following" } as const : { kind: "not_saved" } as const;
     const module = context.releaseSet.modules.find((candidateModule) => candidateModule.definitionKey === request.moduleKey);
     const record = module?.content.recordTypes.find((candidateRecord) => candidateRecord.key === request.recordKey);
-    if (module === undefined || record === undefined) return { kind: "not_saved" };
+    if (module === undefined || record === undefined) return missing;
     const query = request.queryKey === undefined ? plainQueryOf(module, record)
       : module.content.queries.find((candidateQuery) => candidateQuery.key === request.queryKey);
-    if (query === undefined) return request.queryKey === undefined ? { kind: "no_query" } : { kind: "not_saved" };
+    if (query === undefined) return request.queryKey === undefined && !behind ? { kind: "no_query" } : missing;
     const queryRecord = query.recordType.state === "resolved"
       ? context.releaseSet.modules.flatMap((candidateModule) => candidateModule.content.recordTypes)
         .find((candidateRecord) => sameId(String(candidateRecord.recordTypeId), String((query.recordType as { recordTypeId: string }).recordTypeId)))
       : undefined;
-    if (queryRecord === undefined) return { kind: "not_saved" };
+    if (queryRecord === undefined) return missing;
 
     const summary = query.groupByFieldIds.length > 0 || query.aggregates.length > 0;
     const label = query.label ?? sentence(query.key);
@@ -180,7 +187,7 @@ export const readStudioDataRecords = async (
             value: result === undefined ? "None" : totalText(result) };
         });
       return {
-        kind: "summary", queryLabel: label, totalRowCount: completed.totalRowCount, totals: totalsOf(completed.aggregates),
+        kind: "summary", behind, queryLabel: label, totalRowCount: completed.totalRowCount, totals: totalsOf(completed.aggregates),
         groupColumns: groupFields.map((field) => ({ key: field.key, label: field.label })),
         groups: completed.groups.slice(0, request.pageSize).map((group) => ({
           key: group.groupKey, count: group.rowCount, totals: totalsOf(group.aggregates),
@@ -211,6 +218,7 @@ export const readStudioDataRecords = async (
     const title = fields.find((field) => sameId(String(field.fieldId), String(queryRecord.titleFieldId)));
     return {
       kind: "available",
+      behind,
       queryLabel: label,
       columns: fields.map((field) => ({ key: field.key, label: field.label })),
       ...(title === undefined ? {} : { titleColumn: title.key }),

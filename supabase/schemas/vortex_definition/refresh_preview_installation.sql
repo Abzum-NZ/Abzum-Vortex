@@ -40,7 +40,8 @@ begin
     and preview.previewer_organization_account_id =
       (checked_context ->> 'organizationAccountId')::uuid
     and preview.expires_at > pg_catalog.statement_timestamp()
-  for update;
+  -- Reads of the preview (for key share) go on while it moves; a second move waits.
+  for no key update;
   if not found then
     raise exception using errcode = '42501', message = 'Preview installation is unavailable';
   end if;

@@ -792,6 +792,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           ...(result.next === undefined ? {} : { next: result.next }) };
       }
       case "not_saved": return { kind: "not_saved" };
+      // The preview is still moving to the saved revision; the picker reads again when opened again.
+      case "following": return { kind: "temporarily_unavailable" };
       // The saved draft moved on; the next save's revision reads again.
       case "conflict": return { kind: "temporarily_unavailable" };
       case "no_query": return { kind: "no_list" };
@@ -814,7 +816,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       draftRevision: compiled.draftRevision, sourceFingerprint: compiled.sourceFingerprint, pageAlias, area });
     if (result.kind === "available" && result.draftRevision === compiled.draftRevision &&
       result.sourceFingerprint === compiled.sourceFingerprint && result.pageAlias === pageAlias && result.area === area)
-      return { state: "ready" as const, records: result.records };
+      return { state: "ready" as const, records: result.records, behind: result.behind };
     if (result.kind === "refused") return { state: "refused" as const, records: {} };
     console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
     return { state: "unavailable" as const, records: {} };

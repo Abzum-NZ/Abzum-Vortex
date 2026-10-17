@@ -63,6 +63,11 @@ export type StudioPreviewResult =
       expiresAt: string;
       /** Its copied live records are due to be decided again by the builder's live access. */
       reconcileDue: boolean;
+      /**
+       * It still runs an older saved revision whose records, queries or access differ from this
+       * one's; it is moving to this revision in the background, so read again shortly.
+       */
+      behind: boolean;
     }>
   | PreviewFailure;
 
@@ -139,8 +144,11 @@ export const studioPreviewShapeFingerprint = (source: StoredApplicationDefinitio
     body: Object.fromEntries(Object.entries(source.body).filter(([key]) => !presentationKeys.has(key))) });
 
 /**
- * Reads, in one organisation request under the builder's draft authority, the saved draft at
- * exactly the requested revision and the builder's current preview of its Application.
+ * Reads, in one request under the builder's draft authority, the saved draft at exactly the
+ * requested revision and the builder's current preview of its Application. It reads in the
+ * installed Application's own scope, which an organisation-wide change (such as a preview's
+ * rehearsed publication) does not hold up, and in the organisation's scope for an Application
+ * with no installation yet.
  */
 export const readStudioPreviewState = async (
   session: IdentitySession,
@@ -149,7 +157,28 @@ export const readStudioPreviewState = async (
   draftRevision: number,
 ): Promise<StudioPreviewState> => {
   try {
-    const read = await humanOrganizationRequests().run(session, { organizationId },
+    const inApplication = await readPreviewStateIn(session, { organizationId, applicationRootId: rootId },
+      organizationId, rootId, draftRevision);
+    const read = inApplication.kind === "available" && inApplication.value.kind !== "refused" ? inApplication
+      : await readPreviewStateIn(session, { organizationId }, organizationId, rootId, draftRevision);
+    if (read.kind === "available") return read.value;
+    return read.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" }
+      : { kind: "refused", reason: "permission_refused" };
+  } catch (error) {
+    if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
+    console.error(`[studio] preview state unavailable: STUDIO_PREVIEW_STATE_FAILED cause=${describeFailure(error)}`);
+    return { kind: "temporarily_unavailable" };
+  }
+};
+
+const readPreviewStateIn = (
+  session: IdentitySession,
+  selection: Readonly<{ organizationId: OrganizationId; applicationRootId?: ApplicationRootId }>,
+  organizationId: OrganizationId,
+  rootId: ApplicationRootId,
+  draftRevision: number,
+) =>
+    humanOrganizationRequests().run(session, selection,
       async (transaction, scope) => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts,
           permissions: platformPermissionSource });
@@ -166,23 +195,14 @@ export const readStudioPreviewState = async (
           throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
         return { kind: "read", draft, preview } as const;
       });
-    if (read.kind === "available") return read.value;
-    return read.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" }
-      : { kind: "refused", reason: "permission_refused" };
-  } catch (error) {
-    if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
-    console.error(`[studio] preview state unavailable: STUDIO_PREVIEW_STATE_FAILED cause=${describeFailure(error)}`);
-    return { kind: "temporarily_unavailable" };
-  }
-};
 
 /** A preview reused for a new read keeps at least this long, so it does not expire while Studio reads it. */
 const reuseMarginMs = 60 * 60 * 1000;
 
 const available = (preview: Readonly<{ previewInstallationId: string; organizationId: string; draftRevision: number;
-  expiresAt: string }>, reconcileDue: boolean): StudioPreviewResult => ({
+  expiresAt: string }>, reconcileDue: boolean, behind = false): StudioPreviewResult => ({
   kind: "available", previewInstallationId: preview.previewInstallationId, organizationId: preview.organizationId,
-  draftRevision: preview.draftRevision, expiresAt: preview.expiresAt, reconcileDue,
+  draftRevision: preview.draftRevision, expiresAt: preview.expiresAt, reconcileDue, behind,
 });
 
 /**
@@ -232,11 +252,12 @@ const follow = (target: Target, previewInstallationId: string): Promise<StudioPr
         ? provision(target) : failure(error)));
 
 /**
- * Presentation-only edits move the preview's pages to the draft after a short pause, so a burst of
- * saves moves it once, to the newest revision; reads meanwhile run on the preview as it is.
+ * Reads never wait for the preview to move: after a data-shape edit it moves to the draft in the
+ * background after a short pause, so a burst of saves moves it once, to the newest revision, and
+ * reads meanwhile run on the preview as it is until the move commits.
  */
 const scheduled = new Map<string, Readonly<{ timer: ReturnType<typeof setTimeout>; draftRevision: number }>>();
-const followLater = (target: Target, previewInstallationId: string): void => {
+const followLater = (target: Target, previewInstallationId: string, pauseMs: number): void => {
   const key = `${target.session.identityId}|${target.organizationId}|${target.rootId}`.toLowerCase();
   const waiting = scheduled.get(key);
   if (waiting !== undefined && waiting.draftRevision >= target.draftRevision) return;
@@ -248,16 +269,17 @@ const followLater = (target: Target, previewInstallationId: string): void => {
       if (result.kind !== "available" && result.kind !== "conflict")
         console.error(`[studio] the preview did not follow the draft: STUDIO_PREVIEW_FOLLOW_${result.kind.toUpperCase()}`);
     });
-  }, 1500);
+  }, pauseMs);
   scheduled.set(key, { timer, draftRevision: target.draftRevision });
 };
 
 /**
  * The builder's one preview for the saved draft at this revision:
  * - their current preview, when it runs this revision;
- * - for a read, their current preview as it is when the draft changed only its presentation, so
- *   the read takes no provisioning; the preview's pages follow the draft right after;
- * - otherwise their current preview moved to this revision in place, keeping its records;
+ * - for a read, their current preview as it is: after a presentation-only edit it already has the
+ *   draft's records, queries and access; after a data-shape edit it moves to this revision in the
+ *   background, keeping its records, and is `behind` until then;
+ * - for opening it, their current preview moved to this revision in place first, its pages too;
  * - and a new preview when they have none or its records cannot take the change.
  * Studio's canvas, its Data tab and its Preview button all run on this one preview.
  */
@@ -275,9 +297,13 @@ export const currentStudioPreview = async (
   if (preview.draftRevision > draft.draftRevision) return { kind: "conflict" };
   const lasting = Date.parse(preview.expiresAt) - Date.now() > reuseMarginMs;
   if (lasting && preview.draftRevision === draft.draftRevision) return available(preview, preview.reconcileDue);
-  if (lasting && purpose === "read" && preview.shapeFingerprint === target.shapeFingerprint) {
-    followLater(target, preview.previewInstallationId);
-    return available(preview, preview.reconcileDue);
+  if (purpose === "read") {
+    // A presentation-only edit leaves the preview's records, queries and access the draft's: its
+    // pages follow when the preview is opened. Moving it means rehearsing a publication, whose
+    // transaction holds the organisation's access lock, so it is not repeated for every such save.
+    if (preview.shapeFingerprint === target.shapeFingerprint) return available(preview, preview.reconcileDue);
+    followLater(target, preview.previewInstallationId, 1000);
+    return available(preview, preview.reconcileDue, true);
   }
   const followed = await follow(target, preview.previewInstallationId);
   // A followed preview keeps its copied records, which are due to be decided again as before.

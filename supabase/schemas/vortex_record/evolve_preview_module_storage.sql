@@ -71,6 +71,41 @@ begin
       or pg_catalog.jsonb_typeof(record_type -> 'relationships') is distinct from 'array' then
       raise exception using errcode = 'V3201', message = 'Preview record storage cannot follow this change';
     end if;
+    evolved_definition := pg_catalog.jsonb_set(
+      record_type, '{storageContractId}',
+      pg_catalog.to_jsonb(binding_row.storage_contract_id::text), true
+    );
+    -- An unchanged record type keeps its storage exactly as it is: only the release it serves moves.
+    if catalogue_row.record_type_definition = evolved_definition then
+      if binding_row.module_release_revision <> p_module_release_revision
+        or binding_row.release_storage_contract_id is distinct from release_storage_id then
+        update vortex_record.storage_catalogue as catalogue
+        set first_compatible_release_revision = p_module_release_revision,
+            last_compatible_release_revision = p_module_release_revision,
+            changed_at = pg_catalog.statement_timestamp()
+        where catalogue.storage_contract_id = binding_row.storage_contract_id;
+        update vortex_record.field_storage_mappings as mapping
+        set introduced_by_module_root_id = p_module_root_id,
+            introduced_at_release_revision = p_module_release_revision
+        where mapping.storage_contract_id = binding_row.storage_contract_id
+          and mapping.state = 'active';
+        update vortex_record.preview_storage_bindings as binding
+        set module_release_revision = p_module_release_revision,
+            release_storage_contract_id = release_storage_id
+        where binding.preview_installation_id = p_preview_installation_id
+          and binding.storage_contract_id = binding_row.storage_contract_id;
+      end if;
+      storage_identities := storage_identities || pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'moduleRootId', p_module_root_id,
+          'moduleReleaseRevision', p_module_release_revision,
+          'recordTypeId', record_type_id_value,
+          'releaseStorageContractId', release_storage_id,
+          'previewStorageContractId', binding_row.storage_contract_id
+        )
+      );
+      continue;
+    end if;
     scope_index_columns := case catalogue_row.storage_scope
       when 'organization_shared' then 'organisation_id'
       else 'organisation_id, application_root_id'
@@ -139,7 +174,15 @@ begin
           p_module_root_id, p_module_release_revision, 'active'
         );
       end if;
-      if not (field_value ->> 'required')::boolean then
+      -- Table changes run only where the column or its index actually differs.
+      if not (field_value ->> 'required')::boolean and exists (
+        select 1
+        from pg_catalog.pg_attribute as attribute
+        where attribute.attrelid = pg_catalog.to_regclass(
+            pg_catalog.format('record_data.%I', catalogue_row.physical_table_token))
+          and attribute.attname = column_token
+          and attribute.attnotnull
+      ) then
         execute pg_catalog.format(
           'alter table record_data.%I alter column %I drop not null',
           catalogue_row.physical_table_token, column_token
@@ -148,17 +191,19 @@ begin
       index_token := 'pux_' || pg_catalog.md5(
         binding_row.storage_contract_id::text || ':' || field_id_value::text
       );
-      if (field_value ->> 'unique')::boolean then
+      if (field_value ->> 'unique')::boolean
+        and pg_catalog.to_regclass(pg_catalog.format('record_data.%I', index_token)) is null then
         begin
           execute pg_catalog.format(
-            'create unique index if not exists %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
+            'create unique index %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
             index_token, catalogue_row.physical_table_token, scope_index_columns, column_token
           );
         exception when unique_violation then
           raise exception using errcode = 'V3201', message = 'Preview records repeat a value the draft makes unique';
         end;
-      else
-        execute pg_catalog.format('drop index if exists record_data.%I', index_token);
+      elsif not (field_value ->> 'unique')::boolean
+        and pg_catalog.to_regclass(pg_catalog.format('record_data.%I', index_token)) is not null then
+        execute pg_catalog.format('drop index record_data.%I', index_token);
       end if;
     end loop;
 
@@ -188,10 +233,6 @@ begin
         and mapping.field_id = mapping_row.field_id;
     end loop;
 
-    evolved_definition := pg_catalog.jsonb_set(
-      record_type, '{storageContractId}',
-      pg_catalog.to_jsonb(binding_row.storage_contract_id::text), true
-    );
     update vortex_record.storage_catalogue as catalogue
     set record_type_definition = evolved_definition,
         content_fingerprint = vortex_record.storage_meaning_fingerprint(evolved_definition),

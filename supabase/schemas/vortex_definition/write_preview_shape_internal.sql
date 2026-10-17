@@ -20,7 +20,7 @@ begin
   select preview.* into strict preview_row
   from vortex_definition.preview_installations as preview
   where preview.preview_installation_id = p_preview_installation_id
-  for update;
+  for no key update;
 
   -- The exact Module pins of the previewed Application release, through every Module dependency,
   -- each read from this preview's rehearsed releases first and the stored releases otherwise.

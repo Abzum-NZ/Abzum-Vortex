@@ -44,6 +44,7 @@ const notReadable = (result: StudioDataRecordsResult, plural: string, query: boo
     case "not_saved": return query ? "Save to see results. The saved draft does not have this query yet."
       : "Save to see records. The saved draft does not have this yet.";
     case "conflict": return "The saved draft changed. Its records follow in a moment.";
+    case "following": return "Your preview is catching up with the saved draft. Its records follow in a moment.";
     case "no_query": return `No list of ${plural.toLowerCase()} exists yet. Add a query that lists ${plural.toLowerCase()} to see their records here.`;
     case "query_refused": return result.reason === "input_invalid"
       ? `This query lists records for one chosen record at a time. Select ${plural} in the Data panel to see all of them.`
@@ -106,6 +107,18 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
   const [read, setRead] = useState<Read | null>(null);
   const latest = useRef("");
   const request = JSON.stringify({ scope, page });
+  // A preview still moving to this revision is read again shortly; what it showed stays meanwhile.
+  const [followed, setFollowed] = useState<Readonly<{ request: string; count: number }>>({ request: "", count: 0 });
+  const followUp = followed.request === request ? followed.count : 0;
+  useEffect(() => {
+    if (read?.request !== request) return;
+    const result = read.result;
+    const behind = result.kind === "following" ||
+      ((result.kind === "available" || result.kind === "summary") && result.behind);
+    if (!behind || followUp >= 30) return;
+    const timer = setTimeout(() => setFollowed({ request, count: followUp + 1 }), 1500);
+    return () => clearTimeout(timer);
+  }, [read, request, followUp]);
   useEffect(() => {
     latest.current = request;
     void (async () => {
@@ -121,7 +134,7 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
       }
       if (latest.current === request) setRead({ request, result });
     })();
-  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request]);
+  }, [organizationId, rootId, draftRevision, moduleKey, recordKey, queryKey, pageSize, page.token, page.direction, request, followUp]);
   const current = read?.request === request ? read.result : null;
   const problem = current === null ? undefined : notReadable(current, plural, queryKey !== undefined);
   return <section aria-labelledby="studio-data-results" className="space-y-2">

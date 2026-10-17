@@ -21,6 +21,7 @@ import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
 import { compiledDraftContent } from "./studio-compiled-drafts";
 import { collectPlacements } from "./application-page/placement-helpers";
+import { findModuleQuery } from "./application-page/query-helpers";
 import { isStreamablePlacement, readPlacement } from "./application-page/placement-reader";
 import { openStudioPreviewRead } from "./studio-preview-read";
 import type { PageDataState } from "./application-page/types";
@@ -40,7 +41,12 @@ const requestSchema = z.object({
  */
 export type StudioCanvasRecordsResult =
   | Readonly<{ kind: "available"; draftRevision: number; sourceFingerprint: string; pageAlias: string;
-      area: string; records: Readonly<Record<string, PageDataState>> }>
+      area: string; records: Readonly<Record<string, PageDataState>>;
+      /**
+       * The preview still runs an older revision's data shape and is moving to this one: blocks
+       * whose query it does not have yet have no records here; read again shortly.
+       */
+      behind: boolean }>
   | Readonly<{ kind: "conflict" }>
   /** The builder may not edit or preview this application, so the canvas reads no records. */
   | Readonly<{ kind: "refused" }>
@@ -97,7 +103,9 @@ export const readStudioCanvasRecords = async (
 
     // The draft's page, drawn as the running page reads it: its content is this area's blocks.
     const areaPage = { ...compiledPage, composition: { root: { props: {} }, content: slot } };
-    const placements = collectPlacements(areaPage).filter(isStreamablePlacement);
+    // A query the preview does not run yet is read once the preview has moved to this revision.
+    const placements = collectPlacements(areaPage).filter(isStreamablePlacement)
+      .filter((placement) => findModuleQuery(context, String(placement.vortex.queryId)) !== undefined);
     const data: Record<string, PageDataState> = {};
     const noSubject = recordIdSchema.safeParse(undefined);
     const input = {
@@ -119,7 +127,7 @@ export const readStudioCanvasRecords = async (
       if (alias !== undefined) records[alias] = state;
     }
     return { kind: "available", draftRevision: request.draftRevision, sourceFingerprint: request.sourceFingerprint,
-      pageAlias: request.pageAlias, area: request.area, records };
+      pageAlias: request.pageAlias, area: request.area, records, behind: preview.behind };
   } catch (error) {
     if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return { kind: "conflict" };
     console.error(`[studio] canvas records unavailable: STUDIO_CANVAS_RECORDS_FAILED cause=${describeFailure(error)}`);
