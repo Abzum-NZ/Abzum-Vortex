@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.record_lifecycle_current_revision_internal(p_record_type_id uuid, p_record_id uuid) RETURNS bigint
+CREATE OR REPLACE FUNCTION vortex_record.record_lifecycle_current_revision_internal(p_record_type_id uuid, p_record_id uuid) RETURNS bigint
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$

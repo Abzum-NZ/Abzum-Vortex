@@ -50,6 +50,7 @@ declare
   protected_view_key text;
   reader_schema_value text;
   reader_function_value text;
+  reader_sort_key_value text;
   field_columns_sql text;
   projection_view_sql text;
   existing_columns text[];
@@ -179,11 +180,15 @@ begin
     protected_view_key := null;
     reader_schema_value := null;
     reader_function_value := null;
+    reader_sort_key_value := null;
     projection_view_sql := null;
     if is_projection then
       protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      select registered.reader_schema, registered.reader_function
-      into reader_schema_value, reader_function_value
+      -- The view reads every row in the reader's first registered cursor order, which each
+      -- reader accepts without a page limit.
+      select registered.reader_schema, registered.reader_function,
+        registered.cursor_sort_keys[1]
+      into reader_schema_value, reader_function_value, reader_sort_key_value
       from vortex_record.protected_read_model_views as registered
       where registered.protected_read_model_key = protected_view_key;
       if not found then
@@ -261,10 +266,10 @@ begin
            null::uuid as deleted_by,
            null::timestamptz as removal_due_at,
            %s
-         from %I.%I(null::uuid[], ''record_id'', ''ascending'', null, null) as projection',
+         from %I.%I(null::uuid[], %L, ''ascending'', null, null) as projection',
         table_token, p_module_root_id, record_type_id_value, storage_id,
         p_module_release_revision, field_columns_sql,
-        reader_schema_value, reader_function_value
+        reader_schema_value, reader_function_value, reader_sort_key_value
       );
     end if;
 

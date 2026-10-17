@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.read_derived_field_ids_for_exact_record_internal(p_record_type_id uuid, p_record_id uuid, p_required_field_ids jsonb, p_seen_derived_field_keys jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.read_derived_field_ids_for_exact_record_internal(p_record_type_id uuid, p_record_id uuid, p_required_field_ids jsonb, p_seen_derived_field_keys jsonb) RETURNS jsonb
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
