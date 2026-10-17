@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.lock_record_lifecycle_policy_authority() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint, correlation_id uuid, application_root_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.lock_record_lifecycle_policy_authority() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint, correlation_id uuid, application_root_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -17,7 +17,7 @@ begin
   where version.organization_id = (context_value ->> 'organizationId')::uuid
     and organization.state = 'active'
     and tenant.state = 'active'
-  for update of version;
+  for share of version;
   if not found then
     raise exception using errcode = '42501',
       message = 'Record lifecycle policy administration is unavailable';

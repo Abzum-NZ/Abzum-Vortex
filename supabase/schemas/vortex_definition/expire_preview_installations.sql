@@ -25,9 +25,7 @@ begin
     limit p_limit
     for update skip locked
   loop
-    perform vortex_record.drop_preview_installation_storage(
-      preview_row.preview_installation_id
-    );
+    -- Its storage is retired with it and dropped in the background.
     delete from vortex_definition.preview_installations as preview
     where preview.preview_installation_id = preview_row.preview_installation_id;
     expired_count := expired_count + 1;
@@ -43,4 +41,4 @@ revoke all on function vortex_definition.expire_preview_installations(integer)
 grant execute on function vortex_definition.expire_preview_installations(integer)
   to vortex_request, vortex_owner;
 comment on function vortex_definition.expire_preview_installations(integer) is
-  'Purges a bounded batch of expired preview installations in the current human organisation, including their isolated Record storage.';
+  'Removes a bounded batch of expired preview installations in the current human organisation; their isolated Record storage is retired with them and dropped in the background.';

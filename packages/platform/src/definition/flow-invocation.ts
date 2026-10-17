@@ -552,7 +552,7 @@ export async function invokeInstalledFlow(
     accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
     tenantGovernance: {
       run: (session, selection, operation) =>
-        requests.runChange(session, selection, (transaction, scope) =>
+        requests.runAccessChange(session, selection, (transaction, scope) =>
           operation({
             tenantId: scope.tenantId,
             operations: createRequestBoundTenantGovernanceService(transaction, scope),

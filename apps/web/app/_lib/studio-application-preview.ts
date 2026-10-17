@@ -5,6 +5,7 @@ import {
   createDatabaseDefinitionPublicationService,
   createPreviewInstallationCoordinator,
   DefinitionError,
+  dropRetiredPreviewStorage,
   previewApplicationKey,
   type BuilderTargetFactsReader,
   type DatabaseRow,
@@ -119,6 +120,11 @@ export const provisionStudioApplicationPreview = async (
   } catch (error) {
     return failure(error);
   }
+  // This preview retired the builder's previous one. Its storage is dropped in the background, in
+  // its own short transactions, never inside this request.
+  void dropRetiredPreviewStorage().catch((error: unknown) => {
+    console.error("[studio] retired preview storage drop failed", error);
+  });
   const launcher = await loadOrganizationLauncher(session);
   if (launcher.kind !== "available") return { kind: "temporarily_unavailable" };
   const entry = launcher.entries.find((item) =>

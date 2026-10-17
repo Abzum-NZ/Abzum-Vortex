@@ -50,7 +50,7 @@ begin
   join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
   where version.organization_id = context_organization_id
     and organization.state = 'active' and tenant.state = 'active'
-  for update of version;
+  for share of version;
   if not found or locked_access_version is distinct from context_access_version then
     raise exception using errcode = '42501',
       message = 'Record-share grant withdrawal is unavailable';
