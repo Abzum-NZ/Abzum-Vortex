@@ -29,7 +29,7 @@ import {
  * Disabling bans the identity so the provider refuses sign-in and refresh, and
  * deletes its provider sessions. An access token that was already issued stays
  * valid until its own expiry unless a named sensitive operation performs a live
- * check (part B, #963); this adapter never claims otherwise.
+ * check; this adapter never claims otherwise.
  */
 
 export const identityDisablementFailureCodes = [

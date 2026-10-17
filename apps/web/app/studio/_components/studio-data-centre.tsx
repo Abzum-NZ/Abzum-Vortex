@@ -48,6 +48,8 @@ const notReadable = (result: StudioDataRecordsResult, plural: string, query: boo
     case "no_query": return `No list of ${plural.toLowerCase()} exists yet. Add a query that lists ${plural.toLowerCase()} to see their records here.`;
     case "query_refused": return result.reason === "input_invalid"
       ? `This query lists records for one chosen record at a time. Select ${plural} in the Data panel to see all of them.`
+      : result.reason === "continuation_invalid"
+        ? "The groups changed while you were paging through them. Choose another number per page to start again from the first page."
       : `Your access does not let you see these ${plural.toLowerCase()}. Ask an administrator for access to see them.`;
     case "refused": return `Seeing these ${plural.toLowerCase()} here needs permission to preview this application. Ask an administrator for access.`;
     case "temporarily_unavailable": return "The records could not be read just now. Try again in a moment.";
@@ -63,8 +65,14 @@ function Totals({ totals }: Readonly<{ totals: readonly StudioDataTotal[] }>) {
   </dl>;
 }
 
-/** What a query that groups records or adds totals reads: its overall totals, then one row per group. */
-function SummaryResults({ result }: Readonly<{ result: Extract<StudioDataRecordsResult, { kind: "summary" }> }>) {
+/**
+ * What a query that groups records or adds totals reads: its overall totals, then its groups one page
+ * at a time, by keyset like records: next and previous pages, and how many groups there are in all.
+ */
+function SummaryResults({ result, onPage }: Readonly<{
+  result: Extract<StudioDataRecordsResult, { kind: "summary" }>;
+  onPage: (page: Page) => void;
+}>) {
   const totalColumns = result.totals.map((total) => ({ alias: total.alias, label: total.label }));
   return <div className="space-y-3">
     <p role="status" className="text-sm">{result.totalRowCount} {result.totalRowCount === 1 ? "record" : "records"} in all.</p>
@@ -84,6 +92,15 @@ function SummaryResults({ result }: Readonly<{ result: Extract<StudioDataRecords
           {group.totals.map((total) => <TableCell key={total.alias} className="tabular-nums">{total.value}</TableCell>)}
         </TableRow>)}</TableBody>
     </Table>}
+    {result.groupColumns.length === 0 ? null : <div className="flex items-center justify-between gap-2">
+      <p role="status" className="text-xs text-muted-foreground">{result.groups.length} of {result.groupCount} {result.groupCount === 1 ? "group" : "groups"} on this page</p>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={result.previous === undefined}
+          onClick={() => onPage({ token: result.previous!, direction: "backward" })}>Previous</Button>
+        <Button type="button" size="sm" variant="outline" disabled={result.next === undefined}
+          onClick={() => onPage({ token: result.next!, direction: "forward" })}>Next</Button>
+      </div>
+    </div>}
   </div>;
 }
 
@@ -154,7 +171,7 @@ function PreviewResults({ organizationId, rootId, moduleKey, recordKey, plural, 
     </div>
     {current === null ? <p role="status" className="text-sm text-muted-foreground">Reading records…</p>
       : problem !== undefined ? <p role="status" className="text-sm">{problem}</p>
-        : current.kind === "summary" ? <SummaryResults result={current} />
+        : current.kind === "summary" ? <SummaryResults result={current} onPage={setPage} />
         : current.kind === "available" && <>
           <Table>
             <TableHeader><TableRow>{current.columns.map((column) => <TableHead key={column.key}>{column.label}</TableHead>)}</TableRow></TableHeader>
