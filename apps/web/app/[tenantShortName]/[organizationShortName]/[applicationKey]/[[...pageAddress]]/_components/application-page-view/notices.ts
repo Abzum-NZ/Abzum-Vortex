@@ -52,4 +52,8 @@ export const refusalNotices: Readonly<
   invalid_command: { tone: "problem", text: "The supplied inputs are invalid." },
   duplicate_conflict: { tone: "problem", text: "A conflicting item already exists." },
   stale_revision: { tone: "problem", text: "This item changed. Refresh and try again." },
+  role_acceptance_required: {
+    tone: "problem",
+    text: "This role revision needs accepting before it can be assigned.",
+  },
 };

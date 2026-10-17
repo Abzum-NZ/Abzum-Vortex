@@ -420,6 +420,7 @@ const surfaceDiagnostic = (
           );
   return flowRefusalFeedbackSchema.parse({
     code: parsed.data.code,
+    ...(parsed.data.presentation === undefined ? {} : { presentation: parsed.data.presentation }),
     ...(submittedField === undefined ? {} : { submittedField }),
     ...(corrections.length === 0 ? {} : { corrections }),
     ...(parsed.data.ruleRefusal === undefined ? {} : { ruleRefusal: parsed.data.ruleRefusal }),

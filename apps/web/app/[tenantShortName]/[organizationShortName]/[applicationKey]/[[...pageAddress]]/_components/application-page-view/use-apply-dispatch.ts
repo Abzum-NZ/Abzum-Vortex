@@ -19,18 +19,24 @@ export function useApplyDispatch({
   setFormFeedback,
   router,
   model,
+  resolvePageHref,
   platformComponentRegistry,
   setCompletedGuidedNavigationKey,
   refreshPlacements,
   refreshTargetsForBinding,
 }: Readonly<{
-  placementRequestsRef: RefObject<{ base: string; key: string; generations: Map<string, ComponentRequestGeneration> }>;
+  placementRequestsRef: RefObject<{
+    base: string;
+    key: string;
+    generations: Map<string, ComponentRequestGeneration>;
+  }>;
   navigationKey: string;
   setBusy: Dispatch<SetStateAction<boolean>>;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
   setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
+  resolvePageHref: (page: string) => string;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   setCompletedGuidedNavigationKey: Dispatch<SetStateAction<string | undefined>>;
   refreshPlacements: (
@@ -143,9 +149,25 @@ export function useApplyDispatch({
                 : correctionMessages.length > 0
                   ? { tone: "problem", text: [...new Set(correctionMessages)].join(" ") }
                   : refusalNotices[diagnostic.code];
+            const presentation = diagnostic.presentation;
+            const recoveryPage = presentation === undefined ? undefined : resolvePageHref(presentation.page);
+            const recoveryAddress = recoveryPage === window.location.pathname
+              ? `${recoveryPage}${window.location.search}`
+              : recoveryPage;
             resultNotice = {
               ...reason,
-              text: recovery === undefined ? reason.text : `${reason.text} ${resultNotice.text}`,
+              ...(presentation === undefined
+                ? {}
+                : {
+                    link: {
+                      label: presentation.link_label,
+                      href: `${recoveryAddress}#record-${presentation.record_id}`,
+                    },
+                  }),
+              text:
+                recovery === undefined
+                  ? (presentation?.message ?? reason.text)
+                  : `${presentation?.message ?? reason.text} ${resultNotice.text}`,
             };
           }
           if (
@@ -214,6 +236,7 @@ export function useApplyDispatch({
       navigationKey,
       refreshPlacements,
       refreshTargetsForBinding,
+      resolvePageHref,
       router,
     ],
   );
