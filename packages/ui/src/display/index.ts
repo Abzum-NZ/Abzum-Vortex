@@ -54,6 +54,7 @@ export { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 // Cell Formatting & Display
 export { DisplayCellView, cellValueToText } from "./cell";
 export { formatIsoDate } from "./date-format";
+export { FormattedTime } from "./date-format-context";
 // Display State Container & Helpers
 export {
   DisplayStateContainer,

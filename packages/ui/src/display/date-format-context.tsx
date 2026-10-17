@@ -36,7 +36,7 @@ const readServerSettings = (): DateFormatOptions => NO_VIEWER_SETTINGS;
  * locale and time zone. The server and the hydrating client render with fixed fallbacks and the
  * browser settings apply right after, so there is no hydration mismatch.
  */
-function useDateFormatOptions(): DateFormatOptions {
+export function useDateFormatOptions(): DateFormatOptions {
   const supplied = useContext(DateFormatContext);
   const viewer = useSyncExternalStore(subscribeToNothing, readBrowserSettings, readServerSettings);
   return useMemo(
