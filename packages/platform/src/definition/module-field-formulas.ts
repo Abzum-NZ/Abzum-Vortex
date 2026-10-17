@@ -236,11 +236,16 @@ export const calculationProblems = (settings: CalculationSettings, fields: Reado
       visit(root, "Formula");
       if (depthOf(root) > calculationMaximumNestingDepth) problems.push(`Formula: parts can be nested at most ${calculationMaximumNestingDepth} deep.`);
       if (valuesIn(root) - 1 > calculationMaximumOperandCount) problems.push(`Formula: it can hold at most ${calculationMaximumOperandCount} values and parts.`);
+      if (calculationDependencies(expression).length === 0)
+        problems.push("Formula: use at least one field; fixed numbers alone would give every record the same value.");
       break;
     }
-    case "condition":
-      if ((expression as { condition?: unknown }).condition === undefined) problems.push("Condition: add at least one comparison.");
+    case "condition": {
+      const condition = (expression as { condition?: unknown }).condition;
+      if (condition === undefined) problems.push("Condition: add at least one comparison.");
+      else if (conditionFieldKeys(condition).length === 0) problems.push("Condition: compare at least one field.");
       break;
+    }
     case "date_offset": {
       const field = known("Date", expression.date_field);
       if (field !== undefined && !dateAccepts(field)) problems.push(`Date: ${field.label} is not a date.`);
