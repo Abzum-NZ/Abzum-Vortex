@@ -479,7 +479,7 @@ export const createOrganizationLocalAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<SuspendOrganizationAccountResult>> {
       const command = suspendOrganizationAccountCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChange(session, selection, async (transaction, scope) => {
+      return requests.runAccessChange(session, selection, async (transaction, scope) => {
         const row = requireOne(
           await transaction.query<AccountChangeRow>`
             select * from vortex_access.suspend_organization_account_for_administration(
@@ -509,7 +509,7 @@ export const createOrganizationLocalAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<ReactivateOrganizationAccountResult>> {
       const command = reactivateOrganizationAccountCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChange(session, selection, async (transaction, scope) => {
+      return requests.runAccessChange(session, selection, async (transaction, scope) => {
         const row = requireOne(
           await transaction.query<AccountChangeRow>`
             select * from vortex_access.reactivate_organization_account_for_administration(
@@ -539,7 +539,7 @@ export const createOrganizationLocalAdministrationService = (
     ): Promise<HumanOrganizationRequestResult<CloseOrganizationAccountResult>> {
       const command = closeOrganizationAccountCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChange(session, selection, async (transaction, scope) => {
+      return requests.runAccessChange(session, selection, async (transaction, scope) => {
         const row = requireOne(
           await transaction.query<AccountChangeRow>`
             select * from vortex_access.close_organization_account_for_administration(

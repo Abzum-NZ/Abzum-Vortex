@@ -108,8 +108,10 @@ begin
     raise exception using errcode = 'P0002', message = 'Application has no release to preview';
   end if;
 
-  -- One preview per Application and builder: a new preview replaces this builder's previous one
-  -- and its storage, never another builder's.
+  -- One preview per Application and builder: a new preview replaces this builder's previous one,
+  -- never another builder's. The replaced preview's storage is retired with it: no request reaches
+  -- it once its preview row is gone, and the background drops it
+  -- (`drop_retired_preview_storage_internal`), never this builder's request.
   for previous_preview in
     select preview.preview_installation_id
     from vortex_definition.preview_installations as preview
@@ -119,9 +121,6 @@ begin
     order by preview.preview_installation_id
     for update
   loop
-    perform vortex_record.drop_preview_installation_storage(
-      previous_preview.preview_installation_id
-    );
     delete from vortex_definition.preview_installations as preview
     where preview.preview_installation_id = previous_preview.preview_installation_id;
   end loop;

@@ -365,18 +365,22 @@ const previewReleaseNote = "Rehearsed for a preview";
 export type RehearsedPreviewRelease = Readonly<{ release: unknown; dependencies: unknown }>;
 
 /**
- * The draft exactly as its publication would release it: every inline Module that changed and
- * then the Application are compiled and appended through the publication path, read back as the
- * stored rows, and the whole rehearsal is undone. Nothing is released; a preview runs these rows.
- * A draft identical to its current release rehearses nothing and previews that release.
+ * The draft exactly as its publication would release it: every inline Module that changed, each
+ * Module that depends on one that did, and then the Application are compiled and appended
+ * through the publication path, read back as the stored rows, and the whole rehearsal is undone.
+ * Nothing is released; a preview runs these rows. An inline Module whose current release already
+ * is what its publication would leave current is neither staged nor rehearsed, as a draft compile
+ * skips it: the preview runs that release. A draft identical to its current release rehearses
+ * nothing and previews that release.
  */
 export const rehearseApplicationPreview = async (
   context: SessionContext,
   transaction: DefinitionPublicationTransaction,
   catalogue: DefinitionPublicationCatalogue,
   candidate: DefinitionPublicationCandidate,
-  roots: ReadonlyMap<string, OwnedModuleRoot>,
 ): Promise<readonly RehearsedPreviewRelease[]> => {
+  const unchanged = await releasedUnchangedModules(transaction, candidate);
+  const roots = await materializeInlineModules(transaction, candidate, unchanged);
   const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
   const version =
     latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
@@ -389,6 +393,7 @@ export const rehearseApplicationPreview = async (
       roots,
       version,
       previewReleaseNote,
+      unchanged,
     );
     const pins = modules.map((module) => ({
       rootId: String(module.release.rootId),
@@ -396,11 +401,17 @@ export const rehearseApplicationPreview = async (
     }));
     if (candidate.draft.publishedRevision !== candidate.draft.draftRevision) {
       const application = await compileApplication(transaction, catalogue, candidate, version, true);
+      // Every Module the Application owns, the unchanged ones included, is its own.
+      const owned = new Map(
+        (await transaction.readOwnedModuleRoots(String(candidate.draft.rootId))).map(
+          (root) => [root.key, root] as const,
+        ),
+      );
       const release = await transaction.appendRelease({
         draft: candidate.draft,
         compilationOutput: application.output,
         assignedVersion: version,
-        reasons: publicationReasons(candidate, roots, modules, application),
+        reasons: publicationReasons(candidate, owned, modules, application),
         dependencyManifest: application.manifest,
         resolutionSnapshot: application.resolution,
         validationContractVersion: applicationValidationContractVersion,
