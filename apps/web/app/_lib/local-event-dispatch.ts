@@ -8,10 +8,11 @@ import {
 } from "@vortex/platform/server";
 
 /**
- * Local development has no database webhook (it needs a public HTTPS endpoint) and no Kestra
- * recovery tick, so the committed Event outbox would never be delivered. This runs the same bounded
- * dispatcher in process with a credential generated for this process alone; hosted deployments keep
- * the protected `/api/events/dispatch` route as their only trigger.
+ * A server with no configured wake-up credential (local development and the local production demo)
+ * has no database webhook or Kestra recovery tick, so the committed Event outbox would never be
+ * delivered. This runs the same bounded dispatcher in process with a credential generated for this
+ * process alone; hosted deployments configure the credential and keep the protected
+ * `/api/events/dispatch` route as their only trigger.
  */
 type LocalEventDispatcher = Readonly<{
   /** One bounded dispatch; throws with the refusal reason or the failed delivery counts. */

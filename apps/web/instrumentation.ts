@@ -9,8 +9,13 @@ export async function register(): Promise<void> {
   const { registerCleanNetworkStartup } = await import("./app/_lib/clean-network-startup");
   registerCleanNetworkStartup();
 
-  // Development servers have no database webhook or Kestra tick to deliver committed events.
-  if (process.env.NODE_ENV === "development") {
+  // Development servers never have a database webhook or Kestra tick, and without a configured wake-up
+  // credential nothing can call the protected dispatch route (the local production demo), so in both
+  // cases this server delivers committed events itself.
+  if (
+    process.env.NODE_ENV === "development" ||
+    !process.env.VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256
+  ) {
     const { startLocalEventDispatch } = await import("./app/_lib/local-event-dispatch");
     startLocalEventDispatch();
   }
