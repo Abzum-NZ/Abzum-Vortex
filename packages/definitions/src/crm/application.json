@@ -300,8 +300,7 @@
           "vortex.crm.activities.activity.export",
           "vortex.crm.activities.activity.complete",
           "application.crm.activity.complete",
-          "vortex.crm.tags.record_tag.manage",
-          "vortex.system_directory.person.reference_read"
+          "vortex.crm.tags.record_tag.manage"
         ]
       },
       {
@@ -382,8 +381,7 @@
           "vortex.crm.tags.record_tag.soft_delete",
           "vortex.crm.tags.record_tag.restore",
           "vortex.crm.tags.record_tag.export",
-          "vortex.crm.tags.record_tag.manage",
-          "vortex.system_directory.person.reference_read"
+          "vortex.crm.tags.record_tag.manage"
         ]
       }
     ],
