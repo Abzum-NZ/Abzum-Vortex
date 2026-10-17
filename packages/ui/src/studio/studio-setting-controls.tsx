@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
+  canonicalJson,
   validateComponentSettings,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
@@ -503,7 +504,9 @@ export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
   useEffect(() => {
     const before = previous.current;
     previous.current = { values: props.values, fields: props.choices.fields, id: props.idPrefix };
-    if (props.disabled || before.id !== props.idPrefix) return;
+    // New settings came from an edit callback, selection or history, rather than a query switch.
+    if (props.disabled || before.id !== props.idPrefix ||
+      (before.values !== props.values && canonicalJson(before.values) !== canonicalJson(props.values))) return;
     const values = followFieldLabels(props.properties, props.values, before.values, props.choices.fields, before.fields);
     if (values !== props.values) props.onChange(values);
   }, [props.values, props.choices.fields, props.properties, props.idPrefix, props.disabled, props.onChange]);
