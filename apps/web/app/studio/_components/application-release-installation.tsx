@@ -107,7 +107,9 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   const snapshot = state.load.kind === "available" ? state.load.snapshot : null;
   const snapshotId = snapshot === null ? null : snapshotKey(snapshot);
   const snapshotExpiry = snapshot?.validUntil ?? null;
-  const expired = snapshot !== null && (now === null || now >= Date.parse(snapshot.validUntil));
+  // The clock is read after mount so the server render and hydration agree. Until then nothing is
+  // reported as expired, and installing waits for the clock.
+  const expired = snapshot !== null && now !== null && now >= Date.parse(snapshot.validUntil);
   useEffect(() => {
     if (snapshotExpiry === null || snapshotId === null) return;
     const deadline = Date.parse(snapshotExpiry);
@@ -126,7 +128,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
   }, [state.command]);
 
   const install = async () => {
-    if (!mounted.current || pendingRef.current || snapshot === null || expired ||
+    if (!mounted.current || pendingRef.current || snapshot === null || now === null || expired ||
       snapshot.selected.releaseRevision <= snapshot.active.releaseRevision) return;
     pendingRef.current = true;
     setPending(true);
@@ -223,7 +225,7 @@ export function ApplicationReleaseInstallation({ selector, initialResult }: Prop
           ? <p>This version is already in use. Reload to confirm.</p>
           : <p>Continue only if you want this installed application to start using version {snapshot.selected.releaseVersion}.</p>}
         <Button type="button" variant="outline" size="sm" name="application.release.install_selected"
-          disabled={pending || expired || snapshot.selected.releaseRevision <= snapshot.active.releaseRevision}
+          disabled={pending || now === null || expired || snapshot.selected.releaseRevision <= snapshot.active.releaseRevision}
           aria-busy={pending}
          
           onClick={() => void install()}>

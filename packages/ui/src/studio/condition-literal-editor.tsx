@@ -14,6 +14,7 @@ import {
   type StudioConditionSemanticType,
   type StudioConditionValidation,
   errorForPath,
+  instantFromLocalDateTimeInput,
   literalInputValue,
   literalMatchesType,
   localDateTimeInputValue,
@@ -40,6 +41,8 @@ export function LiteralEditor({
   onInvalid,
 }: LiteralEditorProps) {
   const { timeZone } = useDateFormatOptions();
+  // One zone both shows and reads the local date and time, so an edit keeps the instant it names.
+  const inputTimeZone = timeZone ?? "UTC";
   const error = errorForPath(validation, path);
   const label = collectionElementType && collectionElementType !== "text"
     ? `Literal value (${collectionElementType.replaceAll("_", " ")} list, JSON array)`
@@ -167,19 +170,19 @@ export function LiteralEditor({
             aria-invalid={error !== undefined}
             type="datetime-local"
             step={1}
-            value={localDateTimeInputValue(operand.value, timeZone ?? "UTC")}
+            value={localDateTimeInputValue(operand.value, inputTimeZone)}
             onChange={(event) => {
               const next = event.currentTarget.value;
               if (next === "") {
                 onCommit(null);
                 return;
               }
-              const instant = new Date(next);
-              if (Number.isNaN(instant.getTime())) {
+              const instant = instantFromLocalDateTimeInput(next, inputTimeZone);
+              if (instant === undefined) {
                 onInvalid("Enter a valid date and time");
                 return;
               }
-              onCommit(instant.toISOString());
+              onCommit(instant);
             }}
           />
         </label>

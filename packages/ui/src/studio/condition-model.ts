@@ -923,3 +923,36 @@ export const localDateTimeInputValue = (value: JsonValue, timeZone: string): str
   if (typeof value !== "string" || !isValidInstant(value)) return "";
   return formatIsoDate(value, { timeZone }, "input") ?? "";
 };
+
+const localDateTimePattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
+
+/**
+ * The instant a `datetime-local` value names in the same time zone `localDateTimeInputValue` shows
+ * it in, so an edit round-trips; undefined when the text is not a local date and time.
+ */
+export const instantFromLocalDateTimeInput = (
+  value: string,
+  timeZone: string,
+): string | undefined => {
+  const match = localDateTimePattern.exec(value);
+  if (match === null) return undefined;
+  const [year, month, day, hour, minute, second] = match
+    .slice(1)
+    .map((part) => (part === undefined ? 0 : Number(part))) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const wall = Date.UTC(year, month - 1, day, hour, minute, second);
+  if (Number.isNaN(wall)) return undefined;
+  const offsetAt = (instant: number): number => {
+    const shown = formatIsoDate(new Date(instant).toISOString(), { timeZone }, "input");
+    return shown === undefined ? 0 : Date.parse(`${shown}Z`) - instant;
+  };
+  // A second pass settles a wall time near a daylight-saving change on the offset in force then.
+  const instant = wall - offsetAt(wall - offsetAt(wall));
+  return new Date(instant).toISOString();
+};
