@@ -11,11 +11,15 @@
 -- installation is only its builder's.
 -- A preview is provisioned in the organisation's context, so an Application with no installation
 -- can be previewed. Its storage is created empty and then seeded, under the builder's own live
--- access in the installed Application, with only the records and fields the builder reads there.
+-- access in the installed Application, with only the records and fields the builder reads there:
+-- at most the first 2,000 readable records of each record type, a deliberate preview bound the
+-- preview tells the builder about when it is reached.
 set local role vortex_owner;
 
 alter table vortex_definition.preview_installations
-  add column seeded_at timestamptz;
+  add column seeded_at timestamptz,
+  -- The record types whose seed reached the preview bound of 2,000 readable records.
+  add column seed_bounded_record_type_ids uuid[] not null default '{}';
 
 create table vortex_access.preview_permission_registrations (
   preview_installation_id uuid not null
@@ -1138,13 +1142,17 @@ create or replace function vortex_record.copy_live_records_to_preview_internal(
   p_live_storage_contract_id uuid,
   p_preview_storage_contract_id uuid
 )
-returns bigint
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $function$
 declare
+  -- The deliberate preview bound: a preview holds at most this many records of one record type,
+  -- the first the builder can read in record order. The seed says when the bound was reached, and
+  -- the preview tells the builder so.
   copy_limit constant integer := 2000;
+  bounded boolean := false;
   live_table_token text;
   preview_table_token text;
   record_columns text[];
@@ -1216,11 +1224,11 @@ begin
 
   -- Only the records the builder reads in the installed Application, each with only the fields
   -- the builder reads there; every other field of a copied record is left empty. Row security
-  -- limits the live table to the request's organisation and Application.
+  -- limits the live table to the request's organisation and Application. The bound counts only
+  -- readable records, in record order, so the builder gets the first records they can see.
   for live_record in
     execute pg_catalog.format(
-      'select record_id from record_data.%I order by record_id limit %s',
-      live_table_token, copy_limit
+      'select record_id from record_data.%I order by record_id', live_table_token
     )
   loop
     select projected.projection, projected.read_bounds into row_read
@@ -1228,6 +1236,10 @@ begin
       p_record_type_id, live_record.record_id
     ) as projected;
     continue when row_read.projection ->> 'outcome' is distinct from 'allowed';
+    if copied_count = copy_limit then
+      bounded := true;
+      exit;
+    end if;
     select coalesce(pg_catalog.array_agg(field_column.value order by field_column.value), array[]::text[])
     into readable_columns
     from pg_catalog.unnest(field_columns) as field_column(value)
@@ -1255,7 +1267,7 @@ begin
   where counter.storage_contract_id = p_live_storage_contract_id
     and counter.organization_id = vortex_platform.organization_id()
     and counter.next_number >= 2;
-  return copied_count;
+  return pg_catalog.jsonb_build_object('copied', copied_count, 'bounded', bounded);
 exception
   when no_data_found then
     raise exception using errcode = 'P0002', message = 'Preview record copy storage is unavailable';
@@ -1270,7 +1282,7 @@ revoke all on function vortex_record.copy_live_records_to_preview_internal(uuid,
 grant execute on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid)
   to vortex_owner;
 comment on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid) is
-  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters; at most 2,000 records.';
+  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters: the first 2,000 they read, in record order, and whether there were more.';
 
 create or replace function vortex_record.load_record_access_facts_from_installation_internal(
   p_record_type_id uuid,
@@ -3630,7 +3642,9 @@ declare
   checked_context jsonb;
   preview_row vortex_definition.preview_installations;
   storage_identity jsonb;
+  copy_result jsonb;
   seeded_count bigint := 0;
+  bounded_ids uuid[] := array[]::uuid[];
 begin
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text) then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';
@@ -3671,15 +3685,20 @@ begin
     )
     order by identity.value ->> 'previewStorageContractId'
   loop
-    seeded_count := seeded_count + vortex_record.copy_live_records_to_preview_internal(
+    copy_result := vortex_record.copy_live_records_to_preview_internal(
       p_preview_installation_id,
       (storage_identity ->> 'recordTypeId')::uuid,
       (storage_identity ->> 'releaseStorageContractId')::uuid,
       (storage_identity ->> 'previewStorageContractId')::uuid
     );
+    seeded_count := seeded_count + (copy_result ->> 'copied')::bigint;
+    if (copy_result ->> 'bounded')::boolean then
+      bounded_ids := bounded_ids || (storage_identity ->> 'recordTypeId')::uuid;
+    end if;
   end loop;
   update vortex_definition.preview_installations as preview
-  set seeded_at = pg_catalog.statement_timestamp()
+  set seeded_at = pg_catalog.statement_timestamp(),
+      seed_bounded_record_type_ids = bounded_ids
   where preview.preview_installation_id = p_preview_installation_id;
   return seeded_count;
 end
@@ -3691,6 +3710,47 @@ revoke all on function vortex_definition.seed_preview_installation(uuid)
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_definition.seed_preview_installation(uuid) to vortex_request;
 comment on function vortex_definition.seed_preview_installation(uuid) is
-  'Seeds a new preview''s storage, once, with the live records its builder reads in the installed Application and only the fields they read there. A preview never shows more than its builder sees live, plus what they create in it.';
+  'Seeds a new preview''s storage, once, with the live records its builder reads in the installed Application and only the fields they read there, at most 2,000 per record type, and records the record types that reached that bound. A preview never shows more than its builder sees live, plus what they create in it.';
+
+create or replace function vortex_definition.read_preview_runtime_source()
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  installation_value jsonb;
+  preview_row vortex_definition.preview_installations%rowtype;
+begin
+  installation_value := vortex_definition.read_current_active_installation();
+  if not installation_value ? 'previewInstallationId' then
+    raise exception using errcode = '42501', message = 'Preview installation address is required';
+  end if;
+  select preview.* into preview_row
+  from vortex_definition.preview_installations as preview
+  where preview.preview_installation_id = (installation_value ->> 'previewInstallationId')::uuid;
+  if not found or preview_row.runtime_release_set is null then
+    raise exception using errcode = '55000', message = 'Preview release set is unavailable';
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'installation', installation_value,
+    'draftRevision', preview_row.draft_revision,
+    'expiresAt', preview_row.expires_at,
+    'correlationId', vortex_access.validated_human_request_context() ->> 'correlationId',
+    'releaseSet', preview_row.runtime_release_set,
+    'seedBoundedRecordTypeIds', pg_catalog.to_jsonb(preview_row.seed_bounded_record_type_ids)
+  );
+end
+$function$;
+
+alter function vortex_definition.read_preview_runtime_source() owner to vortex_owner;
+
+revoke all on function vortex_definition.read_preview_runtime_source()
+  from public, anon, authenticated, service_role, vortex_runtime;
+grant execute on function vortex_definition.read_preview_runtime_source()
+  to vortex_request;
+comment on function vortex_definition.read_preview_runtime_source() is
+  'The installation, draft revision, expiry and stored release set of the preview the validated human Application request runs, for the runtime to render it as an installed Application.';
 
 reset role;

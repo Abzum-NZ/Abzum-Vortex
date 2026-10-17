@@ -11,7 +11,9 @@ declare
   checked_context jsonb;
   preview_row vortex_definition.preview_installations;
   storage_identity jsonb;
+  copy_result jsonb;
   seeded_count bigint := 0;
+  bounded_ids uuid[] := array[]::uuid[];
 begin
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text) then
     raise exception using errcode = '22023', message = 'Preview installation command is invalid';
@@ -52,15 +54,20 @@ begin
     )
     order by identity.value ->> 'previewStorageContractId'
   loop
-    seeded_count := seeded_count + vortex_record.copy_live_records_to_preview_internal(
+    copy_result := vortex_record.copy_live_records_to_preview_internal(
       p_preview_installation_id,
       (storage_identity ->> 'recordTypeId')::uuid,
       (storage_identity ->> 'releaseStorageContractId')::uuid,
       (storage_identity ->> 'previewStorageContractId')::uuid
     );
+    seeded_count := seeded_count + (copy_result ->> 'copied')::bigint;
+    if (copy_result ->> 'bounded')::boolean then
+      bounded_ids := bounded_ids || (storage_identity ->> 'recordTypeId')::uuid;
+    end if;
   end loop;
   update vortex_definition.preview_installations as preview
-  set seeded_at = pg_catalog.statement_timestamp()
+  set seeded_at = pg_catalog.statement_timestamp(),
+      seed_bounded_record_type_ids = bounded_ids
   where preview.preview_installation_id = p_preview_installation_id;
   return seeded_count;
 end
@@ -72,4 +79,4 @@ revoke all on function vortex_definition.seed_preview_installation(uuid)
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_definition.seed_preview_installation(uuid) to vortex_request;
 comment on function vortex_definition.seed_preview_installation(uuid) is
-  'Seeds a new preview''s storage, once, with the live records its builder reads in the installed Application and only the fields they read there. A preview never shows more than its builder sees live, plus what they create in it.';
+  'Seeds a new preview''s storage, once, with the live records its builder reads in the installed Application and only the fields they read there, at most 2,000 per record type, and records the record types that reached that bound. A preview never shows more than its builder sees live, plus what they create in it.';

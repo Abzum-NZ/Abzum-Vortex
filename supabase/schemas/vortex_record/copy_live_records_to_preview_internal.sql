@@ -4,13 +4,17 @@ create or replace function vortex_record.copy_live_records_to_preview_internal(
   p_live_storage_contract_id uuid,
   p_preview_storage_contract_id uuid
 )
-returns bigint
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $function$
 declare
+  -- The deliberate preview bound: a preview holds at most this many records of one record type,
+  -- the first the builder can read in record order. The seed says when the bound was reached, and
+  -- the preview tells the builder so.
   copy_limit constant integer := 2000;
+  bounded boolean := false;
   live_table_token text;
   preview_table_token text;
   record_columns text[];
@@ -82,11 +86,11 @@ begin
 
   -- Only the records the builder reads in the installed Application, each with only the fields
   -- the builder reads there; every other field of a copied record is left empty. Row security
-  -- limits the live table to the request's organisation and Application.
+  -- limits the live table to the request's organisation and Application. The bound counts only
+  -- readable records, in record order, so the builder gets the first records they can see.
   for live_record in
     execute pg_catalog.format(
-      'select record_id from record_data.%I order by record_id limit %s',
-      live_table_token, copy_limit
+      'select record_id from record_data.%I order by record_id', live_table_token
     )
   loop
     select projected.projection, projected.read_bounds into row_read
@@ -94,6 +98,10 @@ begin
       p_record_type_id, live_record.record_id
     ) as projected;
     continue when row_read.projection ->> 'outcome' is distinct from 'allowed';
+    if copied_count = copy_limit then
+      bounded := true;
+      exit;
+    end if;
     select coalesce(pg_catalog.array_agg(field_column.value order by field_column.value), array[]::text[])
     into readable_columns
     from pg_catalog.unnest(field_columns) as field_column(value)
@@ -121,7 +129,7 @@ begin
   where counter.storage_contract_id = p_live_storage_contract_id
     and counter.organization_id = vortex_platform.organization_id()
     and counter.next_number >= 2;
-  return copied_count;
+  return pg_catalog.jsonb_build_object('copied', copied_count, 'bounded', bounded);
 exception
   when no_data_found then
     raise exception using errcode = 'P0002', message = 'Preview record copy storage is unavailable';
@@ -136,4 +144,4 @@ revoke all on function vortex_record.copy_live_records_to_preview_internal(uuid,
 grant execute on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid)
   to vortex_owner;
 comment on function vortex_record.copy_live_records_to_preview_internal(uuid, uuid, uuid, uuid) is
-  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters; at most 2,000 records.';
+  'Seeds one preview record table with the live records of the same record type that the request''s builder reads in the installed Application, each with only the fields they read there, and the reference counters: the first 2,000 they read, in record order, and whether there were more.';

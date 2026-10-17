@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  PREVIEW_SEED_RECORD_BOUND,
   runtimePreviewOf,
   type ProjectedNavigation,
 } from "@vortex/platform/server";
@@ -52,8 +53,18 @@ export type ApplicationFrameModel = Readonly<{
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
-  /** The draft this address runs as a preview, and where its Studio is; absent for an installed Application. */
-  preview?: Readonly<{ draftRevision: number; expiresAt: string; studioHref: string }>;
+  /**
+   * The draft this address runs as a preview, and where its Studio is; absent for an installed
+   * Application. `seedBoundedPages` names, by page key, the record type of each page whose seed
+   * reached the preview bound of `seedBound` records.
+   */
+  preview?: Readonly<{
+    draftRevision: number;
+    expiresAt: string;
+    studioHref: string;
+    seedBound: number;
+    seedBoundedPages: Readonly<Record<string, string>>;
+  }>;
 }>;
 
 /** The page key and query the request addresses inside this application, when it names one page. */
@@ -191,6 +202,23 @@ export const loadApplicationFrame = cache(
 
     const permittedKeys = new Set(resolved.application.pageKeys);
     const preview = runtimePreviewOf(context);
+    // The pages whose record type's preview seed reached the bound, with that type's plural name.
+    const boundedRecordTypes = new Map<string, string>();
+    for (const module of context.releaseSet.modules)
+      for (const recordType of module.content.recordTypes as readonly Readonly<{
+        recordTypeId: string;
+        pluralLabel: string;
+      }>[])
+        if (preview?.seedBoundedRecordTypeIds.some((id) => sameId(id, recordType.recordTypeId)))
+          boundedRecordTypes.set(recordType.recordTypeId.toLowerCase(), recordType.pluralLabel);
+    const seedBoundedPages: Record<string, string> = {};
+    for (const page of content.pages as readonly Readonly<{
+      key: string;
+      recordType?: Readonly<{ recordTypeId?: string }>;
+    }>[]) {
+      const label = boundedRecordTypes.get(String(page.recordType?.recordTypeId).toLowerCase());
+      if (label !== undefined && permittedKeys.has(page.key)) seedBoundedPages[page.key] = label;
+    }
     const applicationPath = (key: string, pageKey: string) =>
       `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(key)}/${encodeURIComponent(pageKey)}`;
     return {
@@ -233,6 +261,8 @@ export const loadApplicationFrame = cache(
             preview: {
               draftRevision: preview.draftRevision,
               expiresAt: preview.expiresAt,
+              seedBound: PREVIEW_SEED_RECORD_BOUND,
+              seedBoundedPages,
               studioHref: `/studio/${encodeURIComponent(context.organizationId)}/${encodeURIComponent(context.applicationRootId)}`,
             },
           }),
