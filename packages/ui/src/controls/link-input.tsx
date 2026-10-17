@@ -80,7 +80,12 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const projectedError = context.values?.error;
   const note = inactiveNote(context);
 
-  const seed = useMemo(() => seededPick(context.values), [context.values]);
+  // The projected values are parsed afresh on every render, so the seed is keyed by the linked
+  // record and its title: a person's pick is replaced only when the projected value itself changes.
+  const projected = seededPick(context.values);
+  const seedKey =
+    projected === null ? "" : `${choiceKey(projected.reference)}\u0000${projected.title}`;
+  const seed = useMemo(() => projected, [seedKey]);
   const [picked, setPicked] = useSeededState<Picked | null>(seed);
   const permitted =
     picked !== null && allowedRecordTypeIds.includes(picked.reference.recordTypeId.toLowerCase())
