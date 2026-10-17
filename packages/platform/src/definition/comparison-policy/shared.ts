@@ -120,8 +120,9 @@ export const comparePresentationSet = (
 };
 
 /**
- * The one allowlist of presentation-only setting value kinds. A value of any other kind (an action,
- * query, page, pipeline, relationship, record type or record reference) carries behaviour.
+ * The one allowlist for presentation settings. Actions carry no field reference or require a new
+ * flow binding, so callers must classify them as major independently of this value check.
+ * References and settings outside these display keys also carry behaviour.
  */
 const presentationKinds: ReadonlySet<unknown> = new Set([
   "text",
@@ -134,14 +135,71 @@ const presentationKinds: ReadonlySet<unknown> = new Set([
   "icon",
   "field_reference",
 ]);
+const presentationSettings: ReadonlyMap<string, "text" | "list"> = new Map([
+  ["title", "text"],
+  ["label", "text"],
+  ["placeholder", "text"],
+  ["help_text", "text"],
+  ["description", "text"],
+  ["empty_message", "text"],
+  ["refused_message", "text"],
+  ["error_message", "text"],
+  ["document", "text"],
+  ["value", "text"],
+  ["href", "text"],
+  ["content", "list"],
+  ["columns", "list"],
+  ["detail_fields", "list"],
+  ["options", "list"],
+  ["items", "list"],
+  ["aggregates", "list"],
+]);
 
-/** Whether a compiled setting value holds only presentation-only kinds, nested groups and lists included. */
-export const presentationOnlyValue = (value: unknown): boolean => {
+/** Whether a setting contains only display values, and an existing value changes only display text. */
+export const presentationOnlyValue = (
+  value: unknown,
+  previous?: unknown,
+  settingKey?: string,
+): boolean => {
+  if (settingKey !== undefined && !presentationSettings.has(settingKey)) return false;
+  if (value === undefined || value === null) return false;
   const property = asRecord(value);
-  if (property.kind === "group")
-    return Object.values(asRecord(property.properties)).every(presentationOnlyValue);
-  if (property.kind === "list") return (property.items as unknown[]).every(presentationOnlyValue);
-  return presentationKinds.has(property.kind);
+  if (property.kind === "group") {
+    const properties = asRecord(property.properties);
+    if (previous !== undefined) {
+      const old = asRecord(previous);
+      if (old.kind !== "group") return false;
+      const oldProperties = asRecord(old.properties);
+      return [...new Set([...Object.keys(properties), ...Object.keys(oldProperties)])].every(
+        (key) => {
+          if (same(properties[key], oldProperties[key])) return true;
+          return (
+            presentationSettings.get(key) === "text" &&
+            properties[key] !== undefined &&
+            presentationOnlyValue(properties[key], oldProperties[key], key)
+          );
+        },
+      );
+    }
+    return (
+      Object.values(properties).every((entry) => presentationOnlyValue(entry)) &&
+      ((settingKey !== "columns" && settingKey !== "detail_fields") || holdsFieldReference(value))
+    );
+  }
+  if (property.kind === "list") {
+    if (
+      previous !== undefined ||
+      (settingKey !== undefined && presentationSettings.get(settingKey) !== "list")
+    )
+      return false;
+    return (property.items as unknown[]).every((entry) => presentationOnlyValue(entry));
+  }
+  if (!presentationKinds.has(property.kind)) return false;
+  if (previous === undefined) return true;
+  const old = asRecord(previous);
+  if (old.kind !== property.kind) return false;
+  if (property.kind === "field_reference") return same(value, previous);
+  return settingKey === undefined || presentationSettings.get(settingKey) === "text";
 };
 
 const holdsFieldReference = (value: unknown): boolean => {
@@ -151,13 +209,20 @@ const holdsFieldReference = (value: unknown): boolean => {
   return property.kind === "field_reference";
 };
 
-/**
- * Whether one list entry only shows a field: it names a field and holds nothing but
- * presentation-only values. A row action, bulk action or query parameter names no field, so
- * appending one is a behaviour change.
- */
-export const fieldDisplayEntry = (value: unknown): boolean =>
-  presentationOnlyValue(value) && holdsFieldReference(value);
+const presentationEntryIdentity = (value: unknown, settingKey: string): string | undefined => {
+  const properties = asRecord(asRecord(value).properties);
+  const identityKey =
+    settingKey === "columns" || settingKey === "detail_fields"
+      ? "field"
+      : settingKey === "aggregates"
+        ? "alias"
+        : settingKey === "items" || settingKey === "options"
+          ? "key"
+          : undefined;
+  return identityKey === undefined || properties[identityKey] === undefined
+    ? undefined
+    : canonicalJson(properties[identityKey]);
+};
 
 /**
  * An ordered list of entries (a block's fields or columns, a query's selected fields). Appending
@@ -173,14 +238,30 @@ export const compareOrderedEntries = (
   componentId: unknown,
   property: Property,
   additive: (entry: unknown) => boolean,
+  presentationSettingKey?: string,
 ): void => {
   if (same(previous, candidate)) return;
   const remaining = candidate.map((entry) => canonicalJson(entry));
   const kept: number[] = [];
-  for (const entry of previous) {
-    const at = remaining.indexOf(canonicalJson(entry));
+  let presentationEdited = false;
+  for (const [index, entry] of previous.entries()) {
+    let at = remaining.indexOf(canonicalJson(entry));
+    if (at < 0 && presentationSettingKey !== undefined) {
+      const identity = presentationEntryIdentity(entry, presentationSettingKey);
+      at = candidate.findIndex(
+        (next, nextIndex) =>
+          remaining[nextIndex] !== "" &&
+          (identity === undefined
+            ? nextIndex === index
+            : presentationEntryIdentity(next, presentationSettingKey) === identity) &&
+          presentationOnlyValue(next, entry, presentationSettingKey),
+      );
+      if (at >= 0) presentationEdited = true;
+    }
     if (at < 0) {
-      reasons.push(makeReason("major", "existing_behavior_changed", componentKind, property, componentId));
+      reasons.push(
+        makeReason("major", "existing_behavior_changed", componentKind, property, componentId),
+      );
       return;
     }
     kept.push(at);
@@ -193,8 +274,14 @@ export const compareOrderedEntries = (
     );
   else if (appended.length > 0)
     reasons.push(makeReason("minor", "component_added", componentKind, property, componentId));
+  if (presentationEdited)
+    reasons.push(
+      makeReason("patch", "presentation_changed", componentKind, "configuration", componentId),
+    );
   if (kept.some((position, index) => index > 0 && position < kept[index - 1]!))
-    reasons.push(makeReason("minor", "meaningful_order_changed", componentKind, "order", componentId));
+    reasons.push(
+      makeReason("minor", "meaningful_order_changed", componentKind, "order", componentId),
+    );
 };
 
 export const compareBound = (
