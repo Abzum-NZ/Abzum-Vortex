@@ -38,7 +38,7 @@ begin
   where release.root_id = p_module_root_id
     and release.release_revision = query_release_revision;
   if not found
-    or query_contract_version is distinct from '3.0.0'
+    or query_contract_version <> all (vortex_definition.accepted_contract_version('module'))
     or pg_catalog.jsonb_typeof(query_content -> 'queries') is distinct from 'array' then
     return null;
   end if;

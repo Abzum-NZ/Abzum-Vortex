@@ -711,6 +711,37 @@ for (const file of files.filter(
   }
 }
 
+// Each definition kind accepts exactly one contract version. The SQL function is the single
+// source of truth; the TypeScript source and validation constants must equal what it returns, and
+// it must return one element per kind.
+{
+  const sqlFile = "supabase/schemas/vortex_definition/accepted_contract_version.sql";
+  const sql = read(sqlFile);
+  const accepted = new Map<string, string[]>();
+  for (const match of sql.matchAll(/when '(\w+)' then\s+return array\[([^\]]*)\];/g))
+    accepted.set(match[1]!, [...match[2]!.matchAll(/'([^']+)'/g)].map((version) => version[1]!));
+  for (const kind of ["application", "module", "record_type"]) {
+    const versions = accepted.get(kind);
+    if (versions?.length !== 1)
+      add("contract-version-parity", sqlFile, 1, `${kind} must accept exactly one version, found ${JSON.stringify(versions)}`);
+  }
+  const constant = (file: string, name: string): string | undefined =>
+    new RegExp(`export const ${name} = "([^"]+)"`).exec(read(file))?.[1];
+  const definitionDir = "packages/platform/src/definition";
+  const expectations: Array<[string, string, string]> = [
+    ["application", `${definitionDir}/application-contract-versions.ts`, "applicationSourceContractVersion"],
+    ["application", `${definitionDir}/application-contract-versions.ts`, "applicationValidationContractVersion"],
+    ["module", `${definitionDir}/module-source-contracts.ts`, "moduleSourceContractVersion"],
+    ["module", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
+    ["record_type", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
+  ];
+  for (const [kind, file, name] of expectations) {
+    const value = constant(file, name);
+    if (value === undefined || value !== accepted.get(kind)?.[0])
+      add("contract-version-parity", file, 1, `${name} is ${value}, SQL accepts ${accepted.get(kind)?.[0]} for ${kind}`);
+  }
+}
+
 // The validator prints a JSON array on stdout and exits 0 (clean) or 1 (failures); anything else
 // means it did not run.
 const definitionValidation = await definitionValidationRun;
