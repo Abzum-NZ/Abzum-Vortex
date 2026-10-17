@@ -28,7 +28,7 @@ import {
   releaseSetContainsCustomComponents,
 } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@vortex/platform/server";
+import { backfillDerivedFields, DefinitionError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 
 /**
@@ -178,4 +178,14 @@ export const adoptApplicationRelease = async (
   )
     throw new DefinitionError("APPLICATION_INSTALLATION_STALE");
   await coordinator().activate(session, activation);
+  // The release's new totals and stored calculations are worked out for the existing records, in
+  // the upgraded Application's own context. The upgrade stands if this fails; the cause is logged.
+  const backfilled = await requests().runChange(
+    session,
+    { organizationId: activation.organizationId, applicationRootId: activation.applicationRootId },
+    (transaction, _scope, issuedAt) => backfillDerivedFields(transaction, issuedAt),
+  );
+  if (backfilled.kind !== "available")
+    logRefusal("application-release-adoption", `application ${activation.applicationRootId} derived field backfill`,
+      "APPLICATION_RELEASE_DERIVED_FIELD_BACKFILL_FAILED", backfilled.kind);
 };
