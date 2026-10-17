@@ -23,13 +23,14 @@ import {
   type UpgradeEnvironment,
   type UpgradeReleaseIdentity,
   type UpgradeState,
+  activateFirstInstall,
   createFirstInstallCoordinator,
+  createOrganizationAccessAdministrationService,
   readCurrentFirstInstallCandidate,
-  verifyFirstInstallActivation,
 } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { installedReleaseCatalogue, releaseSetContainsCustomComponents } from "./definition-catalogue";
-import { humanOrganizationRequests } from "./server-composition";
+import { humanOrganizationRequestDependencies, humanOrganizationRequests } from "./server-composition";
 import {
   inspectStudioApplicationReleaseHistory,
   loadStudioApplicationHistoryAccess,
@@ -74,6 +75,7 @@ const firstInstallEnvironment: FirstInstallEnvironment = {
 const firstInstallFlowEnvironment = (): FirstInstallFlowEnvironment => ({
   ...firstInstallEnvironment,
   requests: humanOrganizationRequests(),
+  accessAdministration: createOrganizationAccessAdministrationService(humanOrganizationRequestDependencies()),
   history: {
     readAccess: loadStudioApplicationHistoryAccess,
     inspectRelease: inspectStudioApplicationReleaseHistory,
@@ -251,7 +253,10 @@ const firstInstallLoadFailure = (error: unknown): StudioApplicationFirstInstallL
   if (failure.kind === "conflict")
     return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "conflict" });
   if (failure.kind === "refused" || failure.kind === "authentication_required")
-    return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "refused" });
+    return studioApplicationFirstInstallLoadResultSchema.parse({
+      kind: "refused",
+      ...(failure.memberRoleRefusal === "installation_authority" ? { reason: "installation_authority" } : {}),
+    });
   return studioApplicationFirstInstallLoadResultSchema.parse({ kind: "temporarily_unavailable" });
 };
 
@@ -267,6 +272,9 @@ const firstInstallCommandFailure = (
   return studioApplicationFirstInstallCommandResultSchema.parse({
     kind: failure.kind,
     stateMayHaveChanged,
+    ...("memberRoleRefusal" in failure && failure.memberRoleRefusal !== undefined
+      ? { memberRoleRefusal: failure.memberRoleRefusal }
+      : {}),
   });
 };
 
@@ -371,17 +379,8 @@ export const activateStudioApplicationFirstInstall = async (
         kind: "refused", stateMayHaveChanged: false,
       });
 
-    const coordinator = createFirstInstallCoordinator(
-      environment, candidate.selector, candidate.snapshot, candidate.releaseSet, "activate",
-    );
     invocationStarted = true;
-    const result = await coordinator.activate(candidate.session, {
-      organizationId: candidate.selector.organizationId,
-      applicationRootId: candidate.selector.rootId,
-      applicationReleaseRevision: candidate.selector.releaseRevision,
-      expectedActiveReleaseRevision: null,
-    });
-    verifyFirstInstallActivation(result, candidate.selector, candidate.releaseSet);
+    const result = await activateFirstInstall(environment, candidate, command.data.memberRole);
     let postCommit: { kind: "observed"; activeReleaseRevision: number } | { kind: "unavailable" } = {
       kind: "unavailable",
     };
