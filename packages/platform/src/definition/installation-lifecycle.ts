@@ -21,23 +21,26 @@ import {
 } from "./definition-error";
 
 type LifecycleRow = DatabaseRow & { readonly lifecycle_result: unknown };
+type StoredPoliciesRow = DatabaseRow & { readonly stored_policies: unknown };
 type LifecyclePolicyReadinessRow = DatabaseRow & { readonly lifecycle_readiness: unknown };
 type IndexReadinessRow = DatabaseRow & { readonly index_readiness: unknown };
 
 const mapFailure = (error: unknown): DefinitionError<ApplicationInstallationLifecycleErrorCode> => {
   if (error instanceof DefinitionError) return error;
+  // The database refusal stays the cause, so the server log names the check that refused.
+  const cause = { cause: error };
   switch (classifyDatabaseError(error)) {
     case "invalid":
-      return new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
+      return new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND", cause);
     case "refused":
-      return new DefinitionError("APPLICATION_INSTALLATION_AUTHORITY_REFUSED");
+      return new DefinitionError("APPLICATION_INSTALLATION_AUTHORITY_REFUSED", cause);
     case "not_found":
-      return new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      return new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", cause);
     case "conflict":
-      return new DefinitionError("APPLICATION_INSTALLATION_BINDING_CONFLICT");
+      return new DefinitionError("APPLICATION_INSTALLATION_BINDING_CONFLICT", cause);
     case "constraint_failed":
     case "wrong_state":
-      return new DefinitionError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
+      return new DefinitionError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE", cause);
     default:
       return unexpectedDefinitionFailure(
         "APPLICATION_INSTALLATION_CHANGE_FAILED",
@@ -62,6 +65,41 @@ const parseResult = (rows: readonly LifecycleRow[]): ApplicationInstallationLife
 
 const bindingsIncomplete = (): DefinitionError<ApplicationInstallationLifecycleErrorCode> =>
   new DefinitionError("APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE");
+
+/**
+ * The one installation step that gives every record type of the activated release its lifecycle
+ * policy. A record type without a stored policy gets the platform default (see
+ * `vortex_record.ensure_application_lifecycle_policies`); a stored policy is never changed. First
+ * install and upgrade both reach it here, inside the activation transaction and after the binding
+ * locks, so the executable-policy gate that follows always reads a complete set.
+ */
+const ensureLifecyclePolicies = async (
+  transaction: RequestDatabaseTransaction,
+  command: ApplicationInstallationActivationCommand,
+  activated: ApplicationInstallationLifecycleResult,
+): Promise<void> => {
+  if (
+    activated.state !== "active" ||
+    !sameId(activated.applicationRootId, command.applicationRootId) ||
+    activated.applicationReleaseRevision !== command.applicationReleaseRevision
+  )
+    throw bindingsIncomplete();
+  const rows = await transaction.query<StoredPoliciesRow>`
+    select vortex_record.ensure_application_lifecycle_policies(
+      ${activated.organizationId}::uuid,
+      ${command.applicationRootId}::uuid,
+      ${command.applicationReleaseRevision}::bigint,
+      ${JSON.stringify(activatedBindings(activated))}::text::jsonb
+    ) as stored_policies
+  `;
+  const stored = rows[0]?.stored_policies;
+  if (rows.length !== 1 || typeof stored !== "number" || !Number.isSafeInteger(stored) || stored < 0)
+    throw unexpectedDefinitionFailure(
+      "APPLICATION_INSTALLATION_CHANGE_FAILED",
+      new Error(`lifecycle policy step returned ${rows.length} rows`),
+      "installation-lifecycle",
+    );
+};
 
 /**
  * The readiness gates run after the activation flipped the binding set, which advances every
@@ -234,6 +272,7 @@ export const createApplicationInstallationLifecycleRepository = (
             ) as lifecycle_result
           `,
         );
+        await ensureLifecyclePolicies(transaction, command.data, activated);
         await requireExecutableLifecyclePolicies(transaction, command.data, activated);
         await requireReadyUniquenessIndexes(transaction, command.data, activated);
         return activated;

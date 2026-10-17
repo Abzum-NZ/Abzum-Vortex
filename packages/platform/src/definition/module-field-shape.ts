@@ -9,6 +9,47 @@ type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
 type Field = RecordType["fields"][number];
 
+/** The standard record actions every new record type supports, with the permission each needs. */
+export const standardRecordActions = [
+  { action: "create", kind: "create", verb: "Create" },
+  { action: "read", kind: "read", verb: "Read" },
+  { action: "update", kind: "update", verb: "Update" },
+  { action: "soft_delete", kind: "delete", verb: "Delete" },
+  { action: "restore", kind: "restore", verb: "Restore" },
+  { action: "export", kind: "export", verb: "Export" },
+] as const;
+
+/** Field types whose value the platform produces, so no person can change them. */
+const producedFieldTypes: ReadonlySet<string> = new Set(["reference_number", "calculation", "total"]);
+
+export const standardPermissionKey = (moduleKey: string, recordKey: string, action: string): string =>
+  `${moduleKey}.${recordKey}.${action}`;
+
+/** The standard permission keys of one record type, as its creation declares them. */
+export const standardPermissionKeys = (moduleKey: string, recordKey: string): Set<string> =>
+  new Set(standardRecordActions.map((entry) => standardPermissionKey(moduleKey, recordKey, entry.action)));
+
+/** Whether a field is changed by people (create and update), not produced by the platform. */
+export const changeableByPeople = (field: Pick<Field, "type">): boolean => !producedFieldTypes.has(field.type);
+
+/**
+ * Adds a new field to the standard permissions of its record type: every standard permission can
+ * read it, and create and update can change it unless the platform produces its value. A
+ * permission a builder narrowed by hand (one that is not standard) is left as it is.
+ */
+export const includeFieldInStandardPermissions = (
+  module: InlineModule, record: RecordType, field: Pick<Field, "key" | "type">,
+): void => {
+  const keys = standardPermissionKeys(module.key, record.key);
+  for (const permission of module.permissions) {
+    if (!keys.has(permission.key) || permission.field_policy === undefined) continue;
+    const policy = permission.field_policy as { readable_fields: string[]; changeable_fields: string[] };
+    if (!policy.readable_fields.includes(field.key)) policy.readable_fields.push(field.key);
+    if ((permission.action_kind === "create" || permission.action_kind === "update") && changeableByPeople(field) &&
+        !policy.changeable_fields.includes(field.key)) policy.changeable_fields.push(field.key);
+  }
+};
+
 /** How a builder supplies the settings of a field type the source schema accepts. */
 export type OfferedFieldType = Readonly<{ type: string; needsMaxLength: boolean }>;
 
@@ -118,6 +159,8 @@ export const changeInlineModuleField = (
       id: fieldAlias, key, label: change.label, required: change.required, unique: false, filterable: false,
       sortable: false, personal_data: "none", public_display: "refused", type: change.type, settings,
     } as unknown as Field);
+    // A new field is readable, and changeable where people set it, through the standard permissions.
+    includeFieldInStandardPermissions(module, record, { key, type: change.type as Field["type"] });
   } else {
     fieldAlias = existing.id;
     const destination = existing as Record<string, unknown>;
