@@ -21,29 +21,6 @@ import {
 import type { SourceContractPositions } from "./source-paths";
 import { conditionSourceTargets } from "./source-target-helpers";
 
-/** Theme token values keep their meaning; only multi-word keys change case. */
-export const applicationThemeValueTargets = (
-  sourcePath: Path,
-  sourceValueRoot: Path,
-  canonicalRoot: Path,
-): Path[] => {
-  const suffix = sourcePath.slice(sourceValueRoot.length);
-  const mapped = suffix.map((segment) =>
-    typeof segment === "string"
-      ? ((
-          {
-            size_rem: "sizeRem",
-            line_height: "lineHeight",
-            width_rem: "widthRem",
-            color_token: "colorToken",
-            asset_id: "assetId",
-          } as Readonly<Record<string, string>>
-        )[segment] ?? segment)
-      : segment,
-  );
-  return [[...canonicalRoot, ...mapped]];
-};
-
 /** Authored layout data: a shell's layout or a page's composition. */
 export const isApplicationCompositionSourcePath = (path: Path): boolean =>
   path[0] === "body" &&
@@ -72,7 +49,10 @@ const isCompiledItem = (value: unknown): boolean => {
  * segment after the innermost item's `props` that is not `id`, `vortex` or a child slot its
  * `vortex.slotOrders` orders. Undefined when the leaf is not inside a setting value.
  */
-export const compiledSettingStart = (canonical: unknown, canonicalPath: Path): number | undefined => {
+export const compiledSettingStart = (
+  canonical: unknown,
+  canonicalPath: Path,
+): number | undefined => {
   for (let at = canonicalPath.length - 2; at >= 1; at -= 1) {
     const key = canonicalPath[at + 1];
     if (canonicalPath[at] !== "props" || typeof key !== "string") continue;
@@ -229,14 +209,6 @@ function itemTargets(
         });
         return targets === undefined ? undefined : plain(targets);
       }
-      if (field === "theme_overrides" && typeof suffix[3] === "string")
-        return plain(
-          applicationThemeValueTargets(
-            sourcePath,
-            [...itemPath, "props", "vortex", "theme_overrides", suffix[3]],
-            [...canonicalVortex, "themeOverrides", suffix[3]],
-          ),
-        );
       if (field === "responsive" && typeof suffix[3] === "string") {
         const responsive = asObject(vortex.responsive);
         const breakpoint = suffix[3];

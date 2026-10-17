@@ -1,4 +1,8 @@
-import { platformThemeReleaseSchema, type PlatformThemeRelease, type PlatformThemeTokenRoleKey } from "../definition/application-composition/theme";
+import {
+  platformThemeReleaseSchema,
+  type PlatformThemeRelease,
+  type PlatformThemeTokenRoleKey,
+} from "../definition/application-composition/theme";
 import { platformThemeReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import source from "../catalogue/catalogue/platform-theme-catalogue.source.json";
 
@@ -34,14 +38,6 @@ const release = (definition: {
       tokens: definition.tokens,
     }),
   );
-
-/**
- * The 2.0.0 release stays published unchanged, so an application pinned to it keeps its exact
- * published theme and only the new shadcn roles fall back to the registered release at render time.
- */
-export const PLATFORM_THEME_RELEASE_2_0_0: PlatformThemeRelease = release(
-  source.PLATFORM_THEME_RELEASE_2_0_0,
-);
 
 /**
  * The 3.0.0 release maps every role in the shared vocabulary, including every shadcn role, to the

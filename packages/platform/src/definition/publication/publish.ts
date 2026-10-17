@@ -3,7 +3,7 @@ import "server-only";
 import {
   actorIdSchema,
   assertModuleContractPair,
-  storedDefinitionCompilationOutputSchema,
+  definitionCompilationOutputSchema,
   definitionKindSchema,
   definitionPublicationHistoryEvidenceSchema,
   definitionResolutionSnapshotSchema,
@@ -145,7 +145,7 @@ const storedReleaseEvidenceSchema = z
     authoredSource: storedDefinitionSourceSchema,
     authoredSourceFingerprint: fingerprintSchema,
     sourceContractVersion: semanticVersionSchema,
-    compilationOutput: storedDefinitionCompilationOutputSchema,
+    compilationOutput: definitionCompilationOutputSchema,
     resolutionSnapshot: definitionResolutionSnapshotSchema,
     resolutionFingerprint: fingerprintSchema,
     impactReasons: z.array(versionImpactReasonSchema),
@@ -209,7 +209,7 @@ const rawModuleReleaseSchema = z
     releaseVersion: semanticVersionSchema,
     contentFingerprint: fingerprintSchema,
     resolutionFingerprint: fingerprintSchema,
-    compilationOutput: storedDefinitionCompilationOutputSchema,
+    compilationOutput: definitionCompilationOutputSchema,
     resolutionSnapshot: definitionResolutionSnapshotSchema,
     identities: z.array(sourceIdentityAssignmentSchema),
     published: rawPublishedModuleSchema,
@@ -257,7 +257,7 @@ type RawModuleRelease = z.infer<typeof rawModuleReleaseSchema>;
 type StoredHistoryRelease = z.infer<typeof storedHistoryReleaseSchema>;
 type SourceIdentityAssignment = z.infer<typeof sourceIdentityAssignmentSchema>;
 type StoredApplicationCompilationOutput = Extract<
-  z.infer<typeof storedDefinitionCompilationOutputSchema>,
+  z.infer<typeof definitionCompilationOutputSchema>,
   { kind: "application" }
 >;
 type ProjectedApplicationCompilationOutput = Omit<
@@ -302,7 +302,7 @@ const parseOneRow = <Value>(rows: readonly DatabaseRow[], schema: z.ZodType<Valu
  */
 const dependencyReferencesMatch = (
   output: Exclude<
-    z.infer<typeof storedDefinitionCompilationOutputSchema>,
+    z.infer<typeof definitionCompilationOutputSchema>,
     { kind: "connection_type" }
   >,
   references: readonly { readonly kind: string }[],
@@ -704,7 +704,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       return invalidStorage(
         "readApplicationPageAdoptionRelease found inconsistent stored evidence",
       );
-    const storedOutput = storedDefinitionCompilationOutputSchema.safeParse(
+    const storedOutput = definitionCompilationOutputSchema.safeParse(
       evidence.compilationOutput,
     );
     if (!storedOutput.success || storedOutput.data.kind !== "application")
@@ -856,8 +856,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
   private materializeModuleRelease(release: RawModuleRelease): ResolvableModuleRelease {
     const output = release.compilationOutput;
     const snapshot = release.resolutionSnapshot;
-    const validationContractVersion =
-      "validationContractVersion" in output ? output.validationContractVersion : "1.0.0";
+    if (output.kind !== "module")
+      return invalidStorage("materializeModuleRelease found inconsistent stored evidence");
+    const validationContractVersion = output.validationContractVersion;
     const sourceContractVersion = validationContractVersion;
     try {
       assertModuleContractPair(sourceContractVersion, validationContractVersion);
@@ -872,7 +873,6 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         definition.exactVersion === release.releaseVersion,
     );
     if (
-      output.kind !== "module" ||
       ownResolution.length !== 1 ||
       release.organizationId !== this.context.organizationId ||
       release.published.publication.rootId !== release.rootId ||

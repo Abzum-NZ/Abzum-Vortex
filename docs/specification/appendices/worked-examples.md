@@ -77,7 +77,7 @@ flowchart TB
     CASE_MOD -.->|limited collaborative grant| CRM_APP
 ```
 
-Companies and contacts have `organisation_shared` storage. CRM and Service Desk bind the same module versions and use the same live records; neither application receives a copy.
+Companies and contacts have `organization_shared` storage. CRM and Service Desk bind the same module versions and use the same live records; neither application receives a copy.
 
 Leads, opportunities, activities, cases, comments, and knowledge articles use `application_contained` storage. Another application needs a compatible module binding and an active inter-application grant before it can use such records.
 

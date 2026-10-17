@@ -333,7 +333,7 @@ begin
     end loop;
 
     loaded := vortex_record.load_record_access_facts_internal(
-      record_type_id_value, 'create', record_id_value, null
+      record_type_id_value, 'create', record_id_value, null, null::jsonb
     );
     if pg_catalog.jsonb_typeof(loaded) is distinct from 'object'
       or loaded ->> 'outcome' is distinct from 'loaded'
