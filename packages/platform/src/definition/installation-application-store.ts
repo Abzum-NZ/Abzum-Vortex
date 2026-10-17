@@ -12,10 +12,11 @@ import {
   type JsonValue,
   type OrganizationSelectionCandidate,
 } from "../schema";
-import { InstallationProblem, type InstallationProblemShape } from "./installation-authority";
+import type { InstallationProblemShape } from "./installation-authority";
 import { classifyInstallationFailure } from "./installation-failure";
-import { FirstInstallUnavailable, firstInstallHistory } from "./installation-first-install";
+import { FirstInstallUnavailable } from "./installation-first-install";
 import {
+  readCurrentApplicationLatestRelease,
   readCurrentFirstInstallCandidate,
   type FirstInstallCandidate,
   type FirstInstallFlowEnvironment,
@@ -39,8 +40,10 @@ import {
  * platform operations a flow calls: a review that says whether the selected application's latest
  * published version would be a first install, an upgrade or nothing, and the install and the upgrade
  * themselves. They are the one human path to install and upgrade; each runs the shared installation
- * functions under the person's own authority, which re-prove every permission, the draft history,
- * the release and the bindings in their own transactions. The review hands the caller the exact
+ * functions under the person's own authority: the installation authority alone (managing
+ * applications, with the delegated scope and recent sign-in a role acceptance needs), never a right on
+ * the application's draft. They re-prove that authority, the latest published version, the release
+ * and the bindings in their own transactions. The review hands the caller the exact
  * state it showed (`expected`); the install and the upgrade refuse as a conflict when that state
  * moved, so a person only ever confirms what is still true.
  */
@@ -141,40 +144,7 @@ const commandFailureOf = (error: unknown): ApplicationStoreResult => {
   return commandFailure(classifyInstallationFailure(error));
 };
 
-/** The latest published version the draft history anchors, and the history it was read with. */
-const readLatest = async (
-  environment: ApplicationStoreEnvironment,
-  organizationId: ReturnType<typeof organizationOf>,
-  rootId: z.infer<typeof applicationRootIdSchema>,
-) => {
-  const access = await environment.history.readAccess(organizationId, rootId);
-  if (access.kind !== "available")
-    throw new InstallationProblem(
-      {
-        kind:
-          access.reason === "recent_authentication_required"
-            ? "authentication_required"
-            : access.kind,
-      },
-      `history_${access.reason}`,
-    );
-  const history = firstInstallHistory(access.snapshot);
-  if (history.anchorReleaseRevision === null)
-    throw new FirstInstallUnavailable("release_not_published");
-  const inspected = await environment.history.inspectRelease(organizationId, {
-    rootId,
-    expected: history,
-    releaseRevision: history.anchorReleaseRevision,
-  });
-  if (inspected.kind !== "available")
-    throw new InstallationProblem({ kind: inspected.kind }, `history_release_${inspected.reason}`);
-  return {
-    releaseRevision: history.anchorReleaseRevision,
-    releaseNote: inspected.metadata.releaseNote,
-  };
-};
-
-const installReview = (candidate: FirstInstallCandidate, releaseNote: string): Outputs => {
+const installReview = (candidate: FirstInstallCandidate): Outputs => {
   const role = candidate.snapshot.memberRole;
   return reviewOutputs({
     change: candidate.snapshot.registrationState === "active_exact" ? "current" : "install",
@@ -184,7 +154,7 @@ const installReview = (candidate: FirstInstallCandidate, releaseNote: string): O
       candidate.snapshot.registrationState === "active_exact"
         ? candidate.snapshot.selected.releaseVersion
         : "",
-    release_note: releaseNote,
+    release_note: candidate.snapshot.latest.releaseNote,
     member_role_name: role.name,
     member_role_permissions: role.permissions
       .slice(0, maximumRoleChangeLines)
@@ -208,7 +178,12 @@ const review = async (
   if (!rootId.success) return { kind: "unavailable" };
   const organizationId = organizationOf(selection);
   try {
-    const latest = await readLatest(environment, organizationId, rootId.data);
+    const latest = await readCurrentApplicationLatestRelease(
+      environment,
+      session,
+      organizationId,
+      rootId.data,
+    );
     const selector = {
       organizationId,
       rootId: rootId.data,
@@ -216,7 +191,7 @@ const review = async (
     };
     try {
       const candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
-      return { kind: "available", value: installReview(candidate, latest.releaseNote) };
+      return { kind: "available", value: installReview(candidate) };
     } catch (error) {
       // Installed at an earlier version: the latest one is an upgrade.
       if (!(error instanceof FirstInstallUnavailable) || error.reason !== "already_installed")
@@ -235,12 +210,32 @@ const review = async (
           release_note: latest.releaseNote,
         }),
       };
+    // Reading the changed roles needs the role-reading permission; without it the upgrade still
+    // goes ahead and every change waits in IAM, which the review says instead of listing them.
     const revisions = await readUpgradeRoleRevisions(
       environment,
       session,
       selector,
       authorized.state,
-    );
+    ).catch((error: unknown) => {
+      console.error(`[installation] upgrade role changes unreadable: ${describeFailure(error)}`);
+      return undefined;
+    });
+    if (revisions === undefined)
+      return {
+        kind: "available",
+        value: reviewOutputs({
+          change: "upgrade",
+          application_name: application.content.name,
+          release_version: authorized.snapshot.selected.releaseVersion,
+          installed_version: authorized.snapshot.active.releaseVersion,
+          release_note: latest.releaseNote,
+          role_changes: [
+            "The roles this version changes could not be read with your access. People keep the access they have; the changes wait in IAM.",
+          ],
+          expected: JSON.parse(canonicalJson(authorized.snapshot)) as JsonValue,
+        }),
+      };
     return {
       kind: "available",
       value: reviewOutputs({

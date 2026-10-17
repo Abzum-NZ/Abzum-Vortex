@@ -14,15 +14,10 @@ import {
   humanOrganizationRequestDependencies,
   humanOrganizationRequests,
 } from "./server-composition";
-import {
-  inspectStudioApplicationReleaseHistory,
-  loadStudioApplicationHistoryAccess,
-} from "./studio-application-history";
 
 /**
  * The application catalogue's install and upgrade journeys for one request: the installed release
- * catalogue and permissions, the person's own request transactions and Access operations, and the
- * draft history every install is anchored to.
+ * catalogue and permissions, and the person's own request transactions and Access operations.
  */
 export const applicationStoreService = (): ApplicationStoreService =>
   createApplicationStoreService({
@@ -33,8 +28,4 @@ export const applicationStoreService = (): ApplicationStoreService =>
     accessAdministration: createOrganizationAccessAdministrationService(
       humanOrganizationRequestDependencies(),
     ),
-    history: {
-      readAccess: loadStudioApplicationHistoryAccess,
-      inspectRelease: inspectStudioApplicationReleaseHistory,
-    },
   });

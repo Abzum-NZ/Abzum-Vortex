@@ -34,9 +34,6 @@ const listRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("next"), rootId: applicationRootIdSchema,
     expected: expectedSnapshotSchema, afterReleaseRevision: revisionSchema }).strict(),
 ]);
-const inspectRequestSchema = z.object({
-  rootId: applicationRootIdSchema, expected: expectedSnapshotSchema, releaseRevision: revisionSchema,
-}).strict();
 const pageSchema = z.object({
   anchorReleaseRevision: revisionSchema,
   entries: z.array(z.object({
@@ -66,11 +63,6 @@ export type StudioApplicationHistoryPage = Readonly<{
 }>;
 export type StudioApplicationHistoryListResult = StudioApplicationHistoryFailure |
   Readonly<{ kind: "available"; page: StudioApplicationHistoryPage }>;
-type StudioApplicationHistoryInspectResult = StudioApplicationHistoryFailure |
-  Readonly<{ kind: "available"; snapshot: StudioApplicationHistorySnapshot;
-    metadata: DefinitionReleaseMetadata }>;
-type StudioApplicationHistoryAccessResult = StudioApplicationHistoryFailure |
-  Readonly<{ kind: "available"; snapshot: StudioApplicationHistorySnapshot }>;
 
 type Draft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type ExpectedSnapshot = z.infer<typeof expectedSnapshotSchema>;
@@ -194,7 +186,7 @@ const executeRead = async <Value>(
 
 const readPage = async (
   transaction: RequestDatabaseTransaction, rootId: string, anchor: number,
-  after: number | null, size: number, exactRevision?: number,
+  after: number | null, size: number,
 ): Promise<Readonly<{ entries: readonly DefinitionReleaseMetadata[]; nextAfterReleaseRevision: number | null }>> => {
   const rows = await transaction.query<DatabaseRow>`
     select vortex_definition.read_publication_history_page(
@@ -208,14 +200,11 @@ const readPage = async (
   let previous = after;
   const entries = page.entries.map((entry, index) => {
     const publication = entry.release.publication;
-    if (exactRevision === undefined && after !== null && index === 0 &&
-      entry.previousReleaseRevision !== after) throw new HistoryRefused();
+    if (after !== null && index === 0 && entry.previousReleaseRevision !== after) throw new HistoryRefused();
     if (!sameId(publication.rootId, rootId) || publication.kind !== "application" ||
       publication.revision <= (previous ?? 0) || publication.revision > anchor ||
-      (exactRevision === undefined ? entry.previousReleaseRevision !== previous :
-        entry.previousReleaseRevision !== null && entry.previousReleaseRevision >= publication.revision))
+      entry.previousReleaseRevision !== previous)
       throw new HistoryStorageUnavailable();
-    if (exactRevision !== undefined && publication.revision !== exactRevision) throw new HistoryRefused();
     const metadata = definitionReleaseMetadataSchema.safeParse({
       releaseRevision: publication.revision, releaseVersion: publication.releaseVersion,
       sourceFingerprint: entry.release.evidence.authoredSourceFingerprint,
@@ -231,18 +220,6 @@ const readPage = async (
     page.nextAfterReleaseRevision !== previous || previous === null || previous >= anchor || entries.length !== size)
     throw new HistoryStorageUnavailable();
   return { entries, nextAfterReleaseRevision: page.nextAfterReleaseRevision };
-};
-
-/**
- * The draft's identity and the latest published version it anchors, under the builder's own live
- * authority: what an install of the application is anchored to.
- */
-export const loadStudioApplicationHistoryAccess = async (
-  organizationId: string, rootId: string,
-): Promise<StudioApplicationHistoryAccessResult> => {
-  const result = await executeRead(organizationId, rootId, undefined,
-    async (_transaction, _draft, snapshot) => ({ value: snapshot, metadata: [] }));
-  return result.kind === "available" ? { kind: "available", snapshot: result.value } : result;
 };
 
 export const listStudioApplicationReleaseHistory = async (
@@ -266,26 +243,4 @@ export const listStudioApplicationReleaseHistory = async (
       return { value: { snapshot, ...page, publishers: Object.fromEntries(names) }, metadata: page.entries };
     });
   return result.kind === "available" ? { kind: "available", page: result.value } : result;
-};
-
-/** One published version's metadata, its release note included, read against the draft the caller saw. */
-export const inspectStudioApplicationReleaseHistory = async (
-  organizationId: string, candidate: unknown,
-): Promise<StudioApplicationHistoryInspectResult> => {
-  const request = inspectRequestSchema.safeParse(candidate);
-  if (!request.success || request.data.expected.anchorReleaseRevision === null ||
-    request.data.releaseRevision > request.data.expected.anchorReleaseRevision)
-    return declined({ kind: "refused", reason: "request_invalid" });
-  const command = request.data;
-  const result = await executeRead(organizationId, command.rootId, command.expected,
-    async (transaction, _draft, snapshot) => {
-      if (snapshot.anchorReleaseRevision === null) throw new HistoryConflict();
-      // This selector can sit in a revision gap. It is never a list continuation cursor.
-      const page = await readPage(transaction, snapshot.rootId, snapshot.anchorReleaseRevision,
-        command.releaseRevision - 1, 1, command.releaseRevision);
-      const metadata = page.entries[0];
-      if (metadata === undefined || page.entries.length !== 1) throw new HistoryRefused();
-      return { value: { snapshot, metadata }, metadata: [metadata] };
-    });
-  return result.kind === "available" ? { kind: "available", ...result.value } : result;
 };

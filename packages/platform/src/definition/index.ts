@@ -31,7 +31,6 @@ export {
   readCurrentFirstInstallCandidate,
   type FirstInstallEnvironment,
   type FirstInstallFlowEnvironment,
-  type FirstInstallHistoryReads,
 } from "./installation-first-install-app";
 export {
   createFirstInstallCoordinator,

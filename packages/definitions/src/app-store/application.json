@@ -1270,6 +1270,15 @@
                                       ]
                                     }
                                   },
+                                  "details": {
+                                    "kind": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "review",
+                                      "key": "result",
+                                      "path": ["role_changes"]
+                                    }
+                                  },
                                   "confirm_label": {
                                     "kind": "literal",
                                     "literal": {
