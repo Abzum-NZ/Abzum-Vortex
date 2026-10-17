@@ -9,6 +9,8 @@ import {
   pushChange,
   compareSet,
   compareKeyed,
+  compareOrderedEntries,
+  presentationOnlyValue,
   finaliseReasons,
   sorted,
 } from "./shared";
@@ -33,27 +35,6 @@ type PlacementContext = {
   pageId?: string;
 };
 
-const presentationPropertyValue = (value: unknown): boolean => {
-  const property = asRecord(value);
-  switch (property.kind) {
-    case "text":
-    case "number":
-    case "boolean":
-    case "choice":
-    case "rich_text":
-    case "url":
-    case "asset_reference":
-    case "icon":
-      return true;
-    case "group":
-      return Object.values(asRecord(property.properties)).every(presentationPropertyValue);
-    case "list":
-      return (property.items as unknown[]).every(presentationPropertyValue);
-    default:
-      return false;
-  }
-};
-
 /** The child slots of one compiled item: exactly the slots its `vortex.slotOrders` orders. */
 const itemSlots = (item: RecordValue): [string, RecordValue[]][] => {
   const props = asRecord(item.props);
@@ -70,7 +51,8 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.queryId === undefined &&
-    Object.values(placementSettings(props)).every(presentationPropertyValue) &&
+    // Flow bindings for interactive entries are compared separately as major changes.
+    Object.values(placementSettings(props)).every((value) => presentationOnlyValue(value)) &&
     itemSlots(item).every(([, children]) =>
       children.every((child) => placementSubtreeIsOptionalPresentation(asRecord(child))),
     )
@@ -302,20 +284,49 @@ const comparePlacements = (
       "behavior",
       id,
     );
-    for (const [previousValue, candidateValue] of [
-      [before.vortex.block, after.vortex.block],
-      [before.settings, after.settings],
-    ] as const)
-      pushChange(
-        reasons,
-        previousValue,
-        candidateValue,
-        "major",
-        "existing_behavior_changed",
-        "block_placement",
-        "behavior",
-        id,
-      );
+    pushChange(
+      reasons,
+      before.vortex.block,
+      after.vortex.block,
+      "major",
+      "existing_behavior_changed",
+      "block_placement",
+      "behavior",
+      id,
+    );
+    for (const key of new Set([...Object.keys(before.settings), ...Object.keys(after.settings)])) {
+      const previousSetting = asRecord(before.settings[key]);
+      const candidateSetting = asRecord(after.settings[key]);
+      // Display list entries may be appended or have their text edited; other settings and
+      // references remain behaviour changes. A list that exists on one side only compares as
+      // an empty list on the other, so a whole new list is an append (minor), never a patch.
+      const previousItems = previousSetting?.kind === "list" ? (previousSetting.items as unknown[]) : previousSetting === undefined ? [] : undefined;
+      const candidateItems = candidateSetting?.kind === "list" ? (candidateSetting.items as unknown[]) : candidateSetting === undefined ? [] : undefined;
+      if (previousItems !== undefined && candidateItems !== undefined && (previousSetting !== undefined || candidateSetting !== undefined))
+        compareOrderedEntries(
+          reasons,
+          previousItems,
+          candidateItems,
+          "block_placement",
+          id,
+          "behavior",
+          (entry) => presentationOnlyValue(entry, undefined, key),
+          key,
+        );
+      else {
+        const presentationOnly = presentationOnlyValue(candidateSetting, previousSetting, key);
+        pushChange(
+          reasons,
+          before.settings[key],
+          after.settings[key],
+          presentationOnly ? "patch" : "major",
+          presentationOnly ? "presentation_changed" : "existing_behavior_changed",
+          "block_placement",
+          presentationOnly ? "configuration" : "behavior",
+          id,
+        );
+      }
+    }
   }
 };
 

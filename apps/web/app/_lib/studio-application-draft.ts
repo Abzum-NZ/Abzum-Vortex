@@ -37,7 +37,7 @@ import {
 import { studioUsesSignature, type StudioActionChoice, type StudioBorrowedChoices, type StudioCompileFailure, type StudioQueryChoice,
   type StudioRelationshipChoice } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
-import type { StudioDataModule } from "../studio/_lib/studio-data-model";
+import type { StudioDataModule, StudioPublishedData } from "../studio/_lib/studio-data-model";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
@@ -80,7 +80,7 @@ const loadFailure = (operation: string, error: unknown): StudioApplicationFailur
 };
 
 type StudioApplicationLoadResult =
-  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; borrowedChoices: StudioBorrowedChoices | null; usedModules: readonly StudioDataModule[] | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
+  | Readonly<{ kind: "available"; organizationId: OrganizationId; draft: StoredApplicationDefinitionDraft; searchMetadata: StudioApplicationSearchMetadata | null; borrowedChoices: StudioBorrowedChoices | null; usedModules: readonly StudioDataModule[] | null; published: StudioPublishedData | null; pageCompiledSlots: StudioApplicationCompiledPageSlots | null; canvasFrames: StudioApplicationCanvasFrames | null; compileFailure: StudioCompileFailure | null }>
   | StudioApplicationFailure;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
@@ -305,6 +305,7 @@ export const loadStudioApplicationDraft = async (
         compileFailure: StudioCompileFailure | null;
         borrowedChoices: StudioBorrowedChoices | null;
         usedModules: readonly StudioDataModule[] | null;
+        published: StudioPublishedData | null;
       }>>> => {
         const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts, permissions: platformPermissionSource });
         try {
@@ -325,6 +326,7 @@ export const loadStudioApplicationDraft = async (
         let compileFailure: StudioCompileFailure | null = null;
         let borrowedChoices: StudioBorrowedChoices | null = null;
         let usedModules: StudioDataModule[] | null = null;
+        let published: StudioPublishedData | null = null;
         if (options.compile !== false) try {
           const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
           const compiled = await createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority)
@@ -438,6 +440,7 @@ export const loadStudioApplicationDraft = async (
           borrowedChoices = { usesSignature: studioUsesSignature(draft.source), queries: borrowed,
             actions: borrowedActions, relationships: borrowedRelationships };
           usedModules = used;
+          published = compiled.published;
           searchMetadata = { organizationId: scope.organizationId, rootId: draft.rootId, draftRevision: draft.draftRevision,
             sourceFingerprint: draft.sourceFingerprint, bindingsSignature: JSON.stringify(applicationModuleKeys(draft.source)),
             resolutionFingerprint: compiled.compilation.resolutionFingerprint, records, modules: [...modules.values()] };
@@ -448,7 +451,7 @@ export const loadStudioApplicationDraft = async (
           console.error("STUDIO_DRAFT_COMPILE_FAILED", compileFailure.reasonCode, compileFailure.family, error);
           searchMetadata = null;
         }
-        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, borrowedChoices, usedModules, pageCompiledSlots, canvasFrames, compileFailure } };
+        return { kind: "available", value: { organizationId: scope.organizationId, draft, searchMetadata, borrowedChoices, usedModules, published, pageCompiledSlots, canvasFrames, compileFailure } };
       },
     );
     if (result.kind === "available")

@@ -63,6 +63,12 @@ export type ApplicationDraftCompilation = Readonly<{
   conditionContexts: readonly ApplicationDraftConditionContext[];
   /** The root's current published release revision; preview only labels it and never reads it. */
   currentReleaseRevision: Revision | null;
+  /**
+   * What the current published releases of the draft's own Modules hold, as qualified references:
+   * every record type (`module:record`) and field (`module:record.field`). Their stored shape is
+   * fixed, so Studio offers only the changes an upgrade accepts.
+   */
+  published: Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }>;
 }>;
 
 /** Authoring metadata from the very same verified dependency resolution as compilation. */
@@ -352,6 +358,19 @@ export const createDefinitionPublicationService = (
         candidate,
       );
       const compilation = compiled.output;
+      // The stored current release of each own Module (not the draft's, which the overlay holds).
+      const published = { recordTypes: [] as string[], fields: [] as string[] };
+      for (const root of ownedRoots) {
+        if (root.currentReleaseRevision === null) continue;
+        const release = await reader.readModuleRelease(candidate.draft.organizationId, root.rootId, root.currentReleaseRevision);
+        if (release === undefined) return refuse("DEFINITION_COMPILATION_REFUSED");
+        for (const record of release.compilationOutput.canonical.content.recordTypes as readonly {
+          key: string; fields: readonly { key: string }[];
+        }[]) {
+          published.recordTypes.push(`${root.key}:${record.key}`);
+          for (const field of record.fields) published.fields.push(`${root.key}:${record.key}.${field.key}`);
+        }
+      }
       if (
         compilation.kind !== "application" ||
         compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
@@ -367,6 +386,7 @@ export const createDefinitionPublicationService = (
           compiled.resolution,
         ),
         currentReleaseRevision: candidate.draft.publishedRevision ?? null,
+        published,
       });
     });
   },
