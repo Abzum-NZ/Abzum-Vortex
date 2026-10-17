@@ -2386,7 +2386,7 @@
                           "id": "input_create_custom_role_privilege_classification",
                           "name": "privilege_classification",
                           "label": "Privilege classification",
-                          "help_text": "standard or privileged",
+                          "help_text": "standard or privileged. Administrative permissions require privileged.",
                           "required": true,
                           "vortex": {
                             "block": {

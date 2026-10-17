@@ -15,6 +15,7 @@ declare
   requested jsonb;
   refs jsonb;
   permissions_value jsonb;
+  has_administrative_permissions boolean;
   target_application_root_id uuid;
   target_source_role_id uuid;
   application_registration vortex_access.permission_registrations%rowtype;
@@ -284,8 +285,9 @@ begin
       'continuityRevision', continuity.continuity_revision,
       'meaningFingerprint', continuity.meaning_fingerprint
     )) order by continuity.application_root_id nulls last,
-      continuity.owner_kind collate "C", continuity.owner_id, continuity.permission_id)
-  into permissions_value
+      continuity.owner_kind collate "C", continuity.owner_id, continuity.permission_id),
+    pg_catalog.bool_or(catalogue.administrative)
+  into permissions_value, has_administrative_permissions
   from pg_catalog.jsonb_array_elements(refs) as requested_permission(value)
   join vortex_access.permission_continuities as continuity
     on continuity.organization_id = context_organization_id
@@ -316,6 +318,17 @@ begin
       <> pg_catalog.jsonb_array_length(refs) then
     raise exception using errcode = '40001',
       message = 'Organization role permission evidence is stale or unavailable';
+  end if;
+
+  -- Reject the submitted classification before sealing evidence for a write whose deferred
+  -- revision constraint would reject the same administrative permissions at commit.
+  if operation_name <> 'accept_application_role_revision'
+    and p_preparation ->> 'privilegeClassification' = 'standard'
+    and has_administrative_permissions then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'invalid_privilege_classification',
+      'organizationId', context_organization_id
+    );
   end if;
 
   if operation_name = 'accept_application_role_revision' then
