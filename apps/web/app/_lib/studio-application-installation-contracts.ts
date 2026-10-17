@@ -1,11 +1,14 @@
 import {
   applicationRootIdSchema,
+  builderKeySchema,
   correlationIdSchema,
   fingerprintSchema,
+  labelSchema,
   moduleInstallationBindingEvidenceSchema,
   namespacedKeySchema,
   organizationIdSchema,
   revisionSchema,
+  roleIdSchema,
   semanticVersionSchema,
   stableDefinitionReleaseVersionSchema,
   timestampSchema,
@@ -170,6 +173,14 @@ export const studioApplicationFirstInstallSnapshotSchema = z.object({
   ]),
   registeredReleaseRevision: revisionSchema.nullable(),
   moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
+  /** The application's default member role, offered to the installer on activation. */
+  memberRole: z.object({
+    sourceRoleId: roleIdSchema,
+    key: builderKeySchema,
+    name: labelSchema,
+    privileged: z.boolean(),
+    permissions: z.array(z.object({ key: namespacedKeySchema, label: z.string().min(1).max(200) }).strict()).min(1).max(500),
+  }).strict(),
 }).strict();
 
 export const studioApplicationFirstInstallLoadResultSchema = z.discriminatedUnion("kind", [
@@ -188,7 +199,11 @@ export const studioApplicationFirstInstallLoadResultSchema = z.discriminatedUnio
     ]),
   }).strict(),
   z.object({ kind: z.literal("conflict") }).strict(),
-  z.object({ kind: z.literal("refused") }).strict(),
+  z.object({
+    kind: z.literal("refused"),
+    /** Set when the refusal is the installer lacking the installation authority. */
+    reason: z.literal("installation_authority").optional(),
+  }).strict(),
   z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
 ]);
 
@@ -202,6 +217,11 @@ export const studioApplicationFirstInstallActivateCommandSchema = z.object({
   kind: z.literal("application.first_install.activate"),
   selector: studioApplicationFirstInstallSelectorSchema,
   expected: studioApplicationFirstInstallSnapshotSchema,
+  /** The installer's explicit choice for the default member role shown on the install screen. */
+  memberRole: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("accept"), sourceRoleId: roleIdSchema }).strict(),
+    z.object({ kind: z.literal("decline") }).strict(),
+  ]),
 }).strict();
 
 export const studioApplicationFirstInstallCommandResultSchema = z.union([
@@ -223,6 +243,15 @@ export const studioApplicationFirstInstallCommandResultSchema = z.union([
   z.object({
     kind: z.enum(["conflict", "refused", "authentication_required", "temporarily_unavailable", "failed"]),
     stateMayHaveChanged: z.union([z.boolean(), z.literal("unknown")]),
+    /** Why the installer's member role choice was refused, named on the install screen. */
+    memberRoleRefusal: z.enum([
+      "installation_authority",
+      "member_role_delegation",
+      "roles_manage",
+      "assignments_manage",
+      "role_unavailable",
+      "access_changed",
+    ]).optional(),
   }).strict(),
 ]);
 

@@ -552,6 +552,7 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           id: "role_operations_operator",
           key: "operations_operator",
+          default_member: true,
           name: "Operations operator",
           home_page: "operations_signals",
           permissions: [
