@@ -55,6 +55,8 @@ export type PreviewInstallationRepository = Readonly<{
   readApplicationIdentity(
     previewInstallationId: string,
   ): Promise<PreviewApplicationIdentity | undefined>;
+  /** In the organisation's context: this builder's current unexpired preview of one Application. */
+  readBuilderPreview(applicationRootId: string): Promise<PreviewApplicationIdentity | undefined>;
 }>;
 
 const mapFailure = (error: unknown): DefinitionError<PreviewInstallationRepositoryErrorCode> => {
@@ -76,6 +78,21 @@ const mapFailure = (error: unknown): DefinitionError<PreviewInstallationReposito
         "preview-installation-repository",
       );
   }
+};
+
+/** One preview identity row: the preview, or undefined when there is none. */
+const identityOf = (rows: readonly IdentityRow[]): PreviewApplicationIdentity | undefined => {
+  if (rows.length !== 1) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
+  const value = rows[0]?.preview_identity;
+  if (value === null || value === undefined) return undefined;
+  const parsed = previewApplicationIdentitySchema.safeParse(value);
+  if (!parsed.success)
+    throw unexpectedDefinitionFailure(
+      "PREVIEW_INSTALLATION_FAILED",
+      parsed.error,
+      "preview-installation-repository",
+    );
+  return parsed.data;
 };
 
 /** Request-scoped adapter for the preview ledger and its isolated storage. */
@@ -138,22 +155,23 @@ export const createPreviewInstallationRepository = (
 
     async readApplicationIdentity(previewInstallationId) {
       try {
-        const rows = await transaction.query<IdentityRow>`
+        return identityOf(await transaction.query<IdentityRow>`
           select vortex_definition.read_preview_application_identity(
             ${previewInstallationId}::uuid
           ) as preview_identity
-        `;
-        if (rows.length !== 1) throw new DefinitionError("PREVIEW_INSTALLATION_FAILED");
-        const value = rows[0]?.preview_identity;
-        if (value === null || value === undefined) return undefined;
-        const parsed = previewApplicationIdentitySchema.safeParse(value);
-        if (!parsed.success)
-          throw unexpectedDefinitionFailure(
-            "PREVIEW_INSTALLATION_FAILED",
-            parsed.error,
-            "preview-installation-repository",
-          );
-        return parsed.data;
+        `);
+      } catch (error) {
+        throw mapFailure(error);
+      }
+    },
+
+    async readBuilderPreview(applicationRootId) {
+      try {
+        return identityOf(await transaction.query<IdentityRow>`
+          select vortex_definition.read_builder_preview_installation(
+            ${applicationRootId}::uuid
+          ) as preview_identity
+        `);
       } catch (error) {
         throw mapFailure(error);
       }

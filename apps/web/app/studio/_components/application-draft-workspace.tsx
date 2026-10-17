@@ -776,11 +776,12 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const addTargets = useMemo(() => canvasPage === undefined ? null
     : describeStudioCompositionAddTargets(compositionContext, canvasPage.id), [compositionContext, canvasPage?.id]);
   // What reference settings and the query picker offer: queries that already exist (own, then borrowed), fields and pages.
-  // A record reference picks a record of the installed application, read 40 at a time with the
-  // builder's own access through the same reader as the Data tab's results.
+  // A record reference picks a record of the builder's preview of the saved draft, read 40 at a
+  // time with their preview access through the same reader as the Data tab's results.
   const readRecordChoices = useCallback<StudioRecordReader>(async ({ recordType, after }) => {
     const separator = recordType.indexOf(":");
     const result = await readStudioDataRecords(organizationId, { rootId: draft.rootId,
+      draftRevision: compiled.draftRevision,
       moduleKey: recordType.slice(0, separator), recordKey: recordType.slice(separator + 1), pageSize: 40,
       ...(after === undefined ? {} : { continuationToken: after }) });
     switch (result.kind) {
@@ -790,7 +791,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           label: (title === undefined ? undefined : row.cells[title]) || "Untitled record" })),
           ...(result.next === undefined ? {} : { next: result.next }) };
       }
-      case "not_installed": return { kind: "not_installed" };
+      case "not_saved": return { kind: "not_saved" };
+      // The saved draft moved on; the next save's revision reads again.
+      case "conflict": return { kind: "temporarily_unavailable" };
       case "no_query": return { kind: "no_list" };
       // A record type is read through a plain query, never a summary.
       case "summary": return { kind: "no_list" };
@@ -800,21 +803,21 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       case "refused": return { kind: "refused" };
       case "temporarily_unavailable": return { kind: "temporarily_unavailable" };
     }
-  }, [organizationId, draft.rootId]);
+  }, [organizationId, draft.rootId, compiled.draftRevision]);
   const draftChoices = useMemo(() => studioDraftChoices(source, borrowedChoices, readRecordChoices),
     [source, borrowedChoices, readRecordChoices]);
   // The records of the canvas's data blocks, read for the compiled saved revision only.
   const readCanvasRecords = useCallback(async (area: string) => {
     const pageAlias = canvasPageRef.current;
-    if (pageAlias === undefined) return { state: "unavailable" as const, records: {}, notInstalled: [] };
+    if (pageAlias === undefined) return { state: "unavailable" as const, records: {} };
     const result = await readStudioCanvasRecords(organizationId, { rootId: draft.rootId,
       draftRevision: compiled.draftRevision, sourceFingerprint: compiled.sourceFingerprint, pageAlias, area });
     if (result.kind === "available" && result.draftRevision === compiled.draftRevision &&
       result.sourceFingerprint === compiled.sourceFingerprint && result.pageAlias === pageAlias && result.area === area)
-      return { state: "ready" as const, records: result.records, notInstalled: result.notInstalled };
-    if (result.kind !== "not_installed")
-      console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
-    return { state: result.kind === "not_installed" ? "not_installed" as const : "unavailable" as const, records: {}, notInstalled: [] };
+      return { state: "ready" as const, records: result.records };
+    if (result.kind === "refused") return { state: "refused" as const, records: {} };
+    console.error(`[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`);
+    return { state: "unavailable" as const, records: {} };
   }, [organizationId, draft.rootId, compiled.draftRevision, compiled.sourceFingerprint]);
   const sameDestination = (left: StudioCompositionDestination, right: StudioCompositionDestination) =>
     left.kind === "root" ? right.kind === "root"
@@ -1035,7 +1038,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     used: usedModules, published, peopleDirectory, compiledFields, applications, initialModule, hidden: tab !== "data",
     compositionContext, readRecords: readRecordChoices,
     selection: isStudioDataSelection(selected) ? selected : null,
-    disabled: noEdit || busy.anyOfRendered("publication", "reopening"), refresh: compiled.generation,
+    disabled: noEdit || busy.anyOfRendered("publication", "reopening"), draftRevision: compiled.draftRevision,
     apply: applyDataChange, onFieldPending: reportModuleFieldPending, onSearchPending: reportSearchPending,
     choose: (next) => { void chooseSelection(next); }, selectAfterEdit: (next) => { changeSelection(next); },
     openInTab: (nextTab, next) => { void changeTab(nextTab).then((changed) => { if (changed) void chooseSelection(next); }); },

@@ -102,7 +102,6 @@ const recordKeys = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly 
 export type StudioCanvasRecordsRead = Readonly<{
   state: StudioCanvasRecords["state"];
   records: Readonly<Record<string, unknown>>;
-  notInstalled: readonly string[];
 }>;
 
 /** One compiled content area: its items, exactly as the published definition holds them. */
@@ -379,22 +378,22 @@ function ApplicationPageSlotPuckEditor({
 
   // The records of this area's data blocks, read for the saved revision the compiled version is.
   const [recordsRead, setRecordsRead] = useState<StudioCanvasRecordsRead & { source?: ApplicationSourceDocument }>(
-    { state: "loading", records: {}, notInstalled: [] });
+    { state: "loading", records: {} });
   useEffect(() => {
     if (readRecords === undefined) return;
     let cancelled = false;
-    setRecordsRead({ state: "loading", records: {}, notInstalled: [], source: compiledSource });
+    setRecordsRead({ state: "loading", records: {}, source: compiledSource });
     readRecords(at.key).then(
       (read) => { if (!cancelled) setRecordsRead({ ...read, source: compiledSource }); },
       (error: unknown) => {
         console.error("[studio] the canvas records could not be read", error);
-        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, notInstalled: [], source: compiledSource });
+        if (!cancelled) setRecordsRead({ state: "unavailable", records: {}, source: compiledSource });
       });
     return () => { cancelled = true; };
   }, [readRecords, compiledSource, at.key]);
   const canvasRecords = useMemo((): StudioCanvasRecords => ({
     // Records read for another saved revision are never shown as this one's.
-    ...(recordsRead.source === compiledSource ? recordsRead : { state: "loading", records: {}, notInstalled: [] }),
+    ...(recordsRead.source === compiledSource ? recordsRead : { state: "loading", records: {} }),
     saved: recordKeys(catalogue, originalSlot?.items ?? []),
     current: recordKeys(catalogue, slot?.items ?? []),
     updating: updating === true,

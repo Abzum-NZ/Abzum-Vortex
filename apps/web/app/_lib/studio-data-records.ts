@@ -18,6 +18,7 @@ import {
   isRecord,
   namespacedKeySchema,
   organizationIdSchema,
+  revisionSchema,
   sameId,
   type IdentitySession,
   type JsonValue,
@@ -26,14 +27,13 @@ import { z } from "zod";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { studioDraftTargetFacts } from "./studio-application-draft";
-import { loadInstalledContext, requestDependencies } from "./application-page/load";
-import { createPlacementReadServices } from "./application-page/placement-services";
-import { loadOrganizationLauncher } from "./organization-context";
-import { getQueryContinuationKey } from "./query-continuation-key";
+import { openStudioPreviewRead } from "./studio-preview-read";
 import type { ModuleRelease } from "./application-page/types";
 
 const requestSchema = z.object({
   rootId: applicationRootIdSchema,
+  /** The saved draft revision whose preview the records are read from. */
+  draftRevision: revisionSchema,
   moduleKey: namespacedKeySchema,
   recordKey: builderKeySchema,
   /** A query of the record type's module; absent to read the record type through its first plain query. */
@@ -71,9 +71,11 @@ export type StudioDataRecordsResult =
       totalRowCount: number;
       totals: readonly StudioDataTotal[];
     }>
-  /** The running application does not have this module, record type or query yet: preview or publish first. */
-  | Readonly<{ kind: "not_installed" }>
-  /** The record type is installed, but has no query without inputs to read its records through. */
+  /** The saved draft revision does not have this module, record type or query: save first. */
+  | Readonly<{ kind: "not_saved" }>
+  /** The saved draft changed since the revision the request names: read again for the current one. */
+  | Readonly<{ kind: "conflict" }>
+  /** The record type has no query without inputs to read its records through. */
   | Readonly<{ kind: "no_query" }>
   /** The query refused this read, for example because it needs inputs or the builder may not read it. */
   | Readonly<{ kind: "query_refused"; reason: string }>
@@ -128,10 +130,11 @@ const cellText = (field: ModuleField, value: JsonValue | undefined, links: Proje
 };
 
 /**
- * Reads, with the builder's own access, one page of the records of a record type, or of one query,
- * in the running application. It reads through the running application's own query service against
- * the installed release, so the builder sees exactly the records and fields they may read there.
- * A module, record type or query that is only in the draft has no records to read yet.
+ * Reads one page of the records of a record type, or of one query, through the builder's own
+ * preview installation of exactly the saved draft revision. It reads through the running
+ * application's own query service against the preview, so a record type or query that is only in
+ * the saved draft has its records too, and the builder sees exactly the records and fields their
+ * preview access lets them read. A page is at most 200 records, read with keyset paging.
  */
 export const readStudioDataRecords = async (
   session: IdentitySession,
@@ -143,47 +146,40 @@ export const readStudioDataRecords = async (
   if (!organization.success || !parsed.success) return { kind: "refused" };
   const request = parsed.data;
   try {
-    const allowed = await humanOrganizationRequests().run(session, { organizationId: organization.data },
-      async (transaction, scope) => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts,
-          permissions: platformPermissionSource });
-        try {
-          await requireBuilderAuthority(authority, { kind: "draft_change", rootId: request.rootId });
-        } catch (error) {
-          if (error instanceof BuilderAuthorityError) return false;
-          throw error;
-        }
-        return true;
-      });
+    const [allowed, preview] = await Promise.all([
+      humanOrganizationRequests().run(session, { organizationId: organization.data },
+        async (transaction, scope) => {
+          const authority = createBuilderAuthority({ transaction, scope, targetFacts: studioDraftTargetFacts,
+            permissions: platformPermissionSource });
+          try {
+            await requireBuilderAuthority(authority, { kind: "draft_change", rootId: request.rootId });
+          } catch (error) {
+            if (error instanceof BuilderAuthorityError) return false;
+            throw error;
+          }
+          return true;
+        }),
+      openStudioPreviewRead(session, organization.data, request.rootId, request.draftRevision),
+    ]);
     if (allowed.kind !== "available")
       return allowed.kind === "temporarily_unavailable" ? { kind: "temporarily_unavailable" } : { kind: "refused" };
     if (!allowed.value) return { kind: "refused" };
+    if (preview.kind !== "available") return preview;
 
-    const dependencies = requestDependencies();
-    const selection = { organizationId: organization.data, applicationRootId: request.rootId };
-    const installed = await loadInstalledContext(session, dependencies, selection);
-    if (installed.kind !== "available") return { kind: "not_installed" };
-    const context = installed.value;
+    const { context, selection, services } = preview;
     const module = context.releaseSet.modules.find((candidateModule) => candidateModule.definitionKey === request.moduleKey);
     const record = module?.content.recordTypes.find((candidateRecord) => candidateRecord.key === request.recordKey);
-    if (module === undefined || record === undefined) return { kind: "not_installed" };
+    if (module === undefined || record === undefined) return { kind: "not_saved" };
     const query = request.queryKey === undefined ? plainQueryOf(module, record)
       : module.content.queries.find((candidateQuery) => candidateQuery.key === request.queryKey);
-    if (query === undefined) return request.queryKey === undefined ? { kind: "no_query" } : { kind: "not_installed" };
+    if (query === undefined) return request.queryKey === undefined ? { kind: "no_query" } : { kind: "not_saved" };
     const queryRecord = query.recordType.state === "resolved"
       ? context.releaseSet.modules.flatMap((candidateModule) => candidateModule.content.recordTypes)
         .find((candidateRecord) => sameId(String(candidateRecord.recordTypeId), String((query.recordType as { recordTypeId: string }).recordTypeId)))
       : undefined;
-    if (queryRecord === undefined) return { kind: "not_installed" };
+    if (queryRecord === undefined) return { kind: "not_saved" };
 
     const summary = query.groupByFieldIds.length > 0 || query.aggregates.length > 0;
-    const launcher = await loadOrganizationLauncher(session);
-    const entry = launcher.kind === "available"
-      ? launcher.entries.find((candidateEntry) => sameId(candidateEntry.organizationId, organization.data)) : undefined;
-    if (entry === undefined) return { kind: "refused" };
-    const services = createPlacementReadServices({ session, selection, dependencies,
-      continuationKey: getQueryContinuationKey(), tenantShortName: entry.tenantShortName,
-      organizationShortName: entry.organizationShortName });
     const label = query.label ?? sentence(query.key);
     if (summary) {
       const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({ moduleRootId: module.rootId, queryId: query.queryId, inputValues: {} });
