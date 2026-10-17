@@ -12,6 +12,7 @@ import {
 import {
   calculationMaximumNestingDepth,
   calculationMaximumOperandCount,
+  calculationResultTypesByOperation,
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
@@ -449,14 +450,8 @@ const sourceCalculationSettingsSchema = z
   .strict()
   .superRefine((value, context) => {
     const operation = value.expression.operation;
-    const validResultTypes: Readonly<Record<typeof operation, readonly string[]>> = {
-      join_text: ["text"],
-      numeric: ["whole_number", "decimal_number", "money"],
-      condition: ["yes_no"],
-      date_offset: ["date", "date_time"],
-      deadline_passed: ["yes_no"],
-    };
-    if (!validResultTypes[operation].includes(value.result_type))
+    const validResultTypes: readonly string[] = calculationResultTypesByOperation[operation];
+    if (!validResultTypes.includes(value.result_type))
       context.addIssue({
         code: "custom",
         path: ["result_type"],

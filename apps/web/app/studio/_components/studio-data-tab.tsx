@@ -284,7 +284,7 @@ export function useStudioDataTab({ organizationId, rootId, source, saved, used, 
   const publication = useMemo(() => studioFieldPublication(published, saved), [published, saved]);
   const usedRecordTypes = useMemo(() => (used ?? []).flatMap((module) => module.recordTypes.map((record) =>
     ({ key: `${module.key}:${record.key}`, label: `${record.name} (${module.name})` }))), [used]);
-  const fieldContext: ModuleFieldEditorContext = { publication, composition: compositionContext, usedRecordTypes, readRecords };
+  const fieldContext: ModuleFieldEditorContext = { publication, composition: compositionContext, usedRecordTypes, readRecords, compiledFields };
   const savedOwned = useMemo(() => ownedDataModules(saved), [saved]);
   const modules = useMemo(() => [...owned, ...(used ?? [])], [owned, used]);
   const [creating, setCreating] = useState(false);
