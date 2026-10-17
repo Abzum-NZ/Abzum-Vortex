@@ -664,7 +664,6 @@ const applyAdd = (current: StudioCompositionContext, command: unknown): StudioCo
     vortex: {
       block: { block_id: release.blockId, release_version: release.releaseVersion },
       ...(query === null ? {} : { query }),
-      theme_overrides: {},
       responsive: { desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } } },
     },
   } } as unknown as SourceItem;

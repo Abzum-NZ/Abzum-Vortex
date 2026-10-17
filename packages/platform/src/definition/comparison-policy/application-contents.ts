@@ -254,16 +254,6 @@ const comparePlacements = (
       "configuration",
       id,
     );
-    pushChange(
-      reasons,
-      before.vortex.themeOverrides,
-      after.vortex.themeOverrides,
-      "patch",
-      "presentation_changed",
-      "block_placement",
-      "theme",
-      id,
-    );
     for (const key of ["viewPermissionKey", "usePermissionKey"])
       pushChange(
         reasons,
