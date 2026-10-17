@@ -1,12 +1,14 @@
 "use client";
 import { Button } from "@vortex/ui/components/button";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { TechnicalDetails } from "@vortex/ui/components/technical-details";
 
 import { useEffect, useRef, useState } from "react";
 import type { DefinitionReleaseMetadata } from "@vortex/platform/schema";
 import type { StudioApplicationHistoryFailure, StudioApplicationHistoryPage,
   StudioApplicationHistorySnapshot } from "../../_lib/studio-application-history";
-import { inspectApplicationReleaseHistory, listApplicationReleaseHistory,
+import type { StudioApplicationRestoreCommandResult } from "../../_lib/studio-application-restore-contracts";
+import { listApplicationReleaseHistory, restoreApplicationRelease,
 } from "../[organizationId]/[applicationRootId]/history/actions";
 import { formatStudioTimestamp } from "./studio-time";
 
@@ -14,13 +16,11 @@ const snapshotIdentity = (snapshot: StudioApplicationHistorySnapshot) => JSON.st
   snapshot.organizationId, snapshot.rootId, snapshot.definitionKey, snapshot.draftRevision,
   snapshot.sourceFingerprint, snapshot.anchorReleaseRevision,
 ]);
-const routeIdentity = (snapshot: StudioApplicationHistorySnapshot) =>
-  `${snapshot.organizationId}:${snapshot.rootId}`;
 const expectedSnapshot = (snapshot: StudioApplicationHistorySnapshot) => ({
   draftRevision: snapshot.draftRevision, sourceFingerprint: snapshot.sourceFingerprint,
   anchorReleaseRevision: snapshot.anchorReleaseRevision,
 });
-type Pending = "reload" | "next" | "inspect";
+type Pending = "reload" | "next" | "restore";
 type Failure = StudioApplicationHistoryFailure["kind"];
 
 const failureMessage = (failure: Failure) => failure === "conflict"
@@ -29,222 +29,170 @@ const failureMessage = (failure: Failure) => failure === "conflict"
     ? "The version history is unavailable. Sign in with an account that can manage this application, then reload."
     : "The version history is temporarily unavailable. Try again or reload.";
 
-/** The Releases tab's published versions, oldest first, and the review pages for each. */
-export function ApplicationReleaseHistory({ initialPage }: {
+const restoreFailureMessage = (result: Exclude<StudioApplicationRestoreCommandResult, { kind: "completed" }>): string =>
+  result.stateMayHaveChanged === "unknown"
+    ? "Whether the version was restored could not be confirmed. Choose Revert to saved to load the saved draft, then check it."
+    : result.kind === "conflict"
+      ? "The draft changed since this list was loaded, so nothing was restored. Reload the versions and try again."
+      : result.kind === "refused"
+        ? "Restoring was refused for your account or this version, so nothing was restored."
+        : "Restoring is temporarily unavailable, so nothing was restored. Try again in a moment.";
+
+/**
+ * The Releases tab's published versions, oldest first: each with when and by whom it was published
+ * and what changed, and a way to restore it into the draft. Restoring replaces the saved draft with
+ * that version's source as a new draft revision, through the platform's one restore operation; it
+ * never publishes or installs anything. Organisations install and upgrade from the App Store.
+ */
+export function ApplicationReleaseHistory({ initialPage, restoreBlocked, onRestored }: {
   initialPage: StudioApplicationHistoryPage;
+  /** Why restoring cannot start now (unsaved or pending edits in the workspace), or nothing. */
+  restoreBlocked: string | undefined;
+  /** Loads the restored saved draft into the workspace and says what happened. */
+  onRestored: (message: string) => void;
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const [page, setPage] = useState<StudioApplicationHistoryPage | null>(initialPage);
-  const [selectedRevision, setSelectedRevision] = useState<number | null>(null);
-  const [metadata, setMetadata] = useState<DefinitionReleaseMetadata | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [message, setMessage] = useState("Versions loaded.");
-  const lifetime = useRef(0);
   const mounted = useRef(false);
   const generation = useRef(0);
   const pendingRef = useRef<Pending | null>(null);
   const pageRef = useRef<StudioApplicationHistoryPage | null>(initialPage);
-  const selectionRef = useRef<number | null>(null);
-  // Render-time route binding rejects a response even before the next effect has run.
-  const currentRoute = useRef(routeIdentity(initialPage.snapshot));
-  currentRoute.current = routeIdentity(initialPage.snapshot);
-  const currentInitial = useRef(initialPage);
-  currentInitial.current = initialPage;
 
   useEffect(() => {
     mounted.current = true;
-    lifetime.current += 1;
     generation.current += 1;
     pendingRef.current = null;
     pageRef.current = initialPage;
-    selectionRef.current = null;
     setPage(initialPage);
-    setSelectedRevision(null);
-    setMetadata(null);
     setPending(null);
     setFailure(null);
     setMessage("Versions loaded.");
     return () => {
       mounted.current = false;
-      lifetime.current += 1;
       generation.current += 1;
       pendingRef.current = null;
     };
   }, [initialPage]);
 
-  const run = async (command: Pending, releaseRevision?: number) => {
-    if (!mounted.current || pendingRef.current !== null) return;
-    const sourcePage = pageRef.current;
-    if (command !== "reload" && (sourcePage === null || failure === "refused" || failure === "conflict")) return;
-    const snapshot = sourcePage?.snapshot ?? initialPage.snapshot;
-    const nextCursor = sourcePage?.nextAfterReleaseRevision;
-    if (command === "next" && nextCursor == null) return;
-    if (command === "inspect") {
-      if (releaseRevision === undefined || sourcePage === null ||
-        !sourcePage.entries.some((entry) => entry.releaseRevision === releaseRevision)) return;
-      selectionRef.current = releaseRevision;
-      setSelectedRevision(releaseRevision);
-      setMetadata(null);
-    }
+  const begin = (command: Pending) => {
     pendingRef.current = command;
     setPending(command);
     setFailure(null);
-    setMessage(command === "inspect" ? "Loading the selected version."
-      : command === "next" ? "Loading the next versions." : "Reloading the versions.");
-    const token = { lifetime: lifetime.current, generation: ++generation.current,
-      snapshot: sourcePage === null ? null : snapshotIdentity(snapshot),
-      route: currentRoute.current, initial: initialPage, selected: selectionRef.current };
-    const current = () => mounted.current && lifetime.current === token.lifetime &&
-      generation.current === token.generation && currentRoute.current === token.route &&
-      currentInitial.current === token.initial && selectionRef.current === token.selected &&
-      (pageRef.current === null ? null : snapshotIdentity(pageRef.current.snapshot)) === token.snapshot;
+    return ++generation.current;
+  };
+  const finish = (token: number) => {
+    if (mounted.current && generation.current === token) { pendingRef.current = null; setPending(null); }
+  };
+
+  const load = async (command: "reload" | "next") => {
+    if (!mounted.current || pendingRef.current !== null) return;
+    const sourcePage = pageRef.current;
+    const snapshot = sourcePage?.snapshot ?? initialPage.snapshot;
+    const nextCursor = sourcePage?.nextAfterReleaseRevision;
+    if (command === "next" && (sourcePage === null || nextCursor == null)) return;
+    const token = begin(command);
+    setMessage(command === "next" ? "Loading the next versions." : "Reloading the versions.");
+    const current = () => mounted.current && generation.current === token;
     const fail = (kind: Failure) => {
       setFailure(kind);
       setMessage(failureMessage(kind));
-      if (kind === "refused" || kind === "conflict") {
-        pageRef.current = null;
-        selectionRef.current = null;
-        setPage(null);
-        setSelectedRevision(null);
-        setMetadata(null);
-      }
+      if (kind === "refused" || kind === "conflict") { pageRef.current = null; setPage(null); }
     };
     try {
-      if (command === "inspect") {
-        const result = await inspectApplicationReleaseHistory(snapshot.organizationId, {
-          rootId: snapshot.rootId, expected: expectedSnapshot(snapshot), releaseRevision,
-        });
-        if (!current()) return;
-        if (result.kind !== "available") { fail(result.kind); return; }
-        if (snapshotIdentity(result.snapshot) !== token.snapshot ||
-          result.metadata.releaseRevision !== token.selected) { fail("refused"); return; }
-        setMetadata(result.metadata);
-        setMessage("Selected version loaded.");
-      } else {
-        const result = await listApplicationReleaseHistory(snapshot.organizationId, command === "reload"
-          ? { kind: "reload", rootId: snapshot.rootId }
-          : { kind: "next", rootId: snapshot.rootId, expected: expectedSnapshot(snapshot),
-            afterReleaseRevision: nextCursor });
-        if (!current()) return;
-        if (result.kind !== "available") { fail(result.kind); return; }
-        if (routeIdentity(result.page.snapshot) !== token.route ||
-          (command === "next" && snapshotIdentity(result.page.snapshot) !== token.snapshot)) {
-          fail("refused"); return;
-        }
-        // Replace one bounded page. Never append across anchors or retain an unbounded history.
-        pageRef.current = result.page;
-        selectionRef.current = null;
-        setPage(result.page);
-        setSelectedRevision(null);
-        setMetadata(null);
-        setMessage(result.page.entries.length === 0 ? "Nothing is published yet." : "Versions loaded.");
-      }
-    } catch {
+      const result = await listApplicationReleaseHistory(snapshot.organizationId, command === "reload"
+        ? { kind: "reload", rootId: snapshot.rootId }
+        : { kind: "next", rootId: snapshot.rootId, expected: expectedSnapshot(snapshot), afterReleaseRevision: nextCursor });
+      if (!current()) return;
+      if (result.kind !== "available") { fail(result.kind); return; }
+      if (command === "next" && snapshotIdentity(result.page.snapshot) !== snapshotIdentity(snapshot)) { fail("conflict"); return; }
+      // Replace one bounded page. Never append across anchors or retain an unbounded history.
+      pageRef.current = result.page;
+      setPage(result.page);
+      setMessage(result.page.entries.length === 0 ? "Nothing is published yet." : "Versions loaded.");
+    } catch (error) {
+      console.error("[studio] release history failed to load", error);
       if (current()) fail("temporarily_unavailable");
-    } finally {
-      // Successful settlement updates the snapshot or selection, so use the lifetime/generation fence here.
-      if (mounted.current && lifetime.current === token.lifetime && generation.current === token.generation &&
-        currentRoute.current === token.route && currentInitial.current === token.initial) {
-        pendingRef.current = null;
-        setPending(null);
-      }
-    }
+    } finally { finish(token); }
   };
 
-  const displayedSnapshot = page?.snapshot ?? initialPage.snapshot;
-  const blocked = pending !== null || page === null || failure === "refused" || failure === "conflict";
+  const restore = async (entry: DefinitionReleaseMetadata) => {
+    const sourcePage = pageRef.current;
+    if (!mounted.current || pendingRef.current !== null || restoreBlocked !== undefined || sourcePage === null) return;
+    const snapshot = sourcePage.snapshot;
+    if (snapshot.anchorReleaseRevision === null) return;
+    if (!await confirm({
+      title: `Restore version ${entry.releaseVersion} into the draft?`,
+      description: `The saved draft is replaced by what version ${entry.releaseVersion} held, and saved. Nothing is published or installed; publish when the draft is as you want it.`,
+      confirmLabel: "Restore into draft",
+    })) return;
+    if (pageRef.current !== sourcePage || pendingRef.current !== null) return;
+    const token = begin("restore");
+    setMessage(`Restoring version ${entry.releaseVersion} into the draft…`);
+    try {
+      const result = await restoreApplicationRelease(snapshot.organizationId, {
+        selector: { organizationId: snapshot.organizationId, rootId: snapshot.rootId, releaseRevision: entry.releaseRevision },
+        expected: { ...expectedSnapshot(snapshot), anchorReleaseRevision: snapshot.anchorReleaseRevision },
+        confirmed: true,
+      });
+      if (!mounted.current || generation.current !== token) return;
+      if (result.kind === "completed") {
+        onRestored(`Version ${entry.releaseVersion} is now in the draft, saved as draft revision ${result.receipt.draftRevision}.`);
+        return;
+      }
+      setFailure(result.kind);
+      setMessage(restoreFailureMessage(result));
+    } catch (error) {
+      console.error("[studio] restoring a release failed", error);
+      if (mounted.current && generation.current === token)
+        setMessage(restoreFailureMessage({ kind: "temporarily_unavailable", stateMayHaveChanged: "unknown" }));
+    } finally { finish(token); }
+  };
+
+  const snapshot = page?.snapshot ?? initialPage.snapshot;
+  const blocked = pending !== null || page === null;
+  const author = (entry: DefinitionReleaseMetadata) => page?.publishers[entry.publishedBy.toLowerCase()] ?? "someone you cannot see in the directory";
   return <section aria-label="Release history" className="space-y-6">
-    <header className="space-y-3">
+    <header className="space-y-2">
       <h2 className="text-xl font-semibold">Published versions</h2>
-      <p>Versions are listed oldest first, 20 at a time.</p>
+      <p className="text-sm text-muted-foreground">Oldest first, 20 at a time. Organisations install and upgrade a version from the App Store.</p>
     </header>
-    {page !== null && <section aria-label="Saved application context" className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
-      <dl className="space-y-2">
-        <div><dt className="font-semibold">Current version</dt><dd>{displayedSnapshot.anchorReleaseRevision === null ? "Not published yet" : "Published"}</dd></div>
-      </dl>
-      <TechnicalDetails><dl className="space-y-2">
-        <div><dt className="font-semibold">Technical name</dt><dd className="break-all">{displayedSnapshot.definitionKey}</dd></div>
-        <div><dt className="font-semibold">Saved draft revision</dt><dd>{displayedSnapshot.draftRevision}</dd></div>
-        <div><dt className="font-semibold">Current release revision</dt><dd>{displayedSnapshot.anchorReleaseRevision ?? "No published release"}</dd></div>
-        <div><dt className="font-semibold">Organization</dt><dd className="break-all">{displayedSnapshot.organizationId}</dd></div>
-        <div><dt className="font-semibold">Application root</dt><dd className="break-all">{displayedSnapshot.rootId}</dd></div>
-        <div><dt className="font-semibold">Saved source fingerprint</dt><dd className="break-all"><code>{displayedSnapshot.sourceFingerprint}</code></dd></div>
-      </dl></TechnicalDetails>
-    </section>}
     <div className="flex flex-wrap gap-3">
-      <Button type="button" variant="outline" size="sm" name="application.release_history.reload" disabled={pending !== null}
-        onClick={() => void run("reload")}>
-        Reload versions
-      </Button>
-      <Button type="button" variant="outline" size="sm" name="application.release_history.next" disabled={blocked || page?.nextAfterReleaseRevision == null}
-        onClick={() => void run("next")}>
-        Next 20 versions
-      </Button>
+      <Button type="button" variant="outline" size="sm" disabled={pending !== null} onClick={() => void load("reload")}>Reload versions</Button>
+      <Button type="button" variant="outline" size="sm" disabled={blocked || page?.nextAfterReleaseRevision == null}
+        onClick={() => void load("next")}>Next 20 versions</Button>
     </div>
     <p role="status" aria-live="polite" aria-atomic="true">{message}</p>
-    {page !== null && (pending !== null || failure === "temporarily_unavailable") &&
-      <p>These details are from the last successful load.</p>}
-    <section aria-labelledby="release-list-heading" aria-busy={pending === "next" || pending === "reload"} className="space-y-3">
-      <h3 id="release-list-heading" className="text-lg font-semibold">Published versions (oldest first)</h3>
-      {page !== null && failure !== "conflict" && (page.entries.length === 0
-        ? <p>Nothing is published yet. Saving a draft does not publish it.</p>
-        : <>
-          <ol className="space-y-3">
-            {page.entries.map((entry) => <li key={entry.releaseRevision} className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
-              <p className="font-semibold">Version {entry.releaseVersion}
-                {entry.isCurrent && <span> · Current version</span>}</p>
-              <p>Published <time dateTime={entry.publishedAt}>{formatStudioTimestamp(entry.publishedAt)}</time></p>
-              <p className="whitespace-pre-wrap break-words">{entry.releaseNote}</p>
-              <Button type="button" variant="outline" size="sm" name="application.release_history.inspect" aria-pressed={selectedRevision === entry.releaseRevision}
-                disabled={blocked}
-                onClick={() => void run("inspect", entry.releaseRevision)}>
-                Show details of version {entry.releaseVersion}
-              </Button>
-            </li>)}
-          </ol>
-          {page.nextAfterReleaseRevision === null && <p>End of release history.</p>}
-        </>)}
-    </section>
-    <section aria-labelledby="release-inspect-heading" aria-busy={pending === "inspect"} className="space-y-3">
-      <h3 id="release-inspect-heading" className="text-lg font-semibold">Selected version</h3>
-      {metadata !== null && failure !== "conflict" ? <><dl className="space-y-2 rounded-xl border bg-card text-card-foreground p-4">
-        <div><dt className="font-semibold">Version</dt><dd>{metadata.releaseVersion}</dd></div>
-        <div><dt className="font-semibold">Current version</dt><dd>{metadata.isCurrent ? "Yes" : "No"}</dd></div>
-        <div><dt className="font-semibold">Published</dt><dd><time dateTime={metadata.publishedAt}>{formatStudioTimestamp(metadata.publishedAt)}</time></dd></div>
-        <div><dt className="font-semibold">Release note</dt><dd className="whitespace-pre-wrap break-words">{metadata.releaseNote}</dd></div>
-        {selectedRevision === metadata.releaseRevision && <div className="pt-2">
-          <nav aria-label="Selected release actions" className="flex flex-wrap gap-3">
-            <a className="inline-flex rounded-lg border px-3 py-2 underline"
-              href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/install`}
-              >
-              Review upgrade to version {metadata.releaseVersion}
-            </a>
-            <a className="inline-flex rounded-lg border px-3 py-2 underline"
-              href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/first-install`}
-              >
-              Review first install of version {metadata.releaseVersion}
-            </a>
-            {pending === null && page !== null && failure !== "refused" &&
-              page.entries.some((entry) => entry.releaseRevision === metadata.releaseRevision) &&
-              metadata.isCurrent === (metadata.releaseRevision === page.snapshot.anchorReleaseRevision) &&
-              <a className="inline-flex rounded-lg border px-3 py-2 underline"
-                data-command="application.release_history.restore.open"
-                href={`/studio/${encodeURIComponent(displayedSnapshot.organizationId)}/${encodeURIComponent(displayedSnapshot.rootId)}/history/${metadata.releaseRevision}/restore`}
-                >
-                Review restore of version {metadata.releaseVersion}
-              </a>}
-          </nav>
-          <p className="mt-2">Each link opens a review page. Restoring, installing and upgrading always ask you to confirm there; none runs from this list. Save your edits first.</p>
-        </div>}
-      </dl>
-      <TechnicalDetails><dl className="space-y-2">
-        <div><dt className="font-semibold">Release revision</dt><dd>{metadata.releaseRevision}</dd></div>
-        <div><dt className="font-semibold">Published by (account id)</dt><dd className="break-all">{metadata.publishedBy}</dd></div>
-        <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{metadata.sourceFingerprint}</code></dd></div>
-      </dl></TechnicalDetails></> : <p>Choose "Show details" on a version to read its details.</p>}
-    </section>
-    <section aria-label="Unavailable release commands" className="space-y-3 rounded-xl border bg-card text-card-foreground p-4">
-      <p id="history-unavailable-commands">To restore a version, show its details and open its restore review. Publishing is done from the Publish button at the top of the workspace.</p>
-    </section>
+    {restoreBlocked !== undefined && page !== null && page.entries.length > 0 &&
+      <p className="text-sm text-muted-foreground">{restoreBlocked}</p>}
+    {page !== null && failure === "temporarily_unavailable" && <p>These details are from the last successful load.</p>}
+    {page !== null && (page.entries.length === 0
+      ? <p>Nothing is published yet. Saving a draft does not publish it; use Publish at the top.</p>
+      : <ol className="space-y-3" aria-busy={pending !== null}>
+        {page.entries.map((entry) => <li key={entry.releaseRevision} className="space-y-2 rounded-xl border bg-card p-4 text-card-foreground">
+          <p className="font-semibold">Version {entry.releaseVersion}{entry.isCurrent && <span className="font-normal text-muted-foreground"> · current version</span>}</p>
+          <p className="text-sm">Published <time dateTime={entry.publishedAt}>{formatStudioTimestamp(entry.publishedAt)}</time> by {author(entry)}</p>
+          <div>
+            <p className="text-sm font-medium">What changed</p>
+            <p className="whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" disabled={blocked || restoreBlocked !== undefined}
+            onClick={() => void restore(entry)}>Restore version {entry.releaseVersion} into the draft</Button>
+          <TechnicalDetails><dl className="space-y-1 text-sm">
+            <div><dt className="font-semibold">Release revision</dt><dd>{entry.releaseRevision}</dd></div>
+            <div><dt className="font-semibold">Published by (account id)</dt><dd className="break-all">{entry.publishedBy}</dd></div>
+            <div><dt className="font-semibold">Source fingerprint</dt><dd className="break-all"><code>{entry.sourceFingerprint}</code></dd></div>
+          </dl></TechnicalDetails>
+        </li>)}
+      </ol>)}
+    {page !== null && page.entries.length > 0 && page.nextAfterReleaseRevision === null && <p className="text-sm text-muted-foreground">End of release history.</p>}
+    <TechnicalDetails><dl className="space-y-1 text-sm">
+      <div><dt className="font-semibold">Technical name</dt><dd className="break-all">{snapshot.definitionKey}</dd></div>
+      <div><dt className="font-semibold">Saved draft revision</dt><dd>{snapshot.draftRevision}</dd></div>
+      <div><dt className="font-semibold">Current release revision</dt><dd>{snapshot.anchorReleaseRevision ?? "No published release"}</dd></div>
+    </dl></TechnicalDetails>
+    {confirmDialog}
   </section>;
 }

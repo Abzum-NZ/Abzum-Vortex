@@ -10,9 +10,10 @@ import { Input } from "@vortex/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { cn } from "@vortex/ui/lib/utils";
 import {
-  studioMenuPageChoices, studioMenuPermissionChoices, studioMenuPosition,
+  studioMenuPageChoices, studioMenuPosition,
   type StudioMenuCommand, type StudioMenuItem, type StudioMenuResult,
 } from "../_lib/application-menu";
+import { studioAccessGateChoices } from "../_lib/application-access";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioField } from "./studio-field";
 
@@ -26,10 +27,12 @@ const kindWords = (item: StudioMenuItem) => item.type === "heading" ? "Heading" 
  * Alt and the arrow keys, and changed in the form below the tree. Every change is one command on the
  * draft; a refusal is shown here and nothing changes.
  */
-export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, disabled, hidden }: Readonly<{
+export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, onOpenAccess, disabled, hidden }: Readonly<{
   source: ApplicationSourceDocument;
   selectedAlias: string | null;
   onSelect: (alias: string | null) => void;
+  /** Opens the Access tab, where who can see an entry is set. */
+  onOpenAccess: () => void;
   onCommand: (command: StudioMenuCommand) => StudioMenuResult;
   disabled: boolean;
   hidden: boolean;
@@ -157,20 +160,21 @@ export function StudioMenuPanel({ source, selectedAlias, onSelect, onCommand, di
       {feedback !== null && <p role={feedback.kind === "refused" ? "alert" : "status"}
         className={feedback.kind === "refused" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>{feedback.message}</p>}
       {selected !== undefined && <StudioMenuEntryEditor key={selected.item.id} source={source} item={selected.item}
-        position={selected} disabled={disabled} run={run} moveBy={moveBy} />}
+        position={selected} disabled={disabled} run={run} moveBy={moveBy} onOpenAccess={onOpenAccess} />}
       </Suspense>
     </IconLibraryProvider>
   </StudioPanelShell>;
 }
 
 /** The selected entry's settings: label, icon, page, who can see it, where it sits, and removal. */
-function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy }: Readonly<{
+function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy, onOpenAccess }: Readonly<{
   source: ApplicationSourceDocument;
   item: StudioMenuItem;
   position: NonNullable<ReturnType<typeof studioMenuPosition>>;
   disabled: boolean;
   run: (command: StudioMenuCommand) => boolean;
   moveBy: (alias: string, key: string) => boolean;
+  onOpenAccess: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const [label, setLabel] = useState(item.label);
@@ -178,7 +182,7 @@ function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy }
   const [headingLabel, setHeadingLabel] = useState("");
   useEffect(() => { setLabel(item.label); }, [item.label]);
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
-  const permissions = useMemo(() => studioMenuPermissionChoices(source), [source]);
+  const permissions = useMemo(() => studioAccessGateChoices(source), [source]);
   const headings = source.body.navigation.filter((entry) => entry.type === "heading");
   const permission = item.type === "heading" ? undefined : permissions.find((choice) => choice.key === item.permission);
   const change = (command: Extract<StudioMenuCommand, { kind: "change" }>) => run(command);
@@ -226,18 +230,13 @@ function StudioMenuEntryEditor({ source, item, position, disabled, run, moveBy }
       </StudioField>
       <Button type="submit" size="sm" disabled={disabled}>Set</Button>
     </form>}
-    {item.type !== "heading" && <StudioField label="Who can see it"
-      hint={permission === undefined ? undefined : permission.roles.length === 0
-        ? "No role of this application holds this permission yet."
-        : `Roles that see it: ${permission.roles.join(", ")}.`}
-      error={permission === undefined ? "This entry names a permission the application does not declare. Choose who can see it." : undefined}>
-      {(control) => <NativeSelect {...control} value={item.permission} disabled={disabled}
-        onChange={(event) => change({ kind: "change", alias: item.id, changes: { permission: event.target.value } })}>
-        {permission === undefined ? <NativeSelectOption value={item.permission}>Undeclared permission</NativeSelectOption> : null}
-        {permissions.map((choice) => <NativeSelectOption key={choice.key} value={choice.key}>
-          {choice.label}{choice.roles.length === 0 ? "" : ` (${choice.roles.join(", ")})`}</NativeSelectOption>)}
-      </NativeSelect>}
-    </StudioField>}
+    {item.type !== "heading" && <div className="space-y-1">
+      <p className="text-sm font-medium">Who can see it</p>
+      <p className="text-sm text-muted-foreground">{permission === undefined
+        ? "This entry names a permission the application does not declare."
+        : `People who hold “${permission.label}”: ${permission.roles.length === 0 ? "no role holds it yet" : permission.roles.join(", ")}.`}</p>
+      <Button type="button" size="sm" variant="outline" onClick={onOpenAccess}><Icon name="shield" />Change in Access</Button>
+    </div>}
     {item.type === "heading" && <p className="text-xs text-muted-foreground">A heading shows when a person can see at least one entry under it.</p>}
     <div className="flex flex-wrap gap-2" role="group" aria-label="Move">
       <Button type="button" size="sm" variant="outline" disabled={disabled || position.index === 0} onClick={() => moveBy(item.id, "ArrowUp")}>

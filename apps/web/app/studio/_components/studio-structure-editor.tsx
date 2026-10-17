@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { sourcePageShell, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -10,6 +11,7 @@ import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell, studioStructureShellChoices, type StudioStructureCommand, type StudioStructureResult,
 } from "../_lib/application-structure";
+import { studioAccessGateChoices } from "../_lib/application-access";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";
 
@@ -21,13 +23,15 @@ type Form = "none" | "page" | "record" | "shell";
  * layout selected in the tree. Each control sends one command; a refusal is shown here, where it was
  * asked for, and nothing changes.
  */
-export function StudioStructureEditor({ source, selected, disabled, onCommand, onPreview }: Readonly<{
+export function StudioStructureEditor({ source, selected, disabled, onCommand, onPreview, onOpenAccess }: Readonly<{
   source: ApplicationSourceDocument;
   selected: StudioSemanticSelection | null;
   disabled: boolean;
   onCommand: (command: StudioStructureCommand) => StudioStructureResult;
   /** Runs a command on the current draft without keeping it, for a preview of what it adds. */
   onPreview: (command: StudioStructureCommand) => StudioStructureResult;
+  /** Opens the Access tab, where who can open a page is set. */
+  onOpenAccess: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const [form, setForm] = useState<Form>("none");
@@ -43,6 +47,7 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
   const what = page !== undefined ? "page" : "layout";
   const [rename, setRename] = useState(target?.name ?? "");
   useEffect(() => { setRename(target?.name ?? ""); }, [target?.id, target?.name]);
+  const gate = page === undefined ? undefined : studioAccessGateChoices(source).find((choice) => choice.key === page.permission);
   const pageShell = page === undefined ? null : sourcePageShell(page.composition);
   const [moveTo, setMoveTo] = useState(pageShell ?? "");
   useEffect(() => { setMoveTo(pageShell ?? ""); }, [page?.id, pageShell]);
@@ -145,6 +150,13 @@ export function StudioStructureEditor({ source, selected, disabled, onCommand, o
         <Button type="button" size="sm" variant="outline" disabled={disabled || moveTo === (pageShell ?? "")}
           onClick={() => run({ kind: "move_page", pageAlias: page.id, shellAlias: moveTo === "" ? null : moveTo })}>
           Move to layout</Button>
+      </div>}
+      {page !== undefined && <div className="space-y-1">
+        <p className="text-sm font-medium">Who can open it</p>
+        <p className="text-sm text-muted-foreground">{gate === undefined
+          ? "This page names a permission the application does not declare."
+          : `People who hold “${gate.label}”: ${gate.roles.length === 0 ? "no role holds it yet" : gate.roles.join(", ")}.`}</p>
+        <Button type="button" size="sm" variant="outline" onClick={onOpenAccess}><Icon name="shield" />Change in Access</Button>
       </div>}
     </form>}
     {feedback !== null && <p role={feedback.kind === "refused" ? "alert" : "status"}

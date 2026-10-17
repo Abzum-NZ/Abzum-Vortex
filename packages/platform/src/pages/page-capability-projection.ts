@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CompiledLayout, PageDefinition } from "../schema";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
+import { placementViewShown } from "./projected-navigation";
 
 export type PlacementCapabilityState = Readonly<{
   viewAllowed: boolean;
@@ -92,7 +93,7 @@ const projectItems = (
     const placementId = String(props.id);
     const state = states[placementId];
     if (
-      (vortex.viewPermissionKey !== undefined && state?.viewAllowed !== true) ||
+      !placementViewShown(vortex.viewPermissionKey, state?.viewAllowed) ||
       (vortex.visibilityCondition !== undefined && state?.conditionAllowed !== true) ||
       state?.actionAvailable === false
     )
