@@ -598,11 +598,19 @@ export const sourceApplicationBodySchema = z
                 ["permissionKeys/#", "permissionSelection/kind"],
                 true,
               ),
+              /**
+               * Marks the application's one default member role: the role a first install offers
+               * the installer, who accepts it explicitly on the install screen.
+               */
+              default_member: sourceProvenanceTarget(z.literal(true).optional(), ["defaultMember"]),
             })
             .strict(),
         )
         .min(1)
-        .max(100),
+        .max(100)
+        .refine((roles) => roles.filter((role) => role.default_member === true).length === 1, {
+          message: "Exactly one role must be the application's default member role",
+        }),
     ),
     navigation: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).max(100)),
     pipelines: sourceProvenanceUnchanged(

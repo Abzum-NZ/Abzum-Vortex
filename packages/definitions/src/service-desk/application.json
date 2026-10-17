@@ -245,6 +245,7 @@
       {
         "id": "role_sd_agent",
         "key": "service_agent",
+        "default_member": true,
         "name": "Service agent",
         "home_page": "service_desk_overview",
         "permissions": [
