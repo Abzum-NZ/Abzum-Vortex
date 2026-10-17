@@ -96,14 +96,12 @@ const resolvedSettingKinds: ReadonlySet<string> = new Set([
   "query_reference",
   "record_type_reference",
   "relationship_reference",
-  "theme_token",
 ]);
 
 /** Kinds whose plain value is one reference that compilation resolves to a canonical identity. */
 const referenceSettingKinds: ReadonlySet<string> = new Set([
   "asset_reference",
   "icon",
-  "theme_token",
   "field_reference",
   "relationship_reference",
   "action_reference",

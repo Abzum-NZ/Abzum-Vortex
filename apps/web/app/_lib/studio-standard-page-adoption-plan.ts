@@ -120,8 +120,6 @@ const propertyDisplayValue = (value: BlockPropertyValueContract): string => {
       return `${value.kind.replaceAll("_", " ")} (reference omitted)`;
     case "icon":
       return `Icon: ${safeDifferenceLabel(value.iconKey)}`;
-    case "theme_token":
-      return `Theme token: ${safeDifferenceLabel(value.tokenKey)}`;
     case "group":
       return `Group (${Object.keys(value.properties).length} settings)`;
     case "list":
