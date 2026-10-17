@@ -16,7 +16,8 @@ import { ensureLocalSigningKey } from "./ensure-local-signing-key.mjs";
 const workspaceRoot = path.resolve(import.meta.dirname, "../..");
 const cliPath = path.join(workspaceRoot, "node_modules", "supabase", "dist", "supabase.js");
 const lanesRoot = path.resolve(process.env.VORTEX_LANES_ROOT ?? "A:/Apps/vortex-lanes");
-const laneNumbers = new Set([2, 3, 4, 5, 6, 7]);
+// Lane 6 is skipped: its ports (5932x) fall in a TCP range Windows reserves for Hyper-V on this host.
+const laneNumbers = new Set([2, 3, 4, 5, 7, 8]);
 
 // The app needs the database, Auth, the Data API, Kong, Storage and Realtime. Auth sends sign-up
 // confirmation and recovery email, so the Mailpit inbox stays on. Studio, logs, the edge runtime
