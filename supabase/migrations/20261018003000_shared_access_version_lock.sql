@@ -14,7 +14,7 @@
 -- organisation). A replaced or expired preview's storage is retired with its preview row and
 -- dropped in the background, one storage identity per short transaction with a short lock timeout,
 -- never inside a builder's request.
-set local role vortex_owner;
+set role vortex_owner;
 
 drop function vortex_access.resolve_human_application_change_scope(uuid, uuid, uuid);
 drop function vortex_access.resolve_human_organization_change_scope(uuid, uuid);
@@ -186,7 +186,7 @@ $$;
 
 alter function vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) IS 'Resolves one exact active human organisation scope and active application registration under the organisation's shared Access lock, for reads and ordinary changes alike.';
+COMMENT ON FUNCTION vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) IS 'Resolves one exact active human organisation scope and active application registration under the organisation''s shared Access lock, for reads and ordinary changes alike.';
 
 REVOKE ALL ON FUNCTION vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION vortex_access.resolve_human_application_scope(p_identity_id uuid, p_organization_id uuid, p_application_root_id uuid) TO vortex_runtime;
@@ -5141,3 +5141,4 @@ grant execute on function vortex_definition.expire_abandoned_preview_installatio
 comment on function vortex_definition.expire_abandoned_preview_installations_internal(integer) is
   'Removes a bounded batch of expired preview installations across organisations, for scheduled runtime maintenance only; their isolated Record storage is retired with them and dropped in the background.';
 
+reset role;
