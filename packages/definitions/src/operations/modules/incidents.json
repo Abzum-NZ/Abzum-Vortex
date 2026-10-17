@@ -425,7 +425,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         }
       ],

@@ -11,7 +11,7 @@
       "plural_name": "People",
       "title_field": "display_name",
       "storage_contract_id": "srt_system_directory_person",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -142,7 +142,7 @@
       "plural_name": "Organisation invitations",
       "title_field": "invited_email",
       "storage_contract_id": "srt_system_directory_invitation",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -249,7 +249,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -264,7 +264,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         }
       ],
@@ -277,7 +277,7 @@
       "plural_name": "Groups",
       "title_field": "label",
       "storage_contract_id": "srt_system_directory_group",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -391,7 +391,7 @@
       "plural_name": "Group memberships",
       "title_field": "account_display_name",
       "storage_contract_id": "srt_system_directory_group_membership",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -500,7 +500,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -515,7 +515,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -584,7 +584,7 @@
       "plural_name": "Roles",
       "title_field": "label",
       "storage_contract_id": "srt_system_directory_role",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -794,7 +794,7 @@
       "plural_name": "Role assignments",
       "title_field": "role_label",
       "storage_contract_id": "srt_system_directory_role_assignment",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -985,7 +985,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1000,7 +1000,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1069,7 +1069,7 @@
       "plural_name": "Role activations",
       "title_field": "account_display_name",
       "storage_contract_id": "srt_system_directory_role_activation",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1234,7 +1234,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1249,7 +1249,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1314,7 +1314,7 @@
       "plural_name": "Delegations",
       "title_field": "scope_kind",
       "storage_contract_id": "srt_system_directory_delegation",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1458,7 +1458,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1473,7 +1473,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1542,7 +1542,7 @@
       "plural_name": "Organisations",
       "title_field": "display_name",
       "storage_contract_id": "srt_system_directory_organization",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1698,7 +1698,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1713,7 +1713,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         }
       ],
@@ -1726,7 +1726,7 @@
       "plural_name": "Tenant administrators",
       "title_field": "identity_id",
       "storage_contract_id": "srt_system_directory_tenant_administrator",
-      "storage_scope": "organisation_shared",
+      "storage_scope": "organization_shared",
       "ownership_mode": "none",
       "standard_actions": [
         "read"
@@ -1868,7 +1868,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {
@@ -1883,7 +1883,7 @@
           "public_display": "refused",
           "type": "date_time",
           "settings": {
-            "display_time_zone": "organisation"
+            "display_time_zone": "organization"
           }
         },
         {

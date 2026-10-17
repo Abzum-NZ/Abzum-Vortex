@@ -23,7 +23,7 @@ import {
   sourceExactDecimalTextSchema,
   sourceMoneyValueSchema,
 } from "../records/module-field-values";
-import { moduleSourceRecordOwnershipModeSchema } from "../records/record-ownership-compatibility";
+import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
 import {
   boundedProtectedReadModelSortKeys,
@@ -378,11 +378,11 @@ const moduleSourceRecordTypeSchema = z
     title_field: sourceProvenanceTarget(builderKeySchema, ["titleFieldId"]),
     storage_contract_id: sourceProvenanceTarget(sourceAliasSchema, ["storageContractId"]),
     storage_scope: sourceProvenanceTarget(
-      z.enum(["organisation_shared", "application_contained"]),
+      z.enum(["organization_shared", "application_contained"]),
       ["storageScope"],
     ),
     system_projection: sourceProvenanceUnchanged(moduleSourceSystemProjectionSchema.optional()),
-    ownership_mode: sourceProvenanceTarget(moduleSourceRecordOwnershipModeSchema, [
+    ownership_mode: sourceProvenanceTarget(recordOwnershipModeSchema, [
       "ownershipMode",
     ]),
     ownership_relationship: sourceProvenanceTarget(builderKeySchema.optional(), [
@@ -462,7 +462,7 @@ const moduleSourceRecordTypeSchema = z
     if (projection === undefined) return;
     // A system projection is read-only by default. Only a projection in the closed writable
     // registration may declare standard update; create, delete and restore always remain refused.
-    if (value.storage_scope !== "organisation_shared")
+    if (value.storage_scope !== "organization_shared")
       context.addIssue({
         code: "custom",
         path: ["storage_scope"],

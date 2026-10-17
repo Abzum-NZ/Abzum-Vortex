@@ -8,7 +8,7 @@ import {
   recordTypeIdSchema,
   fieldIdSchema,
   isRegisteredWritableSystemProjection,
-  readModuleSourceRecordOwnershipMode,
+  recordOwnershipModeSchema,
   type ModuleCompilationOutput,
   type FlowDefinition,
   type RuleGraph,
@@ -202,10 +202,7 @@ function compileModule(
         String(recordType.storage_contract_id),
         `record:${recordKey}`,
       ),
-      storageScope:
-        recordType.storage_scope === "organisation_shared"
-          ? "organization_shared"
-          : recordType.storage_scope,
+      storageScope: recordType.storage_scope,
       ...(projection === undefined
         ? {}
         : {
@@ -224,7 +221,7 @@ function compileModule(
               ),
             },
           }),
-      ownershipMode: readModuleSourceRecordOwnershipMode(recordType.ownership_mode),
+      ownershipMode: recordOwnershipModeSchema.parse(recordType.ownership_mode),
       ...(recordType.ownership_relationship
         ? {
             ownershipRelationshipId: resolution.relationship(

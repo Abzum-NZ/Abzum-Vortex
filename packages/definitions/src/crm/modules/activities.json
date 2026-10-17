@@ -12,7 +12,7 @@
       "title_field": "subject",
       "storage_contract_id": "srt_00000006",
       "storage_scope": "application_contained",
-      "ownership_mode": "organisation_account",
+      "ownership_mode": "organization_account",
       "standard_actions": [
         "create",
         "read",

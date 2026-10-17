@@ -472,7 +472,7 @@
           "public_display": "refused",
           "type": "link_to_person",
           "settings": {
-            "audience": "organisation_identities_and_external_requesters",
+            "audience": "organization_identities_and_external_requesters",
             "application_root_required": false,
             "on_person_deactivation": "retain_reference"
           }
@@ -986,7 +986,7 @@
           "key": "owner",
           "label": "Owner",
           "required": true,
-          "type": "organisation_account_reference"
+          "type": "organization_account_reference"
         }
       ],
       "tasks": [
