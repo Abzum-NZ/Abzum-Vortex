@@ -48,8 +48,6 @@ export const calculationResultTypeLabels = {
   text: "Text", whole_number: "Whole number", decimal_number: "Decimal number", money: "Money", yes_no: "Yes or no",
   date: "Date", date_time: "Date and time",
 } as const satisfies Record<CalculationResultType, string>;
-/** A total's operations, named as a query's totals name them. */
-export const totalOperationLabels: Readonly<Record<TotalOperation, string>> = queryTotalOperationLabels;
 
 /** The value type a field holds, with a calculation or total read as its result. */
 const valueType = (field: FormulaField | undefined): string | undefined =>
@@ -236,10 +234,6 @@ export const starterCalculationExpression = (operation: CalculationOperation, fi
   }
 };
 
-/** The fields of related records a total's operation can be taken of: the same rule as a query's totals. */
-export const totalAccepts = (operation: TotalOperation, field: FormulaField): boolean =>
-  queryTotalAccepts(operation, field.type);
-
 /** The result a total produces from its operation and field: one rule, so the editor never asks for it. */
 export const totalResultType = (operation: TotalOperation, field: FormulaField | undefined): CalculationResultType | undefined => {
   if (operation === "count") return "whole_number";
@@ -275,10 +269,10 @@ export const totalProblems = (settings: TotalSettings, relationship: TotalRelati
   const field = settings.field === undefined ? undefined : relationship.fields.find((item) => item.key === settings.field);
   if (settings.operation === "count") {
     if (settings.field !== undefined) problems.push("Field: a number of records counts records, not a field.");
-  } else if (settings.field === undefined) problems.push(`Field: choose the field of ${relationship.recordName} to take the ${totalOperationLabels[settings.operation].toLowerCase()} of.`);
+  } else if (settings.field === undefined) problems.push(`Field: choose the field of ${relationship.recordName} to take the ${queryTotalOperationLabels[settings.operation].toLowerCase()} of.`);
   else if (field === undefined) problems.push(`Field: ${settings.field} is not a field of ${relationship.recordName} any more.`);
-  else if (!totalAccepts(settings.operation, field))
-    problems.push(`Field: the ${totalOperationLabels[settings.operation].toLowerCase()} can't be taken of ${field.label}.`);
+  else if (!queryTotalAccepts(settings.operation, field.type))
+    problems.push(`Field: the ${queryTotalOperationLabels[settings.operation].toLowerCase()} can't be taken of ${field.label}.`);
   if (settings.currency !== undefined && (settings.operation !== "sum" || field?.type !== "money"))
     problems.push("Currency: only a sum of money has a currency.");
   if (settings.operation === "average" && settings.decimal_places === undefined)
@@ -290,7 +284,7 @@ export const totalProblems = (settings: TotalSettings, relationship: TotalRelati
 export const describeTotal = (settings: TotalSettings, relationship: TotalRelationship | undefined): string => {
   const records = relationship?.recordName ?? (settings.relationship as string | undefined) ?? "the related records";
   const field = settings.field === undefined ? undefined : relationship?.fields.find((item) => item.key === settings.field)?.label ?? settings.field;
-  const what = settings.operation === "count" ? `${totalOperationLabels.count} of ${records}`
-    : `${totalOperationLabels[settings.operation]} of ${field ?? "a field"} of ${records}`;
+  const what = settings.operation === "count" ? `${queryTotalOperationLabels.count} of ${records}`
+    : `${queryTotalOperationLabels[settings.operation]} of ${field ?? "a field"} of ${records}`;
   return settings.filter === undefined ? what : `${what}, of those that match its filter`;
 };

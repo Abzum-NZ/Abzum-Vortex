@@ -12,6 +12,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -36,13 +37,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "RICH_TEXT_BLOCK_RELEASE": {
@@ -58,6 +55,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -67,6 +65,7 @@
       {
         "kind": "rich_text",
         "key": "document",
+        "presentation": true,
         "label": "Content",
         "help": "Structured content shown when no projected value is supplied",
         "required": false,
@@ -88,13 +87,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "LIST_BLOCK_RELEASE": {
@@ -110,6 +105,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -125,16 +121,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action",
-      "selection_changed",
-      "page_changed"
-    ],
+    "supportedEvents": ["refresh", "row_action", "selection_changed", "page_changed"],
     "supportedStateOperations": []
   },
   "TABLE_BLOCK_RELEASE": {
@@ -150,6 +139,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -165,9 +155,7 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [
       "refresh",
@@ -191,6 +179,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -206,14 +195,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "GROUPED_DATA_BLOCK_RELEASE": {
@@ -229,6 +213,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -244,15 +229,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action",
-      "selection_changed"
-    ],
+    "supportedEvents": ["refresh", "row_action", "selection_changed"],
     "supportedStateOperations": []
   },
   "SUMMARY_VALUES_BLOCK_RELEASE": {
@@ -268,6 +247,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -283,13 +263,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "NOTICE_BLOCK_RELEASE": {
@@ -305,6 +281,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Optional title shown after the severity announcement",
         "required": false,
@@ -335,6 +312,7 @@
       {
         "kind": "list",
         "key": "content",
+        "presentation": true,
         "label": "Content",
         "help": "Ordered plain-text and safe-link parts shown by the notice",
         "required": true,
@@ -361,6 +339,7 @@
             {
               "kind": "text",
               "key": "value",
+              "presentation": true,
               "label": "Value",
               "help": "Text content or the label shown for a link",
               "required": true,
@@ -370,6 +349,7 @@
             {
               "kind": "text",
               "key": "href",
+              "presentation": true,
               "label": "Link destination",
               "help": "Optional destination; unsafe destinations render as the plain-text label",
               "required": false,
@@ -503,6 +483,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -521,6 +502,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there is no text to display",
         "required": false,
@@ -536,13 +518,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "RICH_TEXT_BLOCK_RELEASE_1_1_0": {
@@ -558,6 +536,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -567,6 +546,7 @@
       {
         "kind": "rich_text",
         "key": "document",
+        "presentation": true,
         "label": "Content",
         "help": "Structured content shown when no projected value is supplied",
         "required": false,
@@ -582,6 +562,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there is no content to display",
         "required": false,
@@ -597,13 +578,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "LIST_BLOCK_RELEASE_1_1_0": {
@@ -619,6 +596,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -628,6 +606,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there are no records to display",
         "required": false,
@@ -643,16 +622,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action",
-      "selection_changed",
-      "page_changed"
-    ],
+    "supportedEvents": ["refresh", "row_action", "selection_changed", "page_changed"],
     "supportedStateOperations": []
   },
   "TABLE_BLOCK_RELEASE_1_1_0": {
@@ -668,6 +640,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -677,6 +650,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there are no records to display",
         "required": false,
@@ -692,9 +666,7 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [
       "refresh",
@@ -718,6 +690,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -727,6 +700,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there are no details to display",
         "required": false,
@@ -742,14 +716,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "GROUPED_DATA_BLOCK_RELEASE_1_1_0": {
@@ -765,6 +734,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -774,6 +744,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there are no groups to display",
         "required": false,
@@ -789,15 +760,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action",
-      "selection_changed"
-    ],
+    "supportedEvents": ["refresh", "row_action", "selection_changed"],
     "supportedStateOperations": []
   },
   "SUMMARY_VALUES_BLOCK_RELEASE_1_1_0": {
@@ -813,6 +778,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -822,6 +788,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there are no values to display",
         "required": false,
@@ -837,13 +804,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "TABLE_BLOCK_RELEASE_1_2_0": {
@@ -859,6 +822,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -868,6 +832,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when the query returns no records",
         "required": false,
@@ -877,6 +842,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Refused message",
         "help": "Text shown when the viewer may not read this data",
         "required": false,
@@ -886,6 +852,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when the data could not be read",
         "required": false,
@@ -895,6 +862,8 @@
       {
         "kind": "list",
         "key": "columns",
+        "presentation": true,
+        "presentationIdentity": "field",
         "label": "Columns",
         "help": "Ordered columns; every field must be a field of the bound query",
         "required": true,
@@ -917,6 +886,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Column heading; the field name is used when absent",
               "required": false,
@@ -1235,9 +1205,7 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [
       "refresh",
@@ -1261,6 +1229,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -1270,6 +1239,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when the query returns no records",
         "required": false,
@@ -1279,6 +1249,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Refused message",
         "help": "Text shown when the viewer may not read this data",
         "required": false,
@@ -1288,6 +1259,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when the data could not be read",
         "required": false,
@@ -1297,6 +1269,8 @@
       {
         "kind": "list",
         "key": "columns",
+        "presentation": true,
+        "presentationIdentity": "field",
         "label": "Columns",
         "help": "Ordered columns; every field must be a field of the bound query",
         "required": true,
@@ -1319,6 +1293,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Column heading; the field name is used when absent",
               "required": false,
@@ -1673,6 +1648,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Text shown on the command",
               "required": true,
@@ -1709,6 +1685,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Text shown on the command",
               "required": true,
@@ -1761,9 +1738,7 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [
       "refresh",
@@ -1790,6 +1765,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -1799,6 +1775,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when the query returns no records",
         "required": false,
@@ -1808,6 +1785,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Refused message",
         "help": "Text shown when the viewer may not read this data",
         "required": false,
@@ -1817,6 +1795,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when the data could not be read",
         "required": false,
@@ -1826,6 +1805,8 @@
       {
         "kind": "list",
         "key": "detail_fields",
+        "presentation": true,
+        "presentationIdentity": "field",
         "label": "Detail fields",
         "help": "Ordered fields shown for the record",
         "required": true,
@@ -1848,6 +1829,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Field label; the field name is used when absent",
               "required": false,
@@ -1907,14 +1889,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "TEXT_INPUT_BLOCK_RELEASE": {
@@ -1939,6 +1916,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -1948,6 +1926,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder hint text",
         "required": false,
@@ -1957,6 +1936,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text below the input",
         "required": false,
@@ -2029,13 +2009,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "NUMBER_INPUT_BLOCK_RELEASE": {
@@ -2060,6 +2036,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -2069,6 +2046,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder hint text",
         "required": false,
@@ -2078,6 +2056,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text below the input",
         "required": false,
@@ -2145,13 +2124,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "BOOLEAN_INPUT_BLOCK_RELEASE": {
@@ -2176,6 +2151,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -2185,6 +2161,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text",
         "required": false,
@@ -2231,13 +2208,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "DATE_INPUT_BLOCK_RELEASE": {
@@ -2262,6 +2235,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -2271,6 +2245,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text",
         "required": false,
@@ -2307,13 +2282,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "CHOICE_INPUT_BLOCK_RELEASE": {
@@ -2338,6 +2309,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -2347,6 +2319,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder option label",
         "required": false,
@@ -2356,6 +2329,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text",
         "required": false,
@@ -2379,6 +2353,8 @@
       {
         "kind": "list",
         "key": "options",
+        "presentation": true,
+        "presentationIdentity": "key",
         "label": "Options",
         "help": "Choices offered when no projected options are supplied",
         "required": false,
@@ -2402,6 +2378,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Option text shown to people",
               "required": true,
@@ -2437,13 +2414,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "CHOICE_INPUT_BLOCK_RELEASE_1_1_0": {
@@ -2468,6 +2441,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -2477,6 +2451,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder option label",
         "required": false,
@@ -2486,6 +2461,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text",
         "required": false,
@@ -2509,6 +2485,8 @@
       {
         "kind": "list",
         "key": "options",
+        "presentation": true,
+        "presentationIdentity": "key",
         "label": "Options",
         "help": "Choices offered when no projected options are supplied",
         "required": false,
@@ -2532,6 +2510,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Option text shown to people",
               "required": true,
@@ -2590,13 +2569,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "CHOICE_INPUT_BLOCK_RELEASE_1_2_0": {
@@ -2621,6 +2596,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -2630,6 +2606,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder option label",
         "required": false,
@@ -2639,6 +2616,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text",
         "required": false,
@@ -2662,6 +2640,8 @@
       {
         "kind": "list",
         "key": "options",
+        "presentation": true,
+        "presentationIdentity": "key",
         "label": "Options",
         "help": "Choices offered when no projected options are supplied",
         "required": false,
@@ -2685,6 +2665,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Option text shown to people",
               "required": true,
@@ -2770,13 +2751,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "CHOICE_INPUT_BLOCK_RELEASE_1_3_0": {
@@ -2801,6 +2778,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -2810,6 +2788,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder option label",
         "required": false,
@@ -2819,6 +2798,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text",
         "required": false,
@@ -2842,6 +2822,8 @@
       {
         "kind": "list",
         "key": "options",
+        "presentation": true,
+        "presentationIdentity": "key",
         "label": "Options",
         "help": "Choices offered when no projected options are supplied",
         "required": false,
@@ -2865,6 +2847,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Option text shown to people",
               "required": true,
@@ -2968,13 +2951,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "VALIDATION_MESSAGE_BLOCK_RELEASE": {
@@ -2990,6 +2969,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible title for validation message",
         "required": false,
@@ -3045,9 +3025,7 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []
@@ -3065,6 +3043,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name shown as the button text",
         "required": true,
@@ -3133,13 +3112,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "action"
-    ],
+    "supportedEvents": ["action"],
     "supportedStateOperations": []
   },
   "TABS_BLOCK_RELEASE": {
@@ -3155,6 +3130,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name for the tabs container",
         "required": true,
@@ -3288,16 +3264,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "tab_changed"
-    ],
-    "supportedStateOperations": [
-      "select_tab"
-    ]
+    "supportedEvents": ["tab_changed"],
+    "supportedStateOperations": ["select_tab"]
   },
   "TABS_BLOCK_RELEASE_2_0_0": {
     "blockId": "a3b7065b-47ef-4c92-93d1-59300f8b059c",
@@ -3312,6 +3282,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name for the tabs container",
         "required": true,
@@ -3321,6 +3292,8 @@
       {
         "kind": "list",
         "key": "items",
+        "presentation": true,
+        "presentationIdentity": "key",
         "label": "Tabs",
         "help": "Ordered tabs, each with a stable key and a label",
         "required": true,
@@ -3344,6 +3317,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Label shown on this tab button",
               "required": true,
@@ -3381,16 +3355,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "tab_changed"
-    ],
-    "supportedStateOperations": [
-      "select_tab"
-    ]
+    "supportedEvents": ["tab_changed"],
+    "supportedStateOperations": ["select_tab"]
   },
   "DIALOG_BLOCK_RELEASE": {
     "blockId": "651460f1-5fce-4443-bc9d-4dd4b6ae8a8b",
@@ -3405,6 +3373,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name and modal heading",
         "required": true,
@@ -3459,9 +3428,7 @@
         "key": "actions",
         "label": "Dialog actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -3471,17 +3438,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "action"
-    ],
-    "supportedStateOperations": [
-      "open",
-      "close"
-    ]
+    "supportedEvents": ["action"],
+    "supportedStateOperations": ["open", "close"]
   },
   "DRAWER_BLOCK_RELEASE": {
     "blockId": "a399ff74-5716-4411-bca8-c5ab87ec2e7d",
@@ -3496,6 +3456,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name and drawer heading",
         "required": true,
@@ -3575,9 +3536,7 @@
         "key": "actions",
         "label": "Drawer actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -3587,17 +3546,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "action"
-    ],
-    "supportedStateOperations": [
-      "open",
-      "close"
-    ]
+    "supportedEvents": ["action"],
+    "supportedStateOperations": ["open", "close"]
   },
   "CONTAINER_BLOCK_RELEASE": {
     "blockId": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
@@ -4021,9 +3973,7 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "text"
-      ]
+      "accessibleNamePropertyPath": ["text"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []
@@ -4041,6 +3991,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Accessible name",
         "help": "Accessible name for the navigation landmark",
         "required": true,
@@ -4056,9 +4007,7 @@
       "height": "content_or_bounded",
       "publicSurface": "refused",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []
@@ -4098,6 +4047,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Prompt shown in the application search field",
         "required": true,
@@ -4147,6 +4097,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name for the form",
         "required": false,
@@ -4177,19 +4128,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "form_ready",
-      "form_submit",
-      "form_reset"
-    ],
-    "supportedStateOperations": [
-      "set_value",
-      "reset"
-    ]
+    "supportedEvents": ["form_ready", "form_submit", "form_reset"],
+    "supportedStateOperations": ["set_value", "reset"]
   },
   "LINK_INPUT_BLOCK_RELEASE": {
     "blockId": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
@@ -4213,6 +4155,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -4222,6 +4165,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder hint text",
         "required": false,
@@ -4231,6 +4175,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text below the input",
         "required": false,
@@ -4282,13 +4227,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "RICH_TEXT_INPUT_BLOCK_RELEASE": {
@@ -4313,6 +4254,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual field label",
         "required": true,
@@ -4322,6 +4264,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text below the input",
         "required": false,
@@ -4373,13 +4316,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "FIELD_INPUT_BLOCK_RELEASE": {
@@ -4403,6 +4342,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label override",
         "help": "Overrides the field's label; leave unset to follow the field",
         "required": false,
@@ -4412,6 +4352,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder hint text",
         "required": false,
@@ -4421,6 +4362,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text below the input",
         "required": false,
@@ -4570,6 +4512,8 @@
       {
         "kind": "list",
         "key": "options",
+        "presentation": true,
+        "presentationIdentity": "key",
         "label": "Options",
         "help": "Declared field values offered by this input",
         "required": false,
@@ -4593,6 +4537,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "required": true,
               "minLength": 1,
@@ -4634,13 +4579,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "APPLICATION_LAUNCHER_BLOCK_RELEASE": {
@@ -4656,6 +4597,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -4704,14 +4646,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "LINK_TILES_BLOCK_RELEASE": {
@@ -4727,6 +4664,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -4769,9 +4707,7 @@
         "key": "actions",
         "label": "Tile actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -4781,14 +4717,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "RECORD_PIN_LINK_TILES_BLOCK_RELEASE": {
@@ -4804,6 +4735,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -4936,9 +4868,7 @@
         "key": "actions",
         "label": "Tile actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -4948,14 +4878,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE": {
@@ -4971,6 +4896,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -5121,9 +5047,7 @@
         "key": "actions",
         "label": "Tile actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -5133,14 +5057,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "VIEW_FILTER_BLOCK_RELEASE": {
@@ -5156,6 +5075,7 @@
       {
         "kind": "text",
         "key": "label",
+        "presentation": true,
         "label": "Label",
         "help": "Accessible name and visual label for the filter",
         "required": true,
@@ -5165,6 +5085,7 @@
       {
         "kind": "text",
         "key": "placeholder",
+        "presentation": true,
         "label": "Placeholder",
         "help": "Placeholder hint text",
         "required": false,
@@ -5174,6 +5095,7 @@
       {
         "kind": "text",
         "key": "help_text",
+        "presentation": true,
         "label": "Help text",
         "help": "Descriptive help text below the filter",
         "required": false,
@@ -5220,6 +5142,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when no already-returned row matches the filter",
         "required": false,
@@ -5232,10 +5155,7 @@
         "key": "content",
         "label": "Filtered content",
         "required": true,
-        "allowedChildCategories": [
-          "content",
-          "layout"
-        ]
+        "allowedChildCategories": ["content", "layout"]
       }
     ],
     "capabilities": {
@@ -5245,9 +5165,7 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []
@@ -5265,6 +5183,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -5274,6 +5193,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when the query returns no records",
         "required": false,
@@ -5283,6 +5203,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Refused message",
         "help": "Text shown when the viewer may not read this data",
         "required": false,
@@ -5292,6 +5213,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when the data could not be read",
         "required": false,
@@ -5301,6 +5223,8 @@
       {
         "kind": "list",
         "key": "columns",
+        "presentation": true,
+        "presentationIdentity": "field",
         "label": "Columns",
         "help": "Ordered columns; every field must be a field of the bound query",
         "required": true,
@@ -5323,6 +5247,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Column heading; the field name is used when absent",
               "required": false,
@@ -5677,6 +5602,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Text shown on the command",
               "required": true,
@@ -5734,6 +5660,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Text shown on the command",
               "required": true,
@@ -5807,9 +5734,7 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [
       "refresh",
@@ -6103,6 +6028,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the block heading",
         "required": false,
@@ -6185,6 +6111,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when there are no items in this period",
         "required": false,
@@ -6218,6 +6145,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the board heading",
         "required": false,
@@ -6241,6 +6169,8 @@
       {
         "kind": "list",
         "key": "detail_fields",
+        "presentation": true,
+        "presentationIdentity": "field",
         "label": "Card details",
         "help": "Optional ordered query fields shown below each card title",
         "required": false,
@@ -6263,6 +6193,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Optional label for this card field",
               "required": false,
@@ -6275,6 +6206,8 @@
       {
         "kind": "list",
         "key": "aggregates",
+        "presentation": true,
+        "presentationIdentity": "alias",
         "label": "Board totals",
         "help": "Optional ordered protected query totals shown above every column",
         "required": false,
@@ -6299,6 +6232,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Safe display label for this aggregate",
               "required": true,
@@ -6311,6 +6245,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Neutral text shown when a fetched board bucket has no cards",
         "required": false,
@@ -6320,6 +6255,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Refused message",
         "help": "Text shown when the viewer may not read this board",
         "required": false,
@@ -6329,6 +6265,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when the board could not be read",
         "required": false,
@@ -6362,6 +6299,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the board heading",
         "required": false,
@@ -6385,6 +6323,8 @@
       {
         "kind": "list",
         "key": "detail_fields",
+        "presentation": true,
+        "presentationIdentity": "field",
         "label": "Card details",
         "help": "Optional ordered query fields shown below each card title",
         "required": false,
@@ -6407,6 +6347,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Optional label for this card field",
               "required": false,
@@ -6419,6 +6360,8 @@
       {
         "kind": "list",
         "key": "aggregates",
+        "presentation": true,
+        "presentationIdentity": "alias",
         "label": "Board totals",
         "help": "Optional ordered protected query totals shown above every column",
         "required": false,
@@ -6443,6 +6386,7 @@
             {
               "kind": "text",
               "key": "label",
+              "presentation": true,
               "label": "Label",
               "help": "Safe display label for this aggregate",
               "required": true,
@@ -6455,6 +6399,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Neutral text shown when a fetched board bucket has no cards",
         "required": false,
@@ -6464,6 +6409,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Refused message",
         "help": "Text shown when the viewer may not read this board",
         "required": false,
@@ -6473,6 +6419,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when the board could not be read",
         "required": false,
@@ -6815,6 +6762,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the attachment list heading",
         "required": true,
@@ -6831,6 +6779,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when the readable attachment field is empty",
         "required": false,
@@ -6840,6 +6789,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Unavailable message",
         "help": "Neutral text shown when attachments are unavailable",
         "required": false,
@@ -6849,6 +6799,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when attachments could not be loaded",
         "required": false,
@@ -6864,13 +6815,9 @@
       "height": "content_or_bounded",
       "publicSurface": "refused",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "CHART_BLOCK_RELEASE": {
@@ -6886,6 +6833,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Accessible name shown as the chart heading",
         "required": true,
@@ -6920,6 +6868,7 @@
       {
         "kind": "text",
         "key": "empty_message",
+        "presentation": true,
         "label": "Empty message",
         "help": "Text shown when the query returns no groups",
         "required": false,
@@ -6929,6 +6878,7 @@
       {
         "kind": "text",
         "key": "refused_message",
+        "presentation": true,
         "label": "Unavailable message",
         "help": "Neutral text shown when the chart is unavailable",
         "required": false,
@@ -6938,6 +6888,7 @@
       {
         "kind": "text",
         "key": "error_message",
+        "presentation": true,
         "label": "Error message",
         "help": "Text shown when the chart could not be loaded",
         "required": false,
@@ -6953,13 +6904,9 @@
       "height": "content_or_bounded",
       "publicSurface": "refused",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "NOTICE_BLOCK_RELEASE_1_1_0": {
@@ -6975,6 +6922,7 @@
       {
         "kind": "text",
         "key": "title",
+        "presentation": true,
         "label": "Title",
         "help": "Optional title shown after the severity announcement",
         "required": false,
@@ -7024,6 +6972,7 @@
       {
         "kind": "list",
         "key": "content",
+        "presentation": true,
         "label": "Content",
         "help": "Ordered plain-text and safe-link parts shown by the notice",
         "required": true,
@@ -7056,6 +7005,7 @@
             {
               "kind": "text",
               "key": "value",
+              "presentation": true,
               "label": "Value",
               "help": "Text content or the label shown for a link",
               "required": true,
@@ -7065,6 +7015,7 @@
             {
               "kind": "text",
               "key": "href",
+              "presentation": true,
               "label": "Link destination",
               "help": "Optional destination; unsafe destinations render as the plain-text label",
               "required": false,
@@ -7166,9 +7117,7 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "text"
-      ]
+      "accessibleNamePropertyPath": ["text"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []

@@ -524,13 +524,11 @@ export { flowNodeRunAsSchema };
  *
  * - `web`: a signed-in person using the Vortex web application.
  * - `mcp`: an MCP client acting through the Vortex MCP surface.
- * - `programmatic_interface`: a caller of a published programmatic interface (formerly the
- *   Activity source `interface`).
+ * - `programmatic_interface`: a caller of a published programmatic interface.
  * - `connection`: an external system reaching the organisation through an installed connection.
- *   Activity recorded before the wrappers read the context channel (#1094, #1095) also uses it for
- *   connection grant and administration changes.
+ *   Connection grants and administration changes are recorded under it as well.
  * - `federation`: another organisation reaching this one through federation.
- * - `durable_workflow`: a step of a durable workflow run (formerly the Activity source `workflow`).
+ * - `durable_workflow`: a step of a durable workflow run.
  * - `system`: platform work with no outside caller, such as scheduled or maintenance work.
  */
 export const protectedOperationChannelSchema = z.enum([

@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import {
-  calculationResultTypeLabels, describeTotal, totalAccepts, totalOperationLabels, totalResultType,
+  calculationResultTypeLabels, describeTotal, queryTotalAccepts, queryTotalOperationLabels, totalResultType,
   type ModuleField, type TotalOperation, type TotalRelationship, type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioOptionControl } from "@vortex/ui/studio";
@@ -9,8 +9,8 @@ import { Input } from "@vortex/ui/components/input";
 import { StudioField } from "./studio-field";
 import { StudioFormulaCondition } from "./studio-formula-condition";
 
-const operationOptions = (Object.keys(totalOperationLabels) as TotalOperation[])
-  .map((value) => ({ value, label: totalOperationLabels[value] }));
+const operationOptions = (Object.keys(queryTotalOperationLabels) as TotalOperation[])
+  .map((value) => ({ value, label: queryTotalOperationLabels[value] }));
 
 /**
  * A total's settings kept consistent with its operation and field: a count takes no field, the
@@ -20,7 +20,7 @@ const operationOptions = (Object.keys(totalOperationLabels) as TotalOperation[])
 const settled = (settings: TotalSettings, relationship: TotalRelationship | undefined): TotalSettings => {
   const { field: fieldKey, currency, decimal_places: places, ...rest } = settings;
   const field = relationship?.fields.find((item) => item.key === fieldKey);
-  const keptField = settings.operation === "count" || field === undefined || !totalAccepts(settings.operation, field) ? undefined : field;
+  const keptField = settings.operation === "count" || field === undefined || !queryTotalAccepts(settings.operation, field.type) ? undefined : field;
   const { filter, ...others } = rest;
   return {
     ...others,
@@ -53,7 +53,7 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
     const nextRelationship = relationships.find((item) => item.reference === (next.relationship ?? settings.relationship));
     onChange(settled({ ...settings, ...next } as TotalSettings, nextRelationship), filterValid);
   };
-  const accepted = (relationship?.fields ?? []).filter((field) => settings.operation !== "count" && totalAccepts(settings.operation, field))
+  const accepted = (relationship?.fields ?? []).filter((field) => settings.operation !== "count" && queryTotalAccepts(settings.operation, field.type))
     .map((field) => ({ value: field.key, label: field.label }));
   const fieldType = relationship?.fields.find((field) => field.key === settings.field)?.type;
   // A new total of a record type no link points at has no relationship yet.
@@ -78,7 +78,7 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
         onChange={(operation) => set({ operation: operation as TotalOperation })} />}
     </StudioField>
     {settings.operation === "count" ? null : <StudioField label="Field of the related records"
-      hint={accepted.length === 0 ? `No field of the related records can be taken the ${totalOperationLabels[settings.operation].toLowerCase()} of.` : undefined}>
+      hint={accepted.length === 0 ? `No field of the related records can be taken the ${queryTotalOperationLabels[settings.operation].toLowerCase()} of.` : undefined}>
       {(control) => <StudioOptionControl id={control.id} value={settings.field ?? ""} unset="Choose a field…" disabled={disabled} options={accepted}
         onChange={(field) => set(field === "" ? { field: undefined } : { field })} />}
     </StudioField>}
