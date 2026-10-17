@@ -33,13 +33,13 @@ const settled = (settings: TotalSettings, relationship: TotalRelationship | unde
 };
 
 /**
- * The total editor of a total field: which related records it totals (a link from another record
- * type to this one), the operation and the field, as a query's totals offer them, and an optional
+ * The total editor of a total field: which related records it totals (a link to this one from a
+ * record type of its module), the operation and the field, as a query's totals offer them, and an optional
  * filter of the related records. The result follows from the operation and the field.
  */
 export function StudioTotalEditor({ settings, relationships, compiledOf, disabled, onChange }: Readonly<{
   settings: TotalSettings;
-  /** The links that point at this record type, whose records a total can take. */
+  /** The links from this module's record types to this record type, whose records a total can take. */
   relationships: readonly TotalRelationship[];
   /** The saved draft's compiled fields of a record type, by its qualified key, for the filter's controls. */
   compiledOf: (recordType: string) => readonly ModuleField[] | undefined;
@@ -62,7 +62,7 @@ export function StudioTotalEditor({ settings, relationships, compiledOf, disable
 
   return <div className="space-y-3">
     <StudioField label="Related records" hint={relationships.length === 0
-      ? "No record type links to this one yet. Add a link field to another record type first." : "The records that link to this one."}>
+      ? "No record type of this module links to this one yet. Add a link field to one first." : "The records of this module that link to this one."}>
       {(control) => <StudioOptionControl id={control.id} value={reference} unset="Choose the related records…" disabled={disabled}
         options={relationships.map((item) => ({ value: item.reference, label: item.label }))}
         onChange={(reference) => {

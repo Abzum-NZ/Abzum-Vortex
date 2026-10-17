@@ -242,29 +242,31 @@ export const totalResultType = (operation: TotalOperation, field: FormulaField |
   return field.type as CalculationResultType;
 };
 
-/** A relationship a total of this record type can count or add up: a link from another record type to it. */
+/** A relationship a total of this record type can count or add up: a link to it from a record type of its own module. */
 export type TotalRelationship = Readonly<{ reference: string; label: string; recordName: string; fields: readonly FormulaField[] }>;
 
-/** The links of the application's own record types that point at one record type, as totals name them. */
+/**
+ * The links of the module's own record types that point at one record type, as totals name them.
+ * A link from another module's record type is never offered: that module already depends on this
+ * one through the link, so a total over it would make the two modules depend on each other.
+ */
 export const totalRelationships = (source: ApplicationSourceDocument, moduleKey: string, recordKey: string): readonly TotalRelationship[] => {
-  const target = `${moduleKey}:${recordKey}`;
-  const reaches = (owner: string, reference: string | undefined) =>
-    reference !== undefined && (reference === target || (owner === moduleKey && reference === recordKey));
-  return source.body.modules.flatMap((module) => module.record_types.flatMap((record) => record.relationships
-    .filter((relationship) => reaches(module.key, relationship.to_record_type) ||
-      (relationship.to_record_types ?? []).some((reference) => reaches(module.key, reference)))
+  const reaches = (reference: string | undefined) => reference === recordKey || reference === `${moduleKey}:${recordKey}`;
+  const module = source.body.modules.find((item) => item.key === moduleKey);
+  return (module?.record_types ?? []).flatMap((record) => record.relationships
+    .filter((relationship) => reaches(relationship.to_record_type) || (relationship.to_record_types ?? []).some(reaches))
     .map((relationship) => {
       const from = record.fields.find((field) => field.key === relationship.from_field);
-      return { reference: `${module.key}:${record.key}.${relationship.key}`, label: `${record.plural_name} by ${from?.label ?? relationship.key}`,
+      return { reference: `${moduleKey}:${record.key}.${relationship.key}`, label: `${record.plural_name} by ${from?.label ?? relationship.key}`,
         recordName: record.plural_name, fields: record.fields.map(({ key, label, type, settings }) => ({ key, label, type, settings })) };
-    })));
+    }));
 };
 
 /** Why a total's settings can't be applied, in the words of the total editor. */
 export const totalProblems = (settings: TotalSettings, relationship: TotalRelationship | undefined): string[] => {
   if (relationship === undefined)
     return [(settings.relationship as string | undefined) === undefined ? "Related records: choose the link whose records are totalled."
-      : `Related records: ${settings.relationship} is not a link to this record type any more.`];
+      : `Related records: ${settings.relationship} is not a link to this record type from its own module.`];
   const problems: string[] = [];
   const field = settings.field === undefined ? undefined : relationship.fields.find((item) => item.key === settings.field);
   if (settings.operation === "count") {
