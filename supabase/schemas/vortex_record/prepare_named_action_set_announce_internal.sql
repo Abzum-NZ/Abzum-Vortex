@@ -227,7 +227,7 @@ begin
       p_record_type_id, 'update'
     );
     target_loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', copy_target.record_id, null
+      p_record_type_id, 'update', copy_target.record_id, null, null::jsonb
     );
     if target_loaded ->> 'outcome' is distinct from 'loaded' then
       return pg_catalog.jsonb_build_object(

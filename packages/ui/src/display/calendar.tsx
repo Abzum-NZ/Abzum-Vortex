@@ -4,20 +4,17 @@ import type { ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/button";
 import { Card, CardContent, CardDescription, CardHeader } from "../components/card";
-import {
-  DisplayHeader,
-  RecordsEmptyState,
-  RecordsLoadingState,
-} from "./controls";
+import { DisplayHeader, RecordsEmptyState, RecordsLoadingState } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
+import { formatIsoDate } from "./date-format";
+import { useDateFormatOptions } from "./date-format-context";
 import type { CalendarPayload, CalendarView } from "./projected-data";
 
 const calendarViews: readonly CalendarView[] = ["month", "week", "agenda"];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 type DayBoundaries = Readonly<{ start: number; end: number }>;
 const calendarDateFormatters = new Map<string, Intl.DateTimeFormat>();
-const itemTimeFormatters = new Map<string, Intl.DateTimeFormat>();
 
 const calendarDateFormatter = (timeZone: string): Intl.DateTimeFormat => {
   let formatter = calendarDateFormatters.get(timeZone);
@@ -29,19 +26,6 @@ const calendarDateFormatter = (timeZone: string): Intl.DateTimeFormat => {
       day: "2-digit",
     });
     calendarDateFormatters.set(timeZone, formatter);
-  }
-  return formatter;
-};
-
-const itemTimeFormatter = (timeZone: string): Intl.DateTimeFormat => {
-  let formatter = itemTimeFormatters.get(timeZone);
-  if (formatter === undefined) {
-    formatter = new Intl.DateTimeFormat(undefined, {
-      timeZone,
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    itemTimeFormatters.set(timeZone, formatter);
   }
   return formatter;
 };
@@ -96,7 +80,8 @@ const localDayStart = (date: string, timeZone: string): number => {
   const estimate = dateAtUtc(year, month - 1, day).getTime();
   let lower = estimate - 48 * 60 * 60 * 1_000;
   let upper = estimate + 48 * 60 * 60 * 1_000;
-  const localDateAt = (instant: number): string => localDateOf(new Date(instant).toISOString(), timeZone);
+  const localDateAt = (instant: number): string =>
+    localDateOf(new Date(instant).toISOString(), timeZone);
   if (localDateAt(lower) >= date) return lower;
   if (localDateAt(upper) < date) return upper;
   while (upper - lower > 1) {
@@ -116,40 +101,36 @@ const itemIntersectsDay = (
   if (datePattern.test(item.start)) {
     const startDay = item.start;
     const endDay = item.end ?? startDay;
-    return startDay <= day &&
-      (endExclusive && endDay > startDay ? endDay > day : endDay >= day);
+    return startDay <= day && (endExclusive && endDay > startDay ? endDay > day : endDay >= day);
   }
   if (boundaries === undefined)
     throw new Error("A timestamped calendar item requires precomputed day boundaries");
   const start = Date.parse(item.start);
   const end = item.end === null ? start : Date.parse(item.end);
-  return start < boundaries.end &&
-    (endExclusive && end > start ? end > boundaries.start : end >= boundaries.start);
+  return (
+    start < boundaries.end &&
+    (endExclusive && end > start ? end > boundaries.start : end >= boundaries.start)
+  );
 };
 
-const dayLabel = (date: string): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: "UTC",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(dateAtUtc(year, month - 1, day));
+const dayLabel = (date: string, locale: string | undefined): string => {
+  const label = formatIsoDate(date, { locale }, "weekday");
+  if (label === undefined) throw new Error("A calendar day must be a valid ISO date");
+  return label;
 };
 
-const monthLabel = (date: string): string => {
-  const [year, month] = date.split("-").map(Number) as [number, number];
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: "UTC",
-    month: "long",
-    year: "numeric",
-  }).format(dateAtUtc(year, month - 1, 1));
+const monthLabel = (date: string, locale: string | undefined): string => {
+  const label = formatIsoDate(`${date.slice(0, 7)}-01`, { locale }, "month");
+  if (label === undefined) throw new Error("A calendar month must be a valid ISO date");
+  return label;
 };
 
-const itemTime = (value: string, timeZone: string): string =>
-  datePattern.test(value)
-    ? ""
-    : itemTimeFormatter(timeZone).format(new Date(value));
+const itemTime = (value: string, timeZone: string, locale: string | undefined): string => {
+  if (datePattern.test(value)) return "";
+  const label = formatIsoDate(value, { locale, timeZone }, "time");
+  if (label === undefined) throw new Error("A calendar item must have a valid ISO timestamp");
+  return label;
+};
 
 const periodDays = (values: CalendarPayload): readonly string[] => {
   if (values.view === "week")
@@ -165,6 +146,7 @@ const periodDays = (values: CalendarPayload): readonly string[] => {
 
 /** A query-bound calendar that keeps its view and period in this placement's page parameters. */
 export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): ReactElement {
+  const { locale } = useDateFormatOptions();
   const { placementId, availability } = props;
   const {
     title,
@@ -175,11 +157,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     refusedMessage,
     errorMessage,
     events,
-  } = resolveDisplayContext<CalendarPayload>(
-    props,
-    () => false,
-    "No items in this period",
-  );
+  } = resolveDisplayContext<CalendarPayload>(props, () => false, "No items in this period");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -228,7 +206,11 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
         <section data-vortex-display="calendar" data-vortex-placement-id={placementId}>
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Calendar period">
+            <div
+              className="flex flex-wrap items-center gap-2"
+              role="group"
+              aria-label="Calendar period"
+            >
               <Button
                 type="button"
                 variant="outline"
@@ -236,7 +218,8 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 onClick={() =>
                   replaceParameters((parameters) => {
                     const amount = values.view === "week" ? -7 : values.view === "agenda" ? -30 : 0;
-                    const date = amount === 0 ? shiftMonth(values.date, -1) : addDays(values.date, amount);
+                    const date =
+                      amount === 0 ? shiftMonth(values.date, -1) : addDays(values.date, amount);
                     parameters.set(`date.${placementId}`, date);
                   })
                 }
@@ -247,7 +230,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 type="button"
                 variant="outline"
                 onClick={() =>
-                  replaceParameters((parameters) => parameters.set(`date.${placementId}`, localToday(values.timeZone)))
+                  replaceParameters((parameters) =>
+                    parameters.set(`date.${placementId}`, localToday(values.timeZone)),
+                  )
                 }
               >
                 Today
@@ -259,7 +244,8 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 onClick={() =>
                   replaceParameters((parameters) => {
                     const amount = values.view === "week" ? 7 : values.view === "agenda" ? 30 : 0;
-                    const date = amount === 0 ? shiftMonth(values.date, 1) : addDays(values.date, amount);
+                    const date =
+                      amount === 0 ? shiftMonth(values.date, 1) : addDays(values.date, amount);
                     parameters.set(`date.${placementId}`, date);
                   })
                 }
@@ -268,8 +254,8 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
               </Button>
               <h3 className="min-w-36 text-center font-medium" aria-live="polite">
                 {values.view === "month"
-                  ? monthLabel(values.date)
-                  : `${dayLabel(values.windowStart)} – ${dayLabel(addDays(values.windowEnd, -1))}`}
+                  ? monthLabel(values.date, locale)
+                  : `${dayLabel(values.windowStart, locale)} – ${dayLabel(addDays(values.windowEnd, -1), locale)}`}
               </h3>
             </div>
             <div className="flex gap-1" role="group" aria-label="Calendar view">
@@ -303,24 +289,20 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 const items =
                   day >= values.windowStart && day < values.windowEnd
                     ? values.items.filter((item) =>
-                        itemIntersectsDay(
-                          item,
-                          day,
-                          boundaries,
-                          values.endExclusive,
-                        ),
+                        itemIntersectsDay(item, day, boundaries, values.endExclusive),
                       )
                     : [];
                 if (items.length === 0) return null;
                 return (
-                  <section key={day} aria-label={dayLabel(day)} className="border-b pb-2">
-                    <h4 className="mb-1 font-medium">{dayLabel(day)}</h4>
+                  <section key={day} aria-label={dayLabel(day, locale)} className="border-b pb-2">
+                    <h4 className="mb-1 font-medium">{dayLabel(day, locale)}</h4>
                     <ul className="space-y-1">
                       {items.map((item) => (
                         <li key={item.recordId}>
                           <CalendarItemButton
                             item={item}
                             timeZone={values.timeZone}
+                            locale={locale}
                             events={events}
                             showTime
                           />
@@ -333,14 +315,21 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
             </div>
           ) : (
             <div
-              className={values.view === "week" ? "grid grid-cols-1 gap-2 sm:grid-cols-7" : "grid grid-cols-7 gap-1"}
+              className={
+                values.view === "week"
+                  ? "grid grid-cols-1 gap-2 sm:grid-cols-7"
+                  : "grid grid-cols-7 gap-1"
+              }
               data-vortex-calendar-view={values.view}
               role="group"
               aria-label={`${values.view} calendar`}
             >
               {values.view === "month"
                 ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((weekday) => (
-                    <div key={weekday} className="px-1 py-2 text-center text-sm font-medium text-muted-foreground">
+                    <div
+                      key={weekday}
+                      className="px-1 py-2 text-center text-sm font-medium text-muted-foreground"
+                    >
                       {weekday}
                     </div>
                   ))
@@ -358,12 +347,12 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                     key={day}
                     size="sm"
                     role="group"
-                    aria-label={dayLabel(day)}
+                    aria-label={dayLabel(day, locale)}
                     className={`min-h-24 min-w-0 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
                   >
                     <CardHeader className={values.view === "month" ? "text-right" : undefined}>
                       <CardDescription>
-                        {values.view === "week" ? dayLabel(day) : Number(day.slice(8, 10))}
+                        {values.view === "week" ? dayLabel(day, locale) : Number(day.slice(8, 10))}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -373,6 +362,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                             <CalendarItemButton
                               item={item}
                               timeZone={values.timeZone}
+                              locale={locale}
                               events={events}
                               showTime={values.view === "week"}
                             />
@@ -394,16 +384,18 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
 const CalendarItemButton = ({
   item,
   timeZone,
+  locale,
   events,
   showTime,
 }: Readonly<{
   item: CalendarPayload["items"][number];
   timeZone: string;
+  locale: string | undefined;
   events: DisplayRenderProps<CalendarPayload>["events"];
   showTime: boolean;
 }>): ReactElement => {
   const label = item.title.trim() || "Untitled item";
-  const startTime = itemTime(item.start, timeZone);
+  const startTime = itemTime(item.start, timeZone, locale);
   const time = showTime ? startTime : "";
   const content = (
     <>

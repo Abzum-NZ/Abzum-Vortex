@@ -46,7 +46,7 @@ begin
     meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'restore');
     context_value := meta -> 'context';
     loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'restore', p_record_id, p_expected_concurrency_number
+      p_record_type_id, 'restore', p_record_id, p_expected_concurrency_number, null::jsonb
     );
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
@@ -176,7 +176,7 @@ begin
       );
 
       target_loaded := vortex_record.load_record_access_facts_internal(
-        retained_target_type_id, 'read', retained_target_record_id, null
+        retained_target_type_id, 'read', retained_target_record_id, null, null::jsonb
       );
       if target_loaded ->> 'outcome' <> 'loaded'
         or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
