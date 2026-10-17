@@ -313,6 +313,7 @@
       {
         "id": "role_iam_requester",
         "key": "iam_requester",
+        "default_member": true,
         "name": "IAM requester",
         "home_page": "iam_access_requests",
         "permissions": [

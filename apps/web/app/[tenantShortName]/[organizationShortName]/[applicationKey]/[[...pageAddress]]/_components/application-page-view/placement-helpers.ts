@@ -1,7 +1,7 @@
 import {
   parseBoardPayload,
   parseTablePayload,
-  type createFullPlatformComponentRegistry,
+  type createPlatformComponentRegistryForReleases,
   type BoardPayload,
 } from "@vortex/ui";
 import {
@@ -17,7 +17,7 @@ import { isPlatformRelease } from "./form-surface";
 /** Finds the semantic events each registered placement declares in the rendered page tree. */
 export const placementEventNamesByPage = (
   page: Readonly<Record<string, unknown>>,
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
 ): Readonly<Record<string, ReadonlySet<string>>> => {
   const eventNames: Record<string, ReadonlySet<string>> = {};
   walkPageComposition(page.composition, ({ placementId, vortex }) => {
@@ -39,7 +39,7 @@ export const placementEventNamesByPage = (
 /** Finds launcher placements whose row actions open through the addressed server action. */
 export const applicationLauncherPlacementIds = (
   page: Readonly<Record<string, unknown>>,
-  registry: ReturnType<typeof createFullPlatformComponentRegistry>,
+  registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
 ): Set<string> => {
   const placementIds = new Set<string>();
   walkPageComposition(page.composition, ({ placementId, vortex }) => {

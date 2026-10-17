@@ -2,6 +2,7 @@ import {
   applicationSourceDocumentSchema,
   builderKeySchema,
   flowContractVersion,
+  sourcePageItems,
   validateFlow,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
@@ -11,25 +12,41 @@ import { describeStudioFlowLocation, studioWords } from "./application-flow-mode
 import { traverseStudioSemanticSelectionDraft, type StudioSemanticSelection } from "./semantic-selection";
 
 /**
- * Creating a flow with the minimum valid shape, bound the one way flows are bound:
+ * Creating a flow and binding it, the one way flows are created and bound:
  * - for an action control: an interactive flow started by the person, with one Show message step,
  *   and one flow binding of the control's action event to it (the existing `flow_bindings` model);
  *   on a record page the flow reads the record the page shows as its `record_id` input;
  * - for a board: an interactive flow bound to its card moves, with one Save record step that saves
  *   the moved card's new stage, so its pipeline and the action that owns the stage apply;
+ * - for a control event with its steps given (a generated page's Open, New, Edit and Save): an
+ *   interactive flow with exactly those inputs, steps and outputs, bound to that control event;
+ * - for another control of an existing flow (each form of a guided form): one more binding;
  * - for a record event: a transaction flow an owned Module runs before one of its record types is
  *   saved, with one Warn step (the trigger is the flow's own `triggers`, as Module rules have).
+ * A binding of a control on a page of a record type declares its event for that record type, as
+ * publication requires of every bound event.
  */
+
+type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
+/** A control event a flow can be bound to. */
+export type StudioFlowControlEvent = SourceBinding["event"];
 
 export type StudioFlowCreateCommand =
   /** On a record page, the flow gets the record the page shows as its record_id input. */
   | Readonly<{ kind: "action"; controlAlias: string; name: string; recordType: string | null;
       event: "action" | "card_moved" }>
+  | Readonly<{ kind: "control"; controlAlias: string; event: StudioFlowControlEvent; name: string; description: string;
+      inputs: SourceFlow["inputs"]; tasks: SourceFlow["tasks"]; outputs: SourceFlow["outputs"];
+      bindingInputs: SourceBinding["inputs"] }>
+  | Readonly<{ kind: "bind"; controlAlias: string; event: StudioFlowControlEvent; flowKey: string;
+      bindingInputs: SourceBinding["inputs"] }>
   | Readonly<{ kind: "before_save"; moduleKey: string; recordTypeKey: string; name: string;
       operations: readonly ("create" | "update")[] }>;
 
 export type StudioFlowCreateResult =
-  | Readonly<{ kind: "applied"; source: ApplicationSourceDocument; selection: Extract<StudioSemanticSelection, { kind: "flow" }> }>
+  | Readonly<{ kind: "applied"; source: ApplicationSourceDocument; selection: Extract<StudioSemanticSelection, { kind: "flow" }>;
+      /** The binding made, for a command that binds a control: its alias and the event it declares. */
+      binding?: Readonly<{ id: string; eventId: string }> }>
   | Readonly<{ kind: "refused"; reason: string }>;
 
 export type StudioFlowCreateChoices = Readonly<{
@@ -81,7 +98,7 @@ export const projectStudioFlowCreateChoices = (
 
 /** A builder key from a name, unique among the taken ones. */
 const keyFrom = (name: string, taken: ReadonlySet<string>): string | undefined => {
-  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^[^a-z]+|_+$/g, "").slice(0, 34) || "flow";
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^[^a-z]+|_+$/g, "").slice(0, 34).replace(/_+$/g, "") || "flow";
   for (let n = 1; n < 1000; n += 1) {
     const candidate = n === 1 ? base : `${base}_${n}`;
     if (!taken.has(candidate) && builderKeySchema.safeParse(candidate).success) return candidate;
@@ -91,79 +108,51 @@ const keyFrom = (name: string, taken: ReadonlySet<string>): string | undefined =
 
 const message = (value: string) => ({ kind: "literal" as const, literal: { type: "text" as const, value } });
 
-export const applyStudioFlowCreate = (
-  source: Readonly<ApplicationSourceDocument>,
-  command: StudioFlowCreateCommand,
-): StudioFlowCreateResult => {
-  const name = command.name.trim();
-  if (name.length < 1 || name.length > 100) return { kind: "refused", reason: "Name the flow, in at most 100 characters." };
-  const candidate: ApplicationSourceDocument = structuredClone(source);
-  const body = candidate.body;
-  let flows: SourceFlow[];
-  let moduleKey: string | null;
-  let flow: SourceFlow;
-  if (command.kind === "action" && command.event === "card_moved") {
-    if (body.flow_bindings.some((binding) => binding.control === command.controlAlias && binding.event === "card_moved"))
-      return { kind: "refused", reason: "This board already runs a flow when a card is moved. Open that flow and change it instead." };
-    if (command.recordType === null) return { kind: "refused", reason: "Choose the board's choice field first." };
-    flows = body.flows;
-    moduleKey = null;
-    const key = keyFrom(name, new Set(flows.flatMap((entry) => [entry.id, entry.key])));
-    if (key === undefined) return { kind: "refused", reason: "No free name could be made for this flow. Choose another name." };
-    flow = { contractVersion: flowContractVersion, id: key, key, labels: { name }, execution: "interactive",
-      runAs: { kind: "initiator" },
-      inputs: { record: { type: "record_reference", required: true, recordTypeIds: [command.recordType] },
-        values: { type: "json", required: true } },
-      variables: {}, triggers: [], outputs: {}, errors: [], finally: [],
-      tasks: [{ id: "save_stage", type: "record.save", version: "1.0.0", properties: {
-        record_type: { kind: "literal", literal: { type: "text", value: command.recordType } },
-        record: { kind: "reference", reference: { source: "input", name: "record" } },
-        values: { kind: "reference", reference: { source: "input", name: "values" } } } }] } as SourceFlow;
-    const aliases = new Set(body.flow_bindings.flatMap((binding) => [binding.id, binding.event_id]));
-    const bindingId = keyFrom(`binding_${key}`, aliases);
-    const eventId = keyFrom(`event_${key}`, aliases);
-    if (bindingId === undefined || eventId === undefined)
-      return { kind: "refused", reason: "No free name could be made for the binding. Choose another name." };
-    body.flow_bindings.push({ id: bindingId, control: command.controlAlias, event_id: eventId, event: "card_moved", flow: key,
-      inputs: { record: { kind: "caller", name: "record_id" }, values: { kind: "caller", name: "values" } } });
-  } else if (command.kind === "action") {
-    if (body.flow_bindings.some((binding) => binding.control === command.controlAlias && binding.event === "action"))
-      return { kind: "refused", reason: "This control already runs a flow when it is used. Open that flow and change it instead." };
-    flows = body.flows;
-    moduleKey = null;
-    const key = keyFrom(name, new Set(flows.flatMap((entry) => [entry.id, entry.key])));
-    if (key === undefined) return { kind: "refused", reason: "No free name could be made for this flow. Choose another name." };
-    flow = { contractVersion: flowContractVersion, id: key, key, labels: { name }, execution: "interactive",
-      runAs: { kind: "initiator" },
-      inputs: command.recordType === null ? {}
-        : { record_id: { type: "record_reference", required: true, recordTypeIds: [command.recordType] } },
-      variables: {}, triggers: [], outputs: {}, errors: [], finally: [],
-      tasks: [{ id: "show_message", type: "interface.show_message", version: "1.0.0",
-        properties: { message: message("Edit this message") } }] };
-    const aliases = new Set(body.flow_bindings.flatMap((binding) => [binding.id, binding.event_id]));
-    const bindingId = keyFrom(`binding_${key}`, aliases);
-    const eventId = keyFrom(`event_${key}`, aliases);
-    if (bindingId === undefined || eventId === undefined)
-      return { kind: "refused", reason: "No free name could be made for the binding. Choose another name." };
-    body.flow_bindings.push({ id: bindingId, control: command.controlAlias, event_id: eventId, event: "action", flow: key,
-      inputs: command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } } });
-  } else {
-    const module = body.modules.find((entry) => entry.key === command.moduleKey);
-    if (module === undefined) return { kind: "refused", reason: "This application does not own that module, so it cannot hold a flow for it." };
-    if (!module.record_types.some((recordType) => recordType.key === command.recordTypeKey))
-      return { kind: "refused", reason: "That record type is not in the module." };
-    if (command.operations.length === 0) return { kind: "refused", reason: "Choose when the flow runs: when a record is created, changed, or both." };
-    flows = module.flows;
-    moduleKey = module.key;
-    const key = keyFrom(name, new Set(flows.flatMap((entry) => [entry.id, entry.key])));
-    if (key === undefined) return { kind: "refused", reason: "No free name could be made for this flow. Choose another name." };
-    flow = { contractVersion: flowContractVersion, id: key, key, labels: { name }, execution: "transaction",
-      runAs: { kind: "saver" }, inputs: {}, variables: {}, outputs: {}, errors: [], finally: [],
-      triggers: [{ id: "before_save", type: "BeforeSave", recordTypeId: command.recordTypeKey, inputs: {},
-        operations: command.operations.map((kind) => ({ kind })), priority: 100 }],
-      tasks: [{ id: "warn", type: "rule.warn", version: "1.0.0", properties: { message: message("Edit this message") } }] };
+class FlowCreateRefusal extends Error {}
+const refuse = (reason: string): never => { throw new FlowCreateRefusal(reason); };
+
+/**
+ * Binds one control event to a flow: a fresh binding alias and event alias, and, for a control on
+ * a page of a record type, the event's declaration for that record type.
+ */
+const bindControl = (body: ApplicationSourceDocument["body"], controlAlias: string, event: StudioFlowControlEvent,
+  flowKey: string, inputs: SourceBinding["inputs"]): Readonly<{ id: string; eventId: string }> => {
+  if (body.flow_bindings.some((binding) => binding.control === controlAlias && binding.event === event))
+    refuse(event === "action" ? "This control already runs a flow when it is used. Open that flow and change it instead."
+      : event === "card_moved" ? "This board already runs a flow when a card is moved. Open that flow and change it instead."
+        : "This control already runs a flow for that event. Open that flow and change it instead.");
+  const aliases = new Set([...body.flow_bindings.flatMap((binding) => [binding.id, binding.event_id]),
+    ...body.events.map((entry) => entry.id)]);
+  const id = keyFrom(`binding_${flowKey}`, aliases);
+  if (id === undefined) return refuse("No free name could be made for the binding. Choose another name.");
+  const page = body.pages.find((candidate) => sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias));
+  const recordType = page !== undefined && "record_type" in page && typeof page.record_type === "string" ? page.record_type : undefined;
+  // A binding is unique by its control and event, so every control of one record type raising one
+  // kind of event shares that record type's one declared event of that kind.
+  const declared = new Set(body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id));
+  const shared = recordType === undefined ? undefined
+    : body.flow_bindings.find((binding) => binding.event === event && declared.has(binding.event_id))?.event_id;
+  const eventId = shared ?? keyFrom(recordType === undefined ? `event_${flowKey}`
+    : `event_${recordType.slice(recordType.lastIndexOf(":") + 1)}_${event}`, aliases);
+  if (eventId === undefined) return refuse("No free name could be made for the binding's event. Choose another name.");
+  if (recordType !== undefined && shared === undefined) {
+    if (body.events.length >= 100) refuse("An application can declare at most 100 events, so no more controls can be bound.");
+    body.events.push({ id: eventId, key: `vortex.app.events.${eventId}`, record_type: recordType, carries: [],
+      personal_or_sensitive_values_allowed: false });
   }
-  flows.push(flow);
+  body.flow_bindings.push({ id, control: controlAlias, event_id: eventId, event, flow: flowKey, inputs });
+  return { id, eventId };
+};
+
+const interactiveFlow = (key: string, name: string, parts: Pick<SourceFlow, "inputs" | "tasks" | "outputs"> &
+  Readonly<{ description?: string }>): SourceFlow => ({
+  contractVersion: flowContractVersion, id: key, key, ...(parts.description === undefined ? {} : { description: parts.description }),
+  labels: { name }, execution: "interactive", runAs: { kind: "initiator" }, inputs: parts.inputs, variables: {}, triggers: [],
+  tasks: parts.tasks, outputs: parts.outputs, errors: [], finally: [],
+});
+
+const created = (candidate: ApplicationSourceDocument, flow: SourceFlow, moduleKey: string | null,
+  binding: Readonly<{ id: string; eventId: string }> | undefined): StudioFlowCreateResult => {
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (!parsed.success) {
     const first = parsed.error.issues[0];
@@ -172,5 +161,72 @@ export const applyStudioFlowCreate = (
   }
   const issue = validateFlow(flow)[0];
   if (issue !== undefined) return { kind: "refused", reason: `${describeStudioFlowLocation(flow, issue.path)}: ${issue.message}.` };
-  return { kind: "applied", source: candidate, selection: { kind: "flow", flowAlias: flow.id, moduleKey } };
+  return { kind: "applied", source: parsed.data, selection: { kind: "flow", flowAlias: flow.id, moduleKey },
+    ...(binding === undefined ? {} : { binding }) };
+};
+
+export const applyStudioFlowCreate = (
+  source: Readonly<ApplicationSourceDocument>,
+  command: StudioFlowCreateCommand,
+): StudioFlowCreateResult => {
+  try {
+    const candidate: ApplicationSourceDocument = structuredClone(source);
+    const body = candidate.body;
+    if (command.kind === "bind") {
+      const flow = body.flows.find((entry) => entry.key === command.flowKey);
+      if (flow === undefined) return { kind: "refused", reason: "That flow is no longer in the draft." };
+      return created(candidate, flow, null, bindControl(body, command.controlAlias, command.event, flow.key, command.bindingInputs));
+    }
+    const name = command.name.trim();
+    if (name.length < 1 || name.length > 100) return { kind: "refused", reason: "Name the flow, in at most 100 characters." };
+    if (command.kind === "before_save") {
+      const module = body.modules.find((entry) => entry.key === command.moduleKey);
+      if (module === undefined) return { kind: "refused", reason: "This application does not own that module, so it cannot hold a flow for it." };
+      if (!module.record_types.some((recordType) => recordType.key === command.recordTypeKey))
+        return { kind: "refused", reason: "That record type is not in the module." };
+      if (command.operations.length === 0) return { kind: "refused", reason: "Choose when the flow runs: when a record is created, changed, or both." };
+      const key = keyFrom(name, new Set(module.flows.flatMap((entry) => [entry.id, entry.key])));
+      if (key === undefined) return { kind: "refused", reason: "No free name could be made for this flow. Choose another name." };
+      const flow: SourceFlow = { contractVersion: flowContractVersion, id: key, key, labels: { name }, execution: "transaction",
+        runAs: { kind: "saver" }, inputs: {}, variables: {}, outputs: {}, errors: [], finally: [],
+        triggers: [{ id: "before_save", type: "BeforeSave", recordTypeId: command.recordTypeKey, inputs: {},
+          operations: command.operations.map((kind) => ({ kind })), priority: 100 }],
+        tasks: [{ id: "warn", type: "rule.warn", version: "1.0.0", properties: { message: message("Edit this message") } }] };
+      module.flows.push(flow);
+      return created(candidate, flow, module.key, undefined);
+    }
+    if (command.kind === "action" && command.event === "card_moved" && command.recordType === null)
+      return { kind: "refused", reason: "Choose the board's choice field first." };
+    const key = keyFrom(name, new Set(body.flows.flatMap((entry) => [entry.id, entry.key])));
+    if (key === undefined) return { kind: "refused", reason: "No free name could be made for this flow. Choose another name." };
+    let flow: SourceFlow;
+    let binding: Readonly<{ id: string; eventId: string }>;
+    if (command.kind === "action" && command.event === "card_moved" && command.recordType !== null) {
+      // The board's card move saves the moved card's new stage through its pipeline.
+      flow = interactiveFlow(key, name, { outputs: {},
+        inputs: { record: { type: "record_reference", required: true, recordTypeIds: [command.recordType] },
+          values: { type: "json", required: true } },
+        tasks: [{ id: "save_stage", type: "record.save", version: "1.0.0", properties: {
+          record_type: { kind: "literal", literal: { type: "text", value: command.recordType } },
+          record: { kind: "reference", reference: { source: "input", name: "record" } },
+          values: { kind: "reference", reference: { source: "input", name: "values" } } } }] as SourceFlow["tasks"] });
+      binding = bindControl(body, command.controlAlias, "card_moved", key,
+        { record: { kind: "caller", name: "record_id" }, values: { kind: "caller", name: "values" } });
+    } else if (command.kind === "action") {
+      flow = interactiveFlow(key, name, { outputs: {},
+        inputs: command.recordType === null ? {}
+          : { record_id: { type: "record_reference", required: true, recordTypeIds: [command.recordType] } },
+        tasks: [{ id: "show_message", type: "interface.show_message", version: "1.0.0", properties: { message: message("Edit this message") } }] });
+      binding = bindControl(body, command.controlAlias, "action", key,
+        command.recordType === null ? {} : { record_id: { kind: "caller", name: "record_id" } });
+    } else {
+      flow = interactiveFlow(key, name, { description: command.description, inputs: command.inputs, tasks: command.tasks, outputs: command.outputs });
+      binding = bindControl(body, command.controlAlias, command.event, key, command.bindingInputs);
+    }
+    body.flows.push(flow);
+    return created(candidate, flow, null, binding);
+  } catch (error) {
+    if (error instanceof FlowCreateRefusal) return { kind: "refused", reason: error.message };
+    throw error;
+  }
 };

@@ -385,6 +385,7 @@ function compileApplication(
                 catalogueFingerprint: wildcardCatalogueFingerprint,
               }
             : { kind: "exact" },
+          ...(role.default_member === true ? { defaultMember: true } : {}),
         };
       }),
       queries,

@@ -251,6 +251,7 @@
       {
         "id": "role_crm_contributor",
         "key": "crm_contributor",
+        "default_member": true,
         "name": "CRM contributor",
         "home_page": "crm_dashboard",
         "permissions": [
