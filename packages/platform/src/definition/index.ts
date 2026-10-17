@@ -56,6 +56,13 @@ export {
   type UpgradeSnapshot,
   type UpgradeState,
 } from "./installation-upgrade";
+export {
+  acceptUpgradeRoleRevisions,
+  readUpgradeRoleRevisions,
+  upgradeWithRoleRevisions,
+  type UpgradeRoleEnvironment,
+  type UpgradeRoleRevision,
+} from "./installation-upgrade-role-revisions";
 export type { OfflineSourceFailure } from "./offline-source-validation";
 export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";
