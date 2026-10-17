@@ -140,7 +140,7 @@ begin
     order by mapping.field_id
   loop
     execute pg_catalog.format(
-      'select pg_catalog.max(pg_catalog.substring(%I from ''([0-9]+)[^0-9]*$'')::numeric) from record_data.%I where storage_contract_id = %L::uuid',
+      'select pg_catalog.max(pg_catalog.substring(%I, ''([0-9]+)[^0-9]*$'')::numeric) from record_data.%I where storage_contract_id = %L::uuid',
       counter_mapping.physical_column_token, preview_table_token, p_preview_storage_contract_id
     ) into copied_maximum;
     if copied_maximum is not null then
