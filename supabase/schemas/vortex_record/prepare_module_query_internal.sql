@@ -454,6 +454,11 @@ begin
       -- examined. A planning failure propagates; it never widens the scan.
       select plan.* into access_plan
       from vortex_record.plan_record_read_scan_internal(record_type_id_value) as plan;
+      -- No eligible read alternative admits any record. Report a refusal before
+      -- an empty scan can be mistaken for an empty query result.
+      if access_plan.access_predicate = 'false' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
+      end if;
       readable_field_ids := coalesce(access_plan.readable_field_ids, array[]::text[]);
       prepared_plan := prepared_plan || pg_catalog.jsonb_build_object(
         'storage', pg_catalog.jsonb_build_object(
