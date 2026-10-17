@@ -7,7 +7,7 @@ import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-e
 import { applicationSourceDocumentSchema, canonicalJson, describeFailure,
   prepareDefinitionPublicationResultSchema, publishDefinitionResultSchema,
   type ApplicationSourceDocument, type DefinitionPublicationConfirmation,
-  applicationModuleKeys, type PublishDefinitionResult, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
+  applicationModuleKeys, type ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioVisibilityCondition,
@@ -252,7 +252,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   const [publicationNote, setPublicationNote] = useState("");
   const [publicationProblem, setPublicationProblem] = useState("");
   const [preparing, setPreparing] = useState(false);
-  const [publishedPublication, setPublishedPublication] = useState<PublishDefinitionResult | null>(null);
+  const [releaseListGeneration, setReleaseListGeneration] = useState(0);
   const [preparedPublication, setPreparedState] = useState<PreparedPublication | null>(null);
   // The agent tools read the confirmation between calls, so the latest value is kept outside render state.
   const preparedRef = useRef<PreparedPublication | null>(null);
@@ -530,7 +530,9 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
         parsed.data.resolutionFingerprint === confirmation.resolutionFingerprint &&
         canonicalJson(parsed.data.dependencyManifest) === canonicalJson(confirmation.dependencyManifest)) {
         previewGeneration.current += 1;
-        setPublishedPublication(parsed.data);
+        setMessage(`Version ${parsed.data.releaseVersion} published.`);
+        setReleaseListGeneration((generation) => generation + 1);
+        closePublish(false);
         return { kind: "published", publication: parsed.data };
       }
       if (result.kind === "available") {
@@ -560,7 +562,6 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
   };
   const openPublish = () => {
     setPublicationProblem("");
-    setPublishedPublication(null);
     setPublicationNote("");
     setPublishOpen(true);
   };
@@ -935,7 +936,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
     [state.rootId, source, platformBlockCatalogue, describePlacement]);
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
-  const savedStateLabel = state.isSaving ? "Saving…" : state.isDirty ? "Unsaved changes" : "Saved";
+  const savedStateLabel = state.isDirty ? "Unsaved changes" : "Saved";
   const pendingNote = busy.isRendered("search")
     ? "Apply or discard your search settings before saving or changing anything else." : busy.isRendered("sourceImport")
     ? "Apply or discard the imported source before saving or changing anything else." : busy.isRendered("condition")
@@ -1299,7 +1300,8 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
           {/* The Data tab's field editor keeps its unapplied input while another tab is open. */}
           <div hidden={tab !== "data"}>{data.centre}</div>
           {tab === "releases" && releasesSection === "history" &&
-            <StudioHistoryTab organizationId={organizationId} rootId={state.rootId} savedRevision={savedPreviewDraft.current.draftRevision} />}
+            <StudioHistoryTab key={releaseListGeneration} organizationId={organizationId} rootId={state.rootId}
+              savedRevision={savedPreviewDraft.current.draftRevision} />}
           {tab === "releases" && releasesSection === "page-adoption" &&
             <StandardPageAdoption organizationId={organizationId} rootId={state.rootId}
               disabledReason={state.isDirty || locked ? "Save your changes first; a choice here changes the saved draft." : undefined}
@@ -1320,7 +1322,7 @@ function ExistingApplicationWorkspace({ organizationId, draft, place, initialTab
       hasUnsavedChanges={state.isDirty} saving={state.isSaving} onSave={() => { void save(); }}
       canPrepare={canPrepare} preparing={preparing} publishing={busy.isRendered("publication") && !preparing}
       prepared={preparedPublication} note={publicationNote} onNoteChange={setPublicationNote}
-      problem={publicationProblem} published={publishedPublication}
+      problem={publicationProblem}
       onPrepare={() => { void requestPublication("prepare"); }}
       onPublish={() => { void requestPublication("publish"); }} />
     <StudioBlockSetupDialog request={blockSetup} choices={draftChoices} onClose={() => setBlockSetup(null)} />
