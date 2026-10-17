@@ -8,6 +8,7 @@ import {
   versionImpactReasonCodes,
 } from "../../schema";
 import { canonicalJson, compareCanonicalStrings } from "../canonical-json-definition";
+import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 
 export type RecordValue = Record<string, unknown>;
 export type ComponentKind = VersionImpactReason["location"]["componentKind"];
@@ -119,11 +120,7 @@ export const comparePresentationSet = (
     reasons.push(makeReason("patch", "presentation_changed", componentKind, "order", componentId));
 };
 
-/**
- * The one allowlist for presentation settings, by setting name. Settings outside it (actions,
- * parameters, references) are major, and a new interactive placement is major through its flow
- * bindings, so nobody should rely on this value check alone.
- */
+/** Safe value kinds within a declared presentation list entry; references to behaviour are excluded. */
 const presentationKinds: ReadonlySet<unknown> = new Set([
   "text",
   "number",
@@ -135,93 +132,85 @@ const presentationKinds: ReadonlySet<unknown> = new Set([
   "icon",
   "field_reference",
 ]);
-const presentationSettings: ReadonlyMap<string, "text" | "list"> = new Map([
-  ["title", "text"],
-  ["label", "text"],
-  ["placeholder", "text"],
-  ["help_text", "text"],
-  ["description", "text"],
-  ["empty_message", "text"],
-  ["refused_message", "text"],
-  ["error_message", "text"],
-  ["document", "text"],
-  ["value", "text"],
-  ["href", "text"],
-  ["content", "list"],
-  ["columns", "list"],
-  ["detail_fields", "list"],
-  ["options", "list"],
-  ["items", "list"],
-  ["aggregates", "list"],
-]);
 
-/** Whether a setting contains only display values, and an existing value changes only display text. */
-export const presentationOnlyValue = (
+/** A new entry may carry only safe display values declared by its presentation list. */
+const presentationEntryValue = (
   value: unknown,
-  previous?: unknown,
-  settingKey?: string,
+  declaration: BlockPropertySchemaContract,
 ): boolean => {
-  if (settingKey !== undefined && !presentationSettings.has(settingKey)) return false;
   if (value === undefined || value === null) return false;
   const property = asRecord(value);
+  if (property.kind !== declaration.kind) return false;
   if (property.kind === "group") {
+    if (declaration.kind !== "group") return false;
     const properties = asRecord(property.properties);
-    if (previous !== undefined) {
-      const old = asRecord(previous);
-      if (old.kind !== "group") return false;
-      const oldProperties = asRecord(old.properties);
-      return [...new Set([...Object.keys(properties), ...Object.keys(oldProperties)])].every(
-        (key) => {
-          if (same(properties[key], oldProperties[key])) return true;
-          return (
-            presentationSettings.get(key) === "text" &&
-            properties[key] !== undefined &&
-            presentationOnlyValue(properties[key], oldProperties[key], key)
-          );
-        },
-      );
-    }
-    return (
-      Object.values(properties).every((entry) => presentationOnlyValue(entry)) &&
-      ((settingKey !== "columns" && settingKey !== "detail_fields") || holdsFieldReference(value))
-    );
+    return Object.entries(properties).every(([key, entry]) => {
+      const child = declaration.properties.find((candidate) => candidate.key === key);
+      return child !== undefined && presentationEntryValue(entry, child);
+    });
   }
   if (property.kind === "list") {
-    if (
-      previous !== undefined ||
-      (settingKey !== undefined && presentationSettings.get(settingKey) !== "list")
-    )
-      return false;
-    return (property.items as unknown[]).every((entry) => presentationOnlyValue(entry));
+    return (
+      declaration.kind === "list" &&
+      (property.items as unknown[]).every(
+        (entry) =>
+          presentationEntryValue(entry, declaration.item) &&
+          (declaration.presentationIdentity === undefined ||
+            presentationEntryIdentity(entry, declaration.presentationIdentity) !== undefined),
+      )
+    );
   }
-  if (!presentationKinds.has(property.kind)) return false;
+  return presentationKinds.has(property.kind);
+};
+
+export const presentationListEntry = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean =>
+  declaration.kind === "list" &&
+  declaration.presentation === true &&
+  presentationEntryValue(value, declaration.item) &&
+  (declaration.presentationIdentity === undefined ||
+    presentationEntryIdentity(value, declaration.presentationIdentity) !== undefined);
+
+/** Whether a declared display setting changes only its presentation values. */
+export const presentationOnlyValue = (
+  value: unknown,
+  declaration: BlockPropertySchemaContract,
+  previous?: unknown,
+): boolean => {
+  if (declaration.presentation !== true || !presentationEntryValue(value, declaration))
+    return false;
   if (previous === undefined) return true;
+  const property = asRecord(value);
   const old = asRecord(previous);
   if (old.kind !== property.kind) return false;
+  if (declaration.kind === "group") return presentationEntryEdit(value, previous, declaration);
+  if (declaration.kind === "list") return false;
   if (property.kind === "field_reference") return same(value, previous);
-  return settingKey === undefined || presentationSettings.get(settingKey) === "text";
+  return true;
 };
 
-const holdsFieldReference = (value: unknown): boolean => {
-  const property = asRecord(value);
-  if (property.kind === "group")
-    return Object.values(asRecord(property.properties)).some(holdsFieldReference);
-  return property.kind === "field_reference";
-};
-
-const presentationEntryIdentity = (value: unknown, settingKey: string): string | undefined => {
+const presentationEntryEdit = (
+  value: unknown,
+  previous: unknown,
+  declaration: BlockPropertySchemaContract,
+): boolean => {
+  if (declaration.kind !== "group" || !presentationEntryValue(value, declaration)) return false;
+  const old = asRecord(previous);
+  if (old.kind !== "group") return false;
   const properties = asRecord(asRecord(value).properties);
-  const identityKey =
-    settingKey === "columns" || settingKey === "detail_fields"
-      ? "field"
-      : settingKey === "aggregates"
-        ? "alias"
-        : settingKey === "items" || settingKey === "options"
-          ? "key"
-          : undefined;
-  return identityKey === undefined || properties[identityKey] === undefined
-    ? undefined
-    : canonicalJson(properties[identityKey]);
+  const oldProperties = asRecord(old.properties);
+  return [...new Set([...Object.keys(properties), ...Object.keys(oldProperties)])].every((key) => {
+    if (same(properties[key], oldProperties[key])) return true;
+    const child = declaration.properties.find((candidate) => candidate.key === key);
+    return child !== undefined && presentationOnlyValue(properties[key], child, oldProperties[key]);
+  });
+};
+
+const presentationEntryIdentity = (value: unknown, identityKey: string): string | undefined => {
+  const properties = asRecord(asRecord(value).properties);
+  return properties[identityKey] === undefined ? undefined : canonicalJson(properties[identityKey]);
 };
 
 /**
@@ -238,7 +227,7 @@ export const compareOrderedEntries = (
   componentId: unknown,
   property: Property,
   additive: (entry: unknown) => boolean,
-  presentationSettingKey?: string,
+  presentationDeclaration?: BlockPropertySchemaContract,
 ): void => {
   if (same(previous, candidate)) return;
   const remaining = candidate.map((entry) => canonicalJson(entry));
@@ -246,15 +235,21 @@ export const compareOrderedEntries = (
   let presentationEdited = false;
   for (const [index, entry] of previous.entries()) {
     let at = remaining.indexOf(canonicalJson(entry));
-    if (at < 0 && presentationSettingKey !== undefined) {
-      const identity = presentationEntryIdentity(entry, presentationSettingKey);
+    if (
+      at < 0 &&
+      presentationDeclaration?.kind === "list" &&
+      presentationDeclaration.presentation === true
+    ) {
+      const identityKey = presentationDeclaration.presentationIdentity;
+      const identity =
+        identityKey === undefined ? undefined : presentationEntryIdentity(entry, identityKey);
       at = candidate.findIndex(
         (next, nextIndex) =>
           remaining[nextIndex] !== "" &&
           (identity === undefined
             ? nextIndex === index
-            : presentationEntryIdentity(next, presentationSettingKey) === identity) &&
-          presentationOnlyValue(next, entry, presentationSettingKey),
+            : presentationEntryIdentity(next, identityKey!) === identity) &&
+          presentationEntryEdit(next, entry, presentationDeclaration.item),
       );
       if (at >= 0) presentationEdited = true;
     }

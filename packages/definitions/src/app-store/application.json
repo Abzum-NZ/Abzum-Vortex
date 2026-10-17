@@ -804,7 +804,7 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "You cannot install or upgrade this application. That needs permission to manage applications and to change this application's draft in Studio, and a sign-in within the last 15 minutes."
+                                          "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
                                         }
                                       }
                                     }
@@ -1172,7 +1172,7 @@
                                             "kind": "literal",
                                             "literal": {
                                               "type": "text",
-                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications and to change this application's draft in Studio, and a sign-in within the last 15 minutes."
+                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
                                             }
                                           }
                                         }
@@ -1476,7 +1476,7 @@
                                             "kind": "literal",
                                             "literal": {
                                               "type": "text",
-                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications and to change this application's draft in Studio, and a sign-in within the last 15 minutes."
+                                              "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
                                             }
                                           }
                                         }
@@ -1748,7 +1748,7 @@
                         "kind": "literal",
                         "literal": {
                           "type": "text",
-                          "value": "You cannot install or upgrade this application. That needs permission to manage applications and to change this application's draft in Studio, and a sign-in within the last 15 minutes."
+                          "value": "You cannot install or upgrade this application. That needs permission to manage applications, delegated management of the organisation's catalogue, and for some versions a recent sign-in."
                         }
                       }
                     }

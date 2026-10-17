@@ -39,10 +39,10 @@ import { workflowServiceKestraInstanceKind } from "./kestra-instance";
  * #662: installation activation and withdrawal readiness over the #661 flow
  * registrations.
  *
- * #661 part A compiles each exact published workflow of one Application release
- * into a deterministic inactive Kestra candidate, and #661 part B registers it
- * as one exact installation identity mapping. This module is the missing
- * readiness step the #64 installation lifecycle consumes:
+ * The compiler builds each exact published workflow of one Application release
+ * into a deterministic inactive Kestra candidate and the registration stores it
+ * as one exact installation identity mapping. This module is the readiness step
+ * the installation lifecycle consumes:
  *
  * - `planInstallationWorkflowActivation` refuses to name activation evidence
  *   unless every expected workflow of the candidate release is registered
@@ -89,7 +89,7 @@ export class InstallationWorkflowReadinessError extends Error {
  * The five permanent identity fields an activation or withdrawal targets. The
  * sixth identity field, `workflowRevision`, belongs to one workflow rather than
  * the installation. `installationRevision` is the Application release revision
- * the #64 activation switches to, so readiness evidence and the activation
+ * the activation switches to, so readiness evidence and the activation
  * command share one target.
  */
 export type InstallationWorkflowInstallationIdentity = Readonly<{

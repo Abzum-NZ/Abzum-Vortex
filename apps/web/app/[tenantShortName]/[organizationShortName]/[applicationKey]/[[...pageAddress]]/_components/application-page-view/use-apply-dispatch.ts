@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
 import type {
-  createFullPlatformComponentRegistry,
+  createPlatformComponentRegistryForReleases,
   FlowDispatchResult,
   FormFlowFeedback,
 } from "@vortex/ui";
@@ -31,7 +31,7 @@ export function useApplyDispatch({
   setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
-  platformComponentRegistry: ReturnType<typeof createFullPlatformComponentRegistry>;
+  platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   setCompletedGuidedNavigationKey: Dispatch<SetStateAction<string | undefined>>;
   refreshPlacements: (
     placementIds: readonly string[],
