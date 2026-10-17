@@ -118,7 +118,9 @@ export const loadInstalledContext = (
         scope: {
           organizationId: scope.organizationId,
           applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined ? {} : { previewInstallationId: scope.previewInstallationId }),
+          ...(scope.previewInstallationId === undefined
+            ? {}
+            : { previewInstallationId: scope.previewInstallationId }),
         },
       }).load();
     },
@@ -208,7 +210,9 @@ const loadApplicationPageJoined = async (
   const selection: OrganizationSelectionCandidate = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
-    ...(address.application.previewInstallationId === undefined ? {} : { previewInstallationId: address.application.previewInstallationId }),
+    ...(address.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: address.application.previewInstallationId }),
   };
 
   // The installed context is read once, under the person's own verified request scope. The address
@@ -445,9 +449,16 @@ const loadApplicationPageJoined = async (
     tenantShortName: address.tenantShortName,
     organizationShortName: address.organizationShortName,
   });
-  const { queries, referenceChoices, tables, queryNotices, linkTiles, readCalendarSettings, subjects,
-    readConcurrently } =
-    services;
+  const {
+    queries,
+    referenceChoices,
+    tables,
+    queryNotices,
+    linkTiles,
+    readCalendarSettings,
+    subjects,
+    readConcurrently,
+  } = services;
 
   // The page subject: the one record the page's own address names, of the page's declared record
   // type, read once through the record read path under the viewer's own authority. Nothing here
@@ -615,17 +626,16 @@ const loadApplicationPageJoined = async (
       editFormPlacementIds,
     });
 
-  const { refreshPlacementsByBinding, selectedReadTypesByFlow } =
-    projectFlowBindingTargets({
-      application,
-      context,
-      allPlacements,
-      recordTypeByPlacement,
-      pageSubjectRecordTypeId,
-      editFormPlacementIds,
-      dataPlacementsByRecordType,
-      editFormDataPlacementIds,
-    });
+  const { refreshPlacementsByBinding, selectedReadTypesByFlow } = projectFlowBindingTargets({
+    application,
+    context,
+    allPlacements,
+    recordTypeByPlacement,
+    pageSubjectRecordTypeId,
+    editFormPlacementIds,
+    dataPlacementsByRecordType,
+    editFormDataPlacementIds,
+  });
 
   const data: Record<string, PageDataState> = {};
   // Set when the record a detail or public page addresses cannot be shown to this viewer: it is

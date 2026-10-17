@@ -127,21 +127,19 @@ export const readCreatableFieldIds = async (
     decideOrganizationAccessBatch(
       transaction,
       scope,
-      entries.map(
-        (entry): OrganizationAccessDeclaration => ({
-          operationKey: "application.page.form_field.create",
-          action: { actionKind: "create" },
-          target: { kind: "application", applicationRootId: context.applicationRootId },
-          requiredPermission: {
-            applicationRootId: entry.applicationRootId,
-            ownerKind: entry.ownerKind,
-            ownerId: entry.ownerId,
-            permissionId: entry.permission.permissionId,
-          },
-          recentAuthentication: { kind: "none" },
-          authority: { kind: "permission" },
-        }),
-      ),
+      entries.map((entry): OrganizationAccessDeclaration => ({
+        operationKey: "application.page.form_field.create",
+        action: { actionKind: "create" },
+        target: { kind: "application", applicationRootId: context.applicationRootId },
+        requiredPermission: {
+          applicationRootId: entry.applicationRootId,
+          ownerKind: entry.ownerKind,
+          ownerId: entry.ownerId,
+          permissionId: entry.permission.permissionId,
+        },
+        recentAuthentication: { kind: "none" },
+        authority: { kind: "permission" },
+      })),
     ),
   );
   if (decided.kind !== "available") return decided;
@@ -163,7 +161,9 @@ const isEmptyValue = (value: JsonValue | undefined): boolean =>
 /** The label a form shows for one field: its placement's own label, else the field's. */
 const fieldLabel = (placement: Placement, field: ModuleField): string => {
   const label = placement.settings.label;
-  return isRecord(label) && label.kind === "text" && typeof label.value === "string" &&
+  return isRecord(label) &&
+    label.kind === "text" &&
+    typeof label.value === "string" &&
     label.value.trim() !== ""
     ? label.value.trim()
     : field.label;
@@ -171,8 +171,9 @@ const fieldLabel = (placement: Placement, field: ModuleField): string => {
 
 const isRequired = (placement: Placement, field: ModuleField): boolean => {
   const required = placement.settings.required;
-  return field.required ||
-    (isRecord(required) && required.kind === "boolean" && required.value === true);
+  return (
+    field.required || (isRecord(required) && required.kind === "boolean" && required.value === true)
+  );
 };
 
 /** The viewer's access, decided for each form of the page's record type. */
